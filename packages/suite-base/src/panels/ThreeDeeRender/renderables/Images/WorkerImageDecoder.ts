@@ -12,6 +12,7 @@ import { ComlinkWrap } from "@lichtblick/den/worker";
 
 import type { CompressedImageTypes } from "./ImageTypes";
 import type { RawImageOptions } from "./decodeImage";
+import type { DecodedDepth, DepthDecodeOptions } from "./imageRenderModeSettings";
 import { Image as RosImage } from "../../ros";
 
 /**
@@ -45,6 +46,14 @@ export class WorkerImageDecoder {
     options: Partial<RawImageOptions>,
   ): Promise<ImageData> {
     return await this.#remote.decode(image, options);
+  }
+
+  /** Depth in meters plus, when `options.color` is set, colors from the depth. */
+  public async decodeDepth(
+    image: RosImage | RawImage | CompressedImageTypes,
+    options: DepthDecodeOptions,
+  ): Promise<DecodedDepth> {
+    return await this.#remote.decodeDepth(image, options);
   }
 
   public terminate(): void {

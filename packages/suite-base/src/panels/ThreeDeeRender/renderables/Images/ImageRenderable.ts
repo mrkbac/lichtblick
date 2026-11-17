@@ -27,6 +27,7 @@ import {
   clampContrast,
 } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/ImageMode/utils";
 import { WorkerImageDecoder } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/Images/WorkerImageDecoder";
+import { colorHasTransparency } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/colorMode";
 import { projectPixel } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/projections";
 import { ColorModeSettings } from "@lichtblick/suite-base/panels/ThreeDeeRender/settingsNodes/colorMode";
 import {
@@ -36,6 +37,7 @@ import {
 import { RosValue } from "@lichtblick/suite-base/players/types";
 import { toError } from "@lichtblick/suite-base/util/toError";
 
+import { DepthCloud } from "./DepthCloud";
 import { AnyImage, CompressedVideo } from "./ImageTypes";
 import { isCompressedDepthFormat } from "./decodeCompressedDepth";
 import {
@@ -44,6 +46,13 @@ import {
   emptyVideoFrame,
   prepareVideoFrame,
 } from "./decodeImage";
+import {
+  DEFAULT_DEPTH_POINT_SIZE,
+  depthColorSettings,
+  DepthDistanceType,
+  ImageRenderMode,
+} from "./imageRenderModeSettings";
+import { planeProjectionMaxDistance } from "./imageRenderModes";
 import { PreparedVideoFrame, PreparedVideoFrameStatus } from "./types";
 import { CameraInfo } from "../../ros";
 import {
@@ -67,7 +76,39 @@ export interface ImageRenderableSettings extends Partial<ColorModeSettings> {
   color: string;
   brightness: number;
   contrast: number;
+  /** Absent means "default" (also the Image panel, which has no render modes) */
+  renderMode?: ImageRenderMode;
+  /** Plane mode: frame whose XY plane the image is projected onto; absent means the fixed frame */
+  projectionFrameId?: string;
+  /** Plane mode: farthest a pixel lands from the camera, in meters; absent means angle-based */
+  projectionDistance?: number;
+  depthDistanceType?: DepthDistanceType;
+  /** Depth mode: point size in pixels */
+  pointSize?: number;
+  /** Depth mode: meters per raw depth unit; absent means by encoding */
+  depthScale?: number;
+  /** Depth mode: image topic that colors the points */
+  rgbTopic?: string;
 }
+
+const PLANE_VERTEX_SHADER = /* glsl */ `
+  uniform mat4 camToPlane;
+  uniform float maxDistance;
+  varying vec2 vUv;
+  void main() {
+    vUv = uv;
+    // position is the pixel's ray in the camera frame, scaled to z = 1
+    float originZ = camToPlane[3].z;
+    // Slightly toward the camera so the image doesn't z-fight with a grid on the plane
+    float planeZ = originZ >= 0.0 ? 0.01 : -0.01;
+    vec3 dir = mat3(camToPlane) * position;
+    float t = maxDistance / length(position);
+    if ((planeZ - originZ) * dir.z > 0.0) {
+      t = min(t, (planeZ - originZ) / dir.z);
+    }
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(position * t, 1.0);
+  }
+`;
 
 export const IMAGE_RENDERABLE_DEFAULT_SETTINGS: ImageRenderableSettings = {
   visible: false,
@@ -156,6 +197,11 @@ export class ImageRenderable extends Renderable<ImageUserData> {
 
   #renderBehindScene: boolean = false;
 
+  #depthCloud: DepthCloud | undefined;
+  #colorImageReceivedSeq = 0;
+  #colorImageDisplayedSeq = 0;
+  readonly #camToPlane = new THREE.Matrix4();
+
   #isUpdating = false;
 
   #decodedImage?: ImageBitmap | ImageData;
@@ -230,6 +276,7 @@ export class ImageRenderable extends Renderable<ImageUserData> {
     this.userData.texture?.dispose();
     this.userData.material?.dispose();
     this.userData.geometry?.dispose();
+    this.#depthCloud?.dispose();
     this.videoPlayer?.close();
     this.decoder?.terminate();
     // Release the GOP backfill cache. Entries hold frame references and replay metadata for up to
@@ -274,6 +321,21 @@ export class ImageRenderable extends Renderable<ImageUserData> {
 
   public setSettings(newSettings: ImageRenderableSettings): void {
     const prevSettings = this.userData.settings;
+    const prevMode = prevSettings.renderMode ?? "default";
+    const newMode = newSettings.renderMode ?? "default";
+    if (prevMode !== newMode) {
+      // The two projections use different vertex shaders and geometry
+      this.userData.material?.dispose();
+      this.userData.material = undefined;
+      this.#materialNeedsUpdate = true;
+      this.#geometryNeedsUpdate = true;
+      if (prevMode === "depth") {
+        this.#removeDepthCloud();
+      }
+    }
+    if (prevSettings.rgbTopic !== newSettings.rgbTopic) {
+      this.#depthCloud?.setColorImage(undefined);
+    }
     if (prevSettings.cameraInfoTopic !== newSettings.cameraInfoTopic) {
       // clear mesh since it is no longer showing userData accurately
       if (this.userData.mesh != undefined) {
@@ -303,7 +365,11 @@ export class ImageRenderable extends Renderable<ImageUserData> {
       !_.isEqual(prevSettings.gradient, newSettings.gradient) ||
       prevSettings.colorMap !== newSettings.colorMap ||
       prevSettings.minValue !== newSettings.minValue ||
-      prevSettings.maxValue !== newSettings.maxValue
+      prevSettings.maxValue !== newSettings.maxValue ||
+      prevSettings.explicitAlpha !== newSettings.explicitAlpha ||
+      prevMode !== newMode ||
+      prevSettings.depthScale !== newSettings.depthScale ||
+      prevSettings.rgbTopic !== newSettings.rgbTopic
     ) {
       this.userData.settings = newSettings;
       // Decode the current image again, which takes into account the new options
@@ -321,6 +387,10 @@ export class ImageRenderable extends Renderable<ImageUserData> {
     this.userData.image = image;
 
     const seq = ++this.#receivedImageSequenceNumber;
+    if (this.userData.settings.renderMode === "depth") {
+      void this.#startDepthDecode(image, seq);
+      return;
+    }
     const incomingFormat = "format" in image ? image.format : undefined;
     const incomingCodec =
       incomingFormat == undefined ? undefined : this.#cachedCanonicalCodec(incomingFormat);
@@ -375,6 +445,114 @@ export class ImageRenderable extends Renderable<ImageUserData> {
     // Raw (non-video) images decode in parallel; the `#displayedImageSequenceNumber > seq` guard
     // inside `#startDecode` drops late results.
     void this.#startDecode(image, seq, resizeWidth, onDecoded);
+  }
+
+  async #startDepthDecode(image: AnyImage, seq: number): Promise<void> {
+    try {
+      if ("format" in image && !isCompressedDepthFormat(image.format)) {
+        throw new Error(
+          `Depth map needs a 16UC1 or 32FC1 depth image, not "${image.format}" images`,
+        );
+      }
+      const settings = this.userData.settings;
+      const result = await (this.decoder ??= new WorkerImageDecoder()).decodeDepth(image, {
+        depthScale: settings.depthScale,
+        color: settings.rgbTopic == undefined ? depthColorSettings(settings) : undefined,
+      });
+      if (
+        this.isDisposed() ||
+        this.#displayedImageSequenceNumber > seq ||
+        this.userData.settings.renderMode !== "depth"
+      ) {
+        return;
+      }
+      this.#displayedImageSequenceNumber = seq;
+      this.#ensureDepthCloud().setDepth(result);
+      this.removeError(DECODE_IMAGE_ERR_KEY);
+      this.update();
+      this.renderer.queueAnimationFrame();
+    } catch (err) {
+      if (!this.isDisposed()) {
+        this.addError(DECODE_IMAGE_ERR_KEY, `Error decoding depth image: ${toError(err).message}`);
+      }
+    }
+  }
+
+  /** Depth mode: an image from the RGB topic, which colors the depth points. */
+  public setColorImage(image: AnyImage): void {
+    void this.#startColorImageDecode(image, ++this.#colorImageReceivedSeq);
+  }
+
+  async #startColorImageDecode(image: AnyImage, seq: number): Promise<void> {
+    try {
+      let decoded: ImageBitmap | ImageData;
+      if (!("format" in image) || isCompressedDepthFormat(image.format)) {
+        decoded = await (this.decoder ??= new WorkerImageDecoder()).decode(image, {});
+      } else if (canonicalVideoCodec(image.format) != undefined) {
+        throw new Error("video topics can't color a depth map");
+      } else {
+        decoded = await decodeCompressedImageToBitmap(image);
+      }
+      if (
+        this.isDisposed() ||
+        this.#colorImageDisplayedSeq > seq ||
+        this.userData.settings.renderMode !== "depth"
+      ) {
+        this.#releaseBitmap(decoded);
+        return;
+      }
+      this.#colorImageDisplayedSeq = seq;
+      this.#ensureDepthCloud().setColorImage(decoded);
+      this.removeError(COLOR_IMAGE_ERR_KEY);
+      this.renderer.queueAnimationFrame();
+    } catch (err) {
+      if (!this.isDisposed()) {
+        this.addError(COLOR_IMAGE_ERR_KEY, `Error decoding RGB image: ${toError(err).message}`);
+      }
+    }
+  }
+
+  #ensureDepthCloud(): DepthCloud {
+    if (!this.#depthCloud) {
+      this.#depthCloud = new DepthCloud(`${this.userData.topic}:DepthCloud`);
+      this.#depthCloud.setPixelRatio(this.renderer.getPixelRatio());
+      this.add(this.#depthCloud);
+    }
+    return this.#depthCloud;
+  }
+
+  #removeDepthCloud(): void {
+    if (this.#depthCloud) {
+      this.remove(this.#depthCloud);
+      this.#depthCloud.dispose();
+      this.#depthCloud = undefined;
+    }
+    this.removeError(COLOR_IMAGE_ERR_KEY);
+  }
+
+  public setPixelRatio(pixelRatio: number): void {
+    this.#depthCloud?.setPixelRatio(pixelRatio);
+  }
+
+  /**
+   * Plane mode: `camToPlane` maps the camera frame into the projection frame, or is undefined
+   * when that transform is missing, which hides the image.
+   */
+  public setPlaneProjection(camToPlane: THREE.Matrix4 | undefined): void {
+    if (this.userData.mesh) {
+      this.userData.mesh.visible = camToPlane != undefined;
+    }
+    if (!camToPlane) {
+      return;
+    }
+    this.#camToPlane.copy(camToPlane);
+    const maxDistance = this.userData.material?.uniforms.maxDistance;
+    if (maxDistance) {
+      maxDistance.value = planeProjectionMaxDistance(
+        camToPlane.elements[14],
+        this.userData.settings.projectionDistance,
+      );
+    }
   }
 
   #cachedCanonicalCodec(format: string): VideoCodec | undefined {
@@ -710,7 +888,7 @@ export class ImageRenderable extends Renderable<ImageUserData> {
         if (isCompressedDepthFormat(image.format)) {
           return await (this.decoder ??= new WorkerImageDecoder()).decode(
             image,
-            this.userData.settings,
+            this.#rawImageOptions(),
           );
         }
         return await decodeCompressedImageToBitmap(image, resizeWidth);
@@ -784,7 +962,13 @@ export class ImageRenderable extends Renderable<ImageUserData> {
         );
       }
     }
-    return await (this.decoder ??= new WorkerImageDecoder()).decode(image, this.userData.settings);
+    return await (this.decoder ??= new WorkerImageDecoder()).decode(image, this.#rawImageOptions());
+  }
+
+  /** Flat color only applies to depth points; images fall back to the default gradient. */
+  #rawImageOptions(): ImageRenderableSettings {
+    const settings = this.userData.settings;
+    return settings.colorMode === "flat" ? { ...settings, colorMode: undefined } : settings;
   }
 
   public update(): void {
@@ -821,6 +1005,21 @@ export class ImageRenderable extends Renderable<ImageUserData> {
       this.#updateMesh();
       this.#meshNeedsUpdate = false;
     }
+
+    const settings = this.userData.settings;
+    const depthMode = settings.renderMode === "depth";
+    if (this.userData.mesh && (depthMode || settings.renderMode !== "plane")) {
+      this.userData.mesh.visible = !depthMode;
+    }
+    if (depthMode && this.#depthCloud && this.userData.cameraModel) {
+      this.#depthCloud.updateRays(this.userData.cameraModel);
+      this.#depthCloud.updateSettings({
+        pointSize: settings.pointSize ?? DEFAULT_DEPTH_POINT_SIZE,
+        distanceType: settings.depthDistanceType ?? "z",
+        transparent:
+          settings.rgbTopic == undefined && colorHasTransparency(depthColorSettings(settings)),
+      });
+    }
     this.#isUpdating = false;
   }
 
@@ -829,7 +1028,10 @@ export class ImageRenderable extends Renderable<ImageUserData> {
     // Dispose of the current geometry if the settings have changed
     this.userData.geometry?.dispose();
     this.userData.geometry = undefined;
-    const geometry = createGeometry(this.userData.cameraModel, this.userData.settings);
+    const geometry =
+      this.userData.settings.renderMode === "plane"
+        ? createGeometry(this.userData.cameraModel, PLANE_RAYS, 0)
+        : createGeometry(this.userData.cameraModel, this.userData.settings);
     this.userData.geometry = geometry;
     this.#meshNeedsUpdate = true;
   }
@@ -931,6 +1133,8 @@ export class ImageRenderable extends Renderable<ImageUserData> {
       opacity: { value: tempColor.a },
       brightness: { value: clampBrightness(brightness) },
       contrast: { value: clampContrast(contrast) },
+      camToPlane: { value: this.#camToPlane },
+      maxDistance: { value: 1 },
     };
     this.userData.material = new THREE.ShaderMaterial({
       name: `${this.userData.topic}:Material`,
@@ -939,7 +1143,8 @@ export class ImageRenderable extends Renderable<ImageUserData> {
       opacity: tempColor.a,
       transparent,
       depthWrite: !transparent,
-      vertexShader: VERTEX_SHADER,
+      vertexShader:
+        this.userData.settings.renderMode === "plane" ? PLANE_VERTEX_SHADER : VERTEX_SHADER,
       fragmentShader: FRAGMENT_SHADER,
     });
   }
@@ -980,6 +1185,10 @@ export class ImageRenderable extends Renderable<ImageUserData> {
 
 let tempColor = { r: 0, g: 0, b: 0, a: 0 };
 
+const COLOR_IMAGE_ERR_KEY = "DepthColorImage";
+// Rays scaled to z = 1; the plane vertex shader extends them to the plane
+const PLANE_RAYS = { distance: 1, planarProjectionFactor: 1 };
+
 function createCanvasTexture(bitmap: ImageBitmap): THREE.CanvasTexture<ImageBitmap> {
   const texture = new THREE.CanvasTexture(
     bitmap,
@@ -1019,7 +1228,9 @@ function createDataTexture(imageData: ImageData): THREE.DataTexture {
 
 function createGeometry(
   cameraModel: ICameraModel,
-  settings: ImageRenderableSettings,
+  settings: { distance: number; planarProjectionFactor: number },
+  // Use a slight offset to avoid z-fighting with the CameraInfo wireframe
+  EPS = 1e-3,
 ): THREE.PlaneGeometry {
   const WIDTH_SEGMENTS = 100;
   const HEIGHT_SEGMENTS = 100;
@@ -1034,9 +1245,6 @@ function createGeometry(
 
   const segmentWidth = width / WIDTH_SEGMENTS;
   const segmentHeight = height / HEIGHT_SEGMENTS;
-
-  // Use a slight offset to avoid z-fighting with the CameraInfo wireframe
-  const EPS = 1e-3;
 
   // Rebuild the position buffer for the plane by iterating through the grid and
   // projecting each pixel space x/y coordinate into a 3D ray and casting out by

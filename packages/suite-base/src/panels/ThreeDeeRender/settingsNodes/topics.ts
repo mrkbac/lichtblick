@@ -16,7 +16,14 @@ import { colorModeSettingsFields, type ColorModeSettings } from "./colorMode";
 import { POINTCLOUD_DATATYPES as LICHTBLICK_POINTCLOUD_DATATYPES } from "../foxglove";
 import type { LayerSettingsCameraInfo } from "../renderables/Cameras";
 import type { LayerSettingsFoxgloveGrid } from "../renderables/FoxgloveGrid";
+import type { LayerSettingsGridMap } from "../renderables/GridMaps";
 import type { ImageRenderableSettings } from "../renderables/Images/ImageRenderable";
+import {
+  DEFAULT_DEPTH_GRADIENT,
+  DEFAULT_DEPTH_POINT_SIZE,
+  depthColorSettings,
+  MIN_PROJECTION_DISTANCE,
+} from "../renderables/Images/imageRenderModeSettings";
 import type { LayerSettingsOccupancyGrid } from "../renderables/OccupancyGrids";
 import type { LayerSettingsPolygon } from "../renderables/Polygons";
 import type { LayerSettingsPoseArray } from "../renderables/PoseArrays";
@@ -532,6 +539,96 @@ export function foxgloveGridSettingsNode(
   };
 }
 
+// ---- Grid maps ----
+
+export const GRID_MAP_DEFAULTS: LayerSettingsGridMap = {
+  ...FOXGLOVE_GRID_DEFAULTS,
+  colorMode: "colormap",
+  colorLayer: undefined,
+  elevationLayer: undefined,
+  interpolation: "linear",
+  lighting: true,
+  drawBehind: false,
+};
+
+/** The layer each role uses: the user's pick, else `elevation` if the map has it, else none. */
+export function resolveGridMapLayers(
+  config: Pick<Partial<LayerSettingsGridMap>, "colorLayer" | "elevationLayer">,
+  layers: readonly string[],
+): { colorLayer: string | undefined; elevationLayer: string | undefined } {
+  const elevationLayer =
+    config.elevationLayer ?? (layers.includes("elevation") ? "elevation" : undefined);
+  return {
+    colorLayer: config.colorLayer ?? elevationLayer ?? layers[0],
+    // "" is the user's explicit "None"
+    elevationLayer: elevationLayer === "" ? undefined : elevationLayer,
+  };
+}
+
+/** `layers`: the map's layer names, once a message arrived. */
+export function gridMapSettingsNode(
+  topic: Pick<Topic, "name">,
+  config: Partial<LayerSettingsGridMap>,
+  layers: readonly string[],
+): DocumentedNode {
+  const settings = { ...GRID_MAP_DEFAULTS, ...config };
+  const resolved = resolveGridMapLayers(config, layers);
+  const layerOptions = layers.map((layer) => ({ label: layer, value: layer }));
+  return {
+    order: topic.name.toLocaleLowerCase(),
+    icon: "Cells",
+    visible: settings.visible,
+    fields: {
+      colorLayer: {
+        label: t("threeDee:gridMapColorLayer"),
+        help: t("threeDee:gridMapColorLayerHelp"),
+        input: "select",
+        options: layerOptions,
+        value: resolved.colorLayer,
+      },
+      ...colorModeSettingsFields({
+        config: settings,
+        defaults: GRID_MAP_DEFAULTS,
+        modifiers: {
+          supportsPackedRgbModes: false,
+          supportsRgbaFieldsMode: false,
+          hideFlatColor: true,
+        },
+      }),
+      elevationLayer: {
+        label: t("threeDee:gridMapElevationLayer"),
+        help: t("threeDee:gridMapElevationLayerHelp"),
+        input: "select",
+        options: [{ label: t("threeDee:gridMapNoLayer"), value: "" }, ...layerOptions],
+        value: resolved.elevationLayer ?? "",
+      },
+      interpolation: {
+        label: t("threeDee:gridMapInterpolation"),
+        help: t("threeDee:gridMapInterpolationHelp"),
+        input: "select",
+        options: [
+          { label: t("threeDee:gridMapInterpolationLinear"), value: "linear" },
+          { label: t("threeDee:gridMapInterpolationNearest"), value: "nearest" },
+        ],
+        value: settings.interpolation,
+      },
+      lighting: {
+        label: t("threeDee:gridMapLighting"),
+        help: t("threeDee:gridMapLightingHelp"),
+        input: "boolean",
+        value: settings.lighting,
+      },
+      drawBehind: {
+        label: t("threeDee:gridMapDrawBehind"),
+        help: t("threeDee:gridMapDrawBehindHelp"),
+        input: "boolean",
+        value: settings.drawBehind,
+      },
+      ...frameLockField(t("threeDee:frameLock"), settings),
+    },
+  };
+}
+
 // ---- Camera calibrations and image projections ----
 
 export const DEFAULT_PROJECTION_DISTANCE = 1;
@@ -600,30 +697,141 @@ export function cameraInfoSettingsNode(
   };
 }
 
-/** `cameraInfoOptions`: the calibration topics to choose from, best match first. */
+/**
+ * `cameraInfoOptions`: the calibration topics to choose from, best match first.
+ * `frameOptions`: frames for plane projection. `rgbTopicOptions`: image topics that can color a
+ * depth map.
+ */
 export function imageProjectionSettingsNode(
   topic: Pick<Topic, "name">,
   config: Partial<ImageRenderableSettings>,
   cameraInfoOptions: { label: string; value: string }[],
+  {
+    frameOptions = [],
+    rgbTopicOptions = [],
+  }: {
+    frameOptions?: { label: string; value: string }[];
+    rgbTopicOptions?: { label: string; value: string }[];
+  } = {},
 ): DocumentedNode {
+  const renderMode = config.renderMode ?? "default";
+  const fields: DocumentedFields = {
+    cameraInfoTopic: {
+      label: t("threeDee:cameraInfo"),
+      help: t("threeDee:cameraInfoHelp"),
+      input: "select",
+      options: cameraInfoOptions,
+      value: config.cameraInfoTopic,
+    },
+    renderMode: {
+      label: t("threeDee:renderMode"),
+      help: t("threeDee:renderModeHelp"),
+      input: "select",
+      options: [
+        { label: t("threeDee:renderModeDefault"), value: "default" },
+        { label: t("threeDee:renderModePlane"), value: "plane" },
+        { label: t("threeDee:renderModeDepth"), value: "depth" },
+      ],
+      value: renderMode,
+    },
+  };
+  const tintField: DocumentedFields = {
+    color: {
+      label: t("threeDee:color"),
+      help: t("threeDee:imageColorHelp"),
+      input: "rgba",
+      value: config.color,
+    },
+  };
+
+  switch (renderMode) {
+    case "default":
+      Object.assign(fields, projectionFields(config, t("threeDee:imageDistanceHelp")), tintField);
+      break;
+    case "plane":
+      Object.assign(
+        fields,
+        {
+          projectionFrameId: {
+            label: t("threeDee:projectionFrame"),
+            help: t("threeDee:projectionFrameHelp"),
+            input: "select",
+            options: [
+              { label: t("threeDee:projectionFrameFixed"), value: undefined },
+              ...frameOptions,
+            ],
+            value: config.projectionFrameId,
+          },
+          projectionDistance: {
+            label: t("threeDee:projectionDistance"),
+            help: t("threeDee:projectionDistanceHelp"),
+            input: "number",
+            min: MIN_PROJECTION_DISTANCE,
+            step: 1,
+            precision: PRECISION_DISTANCE,
+            placeholder: t("threeDee:auto"),
+            value: config.projectionDistance,
+          },
+        } satisfies DocumentedFields,
+        tintField,
+      );
+      break;
+    case "depth":
+      Object.assign(fields, {
+        depthDistanceType: {
+          label: t("threeDee:depthDistanceType"),
+          help: t("threeDee:depthDistanceTypeHelp"),
+          input: "select",
+          options: [
+            { label: t("threeDee:depthDistanceZ"), value: "z" },
+            { label: t("threeDee:depthDistanceEuclidean"), value: "euclidean" },
+          ],
+          value: config.depthDistanceType ?? "z",
+        },
+        pointSize: {
+          label: t("threeDee:pointSize"),
+          help: t("threeDee:pointSizeHelp"),
+          input: "number",
+          min: 0,
+          step: 1,
+          precision: 2,
+          placeholder: String(DEFAULT_DEPTH_POINT_SIZE),
+          value: config.pointSize,
+        },
+        depthScale: {
+          label: t("threeDee:depthScale"),
+          help: t("threeDee:depthScaleHelp"),
+          input: "number",
+          min: 0,
+          step: 0.001,
+          precision: 6,
+          placeholder: t("threeDee:auto"),
+          value: config.depthScale,
+        },
+        rgbTopic: {
+          label: t("threeDee:rgbTopic"),
+          help: t("threeDee:rgbTopicHelp"),
+          input: "select",
+          options: [{ label: t("threeDee:rgbTopicNone"), value: undefined }, ...rgbTopicOptions],
+          value: config.rgbTopic,
+        },
+      } satisfies DocumentedFields);
+      if (config.rgbTopic == undefined) {
+        Object.assign(
+          fields,
+          colorModeSettingsFields({
+            config: { ...config, colorMode: depthColorSettings(config).colorMode },
+            defaults: { gradient: DEFAULT_DEPTH_GRADIENT },
+            modifiers: { supportsPackedRgbModes: false, supportsRgbaFieldsMode: false },
+          }),
+        );
+      }
+      break;
+  }
+
   return {
     icon: "ImageProjection",
-    fields: {
-      cameraInfoTopic: {
-        label: t("threeDee:cameraInfo"),
-        help: t("threeDee:cameraInfoHelp"),
-        input: "select",
-        options: cameraInfoOptions,
-        value: config.cameraInfoTopic,
-      },
-      ...projectionFields(config, t("threeDee:imageDistanceHelp")),
-      color: {
-        label: t("threeDee:color"),
-        help: t("threeDee:imageColorHelp"),
-        input: "rgba",
-        value: config.color,
-      },
-    },
+    fields,
     visible: config.visible ?? false,
     order: topic.name.toLocaleLowerCase(),
   };

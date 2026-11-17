@@ -140,7 +140,7 @@ const useStyles = makeStyles()((theme) => ({
   },
 }));
 
-const formatStat = (value: number) =>
+export const formatStat = (value: number): string =>
   Math.abs(value) >= 1e5 || (value !== 0 && Math.abs(value) < 1e-3)
     ? value.toExponential(3)
     : value.toFixed(4);

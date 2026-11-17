@@ -139,6 +139,13 @@ export const threeDee = {
   planarProjectionFactor: "Planar projection factor",
   syncCamera: "Sync camera",
   syncCameraHelp: "Sync the camera with other panels that also have this setting enabled.",
+  syncTimestamps: "Sync timestamps",
+  syncTimestampsHelp:
+    "Only show messages whose timestamps match across all topics marked Sync. Each topic then shows its newest message from the newest matching set. Transforms and robot models are never held back.",
+  syncTopic: "Sync",
+  syncTopicHelp:
+    "Hold back this topic's messages until every topic marked Sync has one with the same message timestamp (or log time when the message has none). Needs at least two topics.",
+  waitingForSyncMessages: "Waiting for synchronized messages…",
   target: "Target",
   theta: "Theta",
   view: "View",
@@ -194,6 +201,21 @@ export const threeDee = {
   covarianceColorHelp: "Color of the covariance ellipsoid.",
   pathLineWidthHelp: "Width of the line through the poses, in meters.",
   poseGradientHelp: "Colors from the first pose to the last.",
+  gridMapColorLayer: "Color layer",
+  gridMapColorLayerHelp: "The map layer whose values set each cell's color.",
+  gridMapElevationLayer: "Elevation layer",
+  gridMapElevationLayerHelp:
+    "The map layer whose values lift each cell along Z, in meters. Choose None for a flat map.",
+  gridMapNoLayer: "None",
+  gridMapInterpolation: "Interpolation",
+  gridMapInterpolationHelp:
+    "Linear blends colors between cell centers. Nearest shows each cell as a solid block.",
+  gridMapInterpolationLinear: "Linear",
+  gridMapInterpolationNearest: "Nearest",
+  gridMapLighting: "Lighting",
+  gridMapLightingHelp: "Shade slopes of the elevation surface so terrain shape is easier to read.",
+  gridMapDrawBehind: "Draw behind",
+  gridMapDrawBehindHelp: "Draw the map underneath everything else in the scene, ignoring depth.",
   occupancyColorModeHelp:
     "Custom blends between your colors; Map and Costmap use the rviz palettes; Raw shows cell values as gray levels.",
   minColorHelp: "Color of free cells (0); values up to 100 blend toward the max color.",
@@ -208,6 +230,31 @@ export const threeDee = {
   planarProjectionFactorHelp:
     "0 projects onto a sphere around the camera, 1 onto a flat plane; values between blend.",
   imageColorHelp: "Tints the image; the alpha sets its opacity.",
+  renderMode: "Render mode",
+  renderModeHelp:
+    "Default draws the image at a distance from the camera, Plane projection lays it onto a frame's XY plane, Depth map turns a depth image into 3D points.",
+  renderModeDefault: "Default",
+  renderModePlane: "Plane projection",
+  renderModeDepth: "Depth map",
+  projectionFrame: "Projection frame",
+  projectionFrameHelp: "Frame whose XY plane (z = 0) the image is projected onto.",
+  projectionFrameFixed: "Fixed frame",
+  projectionDistance: "Projection distance",
+  projectionDistanceHelp:
+    "Farthest a pixel is drawn from the camera, in meters (at least 1). Empty stops rays that graze the plane.",
+  auto: "auto",
+  depthDistanceType: "Distance type",
+  depthDistanceTypeHelp:
+    "Z axis: depth is measured along the camera's optical axis (most depth cameras). Euclidean: along each pixel's ray.",
+  depthDistanceZ: "Z axis",
+  depthDistanceEuclidean: "Euclidean",
+  depthScale: "Depth scale",
+  depthScaleHelp:
+    "Meters per depth unit. Empty uses 1 for 32FC1 images and 0.001 (millimeters) otherwise.",
+  rgbTopic: "RGB topic",
+  rgbTopicHelp:
+    "Color image that colors the points. It should be registered to the depth image (same view).",
+  rgbTopicNone: "None",
   frustumLineWidthHelp: "Width of the frustum lines, in meters.",
   frustumColorHelp: "Color of the frustum lines.",
   pointShapeHelp: "Shape drawn for each point.",

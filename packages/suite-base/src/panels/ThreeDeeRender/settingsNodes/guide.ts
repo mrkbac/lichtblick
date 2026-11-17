@@ -39,6 +39,7 @@ import {
 import {
   cameraInfoSettingsNode,
   foxgloveGridSettingsNode,
+  gridMapSettingsNode,
   imageProjectionSettingsNode,
   laserScanSettingsNode,
   markerSettingsNode,
@@ -143,8 +144,21 @@ function topicNodes(): DocumentedNodes {
         packedVoxelGridSettingsNode(topic(""), { colorMode }, fields),
       ),
     ),
+    gridMap: merged(
+      "Grid map",
+      ...(["colormap", "gradient"] as const).map((colorMode) =>
+        gridMapSettingsNode(topic(""), { colorMode }, ["elevation"]),
+      ),
+    ),
     cameraInfo: { ...cameraInfoSettingsNode(topic(""), {}), label: "Camera calibration" },
-    image: { ...imageProjectionSettingsNode(topic(""), {}, []), label: "Image" },
+    image: merged(
+      "Image",
+      imageProjectionSettingsNode(topic(""), {}, []),
+      imageProjectionSettingsNode(topic(""), { renderMode: "plane" }, []),
+      ...COLOR_MODES.map((colorMode) =>
+        imageProjectionSettingsNode(topic(""), { renderMode: "depth", colorMode }, []),
+      ),
+    ),
     urdf: merged(
       "Robot description",
       ...([false, true] as const).map((jointStates) =>
