@@ -404,10 +404,10 @@ export class ChunkCursor {
 
   #skipIrrelevant(): void {
     const relevant = this.#relevantChannels;
-    if (!relevant) {
+    if (!relevant || !this.#index) {
       return;
     }
-    const channelIds = this.#index!.channelIds;
+    const channelIds = this.#index.channelIds;
     while (
       this.#next >= this.#first &&
       this.#next <= this.#last &&

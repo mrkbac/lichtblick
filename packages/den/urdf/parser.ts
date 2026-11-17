@@ -5,7 +5,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-/* eslint-disable @typescript-eslint/prefer-for-of, @typescript-eslint/no-base-to-string */
+/* eslint-disable @typescript-eslint/no-base-to-string */
 
 import {
   Color,
@@ -23,14 +23,20 @@ import {
   Vector3,
 } from "./types";
 
-const JOINT_TYPES = ["fixed", "continuous", "revolute", "planar", "prismatic", "floating"];
+const JOINT_TYPES: readonly JointType[] = [
+  "fixed",
+  "continuous",
+  "revolute",
+  "planar",
+  "prismatic",
+  "floating",
+];
 
 export function parseUrdf(xml: XMLDocument | string): UrdfRobot {
   const parser = new DOMParser();
   const urdf = xml instanceof XMLDocument ? xml : parser.parseFromString(xml, "text/xml");
 
-  for (let i = 0; i < urdf.children.length; i++) {
-    const child = urdf.children[i]!;
+  for (const child of urdf.children) {
     if (child.nodeName === "robot") {
       return parseRobot(child);
     }
@@ -48,8 +54,7 @@ function parseRobot(xml: Element): UrdfRobot {
   const joints = new Map<string, UrdfJoint>();
   const materials = new Map<string, UrdfMaterial>();
 
-  for (let i = 0; i < xml.children.length; i++) {
-    const child = xml.children[i]!;
+  for (const child of xml.children) {
     const childName = child.getAttribute("name");
     if (childName == undefined) {
       continue;
@@ -79,8 +84,7 @@ function parseLink(xml: Element): UrdfLink {
 
   const link: UrdfLink = { name, visuals: [], colliders: [] };
 
-  for (let i = 0; i < xml.children.length; i++) {
-    const child = xml.children[i]!;
+  for (const child of xml.children) {
     switch (child.nodeName) {
       case "inertial":
         link.inertial = parseInertial(child);
@@ -102,8 +106,7 @@ function parseInertial(xml: Element): UrdfInertial {
   let mass: number | undefined;
   let inertia: Inertia | undefined;
 
-  for (let i = 0; i < xml.children.length; i++) {
-    const child = xml.children[i]!;
+  for (const child of xml.children) {
     switch (child.nodeName) {
       case "origin":
         origin = parsePose(child);
@@ -126,7 +129,8 @@ function parseInertial(xml: Element): UrdfInertial {
 
 function parseJoint(xml: Element): UrdfJoint {
   const name = xml.getAttribute("name") ?? undefined;
-  const jointType = xml.getAttribute("type") ?? undefined;
+  const jointTypeAttr = xml.getAttribute("type");
+  const jointType = JOINT_TYPES.find((type) => type === jointTypeAttr);
   let origin: Pose | undefined;
   let parentLink: string | undefined;
   let childLink: string | undefined;
@@ -147,12 +151,11 @@ function parseJoint(xml: Element): UrdfJoint {
   if (name == undefined) {
     throw new Error(`missing attribute "name" in ${xml}`);
   }
-  if (!JOINT_TYPES.includes(jointType ?? "")) {
-    throw new Error(`invalid joint type "${jointType}" in ${xml}`);
+  if (jointType == undefined) {
+    throw new Error(`invalid joint type "${jointTypeAttr}" in ${xml}`);
   }
 
-  for (let i = 0; i < xml.children.length; i++) {
-    const child = xml.children[i]!;
+  for (const child of xml.children) {
     switch (child.nodeName) {
       case "origin":
         origin = parsePose(child);
@@ -218,7 +221,7 @@ function parseJoint(xml: Element): UrdfJoint {
 
   return {
     name,
-    jointType: jointType as JointType,
+    jointType,
     origin: origin ?? defaultPose(),
     parent: parentLink,
     child: childLink,
@@ -237,8 +240,7 @@ function parseVisual(xml: Element): UrdfVisual {
   let geometry: UrdfGeometry | undefined;
   let material: UrdfMaterial | undefined;
 
-  for (let i = 0; i < xml.children.length; i++) {
-    const child = xml.children[i]!;
+  for (const child of xml.children) {
     switch (child.nodeName) {
       case "origin":
         origin = parsePose(child);
@@ -264,8 +266,7 @@ function parseCollision(xml: Element): UrdfCollider {
   let origin: Pose | undefined;
   let geometry: UrdfGeometry | undefined;
 
-  for (let i = 0; i < xml.children.length; i++) {
-    const child = xml.children[i]!;
+  for (const child of xml.children) {
     switch (child.nodeName) {
       case "origin":
         origin = parsePose(child);
@@ -288,8 +289,7 @@ function parseMaterial(xml: Element): UrdfMaterial {
   let color: Color | undefined;
   let texture: string | undefined;
 
-  for (let i = 0; i < xml.children.length; i++) {
-    const child = xml.children[i]!;
+  for (const child of xml.children) {
     switch (child.nodeName) {
       case "color":
         color = parseColorAttribute(child, "rgba");
@@ -314,11 +314,11 @@ function parseInertia(xml: Element): Inertia {
 }
 
 function parseGeometry(xml: Element): UrdfGeometry {
-  if (xml.children.length < 1) {
+  const child = xml.firstElementChild;
+  if (child == undefined) {
     throw new Error("<geometry> must contain box, cylinder, sphere, or mesh");
   }
 
-  const child = xml.children[0]!;
   switch (child.nodeName) {
     case "box": {
       const size = parseVec3Attribute(child, "size");

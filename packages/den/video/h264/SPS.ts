@@ -127,12 +127,12 @@ export class SPS {
       throw new Error("SPS error: not SPS");
     }
 
-    this.profile_idc = bitstream.u_8()!;
-    if (H264_PROFILE_NAMES.has(this.profile_idc)) {
-      this.profileName = H264_PROFILE_NAMES.get(this.profile_idc)!;
-    } else {
+    this.profile_idc = bitstream.u_8();
+    const profileName = H264_PROFILE_NAMES.get(this.profile_idc);
+    if (profileName == undefined) {
       throw new Error("SPS error: invalid profile_idc");
     }
+    this.profileName = profileName;
 
     this.constraint_set0_flag = bitstream.u_1();
     this.constraint_set1_flag = bitstream.u_1();
@@ -145,7 +145,7 @@ export class SPS {
       throw new Error("SPS error: reserved_zero_2bits must be zero");
     }
 
-    this.level_idc = bitstream.u_8()!;
+    this.level_idc = bitstream.u_8();
 
     this.seq_parameter_set_id = bitstream.ue_v();
     if (this.seq_parameter_set_id > 31) {

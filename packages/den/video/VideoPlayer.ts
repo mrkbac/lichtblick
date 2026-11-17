@@ -171,7 +171,7 @@ export class VideoPlayer extends EventEmitter<VideoPlayerEventTypes> {
           this.#decoderConfig = fallbackConfig;
         } catch (fallbackError) {
           const err = new Error(
-            `Failed to configure VideoDecoder with ${JSON.stringify(fallbackConfig)}: ${(fallbackError as Error).message}`,
+            `Failed to configure VideoDecoder with ${JSON.stringify(fallbackConfig)}: ${fallbackError instanceof Error ? fallbackError.message : String(fallbackError)}`,
           );
           this.emit("error", err);
           return;
@@ -300,7 +300,9 @@ export class VideoPlayer extends EventEmitter<VideoPlayerEventTypes> {
         }
       })
       .catch((error_: unknown) => {
-        const error = new Error(`Failed to submit decode chain: ${(error_ as Error).message}`);
+        const error = new Error(
+          `Failed to submit decode chain: ${error_ instanceof Error ? error_.message : String(error_)}`,
+        );
         this.emit("error", error);
         waiterPromise = Promise.resolve({ type: "aborted" });
       });
@@ -362,7 +364,7 @@ export class VideoPlayer extends EventEmitter<VideoPlayerEventTypes> {
       return true;
     } catch (unk) {
       const error = new Error(
-        `Failed to decode ${data.byteLength} byte chunk at time ${timestampMicros}: ${(unk as Error).message}`,
+        `Failed to decode ${data.byteLength} byte chunk at time ${timestampMicros}: ${unk instanceof Error ? unk.message : String(unk)}`,
       );
       this.emit("error", error);
       return false;

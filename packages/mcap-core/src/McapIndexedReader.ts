@@ -335,7 +335,7 @@ export class McapIndexedReader<TReadOptions = unknown> {
         new McapByteReader(footerAndMagicView, footerAndMagicView.byteLength - MCAP_MAGIC.length),
       );
     } catch (error) {
-      throw errorWithLibrary((error as Error).message);
+      throw errorWithLibrary(error instanceof Error ? error.message : String(error));
     }
 
     let footer: TypedMcapRecords["Footer"];
@@ -931,8 +931,8 @@ function readAheadPlan(
     chunks.sort(compare);
   }
   const position = new Map<bigint, number>();
-  for (let i = 0; i < chunks.length; i++) {
-    position.set(chunks[i]!.chunkStartOffset, i);
+  for (const [i, chunk] of chunks.entries()) {
+    position.set(chunk.chunkStartOffset, i);
   }
   return { chunks, position };
 }

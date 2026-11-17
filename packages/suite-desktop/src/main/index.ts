@@ -42,7 +42,7 @@ const log = Logger.getLogger(__filename);
 // This overwrite needs to be done here, before the app is ready, otherwise it will not take effect
 const homeOverride = process.argv.find((arg) => arg.startsWith("--home-dir="));
 if (homeOverride != undefined) {
-  app.setPath("home", homeOverride.split("=")[1]!);
+  app.setPath("home", homeOverride.slice("--home-dir=".length));
 }
 
 function updateNativeColorScheme() {
@@ -65,7 +65,7 @@ export async function main(): Promise<void> {
   // Allow integration tests to override the userData directory
   const userDataOverride = process.argv.find((arg) => arg.startsWith("--user-data-dir="));
   if (userDataOverride != undefined) {
-    app.setPath("userData", userDataOverride.split("=")[1]!);
+    app.setPath("userData", userDataOverride.slice("--user-data-dir=".length));
   }
 
   // https://github.com/electron/electron/issues/28422#issuecomment-987504138
