@@ -573,7 +573,7 @@ function createPickingMaterials(cellSize: THREE.IUniform<THREE.Vector3>): {
 }
 
 export class VoxelGrids extends SceneExtension<VoxelGridRenderable> {
-  public static extensionId = "foxglove.VoxelGrids";
+  public static extensionId = "lichtblick.VoxelGrids";
   #fieldsByTopic = new Map<string, string[]>();
 
   public constructor(renderer: Renderer, name: string = VoxelGrids.extensionId) {
