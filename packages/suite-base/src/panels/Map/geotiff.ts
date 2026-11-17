@@ -51,13 +51,12 @@ function toRgba(
     return rgba;
   }
   // Single band (elevation, intensity, ...): stretch min..max to grayscale.
-  const band = r;
-  if (!band) {
+  if (!r) {
     return rgba;
   }
   let min = Infinity;
   let max = -Infinity;
-  for (const v of band) {
+  for (const v of r) {
     if (v !== noData && isFinite(v)) {
       min = Math.min(min, v);
       max = Math.max(max, v);
@@ -65,7 +64,7 @@ function toRgba(
   }
   const scale = max > min ? 255 / (max - min) : 0;
   for (let i = 0; i < width * height; i++) {
-    const v = band[i]!;
+    const v = r[i]!;
     const valid = v !== noData && isFinite(v);
     const gray = valid ? (v - min) * scale : 0;
     rgba[i * 4] = rgba[i * 4 + 1] = rgba[i * 4 + 2] = gray;

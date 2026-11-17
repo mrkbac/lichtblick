@@ -465,14 +465,13 @@ export function composeStyle(input: ComposeStyleInput): StyleSpecification {
           if (hidden.includes(vectorGroup(vectorLayer))) {
             continue;
           }
-          const namespaced =
-            "source" in vectorLayer && typeof vectorLayer.source === "string"
-              ? {
-                  ...vectorLayer,
-                  id: `${id}:${vectorLayer.id}`,
-                  source: `${id}:${vectorLayer.source}`,
-                }
-              : { ...vectorLayer, id: `${id}:${vectorLayer.id}` };
+          const namespaced = {
+            ...vectorLayer,
+            id: `${id}:${vectorLayer.id}`,
+            ...("source" in vectorLayer && typeof vectorLayer.source === "string"
+              ? { source: `${id}:${vectorLayer.source}` }
+              : {}),
+          };
           style.layers.push(withOpacity(namespaced, layer.opacity));
         }
         break;
