@@ -42,3 +42,12 @@ describe("Slider", () => {
     expect(container.querySelector("path")).toBeNull();
   });
 });
+
+describe("Slider with cleared settings", () => {
+  // A cleared number field in the settings sidebar stores undefined despite the config type.
+  it.each(["minValue", "maxValue"])("renders without a marker when %s is cleared", (key) => {
+    const { container } = render(<Slider config={{ ...config, [key]: undefined }} value={12} />);
+    expect(label()).toBe("12");
+    expect(container.querySelector("path")).toBeNull();
+  });
+});

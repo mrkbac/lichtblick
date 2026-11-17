@@ -9,7 +9,9 @@ import { GaugeConfig } from "./types";
 
 const X0 = 20;
 const X1 = 300;
-const fmt = (v: number) => String(Number(v.toFixed(3)));
+// Limits can be undefined at runtime: a cleared number field in the settings sidebar stores it.
+const fmt = (v: number | undefined) =>
+  v != undefined && Number.isFinite(v) ? String(Number(v.toFixed(3))) : "—";
 
 /** Linear track between the min/max limits that shows where the value sits, flagging values outside. */
 export function Slider({
@@ -28,11 +30,12 @@ export function Slider({
       ? Number(value)
       : NaN;
   const fraction = (numericValue - minValue) / (maxValue - minValue);
-  const hasValue = Number.isFinite(numericValue) && maxValue > minValue;
+  const hasValue =
+    Number.isFinite(numericValue) && Number.isFinite(fraction) && maxValue > minValue;
   const below = hasValue && numericValue < minValue;
   const above = hasValue && numericValue > maxValue;
   const x = X0 + Math.max(0, Math.min(1, fraction)) * (X1 - X0);
-  const color = !hasValue
+  const color = !Number.isFinite(numericValue)
     ? theme.palette.text.disabled
     : below || above
       ? theme.palette.error.main
@@ -42,7 +45,8 @@ export function Slider({
     : above
       ? t("aboveLimit")
       : `${(fraction * 100).toFixed(0)}%`;
-  const readout = hasValue ? fmt(numericValue) : "—";
+  // The reading stays visible without valid limits; only the marker and status need them.
+  const readout = fmt(numericValue);
 
   return (
     <svg

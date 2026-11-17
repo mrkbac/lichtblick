@@ -102,6 +102,8 @@ export function buildSettingsTree(
             help: t("maxValue.help"),
             input: "number",
             value: maxValue,
+            // Cleared fields are undefined at runtime, which also fails this check.
+            error: maxValue > minValue ? undefined : t("invalidLimits"),
           },
           colorMode: {
             label: t("colorMode.label"),

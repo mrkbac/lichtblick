@@ -21,6 +21,7 @@ export const gauge = {
   criticalAngle: "Critical angle (°)",
   criticalAngleHelp: "Angle at which the indicator turns to the critical color.",
   gradientHelp: "Start and end colors of the arc.",
+  invalidLimits: "Set both limits, with max above min.",
   invalidAngles: "Use 0 < warning < critical < range ≤ 90°.",
   messagePath: {
     label: "Message path",
