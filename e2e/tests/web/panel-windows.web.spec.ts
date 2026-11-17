@@ -368,6 +368,12 @@ test("restores several existing panel windows when screen permission is denied",
   }
 });
 
+// index.html ships one theme-color tag per prefers-color-scheme; the app sets them all to one color.
+const themeColors = async (p: Page) =>
+  await p
+    .locator('meta[name="theme-color"]')
+    .evaluateAll((metas) => [...new Set(metas.map((meta) => (meta as HTMLMetaElement).content))]);
+
 for (const colorScheme of ["light", "dark"] as const) {
   test(`renders newly created views with window-local settings and matching PWA colors (${colorScheme})`, {
     tag: "@regression",
@@ -385,9 +391,7 @@ for (const colorScheme of ["light", "dark"] as const) {
     const canvas = await monitor.locator("canvas").boundingBox();
     expect(canvas!.height).toBeGreaterThan(100);
     await expect(monitor.locator("html")).toHaveAttribute("data-color-mode", colorScheme);
-    expect(await monitor.locator('meta[name="theme-color"]').getAttribute("content")).toBe(
-      await page.locator('meta[name="theme-color"]').getAttribute("content"),
-    );
+    expect(await themeColors(monitor)).toEqual(await themeColors(page));
     const headerStyle = (element: HTMLElement) => {
       const button = getComputedStyle(element);
       const icon = getComputedStyle(element.querySelector("svg")!);
@@ -429,9 +433,7 @@ for (const colorScheme of ["light", "dark"] as const) {
     const nextScheme = colorScheme === "dark" ? "light" : "dark";
     await page.emulateMedia({ colorScheme: nextScheme });
     await expect(monitor.locator("html")).toHaveAttribute("data-color-mode", nextScheme);
-    expect(await monitor.locator('meta[name="theme-color"]').getAttribute("content")).toBe(
-      await page.locator('meta[name="theme-color"]').getAttribute("content"),
-    );
+    expect(await themeColors(monitor)).toEqual(await themeColors(page));
     expect(await monitor.getByTestId("window-left-sidebar-button").evaluate(headerStyle)).toEqual(
       await page.getByTestId("left-sidebar-button").evaluate(headerStyle),
     );
