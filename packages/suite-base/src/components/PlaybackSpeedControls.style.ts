@@ -31,6 +31,14 @@ export const useStyles = makeStyles()((theme) => ({
     marginBottom: theme.spacing(2.5), // align with the track, above the mark labels
   },
   slider: {
+    // Keep the thumb and the edge labels clear of the −/+ buttons.
+    marginInline: theme.spacing(1),
+    '& .MuiSlider-markLabel[data-index="0"]': {
+      transform: "translateX(-25%)",
+    },
+    '& .MuiSlider-markLabel[data-index="4"]': {
+      transform: "translateX(-75%)",
+    },
     "& .MuiSlider-thumb": {
       width: 14,
       height: 14,

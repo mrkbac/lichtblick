@@ -18,6 +18,7 @@ import {
 } from "@mui/material";
 import { useCallback, useEffect, useState } from "react";
 
+import { useLatest } from "@lichtblick/hooks";
 import HoverableIconButton from "@lichtblick/suite-base/components/HoverableIconButton";
 import { useMessagePipeline } from "@lichtblick/suite-base/components/MessagePipeline";
 import { useStyles } from "@lichtblick/suite-base/components/PlaybackSpeedControls.style";
@@ -57,6 +58,10 @@ export const stepSpeed = (speed: number, dir: 1 | -1): number => {
       : PLAYBACK_SPEED_OPTIONS.findLast((o) => o < speed - 1e-9);
   return next ?? speed;
 };
+
+// Wheel delta needed per speed step: one mouse-wheel notch (~100px) is one step, while a
+// trackpad's stream of small deltas doesn't skip through presets too fast.
+const WHEEL_STEP_PX = 50;
 
 const configSpeedSelector = (state: LayoutState) =>
   state.selectedLayout?.data?.playbackConfig.speed;
@@ -100,9 +105,40 @@ export default function PlaybackSpeedControls(): React.JSX.Element {
   const current = displayedSpeed ?? 1;
   const shown = draft ?? current;
 
+  // Scroll over the speed button: up = faster, down = slower. Non-passive so the page doesn't
+  // scroll; React's onWheel is passive and can't preventDefault.
+  const wheelStep = useLatest((dir: 1 | -1) => {
+    setSpeed(stepSpeed(shown, dir));
+  });
+  const wheelRef = useCallback(
+    (el: HTMLButtonElement | null) => {
+      if (!el) {
+        return undefined;
+      }
+      let acc = 0;
+      const onWheel = (event: WheelEvent) => {
+        if (el.disabled) {
+          return;
+        }
+        event.preventDefault();
+        acc += event.deltaY;
+        if (Math.abs(acc) >= WHEEL_STEP_PX) {
+          wheelStep.current(acc < 0 ? 1 : -1);
+          acc = 0;
+        }
+      };
+      el.addEventListener("wheel", onWheel, { passive: false });
+      return () => {
+        el.removeEventListener("wheel", onWheel);
+      };
+    },
+    [wheelStep],
+  );
+
   return (
     <>
       <HoverableIconButton
+        ref={wheelRef}
         id="playback-speed-button"
         aria-controls={open ? "playback-speed-popover" : undefined}
         aria-haspopup="true"
@@ -114,7 +150,7 @@ export default function PlaybackSpeedControls(): React.JSX.Element {
         }}
         data-testid="PlaybackSpeedControls-Dropdown"
         disabled={setPlaybackSpeed == undefined}
-        title="Playback speed"
+        title="Playback speed (scroll to change)"
         color="inherit"
       >
         <span className={classes.speedText}>

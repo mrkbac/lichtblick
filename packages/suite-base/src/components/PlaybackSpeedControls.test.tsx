@@ -49,7 +49,7 @@ describe("Given PlaybackSpeedControls", () => {
     renderWithProviders({ speed: 1 });
 
     const button = screen.getByRole("button");
-    expect(button).toHaveAttribute("title", "Playback speed");
+    expect(button).toHaveAttribute("title", "Playback speed (scroll to change)");
   });
 
   it("When clicked Then opens popover with slider, steppers and presets", () => {
@@ -74,6 +74,30 @@ describe("Given PlaybackSpeedControls", () => {
     // The mock player never echoes the new speed; the control must not snap back to 1×.
     expect(slider).toHaveAttribute("aria-valuetext", "0.98×");
     expect(screen.getByTestId("PlaybackSpeedControls-Dropdown")).toHaveTextContent("0.98×");
+  });
+});
+
+describe("Given the speed button", () => {
+  it("When scrolled Then steps through presets, ignoring small trackpad deltas", () => {
+    render(
+      <MockCurrentLayoutProvider>
+        <MockMessagePipelineProvider
+          activeData={{ speed: 1 }}
+          capabilities={[PLAYER_CAPABILITIES.setSpeed]}
+        >
+          <PlaybackSpeedControls />
+        </MockMessagePipelineProvider>
+      </MockCurrentLayoutProvider>,
+    );
+    const button = screen.getByTestId("PlaybackSpeedControls-Dropdown");
+
+    fireEvent.wheel(button, { deltaY: -100 });
+    expect(button).toHaveTextContent("2×");
+
+    fireEvent.wheel(button, { deltaY: 20 });
+    expect(button).toHaveTextContent("2×");
+    fireEvent.wheel(button, { deltaY: 40 });
+    expect(button).toHaveTextContent("1×");
   });
 });
 
