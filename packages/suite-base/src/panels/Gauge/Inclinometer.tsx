@@ -73,13 +73,8 @@ export function Inclinometer({
         <circle cx="160" cy="150" r="99" fill={theme.palette.background.default} />
         {hasValue && (
           <g clipPath={`url(#${clipId})`}>
-            <g
-              transform={
-                displayMode === "roll"
-                  ? `rotate(${-angle} 160 150)`
-                  : `translate(0 ${(angle / range) * 75})`
-              }
-            >
+            {/* Positive angles tilt the horizon clockwise: left side up, right side down. */}
+            <g transform={`rotate(${angle} 160 150)`}>
               {Array.from({ length: 8 }, (_, index) => {
                 const bandAngle = ((index + 1) * range) / 8;
                 return (
