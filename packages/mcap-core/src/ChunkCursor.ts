@@ -127,6 +127,11 @@ export class ChunkMessageIndex {
       }
       pos = start + Number(recordLength);
     }
+    if (pos !== view.byteLength) {
+      throw new Error(
+        `${view.byteLength - pos} bytes remaining in chunk at offset ${chunkIndex.chunkStartOffset}`,
+      );
+    }
     return ChunkMessageIndex.#sorted(
       BigUint64Array.from(logTimes),
       Float64Array.from(offsets),
