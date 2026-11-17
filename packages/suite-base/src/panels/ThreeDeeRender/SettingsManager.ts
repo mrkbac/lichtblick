@@ -38,10 +38,7 @@ export class SettingsManager extends EventEmitter<SettingsManagerEvents> {
   #globalSettingsEntryValidators: NodeValidator[] = [];
 
   /** Adjusts every entry an extension (`key`) sets, e.g. to add panel-wide fields to topic nodes */
-  public decorateEntry: (key: string, entry: SettingsTreeEntry) => SettingsTreeEntry = (
-    _key,
-    entry,
-  ) => entry;
+  public decorateEntry?: (key: string, entry: SettingsTreeEntry) => SettingsTreeEntry;
 
   public constructor(baseTree: DocumentedNodes) {
     super();
@@ -53,7 +50,7 @@ export class SettingsManager extends EventEmitter<SettingsManagerEvents> {
   }
 
   public setNodesForKey(key: string, undecoratedNodes: SettingsTreeEntry[]): void {
-    const nodes = undecoratedNodes.map((entry) => this.decorateEntry(key, entry));
+    const nodes = undecoratedNodes.map((entry) => this.decorateEntry?.(key, entry) ?? entry);
     nodes.forEach((entry) => {
       this.#globalSettingsEntryValidators.forEach((validator) => {
         validator(entry, this.errors);
