@@ -139,7 +139,7 @@ export class RenderableModels extends RenderablePrimitive {
       const idx = renderables.findIndex((prev) => isMatch(prev.primitive));
       if (idx >= 0) {
         // remove from previous renderables so that it doesn't get disposed
-        return renderables.splice(idx, 1)[0]!;
+        return renderables.splice(idx, 1)[0];
       }
     }
     return undefined;

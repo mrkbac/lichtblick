@@ -537,12 +537,13 @@ export class Urdfs extends SceneExtension<UrdfRenderable> {
 
     // Update custom layer URDFs that use parameters.
     for (const [instanceId, renderable] of this.renderables.entries()) {
-      const sourceType = (renderable.userData.settings as Partial<LayerSettingsCustomUrdf>)
-        .sourceType;
-      const paramName = (renderable.userData.settings as Partial<LayerSettingsCustomUrdf>)
-        .parameter;
-      if (sourceType === "param" && paramName != undefined) {
-        const urdf = parameters?.get(paramName);
+      const settings = renderable.userData.settings;
+      if (
+        "sourceType" in settings &&
+        settings.sourceType === "param" &&
+        settings.parameter != undefined
+      ) {
+        const urdf = parameters?.get(settings.parameter);
         if (typeof urdf === "string") {
           this.#loadUrdf({ instanceId, urdf });
         }

@@ -115,9 +115,8 @@ export class RenderableArrow extends RenderableMarker {
     this.#headOutline.visible = settings?.showOutlines ?? true;
 
     // Adapted from <https://github.com/ros-visualization/rviz/blob/noetic-devel/src/rviz/default_plugin/markers/arrow_marker.cpp
-    if (marker.points.length === 2) {
-      const pointA = marker.points[0]!;
-      const pointB = marker.points[1]!;
+    const [pointA, pointB] = marker.points;
+    if (marker.points.length === 2 && pointA && pointB) {
       tempStart.set(pointA.x, pointA.y, pointA.z);
       tempEnd.set(pointB.x, pointB.y, pointB.z);
 
