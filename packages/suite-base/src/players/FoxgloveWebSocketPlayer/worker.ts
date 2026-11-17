@@ -17,7 +17,8 @@ self.onmessage = (event: MessageEvent<ToWorkerMessage>) => {
   switch (type) {
     case "open":
       try {
-        ws = new WebSocket(data.wsUrl, data.protocols);
+        const socket = new WebSocket(data.wsUrl, data.protocols);
+        ws = socket;
         ws.binaryType = "arraybuffer";
         ws.onerror = (wsEvent) => {
           send({
@@ -28,7 +29,7 @@ self.onmessage = (event: MessageEvent<ToWorkerMessage>) => {
         ws.onopen = (_event) => {
           send({
             type: "open",
-            protocol: ws!.protocol,
+            protocol: socket.protocol,
           });
         };
         ws.onclose = (wsEvent) => {
