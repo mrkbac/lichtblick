@@ -108,8 +108,7 @@ const useStyles = makeStyles()((theme) => ({
     cursor: "pointer",
     userSelect: "none",
 
-    "&:hover": { color: theme.palette.text.primary },
-    "&:hover:not(.active)": { backgroundColor: theme.palette.action.hover },
+    "&:hover": { color: theme.palette.text.primary, backgroundColor: theme.palette.action.hover },
     "&:hover .close, &:focus-within .close": { visibility: "visible" },
   },
   active: {
@@ -117,6 +116,7 @@ const useStyles = makeStyles()((theme) => ({
     color: theme.palette.text.primary,
     backgroundColor: theme.palette.background.paper,
     borderColor: theme.palette.divider,
+    "&:hover": { backgroundColor: theme.palette.background.paper },
 
     // The shoulders: a quarter curve on each side from the tab's border into the strip's line.
     "&::before, &::after": {
@@ -216,11 +216,7 @@ function TabButton(props: TabButtonProps): React.JSX.Element {
       tabIndex={0}
       title={t("doubleClickToRename")}
       data-testid="tab-panel-tab"
-      className={cx(classes.tab, {
-        [classes.active]: isActive,
-        active: isActive,
-        [classes.dropOver]: isOver,
-      })}
+      className={cx(classes.tab, { [classes.active]: isActive, [classes.dropOver]: isOver })}
       onClick={onSelect}
       onKeyDown={(event) => {
         // Keys on the close button are the button's own.

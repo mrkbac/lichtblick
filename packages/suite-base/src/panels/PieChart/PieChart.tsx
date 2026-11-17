@@ -150,17 +150,16 @@ export function PieChart({ context }: PieChartProps): React.JSX.Element {
   const { legendCount } = useLegendCount();
   // Follow the app's light/dark theme; the canvas needs the colors as values.
   const [colorScheme, setColorScheme] = useState<"dark" | "light">("dark");
-  const theme = useMemo(() => createMuiTheme(colorScheme), [colorScheme]);
-  const chartTheme = useMemo(
-    (): ChartTheme => ({
-      text: theme.palette.text.primary,
-      mutedText: theme.palette.text.secondary,
-      surface: theme.palette.background.default,
-      border: theme.palette.divider,
+  const chartTheme = useMemo((): ChartTheme => {
+    const { palette } = createMuiTheme(colorScheme);
+    return {
+      text: palette.text.primary,
+      mutedText: palette.text.secondary,
+      surface: palette.background.default,
+      border: palette.divider,
       fontFamily: fontSansSerif,
-    }),
-    [theme],
-  );
+    };
+  }, [colorScheme]);
 
   const [config, setConfig] = useState<PieChartConfig>(() => ({
     ...DEFAULT_CONFIG,

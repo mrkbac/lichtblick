@@ -27,16 +27,6 @@ const CONDITION_FALSE_COLOR = "rgba(128, 128, 128, 0.35)";
  */
 export function messagesToDataset(args: MessageDatasetArgs): ChartDataset {
   const { path, startTime, y, blocks, showPoints, darkenLabels = false } = args;
-  // Few distinct colors per path, so parse each once.
-  const labelTextColors = new Map<string, string>();
-  const labelTextColor = (color: string): string => {
-    let textColor = labelTextColors.get(color);
-    if (textColor == undefined) {
-      textColor = darken(color, 0.45);
-      labelTextColors.set(color, textColor);
-    }
-    return textColor;
-  };
 
   const dataset: ChartDataset = {
     borderWidth: 10,
@@ -106,7 +96,7 @@ export function messagesToDataset(args: MessageDatasetArgs): ChartDataset {
         y,
         label: isNewSegment ? label : undefined,
         labelColor: color,
-        ...(isNewSegment && darkenLabels && { labelTextColor: labelTextColor(color) }),
+        ...(isNewSegment && darkenLabels && { labelTextColor: darken(color, 0.45) }),
         value,
         constantName,
       };
