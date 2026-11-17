@@ -191,12 +191,15 @@ export default function CurrentLayoutProvider({
           const reverted = revertedWhileLoading.current;
           revertedWhileLoading.current = undefined;
           historyLayoutId.current = layout.id;
-          const data = history.current.load(
+          let data = history.current.load(
             saved,
-            reverted?.id === layout.id
-              ? reverted.data
-              : migratePanelsState(layout.working?.data ?? layout.baseline.data),
+            migratePanelsState(layout.working?.data ?? layout.baseline.data),
           );
+          if (reverted?.id === layout.id) {
+            // Like any revert: a step after the loaded state, so undo brings that back.
+            history.current.sync(reverted.data);
+            data = reverted.data;
+          }
           setLayoutState({
             selectedLayout: { loading: false, id: layout.id, data, name: layout.name },
           });

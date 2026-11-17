@@ -458,6 +458,14 @@ describe("CurrentLayoutProvider", () => {
           item.layoutState.selectedLayout.data?.globalVariables.reverted !== true,
       ),
     ).toBe(false);
+
+    // The revert is undoable back to the layout as it was loaded.
+    act(() => {
+      result.current.actions.undoLayoutChange();
+    });
+    expect(result.current.layoutState.selectedLayout?.data?.globalVariables).toEqual(
+      TEST_LAYOUT.globalVariables,
+    );
   });
 
   it("saves the history under the selected layout and stops when that layout is deleted", async () => {
