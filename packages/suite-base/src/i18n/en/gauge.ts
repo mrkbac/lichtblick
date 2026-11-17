@@ -2,8 +2,12 @@
 // SPDX-License-Identifier: MPL-2.0
 export const gauge = {
   displayMode: "Display mode",
-  displayModeHelp: "Arc for a value in a range; Roll or Pitch for a tilt angle.",
+  displayModeHelp:
+    "Arc for a value in a range; Slider for where a value sits between its limits; Roll or Pitch for a tilt angle.",
   arc: "Arc",
+  slider: "Slider",
+  belowLimit: "below min",
+  aboveLimit: "above max",
   roll: "Roll",
   pitch: "Pitch",
   angleUnit: "Input angle unit",
@@ -17,6 +21,7 @@ export const gauge = {
   criticalAngle: "Critical angle (°)",
   criticalAngleHelp: "Angle at which the indicator turns to the critical color.",
   gradientHelp: "Start and end colors of the arc.",
+  invalidLimits: "Set both limits, with max above min.",
   invalidAngles: "Use 0 < warning < critical < range ≤ 90°.",
   messagePath: {
     label: "Message path",
@@ -24,11 +29,11 @@ export const gauge = {
   },
   minValue: {
     label: "Min",
-    help: "Value at the left end of the arc; lower values are clamped.",
+    help: "Lower limit, at the left end; lower values are clamped and flagged.",
   },
   maxValue: {
     label: "Max",
-    help: "Value at the right end of the arc; higher values are clamped.",
+    help: "Upper limit, at the right end; higher values are clamped and flagged.",
   },
   colorMode: {
     label: "Color mode",

@@ -8,6 +8,7 @@ import { useTheme } from "@mui/material";
 import { useId } from "react";
 import { useTranslation } from "react-i18next";
 
+import { toNumber, validAngles } from "./limits";
 import { GaugeConfig } from "./types";
 
 /** Keeps invalid readings and thresholds from appearing as a live, level horizon. */
@@ -21,19 +22,23 @@ export function Inclinometer({
   const theme = useTheme();
   const { t } = useTranslation("gauge");
   const clipId = useId();
-  const { displayMode, angleUnit, angleRange, warningAngle, criticalAngle } = config;
-  const validRange =
-    warningAngle > 0 &&
-    criticalAngle > warningAngle &&
-    angleRange > criticalAngle &&
-    angleRange <= 90;
-  const numericValue =
-    typeof value === "number" || (typeof value === "string" && value.trim() !== "")
-      ? Number(value)
-      : NaN;
+  const { displayMode, angleUnit } = config;
+  const angles = validAngles(config);
+  const validRange = angles != undefined;
+  // Invalid thresholds draw an empty 40° dial: no reading, no colored bands.
+  const {
+    range,
+    warning: warningAngle,
+    critical: criticalAngle,
+  } = angles ?? {
+    range: 40,
+    warning: Infinity,
+    critical: Infinity,
+  };
+  const numericValue = toNumber(value);
   const degrees = angleUnit === "radians" ? (numericValue * 180) / Math.PI : numericValue;
   const hasValue = Number.isFinite(degrees) && validRange;
-  const angle = hasValue ? Math.max(-angleRange, Math.min(angleRange, degrees)) : 0;
+  const angle = hasValue ? Math.max(-range, Math.min(range, degrees)) : 0;
   const color = !hasValue
     ? theme.palette.text.disabled
     : Math.abs(degrees) >= criticalAngle
@@ -42,7 +47,6 @@ export function Inclinometer({
         ? theme.palette.warning.main
         : theme.palette.success.main;
   const label = t(displayMode === "pitch" ? "pitch" : "roll");
-  const range = validRange ? angleRange : 40;
   const ticks = Array.from({ length: 17 }, (_, index) => ((index - 8) * range) / 8);
 
   return (
@@ -73,13 +77,8 @@ export function Inclinometer({
         <circle cx="160" cy="150" r="99" fill={theme.palette.background.default} />
         {hasValue && (
           <g clipPath={`url(#${clipId})`}>
-            <g
-              transform={
-                displayMode === "roll"
-                  ? `rotate(${-angle} 160 150)`
-                  : `translate(0 ${(angle / range) * 75})`
-              }
-            >
+            {/* Positive angles tilt the horizon clockwise: left side up, right side down. */}
+            <g transform={`rotate(${angle} 160 150)`}>
               {Array.from({ length: 8 }, (_, index) => {
                 const bandAngle = ((index + 1) * range) / 8;
                 return (

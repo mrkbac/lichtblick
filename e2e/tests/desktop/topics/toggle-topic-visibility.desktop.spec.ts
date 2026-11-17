@@ -22,7 +22,7 @@ test("toggle topics visibility", { tag: "@regression" }, async ({ mainWindow }) 
   // When
   await sidebar.openPanelSettingsTab();
   await new Panels(mainWindow).select("3D");
-  const visibilityButtons = mainWindow.getByTitle("Toggle visibility");
+  const visibilityButtons = mainWindow.getByTitle("Toggle visibility", { exact: true });
   await visibilityButtons.first().click();
 
   // Then
@@ -31,15 +31,15 @@ test("toggle topics visibility", { tag: "@regression" }, async ({ mainWindow }) 
   // Select only visibles
   await mainWindow.getByText("List All").first().click();
   await mainWindow.locator("#menu-").getByText("List visible").click();
-  expect(await mainWindow.getByTitle("Toggle visibility").count()).toBe(1);
+  expect(await visibilityButtons.count()).toBe(1);
 
   // Select only invisibles
   await mainWindow.getByText("List visible").first().click();
   await mainWindow.locator("#menu-").getByText("List invisible").click();
-  expect(await mainWindow.getByTitle("Toggle visibility").count()).toBe(3);
+  expect(await visibilityButtons.count()).toBe(3);
 
   // Select all
   await mainWindow.getByText("List invisible").first().click();
   await mainWindow.locator("#menu-").getByText("List all").click();
-  expect(await mainWindow.getByTitle("Toggle visibility").count()).toBe(4);
+  expect(await visibilityButtons.count()).toBe(4);
 });

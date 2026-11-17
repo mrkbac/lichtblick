@@ -18,6 +18,8 @@ import { GaugeAndIndicatorState } from "@lichtblick/suite-base/panels/shared/typ
 import { randomUUID } from "@lichtblick/suite-base/util/randomUUID";
 
 import { Inclinometer } from "./Inclinometer";
+import { Slider } from "./Slider";
+import { toNumber, validLimits } from "./limits";
 import { settingsActionReducer } from "./settingsActionReducer";
 import { GaugeConfig, GaugeProps } from "./types";
 import { useSettingsTree } from "./useSettingsTree";
@@ -113,16 +115,15 @@ export function Gauge({ context }: GaugeProps): React.JSX.Element {
     renderDone();
   }, [renderDone]);
 
-  const rawValue =
-    typeof state.latestMatchingQueriedData === "number" ||
-    typeof state.latestMatchingQueriedData === "string"
-      ? Number(state.latestMatchingQueriedData)
-      : NaN;
+  const rawValue = toNumber(state.latestMatchingQueriedData);
 
-  const { minValue, maxValue } = config;
-  const scaledValue =
-    (Math.max(minValue, Math.min(rawValue, maxValue)) - minValue) / (maxValue - minValue);
-  const outOfBounds = rawValue < minValue || rawValue > maxValue;
+  // Without valid limits the needle is hidden (scaledValue is NaN).
+  const limits = validLimits(config);
+  const scaledValue = limits
+    ? (Math.max(limits.min, Math.min(rawValue, limits.max)) - limits.min) /
+      (limits.max - limits.min)
+    : NaN;
+  const outOfBounds = limits != undefined && (rawValue < limits.min || rawValue > limits.max);
 
   const padding = 0.1;
   const centerX = 0.5 + padding;
@@ -139,6 +140,9 @@ export function Gauge({ context }: GaugeProps): React.JSX.Element {
   const needleThickness = 8;
   const needleExtraLength = 0.05;
   const [clipPathId] = useState(() => `gauge-clip-path-${randomUUID()}`);
+  if (config.displayMode === "slider") {
+    return <Slider config={config} value={state.latestMatchingQueriedData} />;
+  }
   if (config.displayMode !== "arc") {
     return <Inclinometer config={config} value={state.latestMatchingQueriedData} />;
   }

@@ -27,6 +27,9 @@
                         "panels": ["Gauge!pitch"]
                       },
                       {
+                        "panels": ["Gauge!accel"]
+                      },
+                      {
                         "direction": "column",
                         "children": [
                           {
@@ -39,7 +42,7 @@
                         "sizes": [50, 50]
                       }
                     ],
-                    "sizes": [28, 24, 24, 24]
+                    "sizes": [22, 18, 18, 24, 18]
                   }
                 ],
                 "sizes": [72, 28]
@@ -385,6 +388,16 @@
       "colorMap": "red-yellow-green",
       "reverse": false,
       "lichtblickPanelTitle": "Pitch"
+    },
+    "Gauge!accel": {
+      "path": "/boreas/motion.accel_long",
+      "minValue": -1.5,
+      "maxValue": 1.5,
+      "displayMode": "slider",
+      "colorMode": "colormap",
+      "colorMap": "turbo",
+      "reverse": false,
+      "lichtblickPanelTitle": "Accel limits (m/s²)"
     },
     "Indicator!drive": {
       "path": "/boreas/vehicle/state.drive_state",
