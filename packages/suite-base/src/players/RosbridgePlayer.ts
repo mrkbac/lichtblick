@@ -55,6 +55,9 @@ import { toError } from "@lichtblick/suite-base/util/toError";
 
 const log = Log.getLogger(__dirname);
 
+/** Topics the player subscribes to itself when they are available. */
+const INTERNAL_TOPICS: readonly string[] = ["/clock"];
+
 type MessageDecoder = { readMessage: (data: Uint8Array) => unknown };
 
 const CAPABILITIES = [PLAYER_CAPABILITIES.advertise, PLAYER_CAPABILITIES.callServices];
@@ -472,10 +475,15 @@ export default class RosbridgePlayer implements Player {
     return !this.#closed && this.#rosClient === rosClient;
   }
 
-  /** Whether a requested subscription is on a topic the server doesn't advertise yet. */
+  /**
+   * Whether a panel requested a topic the server doesn't advertise yet. The player's own optional
+   * topics don't count: they are often never published (e.g. no /clock outside simulation).
+   */
   #waitingForTopic(): boolean {
     const advertised = new Set(this.#providerTopics?.map((topic) => topic.name));
-    return this.#requestedSubscriptions.some((sub) => !advertised.has(sub.topic));
+    return this.#requestedSubscriptions.some(
+      (sub) => !advertised.has(sub.topic) && !INTERNAL_TOPICS.includes(sub.topic),
+    );
   }
 
   #cancelTopicsPoll(): void {
@@ -504,6 +512,12 @@ export default class RosbridgePlayer implements Player {
 
     if (!this.#rosClient || this.#closed) {
       return;
+    }
+
+    // Polling waits for a hidden window to be shown: a newly requested topic that isn't advertised
+    // yet needs polling now, so it is subscribed as soon as it appears.
+    if (this.#requestTopicsOnShow != undefined && this.#waitingForTopic()) {
+      void this.#requestTopics();
     }
 
     // Subscribe to additional topics used by RosbridgePlayer itself
@@ -827,10 +841,10 @@ export default class RosbridgePlayer implements Player {
 
   #addInternalSubscriptions(subscriptions: SubscribePayload[]): void {
     // Always subscribe to /clock if available
-    if (subscriptions.find((sub) => sub.topic === "/clock") == undefined) {
-      subscriptions.unshift({
-        topic: "/clock",
-      });
+    for (const topic of INTERNAL_TOPICS) {
+      if (subscriptions.find((sub) => sub.topic === topic) == undefined) {
+        subscriptions.unshift({ topic });
+      }
     }
   }
 

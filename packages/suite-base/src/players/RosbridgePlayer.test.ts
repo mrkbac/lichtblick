@@ -88,8 +88,10 @@ class MockRosClient {
   /** While set, topic requests wait until the test calls `settleTopics`. */
   public holdTopics = false;
   public settleTopics?: () => void;
+  public topicRequests = 0;
 
   public getTopicsAndRawTypes(callback: (...args: unknown[]) => void) {
+    this.topicRequests++;
     const reply = () => {
       callback({
         topics: this.#topics,
@@ -189,6 +191,41 @@ describe("RosbridgePlayer", () => {
     expect(addListener).not.toHaveBeenCalledWith("visibilitychange", expect.anything(), {
       once: true,
     });
+  });
+
+  it("polls again while hidden once a panel requests a topic that isn't advertised yet", async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal("document", {
+      hidden: true,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    });
+    onTestFinished(() => {
+      vi.useRealTimers();
+      vi.unstubAllGlobals();
+    });
+    workerInstance.setup({
+      topics: ["/a"],
+      types: ["/std_msgs/Header", "rosgraph_msgs/Log"],
+      typedefs: [
+        `std_msgs/Header header
+
+      ================================================================================
+      MSG: std_msgs/Header
+      uint32 seq
+      time stamp
+      string frame_id`,
+      ],
+    });
+    await vi.advanceTimersByTimeAsync(3_000);
+    // Every requested topic is advertised: polling waits for the window to be shown.
+    const requests = workerInstance.topicRequests;
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(workerInstance.topicRequests).toBe(requests);
+
+    player.setSubscriptions([{ topic: "/b" }]);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(workerInstance.topicRequests).toBeGreaterThan(requests);
   });
 
   it("subscribes to topics without errors", async () => {
