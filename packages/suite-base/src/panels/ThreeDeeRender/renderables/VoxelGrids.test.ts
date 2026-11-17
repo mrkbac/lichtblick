@@ -2,8 +2,17 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import { NumericType, VoxelGrid } from "@foxglove/schemas";
+import * as THREE from "three";
 
-import { BitVoxelGrid, decodeBitVoxelGrid, decodePackedVoxelGrid, VoxelBuffer } from "./VoxelGrids";
+import {
+  BitVoxelGrid,
+  decodeBitVoxelGrid,
+  decodePackedVoxelGrid,
+  VoxelBuffer,
+  VoxelGridRenderable,
+} from "./VoxelGrids";
+import { Picker } from "../Picker";
+import type { Renderer } from "../Renderer";
 import {
   LayerSettingsVoxelGrid,
   packedVoxelGridSettingsNode,
@@ -257,5 +266,92 @@ describe("packedVoxelGridSettingsNode", () => {
       "value",
       "intensity",
     ]);
+  });
+});
+
+describe("Draw behind picking", () => {
+  // A stub renderer that runs the picker's passes and records each draw's material state
+  function setup() {
+    const draws: { material: THREE.Material; depthWrite: boolean }[] = [];
+    const scene = new THREE.Scene();
+    const gl = {
+      domElement: { width: 800, height: 400 },
+      getPixelRatio: () => 1,
+      getRenderTarget: () => null,
+      getClearAlpha: () => 1,
+      getClearColor: vi.fn(),
+      setRenderTarget: vi.fn(),
+      setClearColor: vi.fn(),
+      clear: vi.fn(),
+      readRenderTargetPixels: vi.fn(),
+      render: (target: THREE.Scene, camera: THREE.Camera) => {
+        target.onAfterRender(
+          gl,
+          target,
+          camera,
+          undefined as never,
+          undefined as never,
+          undefined as never,
+        );
+      },
+      renderBufferDirect: (
+        _camera: THREE.Camera,
+        _scene: THREE.Scene,
+        _geometry: THREE.BufferGeometry,
+        material: THREE.Material,
+      ) => {
+        draws.push({ material, depthWrite: material.depthWrite });
+      },
+      renderLists: { get: () => ({ opaque: renderItems, transmissive: [], transparent: [] }) },
+    } as unknown as THREE.WebGLRenderer;
+    const renderer = {
+      settings: { errors: { addToTopic: vi.fn(), removeFromTopic: vi.fn() } },
+    } as unknown as Renderer;
+    const grid: BitVoxelGrid = {
+      header: { seq: 0, stamp: { sec: 0, nsec: 0 }, frame_id: "map" },
+      data: new Uint32Array([0x10001]),
+      origin: { x: 0, y: 0, z: 0 },
+      resolutions: { x: 1, y: 1, z: 1 },
+      size_x: 1,
+      size_y: 1,
+      size_z: 1,
+    };
+    const renderable = new VoxelGridRenderable("/voxels", renderer, {
+      receiveTime: 0n,
+      messageTime: 0n,
+      frameId: "map",
+      pose: { position: { x: 0, y: 0, z: 0 }, orientation: { x: 0, y: 0, z: 0, w: 1 } },
+      settingsPath: ["topics", "/voxels"],
+      settings: { ...VOXEL_GRID_DEFAULTS, drawBehind: true },
+      topic: "/voxels",
+      grid: { kind: "bit", message: grid },
+    });
+    renderable.update();
+    const mesh = renderable.children[0] as THREE.Mesh;
+    const renderItems = [
+      { id: mesh.id, object: mesh, geometry: mesh.geometry, material: mesh.material },
+    ];
+    const camera = new THREE.PerspectiveCamera(45, 2, 0.5, 500);
+    return { picker: new Picker(gl, scene), draws, mesh, renderable, camera };
+  }
+
+  it("lets later objects win the id pass but keeps depth and nearest-voxel picking", () => {
+    const { picker, draws, mesh, renderable, camera } = setup();
+    const { pickingMaterial, instancePickingMaterial } = mesh.userData as {
+      pickingMaterial: THREE.Material;
+      instancePickingMaterial: THREE.Material;
+    };
+
+    // Object id pass: the grid writes no depth, so foreground objects drawn after it win
+    picker.pick(100, 100, camera);
+    expect(draws.at(-1)).toEqual({ material: pickingMaterial, depthWrite: false });
+
+    // Depth pass (measuring): the grid's surface is still recorded
+    picker.pickDepth(100, 100, camera);
+    expect(draws.at(-1)).toEqual({ material: pickingMaterial, depthWrite: true });
+
+    // Instance pass: depth writes stay on, so the nearest voxel wins
+    picker.pickInstance(100, 100, camera, renderable);
+    expect(draws.at(-1)).toEqual({ material: instancePickingMaterial, depthWrite: true });
   });
 });
