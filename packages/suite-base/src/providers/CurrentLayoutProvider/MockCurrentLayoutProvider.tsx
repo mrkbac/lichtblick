@@ -18,6 +18,7 @@ import {
   LayoutData,
   PanelsActions,
 } from "@lichtblick/suite-base/context/CurrentLayoutContext/actions";
+import type { HistorySnapshot } from "@lichtblick/suite-base/providers/CurrentLayoutProvider/layoutHistory";
 import panelsReducer, {
   defaultPlaybackConfig,
 } from "@lichtblick/suite-base/providers/CurrentLayoutProvider/reducers";
@@ -26,6 +27,9 @@ import panelsReducer, {
  * An alternative implementation of CurrentLayoutProvider, for use in tests, which performs actions
  * synchronously and doesn't require a LayoutManager.
  */
+/** One object, so useSyncExternalStore sees an unchanged snapshot. */
+const EMPTY_LAYOUT_HISTORY: HistorySnapshot = { entries: [], index: -1 };
+
 export default function MockCurrentLayoutProvider({
   children,
   initialState,
@@ -156,6 +160,9 @@ export default function MockCurrentLayoutProvider({
       undoLayoutChange: () => {},
       redoLayoutChange: () => {},
       reopenClosedPanel: () => {},
+      goToLayoutHistory: () => {},
+      getLayoutHistory: () => EMPTY_LAYOUT_HISTORY,
+      subscribeLayoutHistory: () => () => {},
     }),
     [performAction, setCurrentLayout, updateSharedPanelState],
   );

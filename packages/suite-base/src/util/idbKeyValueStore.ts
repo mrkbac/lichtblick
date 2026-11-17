@@ -6,6 +6,7 @@ export type KeyValueStore = {
   get: <T>(key: IDBValidKey) => Promise<T | undefined>;
   set: (key: IDBValidKey, value: unknown) => Promise<void>;
   setMany: (entries: [IDBValidKey, unknown][]) => Promise<void>;
+  delete: (key: IDBValidKey) => Promise<void>;
 };
 
 /**
@@ -49,6 +50,9 @@ export function createKeyValueStore(dbName: string, storeName: string): KeyValue
     get: async <T>(key: IDBValidKey) => (await (await open()).get(storeName, key)) as T | undefined,
     set: async (key, value) => {
       await (await open()).put(storeName, value, key);
+    },
+    delete: async (key) => {
+      await (await open()).delete(storeName, key);
     },
     setMany: async (entries) => {
       const tx = (await open()).transaction(storeName, "readwrite");
