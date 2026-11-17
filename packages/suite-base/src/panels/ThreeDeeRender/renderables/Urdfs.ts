@@ -430,16 +430,27 @@ export class Urdfs extends SceneExtension<UrdfRenderable> {
       const isAngular = joint.jointType === "revolute" || joint.jointType === "continuous";
       const axis = tempVec3a.set(joint.axis.x, joint.axis.y, joint.axis.z);
 
+      if (action.payload.input !== "number") {
+        return;
+      }
+      // undefined when the field is cleared: drop the manual offset
+      const value = action.payload.value;
       if (isAngular) {
-        const degrees = action.payload.value as number;
-        const quaternion = tempQuaternion1.setFromAxisAngle(axis, degrees * DEG2RAD);
-        const euler = tempEuler.setFromQuaternion(quaternion);
-        frame.offsetEulerDegrees = [euler.x * RAD2DEG, euler.y * RAD2DEG, euler.z * RAD2DEG];
+        if (value == undefined) {
+          frame.offsetEulerDegrees = undefined;
+        } else {
+          const quaternion = tempQuaternion1.setFromAxisAngle(axis, value * DEG2RAD);
+          const euler = tempEuler.setFromQuaternion(quaternion);
+          frame.offsetEulerDegrees = [euler.x * RAD2DEG, euler.y * RAD2DEG, euler.z * RAD2DEG];
+        }
         this.saveSetting(["transforms", frameKey, "rpyCoefficient"], frame.offsetEulerDegrees);
       } else {
-        const scale = action.payload.value as number;
-        axis.multiplyScalar(scale);
-        frame.offsetPosition = [axis.x, axis.y, axis.z];
+        if (value == undefined) {
+          frame.offsetPosition = undefined;
+        } else {
+          axis.multiplyScalar(value);
+          frame.offsetPosition = [axis.x, axis.y, axis.z];
+        }
         this.saveSetting(["transforms", frameKey, "xyzOffset"], frame.offsetPosition);
       }
     } else if (path.length === 3) {
