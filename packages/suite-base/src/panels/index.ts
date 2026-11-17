@@ -72,6 +72,7 @@ import { PUBLISH_SHORTCUTS } from "./Publish/shortcuts";
 import publishThumbnail from "./Publish/thumbnail.png";
 import rawMessagesThumbnail from "./RawMessages/thumbnail.png";
 import { RAW_MESSAGES_SHORTCUTS } from "./RawMessagesVirtual/shortcuts";
+import stackThumbnail from "./Stack/thumbnail.png";
 import { STATE_TRANSITIONS_SHORTCUTS } from "./StateTransitions/shortcuts";
 import stateTransitionsThumbnail from "./StateTransitions/thumbnail.png";
 import { TAB_SHORTCUTS } from "./Tab/shortcuts";
@@ -158,6 +159,15 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
     module: async () => await import("./Indicator"),
     docs: async () => await import("./Indicator/docs"),
     shortcuts: INDICATOR_SHORTCUTS,
+  },
+  {
+    title: t("stack"),
+    type: "Stack",
+    keywords: ["layout", "scroll", "list", "grid", "vstack", "hstack", "container"],
+    description: t("stackDescription"),
+    thumbnail: stackThumbnail,
+    module: async () => await import("./Stack"),
+    docs: async () => await import("./Stack/docs"),
   },
   {
     title: t("tab"),

@@ -510,3 +510,59 @@ describe("layout reducers", () => {
     });
   });
 });
+
+describe("Stack panel", () => {
+  const withStack = (
+    tabs: { title: string; layout?: LayoutNode; size?: number }[],
+  ): LayoutData => ({
+    ...emptyLayout,
+    layout: { direction: "row", children: [{ panels: ["Plot!a"] }, { panels: ["Stack!s"] }] },
+    configById: { "Stack!s": { arrangement: "vertical", tabs } },
+  });
+
+  it("appends a panel as a new item, also moving it from elsewhere", () => {
+    const added = panelsReducer(withStack([{ title: "", layout: { panels: ["Map!m"] } }]), {
+      type: "ADD_PANEL",
+      payload: { id: "Plot!a", tabId: "Stack!s", tabIndex: 1 },
+    });
+    expect(added.layout).toEqual({ panels: ["Stack!s"] });
+    expect(getTabs(added.configById["Stack!s"]).map((tab) => tab.layout)).toEqual([
+      { panels: ["Map!m"] },
+      { panels: ["Plot!a"] },
+    ]);
+  });
+
+  it("keeps a single item and the empty Stack panel, dropping empty items and keeping sizes", () => {
+    const state = withStack([
+      { title: "", layout: { panels: ["Map!m"] }, size: 200 },
+      { title: "", layout: { panels: ["Audio!x"] } },
+    ]);
+    const closed = panelsReducer(state, {
+      type: "CHANGE_PANEL_LAYOUT",
+      payload: { layout: undefined, tab: { panelId: "Stack!s", index: 1 } },
+    });
+    expect(getPanelIds(closed.layout)).toEqual(["Plot!a", "Stack!s"]);
+    expect(getTabs(closed.configById["Stack!s"])).toEqual([
+      { title: "", layout: { panels: ["Map!m"] }, size: 200 },
+    ]);
+    expect(closed.configById["Audio!x"]).toBeUndefined();
+
+    const empty = panelsReducer(closed, {
+      type: "CHANGE_PANEL_LAYOUT",
+      payload: { layout: undefined, tab: { panelId: "Stack!s", index: 0 } },
+    });
+    expect(getPanelIds(empty.layout)).toEqual(["Plot!a", "Stack!s"]);
+    expect(getTabs(empty.configById["Stack!s"])).toEqual([]);
+  });
+
+  it("stacks a panel dropped onto an item's panel within that item", () => {
+    const state = withStack([{ title: "", layout: { panels: ["Map!m"] } }]);
+    const result = panelsReducer(state, {
+      type: "ADD_PANEL",
+      payload: { id: "Plot!a", position: "center", targetPanelId: "Map!m" },
+    });
+    expect(result.layout).toEqual({ panels: ["Stack!s"] });
+    const [item] = getTabs(result.configById["Stack!s"]);
+    expect(getPanelIds(item?.layout).map(getPanelTypeFromId)).toEqual(["Tab"]);
+  });
+});

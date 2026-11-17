@@ -103,6 +103,8 @@ type Props = {
   canPublish: boolean;
   canvas: HTMLCanvasElement | null;
   enableStats: boolean;
+  /** Show object details on hover; toggled with a shortcut */
+  hoverInspector: boolean;
   interfaceMode: InterfaceMode;
   measureActive: boolean;
   onChangePublishClickType: (_: PublishClickType) => void;
@@ -631,7 +633,9 @@ export function RendererOverlay(props: Readonly<Props>): React.JSX.Element {
         </div>
       )}
       <HUD renderer={renderer} />
-      <HoverTooltip entities={hoveredEntities} position={hoverPosition} canvas={props.canvas} />
+      {props.hoverInspector && (
+        <HoverTooltip entities={hoveredEntities} position={hoverPosition} canvas={props.canvas} />
+      )}
       {stats}
       {resetViewButton}
     </>

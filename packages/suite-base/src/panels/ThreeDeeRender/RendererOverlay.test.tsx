@@ -108,6 +108,7 @@ describe("<RendererOverlay /> hover wiring", () => {
           canPublish={false}
           canvas={canvas}
           enableStats={false}
+          hoverInspector
           interfaceMode="3d"
           measureActive={false}
           onChangePublishClickType={vi.fn()}
@@ -350,6 +351,7 @@ describe("<RendererOverlay /> download image button", () => {
           canPublish={false}
           canvas={null}
           enableStats={false}
+          hoverInspector
           interfaceMode={interfaceMode}
           measureActive={false}
           onChangePublishClickType={vi.fn()}
@@ -407,6 +409,7 @@ describe("<RendererOverlay /> frame picking", () => {
           canPublish
           canvas={null}
           enableStats={false}
+          hoverInspector
           interfaceMode="3d"
           measureActive={active.measureActive}
           onChangePublishClickType={vi.fn()}

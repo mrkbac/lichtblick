@@ -307,4 +307,17 @@ describe("CameraStateSettings", () => {
     ]);
     handler.dispose();
   });
+
+  it("stores the log depth switch in the scene config", () => {
+    // Given
+    const handler = new CameraStateSettings(renderer, canvas, 1);
+    // When
+    handler.handleSettingsAction({
+      action: "update",
+      payload: { path: ["cameraState", "logDepth"], input: "boolean", value: true },
+    });
+    // Then
+    expect(renderer.config.scene.logDepth).toBe(true);
+    handler.dispose();
+  });
 });
