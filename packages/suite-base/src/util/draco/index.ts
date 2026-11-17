@@ -16,8 +16,10 @@ import { addFoxgloveSchema } from "@lichtblick/suite-base/util/foxgloveSchemas";
 import { preloadDecoder } from "@lichtblick/suite-base/util/preloadDecoder";
 import { toError } from "@lichtblick/suite-base/util/toError";
 
-export const COMPRESSED_POINT_CLOUD_SCHEMAS = new Set<string>();
-addFoxgloveSchema(COMPRESSED_POINT_CLOUD_SCHEMAS, "foxglove.CompressedPointCloud");
+export const COMPRESSED_POINT_CLOUD_SCHEMAS = addFoxgloveSchema(
+  new Set<string>(),
+  "foxglove.CompressedPointCloud",
+);
 
 /** The parts of the Emscripten Draco module this file uses. */
 type DracoObject = { ptr: number };
