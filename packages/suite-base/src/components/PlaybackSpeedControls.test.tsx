@@ -11,7 +11,11 @@ import { render, screen, fireEvent } from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
 
 import MockMessagePipelineProvider from "@lichtblick/suite-base/components/MessagePipeline/MockMessagePipelineProvider";
-import PlaybackSpeedControls from "@lichtblick/suite-base/components/PlaybackSpeedControls";
+import PlaybackSpeedControls, {
+  formatSpeed,
+  roundSpeed,
+  stepSpeed,
+} from "@lichtblick/suite-base/components/PlaybackSpeedControls";
 import { PLAYER_CAPABILITIES } from "@lichtblick/suite-base/players/constants";
 import MockCurrentLayoutProvider from "@lichtblick/suite-base/providers/CurrentLayoutProvider/MockCurrentLayoutProvider";
 
@@ -48,17 +52,38 @@ describe("Given PlaybackSpeedControls", () => {
     expect(button).toHaveAttribute("title", "Playback speed");
   });
 
-  it("When clicked Then opens menu", () => {
+  it("When clicked Then opens popover with slider, steppers and presets", () => {
     renderWithProviders({ speed: 1 });
 
-    const button = screen.getByTestId("PlaybackSpeedControls-Dropdown");
-    fireEvent.click(button);
+    fireEvent.click(screen.getByTestId("PlaybackSpeedControls-Dropdown"));
 
-    // Menu should be open and show speed options
-    expect(screen.getByRole("menu")).toBeInTheDocument();
-    expect(screen.getByText("0.01×")).toBeInTheDocument();
+    expect(screen.getByRole("slider", { name: "Playback speed" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Slower" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Faster" })).toBeInTheDocument();
     expect(screen.getByText("0.5×")).toBeInTheDocument();
-    expect(screen.getByText("2×")).toBeInTheDocument();
-    expect(screen.getByText("5×")).toBeInTheDocument();
+    expect(screen.getByText("10×")).toBeInTheDocument();
+  });
+});
+
+describe("speed helpers", () => {
+  it("rounds slider values to 2 significant digits within range", () => {
+    expect(roundSpeed(0.3712)).toBe(0.37);
+    expect(roundSpeed(1.234)).toBe(1.2);
+    expect(roundSpeed(0.001)).toBe(0.01);
+    expect(roundSpeed(500)).toBe(100);
+  });
+
+  it("steps to the neighbouring preset from any value", () => {
+    expect(stepSpeed(1, 1)).toBe(2);
+    expect(stepSpeed(1, -1)).toBe(0.8);
+    expect(stepSpeed(1.3, 1)).toBe(2);
+    expect(stepSpeed(1.3, -1)).toBe(1);
+    expect(stepSpeed(100, 1)).toBe(100);
+  });
+
+  it("formats speeds", () => {
+    expect(formatSpeed(0.05)).toBe("0.05×");
+    expect(formatSpeed(1)).toBe("1×");
+    expect(formatSpeed(0.37)).toBe("0.37×");
   });
 });

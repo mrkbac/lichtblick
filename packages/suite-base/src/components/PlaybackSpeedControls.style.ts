@@ -3,10 +3,21 @@
 
 import { makeStyles } from "tss-react/mui";
 
-export const useStyles = makeStyles()(() => ({
+export const useStyles = makeStyles()((theme) => ({
   speedText: {
     fontSize: "0.8rem",
     fontWeight: 400,
     marginRight: 2,
+  },
+  paper: {
+    width: 280,
+    padding: theme.spacing(1.5),
+    display: "flex",
+    flexDirection: "column",
+    gap: theme.spacing(1),
+  },
+  value: {
+    fontWeight: 600,
+    fontVariantNumeric: "tabular-nums",
   },
 }));
