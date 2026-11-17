@@ -75,13 +75,12 @@ function mergeSubscription(
 function denormalizeSubscriptions(
   subscriptions: Immutable<InternalSubscribePayload[]>,
 ): Immutable<InternalSubscribePayload[]> {
-  const byTopic = Object.groupBy(subscriptions, (v) => v.topic);
   return (
-    Object.values(byTopic)
+    [...Map.groupBy(subscriptions, (v) => v.topic).values()]
       // Filter out any set of payloads that contains _only_ empty `fields`
-      .filter((payloads) => !payloads!.every((v) => v.fields?.length === 0))
+      .filter((payloads) => !payloads.every((v) => v.fields?.length === 0))
       // Now reduce them down to a single payload for each topic
-      .map((payloads) => applySamplingGuardToSubscription(payloads!.reduce(mergeSubscription)))
+      .map((payloads) => applySamplingGuardToSubscription(payloads.reduce(mergeSubscription)))
   );
 }
 
