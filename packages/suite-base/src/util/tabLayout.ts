@@ -215,14 +215,6 @@ export function mapLayoutTrees<T extends TreeData>(
   );
 }
 
-/**
- * The tabs of a Tab panel and which of them is shown. Empty tabs stay: they show the panel picker
- * until filled or closed.
- */
-function tabsAndActive(config: PanelConfig | undefined): { tabs: TabConfig[]; active: number } {
-  return { tabs: getTabs(config), active: getActiveTabIndex(config) };
-}
-
 function normalizeTabsOnce<T extends TreeData>(data: T): T {
   let result = data;
   for (const { location } of getLayoutTrees(data)) {
@@ -254,11 +246,11 @@ function normalizeTabsOnce<T extends TreeData>(data: T): T {
       let activeTabIdx = 0;
       for (const id of group.panels) {
         if (isTabPanel(id)) {
-          const merged = tabsAndActive(configById[id] ?? configs[id]);
+          const merged = configById[id] ?? configs[id];
           if (id === shownId) {
-            activeTabIdx = tabs.length + merged.active;
+            activeTabIdx = tabs.length + getActiveTabIndex(merged);
           }
-          pushAll(tabs, merged.tabs);
+          pushAll(tabs, getTabs(merged));
         } else {
           if (id === shownId) {
             activeTabIdx = tabs.length;
