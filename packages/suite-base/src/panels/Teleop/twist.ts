@@ -182,7 +182,8 @@ export function computeTwist(
   const twist = zeroTwist();
   for (const field of TWIST_FIELDS) {
     const { input, max = DEFAULT_MAPPING[field].max } = mapping[field];
-    if (!Number.isFinite(speed)) {
+    // the number editor accepts e.g. 1e309 (Infinity); never publish non-finite components
+    if (!Number.isFinite(max) || !Number.isFinite(speed)) {
       continue;
     }
     const [kind, axis] = field.split("-") as ["linear" | "angular", "x" | "y" | "z"];

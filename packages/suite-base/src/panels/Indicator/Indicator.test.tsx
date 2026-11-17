@@ -13,7 +13,10 @@ import {
   PanelExtensionAdapter,
 } from "@lichtblick/suite-base/components/PanelExtensionAdapter";
 import Indicator from "@lichtblick/suite-base/panels/Indicator";
-import { DEFAULT_CONFIG } from "@lichtblick/suite-base/panels/Indicator/constants";
+import {
+  DEFAULT_CONFIG,
+  DEFAULT_FALLBACK_COLOR,
+} from "@lichtblick/suite-base/panels/Indicator/constants";
 import { getMatchingRule } from "@lichtblick/suite-base/panels/Indicator/getMatchingRule";
 import {
   IndicatorConfig,
@@ -147,6 +150,14 @@ describe("Indicator Component", () => {
     });
 
     expect(screen.getByText(matchingRule.label)).toBeTruthy();
+    // the browser normalizes the hex color, so compare against a probe styled the same way
+    const probe = document.createElement("div");
+    probe.style.backgroundColor = DEFAULT_FALLBACK_COLOR;
+    const indicatorStack = screen.getByTestId("background-indicator").parentElement;
+    expect(indicatorStack).toBeInstanceOf(HTMLElement);
+    expect(getComputedStyle(indicatorStack ?? document.body).backgroundColor).toBe(
+      probe.style.backgroundColor,
+    );
   });
 
   it.each<IndicatorStyle>(["bulb", "background"])(

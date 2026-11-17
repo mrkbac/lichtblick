@@ -11,6 +11,7 @@ import {
   NEUTRAL_PAD,
   readGamepad,
   toJoy,
+  zeroTwist,
 } from "@lichtblick/suite-base/panels/Teleop/twist";
 import { PadState } from "@lichtblick/suite-base/panels/Teleop/types";
 
@@ -52,6 +53,20 @@ describe("computeTwist", () => {
 
     // Then angular.z drives with the default max, as it will after the layout is reloaded
     expect(twist).toEqual({ linear: { x: 1, y: 0, z: 0 }, angular: { x: 0, y: 0, z: -0.75 } });
+  });
+
+  it("leaves a field at zero when its max is not finite", () => {
+    // Given an angular.z max typed as 1e309, which parses to Infinity
+    const mapping = {
+      ...DEFAULT_CONFIG.mapping,
+      "angular-z": { input: "leftX" as const, max: Infinity },
+    };
+
+    // When the left stick is pushed fully left and centered vertically
+    const twist = computeTwist(mapping, pad({ left: { x: 1, y: 0 } }), 1);
+
+    // Then nothing non-finite is published
+    expect(twist).toEqual(zeroTwist());
   });
 });
 
