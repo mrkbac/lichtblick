@@ -15,7 +15,6 @@
 //   You may not use this file except in compliance with the License.
 
 import { RosObject } from "@lichtblick/suite-base/players/types";
-import { Marker } from "@lichtblick/suite-base/types/Messages";
 
 export type InteractionData = {
   readonly topic: string | undefined;
@@ -23,8 +22,6 @@ export type InteractionData = {
   readonly originalMessage: RosObject;
   readonly instanceDetails: RosObject | undefined;
 };
-export type Interactive<T> = T & { interactionData: InteractionData };
-export type SelectedObject = { object: Marker; instanceIndex?: number };
 
 export type HoverEntityInfo = {
   topic?: string;
