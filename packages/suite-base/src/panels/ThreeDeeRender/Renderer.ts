@@ -47,6 +47,7 @@ import type { DocumentedNodes } from "@lichtblick/suite-base/panels/shared/docum
 import { showHideAllValue } from "@lichtblick/suite-base/panels/shared/topicList";
 import IAnalytics from "@lichtblick/suite-base/services/IAnalytics";
 import { randomUUID } from "@lichtblick/suite-base/util/randomUUID";
+import { toError } from "@lichtblick/suite-base/util/toError";
 import { palette, fontMonospace } from "@lichtblick/theme";
 
 import { DynamicBufferGeometry } from "./DynamicBufferGeometry";
@@ -1411,7 +1412,7 @@ export class Renderer extends EventEmitter<RendererEvents> {
         });
       }
     } catch (e: unknown) {
-      const err = e as Error;
+      const err = toError(e);
       this.settings.errors.add(
         ["transforms"],
         ADD_TRANSFORM_ERROR,
@@ -1440,7 +1441,7 @@ export class Renderer extends EventEmitter<RendererEvents> {
         });
       }
     } catch (e: unknown) {
-      const err = e as Error;
+      const err = toError(e);
       this.settings.errors.add(
         ["transforms"],
         ADD_TRANSFORM_ERROR,

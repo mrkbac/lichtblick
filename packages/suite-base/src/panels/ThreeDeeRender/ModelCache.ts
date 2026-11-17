@@ -18,6 +18,7 @@ import { STLLoader } from "three/examples/jsm/loaders/STLLoader.js";
 
 import Logger from "@lichtblick/log";
 import { BuiltinPanelExtensionContext } from "@lichtblick/suite-base/components/PanelExtensionAdapter";
+import { toError } from "@lichtblick/suite-base/util/toError";
 
 import { disposeMeshesRecursive } from "./dispose";
 import { isTiff, tiffToPng } from "./tiffToPng";
@@ -99,7 +100,7 @@ export class ModelCache {
         .then((model) => ({ model: addEdges(model, this.#edgeMaterial), errors }))
         .catch((err: unknown) => {
           this.#models.delete(key);
-          errors.push(err as Error);
+          errors.push(toError(err));
           return { model: undefined, errors };
         });
       this.#models.set(key, promise);

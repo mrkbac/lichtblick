@@ -26,6 +26,7 @@ import type { DocumentedNodes } from "@lichtblick/suite-base/panels/shared/docum
 import { eulerToQuaternion } from "@lichtblick/suite-base/util/geometry";
 import { isValidUrl } from "@lichtblick/suite-base/util/isValidURL";
 import { randomUUID } from "@lichtblick/suite-base/util/randomUUID";
+import { toError } from "@lichtblick/suite-base/util/toError";
 
 import { BaseUserData, Renderable } from "../Renderable";
 import { RenderableCube } from "./markers/RenderableCube";
@@ -616,7 +617,7 @@ export class Urdfs extends SceneExtension<UrdfRenderable> {
         if (fetching.control.signal.aborted || renderable.userData.fetching !== fetching) {
           return;
         }
-        const err = e as Error;
+        const err = toError(e);
         const hasError = !err.message.startsWith("Failed to fetch");
         const errMessage = `Failed to load URDF from "${url}"${hasError ? `: ${err.message}` : ""}`;
         this.renderer.settings.errors.add(["layers", instanceId], FETCH_URDF_ERR, errMessage);
@@ -780,7 +781,7 @@ export class Urdfs extends SceneExtension<UrdfRenderable> {
         ) {
           return;
         }
-        const err = e as Error;
+        const err = toError(e);
         log.error(`Failed to parse URDF: ${err.message}`);
         this.renderer.settings.errors.add(
           settingsPath,

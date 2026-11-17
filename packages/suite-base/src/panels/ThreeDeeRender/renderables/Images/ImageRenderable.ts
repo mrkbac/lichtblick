@@ -34,6 +34,7 @@ import {
   INITIAL_CONTRAST,
 } from "@lichtblick/suite-base/panels/ThreeDeeRender/settingsNodes/imageMode";
 import { RosValue } from "@lichtblick/suite-base/players/types";
+import { toError } from "@lichtblick/suite-base/util/toError";
 
 import { AnyImage, CompressedVideo } from "./ImageTypes";
 import { isCompressedDepthFormat } from "./decodeCompressedDepth";
@@ -500,7 +501,7 @@ export class ImageRenderable extends Renderable<ImageUserData> {
       if (!this.#showingErrorImage) {
         await this.#setErrorImage(seq, onDecoded);
       }
-      this.addError(DECODE_IMAGE_ERR_KEY, `Error decoding image: ${(err as Error).message}`);
+      this.addError(DECODE_IMAGE_ERR_KEY, `Error decoding image: ${toError(err).message}`);
     }
   }
 

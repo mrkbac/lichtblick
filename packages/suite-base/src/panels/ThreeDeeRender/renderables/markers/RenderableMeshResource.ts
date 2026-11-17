@@ -8,6 +8,7 @@
 import * as THREE from "three";
 
 import { EDGE_LINE_SEGMENTS_NAME } from "@lichtblick/suite-base/panels/ThreeDeeRender/ModelCache";
+import { toError } from "@lichtblick/suite-base/util/toError";
 
 import { RenderableMarker } from "./RenderableMarker";
 import { makeStandardMaterial } from "./materials";
@@ -101,7 +102,7 @@ export class RenderableMeshResource extends RenderableMarker {
           errors.add(
             this.userData.settingsPath,
             MESH_FETCH_FAILED,
-            `Unhandled error loading mesh from "${marker.mesh_resource}": ${(err as Error).message}`,
+            `Unhandled error loading mesh from "${marker.mesh_resource}": ${toError(err).message}`,
           );
         });
     }
