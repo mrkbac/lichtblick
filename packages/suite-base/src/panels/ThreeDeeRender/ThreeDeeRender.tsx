@@ -767,9 +767,13 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
         }
       }
       if (shouldSubscribe) {
+        // Timestamp sync needs every message to find matching stamps
+        const synced =
+          config.scene.syncTimestamps === true && config.topics[topic.name]?.sync === true;
         const latestOnly =
-          rendererSubscription.latestOnly?.() ??
-          rendererSubscription.filterQueue === onlyLastByTopicMessage;
+          !synced &&
+          (rendererSubscription.latestOnly?.() ??
+            rendererSubscription.filterQueue === onlyLastByTopicMessage);
         const sampling =
           rendererSubscription.preload !== true && latestOnly
             ? { mode: "latest-per-render-tick" as const }
@@ -812,6 +816,7 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
     config.imageMode.annotations,
     // Image sampling depends on synchronization
     config.imageMode.synchronize,
+    config.scene.syncTimestamps,
     // Need to update subscriptions when layers change as URDF layers might subscribe to topics
     // shouldSubscribe values will be re-evaluated
     config.layers,
