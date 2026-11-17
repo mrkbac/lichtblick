@@ -12,7 +12,7 @@ export const MAX_SYNC_STAMPS_PER_TOPIC = 250;
 type Stamped = { timestamp?: Partial<Time> };
 
 /**
- * Header stamp (ROS), `timestamp` field or first entity's `timestamp` (foxglove schemas), else the
+ * Header stamp, else a `timestamp` field on the message or its first entity, else the
  * log time.
  */
 export function syncTimestamp(event: MessageEvent): bigint {
