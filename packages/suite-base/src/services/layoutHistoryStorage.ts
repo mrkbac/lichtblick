@@ -28,8 +28,6 @@ function flush(): void {
   }
 }
 
-window.addEventListener("pagehide", flush);
-
 export async function loadLayoutHistory(layoutId: string): Promise<HistorySnapshot | undefined> {
   if (pending?.layoutId === layoutId) {
     return pending.history;
@@ -43,6 +41,8 @@ export function saveLayoutHistory(layoutId: string, history: HistorySnapshot): v
     flush();
   }
   pending = { layoutId, history };
+  // Write the last edits when the page goes away. Re-adding the same listener is a no-op.
+  window.addEventListener("pagehide", flush);
   timer ??= setTimeout(flush, SAVE_THROTTLE_MS);
 }
 
