@@ -36,13 +36,15 @@ import {
 import { ILayoutManager, LayoutFavorites } from "@lichtblick/suite-base/services/ILayoutManager";
 import {
   deleteLayoutHistory,
+  loadLayoutHistory,
   saveLayoutHistory,
 } from "@lichtblick/suite-base/services/layoutHistoryStorage";
+import { migratePanelsState } from "@lichtblick/suite-base/services/migrateLayout";
 import { BasicBuilder } from "@lichtblick/test-builders";
 
 // Each test starts without a saved layout history.
 vi.mock("@lichtblick/suite-base/services/layoutHistoryStorage", () => ({
-  loadLayoutHistory: async () => undefined,
+  loadLayoutHistory: vi.fn(async () => undefined),
   saveLayoutHistory: vi.fn(),
   deleteLayoutHistory: vi.fn(async () => {}),
 }));
@@ -361,6 +363,43 @@ describe("CurrentLayoutProvider", () => {
       result.current.actions.redoLayoutChange();
     });
     expect(config()).toEqual({ "ExamplePanel!1": { foo: "changed" } });
+  });
+
+  it("continues the selected layout's saved history", async () => {
+    // Saved as the provider shows it: migrated.
+    const current = migratePanelsState(TEST_LAYOUT);
+    const earlier = { ...current, globalVariables: { step: 1 } };
+    vi.mocked(loadLayoutHistory).mockResolvedValueOnce({
+      entries: [
+        { data: earlier, savedAt: 1 },
+        { data: current, savedAt: 2 },
+      ],
+      index: 1,
+    });
+    mockLayoutManager.getLayouts.mockImplementation(async () => [
+      {
+        id: "example",
+        name: "Test layout",
+        data: { data: TEST_LAYOUT },
+        permission: "CREATOR_WRITE",
+      },
+    ]);
+    mockLayoutManager.getLayout.mockResolvedValue({
+      id: "example",
+      name: "Test layout",
+      baseline: { data: TEST_LAYOUT, updatedAt: new Date(10).toISOString() },
+    });
+    mockUserProfile.getUserProfile.mockResolvedValue({ currentLayoutId: "example" });
+    const { result } = renderTest({ mockLayoutManager, mockUserProfile });
+    await waitFor(() => {
+      expect(result.current.layoutState.selectedLayout?.data).toBeDefined();
+    });
+    expect(loadLayoutHistory).toHaveBeenCalledWith("example");
+
+    act(() => {
+      result.current.actions.undoLayoutChange();
+    });
+    expect(result.current.layoutState.selectedLayout?.data?.globalVariables).toEqual({ step: 1 });
   });
 
   it("saves the history under the selected layout and stops when that layout is deleted", async () => {
