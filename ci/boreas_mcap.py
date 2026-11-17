@@ -307,10 +307,6 @@ def ros1(name: str, definition: str) -> Codec:
     return Codec(name, SchemaEncoding.ROS1, definition.encode(), "ros1", encode)
 
 
-def ros1_time(microseconds: int) -> dict[str, int]:
-    return {"sec": microseconds // 1_000_000, "nsec": microseconds % 1_000_000 * 1000}
-
-
 # --- OMG IDL ----------------------------------------------------------------------------------
 
 
@@ -532,7 +528,6 @@ class ContainerWriter:
         self.chunk_indexes: list[ChunkIndex] = []
         self.attachment_indexes: list[AttachmentIndex] = []
         self.metadata_indexes: list[MetadataIndex] = []
-        self.counts: dict[int, int] = defaultdict(int)
         self.facts: dict[int, ChannelFacts] = defaultdict(ChannelFacts)
         self.compressions: set[str] = set()
         self.without_crc = 0
@@ -585,7 +580,6 @@ class ContainerWriter:
         return channel.id
 
     def _count(self, message: Message, source: dict | None) -> None:
-        self.counts[message.channel_id] += 1
         facts = self.facts[message.channel_id]
         if facts.count == 0:
             facts.first_log_time = message.log_time
@@ -732,7 +726,7 @@ class ContainerWriter:
         summary = RecordBuilder()
         offsets: list[SummaryOffset] = []
         statistics = Statistics(
-            message_count=sum(self.counts.values()),
+            message_count=sum(f.count for f in self.facts.values()),
             schema_count=len(self.schemas),
             channel_count=len(self.channels),
             attachment_count=len(self.attachment_indexes),
@@ -740,7 +734,7 @@ class ContainerWriter:
             chunk_count=len(self.chunk_indexes) + self.empty_chunks,
             message_start_time=self.start_time or 0,
             message_end_time=self.end_time,
-            channel_message_counts=dict(self.counts),
+            channel_message_counts={i: f.count for i, f in self.facts.items()},
         )
         for opcode, records in (
             (Opcode.SCHEMA, list(self.schemas.values())),
@@ -777,12 +771,7 @@ class ContainerWriter:
 
     def expectations(self) -> dict:
         """What a reader must find in the file, per channel and for the container."""
-        chunks = sorted(
-            (
-                c for c in self.chunk_indexes if c.message_end_time
-            ),  # not the empty chunk
-            key=lambda c: c.chunk_start_offset,
-        )
+        chunks = sorted(self.chunk_indexes, key=lambda c: c.chunk_start_offset)
         return {
             "container": {
                 # Indexed chunks; streaming readers also see the empty chunks.
@@ -799,7 +788,7 @@ class ContainerWriter:
                 "unchunked_messages": self.unchunked,
                 "attachments": [a.name for a in self.attachment_indexes],
                 "metadata": [m.name for m in self.metadata_indexes],
-                "message_count": sum(self.counts.values()),
+                "message_count": sum(f.count for f in self.facts.values()),
             },
             "channels": [
                 {

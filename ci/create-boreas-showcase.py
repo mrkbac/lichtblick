@@ -194,7 +194,7 @@ def listing(sensor: str, margin: int = 0) -> list[tuple[int, str]]:
 
 
 def stamp(microseconds: int) -> dict[str, int]:
-    """foxglove Time; see codecs.ros1_time and codecs.ros2_time for the ROS layouts."""
+    """foxglove and ROS 1 Time; codecs.ros2_time for ROS 2."""
     return {"sec": microseconds // 1_000_000, "nsec": microseconds % 1_000_000 * 1000}
 
 
@@ -444,10 +444,11 @@ def cloudini_converter() -> Path:
         raise SystemExit(
             "cmake (and a C++ compiler) is needed to build the Cloudini encoder for the LiDAR"
         )
-    archive = download_url(
-        f"https://github.com/facontidavide/cloudini/archive/{CLOUDINI_COMMIT}.tar.gz"
-    )
-    with tarfile.open(fileobj=io.BytesIO(archive)) as tar:
+    url = f"https://github.com/facontidavide/cloudini/archive/{CLOUDINI_COMMIT}.tar.gz"
+    with (
+        urllib.request.urlopen(url, timeout=120) as response,
+        tarfile.open(fileobj=response, mode="r|gz") as tar,
+    ):
         tar.extractall(CACHE, filter="data")
     build = source / "build"
     subprocess.run(
@@ -471,11 +472,6 @@ def cloudini_converter() -> Path:
         check=True,
     )
     return binary
-
-
-def download_url(url: str) -> bytes:
-    with urllib.request.urlopen(url, timeout=120) as response:
-        return response.read()
 
 
 def cloudini_lidar(frames: list[tuple[int, str]]) -> Path:
@@ -1260,7 +1256,7 @@ def main() -> None:
                 {
                     "header": {
                         "seq": scan,
-                        "stamp": codecs.ros1_time(t),
+                        "stamp": stamp(t),
                         "frame_id": "radar",
                     },
                     "format": "png",
@@ -1487,7 +1483,7 @@ def main() -> None:
                 "/diagnostics",
                 "DiagnosticArray",
                 {
-                    "header": {"seq": 0, "stamp": codecs.ros1_time(t), "frame_id": ""},
+                    "header": {"seq": 0, "stamp": stamp(t), "frame_id": ""},
                     "status": status,
                 },
             )
