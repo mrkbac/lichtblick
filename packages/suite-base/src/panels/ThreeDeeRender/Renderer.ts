@@ -69,6 +69,7 @@ import { ScreenOverlay } from "./ScreenOverlay";
 import { SettingsManager, SettingsTreeEntry } from "./SettingsManager";
 import { SharedGeometry } from "./SharedGeometry";
 import type { SharedMap } from "./SharedMap";
+import { TimestampSynchronizer } from "./TimestampSynchronizer";
 import { CameraState } from "./camera";
 import { DARK_OUTLINE, LIGHT_OUTLINE, stringToRgb } from "./color";
 import { HOVER_PICK_THROTTLE_MS, isTransformPreloadEnabled } from "./constants";
@@ -84,6 +85,7 @@ import { CameraStateSettings } from "./renderables/CameraStateSettings";
 import { ImageMode } from "./renderables/ImageMode/ImageMode";
 import { MeasurementTool } from "./renderables/MeasurementTool";
 import { PublishClickTool } from "./renderables/PublishClickTool";
+import { Urdfs } from "./renderables/Urdfs";
 import { MarkerPool } from "./renderables/markers/MarkerPool";
 import {
   Header,
@@ -137,6 +139,20 @@ const LABEL_ATLAS_ERROR = "LABEL_ATLAS_ERROR";
 // An extensionId for creating the top-level settings nodes such as "Topics" and
 // "Custom Layers"
 const RENDERER_ID = "foxglove.Renderer";
+
+const TRANSFORM_SCHEMAS = [
+  FRAME_TRANSFORM_DATATYPES,
+  FRAME_TRANSFORMS_DATATYPES,
+  TF_DATATYPES,
+  TRANSFORM_STAMPED_DATATYPES,
+];
+
+const WAITING_FOR_TIMESTAMP_SYNC_HUD_ITEM: HUDItem = {
+  id: "WAITING_FOR_TIMESTAMP_SYNC",
+  group: RENDERER_ID,
+  getMessage: () => i18next.t("threeDee:waitingForSyncMessages"),
+  displayType: "notice",
+};
 /**
  * temp variables declared here to avoid unnecessary allocations and
  * subsequent garbage collection in high frequency operations
@@ -196,6 +212,10 @@ export class Renderer extends EventEmitter<RendererEvents> {
 
   /** HUD manager instance */
   public hud;
+  /** Holds back messages on topics marked "Sync" until their timestamps match */
+  #timestampSync = new TimestampSynchronizer();
+  /** Inputs `#timestampSync`'s topics were last computed from */
+  #timestampSyncInputs: [unknown, unknown] = [undefined, undefined];
   /** Items to display in the HUD */
   public hudItems: HUDItem[] = [];
   // layerId -> { action, handler }
@@ -297,6 +317,7 @@ export class Renderer extends EventEmitter<RendererEvents> {
     this.hud = new HUDItemManager(this.#onHUDItemsChange);
 
     this.settings = new SettingsManager(baseSettingsTree(this.interfaceMode));
+    this.settings.decorateEntry = this.#addSyncField;
     this.settings.on("update", () => this.emit("settingsTreeChange", this));
     // Add the top-level nodes first so merging happens in the correct order.
     // Another approach would be to modify SettingsManager to allow merging parent
@@ -627,6 +648,7 @@ export class Renderer extends EventEmitter<RendererEvents> {
       this.settings.errors.add(["scene"], LABEL_ATLAS_ERROR, this.#labelAtlasError);
     }
     this.hud.clear();
+    this.#timestampSync.clear();
 
     for (const extension of this.sceneExtensions.values()) {
       if (!clearImageModeExtension && extension === this.#imageModeExtension) {
@@ -1069,9 +1091,7 @@ export class Renderer extends EventEmitter<RendererEvents> {
     this.emit("topicsChanged", this);
 
     // Rebuild the settings nodes for all scene extensions
-    for (const extension of this.sceneExtensions.values()) {
-      this.settings.setNodesForKey(extension.extensionId, extension.settingsNodes());
-    }
+    this.updateAllSettingsNodes();
   }
 
   public setParameters(parameters: Immutable<Map<string, ParameterValue>> | undefined): void {
@@ -1279,7 +1299,7 @@ export class Renderer extends EventEmitter<RendererEvents> {
     // Group messages by topic and schema for efficient batching
     const messagesByTopic = new Map<string, MessageEvent[]>();
     const messagesBySchema = new Map<string, MessageEvent[]>();
-    for (const msg of messageEvents) {
+    for (const msg of this.#synchronize(messageEvents)) {
       // Group by topic
       let topicMessages = messagesByTopic.get(msg.topic);
       if (topicMessages == undefined) {
@@ -1343,8 +1363,84 @@ export class Renderer extends EventEmitter<RendererEvents> {
       return;
     }
 
-    queueMessage(messageEvent, this.topicSubscriptions.get(messageEvent.topic));
-    queueMessage(messageEvent, this.schemaSubscriptions.get(messageEvent.schemaName));
+    for (const event of this.#synchronize([messageEvent])) {
+      queueMessage(event, this.topicSubscriptions.get(event.topic));
+      queueMessage(event, this.schemaSubscriptions.get(event.schemaName));
+    }
+  }
+
+  /** Passes messages through `#timestampSync`, keeping its topics and HUD notice current. */
+  #synchronize(messageEvents: readonly MessageEvent[]): readonly MessageEvent[] {
+    if (
+      this.#timestampSyncInputs[0] !== this.config ||
+      this.#timestampSyncInputs[1] !== this.topicsByName
+    ) {
+      this.#timestampSyncInputs = [this.config, this.topicsByName];
+      this.#timestampSync.setTopics(this.#syncedTopics());
+    }
+    const result = this.#timestampSync.filter(messageEvents);
+    this.hud.displayIfTrue(this.#timestampSync.isWaiting(), WAITING_FOR_TIMESTAMP_SYNC_HUD_ITEM);
+    return result;
+  }
+
+  /**
+   * Visible topics of the data source marked "Sync" while timestamp sync is on. Hidden or missing
+   * topics would never match, and transforms are never held back.
+   */
+  #syncedTopics(): Set<string> {
+    const topics = new Set<string>();
+    if (this.config.scene.syncTimestamps !== true) {
+      return topics;
+    }
+    for (const [topic, settings] of Object.entries(this.config.topics)) {
+      const schemaName = this.topicsByName?.get(topic)?.schemaName;
+      if (
+        settings?.sync === true &&
+        settings.visible === true &&
+        schemaName != undefined &&
+        !TRANSFORM_SCHEMAS.some((schemas) => schemas.has(schemaName))
+      ) {
+        topics.add(topic);
+      }
+    }
+    return topics;
+  }
+
+  /** Adds the "Sync" switch to topic layers while timestamp sync is on (not robot models). */
+  #addSyncField = (key: string, entry: SettingsTreeEntry): SettingsTreeEntry => {
+    const [root, topic] = entry.path;
+    if (
+      this.config.scene.syncTimestamps !== true ||
+      root !== "topics" ||
+      topic == undefined ||
+      entry.path.length !== 2 ||
+      key === Urdfs.extensionId
+    ) {
+      return entry;
+    }
+    const settings = this.config.topics[topic];
+    return {
+      ...entry,
+      node: {
+        ...entry.node,
+        fields: {
+          ...entry.node.fields,
+          sync: {
+            label: i18next.t("threeDee:syncTopic"),
+            help: i18next.t("threeDee:syncTopicHelp"),
+            input: "boolean",
+            value: settings?.sync ?? false,
+          },
+        },
+      },
+    };
+  };
+
+  /** Rebuilds every extension's settings nodes, e.g. after a panel-wide setting changes them. */
+  public updateAllSettingsNodes(): void {
+    for (const extension of this.sceneExtensions.values()) {
+      this.settings.setNodesForKey(extension.extensionId, extension.settingsNodes());
+    }
   }
 
   /** Match the behavior of `tf::Transformer` by stripping leading slashes from
@@ -1814,6 +1910,14 @@ export class Renderer extends EventEmitter<RendererEvents> {
     const visible = showHideAllValue(action);
     if (visible != undefined && action.payload.path.length === 1) {
       this.#setTopicsVisible(visible);
+    }
+    const [, topic, field] = action.payload.path;
+    if (action.action === "update" && topic != undefined && field === "sync") {
+      const sync = action.payload.value === true;
+      this.updateConfig((draft) => {
+        draft.topics[topic] = { ...draft.topics[topic], sync };
+      });
+      this.updateAllSettingsNodes();
     }
   };
 

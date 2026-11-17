@@ -139,6 +139,13 @@ export const threeDee = {
   planarProjectionFactor: "Planar projection factor",
   syncCamera: "Sync camera",
   syncCameraHelp: "Sync the camera with other panels that also have this setting enabled.",
+  syncTimestamps: "Sync timestamps",
+  syncTimestampsHelp:
+    "Only show messages whose timestamps match across all topics marked Sync. Each topic then shows its newest message from the newest matching set. Transforms and robot models are never held back.",
+  syncTopic: "Sync",
+  syncTopicHelp:
+    "Hold back this topic's messages until every topic marked Sync has one with the same header timestamp (or log time when there is none). Needs at least two topics.",
+  waitingForSyncMessages: "Waiting for synchronized messages…",
   target: "Target",
   theta: "Theta",
   view: "View",

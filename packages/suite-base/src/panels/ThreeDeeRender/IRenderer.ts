@@ -143,6 +143,8 @@ export type RendererConfig = {
     syncCamera?: boolean;
     /** Toggles visibility of all topics */
     topicsVisible?: boolean;
+    /** Only show messages whose timestamps match across the topics marked "Sync" */
+    syncTimestamps?: boolean;
   };
   publish: {
     /** The type of message to publish when clicking in the scene */

@@ -29,7 +29,7 @@ type SelectOption = { label: string; value: string | undefined };
 // ---- Frame and view ----
 
 export function frameSettingsNode(
-  config: Pick<RendererConfig, "followTf" | "followMode">,
+  config: Pick<RendererConfig, "followTf" | "followMode"> & { syncTimestamps?: boolean },
   frameOptions: SelectOption[],
   followTfError: string | undefined,
 ): DocumentedNode {
@@ -54,6 +54,12 @@ export function frameSettingsNode(
           { label: t("threeDee:fixed"), value: "follow-none" },
         ],
         value: config.followMode,
+      },
+      syncTimestamps: {
+        label: t("threeDee:syncTimestamps"),
+        help: t("threeDee:syncTimestampsHelp"),
+        input: "boolean",
+        value: config.syncTimestamps ?? false,
       },
     },
     defaultExpansionState: "expanded",

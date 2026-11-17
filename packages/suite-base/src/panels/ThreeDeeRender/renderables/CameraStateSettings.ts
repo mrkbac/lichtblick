@@ -188,7 +188,11 @@ export class CameraStateSettings extends SceneExtension implements ICameraHandle
     const followTfError = this.renderer.settings.errors.errors.errorAtPath(FOLLOW_TF_PATH);
 
     const node = frameSettingsNode(
-      { followTf: followTfValue, followMode: this.renderer.config.followMode },
+      {
+        followTf: followTfValue,
+        followMode: config.followMode,
+        syncTimestamps: config.scene.syncTimestamps,
+      },
       followTfOptions,
       followTfError,
     );
@@ -270,6 +274,13 @@ export class CameraStateSettings extends SceneExtension implements ICameraHandle
           }
           draft.followMode = followMode;
         });
+      } else if (path[1] === "syncTimestamps") {
+        // Stored under `scene`, not `general`
+        this.renderer.updateConfig((draft) => {
+          draft.scene.syncTimestamps = value === true;
+        });
+        // Show or hide the per-topic Sync switches
+        this.renderer.updateAllSettingsNodes();
       }
 
       this.updateSettingsTree();
