@@ -262,6 +262,27 @@ export const threeDee = {
   minColor: "Min color",
   unknownColor: "Unknown color",
 
+  // Grids (cell data)
+  cellGridElevation: "Elevation",
+  cellGridElevationHelp:
+    "Numeric field that lifts each cell along the grid's Z axis, in meters, turning the grid into a height map. Cells without a finite value are hidden. None keeps the grid flat.",
+  cellGridElevationNone: "None",
+  cellGridLighting: "Lighting",
+  cellGridLightingHelp:
+    "Shade the elevated surface by its slope so its shape is visible. Needs an elevation field.",
+  cellGridInterpolation: "Interpolation",
+  cellGridInterpolationHelp:
+    "How colors are sampled between cell centers. Nearest shows each cell as a solid block; Linear blends neighbouring cells smoothly.",
+  cellGridInterpolationNearest: "Nearest",
+  cellGridInterpolationLinear: "Linear",
+  cellGridShowLines: "Show lines",
+  cellGridShowLinesHelp: "Draw the border of every cell.",
+  cellGridLineColor: "Line color",
+  cellGridLineColorHelp: "Color of the cell borders. Lower the alpha to make them subtler.",
+  cellGridDrawBehind: "Draw behind",
+  cellGridDrawBehindHelp:
+    "Draw this grid before everything else and without depth, so other objects always show on top, like a map underlay. The grid is drawn opaque, and with elevation, near and far parts of the surface may overlap incorrectly.",
+
   // Point Extension Utils
   decayTime: "Decay time",
   decayTimeDefaultZeroSeconds: "0 seconds",

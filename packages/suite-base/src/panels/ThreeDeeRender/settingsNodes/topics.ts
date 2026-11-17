@@ -443,7 +443,71 @@ export const FOXGLOVE_GRID_DEFAULTS: LayerSettingsFoxgloveGrid = {
   ],
   colorMap: "turbo",
   explicitAlpha: 1,
+  elevationField: undefined,
+  interpolation: "nearest",
+  showLines: false,
+  lineColor: rgbaToCssString({ r: 0, g: 0, b: 0, a: 0.5 }),
+  lighting: true,
+  drawBehind: false,
 };
+
+/** Elevation, interpolation, cell lines, lighting and draw order of a grid layer. */
+function foxgloveGridDisplayFields(
+  config: Partial<LayerSettingsFoxgloveGrid>,
+  msgFields: string[] | undefined,
+): DocumentedFields {
+  const settings = { ...FOXGLOVE_GRID_DEFAULTS, ...config };
+  const fieldNames = msgFields ?? (settings.elevationField ? [settings.elevationField] : []);
+  return {
+    elevationField: {
+      label: t("threeDee:cellGridElevation"),
+      help: t("threeDee:cellGridElevationHelp"),
+      input: "select",
+      options: [
+        { label: t("threeDee:cellGridElevationNone"), value: undefined },
+        ...fieldNames.map((name) => ({ label: name, value: name })),
+      ],
+      value: settings.elevationField,
+    },
+    lighting: {
+      label: t("threeDee:cellGridLighting"),
+      help: t("threeDee:cellGridLightingHelp"),
+      input: "boolean",
+      value: settings.lighting,
+      disabled: settings.elevationField == undefined,
+    },
+    interpolation: {
+      label: t("threeDee:cellGridInterpolation"),
+      help: t("threeDee:cellGridInterpolationHelp"),
+      input: "select",
+      options: [
+        { label: t("threeDee:cellGridInterpolationNearest"), value: "nearest" },
+        { label: t("threeDee:cellGridInterpolationLinear"), value: "linear" },
+      ],
+      value: settings.interpolation,
+    },
+    showLines: {
+      label: t("threeDee:cellGridShowLines"),
+      help: t("threeDee:cellGridShowLinesHelp"),
+      input: "boolean",
+      value: settings.showLines,
+    },
+    lineColor: settings.showLines
+      ? {
+          label: t("threeDee:cellGridLineColor"),
+          help: t("threeDee:cellGridLineColorHelp"),
+          input: "rgba",
+          value: settings.lineColor,
+        }
+      : undefined,
+    drawBehind: {
+      label: t("threeDee:cellGridDrawBehind"),
+      help: t("threeDee:cellGridDrawBehindHelp"),
+      input: "boolean",
+      value: settings.drawBehind,
+    },
+  };
+}
 
 /** `msgFields`: the grid's cell fields, once a message arrived. */
 export function foxgloveGridSettingsNode(
@@ -462,6 +526,7 @@ export function foxgloveGridSettingsNode(
         defaults: FOXGLOVE_GRID_DEFAULTS,
         modifiers: { supportsPackedRgbModes: false, supportsRgbaFieldsMode: true },
       }),
+      ...foxgloveGridDisplayFields(config, msgFields),
       ...frameLockField("Frame lock", { ...FOXGLOVE_GRID_DEFAULTS, ...config }),
     },
   };
