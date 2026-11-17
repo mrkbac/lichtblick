@@ -471,15 +471,14 @@ describe("layout reducers", () => {
       expect(getTabs(empty.configById["Tab!window"])[0]?.layout).toBeUndefined();
     });
 
-    it("removes empty tabs", () => {
+    it("keeps a tab whose last panel closed, so it shows the panel picker", () => {
       const result = panelsReducer(withTabs, { type: "CLOSE_PANEL", payload: { id: "B!1" } });
-      expect(getTabs(result.configById["Tab!t"]).map((tab) => tab.title)).toEqual(["one", "two"]);
       const both = panelsReducer(result, { type: "CLOSE_PANEL", payload: { id: "C!1" } });
-      expect(both.layout).toEqual({
-        direction: "row",
-        children: [{ panels: ["E!1"] }, { panels: ["A!1"] }],
-        sizes: [50, 50],
-      });
+      expect(both.layout).toEqual({ ...withTabs.layout, sizes: [50, 50] });
+      expect(getTabs(both.configById["Tab!t"])).toEqual([
+        { title: "one" },
+        { title: "two", layout: { panels: ["E!1"] } },
+      ]);
     });
 
     it("ignores a panel dropped onto itself", () => {

@@ -269,7 +269,7 @@ export const panelButtons = {
   topicGraphServices: { title: "Show services", help: "Shows or hides service nodes." },
   tabAdd: {
     title: "New tab",
-    help: "Opens the panel list; the panel you pick becomes a new tab.",
+    help: "Adds an empty tab and switches to it; pick its panels from the list shown in the tab.",
   },
   tabClose: {
     title: "Close tab",

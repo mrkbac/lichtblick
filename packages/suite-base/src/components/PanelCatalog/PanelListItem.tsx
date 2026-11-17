@@ -5,8 +5,16 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { ReOrderDotsVertical16Filled } from "@fluentui/react-icons";
-import { Fade, ListItem, ListItemButton, ListItemText, Tooltip, Typography } from "@mui/material";
+import { PuzzlePiece20Regular, ReOrderDotsVertical16Filled } from "@fluentui/react-icons";
+import {
+  Fade,
+  ListItem,
+  ListItemButton,
+  ListItemIcon,
+  ListItemText,
+  Tooltip,
+  Typography,
+} from "@mui/material";
 import { useCallback, useEffect, useRef } from "react";
 import { makeStyles } from "tss-react/mui";
 
@@ -30,6 +38,10 @@ const useStyles = makeStyles<void, "dragIcon">()((theme, _params, classes) => {
       cursor: "grab",
       marginRight: theme.spacing(-1),
       color: theme.palette.text.disabled,
+    },
+    icon: {
+      minWidth: theme.spacing(3.5),
+      color: theme.palette.text.secondary,
     },
     highlight: {
       backgroundColor: "transparent",
@@ -81,6 +93,7 @@ export function PanelListItem(props: Props): React.JSX.Element {
     }
   }, [highlighted]);
 
+  const Icon = panel.icon ?? PuzzlePiece20Regular;
   const targetString = panel.extensionNamespace
     ? `${panel.title} [${panel.extensionNamespace}]`
     : panel.title;
@@ -123,6 +136,9 @@ export function PanelListItem(props: Props): React.JSX.Element {
           onDragStart={handleDragStart}
           onClick={onClickWithStopPropagation}
         >
+          <ListItemIcon className={classes.icon}>
+            <Icon />
+          </ListItemIcon>
           <ListItemText>
             <span data-testid={`panel-menu-item ${panel.title}`}>
               <HighlightChars

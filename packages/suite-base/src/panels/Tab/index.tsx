@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import { ButtonBase, Popover } from "@mui/material";
+import { ButtonBase } from "@mui/material";
 import { getPanelData } from "dockview-react";
 import { DragEvent, useCallback, useContext, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -13,7 +13,6 @@ import {
   PanelIconButton,
   usePanelButtonTitle,
 } from "@lichtblick/suite-base/components/PanelButton";
-import { PanelCatalog, PanelSelection } from "@lichtblick/suite-base/components/PanelCatalog";
 import { getPanelDragData } from "@lichtblick/suite-base/components/PanelCatalog/panelDrag";
 import { usePanelContext } from "@lichtblick/suite-base/components/PanelContext";
 import { UnconnectedPanelLayout } from "@lichtblick/suite-base/components/PanelLayout";
@@ -259,9 +258,9 @@ type Props = { config: TabPanelConfig; saveConfig: SaveConfig<TabPanelConfig> };
 function TabPanel({ config, saveConfig }: Props): React.JSX.Element {
   const { classes, cx } = useStyles();
   const { id: panelId } = usePanelContext();
+  const { t } = useTranslation("panelToolbar");
   const { addPanel } = useCurrentLayoutActions();
   const panelCatalog = usePanelCatalog();
-  const [catalogAnchor, setCatalogAnchor] = useState<HTMLElement | undefined>(undefined);
   // Stable while the tabs don't change, so the title selector below stays stable too.
   const rawTabs = config.tabs;
   const tabs = useMemo(() => getTabs({ tabs: rawTabs }), [rawTabs]);
@@ -333,14 +332,13 @@ function TabPanel({ config, saveConfig }: Props): React.JSX.Element {
     });
   };
 
-  const addNewTab = ({ type, config: panelConfig }: PanelSelection) => {
-    setCatalogAnchor(undefined);
-    addPanel({
-      id: getPanelIdForType(type),
-      config: panelConfig,
-      position: "center",
-      targetPanelId: panelId,
-    });
+  // Own title, else the panels in it, else a placeholder for a tab that is still empty.
+  const tabTitle = (title: string, content: string | undefined) =>
+    title !== "" ? title : content != undefined && content !== "" ? content : t("newTab");
+
+  // An empty tab shows the panel picker, so tabs can be opened and named first and filled later.
+  const addNewTab = () => {
+    saveConfig({ tabs: [...tabs, { title: "" }], activeTabIdx: tabs.length });
   };
 
   const dropPanel = (index: number, event: DragEvent<HTMLElement>) => {
@@ -364,13 +362,7 @@ function TabPanel({ config, saveConfig }: Props): React.JSX.Element {
     <div className={classes.root}>
       <PanelToolbar
         additionalIcons={
-          <PanelIconButton
-            button={TAB_BUTTONS.add}
-            data-testid="add-tab"
-            onClick={(event) => {
-              setCatalogAnchor(event.currentTarget);
-            }}
-          />
+          <PanelIconButton button={TAB_BUTTONS.add} data-testid="add-tab" onClick={addNewTab} />
         }
       >
         <div
@@ -389,7 +381,7 @@ function TabPanel({ config, saveConfig }: Props): React.JSX.Element {
             <TabButton
               // Tabs have no ids; the index is their identity.
               key={index}
-              title={tab.title !== "" ? tab.title : (contentTitles[index] ?? "")}
+              title={tabTitle(tab.title, contentTitles[index])}
               contentId={contentId}
               isActive={index === activeIdx}
               closable
@@ -409,17 +401,6 @@ function TabPanel({ config, saveConfig }: Props): React.JSX.Element {
           ))}
         </div>
       </PanelToolbar>
-      <Popover
-        open={catalogAnchor != undefined}
-        anchorEl={catalogAnchor}
-        onClose={() => {
-          setCatalogAnchor(undefined);
-        }}
-        anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
-        transformOrigin={{ vertical: "top", horizontal: "right" }}
-      >
-        <PanelCatalog mode="list" isMenu onPanelSelect={addNewTab} />
-      </Popover>
       <div className={classes.content} role="tabpanel" id={contentId}>
         {/* Every tab stays mounted, so switching tabs is instant and keeps panels' data. */}
         {tabs.map((tab, index) => (

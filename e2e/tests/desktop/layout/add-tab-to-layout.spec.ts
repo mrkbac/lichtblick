@@ -32,7 +32,7 @@ test("load a tab layout and add a tab", { tag: "@regression" }, async ({ mainWin
 
   // When
   await mainWindow.getByTestId("add-tab").click();
-  await mainWindow.getByTestId("panel-menu-item Raw Messages").click();
+  await mainWindow.getByTestId("panel-grid-card Raw Messages").click();
 
   // Then
   await expect(tabs).toHaveCount(3);

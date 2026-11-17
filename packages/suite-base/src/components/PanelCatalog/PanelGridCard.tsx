@@ -5,6 +5,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+import { PuzzlePiece20Regular } from "@fluentui/react-icons";
 import { Card, CardActionArea, CardContent, CardMedia, Typography } from "@mui/material";
 import { useCallback } from "react";
 import { makeStyles } from "tss-react/mui";
@@ -25,6 +26,15 @@ const useStyles = makeStyles()((theme) => {
     cardContent: {
       flex: "auto",
     },
+    title: {
+      display: "flex",
+      alignItems: "center",
+      gap: theme.spacing(0.75),
+    },
+    icon: {
+      flex: "none",
+      color: theme.palette.text.secondary,
+    },
     highlight: {
       backgroundColor: "transparent",
       color: theme.palette.primary.main,
@@ -43,6 +53,7 @@ export function PanelGridCard(props: Props): React.JSX.Element {
   const { searchQuery, panel, onClick } = props;
   const { classes } = useStyles();
 
+  const Icon = panel.icon ?? PuzzlePiece20Regular;
   const targetString = panel.extensionNamespace
     ? `${panel.title} [${panel.extensionNamespace}]`
     : panel.title;
@@ -65,7 +76,8 @@ export function PanelGridCard(props: Props): React.JSX.Element {
             <div className={classes.imagePlaceholder} />
           )}
           <CardContent className={classes.cardContent}>
-            <Typography variant="subtitle2" gutterBottom>
+            <Typography variant="subtitle2" gutterBottom className={classes.title}>
+              <Icon className={classes.icon} />
               <span data-testid={`panel-grid-card ${panel.title}`}>
                 <HighlightChars
                   str={targetString}

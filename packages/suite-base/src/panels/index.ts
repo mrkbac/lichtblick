@@ -5,6 +5,37 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+import {
+  Braces20Regular,
+  BranchFork20Regular,
+  Code20Regular,
+  Cube20Regular,
+  DataLine20Regular,
+  DataPie20Regular,
+  Database20Regular,
+  Eye20Regular,
+  Gauge20Regular,
+  Grid20Regular,
+  HeartPulse20Regular,
+  Image20Regular,
+  Joystick20Regular,
+  Lightbulb20Regular,
+  Map20Regular,
+  Note20Regular,
+  Options20Regular,
+  Organization20Regular,
+  PlugConnected20Regular,
+  Pulse20Regular,
+  Send20Regular,
+  Speaker220Regular,
+  Stethoscope20Regular,
+  TabDesktop20Regular,
+  Table20Regular,
+  TextBulletListLtr20Regular,
+  Timeline20Regular,
+  ToggleMultiple20Regular,
+  TopSpeed20Regular,
+} from "@fluentui/react-icons";
 import { TFunction } from "i18next";
 
 import { PanelInfo } from "@lichtblick/suite-base/context/PanelCatalogContext";
@@ -66,6 +97,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
   {
     title: t("3D"),
     type: "3D",
+    icon: Cube20Regular,
     keywords: ["scene", "pointcloud", "lidar", "markers", "rviz"],
     description: t("3DPanelDescription"),
     thumbnail: threeDeeRenderThumbnail,
@@ -76,6 +108,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
   {
     title: t("ROSDiagnosticsDetail"),
     type: "DiagnosticStatusPanel",
+    icon: HeartPulse20Regular,
     description: t("ROSDiagnosticsDetailDescription"),
     thumbnail: diagnosticStatusThumbnail,
     module: async () => await import("./DiagnosticStatus"),
@@ -86,6 +119,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
   {
     title: t("ROSDiagnosticSummary"),
     type: "DiagnosticSummary",
+    icon: Stethoscope20Regular,
     description: t("ROSDiagnosticSummaryDescription"),
     thumbnail: diagnosticSummaryThumbnail,
     module: async () => await import("./DiagnosticSummary"),
@@ -96,6 +130,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
   {
     title: t("image"),
     type: "Image",
+    icon: Image20Regular,
     keywords: ["camera", "video", "picture"],
     description: t("imageDescription"),
     thumbnail: imageThumbnail,
@@ -106,6 +141,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
   {
     title: t("cameraGrid"),
     type: "CameraGrid",
+    icon: Grid20Regular,
     keywords: ["cameras", "images", "multi camera"],
     description: t("cameraGridDescription"),
     thumbnail: cameraGridThumbnail,
@@ -116,6 +152,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
   {
     title: t("indicator"),
     type: "Indicator",
+    icon: Lightbulb20Regular,
     description: t("indicatorDescription"),
     thumbnail: indicatorThumbnail,
     module: async () => await import("./Indicator"),
@@ -125,6 +162,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
   {
     title: t("tab"),
     type: "Tab",
+    icon: TabDesktop20Regular,
     description: t("tabDescription"),
     thumbnail: tabThumbnail,
     module: async () => await import("./Tab"),
@@ -137,6 +175,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
   {
     title: t("gauge"),
     type: "Gauge",
+    icon: Gauge20Regular,
     description: t("gaugeDescription"),
     thumbnail: gaugeThumbnail,
     module: async () => await import("./Gauge"),
@@ -146,6 +185,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
   {
     title: t("teleop"),
     type: "Teleop",
+    icon: Joystick20Regular,
     keywords: ["joystick", "cmd_vel", "drive"],
     description: t("teleopDescription"),
     thumbnail: teleopThumbnail,
@@ -156,6 +196,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
   {
     title: t("map"),
     type: "map",
+    icon: Map20Regular,
     keywords: ["gps", "navsat", "geo"],
     description: t("mapDescription"),
     thumbnail: mapThumbnail,
@@ -166,6 +207,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
   {
     title: t("parameters"),
     type: "Parameters",
+    icon: Options20Regular,
     description: t("parametersDescription"),
     thumbnail: parametersThumbnail,
     module: async () => await import("./Parameters"),
@@ -175,6 +217,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
   {
     title: t("plot"),
     type: "Plot",
+    icon: DataLine20Regular,
     keywords: ["chart", "graph", "timeseries", "line"],
     description: t("plotDescription"),
     thumbnail: plotThumbnail,
@@ -185,6 +228,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
   {
     title: t("pieChart"),
     type: "PieChart",
+    icon: DataPie20Regular,
     description: t("pieChartDescription"),
     thumbnail: pieChartThumbnail,
     module: async () => await import("./PieChart"),
@@ -194,6 +238,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
   {
     title: t("publish"),
     type: "Publish",
+    icon: Send20Regular,
     keywords: ["send", "rostopic pub"],
     description: t("publishDescription"),
     thumbnail: publishThumbnail,
@@ -204,6 +249,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
   {
     title: t("callService"),
     type: "CallService",
+    icon: PlugConnected20Regular,
     keywords: ["rosservice", "srv"],
     description: t("callServiceDescription"),
     thumbnail: publishThumbnail,
@@ -214,6 +260,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
   {
     title: t("rawMessages"),
     type: "RawMessages",
+    icon: Braces20Regular,
     keywords: ["json", "inspect", "echo"],
     description: t("rawMessagesDescription"),
     thumbnail: rawMessagesThumbnail,
@@ -226,6 +273,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
     // Alias of Raw Messages for layouts saved with this type; not offered in the panel list.
     title: t("rawMessages"),
     type: "RawMessagesVirtual",
+    icon: Braces20Regular,
     description: t("rawMessagesDescription"),
     thumbnail: rawMessagesThumbnail,
     module: async () => await import("./RawMessagesVirtual"),
@@ -237,6 +285,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
   {
     title: t("audio"),
     type: "Audio",
+    icon: Speaker220Regular,
     description: t("audioDescription"),
     thumbnail: audioThumbnail,
     module: async () => await import("./Audio"),
@@ -246,6 +295,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
   {
     title: t("log"),
     type: "RosOut",
+    icon: TextBulletListLtr20Regular,
     keywords: ["rosout", "console", "logs"],
     description: t("logDescription"),
     thumbnail: logThumbnail,
@@ -256,6 +306,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
   {
     title: t("stateTransitions"),
     type: "StateTransitions",
+    icon: Timeline20Regular,
     keywords: ["enum", "states", "timeline"],
     description: t("stateTransitionsDescription"),
     thumbnail: stateTransitionsThumbnail,
@@ -266,6 +317,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
   {
     title: t("table"),
     type: "Table",
+    icon: Table20Regular,
     description: t("tableDescription"),
     thumbnail: tableThumbnail,
     module: async () => await import("./Table"),
@@ -276,6 +328,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
   {
     title: t("topicGraph"),
     type: "TopicGraph",
+    icon: Organization20Regular,
     keywords: ["rqt_graph", "nodes", "computation graph"],
     description: t("topicGraphDescription"),
     thumbnail: topicGraphThumbnail,
@@ -286,6 +339,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
   {
     title: t("transformTree"),
     type: "TransformTree",
+    icon: BranchFork20Regular,
     keywords: ["tf", "tf_static", "frames", "transforms"],
     description: t("transformTreeDescription"),
     module: async () => await import("./TransformTree"),
@@ -295,6 +349,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
   {
     title: t("dataSourceInfo"),
     type: "SourceInfo",
+    icon: Database20Regular,
     keywords: ["topics", "metadata", "info"],
     description: t("dataSourceInfoDescription"),
     thumbnail: dataSourceInfoThumbnail,
@@ -305,6 +360,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
   {
     title: t("notes"),
     type: "Notes",
+    icon: Note20Regular,
     description: t("notesDescription"),
     thumbnail: notesThumbnail,
     module: async () => await import("./Notes"),
@@ -314,6 +370,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
   {
     title: t("topicHealth"),
     type: "TopicHealth",
+    icon: Pulse20Regular,
     keywords: ["hz", "frequency", "rate", "stats"],
     description: t("topicHealthDescription"),
     thumbnail: topicHealthThumbnail,
@@ -324,6 +381,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
   {
     title: t("watch"),
     type: "Watch",
+    icon: Eye20Regular,
     description: t("watchDescription"),
     thumbnail: watchThumbnail,
     module: async () => await import("./Watch"),
@@ -333,6 +391,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
   {
     title: t("variableSlider"),
     type: "GlobalVariableSliderPanel",
+    icon: ToggleMultiple20Regular,
     description: t("variableSliderDescription"),
     thumbnail: variableSliderThumbnail,
     module: async () => await import("./VariableSlider"),
@@ -341,6 +400,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
   {
     title: t("userScripts"),
     type: "NodePlayground",
+    icon: Code20Regular,
     keywords: ["code", "script", "typescript"],
     description: t("userScriptsDescription"),
     thumbnail: userScriptEditorThumbnail,
@@ -351,6 +411,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
   {
     title: t("studioPlaybackPerformance"),
     type: "PlaybackPerformance",
+    icon: TopSpeed20Regular,
     description: t("studioPlaybackPerformanceDescription"),
     module: async () => await import("./PlaybackPerformance"),
     docs: async () => await import("./PlaybackPerformance/docs"),

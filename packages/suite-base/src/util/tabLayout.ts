@@ -215,12 +215,12 @@ export function mapLayoutTrees<T extends TreeData>(
   );
 }
 
-/** The tabs of a Tab panel that hold panels, and which of them is shown. */
-function filledTabs(config: PanelConfig | undefined): { tabs: TabConfig[]; active: number } {
-  const all = getTabs(config);
-  const shown = all[getActiveTabIndex(config)];
-  const tabs = all.filter((tab) => getPanelIds(tab.layout).length > 0);
-  return { tabs, active: Math.max(0, shown ? tabs.indexOf(shown) : 0) };
+/**
+ * The tabs of a Tab panel and which of them is shown. Empty tabs stay: they show the panel picker
+ * until filled or closed.
+ */
+function tabsAndActive(config: PanelConfig | undefined): { tabs: TabConfig[]; active: number } {
+  return { tabs: getTabs(config), active: getActiveTabIndex(config) };
 }
 
 function normalizeTabsOnce<T extends TreeData>(data: T): T {
@@ -242,15 +242,9 @@ function normalizeTabsOnce<T extends TreeData>(data: T): T {
         if (configById[id]?.isWindow === true) {
           return group;
         }
-        const { tabs, active } = filledTabs(configById[id]);
+        const tabs = getTabs(configById[id]);
         // A Tab panel with one tab left becomes that tab's layout; one with none goes away.
-        if (tabs.length <= 1) {
-          return tabs[0]?.layout;
-        }
-        if (tabs.length !== getTabs(configById[id]).length) {
-          configs[id] = { ...configById[id], tabs, activeTabIdx: active };
-        }
-        return group;
+        return tabs.length <= 1 ? tabs[0]?.layout : group;
       }
       // Panels stacked onto each other become one Tab panel with a tab per panel. Stacked Tab
       // panels contribute their tabs; the first of them is kept.
@@ -260,7 +254,7 @@ function normalizeTabsOnce<T extends TreeData>(data: T): T {
       let activeTabIdx = 0;
       for (const id of group.panels) {
         if (isTabPanel(id)) {
-          const merged = filledTabs(configById[id] ?? configs[id]);
+          const merged = tabsAndActive(configById[id] ?? configs[id]);
           if (id === shownId) {
             activeTabIdx = tabs.length + merged.active;
           }
@@ -282,8 +276,8 @@ function normalizeTabsOnce<T extends TreeData>(data: T): T {
 }
 
 /**
- * Keep tabs in one shape: panels stacked in a group become a Tab panel with a tab per panel, tabs
- * without panels go away, and a Tab panel with a single tab left is replaced by that tab's layout.
+ * Keep tabs in one shape: panels stacked in a group become a Tab panel with a tab per panel, and a
+ * Tab panel with a single tab left is replaced by that tab's layout. Empty tabs stay until closed.
  * Configs of panels that leave the layout are not removed here.
  */
 export function normalizeTabs<T extends TreeData>(data: T): T {
