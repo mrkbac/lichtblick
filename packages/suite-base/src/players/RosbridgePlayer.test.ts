@@ -43,6 +43,14 @@ const textMessage = ({ text }: { text: string }) => {
   return { bytes };
 };
 
+const HEADER_TYPEDEF = `std_msgs/Header header
+
+================================================================================
+MSG: std_msgs/Header
+uint32 seq
+time stamp
+string frame_id`;
+
 let workerInstance: MockRosClient;
 class MockRosClient {
   public constructor() {
@@ -73,6 +81,21 @@ class MockRosClient {
     this.#messages = messages;
 
     this.#connectCallback?.();
+  }
+
+  /** Changes what the server advertises, without reconnecting. */
+  public advertise({
+    topics,
+    types,
+    typedefs,
+  }: {
+    topics: string[];
+    types: string[];
+    typedefs: string[];
+  }) {
+    this.#topics = topics;
+    this.#types = types;
+    this.#typedefs_full_text = typedefs;
   }
 
   public on(op: string, callback: () => void) {
@@ -123,6 +146,8 @@ class MockRosClient {
   }
 }
 
+const subscribedTopics: string[] = [];
+
 class MockRosTopic {
   #name: string = "";
 
@@ -131,6 +156,7 @@ class MockRosTopic {
   }
 
   public subscribe(callback: (arg: unknown) => void) {
+    subscribedTopics.push(this.#name);
     workerInstance.getMessagesByTopicName(this.#name).forEach(({ message }) => {
       callback(message);
     });
@@ -211,15 +237,7 @@ describe("RosbridgePlayer", () => {
     workerInstance.setup({
       topics: ["/a"],
       types: ["/std_msgs/Header", "rosgraph_msgs/Log"],
-      typedefs: [
-        `std_msgs/Header header
-
-      ================================================================================
-      MSG: std_msgs/Header
-      uint32 seq
-      time stamp
-      string frame_id`,
-      ],
+      typedefs: [HEADER_TYPEDEF],
     });
     await vi.advanceTimersByTimeAsync(3_000);
     // Every requested topic is advertised: polling waits for the window to be shown.
@@ -240,6 +258,16 @@ describe("RosbridgePlayer", () => {
     player.setSubscriptions([{ topic: "/clock" }]);
     await vi.advanceTimersByTimeAsync(10_000);
     expect(workerInstance.topicRequests).toBeGreaterThan(settled + 1);
+
+    // /clock appears while still hidden: the next poll finds it and the player subscribes.
+    subscribedTopics.length = 0;
+    workerInstance.advertise({
+      topics: ["/a", "/clock"],
+      types: ["/std_msgs/Header", "/std_msgs/Header", "rosgraph_msgs/Log"],
+      typedefs: [HEADER_TYPEDEF, HEADER_TYPEDEF],
+    });
+    await vi.advanceTimersByTimeAsync(3_000);
+    expect(subscribedTopics).toContain("/clock");
   });
 
   it("subscribes to topics without errors", async () => {
