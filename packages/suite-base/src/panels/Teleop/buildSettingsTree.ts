@@ -7,6 +7,9 @@ import { SettingsTreeAction, Topic } from "@lichtblick/suite";
 import {
   AXIS_LABELS,
   BUTTON_LABELS,
+  DEFAULT_GAMEPAD_DEADZONE,
+  DEFAULT_MAPPING,
+  DEFAULT_PUBLISH_RATE,
   DEFAULT_TOPICS,
   JOY_BUTTONS,
   STANDARD_BUTTONS,
@@ -84,6 +87,7 @@ export function buildSettingsTreeTeleop(
         label: `${name} max`,
         input: "number",
         value: max,
+        placeholder: String(DEFAULT_MAPPING[field].max),
         step: 0.1,
         precision: 2,
         help: `Full deflection publishes this value (${field.startsWith("linear") ? "m/s" : "rad/s"}). Positive is forward, left or counter-clockwise; use a negative value to invert.`,
@@ -125,6 +129,7 @@ export function buildSettingsTreeTeleop(
           label: "Publish rate (Hz)",
           input: "number",
           value: config.publishRate,
+          placeholder: String(DEFAULT_PUBLISH_RATE),
           min: 0,
           help: "How often the command is repeated while a control is held",
         },
@@ -189,6 +194,7 @@ export function buildSettingsTreeTeleop(
             label: "Deadzone",
             input: "number",
             value: config.gamepadDeadzone,
+            placeholder: String(DEFAULT_GAMEPAD_DEADZONE),
             min: 0,
             max: 0.9,
             step: 0.05,
@@ -242,8 +248,8 @@ export function applySettingsAction(
   return produce(config, (draft) => {
     if (node === "mapping") {
       const field = key.replace(/-max$/, "") as TwistField;
-      if (key.endsWith("-max")) {
-        draft.mapping[field].max = value as number;
+      if (action.payload.input === "number") {
+        draft.mapping[field].max = action.payload.value;
       } else {
         draft.mapping[field].input = value as AxisInput;
       }
@@ -261,6 +267,12 @@ export function applySettingsAction(
         draft.topic = DEFAULT_TOPICS[next];
       }
       draft.messageType = next;
+      return;
+    }
+    if (action.payload.input === "number") {
+      if (key === "publishRate" || key === "gamepadDeadzone") {
+        draft[key] = action.payload.value;
+      }
       return;
     }
     (draft as Record<string, unknown>)[key] = value;

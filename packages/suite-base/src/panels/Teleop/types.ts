@@ -45,8 +45,8 @@ export type TwistField =
   | "angular-y"
   | "angular-z";
 
-/** Velocity field = max * input * speed */
-export type AxisMapping = { input: AxisInput; max: number };
+/** Velocity field = max * input * speed; max is undefined while its settings field is cleared */
+export type AxisMapping = { input: AxisInput; max: number | undefined };
 
 export type OutputType = "Twist" | "TwistStamped" | "Joy";
 
@@ -56,14 +56,16 @@ export type TeleopConfig = {
   topic: undefined | string;
   messageType: OutputType;
   frameId: string;
-  publishRate: number;
+  /** undefined while the settings field is cleared: DEFAULT_PUBLISH_RATE */
+  publishRate: number | undefined;
   stopOnRelease: boolean;
   mode: OnScreenControl;
   keyboard: boolean;
   gamepad: boolean;
   /** Gamepad.id to read, "" for the first connected one */
   gamepadId: string;
-  gamepadDeadzone: number;
+  /** undefined while the settings field is cleared: DEFAULT_GAMEPAD_DEADZONE */
+  gamepadDeadzone: number | undefined;
   /** Fraction (0-1] of each field's max used while turbo is not held */
   speedScale: number;
   mapping: Record<TwistField, AxisMapping>;

@@ -5,6 +5,7 @@ import * as _ from "lodash-es";
 
 import {
   DEFAULT_CONFIG,
+  DEFAULT_MAPPING,
   JOY_BUTTON_COUNT,
   JOY_BUTTONS,
   STANDARD_BUTTONS,
@@ -83,7 +84,7 @@ export function actionToVector(action: DirectionalPadAction): TeleopVector {
 /** Radial deadzone, rescaled so output starts at 0 just past the deadzone */
 export function applyDeadzone(x: number, y: number, deadzone: number): TeleopVector {
   const magnitude = Math.hypot(x, y);
-  // negated so a non-numeric deadzone (cleared settings field) yields no motion
+  // negated so a NaN deadzone yields no motion
   if (!(magnitude > deadzone) || !(deadzone < 1)) {
     return ZERO_VECTOR;
   }
@@ -180,9 +181,8 @@ export function computeTwist(
 ): Twist {
   const twist = zeroTwist();
   for (const field of TWIST_FIELDS) {
-    const { input, max } = mapping[field];
-    // a cleared number field in the settings arrives as undefined; never publish NaN
-    if (!Number.isFinite(max) || !Number.isFinite(speed)) {
+    const { input, max = DEFAULT_MAPPING[field].max } = mapping[field];
+    if (!Number.isFinite(speed)) {
       continue;
     }
     const [kind, axis] = field.split("-") as ["linear" | "angular", "x" | "y" | "z"];

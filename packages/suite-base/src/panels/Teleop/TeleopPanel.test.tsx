@@ -205,6 +205,24 @@ describe("TeleopPanel", () => {
       expect(publish).not.toHaveBeenCalled();
     });
 
+    it("keeps publishing at the default rate while the publish rate field is cleared", () => {
+      // Given a held command and a cleared publish rate field
+      const { publish, context } = setup();
+      const handler = context.updatePanelSettingsEditor.mock.calls.at(-1)![0].actionHandler;
+      act(() => {
+        handler({
+          action: "update",
+          payload: { path: ["general", "publishRate"], input: "number", value: undefined },
+        });
+      });
+      fireEvent.click(screen.getByText("UP"));
+      publish.mockClear();
+      // When a second passes
+      vi.advanceTimersByTime(1000);
+      // Then it repeats at DEFAULT_PUBLISH_RATE (20 Hz) instead of stopping
+      expect(publish).toHaveBeenCalledTimes(20);
+    });
+
     it("publishes nothing when the publish rate is zero", () => {
       const { publish } = setup({ publishRate: 0 });
       expect(screen.getByTestId("empty-state")).toBeInTheDocument();
