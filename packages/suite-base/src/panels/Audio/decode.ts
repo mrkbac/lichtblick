@@ -5,7 +5,20 @@
 export type PcmFormat = "s16" | "s16be" | "s32" | "f32" | "u8" | "mulaw" | "alaw";
 /** Compressed formats handed to WebCodecs `AudioDecoder` or `decodeAudioData`. */
 export type CompressedFormat = "opus" | "mp3" | "aac" | "vorbis" | "flac" | "wav";
-export type AudioFormat = PcmFormat | CompressedFormat;
+/** G.726 ADPCM at 16 to 40 kbit/s, decoded in JS. `aal2-` codewords start at the high bit. */
+export type G726Format = `${"" | "aal2-"}g726-${16 | 24 | 32 | 40}`;
+export type AudioFormat = PcmFormat | CompressedFormat | G726Format;
+
+export const G726_FORMATS: readonly G726Format[] = [
+  "g726-16",
+  "g726-24",
+  "g726-32",
+  "g726-40",
+  "aal2-g726-16",
+  "aal2-g726-24",
+  "aal2-g726-32",
+  "aal2-g726-40",
+];
 
 export const AUDIO_FORMATS: readonly AudioFormat[] = [
   "s16",
@@ -21,6 +34,7 @@ export const AUDIO_FORMATS: readonly AudioFormat[] = [
   "vorbis",
   "flac",
   "wav",
+  ...G726_FORMATS,
 ];
 
 /** Schemas whose topics the panel offers and auto-selects. */
@@ -28,6 +42,11 @@ export const AUDIO_SCHEMAS: ReadonlySet<string> = new Set([
   "foxglove.RawAudio",
   "foxglove_msgs/RawAudio",
   "foxglove_msgs/msg/RawAudio",
+  "foxglove::RawAudio",
+  "foxglove.CompressedAudio",
+  "foxglove_msgs/CompressedAudio",
+  "foxglove_msgs/msg/CompressedAudio",
+  "foxglove::CompressedAudio",
   "audio_common_msgs/AudioData",
   "audio_common_msgs/msg/AudioData",
   "audio_common_msgs/AudioDataStamped",
@@ -53,6 +72,8 @@ const ALIASES: Record<string, AudioFormat> = {
   mpeg: "mp3",
   ogg: "vorbis",
   wave: "wav",
+  // foxglove.CompressedAudio names AAC by its codec string
+  "mp4a.40.2": "aac",
 };
 
 /** Maps format strings like "pcm-s16", "S16LE", "audio/mpeg" or "PCMU" to a format, if known. */
@@ -65,8 +86,38 @@ export function normalizeFormat(raw: string): AudioFormat | undefined {
   return AUDIO_FORMATS.find((format) => format === name) ?? ALIASES[name];
 }
 
+export function isG726(format: AudioFormat): format is G726Format {
+  return format.includes("g726");
+}
+
 export function isPcm(format: AudioFormat): format is PcmFormat {
-  return !["opus", "mp3", "aac", "vorbis", "flac", "wav"].includes(format);
+  return !isG726(format) && !["opus", "mp3", "aac", "vorbis", "flac", "wav"].includes(format);
+}
+
+/**
+ * Sample rate and channel count implied by the stream itself, for messages without
+ * `sample_rate` / `number_of_channels` (foxglove.CompressedAudio): G.726 is 8 kHz mono, Opus
+ * decodes at 48 kHz with the channel count from the packet's TOC byte, and ADTS frames carry both.
+ */
+export function streamParams(
+  format: AudioFormat,
+  data: Uint8Array,
+): { sampleRate?: number; channels?: number } {
+  if (isG726(format)) {
+    return { sampleRate: 8000, channels: 1 };
+  }
+  const [b0, b1, b2, b3] = data;
+  if (format === "opus" && b0 != undefined) {
+    return { sampleRate: 48000, channels: (b0 & 0x04) !== 0 ? 2 : 1 };
+  }
+  if (format === "aac" && b0 === 0xff && b1 != undefined && (b1 & 0xf6) === 0xf0) {
+    const sampleRate = AAC_SAMPLE_RATES[((b2 ?? 0) >> 2) & 0x0f];
+    const channelConfig = (((b2 ?? 0) & 0x01) << 2) | ((b3 ?? 0) >> 6);
+    // Channel configuration 7 is 7.1 (8 channels); 0 means it is given in the stream instead
+    const channels = channelConfig === 7 ? 8 : channelConfig === 0 ? undefined : channelConfig;
+    return { sampleRate, channels };
+  }
+  return {};
 }
 
 export const MIN_SAMPLE_RATE = 3000;
@@ -108,8 +159,9 @@ function positiveInt(value: unknown): number | undefined {
 
 /**
  * Reads one audio chunk from a message: `data`, `format`, `sample_rate` and `number_of_channels`
- * (foxglove.RawAudio), or `audio.data` (audio_common_msgs/AudioDataStamped). Fields missing in
- * the message come from the panel settings.
+ * (foxglove.RawAudio), `data` and `format` (foxglove.CompressedAudio), or `audio.data`
+ * (audio_common_msgs/AudioDataStamped). Fields missing in the message come from the stream itself
+ * where it defines them, else from the panel settings.
  */
 export function extractAudioChunk(
   message: unknown,
@@ -134,8 +186,9 @@ export function extractAudioChunk(
     return { error: "Message has no `format` field. Choose a format in the panel settings." };
   }
 
-  const sampleRate = positiveInt(msg.sample_rate) ?? overrides.sampleRate;
-  const channels = positiveInt(msg.number_of_channels) ?? overrides.channels;
+  const implied = streamParams(format, data);
+  const sampleRate = positiveInt(msg.sample_rate) ?? implied.sampleRate ?? overrides.sampleRate;
+  const channels = positiveInt(msg.number_of_channels) ?? implied.channels ?? overrides.channels;
   // Web Audio's limits; also keeps a corrupt header from allocating billions of channels
   if (!(sampleRate >= MIN_SAMPLE_RATE && sampleRate <= MAX_SAMPLE_RATE)) {
     return { error: `Unsupported sample rate ${sampleRate} Hz.` };

@@ -30,6 +30,7 @@ import { Namespace } from "@lichtblick/suite-base/types";
 import { ExtensionInfo } from "@lichtblick/suite-base/types/Extensions";
 import { InstalledMessageConverter } from "@lichtblick/suite-base/types/messageConverters";
 import { CLOUDINI_SCHEMA, cloudiniMessageConverter } from "@lichtblick/suite-base/util/cloudini";
+import { dracoMessageConverters } from "@lichtblick/suite-base/util/draco";
 import isDesktopApp from "@lichtblick/suite-base/util/isDesktopApp";
 import { BasicBuilder } from "@lichtblick/test-builders";
 
@@ -362,13 +363,17 @@ describe("ExtensionCatalogProvider", () => {
       expect(loadExtension).toHaveBeenCalledTimes(1);
     });
     expect(result.current.installedMessageConverters).toEqual([
+      ...dracoMessageConverters,
       expect.objectContaining({ fromSchemaName: CLOUDINI_SCHEMA, extensionId: extension.id }),
     ]);
 
     await act(async () => {
       await result.current.uninstallExtension(extension.namespace!, extension.id);
     });
-    expect(result.current.installedMessageConverters).toEqual([cloudiniMessageConverter]);
+    expect(result.current.installedMessageConverters).toEqual([
+      cloudiniMessageConverter,
+      ...dracoMessageConverters,
+    ]);
   });
 
   it("should register multiple message converters", async () => {
@@ -778,7 +783,10 @@ describe("ExtensionCatalogProvider", () => {
       expect(result.current.isExtensionInstalled(extensionInfo.id)).toBe(false);
       expect(result.current.installedExtensions?.length).toBe(0);
       expect(result.current.installedPanels).toEqual({});
-      expect(result.current.installedMessageConverters).toEqual([cloudiniMessageConverter]);
+      expect(result.current.installedMessageConverters).toEqual([
+        cloudiniMessageConverter,
+        ...dracoMessageConverters,
+      ]);
       expect(result.current.installedTopicAliasFunctions?.length).toBe(0);
       expect(result.current.installedCameraModels.size).toBe(0);
     });

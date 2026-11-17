@@ -9,6 +9,7 @@ import type { Feature, FeatureCollection, GeoJSON } from "geojson";
 
 import { MessageEvent } from "@lichtblick/suite";
 import { FoxgloveMessages } from "@lichtblick/suite-base/types/FoxgloveMessages";
+import { addFoxgloveSchema } from "@lichtblick/suite-base/util/foxgloveSchemas";
 
 import { MapPanelMessage, NavSatFixMsg, NavSatFixStatus } from "./types";
 
@@ -62,6 +63,25 @@ export function isValidMapMessage(msgEvent: MessageEvent): msgEvent is MapPanelM
   );
 }
 
+const LOCATION_FIXES_SCHEMAS = addFoxgloveSchema(new Set<string>(), "foxglove.LocationFixes");
+
+/**
+ * Splits each `foxglove.LocationFixes` message into one message per fix, so the panel handles them
+ * like `foxglove.LocationFix` messages on the same topic. Other messages pass through.
+ */
+export function expandLocationFixes(events: readonly MessageEvent[]): readonly MessageEvent[] {
+  if (!events.some((event) => LOCATION_FIXES_SCHEMAS.has(event.schemaName))) {
+    return events;
+  }
+  return events.flatMap((event) => {
+    if (!LOCATION_FIXES_SCHEMAS.has(event.schemaName)) {
+      return [event];
+    }
+    const fixes = (event.message as { fixes?: unknown[] }).fixes ?? [];
+    return fixes.map((fix) => ({ ...event, schemaName: "foxglove.LocationFix", message: fix }));
+  });
+}
+
 /** Schemas the Map panel reads. */
 export const MAP_SCHEMAS: ReadonlySet<string> = new Set([
   "sensor_msgs/NavSatFix",
@@ -71,6 +91,7 @@ export const MAP_SCHEMAS: ReadonlySet<string> = new Set([
   "foxglove_msgs/msg/LocationFix",
   "foxglove.LocationFix",
   "foxglove::LocationFix",
+  ...LOCATION_FIXES_SCHEMAS,
   "foxglove_msgs/GeoJSON",
   "foxglove_msgs/msg/GeoJSON",
   "foxglove::GeoJSON",

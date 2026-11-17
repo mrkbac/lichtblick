@@ -11,7 +11,7 @@ export const audio = {
     'Overrides the message\'s format field; keep "From message" unless it is missing or wrong.',
   general: "General",
   noTopic:
-    "No audio topic. Pick a topic in the panel settings: foxglove.RawAudio and audio_common_msgs/AudioData are detected automatically, and any message with a data and format field works.",
+    "No audio topic. Pick a topic in the panel settings: foxglove.RawAudio, foxglove.CompressedAudio and audio_common_msgs/AudioData are detected automatically, and any message with a data and format field works.",
   noWebAudio: "This browser doesn't support Web Audio.",
   sampleRate: "Sample rate (Hz)",
   sampleRateHelp: "Used when the message has no sample_rate field.",

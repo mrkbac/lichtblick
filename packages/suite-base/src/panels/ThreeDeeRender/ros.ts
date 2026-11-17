@@ -418,6 +418,12 @@ addRosDataType(COMPRESSED_IMAGE_DATATYPES, "sensor_msgs/CompressedImage");
 export const POLYGON_STAMPED_DATATYPES = new Set<string>();
 addRosDataType(POLYGON_STAMPED_DATATYPES, "geometry_msgs/PolygonStamped");
 
+export const ODOMETRY_DATATYPES = new Set<string>();
+addRosDataType(ODOMETRY_DATATYPES, "nav_msgs/Odometry");
+
+export const POINT_STAMPED_DATATYPES = new Set<string>();
+addRosDataType(POINT_STAMPED_DATATYPES, "geometry_msgs/PointStamped");
+
 export const JOINTSTATE_DATATYPES = new Set<string>();
 addRosDataType(JOINTSTATE_DATATYPES, "sensor_msgs/JointState");
 

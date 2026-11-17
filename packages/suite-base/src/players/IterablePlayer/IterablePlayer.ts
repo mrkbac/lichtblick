@@ -47,6 +47,7 @@ import {
 import { RosDatatypes } from "@lichtblick/suite-base/types/RosDatatypes";
 import { preloadCloudini } from "@lichtblick/suite-base/util/cloudini";
 import delay from "@lichtblick/suite-base/util/delay";
+import { preloadDraco } from "@lichtblick/suite-base/util/draco";
 import { randomUUID } from "@lichtblick/suite-base/util/randomUUID";
 import { toError } from "@lichtblick/suite-base/util/toError";
 
@@ -708,6 +709,7 @@ export class IterablePlayer implements Player {
       await Promise.all([
         delay(START_DELAY_MS),
         preloadCloudini(this.#providerTopics, this.#closeAbort.signal),
+        preloadDraco(this.#providerTopics, this.#closeAbort.signal),
       ]);
       if (this.#isClosing()) {
         return;

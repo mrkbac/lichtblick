@@ -85,6 +85,7 @@ import {
   isGeoJSONSchema,
   isSupportedSchema,
   isValidMapMessage,
+  expandLocationFixes,
 } from "./support";
 
 const log = Logger.getLogger(__filename);
@@ -543,7 +544,7 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
           setTrackMessages((prev) => prev.filter((m) => m.topic !== topic.name));
           rangeTopicsRef.current.add(topic.name);
           for await (const batch of iterator) {
-            const valid = batch.filter(
+            const valid = expandLocationFixes(batch).filter(
               (event): event is NavMessage => isValidMapMessage(event) && !isGeoJSONMessage(event),
             );
             if (valid.length > 0) {
@@ -675,7 +676,9 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
         setCurrentGeo(new Map());
       }
 
-      const frame = renderState.currentFrame?.filter(isValidMapMessage);
+      const frame =
+        renderState.currentFrame &&
+        expandLocationFixes(renderState.currentFrame).filter(isValidMapMessage);
       if (!frame || frame.length === 0) {
         return;
       }
@@ -1372,7 +1375,7 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
           />
         )}
         {eligibleTopics.length === 0 && (
-          <MapNotice>No NavSatFix, LocationFix, or GeoJSON topics</MapNotice>
+          <MapNotice>No NavSatFix, LocationFix(es), or GeoJSON topics</MapNotice>
         )}
       </MapFrame>
     </ThemeProvider>

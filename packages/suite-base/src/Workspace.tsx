@@ -74,7 +74,6 @@ import { TopicList } from "@lichtblick/suite-base/components/TopicList/TopicList
 import VariablesList from "@lichtblick/suite-base/components/VariablesList";
 import { WorkspaceDialogs } from "@lichtblick/suite-base/components/WorkspaceDialogs";
 import { AllowedFileExtensions } from "@lichtblick/suite-base/constants/allowedFileExtensions";
-import { useCurrentUserType } from "@lichtblick/suite-base/context/CurrentUserContext";
 import { EventsStore, useEvents } from "@lichtblick/suite-base/context/EventsContext";
 import { useLayoutManager } from "@lichtblick/suite-base/context/LayoutManagerContext";
 import { usePlayerSelection } from "@lichtblick/suite-base/context/PlayerSelectionContext";
@@ -182,8 +181,6 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
 
   // Keys the panel tree below so it remounts when the player changes
   const playerId = useMessagePipeline(selectPlayerId);
-
-  const currentUserType = useCurrentUserType();
 
   useDefaultWebLaunchPreference();
 
@@ -347,7 +344,8 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
   }, [DataSourceSidebarItem, alertCount, highestSeverity, enableStudioLogsSidebar]);
 
   const eventsSupported = useEvents(selectEventsSupported);
-  const showEventsTab = currentUserType !== "unauthenticated" && eventsSupported;
+  // Events come from the recording's foxglove.Event topics, no account needed
+  const showEventsTab = eventsSupported;
 
   const leftSidebarItems = useMemo(() => {
     const items = new Map<LeftSidebarItemKey, SidebarItem>([

@@ -46,3 +46,14 @@ addFoxgloveSchema(GRID_DATATYPES, "foxglove.Grid");
 
 export const IMAGE_ANNOTATIONS_DATATYPES = new Set<string>();
 addFoxgloveSchema(IMAGE_ANNOTATIONS_DATATYPES, "foxglove.ImageAnnotations");
+
+export const ODOMETRY_DATATYPES = new Set<string>();
+addFoxgloveSchema(ODOMETRY_DATATYPES, "foxglove.Odometry");
+
+export const POINT3_IN_FRAME_DATATYPES = new Set<string>();
+addFoxgloveSchema(POINT3_IN_FRAME_DATATYPES, "foxglove.Point3InFrame");
+
+/** `foxglove.JointStates`, and `foxglove.JointState` for a topic that carries a single joint. */
+export const JOINT_STATES_DATATYPES = new Set<string>();
+addFoxgloveSchema(JOINT_STATES_DATATYPES, "foxglove.JointStates");
+addFoxgloveSchema(JOINT_STATES_DATATYPES, "foxglove.JointState");
