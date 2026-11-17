@@ -5,11 +5,11 @@ import { useId } from "react";
 import { useTranslation } from "react-i18next";
 
 import { getColorStops } from "./buildConicGradient";
+import { validLimits } from "./limits";
 import { GaugeConfig } from "./types";
 
 const X0 = 20;
 const X1 = 300;
-// Limits can be undefined at runtime: a cleared number field in the settings sidebar stores it.
 const fmt = (v: number | undefined) =>
   v != undefined && Number.isFinite(v) ? String(Number(v.toFixed(3))) : "—";
 
@@ -29,11 +29,11 @@ export function Slider({
     typeof value === "number" || (typeof value === "string" && value.trim() !== "")
       ? Number(value)
       : NaN;
-  const fraction = (numericValue - minValue) / (maxValue - minValue);
-  const hasValue =
-    Number.isFinite(numericValue) && Number.isFinite(fraction) && maxValue > minValue;
-  const below = hasValue && numericValue < minValue;
-  const above = hasValue && numericValue > maxValue;
+  const limits = validLimits(config);
+  const fraction = limits ? (numericValue - limits.min) / (limits.max - limits.min) : NaN;
+  const hasValue = limits != undefined && Number.isFinite(numericValue);
+  const below = limits != undefined && numericValue < limits.min;
+  const above = limits != undefined && numericValue > limits.max;
   const x = X0 + Math.max(0, Math.min(1, fraction)) * (X1 - X0);
   const color = !Number.isFinite(numericValue)
     ? theme.palette.text.disabled

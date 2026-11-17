@@ -18,17 +18,20 @@ export enum ColorModeConfig {
   GRADIENT = "gradient",
 }
 
+/** Clearing a number field in the settings sidebar stores undefined, so these can be missing. */
+type ClearableNumber = number | undefined;
+
 export type GaugeConfig = {
   displayMode: "arc" | "slider" | "roll" | "pitch";
   angleUnit: "degrees" | "radians";
-  angleRange: number;
-  warningAngle: number;
-  criticalAngle: number;
+  angleRange: ClearableNumber;
+  warningAngle: ClearableNumber;
+  criticalAngle: ClearableNumber;
   colorMap: ColorMapConfig;
   colorMode: ColorModeConfig;
   gradient: [string, string];
-  maxValue: number;
-  minValue: number;
+  maxValue: ClearableNumber;
+  minValue: ClearableNumber;
   path: string;
   reverse: boolean;
 };

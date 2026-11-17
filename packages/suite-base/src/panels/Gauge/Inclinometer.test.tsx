@@ -71,3 +71,14 @@ describe("Inclinometer", () => {
     expect(container.querySelector("[clip-path]")).toBeNull();
   });
 });
+
+it.each(["angleRange", "warningAngle", "criticalAngle"])(
+  "shows no live horizon when %s is cleared",
+  (key) => {
+    const { container } = render(
+      <Inclinometer config={{ ...config, [key]: undefined }} value={0} />,
+    );
+    expect(screen.getByRole("img").getAttribute("aria-label")).toBe("roll: — invalidAngles");
+    expect(container.querySelector("[clip-path]")).toBeNull();
+  },
+);
