@@ -200,6 +200,8 @@ describe("URDF requests", () => {
       updateConfig: vi.fn(),
       settings: { errors: { add: addError, remove: removeError }, setNodesForKey: vi.fn() },
       fetchAsset,
+      addTransform: vi.fn(),
+      transformTree: { getOrCreateFrame: vi.fn() },
     };
     const extension = new Urdfs(context as unknown as Renderer);
     return { extension, addError, removeError, queueAnimationFrame, context };
@@ -348,4 +350,53 @@ describe("URDF requests", () => {
       extension.dispose();
     },
   );
+
+  it("drops a joint's manual offset when the field is cleared instead of saving NaN", async () => {
+    // Given a robot with one revolute joint that has a manual angle
+    const jointRobot: UrdfRobot = {
+      ...robot,
+      joints: new Map([
+        [
+          "j1",
+          {
+            name: "j1",
+            jointType: "revolute",
+            origin: { xyz: { x: 0, y: 0, z: 0 }, rpy: { x: 0, y: 0, z: 0 } },
+            parent: "base",
+            child: "link",
+            axis: { x: 0, y: 0, z: 1 },
+          },
+        ],
+      ]),
+    };
+    const parse = vi.spyOn(urdf, "parseRobot").mockResolvedValue(jointRobot);
+    const { extension, context } = createExtension(async (uri) => ({
+      uri,
+      data: new TextEncoder().encode("URDF"),
+    }));
+    const frame: { id: string; offsetEulerDegrees: number[] | undefined } = {
+      id: "link",
+      offsetEulerDegrees: [0, 0, 30],
+    };
+    context.transformTree.getOrCreateFrame.mockReturnValue(frame);
+    await vi.waitFor(() => {
+      expect(context.addTransform).toHaveBeenCalled();
+    });
+    const entry = extension.settingsNodes().find((e) => e.path[1] === "robot");
+
+    // When the manual angle is cleared
+    entry?.node.handler?.({
+      action: "update",
+      payload: {
+        path: ["layers", "robot", "joints", "j1", "manual"],
+        input: "number",
+        value: undefined,
+      },
+    });
+
+    // Then
+    expect(frame.offsetEulerDegrees).toBeUndefined();
+    parse.mockRestore();
+    extension.dispose();
+  });
 });
