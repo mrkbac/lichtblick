@@ -45,7 +45,7 @@ export function parseProtobufSchema(
     const prevToObject = type.toObject; // eslint-disable-line @typescript-eslint/unbound-method
     const newToObject: typeof prevToObject = (message, options) => {
       const result = prevToObject.call(type, message, options);
-      const { seconds, nanos } = result as { seconds: bigint; nanos: number };
+      const { seconds, nanos } = result;
       if (typeof seconds !== "bigint" || typeof nanos !== "number") {
         return result;
       }

@@ -413,11 +413,10 @@ export async function exportMcap(
       chunk.messageStartTime >= startTime &&
       chunk.messageEndTime <= endTime &&
       chunk.compression === outputChunkCompression &&
-      chunkChannels.every(
-        (id) =>
-          jobChannels.get(id)?.everyNth === 1 &&
-          keptChannels.get(id)!.topic === jobChannels.get(id)!.topic,
-      );
+      chunkChannels.every((id) => {
+        const jobChannel = jobChannels.get(id);
+        return jobChannel?.everyNth === 1 && keptChannels.get(id)?.topic === jobChannel.topic;
+      });
     if (copyAsIs) {
       inFlight.push(
         Promise.resolve({
@@ -471,9 +470,10 @@ export async function exportMcap(
     };
     if (decimating && indexCounts) {
       addToCounters(
-        [...indexCounts]
-          .filter(([id]) => jobChannels.has(id))
-          .map(([id, counts]) => [jobChannels.get(id)!.topic, counts.inRange]),
+        [...indexCounts].flatMap(([id, counts]): [string, number][] => {
+          const jobChannel = jobChannels.get(id);
+          return jobChannel ? [[jobChannel.topic, counts.inRange]] : [];
+        }),
       );
     }
     const pending = processChunk(job).then((result) => {
