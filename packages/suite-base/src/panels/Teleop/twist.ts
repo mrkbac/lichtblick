@@ -5,6 +5,7 @@ import * as _ from "lodash-es";
 
 import {
   DEFAULT_CONFIG,
+  DEFAULT_MAPPING,
   JOY_BUTTON_COUNT,
   JOY_BUTTONS,
   STANDARD_BUTTONS,
@@ -18,7 +19,6 @@ import {
   TeleopConfig,
   TeleopVector,
   Twist,
-  TwistField,
 } from "@lichtblick/suite-base/panels/Teleop/types";
 
 export const ZERO_VECTOR: TeleopVector = { x: 0, y: 0 };
@@ -83,7 +83,7 @@ export function actionToVector(action: DirectionalPadAction): TeleopVector {
 /** Radial deadzone, rescaled so output starts at 0 just past the deadzone */
 export function applyDeadzone(x: number, y: number, deadzone: number): TeleopVector {
   const magnitude = Math.hypot(x, y);
-  // negated so a non-numeric deadzone (cleared settings field) yields no motion
+  // negated so a NaN deadzone yields no motion
   if (!(magnitude > deadzone) || !(deadzone < 1)) {
     return ZERO_VECTOR;
   }
@@ -180,8 +180,8 @@ export function computeTwist(
 ): Twist {
   const twist = zeroTwist();
   for (const field of TWIST_FIELDS) {
-    const { input, max } = mapping[field];
-    // a cleared number field in the settings arrives as undefined; never publish NaN
+    const { input, max = DEFAULT_MAPPING[field].max } = mapping[field];
+    // the number editor accepts e.g. 1e309 (Infinity); never publish non-finite components
     if (!Number.isFinite(max) || !Number.isFinite(speed)) {
       continue;
     }
@@ -243,12 +243,12 @@ export function migrateConfig(saved: unknown): TeleopConfig {
       [rightButton, "leftX", -1],
     ];
     for (const [button, input, sign] of legacy) {
-      const field = button?.field?.replace(".", "-") as TwistField | undefined;
+      const legacyField = button?.field?.replace(".", "-");
+      const field = TWIST_FIELDS.find((candidate) => candidate === legacyField);
       const value = button?.value;
       // the opposite button of a pair usually mirrors the first; the first one wins
       if (
         field != undefined &&
-        TWIST_FIELDS.includes(field) &&
         config.mapping[field].input === "none" &&
         typeof value === "number"
       ) {

@@ -86,7 +86,7 @@ class StudioAppUpdater {
         onDisabled();
       }
     } catch (error) {
-      onError(error as Error);
+      onError(error instanceof Error ? error : new Error(String(error)));
     } finally {
       autoUpdater.off("update-not-available", onNotAvailable);
     }

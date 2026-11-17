@@ -106,7 +106,7 @@ export function shortcutKeyHandlers<S extends KeyboardShortcut>(
   const bound = shortcuts.filter((shortcut) => runners[shortcut.id as S["id"]] != undefined);
   const dispatch = (event: KeyboardEvent) => {
     const shortcut = findShortcut(bound, event);
-    return shortcut != undefined && runners[shortcut.id as S["id"]]!(event) !== false;
+    return shortcut != undefined && runners[shortcut.id as S["id"]]?.(event) !== false;
   };
   return Object.fromEntries(
     bound.flatMap((shortcut) =>

@@ -27,7 +27,7 @@ let sendError = (message: string) => {
   unsentErrors.push(message);
 };
 (global as unknown as SharedWorkerGlobalScope).onerror = (event: ErrorEvent) => {
-  sendError((event.error as Error).toString());
+  sendError(String(event.error));
 };
 (global as unknown as SharedWorkerGlobalScope).onunhandledrejection = (
   event: PromiseRejectionEvent,

@@ -109,9 +109,7 @@ export function generateDeepKeyPaths(obj: unknown): Set<string> {
 
     for (const key of Object.getOwnPropertyNames(nestedObj)) {
       const newPath = [key, ...path];
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const value = (nestedObj as any)[key];
-      recurseMapKeys(newPath, value as object);
+      recurseMapKeys(newPath, Reflect.get(nestedObj, key));
     }
   };
   recurseMapKeys([], obj);
@@ -185,14 +183,14 @@ export function getConstantNameByKeyPath(
  * Returns non-typed-array values unchanged.
  */
 export function typedArrayToArray(val: unknown, cache: WeakMap<object, unknown[]>): unknown {
-  if (!(ArrayBuffer.isView(val) && !(val instanceof DataView))) {
+  if (!isTypedArray(val)) {
     return val;
   }
   const cached = cache.get(val);
   if (cached != undefined) {
     return cached;
   }
-  const converted = Array.from(val as unknown as ArrayLike<unknown>);
+  const converted = Array.from<unknown>(val);
   cache.set(val, converted);
   return converted;
 }
@@ -240,9 +238,9 @@ export function getValueLabels({
 
   // Handle typed arrays (binary data preview)
   // Example: Int8Array(331776) [-4, -4, -4, -4, ..., -4]
-  if (ArrayBuffer.isView(itemValue) && !(itemValue instanceof DataView)) {
-    const array = itemValue as Uint8Array;
-    const previewItems = Array.from(array.slice(0, DATA_ARRAY_PREVIEW_LIMIT));
+  if (isTypedArray(itemValue)) {
+    const array = itemValue;
+    const previewItems = Array.from<unknown>(array.slice(0, DATA_ARRAY_PREVIEW_LIMIT));
     const hasMore = array.length > DATA_ARRAY_PREVIEW_LIMIT;
 
     arrLabel = `(${array.length}) [${previewItems.join(", ")}${hasMore ? ", …" : ""}] `;

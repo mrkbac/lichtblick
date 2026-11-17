@@ -274,4 +274,50 @@ describe("CameraStateSettings", () => {
       expect(mockOrbitControls.screenSpacePanning).toBe(false);
     });
   });
+
+  it.each(["distance", "fovy", "near", "far", "phi", "thetaOffset"] as const)(
+    "uses the default %s when the field is cleared instead of saving undefined",
+    (key) => {
+      // Given
+      const handler = new CameraStateSettings(renderer, canvas, 1);
+      // When
+      handler.handleSettingsAction({
+        action: "update",
+        payload: { path: ["cameraState", key], input: "number", value: undefined },
+      });
+      // Then
+      expect(renderer.config.cameraState[key]).toBe(DEFAULT_CAMERA_STATE[key]);
+      handler.dispose();
+    },
+  );
+
+  it("fills cleared target offset components with the default", () => {
+    // Given
+    const handler = new CameraStateSettings(renderer, canvas, 1);
+    // When
+    handler.handleSettingsAction({
+      action: "update",
+      payload: { path: ["cameraState", "targetOffset"], input: "vec3", value: [1, undefined, 3] },
+    });
+    // Then
+    expect(renderer.config.cameraState.targetOffset).toEqual([
+      1,
+      DEFAULT_CAMERA_STATE.targetOffset[1],
+      3,
+    ]);
+    handler.dispose();
+  });
+
+  it("stores the log depth switch in the scene config", () => {
+    // Given
+    const handler = new CameraStateSettings(renderer, canvas, 1);
+    // When
+    handler.handleSettingsAction({
+      action: "update",
+      payload: { path: ["cameraState", "logDepth"], input: "boolean", value: true },
+    });
+    // Then
+    expect(renderer.config.scene.logDepth).toBe(true);
+    handler.dispose();
+  });
 });

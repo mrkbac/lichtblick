@@ -47,6 +47,7 @@ import type { DocumentedNodes } from "@lichtblick/suite-base/panels/shared/docum
 import { showHideAllValue } from "@lichtblick/suite-base/panels/shared/topicList";
 import IAnalytics from "@lichtblick/suite-base/services/IAnalytics";
 import { randomUUID } from "@lichtblick/suite-base/util/randomUUID";
+import { toError } from "@lichtblick/suite-base/util/toError";
 import { palette, fontMonospace } from "@lichtblick/theme";
 
 import { DynamicBufferGeometry } from "./DynamicBufferGeometry";
@@ -309,6 +310,8 @@ export class Renderer extends EventEmitter<RendererEvents> {
       antialias: true,
       // Line materials use a stencil prepass; three.js stopped allocating a stencil buffer by default in r163
       stencil: true,
+      // Fixed at creation; the panel recreates the renderer when this setting changes
+      logarithmicDepthBuffer: config.scene.logDepth === true,
     });
     if (!this.gl.capabilities.isWebGL2) {
       throw new Error("WebGL2 is not supported");
@@ -1136,9 +1139,12 @@ export class Renderer extends EventEmitter<RendererEvents> {
               const geometry = object.geometry as THREE.BufferGeometry;
               // Bound only the active range of reused buffers, skipping NaN points (e.g. in clouds)
               const expand = (name: string, from: number, to: number) => {
-                const attribute = geometry.getAttribute(name) as THREE.BufferAttribute | undefined;
-                for (let i = from; i < Math.min(to, attribute?.count ?? 0); i++) {
-                  point.fromBufferAttribute(attribute!, i);
+                const attribute = geometry.attributes[name];
+                if (!attribute) {
+                  return;
+                }
+                for (let i = from; i < Math.min(to, attribute.count); i++) {
+                  point.fromBufferAttribute(attribute, i);
                   if (Number.isFinite(point.x + point.y + point.z)) {
                     box.expandByPoint(point);
                   }
@@ -1411,7 +1417,7 @@ export class Renderer extends EventEmitter<RendererEvents> {
         });
       }
     } catch (e: unknown) {
-      const err = e as Error;
+      const err = toError(e);
       this.settings.errors.add(
         ["transforms"],
         ADD_TRANSFORM_ERROR,
@@ -1440,7 +1446,7 @@ export class Renderer extends EventEmitter<RendererEvents> {
         });
       }
     } catch (e: unknown) {
-      const err = e as Error;
+      const err = toError(e);
       this.settings.errors.add(
         ["transforms"],
         ADD_TRANSFORM_ERROR,

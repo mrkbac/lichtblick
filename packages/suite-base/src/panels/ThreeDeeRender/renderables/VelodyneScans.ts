@@ -82,11 +82,11 @@ class VelodyneCloudConverter {
   #transformers = new Map<Model, Transformer>();
 
   public decode(scan: VelodyneScan): FoxglovePointCloud | undefined {
-    if (scan.packets.length === 0) {
+    const firstPacketData = scan.packets[0];
+    if (!firstPacketData) {
       return undefined;
     }
 
-    const firstPacketData = scan.packets[0]!;
     const model = RawPacket.InferModel(firstPacketData.data);
     if (model == undefined) {
       return undefined;

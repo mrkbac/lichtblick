@@ -145,3 +145,10 @@ describe("processMessages", () => {
     ]);
   });
 });
+
+describe("registerScript", () => {
+  it("reports a script without a default export function at registration", () => {
+    const result = registerScript({ projectCode: undefined, scriptCode: "exports.foo = 1;" });
+    expect(result.error).toMatch(/default export a function/);
+  });
+});

@@ -27,6 +27,7 @@ import ChartJsMux, {
 import { listenForPan } from "@lichtblick/suite-base/util/listenForPan";
 import { mightActuallyBePartial } from "@lichtblick/suite-base/util/mightActuallyBePartial";
 import { randomUUID } from "@lichtblick/suite-base/util/randomUUID";
+import { toError } from "@lichtblick/suite-base/util/toError";
 
 import { TypedChartData, ChartData, RpcElement, RpcScales } from "./types";
 
@@ -382,7 +383,7 @@ function Chart(props: Props): React.JSX.Element {
 
     updateChart(newUpdate).catch((err: unknown) => {
       if (isMounted()) {
-        setUpdateError(err as Error);
+        setUpdateError(toError(err));
       }
       console.error(err);
     });

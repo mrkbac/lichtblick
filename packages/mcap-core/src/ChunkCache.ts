@@ -35,7 +35,8 @@ export class ChunkCache {
 
   /** For McapIndexedReader's `chunkCache` option */
   public get(chunkStartOffset: bigint): DataView | undefined {
-    return this.#get(`c${chunkStartOffset}`) as DataView | undefined;
+    const data = this.#get(`c${chunkStartOffset}`);
+    return data instanceof DataView ? data : undefined;
   }
 
   public set(chunkStartOffset: bigint, data: DataView): void {
@@ -43,7 +44,8 @@ export class ChunkCache {
   }
 
   public getMessageIndexes(chunkStartOffset: bigint): DataView | undefined {
-    return this.#get(`i${chunkStartOffset}`) as DataView | undefined;
+    const data = this.#get(`i${chunkStartOffset}`);
+    return data instanceof DataView ? data : undefined;
   }
 
   public setMessageIndexes(chunkStartOffset: bigint, data: DataView): void {
@@ -52,7 +54,8 @@ export class ChunkCache {
 
   /** For McapIndexedReader's `chunkCache` option. Keyed by the message index section's offset. */
   public getChunkMessageIndex(messageIndexStartOffset: bigint): ChunkMessageIndex | undefined {
-    return this.#get(`m${messageIndexStartOffset}`) as ChunkMessageIndex | undefined;
+    const index = this.#get(`m${messageIndexStartOffset}`);
+    return index instanceof DataView ? undefined : index;
   }
 
   /** Never evicts the decompressed chunk at `chunkStartOffset`, which is read right after. */

@@ -320,7 +320,9 @@ export class TopicMarkers extends Renderable<MarkerTopicUserData> {
       case MarkerType.MESH_RESOURCE: {
         const renderable = pool.acquire(MarkerType.MESH_RESOURCE, this.topic, marker, receiveTime);
         // Force reload the mesh
-        (renderable as RenderableMeshResource).update(marker, receiveTime, true);
+        if (renderable instanceof RenderableMeshResource) {
+          renderable.update(marker, receiveTime, true);
+        }
         return renderable;
       }
       case MarkerType.TRIANGLE_LIST:

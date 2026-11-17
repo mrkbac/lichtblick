@@ -8,6 +8,7 @@
 import * as THREE from "three";
 
 import { EDGE_LINE_SEGMENTS_NAME } from "@lichtblick/suite-base/panels/ThreeDeeRender/ModelCache";
+import { toError } from "@lichtblick/suite-base/util/toError";
 
 import { RenderableMarker } from "./RenderableMarker";
 import { makeStandardMaterial } from "./materials";
@@ -23,6 +24,8 @@ export class RenderableMeshResource extends RenderableMarker {
   #mesh: THREE.Group | THREE.Scene | undefined;
   #material: THREE.MeshStandardMaterial;
   #referenceUrl: string | undefined;
+  /** Whether the marker alpha also fades the model's own materials, see the constructor */
+  #alphaFadesModelMaterials: boolean;
 
   /** Track updates to avoid race conditions when asynchronously loading models */
   #updateId = 0;
@@ -32,12 +35,17 @@ export class RenderableMeshResource extends RenderableMarker {
     marker: Marker,
     receiveTime: bigint | undefined,
     renderer: Renderer,
-    options?: { referenceUrl?: string },
+    /**
+     * `alphaFadesModelMaterials`: the marker alpha also fades materials that come with the model
+     * (embedded or vertex colored), which otherwise ignore the marker color.
+     */
+    options?: { referenceUrl?: string; alphaFadesModelMaterials?: boolean },
   ) {
     super(topic, marker, receiveTime, renderer);
 
     this.#material = makeStandardMaterial(marker.color);
     this.#referenceUrl = options?.referenceUrl;
+    this.#alphaFadesModelMaterials = options?.alphaFadesModelMaterials ?? false;
     this.update(marker, receiveTime, true);
   }
 
@@ -93,6 +101,7 @@ export class RenderableMeshResource extends RenderableMarker {
           this.#mesh = mesh;
           this.add(mesh);
           this.#updateOutlineVisibility();
+          this.#fadeModelMaterials();
 
           // Render a new frame now that the model is loaded
           this.renderer.queueAnimationFrame();
@@ -101,13 +110,52 @@ export class RenderableMeshResource extends RenderableMarker {
           errors.add(
             this.userData.settingsPath,
             MESH_FETCH_FAILED,
-            `Unhandled error loading mesh from "${marker.mesh_resource}": ${(err as Error).message}`,
+            `Unhandled error loading mesh from "${marker.mesh_resource}": ${toError(err).message}`,
           );
         });
     }
     this.#updateOutlineVisibility();
+    this.#fadeModelMaterials();
 
     this.scale.set(marker.scale.x, marker.scale.y, marker.scale.z);
+  }
+
+  #fadeModelMaterials(): void {
+    if (!this.#alphaFadesModelMaterials || !this.#mesh) {
+      return;
+    }
+    const alpha = this.userData.marker.color.a;
+    this.#mesh.traverse((child) => {
+      if (!(child instanceof THREE.Mesh)) {
+        return;
+      }
+      const mesh: THREE.Mesh = child;
+      const materials = [mesh.material].flat().map((material) => {
+        if (material === this.#material) {
+          return material;
+        }
+        // Model materials are shared with the model cache: fade a copy that remembers the original
+        let faded = material;
+        if (material.userData.baseOpacity == undefined) {
+          if (alpha >= 1) {
+            return material;
+          }
+          faded = material.clone();
+          faded.userData.baseOpacity = material.opacity;
+          faded.userData.baseTransparent = material.transparent;
+        }
+        const baseTransparent = faded.userData.baseTransparent as boolean;
+        faded.opacity = (faded.userData.baseOpacity as number) * alpha;
+        const transparent = baseTransparent || alpha < 1;
+        if (faded.transparent !== transparent) {
+          faded.transparent = transparent;
+          faded.depthWrite = !transparent;
+          faded.needsUpdate = true;
+        }
+        return faded;
+      });
+      mesh.material = Array.isArray(mesh.material) ? materials : materials[0]!;
+    });
   }
 
   #updateOutlineVisibility(): void {

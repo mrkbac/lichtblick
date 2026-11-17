@@ -13,7 +13,10 @@ import {
   PanelExtensionAdapter,
 } from "@lichtblick/suite-base/components/PanelExtensionAdapter";
 import Indicator from "@lichtblick/suite-base/panels/Indicator";
-import { DEFAULT_CONFIG } from "@lichtblick/suite-base/panels/Indicator/constants";
+import {
+  DEFAULT_CONFIG,
+  DEFAULT_FALLBACK_COLOR,
+} from "@lichtblick/suite-base/panels/Indicator/constants";
 import { getMatchingRule } from "@lichtblick/suite-base/panels/Indicator/getMatchingRule";
 import {
   IndicatorConfig,
@@ -32,6 +35,7 @@ vi.mock("./getMatchingRule", () => ({
 type Setup = {
   configOverride?: Partial<IndicatorConfig>;
   contextOverride?: Partial<BuiltinPanelExtensionContext>;
+  matchingRuleOverride?: { color?: string };
 };
 
 describe("Indicator Component", () => {
@@ -44,7 +48,7 @@ describe("Indicator Component", () => {
     vi.clearAllMocks();
   });
 
-  function setup({ contextOverride, configOverride }: Setup = {}) {
+  function setup({ contextOverride, configOverride, matchingRuleOverride }: Setup = {}) {
     const config: IndicatorConfig = {
       ...IndicatorBuilder.config(),
       ...configOverride,
@@ -100,6 +104,7 @@ describe("Indicator Component", () => {
     const matchingRule = {
       color: "#68e24a",
       label: BasicBuilder.string(),
+      ...matchingRuleOverride,
     };
     (getMatchingRule as Mock).mockReturnValue(matchingRule);
 
@@ -135,6 +140,24 @@ describe("Indicator Component", () => {
     const { config } = setup({ configOverride: customConfig });
 
     expect(config).toMatchObject(customConfig);
+  });
+
+  it("renders the default color when the rule and fallback colors are cleared", () => {
+    // Clearing an rgb field in the settings stores undefined
+    const { matchingRule } = setup({
+      configOverride: { style: "background", fallbackColor: undefined },
+      matchingRuleOverride: { color: undefined },
+    });
+
+    expect(screen.getByText(matchingRule.label)).toBeTruthy();
+    // the browser normalizes the hex color, so compare against a probe styled the same way
+    const probe = document.createElement("div");
+    probe.style.backgroundColor = DEFAULT_FALLBACK_COLOR;
+    const indicatorStack = screen.getByTestId("background-indicator").parentElement;
+    expect(indicatorStack).toBeInstanceOf(HTMLElement);
+    expect(getComputedStyle(indicatorStack ?? document.body).backgroundColor).toBe(
+      probe.style.backgroundColor,
+    );
   });
 
   it.each<IndicatorStyle>(["bulb", "background"])(

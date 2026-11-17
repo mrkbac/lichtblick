@@ -20,10 +20,10 @@ export default class NativeStorageAppConfiguration implements IAppConfiguration 
 
   // Protect access to currentValue to avoid read-modify-write races between multiple set() calls.
   #mutex = new Mutex();
-  #currentValue: unknown;
+  #currentValue: Record<string, AppConfigurationValue>;
 
   // Use OsContextAppConfiguration.initialize to create a new instance
-  private constructor(ctx: Storage, initialValue?: unknown) {
+  private constructor(ctx: Storage, initialValue: Record<string, AppConfigurationValue>) {
     this.#ctx = ctx;
     this.#currentValue = initialValue;
   }
@@ -39,14 +39,14 @@ export default class NativeStorageAppConfiguration implements IAppConfiguration 
       NativeStorageAppConfiguration.#STORE_KEY,
       { encoding: "utf8" },
     );
-    const currentValue = JSON.parse(value ?? "{}");
+    const currentValue = JSON.parse(value ?? "{}") as Record<string, AppConfigurationValue>;
     const config = new NativeStorageAppConfiguration(ctx, { ...defaults, ...currentValue });
 
     return config;
   }
 
   public get(key: string): AppConfigurationValue | undefined {
-    return (this.#currentValue as Record<string, AppConfigurationValue>)[key];
+    return this.#currentValue[key];
   }
 
   public async set(key: string, value: AppConfigurationValue): Promise<void> {
@@ -57,7 +57,10 @@ export default class NativeStorageAppConfiguration implements IAppConfiguration 
         { encoding: "utf8" },
       );
 
-      const newConfig: unknown = { ...JSON.parse(currentConfig ?? "{}"), [key]: value };
+      const newConfig: Record<string, AppConfigurationValue> = {
+        ...JSON.parse(currentConfig ?? "{}"),
+        [key]: value,
+      };
 
       await this.#ctx.put(
         NativeStorageAppConfiguration.#STORE_NAME,

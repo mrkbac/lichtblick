@@ -39,6 +39,15 @@ describe("useAsyncFn", () => {
     expect(returned).toBe(error);
     expect(result.current[0]).toEqual({ error, loading: false });
   });
+
+  it("stores a non-Error rejection as an Error", async () => {
+    // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors
+    const { result } = renderHook(() => useAsyncFn(async () => await Promise.reject("boom")));
+    await act(async () => {
+      await result.current[1]();
+    });
+    expect(result.current[0].error?.message).toBe("boom");
+  });
 });
 
 describe("useAsync", () => {

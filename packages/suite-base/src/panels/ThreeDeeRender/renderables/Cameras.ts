@@ -13,6 +13,7 @@ import { CameraModelsMap } from "@lichtblick/den/image/types";
 import Logger from "@lichtblick/log";
 import { ICameraModel, SettingsTreeAction } from "@lichtblick/suite";
 import type { RosValue } from "@lichtblick/suite-base/players/types";
+import { toError } from "@lichtblick/suite-base/util/toError";
 
 import { RenderableLineList } from "./markers/RenderableLineList";
 import { cameraInfosEqual, normalizeCameraInfo, projectPixel } from "./projections";
@@ -220,7 +221,7 @@ export class Cameras extends SceneExtension<CameraInfoRenderable> {
         try {
           renderable.userData.cameraModel = selectCameraModel(cameraInfo, this.customCameraModels);
         } catch (errUnk) {
-          const err = errUnk as Error;
+          const err = toError(errUnk);
           this.renderer.settings.errors.addToTopic(topic, CAMERA_MODEL, err.message);
           renderable.userData.cameraModel = undefined;
           if (renderable.userData.lines) {

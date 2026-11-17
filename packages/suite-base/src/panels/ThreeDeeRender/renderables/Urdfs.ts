@@ -26,13 +26,17 @@ import type { DocumentedNodes } from "@lichtblick/suite-base/panels/shared/docum
 import { eulerToQuaternion } from "@lichtblick/suite-base/util/geometry";
 import { isValidUrl } from "@lichtblick/suite-base/util/isValidURL";
 import { randomUUID } from "@lichtblick/suite-base/util/randomUUID";
+import { toError } from "@lichtblick/suite-base/util/toError";
 
 import { BaseUserData, Renderable } from "../Renderable";
+import { Axis } from "./Axis";
 import { RenderableCube } from "./markers/RenderableCube";
 import { RenderableCylinder } from "./markers/RenderableCylinder";
+import { RenderableMarker } from "./markers/RenderableMarker";
 import { MESH_FETCH_FAILED, RenderableMeshResource } from "./markers/RenderableMeshResource";
 import { RenderableSphere } from "./markers/RenderableSphere";
 import { missingTransformMessage, MISSING_TRANSFORM } from "./transforms";
+import { forwardKinematics, LinkPose } from "./urdfKinematics";
 import type { AnyRendererSubscription } from "../IRenderer";
 import type { Renderer } from "../Renderer";
 import { PartialMessageEvent, SceneExtension, onlyLastByTopicMessage } from "../SceneExtension";
@@ -52,14 +56,17 @@ import { BaseSettings, CustomLayerSettings } from "../settings";
 import {
   CUSTOM_URDF_DEFAULTS,
   customUrdfSettingsNode,
+  resolveJointStatesTopic,
   URDF_DEFAULTS,
   URDF_LAYER_ID,
+  UrdfLinkSettings,
   urdfJointNode,
   urdfJointsNodes,
+  urdfLinkNode,
+  urdfLinksNodes,
   urdfSettingsNode,
 } from "../settingsNodes/layers";
-import { Pose, makePose, TransformTree } from "../transforms";
-import { updatePose } from "../updatePose";
+import { CoordinateFrame, Pose, makePose, TransformTree } from "../transforms";
 
 const log = Logger.getLogger(__filename);
 
@@ -82,26 +89,54 @@ const DEFAULT_COLOR_STR = "#ffffff";
 const DEFAULT_COLOR = stringToRgba(makeRgba(), DEFAULT_COLOR_STR);
 const VEC3_ONE = { x: 1, y: 1, z: 1 };
 
-export type LayerSettingsUrdf = BaseSettings & {
-  instanceId: string; // This will be set to the topic name
-  displayMode: "auto" | "visual" | "collision";
-  label: string;
-  fallbackColor?: string;
+/** Options every robot description has, wherever it comes from. Optional for older layouts. */
+type UrdfRobotOptions = {
+  /** Where link poses come from: the transform tree, or forward kinematics from joint states */
+  controlMode?: "transforms" | "jointStates";
+  /** Joint states topic for `controlMode: "jointStates"`; empty picks the first one */
+  jointStatesTopic?: string;
+  /** 0-1, multiplies every link's alpha */
+  opacity?: number;
+  showOutlines?: boolean;
+  /** Draws each link's coordinate axes */
+  showAxis?: boolean;
+  axisScale?: number;
+  /** Per-link overrides, keyed by link name without the frame prefix */
+  links?: Record<string, UrdfLinkSettings>;
 };
 
-export type LayerSettingsCustomUrdf = CustomLayerSettings & {
-  layerId: "foxglove.Urdf";
-  sourceType: "url" | "filePath" | "param" | "topic";
-  url?: string;
-  filePath?: string;
-  parameter?: string;
-  topic?: string;
-  framePrefix: string;
-  displayMode: "auto" | "visual" | "collision";
-  fallbackColor?: string;
-};
+export type LayerSettingsUrdf = BaseSettings &
+  UrdfRobotOptions & {
+    instanceId: string; // This will be set to the topic name
+    displayMode: "auto" | "visual" | "collision";
+    label: string;
+    fallbackColor?: string;
+  };
+
+export type LayerSettingsCustomUrdf = CustomLayerSettings &
+  UrdfRobotOptions & {
+    layerId: "foxglove.Urdf";
+    sourceType: "url" | "filePath" | "param" | "topic";
+    url?: string;
+    filePath?: string;
+    parameter?: string;
+    topic?: string;
+    framePrefix: string;
+    displayMode: "auto" | "visual" | "collision";
+    fallbackColor?: string;
+  };
 
 const DEFAULT_SETTINGS = URDF_DEFAULTS;
+
+/** Settings applied to the loaded robot in place, without reloading it */
+const APPEARANCE_FIELDS = new Set([
+  "opacity",
+  "showOutlines",
+  "showAxis",
+  "axisScale",
+  "controlMode",
+  "jointStatesTopic",
+]);
 
 const DEFAULT_CUSTOM_SETTINGS = CUSTOM_URDF_DEFAULTS;
 
@@ -110,6 +145,25 @@ const tempVec3b = new THREE.Vector3();
 const tempQuaternion1 = new THREE.Quaternion();
 const tempQuaternion2 = new THREE.Quaternion();
 const tempEuler = new THREE.Euler();
+const tempMatrix = new THREE.Matrix4();
+const tempMatrix2 = new THREE.Matrix4();
+const tempPose = makePose();
+const tempOutPose = makePose();
+
+/** Something drawn in a link's frame: one of its visuals/colliders, or its axis. */
+type UrdfPart = {
+  object: THREE.Object3D;
+  /** Link frame */
+  frameId: string;
+  /** Key into `links` settings: the link name without the frame prefix */
+  linkKey: string;
+  /** Pose in the link frame */
+  pose: Pose;
+  /** Marker as loaded, before opacity is applied */
+  baseMarker?: Marker;
+};
+
+type UrdfLink = { frameId: string; linkKey: string };
 
 export type UrdfUserData = BaseUserData & {
   settings: LayerSettingsUrdf | LayerSettingsCustomUrdf;
@@ -120,6 +174,14 @@ export type UrdfUserData = BaseUserData & {
   sourceType: LayerSettingsCustomUrdf["sourceType"] | undefined;
   parameter: string | undefined;
   renderables: Map<string, Renderable>;
+  /** Visuals/colliders and axes of every link, posed in `startFrame` */
+  parts: UrdfPart[];
+  axes: UrdfPart[];
+  links: UrdfLink[];
+  joints: UrdfJoint[];
+  jointsByName: Map<string, UrdfJoint>;
+  /** Reused forward kinematics output */
+  linkPoses: Map<string, LinkPose>;
 };
 
 enum EmbeddedMaterialUsage {
@@ -158,8 +220,19 @@ export class UrdfRenderable extends Renderable<UrdfUserData> {
     for (const childRenderable of this.userData.renderables.values()) {
       childRenderable.dispose();
     }
+    this.removeAxes();
     this.children.length = 0;
     this.userData.renderables.clear();
+    this.userData.parts = [];
+    this.userData.links = [];
+  }
+
+  public removeAxes(): void {
+    for (const { object } of this.userData.axes) {
+      this.remove(object);
+      (object as Axis).dispose();
+    }
+    this.userData.axes = [];
   }
 }
 
@@ -167,7 +240,9 @@ export class Urdfs extends SceneExtension<UrdfRenderable> {
   public static extensionId = "foxglove.Urdfs";
   #framesByInstanceId = new Map<string, string[]>();
   #transformsByInstanceId = new Map<string, TransformData[]>();
-  #jointStates = new Map<string, JointPosition>();
+  /** Latest position of each joint, by joint states topic */
+  #jointStates = new Map<string, Map<string, JointPosition>>();
+  #jointStateTopicsCache: { topics: unknown; names: string[] } = { topics: undefined, names: [] };
   #textDecoder = new TextDecoder();
   #urdfsByTopic = new Map<string, string>();
 
@@ -201,13 +276,14 @@ export class Urdfs extends SceneExtension<UrdfRenderable> {
         },
       },
 
-      // Note that this subscription will never happen because it does not appear as a topic in the
-      // topic list that can have its visibility toggled on. The ThreeDeeRender subscription logic
-      // needs to become more flexible to make this possible
       {
         type: "schema",
         schemaNames: JOINTSTATE_DATATYPES,
-        subscription: { handler: this.#handleJointState, filterQueue: onlyLastByTopicMessage },
+        subscription: {
+          shouldSubscribe: this.#jointStatesShouldSubscribe,
+          handler: this.#handleJointState,
+          filterQueue: onlyLastByTopicMessage,
+        },
       },
 
       {
@@ -224,12 +300,25 @@ export class Urdfs extends SceneExtension<UrdfRenderable> {
 
   public override settingsNodes(): SettingsTreeEntry[] {
     const entries: SettingsTreeEntry[] = [];
-    const children = (key: string) =>
-      urdfChildren(
-        this.#transformsByInstanceId.get(key),
-        this.renderer.transformTree,
-        this.#jointStates,
-      );
+    const jointStateTopics = this.#jointStateTopics();
+    const children = (key: string, config: Partial<LayerSettingsUrdf>) => {
+      const jointStatesTopic = resolveJointStatesTopic(config, jointStateTopics);
+      return {
+        ...urdfChildren(
+          this.#transformsByInstanceId.get(key),
+          this.renderer.transformTree,
+          jointStatesTopic != undefined ? this.#jointStates.get(jointStatesTopic) : undefined,
+        ),
+        ...urdfLinksNodes(
+          Object.fromEntries(
+            (this.renderables.get(key)?.userData.links ?? []).map(({ linkKey }) => [
+              linkKey,
+              urdfLinkNode(linkKey, config.links?.[linkKey]),
+            ]),
+          ),
+        ),
+      };
+    };
 
     // /robot_description topic entry
     const topic = this.renderer.topicsByName?.get(TOPIC_NAME);
@@ -238,7 +327,7 @@ export class Urdfs extends SceneExtension<UrdfRenderable> {
       entries.push({
         path: ["topics", TOPIC_NAME],
         node: {
-          ...urdfSettingsNode(TOPIC_NAME, config, children(TOPIC_NAME)),
+          ...urdfSettingsNode(TOPIC_NAME, config, jointStateTopics, children(TOPIC_NAME, config)),
           handler: this.#handleTopicSettingsAction,
         },
       });
@@ -251,7 +340,12 @@ export class Urdfs extends SceneExtension<UrdfRenderable> {
       entries.push({
         path: ["topics", PARAM_KEY],
         node: {
-          ...urdfSettingsNode(PARAM_DISPLAY_NAME, config, children(PARAM_KEY)),
+          ...urdfSettingsNode(
+            PARAM_DISPLAY_NAME,
+            config,
+            jointStateTopics,
+            children(PARAM_KEY, config),
+          ),
           handler: this.#handleTopicSettingsAction,
         },
       });
@@ -270,7 +364,13 @@ export class Urdfs extends SceneExtension<UrdfRenderable> {
         entries.push({
           path: ["layers", instanceId],
           node: {
-            ...customUrdfSettingsNode(config, urdfTopics, urdfParameters, children(instanceId)),
+            ...customUrdfSettingsNode(
+              config,
+              urdfTopics,
+              urdfParameters,
+              jointStateTopics,
+              children(instanceId, config),
+            ),
             handler: this.#handleLayerSettingsAction,
           },
         });
@@ -303,39 +403,170 @@ export class Urdfs extends SceneExtension<UrdfRenderable> {
     fixedFrameId: string,
   ): void {
     for (const renderable of this.renderables.values()) {
-      const path = renderable.userData.settingsPath;
+      const { settingsPath: path, settings } = renderable.userData;
       let hasTfError = false;
 
-      renderable.visible = renderable.userData.settings.visible;
+      renderable.visible = settings.visible;
       if (!renderable.visible) {
         this.renderer.settings.errors.clearPath(path);
         continue;
       }
 
-      // UrdfRenderables always stay at the origin. Their children renderables
-      // are individually updated since each child exists in a different frame
-      for (const childRenderable of renderable.userData.renderables.values()) {
-        const srcTime = currentTime;
-        const frameId = childRenderable.userData.frameId;
-        const updated = updatePose(
-          childRenderable,
-          this.renderer.transformTree,
-          renderFrameId,
-          fixedFrameId,
-          frameId,
-          currentTime,
-          srcTime,
-        );
-        if (!updated) {
-          const message = missingTransformMessage(renderFrameId, fixedFrameId, frameId);
-          this.renderer.settings.errors.add(path, MISSING_TRANSFORM, message);
-          hasTfError = true;
+      const linkPoses =
+        settings.controlMode === "jointStates" ? this.#forwardKinematics(renderable) : undefined;
+
+      // UrdfRenderables always stay at the origin. Their parts are individually updated since
+      // each one exists in a different frame
+      for (const parts of [renderable.userData.parts, renderable.userData.axes]) {
+        for (const part of parts) {
+          const linkSettings = settings.links?.[part.linkKey];
+          const missingFrame = this.#updatePart(
+            part,
+            linkSettings,
+            linkPoses?.get(part.frameId),
+            renderFrameId,
+            fixedFrameId,
+            currentTime,
+          );
+          if (missingFrame != undefined) {
+            const message = missingTransformMessage(renderFrameId, fixedFrameId, missingFrame);
+            this.renderer.settings.errors.add(path, MISSING_TRANSFORM, message);
+            hasTfError = true;
+          }
+          if (linkSettings?.visible === false) {
+            part.object.visible = false;
+          }
         }
       }
 
       if (!hasTfError) {
         this.renderer.settings.errors.remove(path, MISSING_TRANSFORM);
       }
+    }
+  }
+
+  /**
+   * Places a part: its pose in the link frame, after the link's offset, and in joint states mode
+   * the link's pose from forward kinematics. Returns the frame it could not resolve, if any.
+   */
+  #updatePart(
+    part: UrdfPart,
+    linkSettings: UrdfLinkSettings | undefined,
+    linkPose: LinkPose | undefined,
+    renderFrameId: string,
+    fixedFrameId: string,
+    currentTime: bigint,
+  ): string | undefined {
+    let srcFrameId = part.frameId;
+    let srcPose: Pose = part.pose;
+    const offset = linkSettings?.position != undefined || linkSettings?.rotation != undefined;
+    if (linkPose || offset) {
+      if (linkPose) {
+        tempMatrix.copy(linkPose.matrix);
+        srcFrameId = linkPose.root;
+      } else {
+        tempMatrix.identity();
+      }
+      if (offset) {
+        tempMatrix.multiply(offsetMatrix(linkSettings, tempMatrix2));
+      }
+      tempMatrix.multiply(poseToMatrix(part.pose, tempMatrix2));
+      srcPose = matrixToPose(tempMatrix, tempPose);
+    }
+    const applied = this.renderer.transformTree.apply(
+      tempOutPose,
+      srcPose,
+      renderFrameId,
+      fixedFrameId,
+      srcFrameId,
+      currentTime,
+      currentTime,
+    );
+    part.object.visible = applied != undefined;
+    if (!applied) {
+      return srcFrameId;
+    }
+    const { position: p, orientation: q } = tempOutPose;
+    part.object.position.set(p.x, p.y, p.z);
+    part.object.quaternion.set(q.x, q.y, q.z, q.w);
+    return undefined;
+  }
+
+  /** Link poses relative to the root link, from the robot's joint states topic */
+  #forwardKinematics(renderable: UrdfRenderable): Map<string, LinkPose> {
+    const { settings, joints, jointsByName, linkPoses } = renderable.userData;
+    const topic = resolveJointStatesTopic(settings, this.#jointStateTopics());
+    const positions = topic != undefined ? this.#jointStates.get(topic) : undefined;
+    const transformTree = this.renderer.transformTree;
+    return forwardKinematics(
+      joints,
+      (name) => {
+        const position = positions?.get(name)?.position;
+        if (position != undefined) {
+          return position;
+        }
+        const joint = jointsByName.get(name);
+        return (joint && manualJointValue(joint, transformTree.frame(joint.child))) ?? 0;
+      },
+      linkPoses,
+    );
+  }
+
+  /** Topics with joint states, recomputed only when the topic list changes */
+  #jointStateTopics(): string[] {
+    const topics = this.renderer.topics;
+    if (this.#jointStateTopicsCache.topics !== topics) {
+      const names = filterMap(topics ?? [], (topic) =>
+        JOINTSTATE_DATATYPES.has(topic.schemaName) ? topic.name : undefined,
+      );
+      this.#jointStateTopicsCache = { topics, names };
+    }
+    return this.#jointStateTopicsCache.names;
+  }
+
+  #jointStatesShouldSubscribe = (topic: string): boolean => {
+    const jointStateTopics = this.#jointStateTopics();
+    const configs = [
+      this.renderer.config.topics[TOPIC_NAME],
+      this.renderer.config.topics[PARAM_KEY],
+      ...Object.values(this.renderer.config.layers).filter((layer) => layer?.layerId === LAYER_ID),
+    ] as (Partial<LayerSettingsUrdf> | undefined)[];
+    return configs.some(
+      (config) =>
+        config?.controlMode === "jointStates" &&
+        resolveJointStatesTopic(config, jointStateTopics) === topic,
+    );
+  };
+
+  /** Applies opacity and outline settings to the loaded link geometry */
+  #applyAppearance(renderable: UrdfRenderable): void {
+    const { opacity = 1, showOutlines = true } = renderable.userData.settings;
+    for (const { object, baseMarker } of renderable.userData.parts) {
+      if (!(object instanceof RenderableMarker) || !baseMarker) {
+        continue;
+      }
+      object.settingsOverride = { showOutlines };
+      const alpha = baseMarker.color.a * _.clamp(opacity, 0, 1);
+      object.update({ ...baseMarker, color: { ...baseMarker.color, a: alpha } }, undefined);
+    }
+  }
+
+  /** Creates, scales or removes the per-link axes */
+  #syncAxes(renderable: UrdfRenderable): void {
+    const { showAxis = false, axisScale = 1 } = renderable.userData.settings;
+    if (!showAxis) {
+      renderable.removeAxes();
+      return;
+    }
+    if (renderable.userData.axes.length === 0) {
+      renderable.userData.axes = renderable.userData.links.map(({ frameId, linkKey }) => {
+        const axis = new Axis(`${frameId}-axis`, this.renderer);
+        renderable.add(axis);
+        return { object: axis, frameId, linkKey, pose: makePose() };
+      });
+    }
+    for (const { object } of renderable.userData.axes) {
+      object.scale.setScalar(axisScale);
     }
   }
 
@@ -430,17 +661,37 @@ export class Urdfs extends SceneExtension<UrdfRenderable> {
       const isAngular = joint.jointType === "revolute" || joint.jointType === "continuous";
       const axis = tempVec3a.set(joint.axis.x, joint.axis.y, joint.axis.z);
 
+      if (action.payload.input !== "number") {
+        return;
+      }
+      // undefined when the field is cleared: drop the manual offset
+      const value = action.payload.value;
       if (isAngular) {
-        const degrees = action.payload.value as number;
-        const quaternion = tempQuaternion1.setFromAxisAngle(axis, degrees * DEG2RAD);
-        const euler = tempEuler.setFromQuaternion(quaternion);
-        frame.offsetEulerDegrees = [euler.x * RAD2DEG, euler.y * RAD2DEG, euler.z * RAD2DEG];
+        if (value == undefined) {
+          frame.offsetEulerDegrees = undefined;
+        } else {
+          const quaternion = tempQuaternion1.setFromAxisAngle(axis, value * DEG2RAD);
+          const euler = tempEuler.setFromQuaternion(quaternion);
+          frame.offsetEulerDegrees = [euler.x * RAD2DEG, euler.y * RAD2DEG, euler.z * RAD2DEG];
+        }
         this.saveSetting(["transforms", frameKey, "rpyCoefficient"], frame.offsetEulerDegrees);
       } else {
-        const scale = action.payload.value as number;
-        axis.multiplyScalar(scale);
-        frame.offsetPosition = [axis.x, axis.y, axis.z];
+        if (value == undefined) {
+          frame.offsetPosition = undefined;
+        } else {
+          axis.multiplyScalar(value);
+          frame.offsetPosition = [axis.x, axis.y, axis.z];
+        }
         this.saveSetting(["transforms", frameKey, "xyzOffset"], frame.offsetPosition);
+      }
+    } else if (path.length === 5 && path[2] === "links") {
+      // [layers|topics, instanceId, "links", linkKey, "visible" | "position" | "rotation"]
+      const { input, value } = action.payload;
+      // A cleared vec3 component counts as 0
+      this.saveSetting(path, input === "vec3" ? value?.map((v) => v ?? 0) : value);
+      const renderable = this.renderables.get(path[1]!);
+      if (renderable) {
+        renderable.userData.settings = this.#getCurrentSettings(path[1]!);
       }
     } else if (path.length === 3) {
       // ["layers", instanceId, field]
@@ -475,6 +726,13 @@ export class Urdfs extends SceneExtension<UrdfRenderable> {
       } else if (field === "topic") {
         urdf = this.#urdfsByTopic.get(action.payload.value as string);
         this.#loadUrdf({ instanceId, urdf });
+      } else if (APPEARANCE_FIELDS.has(field)) {
+        // Applied in place: reloading would refetch every mesh
+        if (renderable) {
+          renderable.userData.settings = this.#getCurrentSettings(instanceId);
+          this.#applyAppearance(renderable);
+          this.#syncAxes(renderable);
+        }
       } else {
         this.#loadUrdf({ instanceId, urdf });
       }
@@ -516,14 +774,22 @@ export class Urdfs extends SceneExtension<UrdfRenderable> {
     const names = msg.name ?? [];
     const positions = msg.position ?? [];
     const timestamp = toNanoSec(messageEvent.receiveTime);
+    let jointStates = this.#jointStates.get(messageEvent.topic);
+    if (!jointStates) {
+      jointStates = new Map();
+      this.#jointStates.set(messageEvent.topic, jointStates);
+    }
 
     for (let i = 0; i < names.length; i++) {
       const name = names[i]!;
-      const position = positions[i] ?? 0;
+      const position = positions[i];
+      if (position == undefined || !Number.isFinite(position)) {
+        continue;
+      }
 
-      const prevTimestamp = this.#jointStates.get(name)?.timestamp;
+      const prevTimestamp = jointStates.get(name)?.timestamp;
       if (prevTimestamp == undefined || timestamp >= prevTimestamp) {
-        this.#jointStates.set(name, { timestamp, position });
+        jointStates.set(name, { timestamp, position });
       }
     }
   };
@@ -536,12 +802,13 @@ export class Urdfs extends SceneExtension<UrdfRenderable> {
 
     // Update custom layer URDFs that use parameters.
     for (const [instanceId, renderable] of this.renderables.entries()) {
-      const sourceType = (renderable.userData.settings as Partial<LayerSettingsCustomUrdf>)
-        .sourceType;
-      const paramName = (renderable.userData.settings as Partial<LayerSettingsCustomUrdf>)
-        .parameter;
-      if (sourceType === "param" && paramName != undefined) {
-        const urdf = parameters?.get(paramName);
+      const settings = renderable.userData.settings;
+      if (
+        "sourceType" in settings &&
+        settings.sourceType === "param" &&
+        settings.parameter != undefined
+      ) {
+        const urdf = parameters?.get(settings.parameter);
         if (typeof urdf === "string") {
           this.#loadUrdf({ instanceId, urdf });
         }
@@ -616,7 +883,7 @@ export class Urdfs extends SceneExtension<UrdfRenderable> {
         if (fetching.control.signal.aborted || renderable.userData.fetching !== fetching) {
           return;
         }
-        const err = e as Error;
+        const err = toError(e);
         const hasError = !err.message.startsWith("Failed to fetch");
         const errMessage = `Failed to load URDF from "${url}"${hasError ? `: ${err.message}` : ""}`;
         this.renderer.settings.errors.add(["layers", instanceId], FETCH_URDF_ERR, errMessage);
@@ -693,6 +960,12 @@ export class Urdfs extends SceneExtension<UrdfRenderable> {
         fetching: undefined,
         loadGeneration: 0,
         renderables: new Map(),
+        parts: [],
+        axes: [],
+        links: [],
+        joints: [],
+        jointsByName: new Map(),
+        linkPoses: new Map(),
         receiveTime: 0n,
         messageTime: 0n,
         frameId,
@@ -756,7 +1029,7 @@ export class Urdfs extends SceneExtension<UrdfRenderable> {
 
     // Parse the URDF
     const loadedRenderable = renderable;
-    parseUrdf(urdf, async (uri) => await this.#getFileFetch(uri, baseUrl), framePrefix)
+    parseUrdf(urdf, async (uri) => await this.#getFileFetch(uri, baseUrl), framePrefix ?? "")
       .then((parsed) => {
         if (
           this.renderables.get(instanceId) !== loadedRenderable ||
@@ -780,7 +1053,7 @@ export class Urdfs extends SceneExtension<UrdfRenderable> {
         ) {
           return;
         }
-        const err = e as Error;
+        const err = toError(e);
         log.error(`Failed to parse URDF: ${err.message}`);
         this.renderer.settings.errors.add(
           settingsPath,
@@ -807,14 +1080,23 @@ export class Urdfs extends SceneExtension<UrdfRenderable> {
 
     this.#loadFrames(instanceId, frames);
     this.#loadTransforms(instanceId, transforms);
-    this.updateSettingsTree();
 
     // Dispose any existing renderables
     renderable.removeChildren();
     // Children share the URDF settings path, so clear the previous load's mesh error once here
     renderer.settings.errors.remove(renderable.userData.settingsPath, MESH_FETCH_FAILED);
 
-    const createChild = (frameId: string, i: number, visual: UrdfVisual): void => {
+    const framePrefix = (settings as Partial<LayerSettingsCustomUrdf>).framePrefix ?? "";
+    const links: UrdfLink[] = [];
+    const parts: UrdfPart[] = [];
+    renderable.userData.links = links;
+    renderable.userData.parts = parts;
+    renderable.userData.joints = transforms.map(({ joint }) => joint);
+    renderable.userData.jointsByName = new Map(transforms.map(({ joint }) => [joint.name, joint]));
+    renderable.userData.linkPoses = new Map();
+
+    const createChild = (link: UrdfLink, i: number, visual: UrdfVisual): void => {
+      const frameId = link.frameId;
       const childRenderable = createRenderable({
         visual,
         robot,
@@ -828,27 +1110,44 @@ export class Urdfs extends SceneExtension<UrdfRenderable> {
       childRenderable.userData.settingsPath = renderable.userData.settingsPath;
       renderable.userData.renderables.set(childRenderable.name, childRenderable);
       renderable.add(childRenderable);
+      parts.push({
+        object: childRenderable,
+        frameId,
+        linkKey: link.linkKey,
+        pose: childRenderable.userData.pose,
+        baseMarker:
+          childRenderable instanceof RenderableMarker ? childRenderable.userData.marker : undefined,
+      });
     };
 
     // Create a renderable for each link
     for (const link of robot.links.values()) {
-      const frameId = link.name;
+      const urdfLink = { frameId: link.name, linkKey: link.name.slice(framePrefix.length) };
+      links.push(urdfLink);
       const renderVisual = displayMode !== "collision";
       const renderCollision =
         displayMode === "collision" || (displayMode === "auto" && link.visuals.length === 0);
 
       if (renderVisual) {
         for (let i = 0; i < link.visuals.length; i++) {
-          createChild(frameId, i, link.visuals[i]!);
+          createChild(urdfLink, i, link.visuals[i]!);
         }
       }
 
       if (renderCollision) {
         for (let i = 0; i < link.colliders.length; i++) {
-          createChild(frameId, i, link.colliders[i]!);
+          createChild(urdfLink, i, link.colliders[i]!);
         }
       }
     }
+
+    const { opacity = 1, showOutlines = true } = settings;
+    if (opacity !== 1 || !showOutlines) {
+      this.#applyAppearance(renderable);
+    }
+    this.#syncAxes(renderable);
+    // The joints and links sections list what was just loaded
+    this.updateSettingsTree();
   }
 
   #loadFrames(instanceId: string, frames: string[]): void {
@@ -973,6 +1272,7 @@ export function createRenderable(args: {
       const marker = createMeshMarker(frameId, pose, embedded, visual.geometry, baseUrl, color);
       return new RenderableMeshResource(name, marker, undefined, renderer, {
         referenceUrl: baseUrl,
+        alphaFadesModelMaterials: true,
       });
     }
     default:
@@ -1047,10 +1347,11 @@ function createMeshMarker(
   };
 }
 
+/** `jointStates`: latest joint positions from the robot's joint states topic, if any */
 function urdfChildren(
   transforms: TransformData[] | undefined,
   transformTree: TransformTree,
-  jointStates: Map<string, JointPosition>,
+  jointStates: Map<string, JointPosition> | undefined,
 ): DocumentedNodes {
   if (!transforms) {
     return {};
@@ -1059,19 +1360,64 @@ function urdfChildren(
   const jointChildren: DocumentedNodes = {};
   for (const { joint } of transforms) {
     const frame = transformTree.getOrCreateFrame(joint.child);
-    let manual: number | undefined;
-    if (joint.jointType === "continuous" || joint.jointType === "revolute") {
-      if (frame.offsetEulerDegrees) {
-        // Convert the Euler degrees to a quaternion
-        const quaternion = eulerDegreesToQuaternion(frame.offsetEulerDegrees);
-        manual = signedAngleAroundAxis(quaternion, joint.axis) * RAD2DEG;
-      }
-    } else if (joint.jointType === "prismatic" && frame.offsetPosition) {
-      manual = signedDistanceAlongAxis(frame.offsetPosition, joint.axis);
-    }
-    jointChildren[joint.name] = urdfJointNode(joint, manual, jointStates.get(joint.name)?.position);
+    const value = manualJointValue(joint, frame);
+    const isAngular = joint.jointType === "continuous" || joint.jointType === "revolute";
+    const manual = value != undefined && isAngular ? value * RAD2DEG : value;
+    jointChildren[joint.name] = urdfJointNode(
+      joint,
+      manual,
+      jointStates?.get(joint.name)?.position,
+    );
   }
   return urdfJointsNodes(jointChildren);
+}
+
+/** The joint value set by hand through the child frame's offset, in radians or meters */
+function manualJointValue(
+  joint: UrdfJoint,
+  frame: CoordinateFrame | undefined,
+): number | undefined {
+  if (joint.jointType === "continuous" || joint.jointType === "revolute") {
+    if (!frame?.offsetEulerDegrees) {
+      return undefined;
+    }
+    return signedAngleAroundAxis(eulerDegreesToQuaternion(frame.offsetEulerDegrees), joint.axis);
+  } else if (joint.jointType === "prismatic" && frame?.offsetPosition) {
+    return signedDistanceAlongAxis(frame.offsetPosition, joint.axis);
+  }
+  return undefined;
+}
+
+const tempPosition = new THREE.Vector3();
+const tempScale = new THREE.Vector3();
+
+/** A link's offset: translation (m) and rotation (roll, pitch, yaw in degrees) */
+function offsetMatrix(link: UrdfLinkSettings | undefined, out: THREE.Matrix4): THREE.Matrix4 {
+  const [r = 0, p = 0, y = 0] = link?.rotation ?? [];
+  const [x = 0, yy = 0, z = 0] = link?.position ?? [];
+  out.makeRotationFromEuler(tempEuler.set(r * DEG2RAD, p * DEG2RAD, y * DEG2RAD, "ZYX"));
+  return out.setPosition(x, yy, z);
+}
+
+function poseToMatrix(pose: Readonly<Pose>, out: THREE.Matrix4): THREE.Matrix4 {
+  const { position: p, orientation: q } = pose;
+  return out.compose(
+    tempPosition.set(p.x, p.y, p.z),
+    tempQuaternion1.set(q.x, q.y, q.z, q.w),
+    tempScale.set(1, 1, 1),
+  );
+}
+
+function matrixToPose(matrix: THREE.Matrix4, out: Pose): Pose {
+  matrix.decompose(tempPosition, tempQuaternion1, tempScale);
+  out.position.x = tempPosition.x;
+  out.position.y = tempPosition.y;
+  out.position.z = tempPosition.z;
+  out.orientation.x = tempQuaternion1.x;
+  out.orientation.y = tempQuaternion1.y;
+  out.orientation.z = tempQuaternion1.z;
+  out.orientation.w = tempQuaternion1.w;
+  return out;
 }
 
 function eulerDegreesToQuaternion(eulerDegrees: vec3): THREE.Quaternion {

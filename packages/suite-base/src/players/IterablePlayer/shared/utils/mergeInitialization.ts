@@ -32,10 +32,11 @@ export const mergeTopicStats = (
   current: InitTopicStatsMap,
 ): InitTopicStatsMap => {
   for (const [topic, stats] of current) {
-    if (!accumulated.has(topic)) {
-      accumulated.set(topic, { numMessages: 0 });
+    let accStats = accumulated.get(topic);
+    if (!accStats) {
+      accStats = { numMessages: 0 };
+      accumulated.set(topic, accStats);
     }
-    const accStats = accumulated.get(topic)!;
 
     accStats.numMessages += stats.numMessages;
     // Keep the earliest firstMessageTime

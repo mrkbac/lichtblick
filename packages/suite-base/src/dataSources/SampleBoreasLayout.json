@@ -27,6 +27,9 @@
                         "panels": ["Gauge!pitch"]
                       },
                       {
+                        "panels": ["Gauge!accel"]
+                      },
+                      {
                         "direction": "column",
                         "children": [
                           {
@@ -39,7 +42,7 @@
                         "sizes": [50, 50]
                       }
                     ],
-                    "sizes": [28, 24, 24, 24]
+                    "sizes": [22, 18, 18, 24, 18]
                   }
                 ],
                 "sizes": [72, 28]
@@ -386,6 +389,16 @@
       "reverse": false,
       "lichtblickPanelTitle": "Pitch"
     },
+    "Gauge!accel": {
+      "path": "/boreas/motion.accel_long",
+      "minValue": -1.5,
+      "maxValue": 1.5,
+      "displayMode": "slider",
+      "colorMode": "colormap",
+      "colorMap": "turbo",
+      "reverse": false,
+      "lichtblickPanelTitle": "Accel limits (m/s²)"
+    },
     "Indicator!drive": {
       "path": "/boreas/vehicle/state.drive_state",
       "style": "background",
@@ -495,12 +508,12 @@
         },
         {
           "id": "tracks",
-          "path": "/boreas/objects/tracks.total",
+          "path": "/boreas/perception/stats.total",
           "label": "Tracked objects"
         },
         {
           "id": "nearest",
-          "path": "/boreas/objects/tracks.nearest_distance",
+          "path": "/boreas/perception/stats.nearest_distance",
           "label": "Nearest object",
           "unit": "m",
           "precision": 1
@@ -542,28 +555,28 @@
     "Plot!objects": {
       "paths": [
         {
-          "value": "/boreas/objects/tracks.cars",
+          "value": "/boreas/perception/stats.cars",
           "enabled": true,
           "timestampMethod": "receiveTime",
           "label": "Cars",
           "interpolation": "step"
         },
         {
-          "value": "/boreas/objects/tracks.pedestrians",
+          "value": "/boreas/perception/stats.pedestrians",
           "enabled": true,
           "timestampMethod": "receiveTime",
           "label": "Pedestrians",
           "interpolation": "step"
         },
         {
-          "value": "/boreas/objects/tracks.cyclists",
+          "value": "/boreas/perception/stats.cyclists",
           "enabled": true,
           "timestampMethod": "receiveTime",
           "label": "Cyclists",
           "interpolation": "step"
         },
         {
-          "value": "/boreas/objects/tracks.nearest_distance",
+          "value": "/boreas/perception/stats.nearest_distance",
           "enabled": true,
           "timestampMethod": "receiveTime",
           "label": "Nearest (m)",
@@ -631,6 +644,13 @@
           "axis": "secondary"
         },
         {
+          "value": "/boreas/imu.angularVelocity.z.@degrees",
+          "enabled": true,
+          "timestampMethod": "receiveTime",
+          "label": "Yaw rate (°/s)",
+          "axis": "secondary"
+        },
+        {
           "value": "50",
           "enabled": true,
           "timestampMethod": "receiveTime",
@@ -668,7 +688,7 @@
           "enabled": true
         },
         {
-          "value": "/boreas/objects/tracks.nearest_distance",
+          "value": "/boreas/perception/stats.nearest_distance",
           "label": "Object within 10 m",
           "condition": "< 10",
           "timestampMethod": "receiveTime",
@@ -734,7 +754,7 @@
     "Plot!trajectory": {
       "paths": [
         {
-          "value": "/boreas/tf.translation.y",
+          "value": "/boreas/tf.transforms[0].transform.translation.y",
           "enabled": true,
           "timestampMethod": "receiveTime",
           "label": "Path"
@@ -750,7 +770,7 @@
       "sidebarDimension": 240,
       "lichtblickPanelTitle": "Driven path (map frame, m)",
       "xAxisPath": {
-        "value": "/boreas/tf.translation.x",
+        "value": "/boreas/tf.transforms[0].transform.translation.x",
         "enabled": true
       },
       "axisScales": "equal"
@@ -802,7 +822,7 @@
     },
     "Notes!about": {
       "fontSize": 13,
-      "text": "# Boreas showcase drive\n\n60 seconds through a busy Toronto intersection, every sensor at full rate:\n128-beam LiDAR (10 Hz, all points), 5 MP camera with calibration, Navtech radar,\nGNSS/INS, and 3D boxes for every car, pedestrian and cyclist.\n\n## Things to try\n- [ ] Click a box in the 3D panel: the Watch row and the Perception plot follow it.\n- [ ] Move the track slider on the Perception tab to inspect any track.\n- [ ] Open the Health tab and seek to a camera frame gap.\n- [ ] Edit the Ride comfort script on this tab; its plot updates live.\n- [ ] Sort the tracks table by speed.\n\n## Credits\nBoreas: A Multi-Season Autonomous Driving Dataset. Keenan Burnett et al.,\nUniversity of Toronto. CC BY 4.0.\nhttps://www.boreas.utias.utoronto.ca/ · https://creativecommons.org/licenses/by/4.0/\n\nAdapted for Lichtblick: boxes interpolated between the 5 Hz labels and stitched across\nthe dataset's 20-second tracking segments; dynamics, logs and diagnostics derived from\nthe recorded data.\n"
+      "text": "# Boreas showcase drive\n\n20 seconds at a busy Toronto intersection (wait, pull away, turn left), every sensor at full rate:\n128-beam LiDAR (10 Hz, all points), 5 MP camera with calibration, Navtech radar,\nGNSS/INS, and 3D boxes for every car, pedestrian and cyclist.\n\n## Things to try\n- [ ] Click a box in the 3D panel: the Watch row and the Perception plot follow it.\n- [ ] Move the track slider on the Perception tab to inspect any track.\n- [ ] Open the Health tab and seek to a camera frame gap.\n- [ ] Edit the Ride comfort script on this tab; its plot updates live.\n- [ ] Sort the tracks table by speed.\n\n## Formats in this file\nEvery topic uses a different encoding, so each panel below is fed by a different decoder.\n\n| Panel | Topic | Encoding |\n|---|---|---|\n| 3D: LiDAR | `/boreas/lidar` | Cloudini `CompressedPointCloud2` (CDR) |\n| 3D: radar points | `/boreas/radar/points` | ROS 2 msg `PointCloud2` (CDR) |\n| 3D: transforms | `/boreas/tf`, `/boreas/tf_static` | ROS 2 IDL `TFMessage` (CDR) |\n| 3D: boxes, trails, route | `/boreas/objects`, `…/trails`, `/boreas/route` | JSON Schema `SceneUpdate` |\n| Image: camera | `/boreas/camera/image` | Protobuf `CompressedVideo` (H.265) |\n| Image: calibration | `/boreas/camera/calibration` | ROS 2 msg `CameraInfo` (CDR) |\n| Image: projected boxes | `/boreas/camera/annotations` | JSON Schema `ImageAnnotations` |\n| Image: radar | `/boreas/radar/image` | ROS 1 `CompressedImage` |\n| Map: position | `/boreas/gps` | FlatBuffers `LocationFix` |\n| Map: route | `/boreas/map/route` | JSON Schema `GeoJSON` |\n| Gauges, plots | `/boreas/motion` | OMG IDL `boreas::Motion` (CDR) |\n| Yaw rate plot | `/boreas/imu` | Cap'n Proto `Imu` |\n| State Transitions | `/boreas/vehicle/state` | CBOR with JSON Schema enums |\n| Object plot, Watch | `/boreas/perception/stats` | MessagePack, no schema |\n| Tracks table | `/boreas/objects/tracks` | JSON, no schema |\n| Pie Chart | `/boreas/objects/class_counts` | ROS 2 msg `float32[]` (CDR) |\n| Diagnostics | `/diagnostics` | ROS 1 `DiagnosticArray` |\n| Log | `/rosout` | ROS 2 msg `rcl_interfaces/Log` (CDR) |\n\nThe container mixes zstd, lz4 and uncompressed chunks with overlapping time ranges, and\ncarries a calibration YAML and a README as attachments (Source Info panel).\n\n## Credits\nBoreas: A Multi-Season Autonomous Driving Dataset. Keenan Burnett et al.,\nUniversity of Toronto. CC BY 4.0.\nhttps://www.boreas.utias.utoronto.ca/ · https://creativecommons.org/licenses/by/4.0/\n\nAdapted for Lichtblick: boxes interpolated between the 5 Hz labels and stitched across\nthe dataset's 20-second tracking segments; dynamics, logs and diagnostics derived from\nthe recorded data.\n"
     }
   },
   "globalVariables": {

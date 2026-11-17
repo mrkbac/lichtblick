@@ -30,7 +30,7 @@ function handleFrameActionState({
   if (!state.parsedPath) {
     return { ...state, error: undefined };
   }
-  const filledInPath = fillInGlobalVariablesInPath(state.parsedPath, state.globalVariables!);
+  const filledInPath = fillInGlobalVariablesInPath(state.parsedPath, state.globalVariables ?? {});
   let latestMatchingQueriedData = state.latestMatchingQueriedData;
   let latestMessage = state.latestMessage;
   for (const message of messages) {
@@ -56,9 +56,20 @@ function handlePathActionStateWithGlobalVars({
   state: GaugeAndIndicatorState;
 }): GaugeAndIndicatorState {
   const newPath = parseMessagePath(path);
+  // Empty or half-typed paths don't parse; show nothing instead of a TypeError
+  if (newPath == undefined) {
+    return {
+      ...state,
+      error: undefined,
+      latestMatchingQueriedData: undefined,
+      parsedPath: undefined,
+      path,
+      pathParseError: undefined,
+    };
+  }
   let latestMatchingQueriedData: unknown;
   let error: Error | undefined;
-  const filledInPath = fillInGlobalVariablesInPath(newPath!, state.globalVariables!);
+  const filledInPath = fillInGlobalVariablesInPath(newPath, state.globalVariables ?? {});
   try {
     if (state.latestMessage) {
       latestMatchingQueriedData = getSingleDataItem(
@@ -66,7 +77,7 @@ function handlePathActionStateWithGlobalVars({
       );
     }
   } catch (err: unknown) {
-    error = err as Error;
+    error = toError(err);
   }
   return {
     ...state,

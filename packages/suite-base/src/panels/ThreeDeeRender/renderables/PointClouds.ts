@@ -275,7 +275,8 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
     const needsRebuild =
       colorHasTransparency(settings) !== material.transparent ||
       pointCloudColorEncoding(settings) !== pointCloudColorEncoding(prevSettings) ||
-      settings.pointShape !== prevSettings.pointShape;
+      settings.pointShape !== prevSettings.pointShape ||
+      settings.showOutlines !== prevSettings.showOutlines;
 
     const pointsHistory = this.#pointsHistory;
     const stixelsHistory = this.#stixelsHistory;
@@ -461,8 +462,10 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
   }
 
   #applyShape(points: PointCloudRenderable): void {
+    const { pointShape, showOutlines } = this.userData.settings;
     points.setCubeMaterials(
-      this.userData.settings.pointShape === "cube" ? this.#cubeMaterials : undefined,
+      pointShape === "cube" || pointShape === "sphere" ? this.#cubeMaterials : undefined,
+      { shape: pointShape === "sphere" ? "sphere" : "cube", showOutline: showOutlines === true },
     );
   }
 
@@ -474,10 +477,9 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
   }
 
   #validatePointCloud(pointCloud: PointCloud | PointCloud2): boolean {
-    const maybeRos = pointCloud as Partial<PointCloud2>;
-    return maybeRos.header
-      ? this.#validateRosPointCloud(pointCloud as PointCloud2)
-      : this.#validateFoxglovePointCloud(pointCloud as PointCloud);
+    return "header" in pointCloud
+      ? this.#validateRosPointCloud(pointCloud)
+      : this.#validateFoxglovePointCloud(pointCloud);
   }
 
   #validateFoxglovePointCloud(pointCloud: PointCloud): boolean {
@@ -560,11 +562,7 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
       if (!isSupportedField(field)) {
         continue;
       }
-      const numericType = (field as Partial<PackedElementField>).type;
-      const type =
-        numericType != undefined
-          ? numericTypeToPointFieldType(numericType)
-          : (field as PointField).datatype;
+      const type = "type" in field ? numericTypeToPointFieldType(field.type) : field.datatype;
 
       if (field.offset < 0) {
         const message = `PointCloud field "${field.name}" has invalid offset ${field.offset}. Must be >= 0`;
@@ -622,7 +620,7 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
         // other than uint32
         const forceType =
           (settings.colorMode === "rgb" || settings.colorMode === "rgba") && byteWidth >= 4
-            ? numericType != undefined
+            ? "type" in field
               ? NumericType.UINT32
               : PointFieldType.UINT32
             : undefined;
@@ -1195,23 +1193,19 @@ function normalizePointCloud2(message: PartialMessage<PointCloud2>): PointCloud2
 }
 
 function getTimestamp(pointCloud: PointCloud | PointCloud2): Time {
-  const maybeRos = pointCloud as Partial<PointCloud2>;
-  return maybeRos.header ? maybeRos.header.stamp : (pointCloud as PointCloud).timestamp;
+  return "header" in pointCloud ? pointCloud.header.stamp : pointCloud.timestamp;
 }
 
 function getFrameId(pointCloud: PointCloud | PointCloud2): string {
-  const maybeRos = pointCloud as Partial<PointCloud2>;
-  return maybeRos.header ? maybeRos.header.frame_id : (pointCloud as PointCloud).frame_id;
+  return "header" in pointCloud ? pointCloud.header.frame_id : pointCloud.frame_id;
 }
 
 function getStride(pointCloud: PointCloud | PointCloud2): number {
-  const maybeRos = pointCloud as Partial<PointCloud2>;
-  return maybeRos.point_step ?? (pointCloud as PointCloud).point_stride;
+  return "point_step" in pointCloud ? pointCloud.point_step : pointCloud.point_stride;
 }
 
 function getPose(pointCloud: PointCloud | PointCloud2): Pose {
-  const maybeFoxglove = pointCloud as Partial<PointCloud>;
-  return maybeFoxglove.pose ?? makePose();
+  return "pose" in pointCloud ? pointCloud.pose : makePose();
 }
 
 export function createStixelMaterial(settings: LayerSettingsPointClouds): THREE.LineBasicMaterial {

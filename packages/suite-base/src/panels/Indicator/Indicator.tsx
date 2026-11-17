@@ -24,7 +24,10 @@ import { PanelIconButton } from "@lichtblick/suite-base/components/PanelButton";
 import Stack from "@lichtblick/suite-base/components/Stack";
 import { GlobalVariables } from "@lichtblick/suite-base/hooks/useGlobalVariables";
 import { useStyles } from "@lichtblick/suite-base/panels/Indicator/Indicator.style";
-import { DEFAULT_CONFIG } from "@lichtblick/suite-base/panels/Indicator/constants";
+import {
+  DEFAULT_CONFIG,
+  DEFAULT_FALLBACK_COLOR,
+} from "@lichtblick/suite-base/panels/Indicator/constants";
 import { stateReducer } from "@lichtblick/suite-base/panels/shared/gaugeAndIndicatorStateReducer";
 import { useReplacePathDrop } from "@lichtblick/suite-base/panels/shared/pathDrop";
 import { GaugeAndIndicatorState } from "@lichtblick/suite-base/panels/shared/types";
@@ -203,16 +206,17 @@ export function Indicator({ context }: IndicatorProps): React.JSX.Element {
     renderDone();
   }, [renderDone]);
 
-  const rawValue = useMemo(() => {
-    return ["boolean", "number", "bigint", "string"].includes(typeof latestMatchingQueriedData)
-      ? latestMatchingQueriedData
+  const rawValue = useMemo((): RawValueIndicator => {
+    const value = latestMatchingQueriedData;
+    return typeof value === "boolean" ||
+      typeof value === "number" ||
+      typeof value === "bigint" ||
+      typeof value === "string"
+      ? value
       : undefined;
   }, [latestMatchingQueriedData]);
 
-  const matchingRule = useMemo(
-    () => getMatchingRule(rawValue as RawValueIndicator, rules),
-    [rawValue, rules],
-  );
+  const matchingRule = useMemo(() => getMatchingRule(rawValue, rules), [rawValue, rules]);
 
   // Alert only on transitions into a rule; seeks, rule edits and missing data just reset the baseline.
   const prevSnapshot = useRef<AlertSnapshot | undefined>(undefined);
@@ -249,7 +253,7 @@ export function Indicator({ context }: IndicatorProps): React.JSX.Element {
     setConfig((prev) => ({ ...prev, alertsMuted: prev.alertsMuted !== true }));
   }, []);
 
-  const bulbColor = matchingRule?.color ?? fallbackColor;
+  const bulbColor = matchingRule?.color ?? fallbackColor ?? DEFAULT_FALLBACK_COLOR;
   const {
     classes,
     theme: {

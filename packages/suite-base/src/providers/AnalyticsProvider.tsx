@@ -43,7 +43,8 @@ export default function AnalyticsProvider({
     let cancelled = false;
     let created: OtelAnalytics | undefined;
 
-    if (APP_CONFIG.otlpEndpoint == undefined) {
+    const endpoint = APP_CONFIG.otlpEndpoint;
+    if (endpoint == undefined) {
       log.debug("No OTLP endpoint was compiled in; analytics events will not be exported.");
       analyticsRef.current = undefined;
       setAnalytics((current) => (current === NULL_ANALYTICS ? current : NULL_ANALYTICS));
@@ -56,7 +57,7 @@ export default function AnalyticsProvider({
     void loadOtelAnalytics()
       .then((OtelAnalyticsImpl) => {
         const nextAnalytics = new OtelAnalyticsImpl({
-          endpoint: APP_CONFIG.otlpEndpoint!,
+          endpoint,
           version: APP_CONFIG.version,
           platform,
         });

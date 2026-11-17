@@ -140,6 +140,12 @@ export function viewSettingsNode(
         precision: PRECISION_DISTANCE,
         value: camera.far,
       },
+      logDepth: {
+        label: t("threeDee:logDepth"),
+        help: t("threeDee:logDepthHelp"),
+        input: "boolean",
+        value: config.scene.logDepth ?? false,
+      },
     },
   };
 }

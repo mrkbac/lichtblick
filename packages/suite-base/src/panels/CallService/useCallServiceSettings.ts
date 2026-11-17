@@ -59,12 +59,16 @@ export function useCallServiceSettings(props: {
             : { serviceName },
         );
       };
-      if (template == undefined || !isEditedMessage(config.requestPayload, datatypes, oldSchema)) {
+      if (
+        template == undefined ||
+        newSchema == undefined ||
+        !isEditedMessage(config.requestPayload, datatypes, oldSchema)
+      ) {
         update({ replaceRequest: true });
         return;
       }
       // Don't silently throw away an edited request
-      void confirmReplace(newSchema!).then((replaceRequest) => {
+      void confirmReplace(newSchema).then((replaceRequest) => {
         update({ replaceRequest });
       });
     },

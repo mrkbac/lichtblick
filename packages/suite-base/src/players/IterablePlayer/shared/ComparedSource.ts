@@ -4,7 +4,12 @@
 import { Time, fromNanoSec, toNanoSec } from "@foxglove/rostime";
 
 import { Immutable, MessageEvent } from "@lichtblick/suite";
-import { CompareSide, TopicSelection, TopicStats } from "@lichtblick/suite-base/players/types";
+import {
+  CompareSide,
+  SubscribePayload,
+  TopicSelection,
+  TopicStats,
+} from "@lichtblick/suite-base/players/types";
 
 import {
   GetBackfillMessagesArgs,
@@ -103,7 +108,7 @@ export class ComparedSource<MessageType = Uint8Array> implements IIterableSource
   public async *messageIterator(
     args: Immutable<MessageIteratorArgs>,
   ): AsyncIterableIterator<Readonly<IteratorResult<MessageType>>> {
-    const topics = this.#unprefixSelection(args.topics as TopicSelection);
+    const topics = this.#unprefixSelection(args.topics);
     if (topics.size === 0) {
       return;
     }
@@ -136,7 +141,7 @@ export class ComparedSource<MessageType = Uint8Array> implements IIterableSource
   public async getBackfillMessages(
     args: Immutable<GetBackfillMessagesArgs>,
   ): Promise<MessageEvent<MessageType>[]> {
-    const topics = this.#unprefixSelection(args.topics as TopicSelection);
+    const topics = this.#unprefixSelection(args.topics);
     if (topics.size === 0) {
       return [];
     }
@@ -190,8 +195,8 @@ export class ComparedSource<MessageType = Uint8Array> implements IIterableSource
     return name;
   }
 
-  #unprefixSelection(topics: TopicSelection): TopicSelection {
-    const result: TopicSelection = new Map();
+  #unprefixSelection(topics: Immutable<TopicSelection>): Immutable<TopicSelection> {
+    const result = new Map<string, Immutable<SubscribePayload>>();
     for (const [name, payload] of topics) {
       const original = this.#originalTopic.get(name);
       if (original != undefined) {

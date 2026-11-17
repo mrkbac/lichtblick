@@ -54,7 +54,7 @@ export function Notes({ config, saveConfig }: Props): React.JSX.Element {
   const textRef = useRef(config.text);
   const fontSize =
     config.fontSize ??
-    Number.parseFloat(theme.typography.body2.fontSize as string) * theme.typography.htmlFontSize;
+    Number.parseFloat(String(theme.typography.body2.fontSize)) * theme.typography.htmlFontSize;
   const fontSizeRef = useRef(fontSize);
 
   useNotesSettings(config, saveConfig);

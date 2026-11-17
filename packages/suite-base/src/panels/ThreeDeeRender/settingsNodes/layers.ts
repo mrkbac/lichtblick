@@ -133,6 +133,14 @@ export function gridSettingsNode(
 export const URDF_LAYER_ID = "foxglove.Urdf";
 const URDF_DEFAULT_COLOR_STR = "#ffffff";
 
+const URDF_ROBOT_DEFAULTS = {
+  controlMode: "transforms",
+  opacity: 1,
+  showOutlines: true,
+  showAxis: false,
+  axisScale: 1,
+} as const;
+
 export const URDF_DEFAULTS: LayerSettingsUrdf = {
   visible: false,
   frameLocked: true,
@@ -140,6 +148,7 @@ export const URDF_DEFAULTS: LayerSettingsUrdf = {
   displayMode: "auto",
   label: "URDF",
   fallbackColor: URDF_DEFAULT_COLOR_STR,
+  ...URDF_ROBOT_DEFAULTS,
 };
 
 export const CUSTOM_URDF_DEFAULTS: LayerSettingsCustomUrdf = {
@@ -156,12 +165,62 @@ export const CUSTOM_URDF_DEFAULTS: LayerSettingsCustomUrdf = {
   framePrefix: "",
   displayMode: "auto",
   fallbackColor: URDF_DEFAULT_COLOR_STR,
+  ...URDF_ROBOT_DEFAULTS,
 };
 
-function urdfAppearanceFields(
-  config: Partial<Pick<LayerSettingsUrdf, "displayMode" | "fallbackColor">>,
+/** Settings shared by robot descriptions from a topic, a parameter or a custom layer. */
+export type UrdfRobotSettings = Pick<
+  LayerSettingsUrdf,
+  | "displayMode"
+  | "fallbackColor"
+  | "controlMode"
+  | "jointStatesTopic"
+  | "opacity"
+  | "showOutlines"
+  | "showAxis"
+  | "axisScale"
+>;
+
+/**
+ * The joint states topic a robot follows in joint states mode: the configured one, else the first
+ * `sensor_msgs/JointState` topic. `jointStateTopics`: the available ones.
+ */
+export function resolveJointStatesTopic(
+  config: Partial<UrdfRobotSettings>,
+  jointStateTopics: readonly string[],
+): string | undefined {
+  const topic = config.jointStatesTopic;
+  return topic != undefined && topic !== "" ? topic : jointStateTopics[0];
+}
+
+/** `jointStateTopics`: topics with joint states, offered in the joint states picker. */
+function urdfRobotFields(
+  config: Partial<UrdfRobotSettings>,
+  jointStateTopics: readonly string[],
 ): DocumentedFields {
+  const controlMode = config.controlMode ?? URDF_DEFAULTS.controlMode;
+  const showAxis = config.showAxis ?? false;
   return {
+    controlMode: {
+      label: "Control mode",
+      help: "Transforms places each link from the transform tree. Joint states computes the link poses from joint positions on a topic, starting at the root link's transform.",
+      input: "select",
+      options: [
+        { label: "Transforms", value: "transforms" },
+        { label: "Joint states", value: "jointStates" },
+      ],
+      value: controlMode,
+    },
+    jointStatesTopic:
+      controlMode === "jointStates"
+        ? {
+            label: "Joint states",
+            help: "Topic with joint positions (sensor_msgs/JointState). Empty uses the first one available. Joints it does not list use their manual value, or zero.",
+            input: "autocomplete",
+            items: [...jointStateTopics],
+            value: resolveJointStatesTopic(config, jointStateTopics) ?? "",
+          }
+        : undefined,
     displayMode: {
       label: "Display mode",
       help: "Visual draws the visual meshes, Collision the collision geometry. Auto draws visuals, and collision geometry for links without visuals.",
@@ -179,6 +238,39 @@ function urdfAppearanceFields(
       input: "rgb",
       value: config.fallbackColor ?? URDF_DEFAULTS.fallbackColor,
     },
+    opacity: {
+      label: "Opacity",
+      help: "Multiplies the transparency of every link, including meshes with their own materials.",
+      input: "number",
+      min: 0,
+      max: 1,
+      step: 0.1,
+      precision: 2,
+      value: config.opacity ?? URDF_DEFAULTS.opacity,
+    },
+    showOutlines: {
+      label: "Show outlines",
+      help: "Draws edges around the link geometry.",
+      input: "boolean",
+      value: config.showOutlines ?? URDF_DEFAULTS.showOutlines,
+    },
+    showAxis: {
+      label: "Show axis",
+      help: "Draws the coordinate axes of every link.",
+      input: "boolean",
+      value: showAxis,
+    },
+    axisScale: showAxis
+      ? {
+          label: "Axis scale",
+          help: "Size of the link axes; 1 draws them at the default length.",
+          input: "number",
+          min: 0,
+          step: 0.1,
+          precision: 2,
+          value: config.axisScale ?? URDF_DEFAULTS.axisScale,
+        }
+      : undefined,
   };
 }
 
@@ -186,22 +278,27 @@ function urdfAppearanceFields(
 export function urdfSettingsNode(
   label: string,
   config: Partial<LayerSettingsUrdf>,
+  jointStateTopics: readonly string[],
   children: DocumentedNodes,
 ): DocumentedNode {
   return {
     label,
     icon: "PrecisionManufacturing",
-    fields: urdfAppearanceFields(config),
+    fields: urdfRobotFields(config, jointStateTopics),
     visible: config.visible ?? URDF_DEFAULTS.visible,
     children,
   };
 }
 
-/** `topics`/`parameters`: names that hold a robot description, offered in the source pickers. */
+/**
+ * `topics`/`parameters`: names that hold a robot description, offered in the source pickers.
+ * `jointStateTopics`: topics with joint states, offered in joint states mode.
+ */
 export function customUrdfSettingsNode(
   config: Partial<LayerSettingsCustomUrdf>,
   topics: string[],
   parameters: string[],
+  jointStateTopics: readonly string[],
   children: DocumentedNodes,
 ): DocumentedNode {
   const sourceType = config.sourceType ?? CUSTOM_URDF_DEFAULTS.sourceType;
@@ -271,10 +368,7 @@ export function customUrdfSettingsNode(
       placeholder: "Frame prefix",
       value: config.framePrefix ?? "",
     },
-    ...urdfAppearanceFields({
-      displayMode: config.displayMode ?? CUSTOM_URDF_DEFAULTS.displayMode,
-      fallbackColor: config.fallbackColor,
-    }),
+    ...urdfRobotFields(config, jointStateTopics),
   };
   return {
     label: config.label ?? CUSTOM_URDF_DEFAULTS.label,
@@ -499,6 +593,49 @@ export function urdfJointNode(
 /** The "Joints" child of a robot node. */
 export function urdfJointsNodes(joints: DocumentedNodes): DocumentedNodes {
   return { joints: { label: "Joints", defaultExpansionState: "collapsed", children: joints } };
+}
+
+/** Per-link overrides, keyed by the link name without the frame prefix. */
+export type UrdfLinkSettings = {
+  visible?: boolean;
+  /** Offset in the link frame, meters */
+  position?: [number, number, number];
+  /** Offset rotation (roll, pitch, yaw) in the link frame, degrees */
+  rotation?: [number, number, number];
+};
+
+/** One link's node: its visibility toggle and offset. */
+export function urdfLinkNode(name: string, settings: UrdfLinkSettings | undefined): DocumentedNode {
+  return {
+    label: name,
+    defaultExpansionState: "collapsed",
+    visible: settings?.visible ?? true,
+    fields: {
+      position: {
+        label: "Offset",
+        help: "Moves the link's geometry and axis within the link frame, in meters. Links attached below are not moved.",
+        input: "vec3",
+        labels: XYZ_LABEL,
+        precision: PRECISION_DISTANCE,
+        step: 0.01,
+        value: settings?.position ?? [0, 0, 0],
+      },
+      rotation: {
+        label: "Rotation",
+        help: "Rotates the link's geometry and axis within the link frame (roll, pitch, yaw) in degrees.",
+        input: "vec3",
+        labels: RPY_LABEL,
+        precision: PRECISION_DEGREES,
+        step: 1,
+        value: settings?.rotation ?? [0, 0, 0],
+      },
+    },
+  };
+}
+
+/** The links section of a URDF node. `links`: one `urdfLinkNode` per link. */
+export function urdfLinksNodes(links: DocumentedNodes): DocumentedNodes {
+  return { links: { label: "Links", defaultExpansionState: "collapsed", children: links } };
 }
 
 // ---- Map ----

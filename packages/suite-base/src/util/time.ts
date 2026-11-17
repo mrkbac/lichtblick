@@ -47,6 +47,9 @@ export function getTimestampForMessageEvent(
 }
 
 export function getTimestampForMessage(message: unknown): Time | undefined {
+  if (message == undefined) {
+    return undefined;
+  }
   if ((message as Partial<StampedMessage>).header != undefined) {
     // This message has a "header" field
     const stamp = (message as Partial<StampedMessage>).header?.stamp;

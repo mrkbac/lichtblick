@@ -285,12 +285,12 @@ export class MeasurementTool extends SceneExtension<Renderable, MeasurementToolE
   }
 
   public removeMeasurement(id: number): void {
-    const index = this.#items.findIndex((item) => item.id === id);
-    if (index === -1) {
+    const item = this.#items.find((entry) => entry.id === id);
+    if (!item) {
       return;
     }
-    this.#disposeItem(this.#items[index]!);
-    this.#items.splice(index, 1);
+    this.#disposeItem(item);
+    this.#items = this.#items.filter((entry) => entry !== item);
     if (this.selectedId === id) {
       this.selectedId = undefined;
     }
@@ -318,17 +318,15 @@ export class MeasurementTool extends SceneExtension<Renderable, MeasurementToolE
     const frame = this.resultFrameName();
     return this.measurements
       .filter((info) => info.complete && !info.unavailable && (id == undefined || info.id === id))
-      .map(({ kind, summary }) =>
+      .map(({ kind, summary: { label, details, profile } }) =>
         [
-          `${measureKindLabel(kind)}: ${summary.label}`,
+          `${measureKindLabel(kind)}: ${label}`,
           `${i18next.t("threeDee:measureFrame")}: ${frame}`,
-          ...summary.details,
-          ...(summary.profile
+          ...details,
+          ...(profile
             ? [
                 "Profile (distance, z):",
-                ...summary.profile.x.map(
-                  (x, i) => `${x.toFixed(3)}, ${summary.profile!.z[i]!.toFixed(3)}`,
-                ),
+                ...profile.x.map((x, i) => `${x.toFixed(3)}, ${profile.z[i]!.toFixed(3)}`),
               ]
             : []),
         ].join("\n"),

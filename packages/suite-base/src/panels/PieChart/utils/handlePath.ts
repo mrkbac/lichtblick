@@ -6,6 +6,7 @@
 
 import { parseMessagePath } from "@lichtblick/message-path";
 import { simpleGetMessagePathDataItems } from "@lichtblick/suite-base/components/MessagePathSyntax/simpleGetMessagePathDataItems";
+import { toError } from "@lichtblick/suite-base/util/toError";
 
 import { toPieValues } from "./toPieValues";
 import type { PieChartState, PieChartAction } from "../types";
@@ -36,7 +37,7 @@ export function handlePath({ state, action }: HandlePathProps): PieChartState {
       pathParseError = "Message paths using variables are not currently supported";
     }
   } catch (err: unknown) {
-    error = err as Error;
+    error = toError(err);
     newPath = undefined;
   }
 
@@ -47,7 +48,7 @@ export function handlePath({ state, action }: HandlePathProps): PieChartState {
         simpleGetMessagePathDataItems(state.latestMessage, newPath),
       );
     } catch (err: unknown) {
-      error = err as Error;
+      error = toError(err);
     }
   }
 

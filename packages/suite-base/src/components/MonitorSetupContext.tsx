@@ -175,11 +175,12 @@ function WebMonitorSetupProvider({ children }: PropsWithChildren) {
               return;
             }
             const layout = getCurrentLayoutState().selectedLayout;
-            if (layout == undefined || layout.id !== layoutId || layout.data == undefined) {
+            const data = layout?.data;
+            if (layout == undefined || layout.id !== layoutId || data == undefined) {
               return;
             }
             // Flush the working copy before confirming; automatic layout persistence is debounced.
-            await layoutManager.updateLayout({ id: layout.id, data: layout.data });
+            await layoutManager.updateLayout({ id: layout.id, data });
             if (operation.current.version !== version) {
               return;
             }
@@ -189,7 +190,7 @@ function WebMonitorSetupProvider({ children }: PropsWithChildren) {
                 ? [
                     {
                       ...captureMonitor(id, child, screens),
-                      configs: capturePanelConfigs(layout.data!, id),
+                      configs: capturePanelConfigs(data, id),
                     },
                   ]
                 : [];

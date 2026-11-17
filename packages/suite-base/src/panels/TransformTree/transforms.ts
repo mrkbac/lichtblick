@@ -51,12 +51,14 @@ type FoxgloveFrameTransform = {
 // tf2 ignores a leading slash (ROS 1 style frame ids), so we do too.
 const normalizeFrameId = (id: string): string => (id.startsWith("/") ? id.slice(1) : id);
 
-const isObject = (value: unknown): value is object => typeof value === "object" && value != null;
-
-const isTime = (value: unknown): value is Time =>
-  isObject(value) &&
-  typeof (value as Partial<Time>).sec === "number" &&
-  typeof (value as Partial<Time>).nsec === "number";
+/** True if every key holds a number, e.g. a rotation missing `w` is rejected. */
+const hasNumbers = <K extends string>(
+  value: unknown,
+  keys: readonly K[],
+): value is Record<K, number> =>
+  typeof value === "object" &&
+  value != null &&
+  keys.every((key) => typeof Reflect.get(value, key) === "number");
 
 /**
  * The sample, or undefined when a field is missing or has the wrong type, e.g. a message sliced
@@ -72,17 +74,17 @@ function toSample(
   if (
     typeof parent !== "string" ||
     typeof child !== "string" ||
-    !isObject(translation) ||
-    !isObject(rotation) ||
-    !isTime(stamp)
+    !hasNumbers(translation, ["x", "y", "z"]) ||
+    !hasNumbers(rotation, ["x", "y", "z", "w"]) ||
+    !hasNumbers(stamp, ["sec", "nsec"])
   ) {
     return undefined;
   }
   return {
     parent: normalizeFrameId(parent),
     child: normalizeFrameId(child),
-    translation: translation as Vector3,
-    rotation: rotation as Quaternion,
+    translation,
+    rotation,
     stamp: toSec(stamp),
   };
 }

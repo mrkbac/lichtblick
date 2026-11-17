@@ -24,7 +24,14 @@ import {
  */
 export const TAB_PANEL_TYPE = "Tab";
 
-export type TabConfig = { title: string; layout?: LayoutNode };
+/**
+ * The Stack panel shows a scrollable list or grid of items, each a layout like a tab of the Tab
+ * panel. It keeps its items in the same `tabs` config, so it shares the plumbing below.
+ */
+export const STACK_PANEL_TYPE = "Stack";
+
+/** `size`: the item's length along a Stack panel's scroll axis, in px. */
+export type TabConfig = { title: string; layout?: LayoutNode; size?: number };
 export type TabPanelConfig = { activeTabIdx: number; tabs: TabConfig[]; isWindow?: boolean };
 
 export const DEFAULT_TAB_PANEL_CONFIG: TabPanelConfig = {
@@ -38,6 +45,15 @@ export function isTabPanel(panelId: string): boolean {
   return getPanelTypeFromId(panelId) === TAB_PANEL_TYPE;
 }
 
+export function isStackPanel(panelId: string): boolean {
+  return getPanelTypeFromId(panelId) === STACK_PANEL_TYPE;
+}
+
+/** A panel that holds layouts of other panels in its `tabs` config: a Tab or Stack panel. */
+export function isContainerPanel(panelId: string): boolean {
+  return isTabPanel(panelId) || isStackPanel(panelId);
+}
+
 /** The tabs of a Tab panel config, skipping malformed entries (configs come from saved files). */
 export function getTabs(config: PanelConfig | undefined): TabConfig[] {
   const tabs: unknown = config?.tabs;
@@ -48,11 +64,12 @@ export function getTabs(config: PanelConfig | undefined): TabConfig[] {
     if (typeof tab !== "object" || tab == undefined) {
       return [];
     }
-    const { title, layout } = tab as Record<string, unknown>;
+    const { title, layout, size } = tab as Record<string, unknown>;
     return [
       {
         title: typeof title === "string" ? title : "",
         ...(isLayoutNode(layout) ? { layout } : {}),
+        ...(typeof size === "number" && size > 0 ? { size } : {}),
       },
     ];
   });
@@ -65,7 +82,7 @@ export function getActiveTabIndex(config: PanelConfig | undefined): number {
   return typeof index === "number" && index >= 0 && index < count ? Math.floor(index) : 0;
 }
 
-/** Where a layout tree lives: the root of the layout, or one tab of a Tab panel. */
+/** Where a layout tree lives: the root of the layout, or one tab of a Tab (or Stack) panel. */
 export type TreeLocation =
   | { tabPanelId?: undefined; ancestors: readonly string[] }
   | { tabPanelId: string; tabIndex: number; ancestors: readonly string[] };
@@ -82,7 +99,7 @@ export function getLayoutTrees(
     result.push({ location, tree });
     for (const id of getPanelIds(tree)) {
       // A hand-edited file could nest a Tab panel in itself.
-      if (isTabPanel(id) && !location.ancestors.includes(id)) {
+      if (isContainerPanel(id) && !location.ancestors.includes(id)) {
         const ancestors = [...location.ancestors, id];
         getTabs(data.configById[id]).forEach((tab, tabIndex) => {
           visit(tab.layout, { tabPanelId: id, tabIndex, ancestors });
@@ -99,7 +116,10 @@ export function getAllPanelIds(data: TreeData): string[] {
   return getLayoutTrees(data).flatMap(({ tree }) => getPanelIds(tree));
 }
 
-/** The panels on screen: the root tree and, recursively, the shown tab of each Tab panel. */
+/**
+ * The panels on screen: the root tree and, recursively, the shown tab of each Tab panel and every
+ * item of each Stack panel (scrolled out of view or not).
+ */
 export function getVisiblePanelIds(data: TreeData): string[] {
   const result: string[] = [];
   const visit = (tree: LayoutNode | undefined, ancestors: readonly string[]) => {
@@ -116,6 +136,10 @@ export function getVisiblePanelIds(data: TreeData): string[] {
       if (isTabPanel(id) && !ancestors.includes(id)) {
         const config = data.configById[id];
         visit(getTabs(config)[getActiveTabIndex(config)]?.layout, [...ancestors, id]);
+      } else if (isStackPanel(id) && !ancestors.includes(id)) {
+        for (const tab of getTabs(data.configById[id])) {
+          visit(tab.layout, [...ancestors, id]);
+        }
       }
     }
   };
@@ -235,6 +259,15 @@ function normalizeTabsOnce<T extends TreeData>(data: T): T {
     const mapped = mapGroups(tree, (group) => {
       if (group.panels.length === 1) {
         const id = group.panels[0]!;
+        if (isStackPanel(id)) {
+          // A Stack panel stays, even empty; only its items without panels go away.
+          const all = getTabs(configById[id]);
+          const tabs = all.filter((tab) => getPanelIds(tab.layout).length > 0);
+          if (tabs.length !== all.length) {
+            configs[id] = { ...configById[id], tabs };
+          }
+          return group;
+        }
         if (!isTabPanel(id)) {
           return group;
         }

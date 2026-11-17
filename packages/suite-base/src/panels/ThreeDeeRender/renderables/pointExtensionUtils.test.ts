@@ -4,10 +4,21 @@
 import * as THREE from "three";
 
 import { SettingsTreeField, Topic } from "@lichtblick/suite";
-import { pointSettingsNode } from "@lichtblick/suite-base/panels/ThreeDeeRender/settingsNodes/topics";
+import {
+  DEFAULT_POINT_SETTINGS,
+  pointSettingsNode,
+} from "@lichtblick/suite-base/panels/ThreeDeeRender/settingsNodes/topics";
 import { BasicBuilder } from "@lichtblick/test-builders";
 
-import { HistoryLimits, RenderObjectHistory } from "./pointExtensionUtils";
+import {
+  createCubeMaterials,
+  createGeometry,
+  disposeCubeMaterials,
+  HistoryLimits,
+  PointsRenderable,
+  RenderObjectHistory,
+} from "./pointExtensionUtils";
+import type { BaseUserData } from "../Renderable";
 import type { Renderer } from "../Renderer";
 
 type SettingsTreeFieldWithOptions = SettingsTreeField & {
@@ -38,7 +49,7 @@ describe("pointExtensionUtils", () => {
       const mockTopic = createTopic({ schemaName: FOXGLOVE_POINTCLOUD_DATATYPE });
 
       const panelSettings = pointSettingsNode(mockTopic, VALID_MESSAGE_FIELDS, {});
-      const colorMode = panelSettings.fields!.colorMode! as SettingsTreeFieldWithOptions;
+      const colorMode = panelSettings.fields.colorMode! as SettingsTreeFieldWithOptions;
 
       expect(colorMode.options).toEqual(expect.arrayContaining([RGBA_OPTION]));
       expect(colorMode.options).toEqual(
@@ -50,7 +61,7 @@ describe("pointExtensionUtils", () => {
       const mockTopic = createTopic({ convertibleTo: [FOXGLOVE_POINTCLOUD_DATATYPE] });
 
       const panelSettings = pointSettingsNode(mockTopic, VALID_MESSAGE_FIELDS, {});
-      const colorMode = panelSettings.fields!.colorMode! as SettingsTreeFieldWithOptions;
+      const colorMode = panelSettings.fields.colorMode! as SettingsTreeFieldWithOptions;
 
       expect(colorMode.options).toEqual(expect.arrayContaining([RGBA_OPTION]));
       expect(colorMode.options).toEqual(
@@ -62,7 +73,7 @@ describe("pointExtensionUtils", () => {
       const mockTopic = createTopic({ convertibleTo: [FOXGLOVE_POINTCLOUD_DATATYPE] });
 
       const panelSettings = pointSettingsNode(mockTopic, [], {});
-      const colorMode = panelSettings.fields!.colorMode! as SettingsTreeFieldWithOptions;
+      const colorMode = panelSettings.fields.colorMode! as SettingsTreeFieldWithOptions;
 
       expect(colorMode.options).toEqual(expect.not.arrayContaining([RGBA_OPTION]));
       expect(colorMode.options).toEqual(
@@ -74,7 +85,7 @@ describe("pointExtensionUtils", () => {
       const mockTopic = createTopic();
 
       const panelSettings = pointSettingsNode(mockTopic, VALID_MESSAGE_FIELDS, {});
-      const colorMode = panelSettings.fields!.colorMode! as SettingsTreeFieldWithOptions;
+      const colorMode = panelSettings.fields.colorMode! as SettingsTreeFieldWithOptions;
 
       expect(colorMode.options).toEqual(expect.not.arrayContaining([RGBA_OPTION]));
       expect(colorMode.options).toEqual(
@@ -86,7 +97,7 @@ describe("pointExtensionUtils", () => {
       const mockTopic = createTopic({ schemaName: ROS_POINTCLOUD_DATATYPE });
 
       const panelSettings = pointSettingsNode(mockTopic, BasicBuilder.strings(), {});
-      const colorMode = panelSettings.fields!.colorMode! as SettingsTreeFieldWithOptions;
+      const colorMode = panelSettings.fields.colorMode! as SettingsTreeFieldWithOptions;
 
       expect(colorMode.options).toEqual(expect.arrayContaining([BGR_OPTION_ROS, BGRA_OPTION_ROS]));
       expect(colorMode.options).toEqual(expect.not.arrayContaining([RGBA_OPTION]));
@@ -96,7 +107,7 @@ describe("pointExtensionUtils", () => {
       const mockTopic = createTopic({ convertibleTo: [ROS_POINTCLOUD_DATATYPE] });
 
       const panelSettings = pointSettingsNode(mockTopic, BasicBuilder.strings(), {});
-      const colorMode = panelSettings.fields!.colorMode! as SettingsTreeFieldWithOptions;
+      const colorMode = panelSettings.fields.colorMode! as SettingsTreeFieldWithOptions;
 
       expect(colorMode.options).toEqual(expect.arrayContaining([BGR_OPTION_ROS, BGRA_OPTION_ROS]));
       expect(colorMode.options).toEqual(expect.not.arrayContaining([RGBA_OPTION]));
@@ -108,19 +119,29 @@ describe("pointExtensionUtils", () => {
 
     it("shows cube size instead of point size for cubes", () => {
       const node = pointSettingsNode(topic, [], { pointShape: "cube", cubeSize: 0.2 });
-      expect(node.fields!.cubeSize?.value).toBe(0.2);
-      expect(node.fields!.pointSize).toBeUndefined();
+      expect(node.fields.cubeSize?.value).toBe(0.2);
+      expect(node.fields.pointSize).toBeUndefined();
+    });
+
+    it("offers an outline for cubes only", () => {
+      expect(
+        pointSettingsNode(topic, [], { pointShape: "cube" }).fields.showOutlines,
+      ).toBeDefined();
+      const sphere = pointSettingsNode(topic, [], { pointShape: "sphere", cubeSize: 0.3 });
+      expect(sphere.fields.showOutlines).toBeUndefined();
+      expect(sphere.fields.cubeSize?.label).toBe("Sphere size (m)");
+      expect(sphere.fields.cubeSize?.value).toBe(0.3);
     });
 
     it("shows point size for flat shapes", () => {
       const node = pointSettingsNode(topic, [], { pointShape: "square" });
-      expect(node.fields!.pointSize).toBeDefined();
-      expect(node.fields!.cubeSize).toBeUndefined();
+      expect(node.fields.pointSize).toBeDefined();
+      expect(node.fields.cubeSize).toBeUndefined();
     });
 
     it("only offers the given shapes", () => {
       const node = pointSettingsNode(topic, [], {}, undefined, ["circle", "square"]);
-      const pointShape = node.fields!.pointShape as SettingsTreeFieldWithOptions;
+      const pointShape = node.fields.pointShape as SettingsTreeFieldWithOptions;
       expect(pointShape.options).toEqual([
         { label: "Circle", value: "circle" },
         { label: "Square", value: "square" },
@@ -201,5 +222,53 @@ describe("RenderObjectHistory", () => {
     }
     history.dispose();
     expect(live).toBe(0);
+  });
+});
+
+describe("PointsRenderable mesh shapes", () => {
+  function setup() {
+    const materials = createCubeMaterials(DEFAULT_POINT_SETTINGS);
+    const geometry = createGeometry("/points", THREE.DynamicDrawUsage);
+    const points = new PointsRenderable(
+      "/points",
+      { topic: "/points" } as BaseUserData,
+      geometry,
+      new THREE.PointsMaterial(),
+      new THREE.MeshBasicMaterial(),
+      new THREE.MeshBasicMaterial(),
+    );
+    const meshes = () =>
+      points.children.filter((child): child is THREE.Mesh => child instanceof THREE.Mesh);
+    const lines = () =>
+      points.children.filter(
+        (child): child is THREE.LineSegments => child instanceof THREE.LineSegments,
+      );
+    return { materials, points, meshes, lines };
+  }
+
+  it("swaps the instanced geometry between cubes and spheres", () => {
+    const { materials, points, meshes } = setup();
+    points.setCubeMaterials(materials, { shape: "cube", showOutline: false });
+    const cubeVertices = meshes()[0]!.geometry.attributes.position!.count;
+    points.setCubeMaterials(materials, { shape: "sphere", showOutline: false });
+    expect(meshes()).toHaveLength(1);
+    expect(meshes()[0]!.visible).toBe(true);
+    expect(meshes()[0]!.geometry.attributes.position!.count).toBeGreaterThan(cubeVertices);
+    points.dispose();
+    disposeCubeMaterials(materials);
+  });
+
+  it("draws cube outlines only when asked and never for spheres", () => {
+    const { materials, points, lines } = setup();
+    points.setCubeMaterials(materials, { shape: "cube", showOutline: false });
+    expect(lines()).toHaveLength(0);
+    points.setCubeMaterials(materials, { shape: "cube", showOutline: true });
+    expect(lines()[0]!.visible).toBe(true);
+    points.setCubeMaterials(materials, { shape: "sphere", showOutline: true });
+    expect(lines()[0]!.visible).toBe(false);
+    points.setCubeMaterials(undefined);
+    expect(lines()[0]!.visible).toBe(false);
+    points.dispose();
+    disposeCubeMaterials(materials);
   });
 });

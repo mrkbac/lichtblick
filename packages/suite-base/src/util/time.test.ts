@@ -85,6 +85,12 @@ describe("time.getTimestampForMessageEvent", () => {
   });
 });
 
+describe("time.getTimestampForMessage", () => {
+  it("returns undefined for a null message", () => {
+    expect(time.getTimestampForMessage(null)).toBeUndefined();
+  });
+});
+
 describe("time.parseTimeUrlString", () => {
   it("returns undefined for undefined input", () => {
     const result = time.parseTimeUrlString(undefined);

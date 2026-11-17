@@ -185,6 +185,7 @@ export function useLiveCatalog(name: string): LiveCatalog {
       },
       dropFolder: () => false,
       accessDenied: false,
+      pickerClosed: false,
       pickFolderWithInput: () => {},
     }),
     [name, recordings, progress, error, live, recordingOf, fileOf, scan, selectSource],

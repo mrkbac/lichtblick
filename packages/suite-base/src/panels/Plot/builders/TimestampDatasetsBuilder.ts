@@ -118,7 +118,7 @@ export class TimestampDatasetsBuilder implements IDatasetsBuilder {
         { didSeek, hasRangeSource: this.#hasRangeSource },
         (config) => readMessagePathItems(msgEvents, config, activeData.startTime),
       );
-      pushAll(this.#pendingDispatch, seriesActions as UpdateDataAction[]);
+      pushAll(this.#pendingDispatch, seriesActions);
       datasetsChanged ||= seriesChanged;
     }
 
@@ -196,7 +196,7 @@ export class TimestampDatasetsBuilder implements IDatasetsBuilder {
     const actions = buildFullSeriesActions(this.#series, topic, options, (config) =>
       readMessagePathItems(messages, config, startTime),
     );
-    pushAll(this.#pendingDispatch, actions as UpdateDataAction[]);
+    pushAll(this.#pendingDispatch, actions);
   }
 
   public setSeries(series: Immutable<SeriesItem[]>): void {

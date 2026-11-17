@@ -9,7 +9,7 @@ import { DataSourceDialog, ExtensionManager } from "../../../page-objects";
  * WHEN the user navigates to the extensions menu and selects "turtlesim"
  * THEN the uninstall option should be enabled
  * WHEN the user confirms the uninstall
- * THEN a toast indicating "Uninstalling..." should appear
+ * THEN a toast confirms the extension was uninstalled
  */
 test("should uninstall an extension", { tag: "@regression" }, async ({ mainWindow }) => {
   const dialog = new DataSourceDialog(mainWindow);
@@ -34,8 +34,8 @@ test("should uninstall an extension", { tag: "@regression" }, async ({ mainWindo
 
   // When
   await uninstallButton.click();
-  const uninstallingToast = mainWindow.getByText("Uninstalling...");
+  const uninstalledToast = mainWindow.getByText("turtlesim uninstalled successfully");
 
   // Then
-  await expect(uninstallingToast).toBeVisible();
+  await expect(uninstalledToast).toBeVisible();
 });

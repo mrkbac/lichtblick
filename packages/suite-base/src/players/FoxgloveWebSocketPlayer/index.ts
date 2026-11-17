@@ -287,8 +287,8 @@ export default class FoxgloveWebSocketPlayer implements Player {
     // FoxgloveClient emits an error for opcodes it doesn't know, so intercept playback state
     // messages before they reach it.
     const clientOnMessage = ws.onmessage;
-    ws.onmessage = (event: unknown) => {
-      const data = (event as { data: unknown }).data;
+    ws.onmessage = (event: { data: unknown }) => {
+      const { data } = event;
       if (isPlaybackStateMessage(data)) {
         if (this.#serverControlsPlayback) {
           this.#handlePlaybackState(decodePlaybackState(data));
@@ -425,12 +425,7 @@ export default class FoxgloveWebSocketPlayer implements Player {
         // Add common ROS message definitions
         const rosDataTypes = isRos1 ? CommonRosTypes.ros1 : ros2CommonDatatypes(rosDistro);
 
-        const dataTypes: MessageDefinitionMap = new Map();
-        for (const dataType in rosDataTypes) {
-          const msgDef = (rosDataTypes as Record<string, MessageDefinition>)[dataType]!;
-          dataTypes.set(dataType, msgDef);
-        }
-        this.#updateDataTypes(dataTypes);
+        this.#updateDataTypes(new Map(Object.entries(rosDataTypes)));
       }
 
       if (event.capabilities.includes(ServerCapability.clientPublish)) {
@@ -759,15 +754,14 @@ export default class FoxgloveWebSocketPlayer implements Player {
 
     this.#client.on("parameterValues", ({ parameters, id }) => {
       const mappedParameters = parameters.map((param) => {
-        return param.type === "byte_array"
+        return param.type === "byte_array" && typeof param.value === "string"
           ? {
               ...param,
-              value: Uint8Array.fromBase64(param.value as string),
+              value: Uint8Array.fromBase64(param.value),
             }
           : param;
       });
-      const parameterTypes = parameters.map((p) => [p.name, p.type] as [string, Parameter["type"]]);
-      const parameterTypesMap = new Map<string, Parameter["type"]>(parameterTypes);
+      const parameterTypesMap = new Map(parameters.map((p) => [p.name, p.type] as const));
 
       const newParameters = mappedParameters.filter((param) => !this.#parameters.has(param.name));
 
@@ -894,6 +888,7 @@ export default class FoxgloveWebSocketPlayer implements Player {
             service,
             parsedResponse,
             requestMessageWriter,
+            requestMsgEncoding,
           };
           this.#servicesByName.set(service.name, resolvedService);
           serviceTypes.set(service.name, {
@@ -1313,9 +1308,8 @@ export default class FoxgloveWebSocketPlayer implements Player {
       );
     }
 
-    const { service, parsedResponse, requestMessageWriter } = resolvedService;
+    const { service, parsedResponse, requestMessageWriter, requestMsgEncoding } = resolvedService;
 
-    const requestMsgEncoding = service.request?.encoding ?? this.#serviceCallEncoding!;
     const serviceCallRequest: ServiceCallPayload = {
       serviceId: service.id,
       callId: ++this.#nextServiceCallId,

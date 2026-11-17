@@ -106,6 +106,8 @@ export type RendererConfig = {
     /** Ignore the <up_axis> tag in COLLADA files (matching rviz behavior) */
     ignoreColladaUpAxis?: boolean;
     meshUpAxis?: MeshUpAxis;
+    /** Logarithmic depth buffer, for scenes spanning very near and very far objects */
+    logDepth?: boolean;
     /**
      * Fixed world-space directional light vs camera-attached headlight (RViz-style).
      * Defaults to "fixed".

@@ -10,6 +10,8 @@ import { toNanoSec } from "@foxglove/rostime";
 import { ModelPrimitive, SceneEntity } from "@foxglove/schemas";
 import * as THREE from "three";
 
+import { toError } from "@lichtblick/suite-base/util/toError";
+
 import { RenderablePrimitive } from "./RenderablePrimitive";
 import { EDGE_LINE_SEGMENTS_NAME, LoadedModel } from "../../ModelCache";
 import type { Renderer } from "../../Renderer";
@@ -137,7 +139,7 @@ export class RenderableModels extends RenderablePrimitive {
       const idx = renderables.findIndex((prev) => isMatch(prev.primitive));
       if (idx >= 0) {
         // remove from previous renderables so that it doesn't get disposed
-        return renderables.splice(idx, 1)[0]!;
+        return renderables.splice(idx, 1)[0];
       }
     }
     return undefined;
@@ -231,7 +233,7 @@ export class RenderableModels extends RenderablePrimitive {
               },
             );
           } catch (e: unknown) {
-            const err = e as Error;
+            const err = toError(e);
             this.renderer.settings.errors.add(
               this.userData.settingsPath,
               MODEL_FETCH_FAILED,
@@ -248,7 +250,7 @@ export class RenderableModels extends RenderablePrimitive {
               (_url) => {},
             );
           } catch (e: unknown) {
-            const err = e as Error;
+            const err = toError(e);
             this.renderer.settings.errors.add(
               this.userData.settingsPath,
               MODEL_FETCH_FAILED,
