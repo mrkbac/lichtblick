@@ -7,6 +7,7 @@
 
 export const workspace = {
   events: "Events",
+  layoutHistory: "History",
   panel: "Panel",
   performance: "Performance",
   alerts: "Alerts",

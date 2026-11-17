@@ -17,6 +17,13 @@ describe("createKeyValueStore", () => {
     expect(await store.get("c")).toBe("three");
   });
 
+  it("deletes", async () => {
+    const store = createKeyValueStore("kv-delete", "items");
+    await store.set("k", 1);
+    await store.delete("k");
+    expect(await store.get("k")).toBeUndefined();
+  });
+
   it("reads a database laid out the way idb-keyval created it", async () => {
     // idb-keyval: indexedDB.open(name) without a version, one out-of-line-key store.
     await new Promise<void>((resolve, reject) => {
