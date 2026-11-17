@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import { toNanoSec } from "@foxglove/rostime";
-import { PackedElementField, VoxelGrid } from "@foxglove/schemas";
+import { VoxelGrid } from "@foxglove/schemas";
 import * as THREE from "three";
 
 import { SettingsTreeAction } from "@lichtblick/suite";
@@ -42,6 +42,7 @@ import {
   VOXEL_GRID_DEFAULTS,
 } from "../settingsNodes/voxelGrids";
 import { topicIsConvertibleToSchema } from "../topicIsConvertibleToSchema";
+import { normalizePackedElementField, numericTypeWidth } from "./FoxgloveGrid";
 import { FieldReader, getReader } from "./pointClouds/fieldReaders";
 
 /**
@@ -185,11 +186,6 @@ export function decodeBitVoxelGrid(
     }
   }
   return undefined;
-}
-
-function numericTypeWidth(type: number): number {
-  // NumericType: 1 UINT8, 2 INT8, 3 UINT16, 4 INT16, 5 UINT32, 6 INT32, 7 FLOAT32, 8 FLOAT64
-  return [0, 1, 1, 2, 2, 4, 4, 4, 8][type] ?? 0;
 }
 
 function validatePackedVoxelGrid(grid: VoxelGrid): string | undefined {
@@ -354,12 +350,6 @@ export type VoxelGridUserData = BaseUserData & {
 
 const UNIT_CUBE = new THREE.BoxGeometry(1, 1, 1);
 
-/** Clears the depth buffer after drawing, so later objects draw over the voxels. */
-const clearDepthAfterRender: THREE.Object3D["onAfterRender"] = (renderer) => {
-  renderer.clearDepth();
-};
-const noop: THREE.Object3D["onAfterRender"] = () => {};
-
 export class VoxelGridRenderable extends Renderable<VoxelGridUserData> {
   public override pickableInstances = true;
   public readonly voxels = new VoxelBuffer();
@@ -380,6 +370,12 @@ export class VoxelGridRenderable extends Renderable<VoxelGridUserData> {
     // Instances are placed in the vertex shader, so three.js can't compute bounds
     this.#mesh.frustumCulled = false;
     this.#mesh.name = `${userData.topic}:VoxelGrid`;
+    // Draw behind: the mesh renders first, then clearing depth lets later objects draw over it
+    this.#mesh.onAfterRender = (gl) => {
+      if (this.userData.settings.drawBehind) {
+        gl.clearDepth();
+      }
+    };
     this.#mesh.userData = {
       pickingMaterial: this.#pickingMaterial,
       instancePickingMaterial: this.#instancePickingMaterial,
@@ -456,7 +452,6 @@ export class VoxelGridRenderable extends Renderable<VoxelGridUserData> {
     this.#syncGeometry();
     this.#syncMaterial();
     this.#mesh.renderOrder = settings.drawBehind ? -1e6 : 0;
-    this.#mesh.onAfterRender = settings.drawBehind ? clearDepthAfterRender : noop;
   }
 
   #syncGeometry(): void {
@@ -731,12 +726,6 @@ function normalizeBitVoxelGrid(message: PartialMessage<BitVoxelGrid>): BitVoxelG
     size_y: message.size_y ?? 0,
     size_z: message.size_z ?? 0,
   };
-}
-
-function normalizePackedElementField(
-  field: PartialMessage<PackedElementField> | undefined,
-): PackedElementField {
-  return { name: field?.name ?? "", offset: field?.offset ?? 0, type: field?.type ?? 0 };
 }
 
 function normalizePackedVoxelGrid(message: PartialMessage<VoxelGrid>): VoxelGrid {

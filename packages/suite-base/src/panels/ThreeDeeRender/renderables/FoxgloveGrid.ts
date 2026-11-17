@@ -663,7 +663,7 @@ function createMesh(
   return mesh;
 }
 
-function numericTypeWidth(type: NumericType): number {
+export function numericTypeWidth(type: NumericType): number {
   switch (type) {
     case NumericType.INT8:
     case NumericType.UINT8:
@@ -843,7 +843,7 @@ function createPickingMaterial(originalMaterial: GridShaderMaterial): THREE.Shad
   return material;
 }
 
-function normalizePackedElementField(
+export function normalizePackedElementField(
   field: PartialMessage<PackedElementField> | undefined,
 ): PackedElementField {
   return {
