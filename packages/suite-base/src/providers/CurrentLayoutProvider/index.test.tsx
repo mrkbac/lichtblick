@@ -34,7 +34,20 @@ import {
   MAX_SUPPORTED_LAYOUT_VERSION,
 } from "@lichtblick/suite-base/providers/CurrentLayoutProvider/constants";
 import { ILayoutManager, LayoutFavorites } from "@lichtblick/suite-base/services/ILayoutManager";
+import {
+  deleteLayoutHistory,
+  loadLayoutHistory,
+  saveLayoutHistory,
+} from "@lichtblick/suite-base/services/layoutHistoryStorage";
+import { migratePanelsState } from "@lichtblick/suite-base/services/migrateLayout";
 import { BasicBuilder } from "@lichtblick/test-builders";
+
+// Each test starts without a saved layout history.
+vi.mock("@lichtblick/suite-base/services/layoutHistoryStorage", () => ({
+  loadLayoutHistory: vi.fn(async () => undefined),
+  saveLayoutHistory: vi.fn(),
+  deleteLayoutHistory: vi.fn(async () => {}),
+}));
 
 vi.mock("notistack", async () => ({
   ...(await vi.importActual("notistack")),
@@ -198,17 +211,17 @@ describe("CurrentLayoutProvider", () => {
     });
 
     expect(mockLayoutManager.getLayouts).toHaveBeenCalled();
-    expect(all.map((item) => (item instanceof Error ? undefined : item.layoutState))).toEqual([
-      { selectedLayout: undefined },
-      {
+    await waitFor(() => {
+      const last = all.at(-1);
+      expect(last instanceof Error ? undefined : last?.layoutState).toEqual({
         selectedLayout: {
           loading: false,
           id: "example",
           data: expectedState,
           name: "Example layout",
         },
-      },
-    ]);
+      });
+    });
   });
 
   it("refuses to load an incompatible layout", async () => {
@@ -350,6 +363,147 @@ describe("CurrentLayoutProvider", () => {
       result.current.actions.redoLayoutChange();
     });
     expect(config()).toEqual({ "ExamplePanel!1": { foo: "changed" } });
+  });
+
+  it("continues the selected layout's saved history", async () => {
+    // Saved as the provider shows it: migrated.
+    const current = migratePanelsState(TEST_LAYOUT);
+    const earlier = { ...current, globalVariables: { step: 1 } };
+    vi.mocked(loadLayoutHistory).mockResolvedValueOnce({
+      entries: [
+        { data: earlier, savedAt: 1 },
+        { data: current, savedAt: 2 },
+      ],
+      index: 1,
+    });
+    mockLayoutManager.getLayouts.mockImplementation(async () => [
+      {
+        id: "example",
+        name: "Test layout",
+        data: { data: TEST_LAYOUT },
+        permission: "CREATOR_WRITE",
+      },
+    ]);
+    mockLayoutManager.getLayout.mockResolvedValue({
+      id: "example",
+      name: "Test layout",
+      baseline: { data: TEST_LAYOUT, updatedAt: new Date(10).toISOString() },
+    });
+    mockUserProfile.getUserProfile.mockResolvedValue({ currentLayoutId: "example" });
+    const { result } = renderTest({ mockLayoutManager, mockUserProfile });
+    await waitFor(() => {
+      expect(result.current.layoutState.selectedLayout?.data).toBeDefined();
+    });
+    expect(loadLayoutHistory).toHaveBeenCalledWith("example");
+
+    act(() => {
+      result.current.actions.undoLayoutChange();
+    });
+    expect(result.current.layoutState.selectedLayout?.data?.globalVariables).toEqual({ step: 1 });
+  });
+
+  it("keeps a revert that happens while the layout's history is loading", async () => {
+    let finishLoad: (value: undefined) => void = () => {};
+    vi.mocked(loadLayoutHistory).mockReturnValueOnce(
+      new Promise((resolve) => {
+        finishLoad = resolve;
+      }),
+    );
+    mockLayoutManager.getLayouts.mockImplementation(async () => [
+      {
+        id: "example",
+        name: "Test layout",
+        data: { data: TEST_LAYOUT },
+        permission: "CREATOR_WRITE",
+      },
+    ]);
+    mockLayoutManager.getLayout.mockResolvedValue({
+      id: "example",
+      name: "Test layout",
+      baseline: { data: TEST_LAYOUT, updatedAt: new Date(10).toISOString() },
+    });
+    mockUserProfile.getUserProfile.mockResolvedValue({ currentLayoutId: "example" });
+    const { result, all } = renderTest({ mockLayoutManager, mockUserProfile });
+    await waitFor(() => {
+      expect(loadLayoutHistory).toHaveBeenCalledWith("example");
+    });
+
+    const reverted = { ...TEST_LAYOUT, globalVariables: { reverted: true } };
+    act(() => {
+      mockLayoutManager.on.mock.calls
+        .filter(([name]) => name === "change")
+        .forEach(([, listener]) => {
+          (listener as (event: unknown) => void)({
+            type: "revert",
+            updatedLayout: { id: "example", name: "Test layout", baseline: { data: reverted } },
+          });
+        });
+    });
+    // Not editable before the layout's own history is ready.
+    expect(result.current.layoutState.selectedLayout?.loading).toBe(true);
+
+    await act(async () => {
+      finishLoad(undefined);
+    });
+    await waitFor(() => {
+      expect(result.current.layoutState.selectedLayout?.data?.globalVariables).toEqual({
+        reverted: true,
+      });
+    });
+    expect(
+      all.some(
+        (item) =>
+          !(item instanceof Error) &&
+          item.layoutState.selectedLayout?.loading === false &&
+          item.layoutState.selectedLayout.data?.globalVariables.reverted !== true,
+      ),
+    ).toBe(false);
+
+    // The revert is undoable back to the layout as it was loaded.
+    act(() => {
+      result.current.actions.undoLayoutChange();
+    });
+    expect(result.current.layoutState.selectedLayout?.data?.globalVariables).toEqual(
+      TEST_LAYOUT.globalVariables,
+    );
+  });
+
+  it("saves the history under the selected layout and stops when that layout is deleted", async () => {
+    mockLayoutManager.getLayouts.mockImplementation(async () => [
+      {
+        id: "example",
+        name: "Test layout",
+        data: { data: TEST_LAYOUT },
+        permission: "CREATOR_WRITE",
+      },
+    ]);
+    mockLayoutManager.getLayout.mockResolvedValue({
+      id: "example",
+      name: "Test layout",
+      baseline: { data: TEST_LAYOUT, updatedAt: new Date(10).toISOString() },
+    });
+    mockUserProfile.getUserProfile.mockResolvedValue({ currentLayoutId: "example" });
+    const { result } = renderTest({ mockLayoutManager, mockUserProfile });
+    await waitFor(() => {
+      expect(result.current.layoutState.selectedLayout?.data).toBeDefined();
+    });
+    expect(saveLayoutHistory).toHaveBeenLastCalledWith("example", expect.anything());
+
+    const changeListeners = mockLayoutManager.on.mock.calls
+      .filter(([name]) => name === "change")
+      .map(([, listener]) => listener as (event: unknown) => void);
+    act(() => {
+      changeListeners.forEach((listener) => {
+        listener({ type: "delete", layoutId: "example" });
+      });
+    });
+    expect(deleteLayoutHistory).toHaveBeenCalledWith("example");
+
+    vi.mocked(saveLayoutHistory).mockClear();
+    act(() => {
+      result.current.actions.setGlobalVariables({ v: 1 });
+    });
+    expect(saveLayoutHistory).not.toHaveBeenCalled();
   });
 
   it("selects the first layout in alphabetic order, when there is no selected layout", async () => {

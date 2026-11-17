@@ -40,6 +40,7 @@ import KeyListener from "@lichtblick/suite-base/components/KeyListener";
 import { KeyboardShortcuts } from "@lichtblick/suite-base/components/KeyboardShortcuts/KeyboardShortcuts";
 import { APP_SHORTCUTS } from "@lichtblick/suite-base/components/KeyboardShortcuts/appShortcuts";
 import LayoutBrowser from "@lichtblick/suite-base/components/LayoutBrowser";
+import LayoutHistoryList from "@lichtblick/suite-base/components/LayoutHistoryList";
 import { LayoutTemplateCommands } from "@lichtblick/suite-base/components/LayoutTemplates";
 import { LiveRecordingsDialog } from "@lichtblick/suite-base/components/LiveRecordingsDialog";
 import {
@@ -377,6 +378,7 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
           component: VariablesList,
         },
       ],
+      ["layout-history", { title: t("workspace:layoutHistory"), component: LayoutHistoryList }],
     ]);
     if (enableDebugMode) {
       items.set("logs-settings", {

@@ -155,12 +155,61 @@ describe("LayoutHistory", () => {
     expect(data.configById["Plot!a"]).toEqual({ title: "t19" });
   });
 
-  it("resets when the layout data changed outside of it", () => {
+  it("records data changed outside of it (e.g. a revert) as an undoable step", () => {
     const h = new LayoutHistory();
-    h.apply(initial, setTitle("Plot!a", "x"), 0);
-    const otherLayout = { ...initial };
-    expect(h.undo(otherLayout)).toBeUndefined();
-    expect(h.reopenClosedPanel(otherLayout, 0)).toBeUndefined();
+    const a = h.apply(initial, setTitle("Plot!a", "x"), 0)!;
+    const reverted = { ...initial };
+    expect(h.undo(reverted)).toBe(a);
+    expect(h.redo(a)).toBe(reverted);
+  });
+
+  it("goes to any step and keeps the later ones for redo until the next edit", () => {
+    const h = new LayoutHistory();
+    const a = h.apply(initial, setTitle("Plot!a", "x"), 0)!;
+    const b = h.apply(a, setTitle("Plot!a", "y"), 1000)!;
+    expect(h.goTo(b, 0)).toBe(initial);
+    expect(h.snapshot().index).toBe(0);
+    expect(h.snapshot().entries.map((e) => e.data)).toEqual([initial, a, b]);
+    expect(h.goTo(initial, 2)).toBe(b);
+    h.goTo(b, 0);
+    h.apply(initial, setTitle("Plot!a", "z"), 2000);
+    expect(h.snapshot().entries).toHaveLength(2);
+  });
+
+  it("continues a layout's saved history when it is opened unchanged", () => {
+    const h = new LayoutHistory();
+    const a = h.apply(initial, setTitle("Plot!a", "x"), 0)!;
+    const saved = h.snapshot();
+
+    const other = new LayoutHistory();
+    expect(other.load(saved, structuredClone(a))).toBe(saved.entries[1]!.data);
+    expect(other.undo(saved.entries[1]!.data)).toBe(initial);
+    expect(other.snapshot().entries.some((e) => e.kind === "opened")).toBe(false);
+  });
+
+  it("adds the opened state as a step when it differs from the saved history", () => {
+    const h = new LayoutHistory();
+    const a = h.apply(initial, setTitle("Plot!a", "x"), 0)!;
+    const changedElsewhere = { ...a, globalVariables: { v: 1 } };
+
+    const other = new LayoutHistory();
+    expect(other.load(h.snapshot(), changedElsewhere)).toBe(changedElsewhere);
+    expect(other.snapshot().entries.at(-1)).toEqual({
+      data: changedElsewhere,
+      savedAt: expect.any(Number),
+      kind: "opened",
+    });
+    expect(other.undo(changedElsewhere)).toBe(a);
+  });
+
+  it("notifies subscribers on every change", () => {
+    const h = new LayoutHistory();
+    const listener = vi.fn();
+    h.subscribe(listener);
+    const a = h.apply(initial, setTitle("Plot!a", "x"), 0)!;
+    h.undo(a);
+    expect(listener).toHaveBeenCalled();
+    expect(h.snapshot().index).toBe(0);
   });
 
   it("reopens the most recently closed panel with its config and place", () => {
