@@ -566,15 +566,17 @@ export function imageProjectionSettingsNode(
 
 // ---- Point clouds, laser scans and velodyne scans ----
 
-export type PointShape = "circle" | "square" | "cube";
-const ALL_POINT_SHAPES: readonly PointShape[] = ["circle", "square", "cube"];
+export type PointShape = "circle" | "square" | "cube" | "sphere";
+const ALL_POINT_SHAPES: readonly PointShape[] = ["circle", "square", "cube", "sphere"];
 
 export type LayerSettingsPointExtension = BaseSettings &
   ColorModeSettings & {
     pointSize: number;
     pointShape: PointShape;
-    /** Edge length in meters when `pointShape` is "cube" */
+    /** Cube edge length or sphere diameter in meters, when `pointShape` is "cube" or "sphere" */
     cubeSize: number;
+    /** Draw cube edges, when `pointShape` is "cube" */
+    showOutlines?: boolean;
     decayTime: number;
   };
 
@@ -607,6 +609,7 @@ const SHAPE_LABELS = {
   circle: "threeDee:pointShapeCircle",
   square: "threeDee:pointShapeSquare",
   cube: "threeDee:pointShapeCube",
+  sphere: "threeDee:pointShapeSphere",
 } as const;
 
 /**
@@ -645,11 +648,11 @@ export function pointSettingsNode(
   });
 
   const sizeFields: DocumentedFields =
-    pointShape === "cube"
+    pointShape === "cube" || pointShape === "sphere"
       ? {
           cubeSize: {
-            label: t("threeDee:cubeSize"),
-            help: t("threeDee:cubeSizeHelp"),
+            label: t(pointShape === "cube" ? "threeDee:cubeSize" : "threeDee:sphereSize"),
+            help: t(pointShape === "cube" ? "threeDee:cubeSizeHelp" : "threeDee:sphereSizeHelp"),
             input: "number",
             step: 0.05,
             placeholder: String(defaultSettings.cubeSize),
@@ -657,6 +660,14 @@ export function pointSettingsNode(
             value: config.cubeSize,
             min: 0,
           },
+          ...(pointShape === "cube" && {
+            showOutlines: {
+              label: t("threeDee:showOutline"),
+              help: t("threeDee:cubeOutlineHelp"),
+              input: "boolean",
+              value: config.showOutlines ?? false,
+            },
+          }),
         }
       : {
           pointSize: {

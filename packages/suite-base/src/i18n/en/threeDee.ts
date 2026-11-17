@@ -167,6 +167,9 @@ export const threeDee = {
   fovyHelp: "Vertical field of view, in degrees.",
   nearHelp: "Closest distance drawn. Anything nearer the camera is cut off.",
   farHelp: "Farthest distance drawn. Anything beyond is cut off.",
+  logDepth: "Log depth",
+  logDepthHelp:
+    "Spreads depth precision evenly from near to far, which stops distant surfaces from flickering through each other. Can be slower and cause artifacts on some objects.",
   editableHelp: "Lets you offset each frame's translation and rotation.",
   adjustStepHelp: "Step size of the offset inputs and keyboard adjustments.",
   frameLabelsHelp: "Shows each frame's name next to its axes.",
@@ -210,6 +213,8 @@ export const threeDee = {
   pointShapeHelp: "Shape drawn for each point.",
   pointSizeHelp: "Point size in pixels.",
   cubeSizeHelp: "Edge length of each cube, in meters.",
+  sphereSizeHelp: "Diameter of each sphere, in meters.",
+  cubeOutlineHelp: "Draws dark edges around each cube.",
   decayTimeHelp: "Seconds that older messages stay visible. 0 shows only the latest one.",
   colorModeHelp:
     "How to color: one flat color, a gradient or color map over a field's value, or colors stored in the message.",
@@ -264,7 +269,9 @@ export const threeDee = {
   pointShapeCircle: "Circle",
   pointShapeSquare: "Square",
   pointShapeCube: "Cube",
+  pointShapeSphere: "Sphere",
   cubeSize: "Cube size (m)",
+  sphereSize: "Sphere size (m)",
   pointSize: "Point size",
 
   // Color Mode

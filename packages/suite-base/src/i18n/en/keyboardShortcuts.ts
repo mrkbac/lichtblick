@@ -36,6 +36,8 @@ export const keyboardShortcuts = {
 
   // 3D
   togglePerspective: "Toggle 2D / 3D camera",
+  recenterCamera: "Center the camera on the display frame",
+  toggleHoverInspector: "Show or hide object details on hover",
   moveCamera: "Pan camera (keys need the canvas focused)",
   screenSpacePan: "Pan in screen space",
   rotateCamera: "Rotate camera",
