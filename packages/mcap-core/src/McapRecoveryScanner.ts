@@ -353,7 +353,8 @@ export class McapRecoveryScanner {
     const indexAt = offsets[0]?.[1] ?? 0n;
     offsets.forEach(([channelId, offset], i) => {
       const at = Number(offset - indexAt);
-      const end = i + 1 < offsets.length ? Number(offsets[i + 1]![1] - indexAt) : view.byteLength;
+      const next = offsets[i + 1];
+      const end = next ? Number(next[1] - indexAt) : view.byteLength;
       view.setUint8(at, Opcode.MESSAGE_INDEX);
       view.setBigUint64(at + 1, BigInt(end - at - 9), true);
       view.setUint16(at + 9, channelId, true);
@@ -546,10 +547,6 @@ export class McapRecoveryScanner {
     for (const channel of channels) {
       this.#channels.set(channel.id, channel);
     }
-    if (messagesByChannel.size === 0) {
-      return;
-    }
-
     let start: bigint | undefined;
     let end: bigint | undefined;
     for (const [channelId, messages] of messagesByChannel) {
@@ -561,15 +558,18 @@ export class McapRecoveryScanner {
       );
       this.messageCount += BigInt(messages.count);
     }
+    if (start == undefined || end == undefined) {
+      return;
+    }
     this.#messageStartTime =
-      this.#messageStartTime == undefined || start! < this.#messageStartTime
+      this.#messageStartTime == undefined || start < this.#messageStartTime
         ? start
         : this.#messageStartTime;
     this.#messageEndTime =
-      this.#messageEndTime == undefined || end! > this.#messageEndTime ? end : this.#messageEndTime;
+      this.#messageEndTime == undefined || end > this.#messageEndTime ? end : this.#messageEndTime;
     this.#chunkIndexes.push({
-      messageStartTime: start!,
-      messageEndTime: end!,
+      messageStartTime: start,
+      messageEndTime: end,
       chunkStartOffset: offset,
       chunkLength: length,
       messageIndexOffsets,
