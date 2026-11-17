@@ -103,7 +103,7 @@ type GridMapMaterial = THREE.ShaderMaterial & {
   uniforms: {
     map: THREE.IUniform<THREE.DataTexture>;
     cells: THREE.IUniform<THREE.DataTexture>;
-    cellSize: THREE.IUniform<THREE.Vector2>;
+    cellResolution: THREE.IUniform<number>;
     useElevation: THREE.IUniform<boolean>;
     lighting: THREE.IUniform<boolean>;
     objectId: THREE.IUniform<number[]>;
@@ -305,7 +305,7 @@ export class GridMaps extends SceneExtension<GridMapRenderable> {
       THREE.RGFormat,
       THREE.FloatType,
     );
-    uniforms.cellSize.value.set(resolution, resolution);
+    uniforms.cellResolution.value = resolution;
     uniforms.useElevation.value = heights != undefined;
     uniforms.lighting.value = settings.lighting;
 
@@ -467,7 +467,7 @@ function createMaterial(topic: string): GridMapMaterial {
     uniforms: {
       map: { value: emptyTexture(THREE.RGBAFormat, THREE.UnsignedByteType) },
       cells: { value: emptyTexture(THREE.RGFormat, THREE.FloatType) },
-      cellSize: { value: new THREE.Vector2(1, 1) },
+      cellResolution: { value: 1 },
       useElevation: { value: false },
       lighting: { value: true },
       objectId: { value: [NaN, NaN, NaN, NaN] },
@@ -475,7 +475,7 @@ function createMaterial(topic: string): GridMapMaterial {
     defines: { PICKING: 0 },
     vertexShader: /* glsl */ `
       uniform sampler2D cells;
-      uniform vec2 cellSize;
+      uniform float cellResolution;
       uniform bool useElevation;
       uniform bool lighting;
       varying vec2 vUv;
@@ -508,8 +508,8 @@ function createMaterial(topic: string): GridMapMaterial {
           float up = u.g > 0.5 ? u.r : h;
           pos.z = h;
           normal = normalize(vec3(
-            (left - right) / (2.0 * cellSize.x),
-            (down - up) / (2.0 * cellSize.y),
+            (left - right) / (2.0 * cellResolution),
+            (down - up) / (2.0 * cellResolution),
             1.0
           ));
         }
