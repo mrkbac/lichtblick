@@ -23,6 +23,7 @@ import OverlayToolbar, {
 } from "@lichtblick/suite-base/components/OverlayToolbar";
 import { PanelButton, usePanelButtonTitle } from "@lichtblick/suite-base/components/PanelButton";
 import { PANEL_FLOATING_TOOLBAR_HEIGHT } from "@lichtblick/suite-base/components/PanelToolbar/constants";
+import { useLocalStorage } from "@lichtblick/suite-base/hooks/useLocalStorage";
 import { findShortcut } from "@lichtblick/suite-base/util/keyboardShortcuts";
 import { customTypography } from "@lichtblick/theme";
 
@@ -60,20 +61,6 @@ const FOLD_TOOLS_BELOW_PX = 380;
 
 /** The step-by-step hint shows until the user has made and left one measurement. */
 const HINT_SEEN_KEY = "lichtblick.map.measureHintSeen";
-function readHintSeen(): boolean {
-  try {
-    return localStorage.getItem(HINT_SEEN_KEY) === "1";
-  } catch {
-    return false;
-  }
-}
-function markHintSeen(): void {
-  try {
-    localStorage.setItem(HINT_SEEN_KEY, "1");
-  } catch {
-    // Without storage the hint just keeps showing.
-  }
-}
 
 const TOOLS: { tool: MeasureTool; button: PanelButton; needsTerrain?: boolean }[] = [
   { tool: "distance", button: MAP_BUTTONS.distance },
@@ -838,13 +825,14 @@ export function MapToolbar(props: Props): React.JSX.Element {
             ? "Click three points; the angle is at the middle one."
             : "Click the bottom, then the top."
         : "Click the map to start.";
-  const [hintSeen, setHintSeen] = useState(readHintSeen);
+  // Stored as `1`, the value earlier versions wrote
+  const [hintSeenValue, setHintSeenValue] = useLocalStorage(HINT_SEEN_KEY, 0);
+  const hintSeen = hintSeenValue === 1;
   useEffect(() => {
     if (!hintSeen && !tool && measurements.length > 0) {
-      markHintSeen();
-      setHintSeen(true);
+      setHintSeenValue(1);
     }
-  }, [hintSeen, measurements.length, tool]);
+  }, [hintSeen, measurements.length, setHintSeenValue, tool]);
 
   // Hosted in MapLibre's top-right stack, so it sits right below zoom and compass.
   const [controlElement, setControlElement] = useState<HTMLElement>();

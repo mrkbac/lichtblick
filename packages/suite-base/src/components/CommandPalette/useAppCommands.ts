@@ -22,6 +22,7 @@ import {
 } from "@lichtblick/suite-base/components/MessagePipeline";
 import {
   selectEndTime,
+  selectIsPlaying,
   selectPausePlayback,
   selectPlayerPresence,
   selectSeekPlayback,
@@ -59,6 +60,7 @@ import {
   PANEL_TITLE_CONFIG_KEY,
   getPanelIdForType,
   getPanelTypeFromId,
+  isPlainObject,
 } from "@lichtblick/suite-base/util/layout";
 import { getPanelIds, setActivePanel } from "@lichtblick/suite-base/util/layoutTree";
 import { formatTimeRaw } from "@lichtblick/suite-base/util/time";
@@ -78,8 +80,7 @@ type TopicTarget = {
   remount?: true;
 };
 
-const obj = (value: unknown): Record<string, unknown> =>
-  typeof value === "object" && value != undefined ? (value as Record<string, unknown>) : {};
+const obj = (value: unknown): Record<string, unknown> => (isPlainObject(value) ? value : {});
 const asArray = (value: unknown): unknown[] => (Array.isArray(value) ? value : []);
 
 /** Panels whose config names one topic: picking a topic replaces it. */
@@ -193,8 +194,6 @@ export function formatOffset(seconds: number): string {
 const selectLeftSidebarOpen = (store: WorkspaceContextStore) => store.sidebars.left.open;
 const selectLeftSidebarItem = (store: WorkspaceContextStore) => store.sidebars.left.item;
 const selectLayout = (state: LayoutState) => state.selectedLayout;
-const selectIsPlaying = (ctx: MessagePipelineContext) =>
-  ctx.playerState.activeData?.isPlaying === true;
 const selectTopics = (ctx: MessagePipelineContext) => ctx.playerState.activeData?.topics;
 const selectSetSpeed = (ctx: MessagePipelineContext) => ctx.setPlaybackSpeed;
 
@@ -390,26 +389,27 @@ export function useAppCommands(): {
       const near: Command[] =
         selectedTarget == undefined
           ? []
-          : [
-              place("right-of", t("placeRightOf", { panel: panelLabel(selectedTarget).title }), {
-                position: "right",
+          : (
+              [
+                ["right-of", "placeRightOf", "right"],
+                ["below", "placeBelow", "bottom"],
+                ["tab-with", "placeTabWith", "center"],
+              ] as const
+            ).map(([key, label, position]) =>
+              place(key, t(label, { panel: panelLabel(selectedTarget).title }), {
+                position,
                 targetPanelId: selectedTarget,
               }),
-              place("below", t("placeBelow", { panel: panelLabel(selectedTarget).title }), {
-                position: "bottom",
-                targetPanelId: selectedTarget,
-              }),
-              place("tab-with", t("placeTabWith", { panel: panelLabel(selectedTarget).title }), {
-                position: "center",
-                targetPanelId: selectedTarget,
-              }),
-            ];
+            );
+      const edges = [
+        ["left", "placeLeftEdge"],
+        ["right", "placeRightEdge"],
+        ["top", "placeTopEdge"],
+        ["bottom", "placeBottomEdge"],
+      ] as const;
       return [
         ...near,
-        place("left", t("placeLeftEdge"), { position: "left" }),
-        place("right", t("placeRightEdge"), { position: "right" }),
-        place("top", t("placeTopEdge"), { position: "top" }),
-        place("bottom", t("placeBottomEdge"), { position: "bottom" }),
+        ...edges.map(([position, label]) => place(position, t(label), { position })),
       ];
     };
     /** Adds a panel where the palette always puts it; Tab offers other places. */
@@ -749,14 +749,6 @@ export function useAppCommands(): {
         keywords: ["hotkeys", "keys", "keybindings"],
         shortcut: shortcutLabel(APP_SHORTCUTS, "app.showShortcuts"),
         run: showShortcuts,
-      },
-      {
-        id: "help.modes",
-        title: t("searchModes"),
-        keywords: ["prefix", "help"],
-        placeholder: t("searchModesPlaceholder"),
-        prefix: "?",
-        children: () => list.filter((cmd) => cmd.prefix != undefined && cmd.id !== "help.modes"),
       },
     );
     return list;

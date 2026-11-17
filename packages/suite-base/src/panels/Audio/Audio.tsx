@@ -23,7 +23,7 @@ import { PanelIconButton } from "@lichtblick/suite-base/components/PanelButton";
 import { usePanelContext } from "@lichtblick/suite-base/components/PanelContext";
 import PanelToolbar from "@lichtblick/suite-base/components/PanelToolbar";
 import Stack from "@lichtblick/suite-base/components/Stack";
-import { hasSchema, replaceDrop } from "@lichtblick/suite-base/panels/shared/pathDrop";
+import { replaceDrop } from "@lichtblick/suite-base/panels/shared/pathDrop";
 import {
   useDefaultPanelTitle,
   usePanelSettingsTreeUpdate,
@@ -127,9 +127,12 @@ export function Audio({ config, saveConfig }: Props): React.JSX.Element {
   const { setMessagePathDropConfig } = usePanelContext();
   useEffect(() => {
     setMessagePathDropConfig(
-      replaceDrop(hasSchema(AUDIO_SCHEMAS), (item) => {
-        saveConfig({ topic: item.topicName });
-      }),
+      replaceDrop(
+        (item) => item.rootSchemaName != undefined && AUDIO_SCHEMAS.has(item.rootSchemaName),
+        (item) => {
+          saveConfig({ topic: item.topicName });
+        },
+      ),
     );
   }, [saveConfig, setMessagePathDropConfig]);
   const [, setDefaultPanelTitle] = useDefaultPanelTitle();

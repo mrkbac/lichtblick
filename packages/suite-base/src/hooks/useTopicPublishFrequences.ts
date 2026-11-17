@@ -9,30 +9,22 @@ import { subtract as subtractTimes, Time } from "@foxglove/rostime";
 import { useEffect, useMemo, useState } from "react";
 
 import { Immutable } from "@lichtblick/suite";
-import {
-  MessagePipelineContext,
-  useMessagePipeline,
-} from "@lichtblick/suite-base/components/MessagePipeline";
+import { useMessagePipeline } from "@lichtblick/suite-base/components/MessagePipeline";
 import {
   selectCurrentTime,
   selectEndTime,
+  selectHasCurrentTime,
   selectPlayerCapabilities,
   selectPlayerId,
   selectStartTime,
+  selectTopicStatsOrEmpty,
 } from "@lichtblick/suite-base/components/MessagePipeline/selectors";
 import { isRecordingSource } from "@lichtblick/suite-base/players/constants";
-import { TopicStats } from "@lichtblick/suite-base/players/types";
 import { LiveTopicRates } from "@lichtblick/suite-base/util/LiveTopicRates";
 import { calculateStaticItemFrequency } from "@lichtblick/suite-base/util/calculateStaticItemFrequency";
 
-const EMPTY_TOPIC_STATS = new Map<string, TopicStats>();
-
 /** How often live rates are re-evaluated when no messages arrive, so a stopped publisher drops to 0. */
 const LIVE_TICK_MS = 500;
-
-const selectHasCurrentTime = (ctx: MessagePipelineContext) => selectCurrentTime(ctx) != undefined;
-const selectTopicStats = (ctx: MessagePipelineContext) =>
-  ctx.playerState.activeData?.topicStats ?? EMPTY_TOPIC_STATS;
 
 type FrequenciesByTopic = Record<string, undefined | number>;
 const EMPTY_FREQUENCIES: FrequenciesByTopic = {};
@@ -44,7 +36,7 @@ const EMPTY_FREQUENCIES: FrequenciesByTopic = {};
 export function useTopicPublishFrequencies(): Immutable<FrequenciesByTopic> {
   const startTime = useMessagePipeline(selectStartTime);
   const endTime = useMessagePipeline(selectEndTime);
-  const topicStats = useMessagePipeline(selectTopicStats);
+  const topicStats = useMessagePipeline(selectTopicStatsOrEmpty);
   const playerCapabilities = useMessagePipeline(selectPlayerCapabilities);
   const duration = useMemo(
     () => (endTime && startTime ? subtractTimes(endTime, startTime) : { sec: 0, nsec: 0 }),

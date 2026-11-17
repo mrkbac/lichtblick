@@ -17,13 +17,11 @@
 import { Time } from "@foxglove/rostime";
 
 import { AppSetting } from "@lichtblick/suite-base/AppSetting";
-import {
-  MessagePipelineContext,
-  useMessagePipeline,
-} from "@lichtblick/suite-base/components/MessagePipeline";
+import { useMessagePipeline } from "@lichtblick/suite-base/components/MessagePipeline";
 import {
   selectCurrentTime,
   selectEndTime,
+  selectIsPlaying,
   selectStartTime,
 } from "@lichtblick/suite-base/components/MessagePipeline/selectors";
 import { useAppTimeFormat } from "@lichtblick/suite-base/hooks";
@@ -35,8 +33,6 @@ type Props = {
   onSeek: (seekTo: Time) => void;
   onPause: () => void;
 };
-
-const selectIsPlaying = (ctx: MessagePipelineContext) => ctx.playerState.activeData?.isPlaying;
 
 export default function PlaybackTimeDisplay(props: Props): React.JSX.Element {
   const [timezone] = useAppConfigurationValue<string>(AppSetting.TIMEZONE);
@@ -55,7 +51,7 @@ export default function PlaybackTimeDisplay(props: Props): React.JSX.Element {
       endTime={endTime}
       onSeek={props.onSeek}
       onPause={props.onPause}
-      isPlaying={isPlaying ?? false}
+      isPlaying={isPlaying}
       timezone={timezone}
     />
   );

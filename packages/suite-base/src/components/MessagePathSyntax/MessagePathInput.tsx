@@ -31,7 +31,7 @@ import {
   STREAM_MODIFIERS,
 } from "@lichtblick/message-path";
 import * as PanelAPI from "@lichtblick/suite-base/PanelAPI";
-import { Autocomplete } from "@lichtblick/suite-base/components/Autocomplete";
+import { Autocomplete } from "@lichtblick/suite-base/components/Autocomplete/Autocomplete";
 import { IAutocomplete } from "@lichtblick/suite-base/components/Autocomplete/types";
 import { useStyles } from "@lichtblick/suite-base/components/MessagePathSyntax/MessagePathInput.style";
 import {

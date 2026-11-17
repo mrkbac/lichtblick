@@ -44,7 +44,7 @@ vi.mock("@lichtblick/suite-base/components/SidebarContent", () => ({
   ),
 }));
 
-vi.mock("@lichtblick/suite-base/components/TopicList", () => ({
+vi.mock("@lichtblick/suite-base/components/TopicList/TopicList", () => ({
   TopicList: () => <div data-testid="topic-list" />,
 }));
 

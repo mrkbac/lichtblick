@@ -20,12 +20,13 @@ export const PANEL_TITLE_TOOLBAR_SPACE = `var(--panel-title-toolbar-space, ${PAN
  * CSS height of the floating toolbar over a panel with only a title (none outside compact mode).
  * Controls drawn over the top of a panel go this far down so the toolbar doesn't cover them.
  */
-export const PANEL_FLOATING_TOOLBAR_HEIGHT = `calc(${PANEL_TOOLBAR_HEIGHT} - ${PANEL_TITLE_TOOLBAR_SPACE})`;
+export const PANEL_FLOATING_TOOLBAR_HEIGHT = "var(--panel-floating-toolbar-height, 0px)";
 
 /** Workspace styles that turn compact panels on. */
 export const COMPACT_PANELS_STYLE = {
   [`&[${COMPACT_PANELS_ATTRIBUTE}]`]: {
     "--panel-toolbar-height": `${COMPACT_PANEL_TOOLBAR_HEIGHT}px`,
     "--panel-title-toolbar-space": "0px",
+    "--panel-floating-toolbar-height": `${COMPACT_PANEL_TOOLBAR_HEIGHT}px`,
   },
 };

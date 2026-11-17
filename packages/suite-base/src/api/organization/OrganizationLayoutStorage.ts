@@ -121,76 +121,64 @@ export class OrganizationLayoutStorage
   }
 
   public async updateLayout(params: UpdateLayoutRequest): Promise<UpdateLayoutResponse> {
-    let known = await this.#known(params.externalId);
+    const known = await this.#known(params.externalId);
     if (!known) {
       return { status: "conflict" };
     }
-    for (let attempt = 0; ; attempt++) {
-      const { data, error, response } = await this.#client.PUT(
-        "/v1/organizations/{organizationId}/layouts/{layoutId}",
-        {
+    const { data, error, response } = await this.#withOwnRetry(
+      known,
+      async (layout) =>
+        await this.#client.PUT("/v1/organizations/{organizationId}/layouts/{layoutId}", {
           params: {
-            path: { organizationId: known.organizationId, layoutId: known.id },
-            header: { "If-Match": revisionETag(known.revision) },
+            path: { organizationId: layout.organizationId, layoutId: layout.id },
+            header: { "If-Match": revisionETag(layout.revision) },
           },
           // Full replacement: unchanged fields are resent from the last known version.
           body: {
-            displayName: params.name ?? known.displayName,
-            data: params.data ?? known.data,
+            displayName: params.name ?? layout.displayName,
+            data: params.data ?? layout.data,
           },
-        },
-      );
-      if (data) {
-        return {
-          status: "success",
-          newLayout: this.#toRemote(this.#remember(data)),
-        };
-      }
-      if (response.status === 412) {
-        if (!("current" in error)) {
-          return { status: "conflict" };
-        }
-        known = this.#remember(error.current);
-        if (attempt === 0 && this.#isOwnChange(known)) {
-          continue;
-        }
-        return { status: "conflict" };
-      }
-      throw new OrganizationApiError(response, error);
+        }),
+    );
+    if (data) {
+      return {
+        status: "success",
+        newLayout: this.#toRemote(this.#remember(data)),
+      };
     }
+    if (response.status === 412) {
+      if ("current" in error) {
+        this.#remember(error.current);
+      }
+      return { status: "conflict" };
+    }
+    throw new OrganizationApiError(response, error);
   }
 
   public async deleteLayout(id: string): Promise<boolean> {
-    let known = await this.#known(id);
+    const known = await this.#known(id);
     if (!known) {
       return false;
     }
-    for (let attempt = 0; ; attempt++) {
-      const { error, response } = await this.#client.DELETE(
-        "/v1/organizations/{organizationId}/layouts/{layoutId}",
-        {
+    const { error, response } = await this.#withOwnRetry(
+      known,
+      async (layout) =>
+        await this.#client.DELETE("/v1/organizations/{organizationId}/layouts/{layoutId}", {
           params: {
-            path: { organizationId: known.organizationId, layoutId: id },
-            header: { "If-Match": revisionETag(known.revision) },
+            path: { organizationId: layout.organizationId, layoutId: id },
+            header: { "If-Match": revisionETag(layout.revision) },
           },
-        },
-      );
-      if (response.status === 404) {
-        this.#forget(id);
-        return false;
-      }
-      if (response.status === 412 && error != undefined && "current" in error && attempt === 0) {
-        known = this.#remember(error.current);
-        if (this.#isOwnChange(known)) {
-          continue;
-        }
-      }
-      if (!response.ok) {
-        throw new OrganizationApiError(response, error);
-      }
+        }),
+    );
+    if (response.status === 404) {
       this.#forget(id);
-      return true;
+      return false;
     }
+    if (!response.ok) {
+      throw new OrganizationApiError(response, error);
+    }
+    this.#forget(id);
+    return true;
   }
 
   public async getFavoriteLayoutIds(): Promise<readonly string[]> {
@@ -328,6 +316,22 @@ export class OrganizationLayoutStorage
    * tab, whose revision this tab didn't see). Then the write goes ahead on top of it; a change by
    * someone else stays a conflict.
    */
+  /**
+   * Sends a conditional request against `known`. A 412 whose current version was written by this
+   * user (our own earlier write) is retried once against that version.
+   */
+  async #withOwnRetry<
+    R extends { response: Response; error?: Partial<Schemas["LayoutConflictProblem"]> },
+  >(known: ApiLayout, send: (layout: ApiLayout) => Promise<R>): Promise<R> {
+    const first = await send(known);
+    const current = first.response.status === 412 ? first.error?.current : undefined;
+    if (current == undefined) {
+      return first;
+    }
+    this.#remember(current);
+    return this.#isOwnChange(current) ? await send(current) : first;
+  }
+
   #isOwnChange(current: ApiLayout): boolean {
     return current.updatedBy.id === this.#session.user.id;
   }

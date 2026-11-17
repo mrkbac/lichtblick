@@ -10,13 +10,12 @@ import { openDB } from "idb";
 import JSZip from "jszip";
 import type { Mock } from "vitest";
 
-import { StoredExtension } from "@lichtblick/suite-base/services/IExtensionStorage";
 import {
   EXTENSION_STORE_NAME,
   METADATA_STORE_NAME,
 } from "@lichtblick/suite-base/services/extension/IdbExtensionStorage";
 import { ALLOWED_FILES } from "@lichtblick/suite-base/services/extension/types";
-import { ExtensionInfo } from "@lichtblick/suite-base/types/Extensions";
+import { ExtensionInfo, StoredExtension } from "@lichtblick/suite-base/types/Extensions";
 import { BasicBuilder } from "@lichtblick/test-builders";
 
 import { IdbExtensionLoader } from "./IdbExtensionLoader";

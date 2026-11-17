@@ -44,6 +44,7 @@ import {
   MessagePipelineContext,
   useMessagePipeline,
 } from "@lichtblick/suite-base/components/MessagePipeline";
+import { selectPlayerCapabilities } from "@lichtblick/suite-base/components/MessagePipeline/selectors";
 import Panel from "@lichtblick/suite-base/components/Panel";
 import {
   PanelIconButton,
@@ -92,9 +93,6 @@ type Props = {
 const EMPTY_PARAMETERS = new Map<string, ParameterValue>();
 const EMPTY_SET = new Set<string>();
 
-function selectCapabilities(ctx: MessagePipelineContext) {
-  return ctx.playerState.capabilities;
-}
 function selectSetParameter(ctx: MessagePipelineContext) {
   return ctx.setParameter;
 }
@@ -174,7 +172,7 @@ function useChangedParameters(
 
 function Parameters({ config, saveConfig }: Props): ReactElement {
   const { classes, cx } = useStyles();
-  const capabilities = useMessagePipeline(selectCapabilities);
+  const capabilities = useMessagePipeline(selectPlayerCapabilities);
   const setParameter = useMessagePipeline(selectSetParameter);
   const parameters = useMessagePipeline(selectParameters);
   const canGetParams = capabilities.includes(PLAYER_CAPABILITIES.getParameters);

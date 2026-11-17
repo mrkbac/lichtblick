@@ -1,16 +1,14 @@
 // SPDX-License-Identifier: MPL-2.0
 
-// Binary decoders (CDR, Protobuf, ROS 1) give numeric arrays as typed arrays
-function isTypedArray(item: unknown): item is ArrayLike<number | bigint> {
-  return ArrayBuffer.isView(item) && !(item instanceof DataView);
-}
+import { isTypedArray } from "@lichtblick/suite-base/types/isTypedArray";
 
 function flatten(item: unknown): unknown[] {
   if (Array.isArray(item)) {
     return item.flatMap(flatten);
   }
+  // Binary decoders (CDR, Protobuf, ROS 1) give numeric arrays as typed arrays
   if (isTypedArray(item)) {
-    return Array.from(item);
+    return Array.from<unknown>(item);
   }
   return [item];
 }

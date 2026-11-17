@@ -9,23 +9,16 @@ import { Time } from "@foxglove/rostime";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from "react";
 
 import { useLatest } from "@lichtblick/hooks";
-import {
-  MessagePipelineContext,
-  useMessagePipeline,
-} from "@lichtblick/suite-base/components/MessagePipeline";
+import { useMessagePipeline } from "@lichtblick/suite-base/components/MessagePipeline";
 import {
   selectPlayerCapabilities,
   selectPlayerId,
+  selectTopicStatsOrEmpty,
 } from "@lichtblick/suite-base/components/MessagePipeline/selectors";
 import { useTopicPublishFrequencies } from "@lichtblick/suite-base/hooks/useTopicPublishFrequences";
 import { isRecordingSource } from "@lichtblick/suite-base/players/constants";
-import { TopicStats } from "@lichtblick/suite-base/players/types";
 
 const EM_DASH = "\u2014";
-const EMPTY_TOPIC_STATS = new Map<string, TopicStats>();
-
-const selectTopicStats = (ctx: MessagePipelineContext) =>
-  ctx.playerState.activeData?.topicStats ?? EMPTY_TOPIC_STATS;
 
 type StatSample = {
   time: Time;
@@ -46,7 +39,7 @@ export function DirectTopicStatsUpdater({
 }: {
   interval?: number;
 }): React.JSX.Element {
-  const topicStats = useMessagePipeline(selectTopicStats);
+  const topicStats = useMessagePipeline(selectTopicStatsOrEmpty);
   const playerCapabilities = useMessagePipeline(selectPlayerCapabilities);
   const playerId = useMessagePipeline(selectPlayerId);
 

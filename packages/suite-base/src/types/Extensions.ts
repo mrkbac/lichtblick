@@ -26,3 +26,11 @@ export type ExtensionInfo = {
   changelog?: string;
   externalId?: string;
 };
+
+export type StoredExtension = {
+  info: ExtensionInfo;
+  content: Uint8Array;
+  workspace?: string;
+  fileId?: string;
+  externalId?: string;
+};

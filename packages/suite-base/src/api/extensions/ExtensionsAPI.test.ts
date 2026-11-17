@@ -5,10 +5,10 @@ import {
   CreateOrUpdateResponse,
   ExtensionInfoWorkspace,
 } from "@lichtblick/suite-base/api/extensions/types";
-import { StoredExtension } from "@lichtblick/suite-base/services/IExtensionStorage";
 import { HttpError } from "@lichtblick/suite-base/services/http/HttpError";
 import HttpService from "@lichtblick/suite-base/services/http/HttpService";
 import ExtensionBuilder from "@lichtblick/suite-base/testing/builders/ExtensionBuilder";
+import { StoredExtension } from "@lichtblick/suite-base/types/Extensions";
 import { BasicBuilder } from "@lichtblick/test-builders";
 
 import ExtensionsAPI from "./ExtensionsAPI";

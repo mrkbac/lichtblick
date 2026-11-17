@@ -18,7 +18,7 @@ import {
   useState,
 } from "react";
 
-import { useLatest, useMountedState, useValueChangedDebugLog } from "@lichtblick/hooks";
+import { useLatest, useMountedState } from "@lichtblick/hooks";
 import Logger from "@lichtblick/log";
 import {
   AppSettingValue,
@@ -849,10 +849,6 @@ function PanelExtensionAdapter(
   ]);
 
   const panelContainerRef = useRef<HTMLDivElement>(null);
-
-  useValueChangedDebugLog(initPanel, "initPanel");
-  useValueChangedDebugLog(panelId, "panelId");
-  useValueChangedDebugLog(partialExtensionContext, "partialExtensionContext");
 
   const configTooNew = useMemo(() => {
     const latestConfig = initialState.current;

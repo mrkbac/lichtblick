@@ -7,7 +7,6 @@
 
 import * as Comlink from "@foxglove/comlink";
 
-import { abortSignalTransferHandler } from "@lichtblick/comlink-transfer-handlers";
 import { Immutable, MessageEvent } from "@lichtblick/suite";
 
 import { ComlinkTransferIteratorCursor } from "./ComlinkTransferIteratorCursor";
@@ -20,6 +19,7 @@ import type {
   MessageIteratorArgs,
 } from "./IIterableSource";
 import { IteratorCursor } from "./IteratorCursor";
+import { abortSignalTransferHandler } from "./abortSignalTransferHandler";
 
 /**
  * Worker-side half of WorkerIterableSource. Serialized (Uint8Array) message buffers are

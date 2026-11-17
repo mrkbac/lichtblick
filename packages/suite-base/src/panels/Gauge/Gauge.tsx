@@ -13,7 +13,7 @@ import { useStyles } from "@lichtblick/suite-base/panels/Gauge/Gauge.style";
 import { buildConicGradient } from "@lichtblick/suite-base/panels/Gauge/buildConicGradient";
 import { DEFAULT_CONFIG } from "@lichtblick/suite-base/panels/Gauge/constants";
 import { stateReducer } from "@lichtblick/suite-base/panels/shared/gaugeAndIndicatorStateReducer";
-import { replaceDrop } from "@lichtblick/suite-base/panels/shared/pathDrop";
+import { useReplacePathDrop } from "@lichtblick/suite-base/panels/shared/pathDrop";
 import { GaugeAndIndicatorState } from "@lichtblick/suite-base/panels/shared/types";
 import { randomUUID } from "@lichtblick/suite-base/util/randomUUID";
 
@@ -58,16 +58,7 @@ export function Gauge({ context }: GaugeProps): React.JSX.Element {
   }, [config, context]);
 
   // Drop a field from the topic list to show it
-  useEffect(() => {
-    context.unstable_setMessagePathDropConfig(
-      replaceDrop(
-        (item) => item.isLeaf,
-        (item) => {
-          setConfig((prev) => ({ ...prev, path: item.path }));
-        },
-      ),
-    );
-  }, [context]);
+  useReplacePathDrop(context, setConfig);
 
   useEffect(() => {
     context.onRender = (renderState, done) => {
