@@ -83,8 +83,8 @@ export function HUD(props: HUDProps): React.ReactElement {
     return <></>;
   }
 
-  if (emptyStates.length > 0) {
-    const highPriorityEmptyState = emptyStates[emptyStates.length - 1]!;
+  const highPriorityEmptyState = emptyStates.at(-1);
+  if (highPriorityEmptyState) {
     return <EmptyState className={classes.empty}>{highPriorityEmptyState.getMessage()}</EmptyState>;
   }
 

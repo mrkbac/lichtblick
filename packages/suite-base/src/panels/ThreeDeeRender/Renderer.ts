@@ -1137,9 +1137,12 @@ export class Renderer extends EventEmitter<RendererEvents> {
               const geometry = object.geometry as THREE.BufferGeometry;
               // Bound only the active range of reused buffers, skipping NaN points (e.g. in clouds)
               const expand = (name: string, from: number, to: number) => {
-                const attribute = geometry.getAttribute(name) as THREE.BufferAttribute | undefined;
-                for (let i = from; i < Math.min(to, attribute?.count ?? 0); i++) {
-                  point.fromBufferAttribute(attribute!, i);
+                const attribute = geometry.attributes[name];
+                if (!attribute) {
+                  return;
+                }
+                for (let i = from; i < Math.min(to, attribute.count); i++) {
+                  point.fromBufferAttribute(attribute, i);
                   if (Number.isFinite(point.x + point.y + point.z)) {
                     box.expandByPoint(point);
                   }

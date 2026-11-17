@@ -67,10 +67,12 @@ export class LayerErrors extends EventEmitter<LayerErrorEvents> {
     let node = this.errors;
     for (const segment of path) {
       node.children ??= new Map();
-      if (!node.children.has(segment)) {
-        node.children.set(segment, new NodeError([...node.path, segment]));
+      let child = node.children.get(segment);
+      if (!child) {
+        child = new NodeError([...node.path, segment]);
+        node.children.set(segment, child);
       }
-      node = node.children.get(segment)!;
+      node = child;
     }
 
     // Create the error map if it does not already exist
