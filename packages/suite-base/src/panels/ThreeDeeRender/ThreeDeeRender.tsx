@@ -241,6 +241,7 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
     sharedMapLayerId,
     configRef,
     config.scene.transforms?.enablePreloading,
+    config.scene.logDepth,
     customCameraModels,
     interfaceMode,
     fetchAsset,
@@ -1140,15 +1141,30 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
     });
   }, [actionHandler, renderer]);
 
+  const [hoverInspector, setHoverInspector] = useState(true);
+
   const onKeyDown = useCallback(
     (event: React.KeyboardEvent) => {
-      if (findShortcut(THREE_DEE_SHORTCUTS, event)?.id === "3d.togglePerspective") {
-        onTogglePerspective();
-        event.stopPropagation();
-        event.preventDefault();
+      switch (findShortcut(THREE_DEE_SHORTCUTS, event)?.id) {
+        case "3d.togglePerspective":
+          onTogglePerspective();
+          break;
+        case "3d.recenter":
+          actionHandler({
+            action: "update",
+            payload: { input: "vec3", path: ["cameraState", "targetOffset"], value: [0, 0, 0] },
+          });
+          break;
+        case "3d.toggleInspector":
+          setHoverInspector((on) => !on);
+          break;
+        default:
+          return;
       }
+      event.stopPropagation();
+      event.preventDefault();
     },
-    [onTogglePerspective],
+    [actionHandler, onTogglePerspective],
   );
 
   // The 3d panel only supports publishing to ros1 and ros2 data sources
@@ -1210,6 +1226,7 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
             enableStats={config.scene.enableStats ?? false}
             perspective={config.cameraState.perspective}
             onTogglePerspective={onTogglePerspective}
+            hoverInspector={hoverInspector}
             measureActive={measureActive}
             onClickMeasure={onClickMeasure}
             canPublish={canPublish}

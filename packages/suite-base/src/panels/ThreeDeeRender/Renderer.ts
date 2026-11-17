@@ -310,6 +310,8 @@ export class Renderer extends EventEmitter<RendererEvents> {
       antialias: true,
       // Line materials use a stencil prepass; three.js stopped allocating a stencil buffer by default in r163
       stencil: true,
+      // Fixed at creation; the panel recreates the renderer when this setting changes
+      logarithmicDepthBuffer: config.scene.logDepth === true,
     });
     if (!this.gl.capabilities.isWebGL2) {
       throw new Error("WebGL2 is not supported");
