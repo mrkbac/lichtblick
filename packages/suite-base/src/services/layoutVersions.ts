@@ -35,7 +35,11 @@ export function addVersion(
 ): LayoutVersion[] | undefined {
   const last = versions.at(-1);
   if (last && _.isEqual(last.data, next.data)) {
-    return undefined;
+    // Same data: only a checkpoint landing on an ordinary version changes anything. Mark that
+    // version as the checkpoint, so later edits can't merge into it and lose the state.
+    return next.kind != undefined && last.kind == undefined
+      ? [...versions.slice(0, -1), { ...last, kind: next.kind }]
+      : undefined;
   }
   if (
     next.kind == undefined &&
@@ -64,12 +68,11 @@ export async function recordLayoutVersion(
   opts: { kind?: LayoutVersion["kind"]; now?: number } = {},
 ): Promise<void> {
   const savedAt = opts.now ?? Date.now();
-  const next = addVersion(
-    await getLayoutVersions(layoutId),
-    opts.kind ? { savedAt, data, kind: opts.kind } : { savedAt, data },
+  const version: LayoutVersion = opts.kind ? { savedAt, data, kind: opts.kind } : { savedAt, data };
+  const wrote = await store.update<LayoutVersion[]>(layoutId, (versions) =>
+    addVersion(versions ?? [], version),
   );
-  if (next) {
-    await store.set(layoutId, next);
+  if (wrote) {
     listeners.forEach((listener) => {
       listener(layoutId);
     });

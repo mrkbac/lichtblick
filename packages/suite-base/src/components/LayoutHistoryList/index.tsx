@@ -4,6 +4,7 @@ import RestoreIcon from "@mui/icons-material/Restore";
 import { Chip, IconButton, List, ListItem, ListItemText, Tooltip, Typography } from "@mui/material";
 import { useSnackbar } from "notistack";
 import { ReactElement, useCallback, useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 import EmptyState from "@lichtblick/suite-base/components/EmptyState";
 import Stack from "@lichtblick/suite-base/components/Stack";
@@ -31,14 +32,14 @@ const UNITS: [Intl.RelativeTimeFormatUnit, number][] = [
   ["minute", 60_000],
 ];
 
-function formatAgo(savedAt: number, now: number): string {
+function formatAgo(savedAt: number, now: number, justNow: string): string {
   const ago = now - savedAt;
   for (const [unit, ms] of UNITS) {
     if (ago >= ms) {
       return relativeFormat.format(-Math.floor(ago / ms), unit);
     }
   }
-  return "Just now";
+  return justNow;
 }
 
 /** Local version history of the current layout, newest first, with one-click restore. */
@@ -47,18 +48,24 @@ export default function LayoutHistoryList(): ReactElement {
   const { restoreLayoutData } = useCurrentLayoutActions();
   const panelCatalog = usePanelCatalog();
   const { enqueueSnackbar } = useSnackbar();
+  const { t } = useTranslation("layoutHistory");
 
-  const [versions, setVersions] = useState<LayoutVersion[]>([]);
+  // Tagged with their layout, so another layout's versions never show (or restore) while the
+  // newly selected layout's versions are still loading.
+  const [loaded, setLoaded] = useState<{ layoutId: string; versions: LayoutVersion[] }>();
+  const versions = useMemo(
+    () => (loaded != undefined && loaded.layoutId === layoutId ? loaded.versions : []),
+    [loaded, layoutId],
+  );
   useEffect(() => {
     if (layoutId == undefined) {
-      setVersions([]);
       return;
     }
     let active = true;
     const load = () => {
-      void getLayoutVersions(layoutId).then((loaded) => {
+      void getLayoutVersions(layoutId).then((result) => {
         if (active) {
-          setVersions(loaded);
+          setLoaded({ layoutId, versions: result });
         }
       });
     };
@@ -90,10 +97,10 @@ export default function LayoutHistoryList(): ReactElement {
     return versions
       .map((version, i) => ({
         version,
-        changes: describeChange(versions[i - 1]?.data, version.data, panelTitle),
+        changes: describeChange(versions[i - 1]?.data, version.data, panelTitle, t),
       }))
       .reverse();
-  }, [versions, panelCatalog]);
+  }, [versions, panelCatalog, t]);
 
   const restore = useCallback(
     (version: LayoutVersion) => {
@@ -103,16 +110,15 @@ export default function LayoutHistoryList(): ReactElement {
       // Its own entry, so the state before the restore stays in the history too.
       recordLayoutVersion(layoutId, version.data, { kind: "restored" }).catch(() => {});
       restoreLayoutData(version.data);
-      enqueueSnackbar(
-        `Restored the version from ${new Date(version.savedAt).toLocaleString()}. Undo to go back.`,
-        { variant: "success" },
-      );
+      enqueueSnackbar(t("restoredToast", { time: new Date(version.savedAt).toLocaleString() }), {
+        variant: "success",
+      });
     },
-    [enqueueSnackbar, layoutId, restoreLayoutData],
+    [enqueueSnackbar, layoutId, restoreLayoutData, t],
   );
 
   if (rows.length === 0) {
-    return <EmptyState>Versions of this layout appear here as you edit it.</EmptyState>;
+    return <EmptyState>{t("empty")}</EmptyState>;
   }
 
   return (
@@ -129,11 +135,11 @@ export default function LayoutHistoryList(): ReactElement {
               divider
               secondaryAction={
                 !isCurrent && (
-                  <Tooltip title="Restore this version">
+                  <Tooltip title={t("restore")}>
                     <IconButton
                       edge="end"
                       size="small"
-                      aria-label="Restore this version"
+                      aria-label={t("restore")}
                       onClick={() => {
                         restore(version);
                       }}
@@ -148,11 +154,11 @@ export default function LayoutHistoryList(): ReactElement {
                 primary={
                   <Stack direction="row" alignItems="center" gap={0.5}>
                     <Tooltip title={new Date(version.savedAt).toLocaleString()}>
-                      <span>{formatAgo(version.savedAt, now)}</span>
+                      <span>{formatAgo(version.savedAt, now, t("justNow"))}</span>
                     </Tooltip>
-                    {version.kind === "opened" && <Chip size="small" label="Opened" />}
-                    {version.kind === "restored" && <Chip size="small" label="Restored" />}
-                    {isCurrent && <Chip size="small" color="primary" label="Current" />}
+                    {version.kind === "opened" && <Chip size="small" label={t("opened")} />}
+                    {version.kind === "restored" && <Chip size="small" label={t("restored")} />}
+                    {isCurrent && <Chip size="small" color="primary" label={t("current")} />}
                   </Stack>
                 }
                 secondary={changes.map((line) => (

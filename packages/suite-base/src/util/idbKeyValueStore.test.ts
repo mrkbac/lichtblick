@@ -17,6 +17,18 @@ describe("createKeyValueStore", () => {
     expect(await store.get("c")).toBe("three");
   });
 
+  it("applies concurrent updates without losing any, and deletes", async () => {
+    const store = createKeyValueStore("kv-update", "items");
+    const writes = await Promise.all(
+      [1, 2, 3].map(async (n) => await store.update<number[]>("k", (list) => [...(list ?? []), n])),
+    );
+    expect(writes).toEqual([true, true, true]);
+    expect(await store.get<number[]>("k")).toHaveLength(3);
+    expect(await store.update("k", () => undefined)).toBe(false);
+    await store.delete("k");
+    expect(await store.get("k")).toBeUndefined();
+  });
+
   it("reads a database laid out the way idb-keyval created it", async () => {
     // idb-keyval: indexedDB.open(name) without a version, one out-of-line-key store.
     await new Promise<void>((resolve, reject) => {

@@ -86,7 +86,10 @@ export function CurrentLayoutLocalStorageSyncAdapter(): React.JSX.Element {
     // Skip updating layout manager during initial layout load to prevent
     // false "edited" states from panel initialization
     if (isInitialLayoutLoad.current) {
-      isInitialLayoutLoad.current = false;
+      // A layout still loading has no data yet: keep the flag for its first real save.
+      if (data) {
+        isInitialLayoutLoad.current = false;
+      }
       return;
     }
 

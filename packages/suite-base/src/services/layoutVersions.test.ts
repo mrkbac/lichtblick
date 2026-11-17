@@ -2,6 +2,7 @@
 
 import { describeChange } from "@lichtblick/suite-base/components/LayoutHistoryList/describeChange";
 import { LayoutData } from "@lichtblick/suite-base/context/CurrentLayoutContext/actions";
+import { sharedI18nObject } from "@lichtblick/suite-base/i18n";
 import {
   MAX_VERSIONS,
   VERSION_IDLE_MS,
@@ -28,6 +29,13 @@ describe("addVersion", () => {
     expect(
       addVersion([{ savedAt: 0, data: a }], { savedAt: 1, data: layout({ "Plot!a": { x: 1 } }) }),
     ).toBe(undefined);
+  });
+
+  it("turns an equal ordinary version into the opened checkpoint instead of skipping it", () => {
+    const opened = addVersion([{ savedAt: 0, data: a }], { savedAt: 1, data: a, kind: "opened" })!;
+    expect(opened).toEqual([{ savedAt: 0, data: a, kind: "opened" }]);
+    // An edit right after must not merge into it.
+    expect(addVersion(opened, { savedAt: 2, data: b })!.map((v) => v.data)).toEqual([a, b]);
   });
 
   it("merges an editing burst into one version but never overwrites the opened checkpoint", () => {
@@ -71,6 +79,7 @@ describe("addVersion", () => {
 
 describe("describeChange", () => {
   const title = (type: string) => type;
+  const t = sharedI18nObject.getFixedT("en", "layoutHistory");
 
   it("summarizes added, removed and edited panels", () => {
     const prev = layout(
@@ -81,7 +90,7 @@ describe("describeChange", () => {
       { "Plot!a": { x: 2 }, "Map!c": {} },
       { direction: "row", children: [{ panels: ["Plot!a"] }, { panels: ["Map!c"] }] },
     );
-    expect(describeChange(prev, next, title)).toEqual([
+    expect(describeChange(prev, next, title, t)).toEqual([
       "Added Map",
       "Removed Image",
       "Changed Plot settings",
@@ -89,6 +98,6 @@ describe("describeChange", () => {
   });
 
   it("describes the first version by its panel count", () => {
-    expect(describeChange(undefined, layout({ "Plot!a": {} }), title)).toEqual(["1 panel"]);
+    expect(describeChange(undefined, layout({ "Plot!a": {} }), title, t)).toEqual(["1 panel"]);
   });
 });

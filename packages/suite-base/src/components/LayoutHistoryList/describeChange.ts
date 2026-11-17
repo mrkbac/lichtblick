@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MPL-2.0
 
+import { TFunction } from "i18next";
 import * as _ from "lodash-es";
 
 import { LayoutData } from "@lichtblick/suite-base/context/CurrentLayoutContext/actions";
@@ -11,10 +12,11 @@ export function describeChange(
   prev: LayoutData | undefined,
   next: LayoutData,
   panelTitle: (type: string) => string,
+  t: TFunction<"layoutHistory">,
 ): string[] {
   const nextIds = getAllPanelIds(next);
   if (prev == undefined) {
-    return [`${nextIds.length} ${nextIds.length === 1 ? "panel" : "panels"}`];
+    return [t("panels", { count: nextIds.length })];
   }
   const prevIds = getAllPanelIds(prev);
   const names = (ids: string[]) =>
@@ -27,25 +29,25 @@ export function describeChange(
 
   const lines: string[] = [];
   if (added.length > 0) {
-    lines.push(`Added ${names(added)}`);
+    lines.push(t("added", { panels: names(added) }));
   }
   if (removed.length > 0) {
-    lines.push(`Removed ${names(removed)}`);
+    lines.push(t("removed", { panels: names(removed) }));
   }
   if (edited.length > 0) {
-    lines.push(`Changed ${names(edited)} settings`);
+    lines.push(t("changedSettings", { panels: names(edited) }));
   }
   if (added.length === 0 && removed.length === 0 && !_.isEqual(prev.layout, next.layout)) {
-    lines.push("Rearranged panels");
+    lines.push(t("rearranged"));
   }
   if (!_.isEqual(prev.globalVariables, next.globalVariables)) {
-    lines.push("Changed variables");
+    lines.push(t("changedVariables"));
   }
   if (!_.isEqual(prev.userNodes, next.userNodes)) {
-    lines.push("Changed user scripts");
+    lines.push(t("changedScripts"));
   }
   if (!_.isEqual(prev.playbackConfig, next.playbackConfig)) {
-    lines.push("Changed playback settings");
+    lines.push(t("changedPlayback"));
   }
   return lines;
 }

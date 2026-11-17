@@ -7,6 +7,12 @@ export type KeyValueStore = {
   set: (key: IDBValidKey, value: unknown) => Promise<void>;
   setMany: (entries: [IDBValidKey, unknown][]) => Promise<void>;
   delete: (key: IDBValidKey) => Promise<void>;
+  /**
+   * Reads, transforms and writes one key in a single readwrite transaction, so concurrent updates
+   * (also from other tabs) can't lose each other's writes. `fn` returns undefined to write nothing.
+   * Resolves to whether it wrote.
+   */
+  update: <T>(key: IDBValidKey, fn: (value: T | undefined) => T | undefined) => Promise<boolean>;
 };
 
 /**
@@ -50,6 +56,15 @@ export function createKeyValueStore(dbName: string, storeName: string): KeyValue
     get: async <T>(key: IDBValidKey) => (await (await open()).get(storeName, key)) as T | undefined,
     set: async (key, value) => {
       await (await open()).put(storeName, value, key);
+    },
+    update: async <T>(key: IDBValidKey, fn: (value: T | undefined) => T | undefined) => {
+      const tx = (await open()).transaction(storeName, "readwrite");
+      const next = fn((await tx.store.get(key)) as T | undefined);
+      if (next != undefined) {
+        await tx.store.put(next, key);
+      }
+      await tx.done;
+      return next != undefined;
     },
     delete: async (key) => {
       await (await open()).delete(storeName, key);
