@@ -1,0 +1,64 @@
+name: Set up pnpm and install
+description: >-
+  Installs pnpm and Node, restores the pnpm store and runs `pnpm install`.
+  Only pushes to licht save the store, and each save deletes the older entries, so the
+  repository keeps about one store (~300 MB) instead of one per lockfile change and per PR,
+  which used to push it over GitHub's 10 GB cache limit.
+
+inputs:
+  save-cache:
+    description: >-
+      Save the store on a licht push when the lockfile changed. Set it on one job per
+      workflow; that job needs `actions: write` to delete the older entries.
+    default: "false"
+
+runs:
+  using: composite
+  steps:
+    - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+
+    - uses: actions/setup-node@v7
+      with:
+        node-version: 26
+
+    - id: store
+      shell: bash
+      run: |
+        echo "path=$(pnpm store path --silent)" >> "$GITHUB_OUTPUT"
+        echo "key=pnpm-store-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}" >> "$GITHUB_OUTPUT"
+
+    # PRs and other branches only restore. A lockfile that licht doesn't have yet falls back
+    # to licht's newest store, so pnpm downloads just the changed packages.
+    - id: restore
+      uses: actions/cache/restore@v6
+      with:
+        path: ${{ steps.store.outputs.path }}
+        key: ${{ steps.store.outputs.key }}
+        restore-keys: pnpm-store-${{ runner.os }}-
+
+    - shell: bash
+      run: pnpm install --frozen-lockfile
+
+    - id: should-save
+      if: >-
+        inputs.save-cache == 'true' && github.event_name == 'push' &&
+        github.ref == 'refs/heads/licht' && steps.restore.outputs.cache-hit != 'true'
+      shell: bash
+      # Drop packages the new lockfile no longer uses, so the store doesn't grow with each save
+      run: pnpm store prune
+
+    - if: steps.should-save.outcome == 'success'
+      uses: actions/cache/save@v6
+      with:
+        path: ${{ steps.store.outputs.path }}
+        key: ${{ steps.store.outputs.key }}
+
+    - if: steps.should-save.outcome == 'success'
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+        KEY: ${{ steps.store.outputs.key }}
+      run: |
+        gh cache list -R "$GITHUB_REPOSITORY" --ref refs/heads/licht --key "pnpm-store-${{ runner.os }}-" \
+          --limit 100 --json id,key --jq ".[] | select(.key != \"$KEY\") | .id" |
+          xargs -r -n1 gh cache delete -R "$GITHUB_REPOSITORY"

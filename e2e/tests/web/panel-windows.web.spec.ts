@@ -423,7 +423,7 @@ for (const colorScheme of ["light", "dark"] as const) {
     await expect(monitor.getByTestId("sidebar-left")).toHaveCount(0);
     // A second view created through + also stays in this monitor.
     await monitor.getByTestId("add-tab").click();
-    await monitor.getByTestId("panel-menu-item Plot").click();
+    await monitor.getByTestId("panel-grid-card Plot").click();
     await expect(monitor.getByRole("tab", { name: "Plot", exact: true })).toHaveAttribute(
       "aria-selected",
       "true",

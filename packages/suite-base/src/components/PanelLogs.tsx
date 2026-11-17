@@ -1,8 +1,8 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import { DeleteSweep } from "@mui/icons-material";
 import CloseIcon from "@mui/icons-material/Close";
+import DeleteSweep from "@mui/icons-material/DeleteSweep";
 import DragIndicatorIcon from "@mui/icons-material/DragIndicator";
 import { List, ListItem, ListItemText, Typography, IconButton } from "@mui/material";
 import { useCallback, useRef, useState, useEffect } from "react";
