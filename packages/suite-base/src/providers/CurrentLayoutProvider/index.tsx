@@ -262,8 +262,11 @@ export default function CurrentLayoutProvider({
         updatedLayout.id === layoutStateRef.current.selectedLayout?.id
       ) {
         const data = migratePanelsState(updatedLayout.working?.data ?? updatedLayout.baseline.data);
-        // A revert is a step of the layout's history, so it can be undone.
-        history.current.sync(data);
+        // A revert is a step of the layout's history, so it can be undone. While the layout is
+        // still loading, the history belongs to the previous layout: show the revert, don't record it.
+        if (historyLayoutId.current === updatedLayout.id) {
+          history.current.sync(data);
+        }
         setLayoutState({
           selectedLayout: { loading: false, id: updatedLayout.id, data, name: updatedLayout.name },
         });
@@ -279,6 +282,10 @@ export default function CurrentLayoutProvider({
   useEffect(() => {
     const listener: LayoutManagerEventTypes["change"] = async (event) => {
       if (event.type === "delete") {
+        // Edits until another layout is selected must not save the deleted history again.
+        if (historyLayoutId.current === event.layoutId) {
+          historyLayoutId.current = undefined;
+        }
         deleteLayoutHistory(event.layoutId).catch((error: unknown) => {
           log.error(error);
         });

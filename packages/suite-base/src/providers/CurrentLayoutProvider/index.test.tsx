@@ -34,13 +34,17 @@ import {
   MAX_SUPPORTED_LAYOUT_VERSION,
 } from "@lichtblick/suite-base/providers/CurrentLayoutProvider/constants";
 import { ILayoutManager, LayoutFavorites } from "@lichtblick/suite-base/services/ILayoutManager";
+import {
+  deleteLayoutHistory,
+  saveLayoutHistory,
+} from "@lichtblick/suite-base/services/layoutHistoryStorage";
 import { BasicBuilder } from "@lichtblick/test-builders";
 
 // Each test starts without a saved layout history.
 vi.mock("@lichtblick/suite-base/services/layoutHistoryStorage", () => ({
   loadLayoutHistory: async () => undefined,
-  saveLayoutHistory: () => {},
-  deleteLayoutHistory: async () => {},
+  saveLayoutHistory: vi.fn(),
+  deleteLayoutHistory: vi.fn(async () => {}),
 }));
 
 vi.mock("notistack", async () => ({
@@ -205,7 +209,6 @@ describe("CurrentLayoutProvider", () => {
     });
 
     expect(mockLayoutManager.getLayouts).toHaveBeenCalled();
-    // The layout's saved history loads before the layout is shown.
     await waitFor(() => {
       const last = all.at(-1);
       expect(last instanceof Error ? undefined : last?.layoutState).toEqual({
@@ -358,6 +361,44 @@ describe("CurrentLayoutProvider", () => {
       result.current.actions.redoLayoutChange();
     });
     expect(config()).toEqual({ "ExamplePanel!1": { foo: "changed" } });
+  });
+
+  it("saves the history under the selected layout and stops when that layout is deleted", async () => {
+    mockLayoutManager.getLayouts.mockImplementation(async () => [
+      {
+        id: "example",
+        name: "Test layout",
+        data: { data: TEST_LAYOUT },
+        permission: "CREATOR_WRITE",
+      },
+    ]);
+    mockLayoutManager.getLayout.mockResolvedValue({
+      id: "example",
+      name: "Test layout",
+      baseline: { data: TEST_LAYOUT, updatedAt: new Date(10).toISOString() },
+    });
+    mockUserProfile.getUserProfile.mockResolvedValue({ currentLayoutId: "example" });
+    const { result } = renderTest({ mockLayoutManager, mockUserProfile });
+    await waitFor(() => {
+      expect(result.current.layoutState.selectedLayout?.data).toBeDefined();
+    });
+    expect(saveLayoutHistory).toHaveBeenLastCalledWith("example", expect.anything());
+
+    const changeListeners = mockLayoutManager.on.mock.calls
+      .filter(([name]) => name === "change")
+      .map(([, listener]) => listener as (event: unknown) => void);
+    act(() => {
+      changeListeners.forEach((listener) => {
+        listener({ type: "delete", layoutId: "example" });
+      });
+    });
+    expect(deleteLayoutHistory).toHaveBeenCalledWith("example");
+
+    vi.mocked(saveLayoutHistory).mockClear();
+    act(() => {
+      result.current.actions.setGlobalVariables({ v: 1 });
+    });
+    expect(saveLayoutHistory).not.toHaveBeenCalled();
   });
 
   it("selects the first layout in alphabetic order, when there is no selected layout", async () => {
