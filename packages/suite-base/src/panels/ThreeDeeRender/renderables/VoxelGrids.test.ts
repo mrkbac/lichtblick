@@ -4,7 +4,11 @@
 import { NumericType, VoxelGrid } from "@foxglove/schemas";
 
 import { BitVoxelGrid, decodeBitVoxelGrid, decodePackedVoxelGrid, VoxelBuffer } from "./VoxelGrids";
-import { LayerSettingsVoxelGrid, VOXEL_GRID_DEFAULTS } from "../settingsNodes/voxelGrids";
+import {
+  LayerSettingsVoxelGrid,
+  packedVoxelGridSettingsNode,
+  VOXEL_GRID_DEFAULTS,
+} from "../settingsNodes/voxelGrids";
 
 const settings = (overrides: Partial<LayerSettingsVoxelGrid>): LayerSettingsVoxelGrid => ({
   ...VOXEL_GRID_DEFAULTS,
@@ -202,5 +206,56 @@ describe("decodePackedVoxelGrid", () => {
     // Then every cell is kept
     expect(out.count).toBe(3000);
     expect(out.cells[2999]).toBe(2999);
+  });
+
+  it("rejects fields at a negative offset", () => {
+    const grid = makeGrid([1, 1, 1, 1]);
+    const bad = { ...grid, fields: [{ name: "value", offset: -1, type: NumericType.UINT8 }] };
+    expect(
+      decodePackedVoxelGrid(bad, settings({ colorField: "value" }), new VoxelBuffer()),
+    ).toMatch(/does not fit/);
+  });
+
+  it("does not normalize a uint8 channel used as the color value", () => {
+    // Given a uint8 "red" field colored by gradient over its raw range
+    const grid: VoxelGrid = {
+      ...makeGrid([0, 0]),
+      slice_stride: 2,
+      row_stride: 2,
+      cell_stride: 1,
+      fields: [{ name: "red", offset: 0, type: NumericType.UINT8 }],
+      data: new Uint8Array([255, 1]),
+    };
+    const out = new VoxelBuffer();
+
+    // When decoding with a fixed 0-255 range
+    decodePackedVoxelGrid(
+      grid,
+      settings({
+        colorMode: "gradient",
+        colorField: "red",
+        gradient: ["#000000ff", "#ffffffff"],
+        minValue: 0,
+        maxValue: 255,
+      }),
+      out,
+    );
+
+    // Then 255 maps to the top of the gradient
+    expect(voxels(out)[0]!.rgba).toEqual([255, 255, 255, 255]);
+  });
+});
+
+describe("packedVoxelGridSettingsNode", () => {
+  it("offers only message fields to color by", () => {
+    const node = packedVoxelGridSettingsNode({ name: "/voxels" }, { colorMode: "colormap" }, [
+      "value",
+      "intensity",
+    ]);
+    const field = node.fields?.colorField;
+    expect(field?.input === "select" ? field.options.map((o) => o.value) : []).toEqual([
+      "value",
+      "intensity",
+    ]);
   });
 });

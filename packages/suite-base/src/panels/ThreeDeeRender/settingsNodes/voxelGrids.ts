@@ -145,6 +145,10 @@ export function packedVoxelGridSettingsNode(
     defaults: VOXEL_GRID_DEFAULTS,
     modifiers: { supportsPackedRgbModes: false, supportsRgbaFieldsMode: true },
   });
+  // Computed colors (e.g. distance) are point cloud only; voxels color by message fields
+  if (colorFields.colorField?.input === "select" && msgFields) {
+    colorFields.colorField.options = msgFields.map((field) => ({ label: field, value: field }));
+  }
   return {
     label: topic.name,
     icon: "Cells",

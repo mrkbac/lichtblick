@@ -204,7 +204,12 @@ function validatePackedVoxelGrid(grid: VoxelGrid): string | undefined {
   }
   for (const field of grid.fields) {
     const width = numericTypeWidth(field.type);
-    if (width === 0 || field.offset + width > cell_stride) {
+    if (
+      width === 0 ||
+      !Number.isInteger(field.offset) ||
+      field.offset < 0 ||
+      field.offset + width > cell_stride
+    ) {
       return `Voxel grid field "${field.name}" (type ${field.type}, offset ${field.offset}) does not fit in cell_stride ${cell_stride}`;
     }
   }
@@ -213,11 +218,13 @@ function validatePackedVoxelGrid(grid: VoxelGrid): string | undefined {
 
 function fieldReader(grid: VoxelGrid, name: string | undefined): FieldReader | undefined {
   const field = grid.fields.find((f) => f.name === name);
-  return field ? getReader(field, grid.cell_stride, isRgbaField(field.name)) : undefined;
+  return field ? getReader(field, grid.cell_stride) : undefined;
 }
 
-function isRgbaField(name: string): boolean {
-  return name === "red" || name === "green" || name === "blue" || name === "alpha";
+/** Like fieldReader, but integer color channels are normalized to 0-1. */
+function channelReader(grid: VoxelGrid, name: string): FieldReader | undefined {
+  const field = grid.fields.find((f) => f.name === name);
+  return field ? getReader(field, grid.cell_stride, /*normalize*/ true) : undefined;
 }
 
 const tempColor = makeRgba();
@@ -243,10 +250,10 @@ export function decodePackedVoxelGrid(
   const view = new DataView(grid.data.buffer, grid.data.byteOffset, grid.data.byteLength);
 
   if (settings.colorMode === "rgba-fields") {
-    const red = fieldReader(grid, "red");
-    const green = fieldReader(grid, "green");
-    const blue = fieldReader(grid, "blue");
-    const alpha = fieldReader(grid, "alpha");
+    const red = channelReader(grid, "red");
+    const green = channelReader(grid, "green");
+    const blue = channelReader(grid, "blue");
+    const alpha = channelReader(grid, "alpha");
     if (!red || !green || !blue || !alpha) {
       return "Voxel grid needs red, green, blue and alpha fields to color by RGBA";
     }
@@ -482,17 +489,23 @@ export class VoxelGridRenderable extends Renderable<VoxelGridUserData> {
 
   #syncMaterial(): void {
     const { settings } = this.userData;
-    const material = this.#mesh.material;
-    const lit = material instanceof THREE.MeshLambertMaterial;
-    if (lit !== settings.useLighting) {
-      material.dispose();
+    if (this.#mesh.material instanceof THREE.MeshLambertMaterial !== settings.useLighting) {
+      this.#mesh.material.dispose();
       this.#mesh.material = this.#createMaterial();
     }
-    const current = this.#mesh.material;
-    if (current.transparent !== this.voxels.transparent) {
-      current.transparent = this.voxels.transparent;
-      current.needsUpdate = true;
+    // Draw behind keeps blended voxels in the opaque pass, which three.js orders by renderOrder,
+    // by blending without the transparent flag; the transparent pass would draw them last.
+    const transparent = this.voxels.transparent && !settings.drawBehind;
+    const blending =
+      this.voxels.transparent && settings.drawBehind ? THREE.CustomBlending : THREE.NormalBlending;
+    const material = this.#mesh.material;
+    if (material.transparent !== transparent || material.blending !== blending) {
+      material.transparent = transparent;
+      material.blending = blending;
+      material.needsUpdate = true;
     }
+    // Object picking reuses the render order: without depth writes, later objects win like on screen
+    this.#pickingMaterial.depthWrite = !settings.drawBehind;
   }
 
   #createMaterial(): THREE.MeshLambertMaterial | THREE.MeshBasicMaterial {
@@ -657,8 +670,8 @@ export class VoxelGrids extends SceneExtension<VoxelGridRenderable> {
           const updated: Partial<LayerSettingsVoxelGrid> = {
             ...userSettings,
             colorField: auto.colorField,
-            colorMode: auto.colorMode,
-            colorMap: auto.colorMap,
+            colorMode: userSettings.colorMode ?? auto.colorMode,
+            colorMap: userSettings.colorMap ?? auto.colorMap,
           };
           draft.topics[topic] = updated;
         });
