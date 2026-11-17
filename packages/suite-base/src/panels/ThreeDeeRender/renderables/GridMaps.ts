@@ -136,7 +136,7 @@ export class GridMapRenderable extends Renderable<GridMapUserData> {
 }
 
 export class GridMaps extends SceneExtension<GridMapRenderable> {
-  public static extensionId = "foxglove.GridMaps";
+  public static extensionId = "lichtblick.GridMaps";
   #layersByTopic = new Map<string, string[]>();
 
   public constructor(renderer: Renderer, name: string = GridMaps.extensionId) {
