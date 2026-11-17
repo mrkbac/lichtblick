@@ -122,7 +122,10 @@ export const registerScript = ({
     // Using new Function in order to execute user-input text in User Scripts as code
     // eslint-disable-next-line no-new-func, @typescript-eslint/no-implied-eval
     new Function("exports", "require", scriptCode)(nodeExports, require);
-    nodeCallback = nodeExports.default!;
+    if (typeof nodeExports.default !== "function") {
+      throw new Error("Your script must default export a function");
+    }
+    nodeCallback = nodeExports.default;
     return {
       error: undefined,
       userScriptLogs,
@@ -161,7 +164,7 @@ export const processMessage = ({
     const newMessage = nodeCallback(message, globalVariables);
     return { message: newMessage, error: undefined, userScriptLogs, userScriptDiagnostics };
   } catch (err: unknown) {
-    const error: string = (err as Error).toString();
+    const error = String(err);
     const diagnostic: Diagnostic = {
       source: SOURCES.Runtime,
       severity: DIAGNOSTIC_SEVERITY.Error,

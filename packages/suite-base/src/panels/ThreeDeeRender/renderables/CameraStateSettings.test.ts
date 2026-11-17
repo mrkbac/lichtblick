@@ -207,6 +207,28 @@ describe("CameraStateSettings", () => {
     handler.dispose();
   });
 
+  it("pushes the orbit target forward instead of stalling when zooming in past the near plane", () => {
+    const handler = new CameraStateSettings(renderer, canvas, 1);
+    const camera = handler.getActiveCamera();
+    handler.setCameraState({ ...DEFAULT_CAMERA_STATE, distance: 2, near: 0.5 });
+    mockOrbitControls.getDistance.mockImplementation(() =>
+      mockOrbitControls.target.distanceTo(camera.position),
+    );
+    const listener = (type: string) =>
+      mockOrbitControls.addEventListener.mock.calls.find(([t]) => t === type)![1] as () => void;
+    const before = mockOrbitControls.target.clone();
+
+    // When: a wheel zoom moves the camera to 0.2 from the target (below 2 * near)
+    listener("start")();
+    camera.position.lerp(mockOrbitControls.target, 0.9);
+    listener("change")();
+
+    // Then: the target moved away so the distance stays at the floor
+    expect(mockOrbitControls.getDistance()).toBeCloseTo(1);
+    expect(mockOrbitControls.target.distanceTo(before)).toBeCloseTo(0.8);
+    handler.dispose();
+  });
+
   describe("screen space panning", () => {
     const aspect = 16 / 9;
 
@@ -251,5 +273,38 @@ describe("CameraStateSettings", () => {
       // Then: Screen space panning should remain disabled
       expect(mockOrbitControls.screenSpacePanning).toBe(false);
     });
+  });
+
+  it.each(["distance", "fovy", "near", "far", "phi", "thetaOffset"] as const)(
+    "uses the default %s when the field is cleared instead of saving undefined",
+    (key) => {
+      // Given
+      const handler = new CameraStateSettings(renderer, canvas, 1);
+      // When
+      handler.handleSettingsAction({
+        action: "update",
+        payload: { path: ["cameraState", key], input: "number", value: undefined },
+      });
+      // Then
+      expect(renderer.config.cameraState[key]).toBe(DEFAULT_CAMERA_STATE[key]);
+      handler.dispose();
+    },
+  );
+
+  it("fills cleared target offset components with the default", () => {
+    // Given
+    const handler = new CameraStateSettings(renderer, canvas, 1);
+    // When
+    handler.handleSettingsAction({
+      action: "update",
+      payload: { path: ["cameraState", "targetOffset"], input: "vec3", value: [1, undefined, 3] },
+    });
+    // Then
+    expect(renderer.config.cameraState.targetOffset).toEqual([
+      1,
+      DEFAULT_CAMERA_STATE.targetOffset[1],
+      3,
+    ]);
+    handler.dispose();
   });
 });

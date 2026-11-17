@@ -529,12 +529,12 @@ export class McapWriter {
 
     const chunkLength = this.#recordWriter.writeChunk(chunkRecord);
 
-    const messageIndexOffsets = this.#chunkIndices ? new Map<number, bigint>() : undefined;
+    const messageIndexOffsets = new Map<number, bigint>();
 
     const messageIndexStart = this.#nextRecordOffset();
     let messageIndexLength = 0n;
     for (const messageIndex of this.#chunkBuilder.indices) {
-      messageIndexOffsets?.set(messageIndex.channelId, messageIndexStart + messageIndexLength);
+      messageIndexOffsets.set(messageIndex.channelId, messageIndexStart + messageIndexLength);
       messageIndexLength += this.#recordWriter.writeMessageIndex(messageIndex);
     }
 
@@ -544,7 +544,7 @@ export class McapWriter {
         messageEndTime: chunkRecord.messageEndTime,
         chunkStartOffset,
         chunkLength,
-        messageIndexOffsets: messageIndexOffsets!,
+        messageIndexOffsets,
         messageIndexLength,
         compression: chunkRecord.compression,
         compressedSize: BigInt(chunkRecord.records.byteLength),

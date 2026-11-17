@@ -161,3 +161,17 @@ it("reports invalid angle thresholds in settings", () => {
   );
   expect(result.current.general.fields!.angleRange!.error).toBe("invalidAngles");
 });
+
+it.each([[{ minValue: 5, maxValue: 5 }], [{ minValue: undefined, maxValue: 5 }]])(
+  "reports missing or inverted limits on max: %o",
+  (limits) => {
+    const { result } = renderHook(() =>
+      useSettingsTree({
+        config: { ...GaugeBuilder.config({ displayMode: "slider" }), ...limits },
+        error: undefined,
+        pathParseError: undefined,
+      }),
+    );
+    expect(result.current.general.fields!.maxValue!.error).toBe("invalidLimits");
+  },
+);

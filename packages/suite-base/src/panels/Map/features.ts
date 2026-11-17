@@ -56,7 +56,7 @@ export function emptyOverlayData(): OverlayData {
   };
 }
 
-const get = (name: string) => ["get", name] as ["get", string];
+const get = (name: string): ["get", string] => ["get", name];
 const geometryIn = (...types: string[]) =>
   ["in", ["geometry-type"], ["literal", types]] as unknown as ["==", string, string];
 
@@ -309,7 +309,7 @@ export function trackFeatures(
 ): { points: FeatureCollection; lines: FeatureCollection } {
   const points: Feature[] = [];
   const lines: Feature[] = [];
-  const lineCoords = new Map<string, LngLat[]>();
+  const lineCoords = new Map<string, { color: string; coords: LngLat[] }>();
   const previous = new Map<string, LngLat>();
   messages.forEach((event, i) => {
     const style = styles[event.topic] ?? {};
@@ -347,20 +347,20 @@ export function trackFeatures(
         }
         return;
       }
-      let coords = lineCoords.get(event.topic);
-      if (!coords) {
-        coords = [];
-        lineCoords.set(event.topic, coords);
+      let line = lineCoords.get(event.topic);
+      if (!line) {
+        line = { color: base, coords: [] };
+        lineCoords.set(event.topic, line);
       }
-      coords.push(position);
+      line.coords.push(position);
     }
   });
-  for (const [topic, coordinates] of lineCoords) {
+  for (const [topic, { color, coords: coordinates }] of lineCoords) {
     lines.push({
       type: "Feature",
       geometry: { type: "LineString", coordinates },
       properties: {
-        c: lightColor(colors.get(topic)!),
+        c: lightColor(color),
         w: Math.max(1.5, (styles[topic]?.pointSize ?? DEFAULT_POINT_SIZE) * 0.8),
       },
     });

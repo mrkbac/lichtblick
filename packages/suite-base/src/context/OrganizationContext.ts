@@ -11,6 +11,7 @@ import {
   fetchCurrentSession,
 } from "@lichtblick/suite-base/api/organization/client";
 import { getAccessToken, logout, startLogin } from "@lichtblick/suite-base/api/organization/oidc";
+import { toError } from "@lichtblick/suite-base/util/toError";
 
 const log = Logger.getLogger(__filename);
 
@@ -80,7 +81,7 @@ export function useOrganizationSession(apiUrl: string | undefined): Organization
       } catch (error) {
         log.error("Organization API unavailable", error);
         if (!controller.signal.aborted) {
-          setState({ status: "unavailable", error: error as Error });
+          setState({ status: "unavailable", error: toError(error) });
         }
       }
     })();

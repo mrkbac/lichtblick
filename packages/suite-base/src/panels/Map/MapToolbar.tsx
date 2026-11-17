@@ -654,10 +654,14 @@ export function MapToolbar(props: Props): React.JSX.Element {
           }
           break;
         case "map.finish":
-          finish(current!.id);
+          if (drawing) {
+            finish(current.id);
+          }
           break;
         case "map.deleteLastPoint":
-          removePoint(current!.id, current!.points.length - 1);
+          if (drawing) {
+            removePoint(current.id, current.points.length - 1);
+          }
           break;
         case "map.deleteMeasurement":
           if (!current) {

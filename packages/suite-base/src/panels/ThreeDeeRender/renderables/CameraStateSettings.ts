@@ -6,7 +6,6 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { t } from "i18next";
-import * as _ from "lodash-es";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 
@@ -26,6 +25,9 @@ import { SceneExtension } from "../SceneExtension";
 import { SettingsTreeEntry } from "../SettingsManager";
 import { CameraState, DEFAULT_CAMERA_STATE, DEFAULT_ORBIT_CONTROLS_CONFIG } from "../camera";
 import { frameSettingsNode, viewSettingsNode } from "../settingsNodes/global";
+
+/** Number fields of the camera settings node, see `viewSettingsNode` */
+const CAMERA_NUMBER_KEYS = ["distance", "thetaOffset", "phi", "fovy", "near", "far"] as const;
 
 const DISPLAY_FRAME_NOT_FOUND = "DISPLAY_FRAME_NOT_FOUND";
 
@@ -93,10 +95,31 @@ export class CameraStateSettings extends SceneExtension implements ICameraHandle
     this.#controls.mouseButtons.RIGHT = DEFAULT_ORBIT_CONTROLS_CONFIG.mouseButtons.RIGHT;
     this.#controls.touches.ONE = DEFAULT_ORBIT_CONTROLS_CONFIG.touches.ONE;
     this.#controls.touches.TWO = DEFAULT_ORBIT_CONTROLS_CONFIG.touches.TWO;
+    // Every user zoom (wheel, pinch) fires "start" first, so programmatic camera changes never
+    // leave a stale value here.
+    let lastDistance = 0;
+    this.#controls.addEventListener("start", () => {
+      lastDistance = this.#controls.getDistance();
+    });
     this.#controls.addEventListener("change", () => {
-      if (!this.#isUpdatingCameraState) {
-        renderer.emit("cameraMove", renderer);
+      if (this.#isUpdatingCameraState) {
+        return;
       }
+      // Pan and zoom speed scale with the distance to the orbit target, so zooming in toward the
+      // target makes everything crawl and zoom stalls at the target. Once a zoom-in gets closer
+      // than twice the near plane, push the target forward instead, so the camera flies through
+      // at a steady speed.
+      const { cameraState } = renderer.config;
+      const distance = this.#controls.getDistance();
+      const minDistance = cameraState.near * 2;
+      if (cameraState.perspective && distance < lastDistance && distance < minDistance) {
+        const forward = tempVec3
+          .subVectors(this.#controls.target, this.#perspectiveCamera.position)
+          .normalize();
+        this.#controls.target.addScaledVector(forward, minDistance - distance);
+      }
+      lastDistance = this.#controls.getDistance();
+      renderer.emit("cameraMove", renderer);
     });
 
     // Screen space panning when holding Alt key
@@ -198,7 +221,23 @@ export class CameraStateSettings extends SceneExtension implements ICameraHandle
           draft.scene.syncCamera = value as boolean;
         });
       } else {
-        this.renderer.updateConfig((draft) => _.set(draft, path, value));
+        const { payload } = action;
+        const numberKey = CAMERA_NUMBER_KEYS.find((key) => key === path[1]);
+        // A cleared field stores undefined, but the camera needs every value: use the default
+        this.renderer.updateConfig((draft) => {
+          if (payload.input === "number" && numberKey != undefined) {
+            draft.cameraState[numberKey] = payload.value ?? DEFAULT_CAMERA_STATE[numberKey];
+          } else if (payload.input === "boolean" && path[1] === "perspective") {
+            draft.cameraState.perspective = payload.value ?? DEFAULT_CAMERA_STATE.perspective;
+          } else if (payload.input === "vec3" && path[1] === "targetOffset") {
+            const fallback = DEFAULT_CAMERA_STATE.targetOffset;
+            draft.cameraState.targetOffset = [
+              payload.value?.[0] ?? fallback[0],
+              payload.value?.[1] ?? fallback[1],
+              payload.value?.[2] ?? fallback[2],
+            ];
+          }
+        });
       }
 
       this.updateSettingsTree();

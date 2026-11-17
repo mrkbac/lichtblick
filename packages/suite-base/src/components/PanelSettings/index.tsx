@@ -34,7 +34,6 @@ import {
   PanelStateStore,
   usePanelStateStore,
 } from "@lichtblick/suite-base/context/PanelStateContext";
-import { PanelConfig } from "@lichtblick/suite-base/types/panels";
 import { getPanelTypeFromId } from "@lichtblick/suite-base/util/layout";
 import {
   getAllPanelIds,
@@ -151,7 +150,7 @@ export default function PanelSettings({
         initialValue={panelConfigById[selectedPanelId] ?? {}}
         onChange={(config) => {
           savePanelConfigs({
-            configs: [{ id: selectedPanelId, config: config as PanelConfig, override: true }],
+            configs: [{ id: selectedPanelId, config, override: true }],
           });
           incrementSequenceNumber(selectedPanelId);
         }}

@@ -24,11 +24,13 @@ import CopyButton from "@lichtblick/suite-base/components/CopyButton";
 import HoverableIconButton from "@lichtblick/suite-base/components/HoverableIconButton";
 import Stack from "@lichtblick/suite-base/components/Stack";
 import { downloadTextFile } from "@lichtblick/suite-base/util/download";
+import { isPlainObject } from "@lichtblick/suite-base/util/layout";
+import { toError } from "@lichtblick/suite-base/util/toError";
 import { customTypography } from "@lichtblick/theme";
 
 export type ShareJsonModalProps = {
   onRequestClose: () => void;
-  onChange: (value: unknown) => void;
+  onChange: (value: Record<string, unknown>) => void;
   initialValue: unknown;
   title: string;
 };
@@ -61,13 +63,19 @@ export function ShareJsonModal({
 
   const { decodedValue, error } = useMemo(() => {
     try {
-      return { decodedValue: JSON.parse(value === "" ? "{}" : value) as unknown, error: undefined };
+      const parsed: unknown = JSON.parse(value === "" ? "{}" : value);
+      return isPlainObject(parsed)
+        ? { decodedValue: parsed, error: undefined }
+        : { decodedValue: undefined, error: new Error("Expected a JSON object") };
     } catch (err: unknown) {
-      return { decodedValue: undefined, error: err as Error };
+      return { decodedValue: undefined, error: toError(err) };
     }
   }, [value]);
 
   const handleSubmit = useCallback(() => {
+    if (decodedValue == undefined) {
+      return;
+    }
     onChange(decodedValue);
     onRequestClose();
   }, [decodedValue, onChange, onRequestClose]);

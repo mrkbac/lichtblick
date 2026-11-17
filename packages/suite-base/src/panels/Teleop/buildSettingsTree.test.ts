@@ -13,6 +13,10 @@ function update(path: string[], value: unknown): SettingsTreeAction {
   return { action: "update", payload: { path, value, input: "string" } } as SettingsTreeAction;
 }
 
+function numberUpdate(path: string[], value: number | undefined): SettingsTreeAction {
+  return { action: "update", payload: { path, value, input: "number" } };
+}
+
 describe("buildSettingsTreeTeleop", () => {
   it("lists topics of the selected message type first", () => {
     const topics = [
@@ -69,7 +73,7 @@ describe("applySettingsAction", () => {
 
   it("updates mapping inputs and max values", () => {
     let next = applySettingsAction(DEFAULT_CONFIG, update(["mapping", "linear-y"], "rightX"));
-    next = applySettingsAction(next, update(["mapping", "linear-y-max"], 0.4));
+    next = applySettingsAction(next, numberUpdate(["mapping", "linear-y-max"], 0.4));
     expect(next.mapping["linear-y"]).toEqual({ input: "rightX", max: 0.4 });
     expect(DEFAULT_CONFIG.mapping["linear-y"].input).toBe("none");
   });

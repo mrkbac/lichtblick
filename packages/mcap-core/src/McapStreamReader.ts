@@ -312,7 +312,7 @@ export default class McapStreamReader {
               yield;
             }
           } catch (error) {
-            throw errorWithLibrary((error as Error).message);
+            throw errorWithLibrary(error instanceof Error ? error.message : String(error));
           }
           if (this.#reader.bytesRemaining() !== 0) {
             throw errorWithLibrary(

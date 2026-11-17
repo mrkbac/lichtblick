@@ -64,14 +64,18 @@ function parseUncached(path: string): MessagePath | undefined {
     // allowed, and only modifiers may follow it. Inputs check that those are scalar.
     const parts = result?.messagePath ?? [];
     const index = parts.findIndex(isStreamModifier);
-    if (result && index !== -1) {
-      const after = parts.slice(index + 1);
-      if (!after.every((part) => part.type === "modifier" && !isStreamModifier(part))) {
-        return undefined;
+    const stream = parts[index];
+    if (result && stream?.type === "modifier") {
+      const after: MessagePathModifier[] = [];
+      for (const part of parts.slice(index + 1)) {
+        if (part.type !== "modifier" || isStreamModifier(part)) {
+          return undefined;
+        }
+        after.push(part);
       }
-      result.modifier = (parts[index] as MessagePathModifier).name;
+      result.modifier = stream.name;
       if (after.length > 0) {
-        result.modifiersAfter = after as MessagePathModifier[];
+        result.modifiersAfter = after;
       }
       result.messagePath = parts.slice(0, index);
     }

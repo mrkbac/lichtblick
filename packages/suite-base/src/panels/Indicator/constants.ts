@@ -2,10 +2,12 @@
 // SPDX-License-Identifier: MPL-2.0
 import { IndicatorConfig } from "./types";
 
+export const DEFAULT_FALLBACK_COLOR = "#a0a0a0";
+
 export const DEFAULT_CONFIG: IndicatorConfig = {
   path: "",
   style: "bulb",
-  fallbackColor: "#a0a0a0",
+  fallbackColor: DEFAULT_FALLBACK_COLOR,
   fallbackLabel: "False",
   rules: [{ operator: "=", rawValue: "true", color: "#68e24a", label: "True" }],
 };
