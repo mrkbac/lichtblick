@@ -101,12 +101,12 @@ export function buildChartConfig(
           position: "bottom",
           labels: {
             color: theme.mutedText,
-            font,
             usePointStyle: true,
             pointStyle: "circle",
-            boxWidth: 8,
-            boxHeight: 8,
-            padding: 12,
+            font: { ...font, size: 11 },
+            boxWidth: 7,
+            boxHeight: 7,
+            padding: 8,
           },
         },
         tooltip: {
@@ -131,6 +131,8 @@ export function buildChartConfig(
           anchor: "end",
           align: "end",
           clamp: true,
+          // Labels on thin slices collide; the tooltip still has their values.
+          display: (ctx) => (data[ctx.dataIndex]?.value ?? 0) >= 6,
           color: (ctx) => colors[ctx.dataIndex] ?? theme.text,
           font: { family: theme.fontFamily, size: 11, weight: "bold" },
           formatter: (_value, ctx) => formatSliceValue(rawValue[ctx.dataIndex]),

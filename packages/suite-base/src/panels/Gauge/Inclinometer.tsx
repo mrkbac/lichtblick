@@ -162,7 +162,7 @@ export function Inclinometer({
                     x={lx}
                     y={ly}
                     fill={muted}
-                    fontSize="11"
+                    fontSize="14"
                     textAnchor="middle"
                     dominantBaseline="central"
                     style={{ fontVariantNumeric: "tabular-nums" }}
@@ -202,7 +202,7 @@ export function Inclinometer({
         y={range > 60 ? 325 : 283}
         fill={muted}
         textAnchor="middle"
-        fontSize="15"
+        fontSize="18"
         fontWeight="500"
       >
         {label}

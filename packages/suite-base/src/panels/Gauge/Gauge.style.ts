@@ -57,7 +57,8 @@ export const useStyles = makeStyles()((theme) => ({
   limit: {
     position: "absolute",
     transform: "translateX(-50%)",
-    fontSize: "5cqw",
+    // Readable even on a small gauge.
+    fontSize: "max(10px, 5cqw)",
     lineHeight: 1,
     fontVariantNumeric: "tabular-nums",
     whiteSpace: "nowrap",

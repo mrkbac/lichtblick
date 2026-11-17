@@ -88,9 +88,9 @@ export const light: PaletteOptions = {
   primary: { main: ACCENT },
   secondary: { main: "#404040" },
   error: { main: "#db3553" },
-  warning: { main: "#eba800" },
+  warning: { main: "#d97706" },
   success: { main: "#107c10" },
-  info: { main: "#1EA7FD" },
+  info: { main: "#0284c7" },
   background: {
     default: "#f7f8fa",
     paper: "#ffffff",

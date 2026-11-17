@@ -79,7 +79,7 @@ export function Slider({
           y="50"
           textAnchor="middle"
           fill={below || above ? color : theme.palette.text.secondary}
-          fontSize="12"
+          fontSize="13"
         >
           {status}
         </text>
@@ -103,10 +103,10 @@ export function Slider({
           strokeWidth="2.5"
         />
       )}
-      <text x={X0} y="100" fill={theme.palette.text.secondary} fontSize="11" textAnchor="start">
+      <text x={X0} y="100" fill={theme.palette.text.secondary} fontSize="14" textAnchor="start">
         {fmt(minValue)}
       </text>
-      <text x={X1} y="100" fill={theme.palette.text.secondary} fontSize="11" textAnchor="end">
+      <text x={X1} y="100" fill={theme.palette.text.secondary} fontSize="14" textAnchor="end">
         {fmt(maxValue)}
       </text>
     </svg>
