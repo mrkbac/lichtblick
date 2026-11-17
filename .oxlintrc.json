@@ -292,7 +292,7 @@
         "desktop/electronBuilderConfig.js",
         "e2e/**",
         "web/rspack.config.ts",
-        "vitest.config.ts",
+        "vitest.config.mts",
         "packages/oxlint-plugin/**",
         "packages/suite-base/rspack.ts",
         "packages/suite-desktop/src/main/**",

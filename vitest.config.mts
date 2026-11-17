@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import fs from "node:fs";
+import { createRequire } from "node:module";
 import path from "node:path";
 import { Plugin } from "vite";
 import { defineConfig, defineProject } from "vitest/config";
 import type { InlineConfig } from "vitest/node";
 
 // nearley's compiler internals ship without types or ESM entry points
-/* eslint-disable @typescript-eslint/no-require-imports */
+const require = createRequire(import.meta.url);
 const nearley = require("nearley") as typeof import("nearley");
 const nearleyCompile = require("nearley/lib/compile") as (
   ast: unknown,
@@ -16,9 +17,8 @@ const nearleyCompile = require("nearley/lib/compile") as (
 const nearleyGenerate = require("nearley/lib/generate") as (info: unknown, name: string) => string;
 const nearleyGrammar =
   require("nearley/lib/nearley-language-bootstrapped") as import("nearley").CompiledRules;
-/* eslint-enable @typescript-eslint/no-require-imports */
 
-const root = __dirname;
+const root = import.meta.dirname;
 const suiteBaseSrc = path.join(root, "packages/suite-base/src");
 const suiteBaseSetup = path.join(suiteBaseSrc, "test/setup.ts");
 // Real globals (not compile-time defines) so tests can override them, as with jest's `globals`
