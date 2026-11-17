@@ -41,11 +41,13 @@ import {
   getAllPanelIds,
   getLayoutTree,
   getTabs,
+  isContainerPanel,
   isTabPanel,
   mapLayoutTrees,
   normalizeTabs,
   setLayoutTree,
   showPanel,
+  TreeLocation,
 } from "@lichtblick/suite-base/util/tabLayout";
 
 export const defaultPlaybackConfig: PlaybackConfig = {
@@ -145,7 +147,7 @@ function copyPanelConfig(
   configs: ConfigsPayload[],
   copying: readonly string[] = [],
 ): PanelConfig {
-  if (!isTabPanel(id) || copying.includes(id)) {
+  if (!isContainerPanel(id) || copying.includes(id)) {
     return config;
   }
   const tabs = getTabs(config).map((tab) => {
@@ -189,6 +191,21 @@ const swapPanel = (
   return finish(mapLayoutTrees(withConfig, (tree) => replacePanel(tree, originalId, newId)));
 };
 
+/** The tree of tab `tabIndex` (by default the shown one) of `tabId`, also one past the last. */
+function tabLocation(
+  data: LayoutData,
+  tabId: string,
+  tabIndex: number | undefined,
+): TreeLocation | undefined {
+  if (tabIndex == undefined) {
+    return findActiveTabTree(data, tabId)?.location;
+  }
+  const outer = findLayoutTree(data, tabId)?.location.ancestors;
+  return outer == undefined
+    ? undefined
+    : { tabPanelId: tabId, tabIndex, ancestors: [...outer, tabId] };
+}
+
 /**
  * Put panel `id` into the layout, or move it there when it already is in the layout (also from
  * the root into a tab and back). The target is the tree holding `targetPanelId`, else the shown
@@ -196,7 +213,14 @@ const swapPanel = (
  */
 function addPanel(
   panelsState: LayoutData,
-  { id, config, position = "left", targetPanelId: requestedTarget, tabId }: AddPanelPayload,
+  {
+    id,
+    config,
+    position = "left",
+    targetPanelId: requestedTarget,
+    tabId,
+    tabIndex,
+  }: AddPanelPayload,
 ): LayoutData {
   const withConfig = config
     ? savePanelConfigs(panelsState, { configs: [{ id, config }] })
@@ -212,13 +236,14 @@ function addPanel(
   while (
     position === "center" &&
     target?.location.tabPanelId != undefined &&
+    isTabPanel(target.location.tabPanelId) &&
     _.isEqual(target.tree, { panels: [targetPanelId] })
   ) {
     targetPanelId = target.location.tabPanelId;
     target = findLayoutTree(withConfig, targetPanelId);
   }
   const location = target?.location ??
-    (tabId != undefined ? findActiveTabTree(withConfig, tabId)?.location : undefined) ?? {
+    (tabId != undefined ? tabLocation(withConfig, tabId, tabIndex) : undefined) ?? {
       ancestors: [],
     };
   // A Tab panel can't go into one of its own tabs.
@@ -271,7 +296,7 @@ export default function (panelsState: Readonly<LayoutData>, action: PanelsAction
       // Tab panel that is not in the layout yet (reopening a closed one) are kept.
       const present = new Set(getAllPanelIds(saved));
       const tabPanelChanged = action.payload.configs.some(
-        ({ id }) => isTabPanel(id) && present.has(id),
+        ({ id }) => isContainerPanel(id) && present.has(id),
       );
       return tabPanelChanged ? finish(saved) : saved;
     }

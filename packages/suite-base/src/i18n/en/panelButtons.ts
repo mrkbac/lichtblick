@@ -267,6 +267,14 @@ export const panelButtons = {
     help: "Switches between top-down and left-to-right layout.",
   },
   topicGraphServices: { title: "Show services", help: "Shows or hides service nodes." },
+  stackAdd: {
+    title: "Add panel",
+    help: "Opens the panel list; the panel you pick is added at the end of the stack.",
+  },
+  stackLayout: {
+    title: "Change arrangement",
+    help: "Switches between a vertical list, a horizontal row and a grid. Its icon shows the current arrangement.",
+  },
   tabAdd: {
     title: "New tab",
     help: "Opens the panel list; the panel you pick becomes a new tab.",

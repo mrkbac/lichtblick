@@ -11,7 +11,12 @@ import panelsReducer from "@lichtblick/suite-base/providers/CurrentLayoutProvide
 import { LayoutDropPosition, LayoutNode } from "@lichtblick/suite-base/types/layouts";
 import { PanelConfig } from "@lichtblick/suite-base/types/panels";
 import { getPanelIds, isLayoutGroup } from "@lichtblick/suite-base/util/layoutTree";
-import { findLayoutTree, getAllPanelIds, getTabs } from "@lichtblick/suite-base/util/tabLayout";
+import {
+  findLayoutTree,
+  getAllPanelIds,
+  getTabs,
+  isTabPanel,
+} from "@lichtblick/suite-base/util/tabLayout";
 
 /** Undo steps kept per layout. */
 export const HISTORY_LIMIT = 100;
@@ -93,7 +98,8 @@ function closePlacements(data: LayoutData, id: string): Placement[] {
   const found = findLayoutTree(data, id);
   const placements = reopenPlacements(found?.tree, id);
   const tabPanelId = found?.location.tabPanelId;
-  if (placements.length > 0 || tabPanelId == undefined) {
+  // A Stack panel's item doesn't come back as a tab (stacking onto a Stack makes a Tab panel).
+  if (placements.length > 0 || tabPanelId == undefined || !isTabPanel(tabPanelId)) {
     return placements;
   }
   const others = getTabs(data.configById[tabPanelId])
