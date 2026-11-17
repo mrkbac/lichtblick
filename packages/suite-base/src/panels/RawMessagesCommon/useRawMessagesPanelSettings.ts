@@ -33,8 +33,7 @@ export function useRawMessagesPanelSettings({
         action.payload.path[1] === "fontSize"
       ) {
         saveConfig({
-          fontSize:
-            action.payload.value == undefined ? undefined : (action.payload.value as number),
+          fontSize: typeof action.payload.value === "number" ? action.payload.value : undefined,
         });
       }
     },

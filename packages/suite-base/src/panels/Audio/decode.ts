@@ -62,10 +62,7 @@ export function normalizeFormat(raw: string): AudioFormat | undefined {
     .toLowerCase()
     .replace(/^audio\//, "")
     .replace(/^pcm[-_]/, "");
-  if ((AUDIO_FORMATS as readonly string[]).includes(name)) {
-    return name as AudioFormat;
-  }
-  return ALIASES[name];
+  return AUDIO_FORMATS.find((format) => format === name) ?? ALIASES[name];
 }
 
 export function isPcm(format: AudioFormat): format is PcmFormat {
@@ -99,7 +96,7 @@ function toBytes(value: unknown): Uint8Array | undefined {
     return new Uint8Array(value.buffer, value.byteOffset, value.byteLength);
   }
   if (Array.isArray(value)) {
-    return Uint8Array.from(value as number[]);
+    return Uint8Array.from(value);
   }
   return undefined;
 }

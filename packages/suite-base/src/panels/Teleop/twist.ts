@@ -19,7 +19,6 @@ import {
   TeleopConfig,
   TeleopVector,
   Twist,
-  TwistField,
 } from "@lichtblick/suite-base/panels/Teleop/types";
 
 export const ZERO_VECTOR: TeleopVector = { x: 0, y: 0 };
@@ -244,12 +243,12 @@ export function migrateConfig(saved: unknown): TeleopConfig {
       [rightButton, "leftX", -1],
     ];
     for (const [button, input, sign] of legacy) {
-      const field = button?.field?.replace(".", "-") as TwistField | undefined;
+      const legacyField = button?.field?.replace(".", "-");
+      const field = TWIST_FIELDS.find((candidate) => candidate === legacyField);
       const value = button?.value;
       // the opposite button of a pair usually mirrors the first; the first one wins
       if (
         field != undefined &&
-        TWIST_FIELDS.includes(field) &&
         config.mapping[field].input === "none" &&
         typeof value === "number"
       ) {

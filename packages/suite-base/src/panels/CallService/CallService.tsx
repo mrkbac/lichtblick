@@ -43,6 +43,7 @@ import { PLAYER_CAPABILITIES } from "@lichtblick/suite-base/players/constants";
 import { useDefaultPanelTitle } from "@lichtblick/suite-base/providers/PanelStateContextProvider";
 import { SaveConfig } from "@lichtblick/suite-base/types/panels";
 import { findShortcut, shortcutLabel } from "@lichtblick/suite-base/util/keyboardShortcuts";
+import { toError } from "@lichtblick/suite-base/util/toError";
 import { customTypography } from "@lichtblick/theme";
 
 import { CALL_SERVICE_BUTTONS } from "./buttons";
@@ -231,7 +232,7 @@ export function CallService({ config, saveConfig }: Props): React.JSX.Element {
       } catch (err) {
         update({
           status: "error",
-          response: (err as Error).message,
+          response: toError(err).message,
           latencyMs: Math.round(performance.now() - start),
         });
       }
@@ -242,8 +243,8 @@ export function CallService({ config, saveConfig }: Props): React.JSX.Element {
   const canSend =
     canCall && Boolean(config.serviceName) && parsed.value != undefined && !formInvalid;
   const send = () => {
-    if (canSend) {
-      void runCall(config.serviceName!, config.requestPayload!);
+    if (canSend && config.serviceName) {
+      void runCall(config.serviceName, config.requestPayload ?? "");
     }
   };
 

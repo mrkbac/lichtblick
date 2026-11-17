@@ -320,13 +320,13 @@ function TabPanel({ config, saveConfig }: Props): React.JSX.Element {
       return;
     }
     const selection = getPanelDragData(event.dataTransfer);
-    const movedId = getPanelData()?.panelId ?? undefined;
-    if (selection == undefined && movedId == undefined) {
+    const id = selection ? getPanelIdForType(selection.type) : getPanelData()?.panelId;
+    if (id == undefined) {
       return;
     }
     event.preventDefault();
     addPanel({
-      id: selection ? getPanelIdForType(selection.type) : movedId!,
+      id,
       config: selection?.config,
       position: "center",
       targetPanelId: panelId,
@@ -345,15 +345,15 @@ function TabPanel({ config, saveConfig }: Props): React.JSX.Element {
 
   const dropPanel = (index: number, event: DragEvent<HTMLElement>) => {
     const selection = getPanelDragData(event.dataTransfer);
-    const movedId = getPanelData()?.panelId ?? undefined;
-    if (selection == undefined && movedId == undefined) {
+    const id = selection ? getPanelIdForType(selection.type) : getPanelData()?.panelId;
+    if (id == undefined) {
       return;
     }
     event.preventDefault();
     // Show the tab first: panels without a target go into the shown tab.
     select(index);
     addPanel({
-      id: selection ? getPanelIdForType(selection.type) : movedId!,
+      id,
       config: selection?.config,
       position: "right",
       tabId: panelId,

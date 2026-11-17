@@ -133,11 +133,11 @@ function diffArraysByIdField(
     const id = (beforeItem as DiffObject)[idToCompareWith];
     const innerDiff = getDiff({
       before: beforeItem,
-      after: unmatchedAfterById[id as string],
+      after: unmatchedAfterById[String(id)],
       idLabel: idToCompareWith,
       showFullMessageForDiff,
     });
-    delete unmatchedAfterById[id as string];
+    delete unmatchedAfterById[String(id)];
 
     if (!_.isEmpty(innerDiff)) {
       diff.push(processDiffForBeforeItem(innerDiff as DiffObject, idToCompareWith, id));

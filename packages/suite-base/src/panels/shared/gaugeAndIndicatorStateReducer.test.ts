@@ -255,6 +255,19 @@ describe("stateReducer", () => {
     });
   });
 
+  describe("stateReducer when path action with an unparseable path", () => {
+    it("clears the parsed path instead of reporting a TypeError", () => {
+      const { action, state } = setup({ actionOverride: buildPathAction() });
+      (parseMessagePath as Mock).mockReturnValue(undefined);
+
+      const newState = stateReducer(state, action);
+
+      expect(newState.error).toBeUndefined();
+      expect(newState.parsedPath).toBeUndefined();
+      expect(newState.path).toBe((action as PathAction).path);
+    });
+  });
+
   describe("stateReducer when seek action", () => {
     it("should reset latestMessage and latestMatchingQueriedData", () => {
       const { action, state } = setup({

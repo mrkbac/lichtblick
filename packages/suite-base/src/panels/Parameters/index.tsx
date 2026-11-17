@@ -595,8 +595,7 @@ function Parameters({ config, saveConfig }: Props): ReactElement {
 }
 
 Parameters.panelType = "Parameters";
-Parameters.defaultConfig = {
-  title: "Parameters",
-} as ParametersConfig;
+const defaultConfig: ParametersConfig = { title: "Parameters" };
+Parameters.defaultConfig = defaultConfig;
 
 export default Panel(Parameters);

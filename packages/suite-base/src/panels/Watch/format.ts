@@ -22,8 +22,10 @@ function isTime(value: object): value is { sec: number; nsec: number } {
   const keys = Object.keys(value);
   return (
     keys.length === 2 &&
-    typeof (value as { sec?: unknown }).sec === "number" &&
-    typeof (value as { nsec?: unknown }).nsec === "number"
+    "sec" in value &&
+    typeof value.sec === "number" &&
+    "nsec" in value &&
+    typeof value.nsec === "number"
   );
 }
 
@@ -100,7 +102,7 @@ export function formatValue(
     return `${value.sec}.${String(value.nsec).padStart(9, "0")}`;
   }
   if (Array.isArray(value) || isTypedArray(value)) {
-    const arr = value as ArrayLike<unknown>;
+    const arr: ArrayLike<unknown> = value;
     const preview = (Array.prototype.slice.call(arr, 0, MAX_PREVIEW_ITEMS) as unknown[])
       .map((item) =>
         typeof item === "object" && item != undefined ? "{…}" : formatScalar(item, precision),
@@ -128,7 +130,7 @@ export function formatExpanded(value: unknown, maxItems: number = MAX_EXPANDED_I
           return String(item);
         }
         if (isTypedArray(item) || Array.isArray(item)) {
-          const arr = item as ArrayLike<unknown>;
+          const arr: ArrayLike<unknown> = item;
           if (arr.length > maxItems) {
             return [
               ...Array.prototype.slice.call(arr, 0, maxItems),

@@ -64,9 +64,9 @@ export function addMessages(
       const added = changesFor(before, status.level, t, staleSec);
       history.set(info.id, {
         changes:
-          added.length > 0
+          added.length > 0 || before == undefined
             ? appendBounded(before?.changes ?? [], added, MAX_LIVE_HISTORY_CHANGES)
-            : before!.changes,
+            : before.changes,
         lastSeen: t,
       });
     }

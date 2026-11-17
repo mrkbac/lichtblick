@@ -206,16 +206,17 @@ export function Indicator({ context }: IndicatorProps): React.JSX.Element {
     renderDone();
   }, [renderDone]);
 
-  const rawValue = useMemo(() => {
-    return ["boolean", "number", "bigint", "string"].includes(typeof latestMatchingQueriedData)
-      ? latestMatchingQueriedData
+  const rawValue = useMemo((): RawValueIndicator => {
+    const value = latestMatchingQueriedData;
+    return typeof value === "boolean" ||
+      typeof value === "number" ||
+      typeof value === "bigint" ||
+      typeof value === "string"
+      ? value
       : undefined;
   }, [latestMatchingQueriedData]);
 
-  const matchingRule = useMemo(
-    () => getMatchingRule(rawValue as RawValueIndicator, rules),
-    [rawValue, rules],
-  );
+  const matchingRule = useMemo(() => getMatchingRule(rawValue, rules), [rawValue, rules]);
 
   // Alert only on transitions into a rule; seeks, rule edits and missing data just reset the baseline.
   const prevSnapshot = useRef<AlertSnapshot | undefined>(undefined);
