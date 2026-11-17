@@ -46,6 +46,14 @@ export class AudioPlayer {
     return this.#ctx.state === "running";
   }
 
+  /** Calls `listener` when the audio clock starts or stops. Returns the unsubscribe function. */
+  public subscribeRunning(listener: () => void): () => void {
+    this.#ctx.addEventListener("statechange", listener);
+    return () => {
+      this.#ctx.removeEventListener("statechange", listener);
+    };
+  }
+
   public setVolume(volume: number): void {
     this.#output.gain.setTargetAtTime(volume, this.#ctx.currentTime, FADE_SEC);
   }

@@ -32,10 +32,14 @@ import React, {
   useReducer,
   useRef,
   useState,
+  useSyncExternalStore,
 } from "react";
 import { createPortal } from "react-dom";
 
-import { DockPanelContext } from "@lichtblick/suite-base/components/DockPanelContext";
+import {
+  DockPanelContext,
+  PanelVisibleContext,
+} from "@lichtblick/suite-base/components/DockPanelContext";
 import { EmptyPanelLayout } from "@lichtblick/suite-base/components/EmptyPanelLayout";
 import EmptyState from "@lichtblick/suite-base/components/EmptyState";
 import { LayoutTabContext } from "@lichtblick/suite-base/components/LayoutTabContext";
@@ -243,29 +247,43 @@ const HostedPanel = React.memo(function HostedPanel({
     api.setTitle(title);
   }, [api, title]);
 
+  // dockview hides a panel when another tab of its group is selected or another group is maximized.
+  const subscribeDockVisible = useCallback(
+    (onChange: () => void) => {
+      const sub = api.onDidVisibilityChange(onChange);
+      return () => {
+        sub.dispose();
+      };
+    },
+    [api],
+  );
+  const dockVisible = useSyncExternalStore(subscribeDockVisible, () => api.isVisible);
+
   return (
     <ErrorBoundary>
       <LayoutTabContext.Provider value={slot.tabPath}>
         <PanelContext.Provider value={slot.parentPanel}>
           <PanelWindowContext.Provider value={slot.parentWindow}>
             <DockPanelContext.Provider value={slot.dock}>
-              <Suspense
-                fallback={
-                  <EmptyState>
-                    <CircularProgress size={28} />
-                  </EmptyState>
-                }
-              >
-                <PanelWindow title={title}>
-                  <PanelRemounter id={id}>
-                    {PanelComponent ? (
-                      <PanelComponent childId={id} />
-                    ) : (
-                      <UnknownPanel childId={id} overrideConfig={{ type, id }} />
-                    )}
-                  </PanelRemounter>
-                </PanelWindow>
-              </Suspense>
+              <PanelVisibleContext.Provider value={slot.layoutVisible && dockVisible}>
+                <Suspense
+                  fallback={
+                    <EmptyState>
+                      <CircularProgress size={28} />
+                    </EmptyState>
+                  }
+                >
+                  <PanelWindow title={title}>
+                    <PanelRemounter id={id}>
+                      {PanelComponent ? (
+                        <PanelComponent childId={id} />
+                      ) : (
+                        <UnknownPanel childId={id} overrideConfig={{ type, id }} />
+                      )}
+                    </PanelRemounter>
+                  </PanelWindow>
+                </Suspense>
+              </PanelVisibleContext.Provider>
             </DockPanelContext.Provider>
           </PanelWindowContext.Provider>
         </PanelContext.Provider>
@@ -280,9 +298,10 @@ function DockPanel({ api, containerApi }: IDockviewPanelProps): React.JSX.Elemen
   const tabPath = useContext(LayoutTabContext);
   const parentPanel = useContext(PanelContext);
   const parentWindow = useContext(PanelWindowContext);
+  const layoutVisible = useContext(PanelVisibleContext);
   const slot = useMemo<PanelSlot>(
-    () => ({ dock: { api, containerApi }, tabPath, parentPanel, parentWindow }),
-    [api, containerApi, tabPath, parentPanel, parentWindow],
+    () => ({ dock: { api, containerApi }, tabPath, parentPanel, parentWindow, layoutVisible }),
+    [api, containerApi, tabPath, parentPanel, parentWindow, layoutVisible],
   );
   const holderRef = useRef<HTMLDivElement>(null);
   const [owner] = useState(() => ({}));

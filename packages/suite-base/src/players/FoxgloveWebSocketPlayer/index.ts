@@ -120,6 +120,8 @@ const SELF_DESCRIBING_ENCODINGS = new Set(["json", "cbor", "msgpack"]);
 const HISTORY_TICK_MS = 16;
 /** A server clock that hasn't ticked for this long, while messages arrive, is reported as stale. */
 const CLOCK_STALE_MS = 3000;
+/** While reviewing history, live data only moves the timeline's end; update it this often, in ms. */
+const REVIEW_EMIT_MS = 1000;
 
 /** How often the browser heap is checked, in ms. */
 const HEAP_CHECK_MS = 5000;
@@ -196,6 +198,7 @@ export default class FoxgloveWebSocketPlayer implements Player {
   /** Newest message handed to panels, to catch them up after a pause. */
   #lastDelivered?: MessageEvent;
   #historyTimer?: ReturnType<typeof setTimeout>;
+  #reviewEmitTimer?: ReturnType<typeof setTimeout>;
   #historyTickMs = 0;
   /** Wall time of the last server time message (or of connecting), to detect a stale clock. */
   #lastClockWallMs = Date.now();
@@ -715,7 +718,7 @@ export default class FoxgloveWebSocketPlayer implements Player {
           error: toError(error),
         });
       }
-      this.#emitState();
+      this.#emitLiveData();
     });
 
     this.#client.on("time", ({ timestamp }) => {
@@ -725,7 +728,8 @@ export default class FoxgloveWebSocketPlayer implements Player {
 
       const time = fromNanoSec(timestamp);
       this.#lastClockWallMs = Date.now();
-      if (this.#clockTime != undefined && isLessThan(time, this.#clockTime)) {
+      const clockReset = this.#clockTime != undefined && isLessThan(time, this.#clockTime);
+      if (clockReset) {
         this.#numTimeSeeks++;
         this.#parsedMessages.clear();
         // The clock was reset (e.g. a simulation or bag restarted): the history no longer fits.
@@ -746,7 +750,11 @@ export default class FoxgloveWebSocketPlayer implements Player {
       }
 
       this.#clockTime = time;
-      this.#emitState();
+      if (clockReset) {
+        this.#emitState();
+      } else {
+        this.#emitLiveData();
+      }
     });
 
     this.#client.on("parameterValues", ({ parameters, id }) => {
@@ -1114,6 +1122,7 @@ export default class FoxgloveWebSocketPlayer implements Player {
 
   public close(): void {
     this.#closed = true;
+    clearTimeout(this.#reviewEmitTimer);
     this.#stopRecording();
     this.#unsubscribeHistorySettings();
     this.#clearHistory();
@@ -1418,7 +1427,12 @@ export default class FoxgloveWebSocketPlayer implements Player {
       this.#sendPlaybackControl(seekTimeNs);
       return;
     }
-    this.#seekHistory(time);
+    // While reviewing, the timeline's end is updated once a second (#emitLiveData): a seek to the
+    // end panels were shown means the newest data.
+    const shownEnd = this.#endTime;
+    this.#seekHistory(
+      shownEnd != undefined && !isLessThan(time, shownEnd) ? this.#getCurrentTime() : time,
+    );
   }
 
   /** Jump to `time` inside the history, giving panels the state at that time. */
@@ -1460,6 +1474,21 @@ export default class FoxgloveWebSocketPlayer implements Player {
     for (const msg of messages) {
       this.#parsedMessages.push(msg);
     }
+  }
+
+  /**
+   * New live data. While reviewing history (paused or replaying) it goes only into the history, so
+   * panels have nothing new to show: emit once a second for the timeline's end instead of per message.
+   */
+  #emitLiveData(): void {
+    if (this.#historyCursor == undefined) {
+      this.#emitState();
+      return;
+    }
+    this.#reviewEmitTimer ??= setTimeout(() => {
+      this.#reviewEmitTimer = undefined;
+      this.#emitState();
+    }, REVIEW_EMIT_MS);
   }
 
   #scheduleHistoryTick(): void {

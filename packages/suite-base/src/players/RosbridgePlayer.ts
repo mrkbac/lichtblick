@@ -55,6 +55,9 @@ import { toError } from "@lichtblick/suite-base/util/toError";
 
 const log = Log.getLogger(__dirname);
 
+/** Topics the player subscribes to itself when they are available. */
+const INTERNAL_TOPICS: readonly string[] = ["/clock"];
+
 type MessageDecoder = { readMessage: (data: Uint8Array) => unknown };
 
 const CAPABILITIES = [PLAYER_CAPABILITIES.advertise, PLAYER_CAPABILITIES.callServices];
@@ -105,6 +108,9 @@ export default class RosbridgePlayer implements Player {
   #closed: boolean = false; // Whether the player has been completely closed using close().
   #providerTopics?: TopicWithSchemaName[]; // Topics as published by the WebSocket.
   #providerTopicsStats = new Map<string, TopicStats>(); // topic names to topic statistics.
+  // Topic stats handed out last; a new Map only when a count changed, so consumers compare by reference.
+  #emittedTopicsStats = new Map<string, TopicStats>();
+  #topicsStatsChanged = false;
   #providerDatatypes?: RosDatatypes; // Datatypes as published by the WebSocket.
   #publishedTopics = new Map<string, Set<string>>(); // A map of topic names to the set of publisher IDs publishing each topic.
   #subscribedTopics = new Map<string, Set<string>>(); // A map of topic names to the set of subscriber IDs subscribed to each topic.
@@ -117,7 +123,11 @@ export default class RosbridgePlayer implements Player {
   // active subscriptions
   #topicSubscriptions = new Map<string, roslib.Topic>();
   #requestedSubscriptions: SubscribePayload[] = []; // Requested subscriptions by setSubscriptions()
+  // Subscriptions the player added for itself (#addInternalSubscriptions), not requested by a panel.
+  readonly #internalSubscriptions = new WeakSet<SubscribePayload>();
   #requestTopicsTimeout?: ReturnType<typeof setTimeout>; // setTimeout() handle for _requestTopics().
+  // Polls topics once a hidden window is shown again; removed on reconnect and close.
+  #requestTopicsOnShow?: () => void;
   // active publishers for the current connection
   #topicPublishers = new Map<string, roslib.Topic>();
   // which topics we want to advertise to other nodes
@@ -190,9 +200,7 @@ export default class RosbridgePlayer implements Player {
     rosClient.on("close", () => {
       this.#presence = PlayerPresence.RECONNECTING;
 
-      if (this.#requestTopicsTimeout) {
-        clearTimeout(this.#requestTopicsTimeout);
-      }
+      this.#cancelTopicsPoll();
       for (const [topicName, topic] of this.#topicSubscriptions) {
         topic.unsubscribe();
         this.#topicSubscriptions.delete(topicName);
@@ -232,9 +240,7 @@ export default class RosbridgePlayer implements Player {
     // clear alerts before each topics request so we don't have stale alerts from previous failed requests
     this.#alerts.removeAlerts((id) => id.startsWith("requestTopics:"));
 
-    if (this.#requestTopicsTimeout) {
-      clearTimeout(this.#requestTopicsTimeout);
-    }
+    this.#cancelTopicsPoll();
     const rosClient = this.#rosClient;
     if (!rosClient || this.#closed) {
       return;
@@ -331,6 +337,7 @@ export default class RosbridgePlayer implements Player {
       const topicsSet = new Set<string>(topics.map((topic) => topic.name));
       for (const topic of this.#providerTopicsStats.keys()) {
         if (!topicsSet.has(topic)) {
+          this.#topicsStatsChanged = true;
           this.#providerTopicsStats.delete(topic);
         }
       }
@@ -364,8 +371,22 @@ export default class RosbridgePlayer implements Player {
     } finally {
       this.#emitState();
 
-      // Regardless of what happens, request topics again in a little bit.
-      this.#requestTopicsTimeout = setTimeout(() => void this.#requestTopics(), 3000);
+      // Regardless of what happens, request topics again in a little bit. A hidden window polls
+      // again as soon as it is shown, instead of every 3 s in the background, unless a panel waits
+      // for a topic that isn't advertised yet (it is subscribed as soon as it appears).
+      // Not after close or a reconnect: that connection's cleanup already ran.
+      if (this.#isCurrentClient(rosClient)) {
+        this.#requestTopicsTimeout = setTimeout(() => {
+          if (isDocumentHidden() && !this.#waitingForTopic()) {
+            this.#requestTopicsOnShow = () => void this.#requestTopics();
+            document.addEventListener("visibilitychange", this.#requestTopicsOnShow, {
+              once: true,
+            });
+          } else {
+            void this.#requestTopics();
+          }
+        }, 3000);
+      }
     }
   }
 
@@ -407,6 +428,10 @@ export default class RosbridgePlayer implements Player {
 
     const currentTime = this.#getCurrentTime();
     const messages = this.#parsedMessages.drain();
+    if (this.#topicsStatsChanged) {
+      this.#topicsStatsChanged = false;
+      this.#emittedTopicsStats = new Map(this.#providerTopicsStats);
+    }
     return this.#listener({
       name: this.#url,
       presence: this.#presence,
@@ -432,8 +457,7 @@ export default class RosbridgePlayer implements Player {
         // that we don't accidentally hit falsy checks.
         lastSeekTime: 1,
         topics: providerTopics,
-        // Always copy topic stats since message counts and timestamps are being updated
-        topicStats: new Map(this.#providerTopicsStats),
+        topicStats: this.#emittedTopicsStats,
         datatypes: providerDatatypes,
         publishedTopics: this.#publishedTopics,
         subscribedTopics: this.#subscribedTopics,
@@ -448,8 +472,35 @@ export default class RosbridgePlayer implements Player {
     this.#emitState();
   }
 
+  /** Whether `rosClient` is still this open player's connection (not closed or replaced). */
+  #isCurrentClient(rosClient: unknown): boolean {
+    return !this.#closed && this.#rosClient === rosClient;
+  }
+
+  /**
+   * Whether a panel requested a topic the server doesn't advertise yet. Subscriptions the player
+   * adds for itself don't count: they are often never published (e.g. no /clock outside
+   * simulation). The same topic requested by a panel does.
+   */
+  #waitingForTopic(): boolean {
+    const advertised = new Set(this.#providerTopics?.map((topic) => topic.name));
+    return this.#requestedSubscriptions.some(
+      (sub) => !advertised.has(sub.topic) && !this.#internalSubscriptions.has(sub),
+    );
+  }
+
+  #cancelTopicsPoll(): void {
+    clearTimeout(this.#requestTopicsTimeout);
+    this.#requestTopicsTimeout = undefined;
+    if (this.#requestTopicsOnShow) {
+      document.removeEventListener("visibilitychange", this.#requestTopicsOnShow);
+      this.#requestTopicsOnShow = undefined;
+    }
+  }
+
   public close(): void {
     this.#closed = true;
+    this.#cancelTopicsPoll();
     if (this.#rosClient) {
       this.#rosClient.close();
     }
@@ -464,6 +515,12 @@ export default class RosbridgePlayer implements Player {
 
     if (!this.#rosClient || this.#closed) {
       return;
+    }
+
+    // Polling waits for a hidden window to be shown: a newly requested topic that isn't advertised
+    // yet needs polling now, so it is subscribed as soon as it appears.
+    if (this.#requestTopicsOnShow != undefined && this.#waitingForTopic()) {
+      void this.#requestTopics();
     }
 
     // Subscribe to additional topics used by RosbridgePlayer itself
@@ -542,6 +599,8 @@ export default class RosbridgePlayer implements Player {
               this.#providerTopicsStats.set(topicName, stats);
             }
             stats.numMessages++;
+            this.#topicsStatsChanged = true;
+            this.#topicsStatsChanged = true;
           }
         } catch (error) {
           this.#alerts.addAlert(alertId, {
@@ -563,6 +622,7 @@ export default class RosbridgePlayer implements Player {
         this.#topicSubscriptions.delete(topicName);
 
         // Reset the message count for this topic
+        this.#topicsStatsChanged = true;
         this.#providerTopicsStats.delete(topicName);
       }
     }
@@ -784,10 +844,12 @@ export default class RosbridgePlayer implements Player {
 
   #addInternalSubscriptions(subscriptions: SubscribePayload[]): void {
     // Always subscribe to /clock if available
-    if (subscriptions.find((sub) => sub.topic === "/clock") == undefined) {
-      subscriptions.unshift({
-        topic: "/clock",
-      });
+    for (const topic of INTERNAL_TOPICS) {
+      if (subscriptions.find((sub) => sub.topic === topic) == undefined) {
+        const sub = { topic };
+        this.#internalSubscriptions.add(sub);
+        subscriptions.unshift(sub);
+      }
     }
   }
 
@@ -846,4 +908,9 @@ export default class RosbridgePlayer implements Player {
       this.#isRefreshing = false;
     }
   }
+}
+
+/** Whether the window is hidden; false outside a browser (tests). */
+function isDocumentHidden(): boolean {
+  return (globalThis as { document?: Document }).document?.hidden === true;
 }

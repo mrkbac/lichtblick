@@ -3,10 +3,11 @@
 
 import { ButtonBase, Popover } from "@mui/material";
 import { getPanelData } from "dockview-react";
-import { DragEvent, useCallback, useMemo, useState } from "react";
+import { DragEvent, useCallback, useContext, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { makeStyles } from "tss-react/mui";
 
+import { PanelVisibleContext } from "@lichtblick/suite-base/components/DockPanelContext";
 import Panel from "@lichtblick/suite-base/components/Panel";
 import {
   PanelIconButton,
@@ -286,6 +287,7 @@ function TabPanel({ config, saveConfig }: Props): React.JSX.Element {
   );
   const contentTitles = useCurrentLayoutSelector(contentTitlesSelector).split("\n");
   const activeIdx = getActiveTabIndex(config);
+  const visible = useContext(PanelVisibleContext);
   const contentId = `${panelId}-tabpanel`;
 
   const select = useCallback(
@@ -426,7 +428,9 @@ function TabPanel({ config, saveConfig }: Props): React.JSX.Element {
             key={index}
             className={cx(classes.tabContent, { [classes.hiddenTab]: index !== activeIdx })}
           >
-            <TabLayout tabPanelId={panelId} index={index} layout={tab.layout} />
+            <PanelVisibleContext.Provider value={visible && index === activeIdx}>
+              <TabLayout tabPanelId={panelId} index={index} layout={tab.layout} />
+            </PanelVisibleContext.Provider>
           </div>
         ))}
       </div>

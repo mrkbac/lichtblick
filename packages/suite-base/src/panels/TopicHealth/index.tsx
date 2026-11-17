@@ -12,11 +12,12 @@ import SearchIcon from "@mui/icons-material/Search";
 import { IconButton, InputBase, Tooltip } from "@mui/material";
 import { produce } from "immer";
 import * as _ from "lodash-es";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 
 import { formatByteSize } from "@lichtblick/den/format";
 import { MessageEvent, SettingsTreeAction } from "@lichtblick/suite";
 import { useMessageReducer } from "@lichtblick/suite-base/PanelAPI";
+import { PanelVisibleContext } from "@lichtblick/suite-base/components/DockPanelContext";
 import EmptyState from "@lichtblick/suite-base/components/EmptyState";
 import {
   useMessagePipeline,
@@ -242,40 +243,59 @@ function TopicHealthTable({ config, saveConfig }: Props): React.JSX.Element {
     live: new Map(),
     deep: new Map(),
   }));
+  // Live rates are sampled every second even while hidden, so message ages and rate history stay
+  // right. Hidden (inactive tab, behind a maximized panel), the panel just doesn't re-render; showing
+  // it publishes the latest sample right away.
+  const visible = useContext(PanelVisibleContext);
+  const visibleRef = useRef(visible);
+  visibleRef.current = visible;
+  const liveRef = useRef<ReadonlyMap<string, RateSample>>(new Map());
+  const publish = useCallback(() => {
+    const { activeData } = getPipeline().playerState;
+    const nowMs = Date.now();
+    setSnapshot((previous) => {
+      const deep = new Map<string, { inspection: TopicInspection; bytesPerSec?: number }>();
+      for (const [topic, state] of liveDeepRef.current) {
+        const before = previous.deep.get(topic)?.inspection.bytes;
+        const seconds = (nowMs - previous.nowMs) / 1000;
+        deep.set(topic, {
+          inspection: finishInspection(state),
+          bytesPerSec:
+            before != undefined && seconds > 0
+              ? (state.result.bytes - before) / seconds
+              : undefined,
+        });
+      }
+      return {
+        stats: activeData?.topicStats,
+        currentTime: activeData?.currentTime,
+        nowMs,
+        live: liveRef.current,
+        deep,
+      };
+    });
+  }, [getPipeline]);
   useEffect(() => {
     const tick = () => {
-      const { activeData } = getPipeline().playerState;
-      const nowMs = Date.now();
-      setSnapshot((previous) => {
-        const deep = new Map<string, { inspection: TopicInspection; bytesPerSec?: number }>();
-        for (const [topic, state] of liveDeepRef.current) {
-          const before = previous.deep.get(topic)?.inspection.bytes;
-          const seconds = (nowMs - previous.nowMs) / 1000;
-          deep.set(topic, {
-            inspection: finishInspection(state),
-            bytesPerSec:
-              before != undefined && seconds > 0
-                ? (state.result.bytes - before) / seconds
-                : undefined,
-          });
-        }
-        return {
-          stats: activeData?.topicStats,
-          currentTime: activeData?.currentTime,
-          nowMs,
-          live: isRecording
-            ? previous.live
-            : sampleLiveRates(previous.live, activeData?.topicStats, nowMs),
-          deep,
-        };
-      });
+      if (!isRecording) {
+        const { activeData } = getPipeline().playerState;
+        liveRef.current = sampleLiveRates(liveRef.current, activeData?.topicStats, Date.now());
+      }
+      if (visibleRef.current) {
+        publish();
+      }
     };
     tick();
     const id = setInterval(tick, SAMPLE_INTERVAL_MS);
     return () => {
       clearInterval(id);
     };
-  }, [getPipeline, isRecording]);
+  }, [getPipeline, isRecording, publish]);
+  useEffect(() => {
+    if (visible) {
+      publish();
+    }
+  }, [publish, visible]);
 
   // Recordings: scan opted-in topics once over the whole source instead of subscribing.
   useEffect(() => {

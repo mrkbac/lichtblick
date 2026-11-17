@@ -120,7 +120,24 @@ export function useSharedRawMessagesLogic<T extends SharedConfig>({
 
   const inTimetickDiffMode = diffEnabled && diffMethod === PREV_MSG_METHOD;
 
-  const topicStats = useMessagePipeline(selectTopicStats);
+  // Only this topic's first/last times: the whole stats Map changes with every live message.
+  const topicName = topic?.name;
+  const firstMessageTime = useMessagePipeline(
+    useCallback(
+      (ctx: MessagePipelineContext) =>
+        topicName == undefined
+          ? undefined
+          : selectTopicStats(ctx)?.get(topicName)?.firstMessageTime,
+      [topicName],
+    ),
+  );
+  const lastMessageTime = useMessagePipeline(
+    useCallback(
+      (ctx: MessagePipelineContext) =>
+        topicName == undefined ? undefined : selectTopicStats(ctx)?.get(topicName)?.lastMessageTime,
+      [topicName],
+    ),
+  );
   const seekPlayback = useMessagePipeline(selectSeekPlayback);
   const pausePlayback = useMessagePipeline(selectPausePlayback);
   const getBatchIterator = useMessagePipeline(selectGetBatchIterator);
@@ -235,9 +252,6 @@ export function useSharedRawMessagesLogic<T extends SharedConfig>({
   // A ref, not state: disabling the focused button mid-step would drop focus and the shortcuts.
   const isSteppingRef = useRef(false);
   const canStep = seekPlayback != undefined && topic != undefined;
-  const stats = topic ? topicStats?.get(topic.name) : undefined;
-  const firstMessageTime = stats?.firstMessageTime;
-  const lastMessageTime = stats?.lastMessageTime;
   // Select only booleans from the playhead so playback ticks don't re-render the panel.
   const playheadAfterFirst = useMessagePipeline(
     useCallback(

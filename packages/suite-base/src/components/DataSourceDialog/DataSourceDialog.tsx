@@ -6,7 +6,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { Dialog } from "@mui/material";
-import { lazy, Suspense, useCallback, useLayoutEffect, useMemo, useRef } from "react";
+import { useCallback, useLayoutEffect, useMemo, useRef } from "react";
 import { makeStyles } from "tss-react/mui";
 
 import { useMountedState } from "@lichtblick/hooks";
@@ -23,16 +23,7 @@ import { AppEvent } from "@lichtblick/suite-base/services/IAnalytics";
 
 import Start from "./Start";
 
-// Lazy so three.js stays out of the startup bundle.
-const Snow = lazy(
-  async () => await import("@lichtblick/suite-base/components/DataSourceDialog/Snow"),
-);
-
 export type DataSourceDialogItem = "start" | "file" | "demo" | "remote";
-
-type DataSourceDialogProps = {
-  backdropAnimation?: boolean;
-};
 
 const useStyles = makeStyles()(() => ({
   fullScreenPaper: {
@@ -48,8 +39,7 @@ const useStyles = makeStyles()(() => ({
 
 const selectDataSourceDialog = (store: WorkspaceContextStore) => store.dialogs.dataSource;
 
-export function DataSourceDialog(props: DataSourceDialogProps): React.JSX.Element {
-  const { backdropAnimation } = props;
+export function DataSourceDialog(): React.JSX.Element {
   const { classes } = useStyles();
   const { availableSources, selectSource } = usePlayerSelection();
   const { dialogActions } = useWorkspaceActions();
@@ -92,26 +82,6 @@ export function DataSourceDialog(props: DataSourceDialogProps): React.JSX.Elemen
     }
   }, [activeView, dialogActions, firstSampleSource, isMounted, selectSource]);
 
-  const backdrop = useMemo(() => {
-    const now = new Date();
-    if (backdropAnimation === false) {
-      return;
-    } else if (now >= new Date(now.getFullYear(), 11, 25)) {
-      return (
-        <Suspense>
-          <Snow effect="snow" />
-        </Suspense>
-      );
-    } else if (now < new Date(now.getFullYear(), 0, 2)) {
-      return (
-        <Suspense>
-          <Snow effect="confetti" />
-        </Suspense>
-      );
-    }
-    return;
-  }, [backdropAnimation]);
-
   return (
     <Dialog
       data-testid="DataSourceDialog"
@@ -123,7 +93,6 @@ export function DataSourceDialog(props: DataSourceDialogProps): React.JSX.Elemen
       maxWidth="lg"
       slotProps={{
         backdrop: {
-          children: backdrop,
           className: classes.belowAppBar,
         },
         paper: {

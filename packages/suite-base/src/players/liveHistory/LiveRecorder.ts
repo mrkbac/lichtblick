@@ -45,7 +45,8 @@ export class LiveRecorder {
   /** Bumped per file, so sizes reported for a closed file are ignored. */
   #file = 0;
   #started?: Promise<void>;
-  #postTimer?: ReturnType<typeof setInterval>;
+  // Armed only while messages wait, so an idle connection doesn't wake up twice a second.
+  #postTimer?: ReturnType<typeof setTimeout>;
   #evictTimer?: ReturnType<typeof setInterval>;
   #failed = false;
   /** Set once stop() begins, so a late batch result can't start a new file. */
@@ -88,7 +89,6 @@ export class LiveRecorder {
       this.#started = this.#call(async () => {
         await this.#remote.start(name, this.#profile, this.#sourceMetadata());
       });
-      this.#postTimer = setInterval(this.#post, POST_INTERVAL_MS);
       this.#evictTimer = setInterval(() => void this.#enforceBudget(), EVICT_INTERVAL_MS);
       void this.#enforceBudget();
     }
@@ -108,6 +108,9 @@ export class LiveRecorder {
       data,
     });
     this.#backlogBytes += data.byteLength;
+    if (!this.#stopped) {
+      this.#postTimer ??= setTimeout(this.#post, POST_INTERVAL_MS);
+    }
     if (this.#backlogBytes > MAX_BACKLOG_BYTES) {
       this.#fail(new Error("Recording can't keep up with the incoming data"));
     }
@@ -116,7 +119,7 @@ export class LiveRecorder {
   /** Write what is pending, finish the file and move it to the recording folder if there is one. */
   public async stop(): Promise<void> {
     this.#stopped = true;
-    clearInterval(this.#postTimer);
+    clearTimeout(this.#postTimer);
     clearInterval(this.#evictTimer);
     if (this.#started) {
       this.#post();
@@ -132,6 +135,8 @@ export class LiveRecorder {
   }
 
   #post = (): void => {
+    clearTimeout(this.#postTimer);
+    this.#postTimer = undefined;
     if (this.#pending.length === 0) {
       return;
     }
@@ -202,7 +207,7 @@ export class LiveRecorder {
     this.#failed = true;
     this.#pending = [];
     this.#backlogBytes = 0;
-    clearInterval(this.#postTimer);
+    clearTimeout(this.#postTimer);
     clearInterval(this.#evictTimer);
     this.#worker.terminate();
     this.#onError(error);

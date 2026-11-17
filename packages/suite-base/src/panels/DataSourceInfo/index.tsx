@@ -27,11 +27,12 @@ import {
   Tooltip,
   Typography,
 } from "@mui/material";
-import { Fragment, useEffect, useRef, useState } from "react";
+import { Fragment, useContext, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { formatByteSize } from "@lichtblick/den/format";
 import CopyButton from "@lichtblick/suite-base/components/CopyButton";
+import { PanelVisibleContext } from "@lichtblick/suite-base/components/DockPanelContext";
 import EmptyState from "@lichtblick/suite-base/components/EmptyState";
 import {
   MessagePipelineContext,
@@ -112,6 +113,15 @@ export function RecordingInspector(): React.JSX.Element {
   const [topicStats, setTopicStats] = useState(() => selectTopicStats(getPipeline()));
   // Live sources show the recent rate, which drops to 0 when a publisher stops
   const [liveRates, setLiveRates] = useState(new Map<string, LiveRate>());
+  // Rates are sampled every second even while hidden (they rely on regular samples). Hidden
+  // (inactive tab, behind a maximized panel), the panel just doesn't re-render; showing it publishes
+  // the latest sample right away.
+  const visible = useContext(PanelVisibleContext);
+  const visibleRef = useRef(visible);
+  visibleRef.current = visible;
+  const latestRef = useRef<{ stats: typeof topicStats; rates?: Map<string, LiveRate> }>({
+    stats: topicStats,
+  });
   useEffect(() => {
     let tracker = new LiveTopicRates();
     let trackedPlayerId: string | undefined;
@@ -123,15 +133,30 @@ export function RecordingInspector(): React.JSX.Element {
         trackedPlayerId = pipeline.playerState.playerId;
         tracker = new LiveTopicRates();
       }
-      setTopicStats(stats);
-      if (stats) {
-        setLiveRates(tracker.update(Date.now(), stats));
+      latestRef.current = {
+        stats,
+        rates: stats ? tracker.update(Date.now(), stats) : latestRef.current.rates,
+      };
+      if (visibleRef.current) {
+        setTopicStats(stats);
+        if (latestRef.current.rates) {
+          setLiveRates(latestRef.current.rates);
+        }
       }
     }, 1000);
     return () => {
       clearInterval(id);
     };
   }, [getPipeline]);
+  useEffect(() => {
+    if (visible) {
+      const { stats, rates } = latestRef.current;
+      setTopicStats(stats);
+      if (rates) {
+        setLiveRates(rates);
+      }
+    }
+  }, [visible]);
   const start = useMessagePipeline(selectStartTime);
   const end = useMessagePipeline(selectEndTime);
   const name = useMessagePipeline(selectPlayerName);

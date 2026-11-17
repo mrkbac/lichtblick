@@ -4,12 +4,21 @@
 import { toSec } from "@foxglove/rostime";
 import { IconButton, Tooltip } from "@mui/material";
 import { useSnackbar } from "notistack";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useContext,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useTranslation } from "react-i18next";
 
 import { useDeepMemo } from "@lichtblick/hooks";
 import { SettingsTreeAction } from "@lichtblick/suite";
 import { useDataSourceInfo, useMessageReducer } from "@lichtblick/suite-base/PanelAPI";
+import { PanelVisibleContext } from "@lichtblick/suite-base/components/DockPanelContext";
 import MessagePathInput from "@lichtblick/suite-base/components/MessagePathSyntax/MessagePathInput";
 import { messagePathStructures } from "@lichtblick/suite-base/components/MessagePathSyntax/messagePathsForDatatype";
 import {
@@ -128,7 +137,12 @@ function Watch({ config: rawConfig, saveConfig }: Props): React.JSX.Element {
 
   // Age values against the playback time without re-rendering: repaint only the age badges
   const getPipeline = useMessagePipelineGetter();
+  // Hidden (inactive tab, behind a maximized panel): no ticking; showing it repaints right away.
+  const visible = useContext(PanelVisibleContext);
   useEffect(() => {
+    if (!visible) {
+      return;
+    }
     const clock = createPlaybackClock();
     const tick = () => {
       const now = clock(playbackOf(getPipeline()), performance.now() / 1000);
@@ -144,7 +158,7 @@ function Watch({ config: rawConfig, saveConfig }: Props): React.JSX.Element {
     return () => {
       clearInterval(timer);
     };
-  }, [getPipeline, painters, store]);
+  }, [getPipeline, painters, store, visible]);
 
   useLayoutEffect(() => {
     store.setRows(compiled);
