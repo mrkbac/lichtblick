@@ -16,6 +16,7 @@ import {
 import Logger from "@lichtblick/log";
 import { RenderState, VariableValue } from "@lichtblick/suite";
 import useShouldNotChangeOften from "@lichtblick/suite-base/hooks/useShouldNotChangeOften";
+import type { HistorySnapshot } from "@lichtblick/suite-base/providers/CurrentLayoutProvider/layoutHistory";
 import { PanelConfig, PlaybackConfig, UserScripts } from "@lichtblick/suite-base/types/panels";
 import { getAllPanelIds } from "@lichtblick/suite-base/util/tabLayout";
 
@@ -107,6 +108,10 @@ export interface ICurrentLayout {
     redoLayoutChange: () => void;
     /** Puts the most recently closed panel back, with its config. */
     reopenClosedPanel: () => void;
+    /** Moves the current layout to step `index` of its history (what undo/redo step through). */
+    goToLayoutHistory: (index: number) => void;
+    getLayoutHistory: () => HistorySnapshot;
+    subscribeLayoutHistory: (listener: () => void) => () => void;
   };
 }
 

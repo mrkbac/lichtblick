@@ -49,6 +49,11 @@ import { findFavoriteLayout } from "@lichtblick/suite-base/providers/CurrentLayo
 import { AppEvent } from "@lichtblick/suite-base/services/IAnalytics";
 import { LayoutLoader } from "@lichtblick/suite-base/services/ILayoutLoader";
 import { LayoutManagerEventTypes } from "@lichtblick/suite-base/services/ILayoutManager";
+import {
+  deleteLayoutHistory,
+  loadLayoutHistory,
+  saveLayoutHistory,
+} from "@lichtblick/suite-base/services/layoutHistoryStorage";
 import { migratePanelsState } from "@lichtblick/suite-base/services/migrateLayout";
 import { PanelConfig, PlaybackConfig, UserScripts } from "@lichtblick/suite-base/types/panels";
 import { windowAppURLState } from "@lichtblick/suite-base/util/appURLState";
@@ -133,6 +138,21 @@ export default function CurrentLayoutProvider({
     [],
   );
 
+  const history = useRef(new LayoutHistory());
+  /** The layout `history` belongs to; unset while another layout loads. */
+  const historyLayoutId = useRef<LayoutID | undefined>(undefined);
+  /** A revert of the layout being loaded, applied once its history is ready. */
+  const revertedWhileLoading = useRef<{ id: LayoutID; data: LayoutData } | undefined>(undefined);
+  useEffect(
+    () =>
+      history.current.subscribe(() => {
+        if (historyLayoutId.current != undefined) {
+          saveLayoutHistory(historyLayoutId.current, history.current.snapshot());
+        }
+      }),
+    [],
+  );
+
   const [, setSelectedLayoutId] = useAsyncFn(
     async (
       id: LayoutID | undefined,
@@ -143,6 +163,9 @@ export default function CurrentLayoutProvider({
         return;
       }
       try {
+        historyLayoutId.current = undefined;
+        // Typed so TS doesn't keep it narrowed to undefined across the awaits below.
+        revertedWhileLoading.current = undefined as typeof revertedWhileLoading.current;
         setLayoutState({ selectedLayout: { id, loading: true, data: undefined } });
         const layout = await layoutManager.getLayout(id);
         const layoutVersion = layout?.baseline.data.version;
@@ -158,13 +181,27 @@ export default function CurrentLayoutProvider({
         if (layout == undefined) {
           setLayoutState({ selectedLayout: undefined });
         } else {
+          const saved = await loadLayoutHistory(layout.id).catch((error: unknown) => {
+            log.error(error);
+            return undefined;
+          });
+          if (!isMounted()) {
+            return;
+          }
+          const reverted = revertedWhileLoading.current;
+          revertedWhileLoading.current = undefined;
+          historyLayoutId.current = layout.id;
+          let data = history.current.load(
+            saved,
+            migratePanelsState(layout.working?.data ?? layout.baseline.data),
+          );
+          if (reverted?.id === layout.id) {
+            // Like any revert: a step after the loaded state, so undo brings that back.
+            history.current.sync(reverted.data);
+            data = reverted.data;
+          }
           setLayoutState({
-            selectedLayout: {
-              loading: false,
-              id: layout.id,
-              data: migratePanelsState(layout.working?.data ?? layout.baseline.data),
-              name: layout.name,
-            },
+            selectedLayout: { loading: false, id: layout.id, data, name: layout.name },
           });
           if (saveToProfile) {
             setUserProfile({ currentLayoutId: id }).catch((error: unknown) => {
@@ -186,8 +223,6 @@ export default function CurrentLayoutProvider({
     },
     [enqueueSnackbar, isMounted, layoutManager, setLayoutState, setUserProfile],
   );
-
-  const history = useRef(new LayoutHistory());
 
   /** Every layout edit goes through here, so undo/redo sees all of them. */
   const commitLayoutData = useCallback(
@@ -238,13 +273,16 @@ export default function CurrentLayoutProvider({
         updatedLayout &&
         updatedLayout.id === layoutStateRef.current.selectedLayout?.id
       ) {
+        const data = migratePanelsState(updatedLayout.working?.data ?? updatedLayout.baseline.data);
+        if (historyLayoutId.current !== updatedLayout.id) {
+          // Still loading: the load shows it once the layout's own history is ready.
+          revertedWhileLoading.current = { id: updatedLayout.id, data };
+          return;
+        }
+        // A revert is a step of the layout's history, so it can be undone.
+        history.current.sync(data);
         setLayoutState({
-          selectedLayout: {
-            loading: false,
-            id: updatedLayout.id,
-            data: migratePanelsState(updatedLayout.working?.data ?? updatedLayout.baseline.data),
-            name: updatedLayout.name,
-          },
+          selectedLayout: { loading: false, id: updatedLayout.id, data, name: updatedLayout.name },
         });
       }
     };
@@ -257,6 +295,15 @@ export default function CurrentLayoutProvider({
   // Make sure our layout still exists after changes. If not deselect it.
   useEffect(() => {
     const listener: LayoutManagerEventTypes["change"] = async (event) => {
+      if (event.type === "delete") {
+        // Edits until another layout is selected must not save the deleted history again.
+        if (historyLayoutId.current === event.layoutId) {
+          historyLayoutId.current = undefined;
+        }
+        deleteLayoutHistory(event.layoutId).catch((error: unknown) => {
+          log.error(error);
+        });
+      }
       if (event.type !== "delete" || !layoutStateRef.current.selectedLayout?.id) {
         return;
       }
@@ -457,6 +504,11 @@ export default function CurrentLayoutProvider({
       reopenClosedPanel: () => {
         commitLayoutData((h, data) => h.reopenClosedPanel(data, performance.now()));
       },
+      goToLayoutHistory: (index: number) => {
+        commitLayoutData((h, data) => h.goTo(data, index));
+      },
+      getLayoutHistory: () => history.current.snapshot(),
+      subscribeLayoutHistory: (listener: () => void) => history.current.subscribe(listener),
     }),
     [
       analytics,
