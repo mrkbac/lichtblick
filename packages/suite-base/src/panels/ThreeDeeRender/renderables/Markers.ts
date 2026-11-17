@@ -75,7 +75,7 @@ export class Markers extends SceneExtension<TopicMarkers> {
       const namespaces = Array.from(topicMarkers?.namespaces.values() ?? []).sort((a, b) =>
         a.namespace.localeCompare(b.namespace),
       );
-      if (namespaces.length > 1 || (namespaces.length === 1 && namespaces[0]!.namespace !== "")) {
+      if (namespaces.some((ns) => ns.namespace !== "")) {
         node.children = {};
         for (const ns of namespaces) {
           const child: SettingsTreeNodeWithActionHandler = {

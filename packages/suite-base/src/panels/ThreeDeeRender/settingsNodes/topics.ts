@@ -624,7 +624,7 @@ export function pointSettingsNode(
   config: Partial<LayerSettingsPointExtension>,
   defaultSettings: LayerSettingsPointExtension = DEFAULT_POINT_SETTINGS,
   shapes: readonly PointShape[] = ALL_POINT_SHAPES,
-): DocumentedNode {
+): DocumentedNode & { fields: DocumentedFields } {
   const pointShape = config.pointShape ?? "circle";
 
   const checkColorsForDatatypes = (pointCloudDatatypes: Set<string>): boolean => {
@@ -705,7 +705,7 @@ export function pointCloudSettingsNode(
   config: Partial<LayerSettingsPointExtension & { stixelsEnabled: boolean }>,
 ): DocumentedNode {
   const node = pointSettingsNode(topic, messageFields, config);
-  node.fields!.stixelsEnabled = {
+  node.fields.stixelsEnabled = {
     label: "Stixel view",
     help: "Draws a vertical line from each point down to its frame's ground plane (z = 0).",
     input: "boolean",

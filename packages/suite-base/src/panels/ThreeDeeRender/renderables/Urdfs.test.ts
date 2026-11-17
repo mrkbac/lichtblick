@@ -223,6 +223,23 @@ describe("URDF requests", () => {
     extension.dispose();
   });
 
+  it("reports a fetch that rejects with a non-Error value", async () => {
+    // Given
+    const { extension, addError } = createExtension(async () => {
+      // eslint-disable-next-line @typescript-eslint/only-throw-error
+      throw "offline";
+    });
+    // Then
+    await vi.waitFor(() => {
+      expect(addError).toHaveBeenCalledWith(
+        ["layers", "robot"],
+        "FetchUrdf",
+        'Failed to load URDF from "https://example.com/old.urdf": offline',
+      );
+    });
+    extension.dispose();
+  });
+
   it.each(["success", "failure"])("ignores a superseded fetch %s", async (result) => {
     // Given
     const request = Promise.withResolvers<{ uri: string; data: Uint8Array }>();

@@ -182,8 +182,9 @@ function createLineStripMarker(
 ): Marker {
   // Close the polygon
   const points = [...polygonStamped.polygon.points];
-  if (points.length > 0) {
-    points.push(points[0]!);
+  const first = points[0];
+  if (first) {
+    points.push(first);
   }
 
   const linesMarker: Marker = {

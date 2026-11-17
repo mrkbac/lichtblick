@@ -7,20 +7,6 @@
 
 import * as THREE from "three";
 
-import type { ColorRGBA, Vector3 } from "./ros";
-import type { Pose } from "./transforms";
-
-export type BaseShape = {
-  pose: Pose;
-  scale: Vector3;
-  color?: ColorRGBA;
-};
-
-export type MouseEventObject = {
-  object: BaseShape;
-  instanceIndex?: number;
-};
-
 export type CameraState = {
   distance: number;
   perspective: boolean;

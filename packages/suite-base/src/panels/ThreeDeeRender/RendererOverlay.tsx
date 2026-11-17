@@ -47,11 +47,9 @@ import { HoverTooltip } from "./Interactions/HoverTooltip";
 import type { HoverEntityInfo } from "./Interactions/types";
 import { MeasurePanel } from "./MeasurePanel";
 import type { PickedRenderable } from "./Picker";
-import { Renderable } from "./Renderable";
 import { useRenderer, useRendererEvent } from "./RendererContext";
 import { Stats } from "./Stats";
 import { IMAGE_BUTTONS, MeasureIcon, THREE_DEE_BUTTONS } from "./buttons";
-import { MouseEventObject } from "./camera";
 import { PublishClickType } from "./renderables/PublishClickTool";
 import { THREE_DEE_SHORTCUTS } from "./shortcuts";
 import { InterfaceMode } from "./types";
@@ -139,8 +137,8 @@ function extractHoverMetadata(
         "value" in metadataEntry
       ) {
         metadata.push({
-          key: String((metadataEntry as { key: unknown }).key),
-          value: String((metadataEntry as { value: unknown }).value),
+          key: String(metadataEntry.key),
+          value: String(metadataEntry.value),
         });
       }
     }
@@ -315,27 +313,6 @@ export function RendererOverlay(props: Readonly<Props>): React.JSX.Element {
       <Stats />
     </div>
   ) : undefined;
-
-  // Convert the list of selected renderables (if any) into MouseEventObjects
-  // that can be passed to <InteractionContextMenu>, which shows a context menu
-  // of candidate objects to select
-  const clickedObjects = useMemo<MouseEventObject[]>(
-    () =>
-      selectedRenderables.map((selection) => ({
-        object: {
-          pose: selection.renderable.pose,
-          scale: selection.renderable.scale,
-          color: undefined,
-          interactionData: {
-            topic: selection.renderable.name,
-            highlighted: undefined,
-            renderable: selection.renderable,
-          },
-        },
-        instanceIndex: selection.instanceIndex,
-      })),
-    [selectedRenderables],
-  );
 
   // Once a single renderable is selected, convert it to the SelectionObject
   // format to populate the object inspection dialog (<Interactions>)
@@ -625,24 +602,16 @@ export function RendererOverlay(props: Readonly<Props>): React.JSX.Element {
           )
         }
       </div>
-      {clickedObjects.length > 1 && !selectedObject && (
+      {selectedRenderables.length > 1 && !selectedObject && (
         <InteractionContextMenu
           onClose={() => {
             setSelectedRenderables([]);
           }}
           clickedPosition={clickedPosition}
-          clickedObjects={clickedObjects}
+          clickedObjects={selectedRenderables}
           selectObject={(selection) => {
-            if (selection) {
-              const renderable = (
-                selection.object as unknown as {
-                  interactionData: { renderable: Renderable };
-                }
-              ).interactionData.renderable;
-              const instanceIndex = selection.instanceIndex;
-              setSelectedRenderables([]);
-              setSelectedRenderable({ renderable, instanceIndex });
-            }
+            setSelectedRenderables([]);
+            setSelectedRenderable(selection);
           }}
         />
       )}

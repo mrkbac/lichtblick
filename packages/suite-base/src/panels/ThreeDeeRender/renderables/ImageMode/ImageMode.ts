@@ -76,6 +76,7 @@ import { t3D } from "@lichtblick/suite-base/panels/ThreeDeeRender/t3D";
 import { makePose, AnyFrameId } from "@lichtblick/suite-base/panels/ThreeDeeRender/transforms";
 import { AppEvent } from "@lichtblick/suite-base/services/IAnalytics";
 import { downloadFiles } from "@lichtblick/suite-base/util/download";
+import { toError } from "@lichtblick/suite-base/util/toError";
 
 import { ImageModeCamera } from "./ImageModeCamera";
 import { MessageHandler, MessageRenderState } from "./MessageHandler";
@@ -882,7 +883,7 @@ export class ImageMode
       this.renderer.settings.errors.remove(CALIBRATION_TOPIC_PATH, CAMERA_MODEL);
     } catch (errUnk) {
       this.#cameraModel = undefined;
-      const err = errUnk as Error;
+      const err = toError(errUnk);
       this.renderer.settings.errors.add(CALIBRATION_TOPIC_PATH, CAMERA_MODEL, err.message);
     }
     return model;
@@ -984,7 +985,7 @@ export class ImageMode
       } catch (error) {
         log.error(error);
         if (this.renderer.displayTemporaryError) {
-          this.renderer.displayTemporaryError((error as Error).toString());
+          this.renderer.displayTemporaryError(String(error));
         }
       }
     };

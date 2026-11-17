@@ -18,9 +18,8 @@ export function removeLights(model: LoadedModel): void {
   // Remove lights from the model
   const lights: THREE.Light[] = [];
   model.traverse((child: THREE.Object3D) => {
-    const maybeLight = child as Partial<THREE.Light>;
-    if (maybeLight.isLight === true) {
-      lights.push(maybeLight as THREE.Light);
+    if (child instanceof THREE.Light) {
+      lights.push(child);
     }
   });
   for (const light of lights) {

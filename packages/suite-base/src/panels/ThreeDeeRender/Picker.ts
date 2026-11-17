@@ -59,15 +59,13 @@ export class Picker {
   #camera?: Camera;
   #materialCache = new Map<number, THREE.ShaderMaterial>();
   #emptyScene: THREE.Scene;
-  #pixelBuffer: Uint8Array;
+  #pixelBuffer = new Uint8Array(4);
+  /** Big-endian view of `#pixelBuffer`: object ids are int32, depth bits float32 */
+  #pixelView = new DataView(this.#pixelBuffer.buffer);
   #currClearColor = new THREE.Color();
   #pickingTarget: THREE.WebGLRenderTarget;
   #isDebugPass = false;
-  #depthTarget?: THREE.WebGLRenderTarget;
-  #depthReadTarget?: THREE.WebGLRenderTarget;
-  #depthCopyScene?: THREE.Scene;
-  #depthCopyMaterial?: THREE.ShaderMaterial;
-  #depthBits = new DataView(new ArrayBuffer(4));
+  #depthPicking?: DepthPicking;
   #projectionBeforePick = new THREE.Matrix4();
 
   public constructor(gl: THREE.WebGLRenderer, scene: THREE.Scene) {
@@ -81,7 +79,6 @@ export class Picker {
       format: THREE.RGBAFormat, // stores objectIds as uint32
       generateMipmaps: false,
     });
-    this.#pixelBuffer = new Uint8Array(4);
     // We need to be inside of .render in order to call renderBufferDirect in
     // renderList() so create an empty scene
     this.#emptyScene = new THREE.Scene();
@@ -93,13 +90,12 @@ export class Picker {
     }
     this.#materialCache.clear();
     this.#pickingTarget.dispose();
-    this.#depthTarget?.depthTexture?.dispose();
-    this.#depthTarget?.dispose();
-    this.#depthReadTarget?.dispose();
-    this.#depthCopyMaterial?.dispose();
-    for (const child of this.#depthCopyScene?.children ?? []) {
-      (child as THREE.Mesh).geometry.dispose();
-    }
+    const depthPicking = this.#depthPicking;
+    depthPicking?.target.depthTexture?.dispose();
+    depthPicking?.target.dispose();
+    depthPicking?.readTarget.dispose();
+    depthPicking?.quad.material.dispose();
+    depthPicking?.quad.geometry.dispose();
   }
 
   /**
@@ -118,77 +114,23 @@ export class Picker {
     if (x < 0 || y < 0 || x * pixelRatio >= width || y * pixelRatio >= height) {
       return undefined;
     }
-    if (!this.#depthTarget || !this.#depthReadTarget || !this.#depthCopyScene) {
-      this.#initDepthPicking();
-    }
-    const depthTarget = this.#depthTarget!;
+    const depthPicking = (this.#depthPicking ??= createDepthPicking());
     this.#emptyScene.onAfterRender = this.#renderForPicking;
     this.#camera = camera;
     const { xInView, yInView } = this.#updateCameraForPickAndGetPickCoordsInView(x, y, {});
-    const originalRenderState = this.#prepareGLRendererForPick(depthTarget);
+    const originalRenderState = this.#prepareGLRendererForPick(depthPicking.target);
     this.#gl.render(this.#emptyScene, camera);
     this.#resetCameraFromPick({});
 
     // WebGL2 can't read depth buffers directly, so copy the depth bits into a color target
-    this.#depthCopyMaterial!.uniforms.texel!.value.set(xInView, yInView);
-    this.#gl.setRenderTarget(this.#depthReadTarget!);
-    this.#gl.render(this.#depthCopyScene!, camera);
-    this.#gl.readRenderTargetPixels(this.#depthReadTarget!, 0, 0, 1, 1, this.#pixelBuffer);
+    depthPicking.texel.set(xInView, yInView);
+    this.#gl.setRenderTarget(depthPicking.readTarget);
+    this.#gl.render(depthPicking.scene, camera);
+    this.#gl.readRenderTargetPixels(depthPicking.readTarget, 0, 0, 1, 1, this.#pixelBuffer);
     this.#cleanUpGlRendererFromPick(originalRenderState);
 
-    for (let i = 0; i < 4; i++) {
-      this.#depthBits.setUint8(i, this.#pixelBuffer[i]!);
-    }
-    const depth = this.#depthBits.getFloat32(0);
+    const depth = this.#pixelView.getFloat32(0);
     return depth < 1 ? depth : undefined;
-  }
-
-  #initDepthPicking(): void {
-    this.#depthTarget = new THREE.WebGLRenderTarget(PIXEL_WIDTH, PIXEL_WIDTH, {
-      minFilter: THREE.NearestFilter,
-      magFilter: THREE.NearestFilter,
-      generateMipmaps: false,
-    });
-    this.#depthTarget.depthTexture = new THREE.DepthTexture(
-      PIXEL_WIDTH,
-      PIXEL_WIDTH,
-      THREE.FloatType,
-    );
-    this.#depthReadTarget = new THREE.WebGLRenderTarget(1, 1, {
-      minFilter: THREE.NearestFilter,
-      magFilter: THREE.NearestFilter,
-      generateMipmaps: false,
-      depthBuffer: false,
-    });
-    this.#depthCopyMaterial = new THREE.ShaderMaterial({
-      vertexShader: /* glsl */ `
-        void main() {
-          gl_Position = vec4(position.xy, 0.0, 1.0);
-        }
-      `,
-      fragmentShader: /* glsl */ `
-        uniform highp sampler2D depthTexture;
-        uniform vec2 texel;
-        void main() {
-          uint bits = floatBitsToUint(texelFetch(depthTexture, ivec2(texel), 0).r);
-          gl_FragColor = vec4(
-            float((bits >> 24) & 255u),
-            float((bits >> 16) & 255u),
-            float((bits >> 8) & 255u),
-            float(bits & 255u)) / 255.0;
-        }
-      `,
-      uniforms: {
-        depthTexture: { value: this.#depthTarget.depthTexture },
-        texel: { value: new THREE.Vector2() },
-      },
-      depthTest: false,
-      depthWrite: false,
-    });
-    const quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), this.#depthCopyMaterial);
-    quad.frustumCulled = false;
-    this.#depthCopyScene = new THREE.Scene();
-    this.#depthCopyScene.add(quad);
   }
 
   public pick(
@@ -211,11 +153,7 @@ export class Picker {
     this.#cleanUpGlRendererFromPick(originalRenderState);
     this.#resetCameraFromPick(options);
 
-    const val =
-      (this.#pixelBuffer[0]! << 24) +
-      (this.#pixelBuffer[1]! << 16) +
-      (this.#pixelBuffer[2]! << 8) +
-      this.#pixelBuffer[3]!;
+    const val = this.#pixelView.getInt32(0);
 
     if (options.debug === true) {
       this.#pickDebugRender(camera);
@@ -248,12 +186,7 @@ export class Picker {
       this.#pickInstanceDebugRender(camera, renderable);
     }
 
-    return (
-      (this.#pixelBuffer[0]! << 24) +
-      (this.#pixelBuffer[1]! << 16) +
-      (this.#pixelBuffer[2]! << 8) +
-      this.#pixelBuffer[3]!
-    );
+    return this.#pixelView.getInt32(0);
   }
 
   #updateCameraForPickAndGetPickCoordsInView(
@@ -573,4 +506,59 @@ function hashInt(x: number): number {
   A[0] ^= A[0] << 10;
   A[0] ^= A[0] >>> 15;
   return A[0];
+}
+
+type DepthPicking = {
+  target: THREE.WebGLRenderTarget;
+  readTarget: THREE.WebGLRenderTarget;
+  scene: THREE.Scene;
+  quad: THREE.Mesh<THREE.PlaneGeometry, THREE.ShaderMaterial>;
+  /** The copy shader's `texel` uniform value */
+  texel: THREE.Vector2;
+};
+
+function createDepthPicking(): DepthPicking {
+  const texel = new THREE.Vector2();
+  const target = new THREE.WebGLRenderTarget(PIXEL_WIDTH, PIXEL_WIDTH, {
+    minFilter: THREE.NearestFilter,
+    magFilter: THREE.NearestFilter,
+    generateMipmaps: false,
+  });
+  target.depthTexture = new THREE.DepthTexture(PIXEL_WIDTH, PIXEL_WIDTH, THREE.FloatType);
+  const readTarget = new THREE.WebGLRenderTarget(1, 1, {
+    minFilter: THREE.NearestFilter,
+    magFilter: THREE.NearestFilter,
+    generateMipmaps: false,
+    depthBuffer: false,
+  });
+  const material = new THREE.ShaderMaterial({
+    vertexShader: /* glsl */ `
+      void main() {
+        gl_Position = vec4(position.xy, 0.0, 1.0);
+      }
+    `,
+    fragmentShader: /* glsl */ `
+      uniform highp sampler2D depthTexture;
+      uniform vec2 texel;
+      void main() {
+        uint bits = floatBitsToUint(texelFetch(depthTexture, ivec2(texel), 0).r);
+        gl_FragColor = vec4(
+          float((bits >> 24) & 255u),
+          float((bits >> 16) & 255u),
+          float((bits >> 8) & 255u),
+          float(bits & 255u)) / 255.0;
+      }
+    `,
+    uniforms: {
+      depthTexture: { value: target.depthTexture },
+      texel: { value: texel },
+    },
+    depthTest: false,
+    depthWrite: false,
+  });
+  const quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), material);
+  quad.frustumCulled = false;
+  const scene = new THREE.Scene();
+  scene.add(quad);
+  return { target, readTarget, scene, quad, texel };
 }

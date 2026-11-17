@@ -18,50 +18,23 @@ import { useTheme } from "@mui/material";
 import { StoryObj } from "storybook-react-rsbuild";
 
 import { InteractionContextMenu } from "./InteractionContextMenu";
-
-const selectedObject = {
-  id: "obj-1",
-  header: { frame_id: "some_frame", stamp: { sec: 0, nsec: 0 } },
-  action: 0,
-  ns: "",
-  type: 0,
-  scale: { x: 2, y: 2, z: 4 },
-  color: { r: 1, g: 0.1, b: 0, a: 0.7 },
-  pose: {
-    position: { x: -1, y: 1, z: -5 },
-    orientation: { x: 0, y: 0, z: 0, w: 1 },
-  },
-};
+import type { Renderable } from "../Renderable";
 
 const sharedProps = {
   selectObject: () => {},
   clickedObjects: [
+    { renderable: { name: "/foo/bar" } as Renderable },
+    { renderable: { name: "/foo1/bar" } as Renderable },
+    { renderable: { name: "/abc/xyz" } as Renderable, instanceIndex: 10 },
     {
-      instanceIndex: undefined,
-      object: { ...selectedObject, interactionData: { topic: "/foo/bar" } },
-    },
-    {
-      instanceIndex: undefined,
-      object: { ...selectedObject, interactionData: { topic: "/foo1/bar" }, id: undefined },
-    },
-    {
+      renderable: {
+        name: "/some_topic_name/nested_name/with_very_very_very_longer_name/",
+      } as Renderable,
       instanceIndex: 10,
-      object: { ...selectedObject, interactionData: { topic: "/abc/xyz" } },
     },
     {
+      renderable: { name: "/some_topic/with_slightly_longer_names" } as Renderable,
       instanceIndex: 10,
-      object: {
-        ...selectedObject,
-        interactionData: { topic: "/some_topic_name/nested_name/with_very_very_very_longer_name/" },
-        id: undefined,
-      },
-    },
-    {
-      instanceIndex: 10,
-      object: {
-        ...selectedObject,
-        interactionData: { topic: "/some_topic/with_slightly_longer_names" },
-      },
     },
   ],
   clickedPosition: { clientX: 100, clientY: 200 },

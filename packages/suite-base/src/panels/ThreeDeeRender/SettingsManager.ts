@@ -93,7 +93,7 @@ export class SettingsManager extends EventEmitter<SettingsManagerEvents> {
   }
 
   public tree(): DocumentedNodes {
-    return this.#root.children!;
+    return this.#root.children ?? {};
   }
 
   public handleAction = (action: SettingsTreeAction): void => {
@@ -149,34 +149,24 @@ export class SettingsManager extends EventEmitter<SettingsManagerEvents> {
 }
 
 function removeNodeAtPath(root: DocumentedNode, path: Path): boolean {
-  if (path.length === 0) {
-    return false;
-  }
-
-  const segment = path[0]!;
-  const nextNode = root.children?.[segment];
-  if (!nextNode) {
+  const segment = path[0];
+  const children = root.children;
+  const nextNode = segment == undefined ? undefined : children?.[segment];
+  if (segment == undefined || !children || !nextNode) {
     return false;
   }
 
   if (path.length === 1) {
-    const hasEntry = root.children?.[segment] != undefined;
-    if (hasEntry) {
-      root.children![segment] = undefined;
-    }
-    return hasEntry;
+    children[segment] = undefined;
+    return true;
   }
 
   return removeNodeAtPath(nextNode, path.slice(1));
 }
 
 function clearChildren(root: DocumentedNode, path: Path): void {
-  if (path.length === 0) {
-    return;
-  }
-
-  const segment = path[0]!;
-  const nextNode = root.children?.[segment];
+  const segment = path[0];
+  const nextNode = segment == undefined ? undefined : root.children?.[segment];
   if (!nextNode) {
     return;
   }
@@ -190,22 +180,20 @@ function clearChildren(root: DocumentedNode, path: Path): void {
 }
 
 function addNodeAtPath(root: DocumentedNode, path: Path, node: DocumentedNode): void {
-  if (path.length === 0) {
+  const lastSegment = path.at(-1);
+  if (lastSegment == undefined) {
     throw new Error(`Empty path for settings node "${node.label}"`);
   }
 
   // Recursively walk/build the settings tree down to the end of the path except
   // for the last segment, which is the node to add
   let curNode = root;
-  for (let i = 0; i < path.length - 1; i++) {
-    const segment = path[i]!;
+  for (const segment of path.slice(0, -1)) {
     curNode.children ??= {};
-    curNode.children[segment] ??= {};
-    curNode = curNode.children[segment]!;
+    curNode = curNode.children[segment] ??= {};
   }
 
   // Assign the node to the last segment of the path
-  const lastSegment = path[path.length - 1]!;
   curNode.children ??= {};
   curNode.children[lastSegment] = node;
 }
@@ -219,8 +207,7 @@ function setLabelAtPath(root: DocumentedNode, path: Path, label: string): void {
   let curNode = root;
   for (const segment of path) {
     curNode.children ??= {};
-    curNode.children[segment] ??= {};
-    curNode = curNode.children[segment]!;
+    curNode = curNode.children[segment] ??= {};
   }
 
   curNode.label = label;

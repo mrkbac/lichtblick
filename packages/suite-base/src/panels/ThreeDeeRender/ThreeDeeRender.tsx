@@ -832,7 +832,7 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
     if (!renderer) {
       return;
     }
-    context.subscribe(topicsToSubscribe ?? ([] as Subscription[]));
+    context.subscribe(topicsToSubscribe ?? []);
   }, [context, topicsToSubscribe, renderer]);
 
   // Keep the renderer parameters up to date

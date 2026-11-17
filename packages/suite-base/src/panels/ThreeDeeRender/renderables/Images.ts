@@ -15,6 +15,7 @@ import { CameraModelsMap } from "@lichtblick/den/image/types";
 import Logger from "@lichtblick/log";
 import { SettingsTreeAction } from "@lichtblick/suite";
 import { ALL_SUPPORTED_IMAGE_SCHEMAS } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/ImageMode/schemas";
+import { toError } from "@lichtblick/suite-base/util/toError";
 
 import {
   IMAGE_RENDERABLE_DEFAULT_SETTINGS,
@@ -433,7 +434,7 @@ export class Images extends SceneExtension<ImageRenderable> {
       renderable.userData.cameraInfo = newCameraInfo;
       this.renderer.settings.errors.removeFromTopic(imageTopic, CAMERA_MODEL);
     } catch (errUnk) {
-      const err = errUnk as Error;
+      const err = toError(errUnk);
       this.renderer.settings.errors.addToTopic(imageTopic, CAMERA_MODEL, err.message);
     }
   }

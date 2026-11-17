@@ -209,14 +209,16 @@ export function nudge(
     xyz: [...(values?.xyz ?? [0, 0, 0])],
     rpy: [...(values?.rpy ?? [0, 0, 0])],
   };
-  const [axis, sign] = {
-    ArrowUp: [rotate ? 1 : 0, 1],
-    ArrowDown: [rotate ? 1 : 0, -1],
-    ArrowLeft: [rotate ? 2 : 1, 1],
-    ArrowRight: [rotate ? 2 : 1, -1],
-    PageUp: [rotate ? 0 : 2, 1],
-    PageDown: [rotate ? 0 : 2, -1],
-  }[key] as [0 | 1 | 2, number];
+  const [axis, sign] = (
+    {
+      ArrowUp: [rotate ? 1 : 0, 1],
+      ArrowDown: [rotate ? 1 : 0, -1],
+      ArrowLeft: [rotate ? 2 : 1, 1],
+      ArrowRight: [rotate ? 2 : 1, -1],
+      PageUp: [rotate ? 0 : 2, 1],
+      PageDown: [rotate ? 0 : 2, -1],
+    } satisfies Record<NudgeKey, [0 | 1 | 2, number]>
+  )[key];
   (rotate ? next.rpy : next.xyz)[axis] += sign * amount;
   return next;
 }

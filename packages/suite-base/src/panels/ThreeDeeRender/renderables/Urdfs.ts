@@ -26,6 +26,7 @@ import type { DocumentedNodes } from "@lichtblick/suite-base/panels/shared/docum
 import { eulerToQuaternion } from "@lichtblick/suite-base/util/geometry";
 import { isValidUrl } from "@lichtblick/suite-base/util/isValidURL";
 import { randomUUID } from "@lichtblick/suite-base/util/randomUUID";
+import { toError } from "@lichtblick/suite-base/util/toError";
 
 import { BaseUserData, Renderable } from "../Renderable";
 import { RenderableCube } from "./markers/RenderableCube";
@@ -547,12 +548,13 @@ export class Urdfs extends SceneExtension<UrdfRenderable> {
 
     // Update custom layer URDFs that use parameters.
     for (const [instanceId, renderable] of this.renderables.entries()) {
-      const sourceType = (renderable.userData.settings as Partial<LayerSettingsCustomUrdf>)
-        .sourceType;
-      const paramName = (renderable.userData.settings as Partial<LayerSettingsCustomUrdf>)
-        .parameter;
-      if (sourceType === "param" && paramName != undefined) {
-        const urdf = parameters?.get(paramName);
+      const settings = renderable.userData.settings;
+      if (
+        "sourceType" in settings &&
+        settings.sourceType === "param" &&
+        settings.parameter != undefined
+      ) {
+        const urdf = parameters?.get(settings.parameter);
         if (typeof urdf === "string") {
           this.#loadUrdf({ instanceId, urdf });
         }
@@ -627,7 +629,7 @@ export class Urdfs extends SceneExtension<UrdfRenderable> {
         if (fetching.control.signal.aborted || renderable.userData.fetching !== fetching) {
           return;
         }
-        const err = e as Error;
+        const err = toError(e);
         const hasError = !err.message.startsWith("Failed to fetch");
         const errMessage = `Failed to load URDF from "${url}"${hasError ? `: ${err.message}` : ""}`;
         this.renderer.settings.errors.add(["layers", instanceId], FETCH_URDF_ERR, errMessage);
@@ -791,7 +793,7 @@ export class Urdfs extends SceneExtension<UrdfRenderable> {
         ) {
           return;
         }
-        const err = e as Error;
+        const err = toError(e);
         log.error(`Failed to parse URDF: ${err.message}`);
         this.renderer.settings.errors.add(
           settingsPath,
