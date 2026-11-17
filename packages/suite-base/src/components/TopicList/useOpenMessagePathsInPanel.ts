@@ -31,6 +31,7 @@ const SCENE_SCHEMAS = new Set([
   ...ros.MARKER_DATATYPES,
   ...ros.MARKER_ARRAY_DATATYPES,
   ...ros.OCCUPANCY_GRID_DATATYPES,
+  ...ros.VOXEL_GRID_DATATYPES,
   ...ros.POINTCLOUD_DATATYPES,
   ...ros.LASERSCAN_DATATYPES,
   ...ros.VELODYNE_SCAN_DATATYPES,
@@ -47,6 +48,7 @@ const SCENE_SCHEMAS = new Set([
   ...foxglove.POSE_IN_FRAME_DATATYPES,
   ...foxglove.POSES_IN_FRAME_DATATYPES,
   ...foxglove.GRID_DATATYPES,
+  ...foxglove.VOXEL_GRID_DATATYPES,
 ]);
 
 /** Picks the panel type a new panel should have to show the given message paths. */

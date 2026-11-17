@@ -350,6 +350,10 @@ addRosDataType(MARKER_ARRAY_DATATYPES, "studio_msgs/MarkerArray");
 export const OCCUPANCY_GRID_DATATYPES = new Set<string>();
 addRosDataType(OCCUPANCY_GRID_DATATYPES, "nav_msgs/OccupancyGrid");
 
+export const VOXEL_GRID_DATATYPES = new Set<string>();
+addRosDataType(VOXEL_GRID_DATATYPES, "costmap_2d/VoxelGrid");
+addRosDataType(VOXEL_GRID_DATATYPES, "nav2_msgs/VoxelGrid");
+
 export const POINTCLOUD_DATATYPES = new Set<string>();
 addRosDataType(POINTCLOUD_DATATYPES, "sensor_msgs/PointCloud2");
 
