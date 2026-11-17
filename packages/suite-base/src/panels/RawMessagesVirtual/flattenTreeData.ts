@@ -12,6 +12,7 @@ import {
   TreeNode,
 } from "@lichtblick/suite-base/panels/RawMessagesCommon/types";
 import { typedArrayToArray } from "@lichtblick/suite-base/panels/RawMessagesCommon/utils";
+import { isTypedArray } from "@lichtblick/suite-base/types/isTypedArray";
 
 const DIFF_STATUS_BY_LABEL: Record<string, DiffStatus> = {
   [diffLabels.ADDED.labelText]: "added",
@@ -43,8 +44,8 @@ function entriesOf(
   // Convert typed arrays to regular arrays so their elements can be iterated.
   const iterable = typedArrayToArray(value, cache);
   return Array.isArray(iterable)
-    ? iterable.map((item, index) => [index, item] as [number, unknown])
-    : Object.entries(iterable as Record<string, unknown>);
+    ? iterable.map((item, index): [number, unknown] => [index, item])
+    : Object.entries(value);
 }
 
 /**
@@ -68,7 +69,7 @@ function isExpandable(value: unknown, { diff }: { diff: boolean }): boolean {
     return false;
   }
   if (ArrayBuffer.isView(value)) {
-    return !(value instanceof DataView) && (value as unknown as ArrayLike<unknown>).length > 0;
+    return isTypedArray(value) && value.length > 0;
   }
   if (Array.isArray(value)) {
     return value.length > 0;
