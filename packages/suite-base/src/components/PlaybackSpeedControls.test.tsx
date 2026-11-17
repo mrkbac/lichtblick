@@ -60,8 +60,20 @@ describe("Given PlaybackSpeedControls", () => {
     expect(screen.getByRole("slider", { name: "Playback speed" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Slower" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Faster" })).toBeInTheDocument();
-    expect(screen.getByText("0.5×")).toBeInTheDocument();
-    expect(screen.getByText("10×")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "0.5×" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "1×", pressed: true })).toBeInTheDocument();
+  });
+
+  it("When the slider moves Then the thumb follows before the player echoes the speed", () => {
+    renderWithProviders({ speed: 1 });
+    fireEvent.click(screen.getByTestId("PlaybackSpeedControls-Dropdown"));
+
+    const slider = screen.getByRole("slider", { name: "Playback speed" });
+    fireEvent.keyDown(slider, { key: "ArrowLeft" });
+
+    // The mock player never echoes the new speed; the control must not snap back to 1×.
+    expect(slider).toHaveAttribute("aria-valuetext", "0.98×");
+    expect(screen.getByTestId("PlaybackSpeedControls-Dropdown")).toHaveTextContent("0.98×");
   });
 });
 

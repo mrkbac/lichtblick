@@ -8,7 +8,14 @@
 import AddIcon from "@mui/icons-material/Add";
 import ArrowDropDownIcon from "@mui/icons-material/ArrowDropDown";
 import RemoveIcon from "@mui/icons-material/Remove";
-import { Chip, IconButton, Popover, Slider, Typography } from "@mui/material";
+import {
+  IconButton,
+  Popover,
+  Slider,
+  ToggleButton,
+  ToggleButtonGroup,
+  Typography,
+} from "@mui/material";
 import { useCallback, useEffect, useState } from "react";
 
 import HoverableIconButton from "@lichtblick/suite-base/components/HoverableIconButton";
@@ -31,7 +38,10 @@ const MAX_SPEED = PLAYBACK_SPEED_OPTIONS[PLAYBACK_SPEED_OPTIONS.length - 1]!;
 // Slider runs in log10 space so 0.01× and 100× are equally reachable.
 const LOG_MIN = Math.log10(MIN_SPEED);
 const LOG_MAX = Math.log10(MAX_SPEED);
-const SLIDER_MARKS = [0.01, 0.1, 1, 10, 100].map((v) => ({ value: Math.log10(v) }));
+const SLIDER_MARKS = [0.01, 0.1, 1, 10, 100].map((v) => ({
+  value: Math.log10(v),
+  label: `${v}×`,
+}));
 
 /** Round to 2 significant digits so slider values read like 0.37×, 1.2×, 45×. */
 export const roundSpeed = (val: number): number =>
@@ -61,8 +71,18 @@ export default function PlaybackSpeedControls(): React.JSX.Element {
   );
   const setPlaybackSpeed = useMessagePipeline(useCallback((state) => state.setPlaybackSpeed, []));
   const { setPlaybackConfig } = useCurrentLayoutActions();
+  // Optimistic value: the player echoes speed changes back asynchronously (throttled), so a
+  // control bound to the echoed speed lags and snaps back while dragging. Show the draft until
+  // the player reports the same speed.
+  const [draft, setDraft] = useState<number | undefined>(undefined);
+  useEffect(() => {
+    if (speed === draft) {
+      setDraft(undefined);
+    }
+  }, [speed, draft]);
   const setSpeed = useCallback(
     (newSpeed: number) => {
+      setDraft(newSpeed);
       setPlaybackConfig({ speed: newSpeed });
       setPlaybackSpeed?.(newSpeed);
     },
@@ -78,6 +98,7 @@ export default function PlaybackSpeedControls(): React.JSX.Element {
 
   const displayedSpeed = speed ?? configSpeed;
   const current = displayedSpeed ?? 1;
+  const shown = draft ?? current;
 
   return (
     <>
@@ -97,7 +118,7 @@ export default function PlaybackSpeedControls(): React.JSX.Element {
         color="inherit"
       >
         <span className={classes.speedText}>
-          {displayedSpeed == undefined ? "–" : formatSpeed(displayedSpeed)}
+          {displayedSpeed == undefined ? "–" : formatSpeed(draft ?? displayedSpeed)}
         </span>
       </HoverableIconButton>
       <Popover
@@ -106,17 +127,24 @@ export default function PlaybackSpeedControls(): React.JSX.Element {
         open={open}
         onClose={() => {
           setAnchorEl(undefined);
+          setDraft(undefined); // don't keep a stale draft if the player clamped the speed
         }}
         anchorOrigin={{ vertical: "top", horizontal: "right" }}
         transformOrigin={{ vertical: "bottom", horizontal: "right" }}
         slotProps={{ paper: { className: classes.paper } }}
       >
-        <Typography variant="body2" align="center" className={classes.value}>
-          {formatSpeed(current)}
-        </Typography>
+        <Stack direction="row" alignItems="baseline" justifyContent="space-between">
+          <Typography variant="overline" color="text.secondary" className={classes.title}>
+            Playback speed
+          </Typography>
+          <Typography variant="h5" className={classes.value}>
+            {formatSpeed(shown)}
+          </Typography>
+        </Stack>
         <Stack direction="row" alignItems="center" gap={1}>
           <IconButton
             size="small"
+            className={classes.stepButton}
             aria-label="Slower"
             disabled={current <= MIN_SPEED}
             onClick={() => {
@@ -126,19 +154,20 @@ export default function PlaybackSpeedControls(): React.JSX.Element {
             <RemoveIcon fontSize="small" />
           </IconButton>
           <Slider
-            size="small"
+            className={classes.slider}
             aria-label="Playback speed"
             min={LOG_MIN}
             max={LOG_MAX}
             step={0.01}
             marks={SLIDER_MARKS}
-            value={Math.log10(current)}
-            scale={(v) => roundSpeed(10 ** v)}
+            value={Math.log10(shown)}
             valueLabelDisplay="off"
             getAriaValueText={(v) => formatSpeed(roundSpeed(10 ** v))}
-            // Live speed while dragging; persist to the layout (one undo step) on release.
+            // Live speed while dragging; persist on release so a drag is one layout undo step.
             onChange={(_e, v) => {
-              setPlaybackSpeed?.(roundSpeed(10 ** v));
+              const next = roundSpeed(10 ** v);
+              setDraft(next);
+              setPlaybackSpeed?.(next);
             }}
             onChangeCommitted={(_e, v) => {
               setSpeed(roundSpeed(10 ** v));
@@ -146,6 +175,7 @@ export default function PlaybackSpeedControls(): React.JSX.Element {
           />
           <IconButton
             size="small"
+            className={classes.stepButton}
             aria-label="Faster"
             disabled={current >= MAX_SPEED}
             onClick={() => {
@@ -155,20 +185,24 @@ export default function PlaybackSpeedControls(): React.JSX.Element {
             <AddIcon fontSize="small" />
           </IconButton>
         </Stack>
-        <Stack direction="row" gap={0.5} justifyContent="center">
+        <ToggleButtonGroup
+          exclusive
+          fullWidth
+          size="small"
+          color="primary"
+          value={QUICK_SPEEDS.includes(shown) ? shown : null}
+          onChange={(_e, v: number | null) => {
+            if (v != null) {
+              setSpeed(v);
+            }
+          }}
+        >
           {QUICK_SPEEDS.map((option) => (
-            <Chip
-              key={option}
-              size="small"
-              label={formatSpeed(option)}
-              color={current === option ? "primary" : "default"}
-              variant={current === option ? "filled" : "outlined"}
-              onClick={() => {
-                setSpeed(option);
-              }}
-            />
+            <ToggleButton key={option} value={option} className={classes.preset}>
+              {formatSpeed(option)}
+            </ToggleButton>
           ))}
-        </Stack>
+        </ToggleButtonGroup>
       </Popover>
     </>
   );
