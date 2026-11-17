@@ -135,6 +135,10 @@ class MockRosTopic {
       callback(message);
     });
   }
+
+  public unsubscribe() {
+    // no-op
+  }
 }
 
 vi.mock("@foxglove/roslibjs", () => {
@@ -226,6 +230,16 @@ describe("RosbridgePlayer", () => {
     player.setSubscriptions([{ topic: "/b" }]);
     await vi.advanceTimersByTimeAsync(0);
     expect(workerInstance.topicRequests).toBeGreaterThan(requests);
+
+    // A panel asking for /clock is waiting for it too, unlike the player's own /clock subscription.
+    player.setSubscriptions([{ topic: "/a" }]);
+    await vi.advanceTimersByTimeAsync(10_000);
+    const settled = workerInstance.topicRequests;
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(workerInstance.topicRequests).toBe(settled);
+    player.setSubscriptions([{ topic: "/clock" }]);
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(workerInstance.topicRequests).toBeGreaterThan(settled + 1);
   });
 
   it("subscribes to topics without errors", async () => {

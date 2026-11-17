@@ -123,6 +123,8 @@ export default class RosbridgePlayer implements Player {
   // active subscriptions
   #topicSubscriptions = new Map<string, roslib.Topic>();
   #requestedSubscriptions: SubscribePayload[] = []; // Requested subscriptions by setSubscriptions()
+  // Subscriptions the player added for itself (#addInternalSubscriptions), not requested by a panel.
+  readonly #internalSubscriptions = new WeakSet<SubscribePayload>();
   #requestTopicsTimeout?: ReturnType<typeof setTimeout>; // setTimeout() handle for _requestTopics().
   // Polls topics once a hidden window is shown again; removed on reconnect and close.
   #requestTopicsOnShow?: () => void;
@@ -476,13 +478,14 @@ export default class RosbridgePlayer implements Player {
   }
 
   /**
-   * Whether a panel requested a topic the server doesn't advertise yet. The player's own optional
-   * topics don't count: they are often never published (e.g. no /clock outside simulation).
+   * Whether a panel requested a topic the server doesn't advertise yet. Subscriptions the player
+   * adds for itself don't count: they are often never published (e.g. no /clock outside
+   * simulation). The same topic requested by a panel does.
    */
   #waitingForTopic(): boolean {
     const advertised = new Set(this.#providerTopics?.map((topic) => topic.name));
     return this.#requestedSubscriptions.some(
-      (sub) => !advertised.has(sub.topic) && !INTERNAL_TOPICS.includes(sub.topic),
+      (sub) => !advertised.has(sub.topic) && !this.#internalSubscriptions.has(sub),
     );
   }
 
@@ -843,7 +846,9 @@ export default class RosbridgePlayer implements Player {
     // Always subscribe to /clock if available
     for (const topic of INTERNAL_TOPICS) {
       if (subscriptions.find((sub) => sub.topic === topic) == undefined) {
-        subscriptions.unshift({ topic });
+        const sub = { topic };
+        this.#internalSubscriptions.add(sub);
+        subscriptions.unshift(sub);
       }
     }
   }
