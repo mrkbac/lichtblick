@@ -21,6 +21,8 @@ export const catalog = {
   indexing: "Indexing {{done}} / {{total}}",
   folderAccessDenied:
     "This browser didn't allow reading the picked folder. Choose it with the upload picker, or drop the folder here.",
+  folderPickerClosed:
+    "No folder was opened. If you picked one, this browser closed the picker without it. Choose it with the upload picker, or drop the folder here.",
   gridView: "Grid",
   listView: "List",
   mapView: "Map",

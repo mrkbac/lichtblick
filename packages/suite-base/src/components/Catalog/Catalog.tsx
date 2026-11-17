@@ -318,16 +318,20 @@ export default function Catalog({
   // upload picker, which reads the files directly.
   const errorAlert = error && (
     <Alert
-      severity="error"
+      severity={folder.pickerClosed ? "info" : "error"}
       action={
-        folder.accessDenied ? (
+        folder.accessDenied || folder.pickerClosed ? (
           <Button color="inherit" size="small" onClick={folder.pickFolderWithInput}>
             {t("useUploadPicker")}
           </Button>
         ) : undefined
       }
     >
-      {folder.accessDenied ? t("folderAccessDenied") : error}
+      {folder.accessDenied
+        ? t("folderAccessDenied")
+        : folder.pickerClosed
+          ? t("folderPickerClosed")
+          : error}
     </Alert>
   );
 

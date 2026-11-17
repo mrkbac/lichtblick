@@ -42,6 +42,11 @@ export type CatalogFolder = {
   dropFolder: (dataTransfer: DataTransfer) => boolean;
   /** The browser refused to read the picked folder; `pickFolderWithInput` may still work. */
   accessDenied: boolean;
+  /**
+   * The folder picker closed without a folder. Usually a cancel, but embedded browsers also abort
+   * it themselves, even after a folder was picked, so the upload picker is offered too.
+   */
+  pickerClosed: boolean;
   /** Pick a folder with the classic upload dialog, which works where folder handles don't. */
   pickFolderWithInput: () => void;
   /** More buttons for a recording in its details, next to Open. */
@@ -65,6 +70,7 @@ export function useCatalogFolder(): CatalogFolder {
   const [progress, setProgress] = useState<{ done: number; total: number }>();
   const [error, setError] = useState<string>();
   const [accessDenied, setAccessDenied] = useState(false);
+  const [pickerClosed, setPickerClosed] = useState(false);
   const scanIdRef = useRef(0);
 
   const { value: lastFolder } = useAsync(loadLastFolder, []);
@@ -81,6 +87,7 @@ export function useCatalogFolder(): CatalogFolder {
       setRelist(() => list);
       setError(undefined);
       setAccessDenied(false);
+      setPickerClosed(false);
       try {
         const folderFiles = await list();
         if (isStale()) {
@@ -163,10 +170,11 @@ export function useCatalogFolder(): CatalogFolder {
     try {
       dir = await window.showDirectoryPicker({ mode: "read" });
     } catch (err: unknown) {
-      if (!(err instanceof DOMException && err.name === "AbortError")) {
-        setAccessDenied(isAccessError(err));
-        setError(String(err));
-      }
+      // A cancel isn't an error, but it can't be told apart from a browser aborting the picker.
+      const closed = err instanceof DOMException && err.name === "AbortError";
+      setPickerClosed(closed);
+      setAccessDenied(!closed && isAccessError(err));
+      setError(String(err));
       return;
     }
     // Remembering the folder is a convenience; open it even if that fails.
@@ -278,6 +286,7 @@ export function useCatalogFolder(): CatalogFolder {
     pickFolder,
     pickFolderWithInput,
     accessDenied,
+    pickerClosed,
     dropFolder,
     reopenLastFolder,
     rescan,
