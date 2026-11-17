@@ -35,16 +35,19 @@ export const useStyles = makeStyles()((theme) => ({
     overflow: "hidden",
     paddingLeft: theme.spacing(0.25),
 
+    // Panel-style tabs as in VS Code: small uppercase labels, a thin full-width accent line.
     ".MuiTabs-indicator": {
-      transform: "scaleX(0.5)",
-      height: 2,
+      height: 1,
     },
     ".MuiTab-root": {
       minHeight: 30,
       minWidth: theme.spacing(4),
-      padding: theme.spacing(0, 1),
+      padding: theme.spacing(0, 0.75),
       color: theme.palette.text.secondary,
       fontSize: "0.6875rem",
+      fontWeight: 500,
+      textTransform: "uppercase",
+      letterSpacing: "0.02em",
 
       "&.Mui-selected": {
         color: theme.palette.text.primary,
@@ -54,7 +57,7 @@ export const useStyles = makeStyles()((theme) => ({
   iconButton: {
     padding: theme.spacing(0.91125), // round out the overall height to 30px
     color: theme.palette.text.secondary,
-    borderRadius: 0,
+    borderRadius: theme.shape.borderRadius,
 
     ":hover": {
       color: theme.palette.text.primary,

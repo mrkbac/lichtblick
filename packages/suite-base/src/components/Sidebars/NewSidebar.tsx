@@ -78,6 +78,9 @@ export function NewSidebar<K extends string>({
         <Tabs
           className={classes.tabs}
           textColor="inherit"
+          // A narrow sidebar scrolls its tabs instead of cutting the last one off.
+          variant="scrollable"
+          scrollButtons={false}
           value={activeTab ?? false}
           onChange={handleTabChange}
         >

@@ -77,28 +77,38 @@ const useStyles = makeStyles()((theme) => ({
     overflowX: "auto",
     scrollbarWidth: "none",
   },
+  // Editor-style tabs: the strip sits on the darker background; the active tab takes the
+  // toolbar color of the panels below, with a thin accent line on top.
+  toolbar: {
+    backgroundColor: "transparent",
+    paddingBlock: 0,
+  },
   tab: {
     display: "flex",
     alignItems: "center",
     gap: theme.spacing(0.5),
-    padding: theme.spacing(0, 1),
+    padding: theme.spacing(0, 1.5),
     flex: "none",
     // Room for the title beside the close button, so clicking a short tab doesn't close it.
     minWidth: theme.spacing(8),
     maxWidth: 200,
     fontSize: theme.typography.body2.fontSize,
     color: theme.palette.text.secondary,
-    borderBottom: "2px solid transparent",
+    borderTop: "1px solid transparent",
+    borderRight: `1px solid ${theme.palette.divider}`,
     whiteSpace: "nowrap",
     cursor: "pointer",
     userSelect: "none",
 
-    "&:hover": { color: theme.palette.text.primary },
+    "&:hover": { color: theme.palette.text.primary, backgroundColor: theme.palette.action.hover },
     "&:hover .close, &:focus-within .close": { visibility: "visible" },
   },
   active: {
     color: theme.palette.text.primary,
-    borderBottomColor: theme.palette.primary.main,
+    backgroundColor: theme.palette.background.paper,
+    borderTopColor: theme.palette.primary.main,
+
+    "&:hover": { backgroundColor: theme.palette.background.paper },
   },
   dropOver: {
     backgroundColor: theme.palette.action.hover,
@@ -363,6 +373,7 @@ function TabPanel({ config, saveConfig }: Props): React.JSX.Element {
   return (
     <div className={classes.root}>
       <PanelToolbar
+        className={classes.toolbar}
         additionalIcons={
           <PanelIconButton
             button={TAB_BUTTONS.add}
