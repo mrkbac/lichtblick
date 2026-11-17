@@ -194,6 +194,11 @@
             "message": "The package entry registers every language (~2 MB of build files). Import the specific module, e.g. monaco-editor/editor/editor.api.js or monaco-editor/languages/features/typescript/register.js."
           },
           {
+            "name": "@mui/icons-material",
+            "allowTypeImports": true,
+            "message": "The package entry loads every icon (~2 s per test file). Import the icon's own module, e.g. @mui/icons-material/Close."
+          },
+          {
             "name": "@emotion/styled",
             "message": "@emotion/styled has performance implications. Use tss-react/mui instead."
           },
@@ -287,7 +292,7 @@
         "desktop/electronBuilderConfig.js",
         "e2e/**",
         "web/rspack.config.ts",
-        "vitest.config.ts",
+        "vitest.config.mts",
         "packages/oxlint-plugin/**",
         "packages/suite-base/rspack.ts",
         "packages/suite-desktop/src/main/**",

@@ -13,10 +13,11 @@ on:
 permissions:
   contents: read
 
-# Only the newest licht commit matters; drop runs a later push has superseded.
+# One run at a time. A started run always finishes (cancelling one throws away its runner
+# minutes and leaves no result); of the runs still waiting, GitHub keeps only the newest.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -34,14 +35,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
-
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 26
-          cache: pnpm
-
-      - run: pnpm install --frozen-lockfile
+      - uses: ./.github/actions/setup
 
       - name: Apply AppArmor Fix (Ubuntu)
         # Required for Playwright/Electron on Ubuntu to work properly
