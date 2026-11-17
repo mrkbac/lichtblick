@@ -121,6 +121,8 @@ export default class RosbridgePlayer implements Player {
   #topicSubscriptions = new Map<string, roslib.Topic>();
   #requestedSubscriptions: SubscribePayload[] = []; // Requested subscriptions by setSubscriptions()
   #requestTopicsTimeout?: ReturnType<typeof setTimeout>; // setTimeout() handle for _requestTopics().
+  // Polls topics once a hidden window is shown again; removed on reconnect and close.
+  #requestTopicsOnShow?: () => void;
   // active publishers for the current connection
   #topicPublishers = new Map<string, roslib.Topic>();
   // which topics we want to advertise to other nodes
@@ -193,9 +195,7 @@ export default class RosbridgePlayer implements Player {
     rosClient.on("close", () => {
       this.#presence = PlayerPresence.RECONNECTING;
 
-      if (this.#requestTopicsTimeout) {
-        clearTimeout(this.#requestTopicsTimeout);
-      }
+      this.#cancelTopicsPoll();
       for (const [topicName, topic] of this.#topicSubscriptions) {
         topic.unsubscribe();
         this.#topicSubscriptions.delete(topicName);
@@ -235,9 +235,7 @@ export default class RosbridgePlayer implements Player {
     // clear alerts before each topics request so we don't have stale alerts from previous failed requests
     this.#alerts.removeAlerts((id) => id.startsWith("requestTopics:"));
 
-    if (this.#requestTopicsTimeout) {
-      clearTimeout(this.#requestTopicsTimeout);
-    }
+    this.#cancelTopicsPoll();
     const rosClient = this.#rosClient;
     if (!rosClient || this.#closed) {
       return;
@@ -372,9 +370,8 @@ export default class RosbridgePlayer implements Player {
       // again as soon as it is shown, instead of every 3 s in the background.
       this.#requestTopicsTimeout = setTimeout(() => {
         if (document.hidden) {
-          document.addEventListener("visibilitychange", () => void this.#requestTopics(), {
-            once: true,
-          });
+          this.#requestTopicsOnShow = () => void this.#requestTopics();
+          document.addEventListener("visibilitychange", this.#requestTopicsOnShow, { once: true });
         } else {
           void this.#requestTopics();
         }
@@ -464,8 +461,18 @@ export default class RosbridgePlayer implements Player {
     this.#emitState();
   }
 
+  #cancelTopicsPoll(): void {
+    clearTimeout(this.#requestTopicsTimeout);
+    this.#requestTopicsTimeout = undefined;
+    if (this.#requestTopicsOnShow) {
+      document.removeEventListener("visibilitychange", this.#requestTopicsOnShow);
+      this.#requestTopicsOnShow = undefined;
+    }
+  }
+
   public close(): void {
     this.#closed = true;
+    this.#cancelTopicsPoll();
     if (this.#rosClient) {
       this.#rosClient.close();
     }

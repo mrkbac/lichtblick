@@ -43,12 +43,27 @@ export class HiddenFrames {
     return !visible && now - this.#renderedAt < HIDDEN_RENDER_INTERVAL_MS;
   }
 
+  /** Frames waiting for a render. */
+  public hasPending(): boolean {
+    return this.#pending.length > 0;
+  }
+
+  /** How long until a hidden panel may render its pending frames, in ms. */
+  public waitMs(now: number): number {
+    return Math.max(0, this.#renderedAt + HIDDEN_RENDER_INTERVAL_MS - now);
+  }
+
   /** The frame to render now; pending frames count as handed out. */
   public take(pipelineFrame: Frame | undefined, now: number): Frame | undefined {
     this.#renderedAt = now;
     if (this.#pending.length === 0) {
       const last = this.#lastBatch;
-      return last != undefined && pipelineFrame === last.source ? last.frame : pipelineFrame;
+      if (last != undefined && pipelineFrame === last.source) {
+        return last.frame;
+      }
+      // A newer pipeline frame: the batch is not needed any more, don't keep its messages alive.
+      this.#lastBatch = undefined;
+      return pipelineFrame;
     }
     const frame = this.#pending.length === 1 ? this.#pending[0]! : this.#pending.flat();
     this.#pending = [];

@@ -316,14 +316,23 @@ function PanelExtensionAdapter(
   // The render-done callback belongs to the render that started it; read the current gate, since
   // the panel may start watching currentFrame while that render is in progress.
   const deliverHeldRef = useLatest(deliverHeld);
-  // Re-runs the render effect when the panel finishes a render while messages are still held, so
-  // they are delivered even if no new frame follows (e.g. a static scene).
+  // Re-runs the render effect when the panel finishes a render while messages are still held or
+  // hidden frames are queued, so they are delivered even if no new frame follows (e.g. a static
+  // scene, or a source that went quiet).
   const [heldRetry, setHeldRetry] = useState(0);
   const retryIfHeld = useCallback(() => {
-    if (deliverHeldRef.current && undelivered.hasHeld()) {
+    if ((deliverHeldRef.current && undelivered.hasHeld()) || hiddenFrames.hasPending()) {
       setHeldRetry((n) => n + 1);
     }
-  }, [deliverHeldRef, undelivered]);
+  }, [deliverHeldRef, hiddenFrames, undelivered]);
+  // A hidden panel's queued frames are delivered when its interval ends, even if no frame follows.
+  const hiddenRetryTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  useEffect(
+    () => () => {
+      clearTimeout(hiddenRetryTimerRef.current);
+    },
+    [],
+  );
 
   useLayoutEffect(() => {
     const lastSeekTime = playerState.activeData?.lastSeekTime;
@@ -357,8 +366,20 @@ function PanelExtensionAdapter(
 
     const now = performance.now();
     if (hiddenFrames.shouldWait({ visible, now })) {
+      if (hiddenFrames.hasPending() && hiddenRetryTimerRef.current == undefined) {
+        hiddenRetryTimerRef.current = setTimeout(() => {
+          hiddenRetryTimerRef.current = undefined;
+          setHeldRetry((n) => n + 1);
+        }, hiddenFrames.waitMs(now));
+      }
       return;
     }
+    // Still rendering: keep queued frames for when it is done (retryIfHeld) instead of dropping them.
+    if (renderingRef.current && hiddenFrames.hasPending()) {
+      return;
+    }
+    clearTimeout(hiddenRetryTimerRef.current);
+    hiddenRetryTimerRef.current = undefined;
     const pipelineFrame = hiddenFrames.take(messageEvents, now);
 
     const subscribedTopics = new Set(localSubscriptions.map((sub) => sub.topic));

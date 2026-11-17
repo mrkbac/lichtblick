@@ -108,38 +108,50 @@ export function RecordingInspector(): React.JSX.Element {
   const [topicStats, setTopicStats] = useState(() => selectTopicStats(getPipeline()));
   // Live sources show the recent rate, which drops to 0 when a publisher stops
   const [liveRates, setLiveRates] = useState(new Map<string, LiveRate>());
-  // Kept across hide/show, so rates continue where they left off.
-  const trackerRef = useRef<{ tracker: LiveTopicRates; playerId?: string }>({
-    tracker: new LiveTopicRates(),
-  });
-  // Hidden (inactive tab, behind a maximized panel): no sampling; showing it samples right away.
+  // Rates are sampled every second even while hidden (they rely on regular samples). Hidden
+  // (inactive tab, behind a maximized panel), the panel just doesn't re-render; showing it publishes
+  // the latest sample right away.
   const visible = useContext(PanelVisibleContext);
+  const visibleRef = useRef(visible);
+  visibleRef.current = visible;
+  const latestRef = useRef<{ stats: typeof topicStats; rates?: Map<string, LiveRate> }>({
+    stats: topicStats,
+  });
   useEffect(() => {
-    if (!visible) {
-      return;
-    }
-    const sample = () => {
+    let tracker = new LiveTopicRates();
+    let trackedPlayerId: string | undefined;
+    const id = setInterval(() => {
       const pipeline = getPipeline();
       const stats = selectTopicStats(pipeline);
       // Start over for a new player, so its rates don't build on the previous player's samples
-      const tracked = trackerRef.current;
-      if (pipeline.playerState.playerId !== tracked.playerId) {
-        trackerRef.current = {
-          tracker: new LiveTopicRates(),
-          playerId: pipeline.playerState.playerId,
-        };
+      if (pipeline.playerState.playerId !== trackedPlayerId) {
+        trackedPlayerId = pipeline.playerState.playerId;
+        tracker = new LiveTopicRates();
       }
-      setTopicStats(stats);
-      if (stats) {
-        setLiveRates(trackerRef.current.tracker.update(Date.now(), stats));
+      latestRef.current = {
+        stats,
+        rates: stats ? tracker.update(Date.now(), stats) : latestRef.current.rates,
+      };
+      if (visibleRef.current) {
+        setTopicStats(stats);
+        if (latestRef.current.rates) {
+          setLiveRates(latestRef.current.rates);
+        }
       }
-    };
-    sample();
-    const id = setInterval(sample, 1000);
+    }, 1000);
     return () => {
       clearInterval(id);
     };
-  }, [getPipeline, visible]);
+  }, [getPipeline]);
+  useEffect(() => {
+    if (visible) {
+      const { stats, rates } = latestRef.current;
+      setTopicStats(stats);
+      if (rates) {
+        setLiveRates(rates);
+      }
+    }
+  }, [visible]);
   const start = useMessagePipeline(selectStartTime);
   const end = useMessagePipeline(selectEndTime);
   const name = useMessagePipeline(selectPlayerName);

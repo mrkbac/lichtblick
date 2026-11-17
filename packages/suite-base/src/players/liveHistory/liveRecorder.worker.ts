@@ -130,8 +130,10 @@ async function start(name: string, profile: string, source: Record<string, strin
       flushTimer: setInterval(() => {
         // Nothing written since the last fsync: don't wake the disk.
         if (position !== flushed) {
-          flushed = position;
+          const target = position;
           handle.flush();
+          // Only after it succeeded: a failed flush is retried on the next tick.
+          flushed = target;
         }
       }, FLUSH_INTERVAL_MS),
       releaseLock,

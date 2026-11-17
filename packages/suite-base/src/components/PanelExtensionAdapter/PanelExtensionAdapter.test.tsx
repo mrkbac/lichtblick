@@ -30,6 +30,7 @@ import { PLAYER_CAPABILITIES } from "@lichtblick/suite-base/players/constants";
 import { AdvertiseOptions, PlayerPresence } from "@lichtblick/suite-base/players/types";
 import * as PanelStateContextProvider from "@lichtblick/suite-base/providers/PanelStateContextProvider";
 import PanelSetup, { Fixture } from "@lichtblick/suite-base/stories/PanelSetup";
+import MessageEventBuilder from "@lichtblick/suite-base/testing/builders/MessageEventBuilder";
 import ThemeProvider from "@lichtblick/suite-base/theme/ThemeProvider";
 
 import PanelExtensionAdapter from "./PanelExtensionAdapter";
@@ -1184,6 +1185,11 @@ describe("PanelExtensionAdapter", () => {
   });
 
   it("renders a hidden panel in batches and everything right away once shown", async () => {
+    // One clock for render times and the retry timer.
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "performance"] });
+    onTestFinished(() => {
+      vi.useRealTimers();
+    });
     const frames: number[][] = [];
     const initPanel = vi.fn((context: PanelExtensionContext) => {
       context.watch("currentFrame");
@@ -1195,13 +1201,13 @@ describe("PanelExtensionAdapter", () => {
         done();
       };
     });
-    const message = (value: number): MessageEvent => ({
-      topic: "x",
-      receiveTime: { sec: value, nsec: 0 },
-      sizeInBytes: 0,
-      message: value,
-      schemaName: "foo",
-    });
+    const message = (value: number): MessageEvent =>
+      MessageEventBuilder.messageEvent({
+        topic: "x",
+        receiveTime: { sec: value, nsec: 0 },
+        message: value,
+        schemaName: "foo",
+      });
     // One fixture per value: a new fixture is a new pipeline frame, and showing the panel is not.
     const fixtures = new Map<number, Fixture>();
     const fixtureFor = (value: number) => {
@@ -1245,6 +1251,17 @@ describe("PanelExtensionAdapter", () => {
     // re-emits the current message on every React render, so values can repeat.)
     expect(frames.length).toBe(rendersBefore + 1);
     expect(new Set(frames.at(-1))).toEqual(new Set([1, 2, 3]));
+
+    // Hidden again with a frame queued and no frame after it: delivered when the interval ends.
+    handle.rerender(<Wrapper visible={false} value={4} />);
+    await flush();
+    const rendersHidden = frames.length;
+    await act(async () => {
+      vi.advanceTimersByTime(1000);
+      await Promise.resolve();
+    });
+    expect(frames.length).toBeGreaterThan(rendersHidden);
+    expect(frames.at(-1)).toContain(4);
   });
 
   it("should call pause frame with new frame and resume after rendering", async () => {
