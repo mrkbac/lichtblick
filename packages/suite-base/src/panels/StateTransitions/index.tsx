@@ -164,6 +164,7 @@ function StateTransitions(props: StateTransitionPanelProps) {
     newItemsByPath,
     decodedMessages,
     showPoints,
+    theme.palette.mode,
   );
 
   const { yScale, xScale, databounds, width, sizeRef } = useChartScalesAndBounds(

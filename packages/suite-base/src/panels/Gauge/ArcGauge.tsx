@@ -11,16 +11,8 @@ import { useStyles } from "@lichtblick/suite-base/panels/Gauge/Gauge.style";
 import { buildConicGradient } from "@lichtblick/suite-base/panels/Gauge/buildConicGradient";
 import { randomUUID } from "@lichtblick/suite-base/util/randomUUID";
 
-import { toNumber, validLimits } from "./limits";
+import { formatReading, toNumber, validLimits } from "./limits";
 import { GaugeConfig } from "./types";
-
-/** Few enough digits to read at a glance: whole numbers from 100, one decimal from 10. */
-function formatValue(value: number): string {
-  const abs = Math.abs(value);
-  return value.toLocaleString(undefined, {
-    maximumFractionDigits: abs >= 100 ? 0 : abs >= 10 ? 1 : 2,
-  });
-}
 
 /** Arc display: a track filled with the color scale up to the value, with the value in the middle. */
 export function ArcGauge({
@@ -106,7 +98,7 @@ export function ArcGauge({
           className={cx(classes.value, outOfBounds && classes.outOfBounds)}
           style={{ top: pct(centerY, height) }}
         >
-          {hasValue ? formatValue(rawValue) : "—"}
+          {hasValue ? formatReading(rawValue) : "—"}
         </div>
         {limits != undefined && (
           <>
@@ -114,13 +106,13 @@ export function ArcGauge({
               className={classes.limit}
               style={{ left: pct(centerX - endX, width), top: pct(endY, height) }}
             >
-              {formatValue(limits.min)}
+              {limits.min.toLocaleString(undefined, { maximumFractionDigits: 2 })}
             </span>
             <span
               className={classes.limit}
               style={{ left: pct(centerX + endX, width), top: pct(endY, height) }}
             >
-              {formatValue(limits.max)}
+              {limits.max.toLocaleString(undefined, { maximumFractionDigits: 2 })}
             </span>
           </>
         )}

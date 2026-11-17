@@ -39,3 +39,16 @@ export function validAngles({
     ? { range: angleRange, warning: warningAngle, critical: criticalAngle }
     : undefined;
 }
+
+/**
+ * A live reading with a fixed number of decimals for its size (2 below 10, 1 below 100, none
+ * above), so trailing zeros stay and the number doesn't jump around as the value changes.
+ */
+export function formatReading(value: number): string {
+  const abs = Math.abs(value);
+  const digits = abs >= 100 ? 0 : abs >= 10 ? 1 : 2;
+  return value.toLocaleString(undefined, {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  });
+}

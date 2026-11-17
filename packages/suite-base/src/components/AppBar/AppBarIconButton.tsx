@@ -16,9 +16,11 @@ const useStyles = makeStyles()((theme) => ({
   },
   iconButton: {
     WebkitAppRegion: "no-drag",
-    borderRadius: 0,
+    // A rounded hover inset from the bar's edges rather than a full-height square.
+    borderRadius: 8,
     fontSize: 24,
-    padding: theme.spacing(1.25),
+    padding: theme.spacing(0.75),
+    margin: theme.spacing(0.5, 0.25),
 
     "svg:not(.MuiSvgIcon-root)": {
       fontSize: "1em",

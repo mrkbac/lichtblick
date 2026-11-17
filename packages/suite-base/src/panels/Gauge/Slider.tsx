@@ -5,7 +5,7 @@ import { useId } from "react";
 import { useTranslation } from "react-i18next";
 
 import { getColorStops } from "./buildConicGradient";
-import { toNumber, validLimits } from "./limits";
+import { formatReading, toNumber, validLimits } from "./limits";
 import { GaugeConfig } from "./types";
 
 const X0 = 20;
@@ -43,7 +43,7 @@ export function Slider({
       ? t("aboveLimit")
       : `${(fraction * 100).toFixed(0)}%`;
   // The reading stays visible without valid limits; only the marker and status need them.
-  const readout = fmt(numericValue);
+  const readout = Number.isFinite(numericValue) ? formatReading(numericValue) : "—";
 
   return (
     <svg

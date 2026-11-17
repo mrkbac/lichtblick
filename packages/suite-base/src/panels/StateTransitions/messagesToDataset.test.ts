@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
+import { darken } from "@mui/material";
+
 import { MessageEvent } from "@lichtblick/suite";
 import { MessagePathDataItem } from "@lichtblick/suite-base/components/MessagePathSyntax/useCachedGetMessagePathDataItems";
 import {
@@ -247,6 +249,22 @@ describe("messagesToDataset", () => {
       value: queriedDataValue,
       constantName: queriedDataName,
     });
+  });
+
+  it("darkens label text, not the line, when asked to", () => {
+    const blocks: PathSample[][] = [
+      [MessageAndDataBuilder(messageEvent, queriedDataValue, queriedDataPath, queriedDataName)],
+    ];
+
+    const [datum] = messagesToDataset({
+      ...args,
+      path: { ...args.path, timestampMethod: "receiveTime" },
+      blocks,
+      darkenLabels: true,
+    }).data;
+
+    expect(datum?.labelTextColor).toBe(darken(datum!.labelColor!, 0.45));
+    expect(datum?.labelTextColor).not.toBe(datum?.labelColor);
   });
 
   it("should return undefined because getTimestampForMessageEvent will return undefined", () => {
