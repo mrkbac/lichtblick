@@ -383,7 +383,7 @@ export function applyModifier(value: unknown, modifier: MessagePathModifier): un
     }
     if ((name === "min" || name === "max") && !isObject(value)) {
       // `/topic.value.@max(0)`: clamp element-wise
-      return mapNumeric(value, (x) => reducer([x, ...args])!);
+      return mapNumeric(value, (x) => reducer([x, ...args]) ?? NaN);
     }
     // `/topic.@sum(left, right)`: reduce fields of an object
     return isObject(value) ? reducer(args) : undefined;
