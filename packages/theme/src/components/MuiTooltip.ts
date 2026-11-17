@@ -24,6 +24,9 @@ export const MuiTooltip: OverrideComponentReturn<"MuiTooltip"> = {
       backdropFilter: "blur(3px)",
       fontWeight: "normal",
       fontSize: theme.typography.caption.fontSize,
+      borderRadius: theme.shape.borderRadius,
+      padding: theme.spacing(0.5, 1),
+      boxShadow: "0 4px 12px rgb(0 0 0 / 0.25)",
     }),
   },
 };

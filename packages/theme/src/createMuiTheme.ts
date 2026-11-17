@@ -26,7 +26,7 @@ export const createMuiTheme = (themePreference: ThemePreference): Theme =>
   createTheme({
     name: themePreference,
     palette: palette[themePreference],
-    shape: { borderRadius: 2 },
+    shape: { borderRadius: 6 },
     typography,
     components,
   });

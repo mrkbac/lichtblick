@@ -29,8 +29,8 @@ export const fontFeatureSettings = [
 
 const headingFontStyles: TypographyStyle = {
   fontFeatureSettings,
-  letterSpacing: "-0.025em",
-  fontWeight: 800,
+  letterSpacing: "-0.02em",
+  fontWeight: 650,
 };
 
 const subtitleFontStyles: TypographyStyle = {
@@ -52,8 +52,8 @@ export const typography: TypographyVariantsOptions = {
   button: {
     fontFeatureSettings,
     textTransform: "none",
-    fontWeight: 700,
-    letterSpacing: "-0.0125em",
+    fontWeight: 600,
+    letterSpacing: "-0.005em",
   },
   overline: {
     fontFeatureSettings,

@@ -67,37 +67,46 @@ export function Slider({
         textAnchor="middle"
         fill={color}
         fontSize="28"
+        fontWeight="600"
+        letterSpacing="-0.5"
         style={{ fontVariantNumeric: "tabular-nums" }}
       >
         {readout}
       </text>
       {hasValue && (
-        <text x="160" y="50" textAnchor="middle" fill={color} fontSize="12">
+        <text
+          x="160"
+          y="50"
+          textAnchor="middle"
+          fill={below || above ? color : theme.palette.text.secondary}
+          fontSize="12"
+        >
           {status}
         </text>
       )}
       <rect
         x={X0}
-        y="66"
+        y="69"
         width={X1 - X0}
-        height="14"
-        rx="7"
+        height="8"
+        rx="4"
         fill={`url(#${gradientId})`}
         opacity={hasValue ? 1 : 0.5}
       />
       {hasValue && (
-        <path
-          d={`M ${x} 64 l -6 -8 h 12 Z M ${x} 62 V 84`}
-          fill={color}
-          stroke={color}
-          strokeWidth="3"
-          strokeLinejoin="round"
+        <circle
+          cx={x}
+          cy="73"
+          r="7"
+          fill={theme.palette.background.default}
+          stroke={below || above ? color : theme.palette.text.primary}
+          strokeWidth="2.5"
         />
       )}
-      <text x={X0} y="100" fill="currentColor" fontSize="11" textAnchor="start">
+      <text x={X0} y="100" fill={theme.palette.text.secondary} fontSize="11" textAnchor="start">
         {fmt(minValue)}
       </text>
-      <text x={X1} y="100" fill="currentColor" fontSize="11" textAnchor="end">
+      <text x={X1} y="100" fill={theme.palette.text.secondary} fontSize="11" textAnchor="end">
         {fmt(maxValue)}
       </text>
     </svg>

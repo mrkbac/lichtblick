@@ -15,7 +15,7 @@ export const MuiIconButton: OverrideComponentReturn<"MuiIconButton"> = {
   styleOverrides: {
     root: ({ theme }) => ({
       borderRadius: theme.shape.borderRadius,
-      transition: "none",
+      transition: "background-color 120ms ease, color 120ms ease",
 
       "&:hover": {
         backgroundColor: theme.palette.action.hover,

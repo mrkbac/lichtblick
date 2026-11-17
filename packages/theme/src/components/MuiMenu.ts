@@ -18,11 +18,21 @@ export const MuiMenu: OverrideComponentReturn<"MuiMenu"> = {
   },
   styleOverrides: {
     paper: ({ theme }) => ({
-      borderRadius: theme.shape.borderRadius,
+      borderRadius: 8,
       backgroundColor: theme.palette.background.menu,
+      border: `1px solid ${theme.palette.divider}`,
+      boxShadow:
+        theme.palette.mode === "dark"
+          ? "0 12px 32px -8px rgb(0 0 0 / 0.6), 0 2px 6px rgb(0 0 0 / 0.3)"
+          : "0 12px 32px -8px rgb(16 24 40 / 0.18), 0 2px 6px rgb(16 24 40 / 0.06)",
     }),
     list: ({ theme }) => ({
       ...theme.typography.body1,
+      padding: theme.spacing(0.5),
+
+      [`.${listItemClasses.root}, .MuiMenuItem-root`]: {
+        borderRadius: theme.shape.borderRadius,
+      },
 
       [`&.${listClasses.dense}`]: {
         ...theme.typography.body2,

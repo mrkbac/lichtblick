@@ -9,27 +9,26 @@ import { useCallback, useEffect, useLayoutEffect, useReducer, useState } from "r
 
 import { parseMessagePath } from "@lichtblick/message-path";
 import { SettingsTreeAction } from "@lichtblick/suite";
-import { useStyles } from "@lichtblick/suite-base/panels/Gauge/Gauge.style";
-import { buildConicGradient } from "@lichtblick/suite-base/panels/Gauge/buildConicGradient";
 import { DEFAULT_CONFIG } from "@lichtblick/suite-base/panels/Gauge/constants";
 import { stateReducer } from "@lichtblick/suite-base/panels/shared/gaugeAndIndicatorStateReducer";
 import { useReplacePathDrop } from "@lichtblick/suite-base/panels/shared/pathDrop";
 import { GaugeAndIndicatorState } from "@lichtblick/suite-base/panels/shared/types";
-import { randomUUID } from "@lichtblick/suite-base/util/randomUUID";
+import ThemeProvider from "@lichtblick/suite-base/theme/ThemeProvider";
 
+import { ArcGauge } from "./ArcGauge";
 import { Inclinometer } from "./Inclinometer";
 import { Slider } from "./Slider";
-import { toNumber, validLimits } from "./limits";
 import { settingsActionReducer } from "./settingsActionReducer";
 import { GaugeConfig, GaugeProps } from "./types";
 import { useSettingsTree } from "./useSettingsTree";
 
 /** Restores saved Gauge settings over defaults so older layouts retain their arc display. */
 export function Gauge({ context }: GaugeProps): React.JSX.Element {
-  const { classes } = useStyles();
   // panel extensions must notify when they've completed rendering
   // onRender will setRenderDone to a done callback which we can invoke after we've rendered
   const [renderDone, setRenderDone] = useState<() => void>(() => () => {});
+  // Follow the app's light/dark theme.
+  const [colorScheme, setColorScheme] = useState<"dark" | "light">("dark");
 
   const [config, setConfig] = useState(() => ({
     ...DEFAULT_CONFIG,
@@ -73,9 +72,14 @@ export function Gauge({ context }: GaugeProps): React.JSX.Element {
       if (renderState.currentFrame) {
         dispatch({ type: "frame", messages: renderState.currentFrame });
       }
+
+      if (renderState.colorScheme) {
+        setColorScheme(renderState.colorScheme);
+      }
     };
     context.watch("currentFrame");
     context.watch("didSeek");
+    context.watch("colorScheme");
 
     return () => {
       context.onRender = undefined;
@@ -115,92 +119,15 @@ export function Gauge({ context }: GaugeProps): React.JSX.Element {
     renderDone();
   }, [renderDone]);
 
-  const rawValue = toNumber(state.latestMatchingQueriedData);
-
-  // Without valid limits the needle is hidden (scaledValue is NaN).
-  const limits = validLimits(config);
-  const scaledValue = limits
-    ? (Math.max(limits.min, Math.min(rawValue, limits.max)) - limits.min) /
-      (limits.max - limits.min)
-    : NaN;
-  const outOfBounds = limits != undefined && (rawValue < limits.min || rawValue > limits.max);
-
-  const padding = 0.1;
-  const centerX = 0.5 + padding;
-  const centerY = 0.5 + padding;
-  const gaugeAngle = -Math.PI / 8;
-  const radius = 0.5;
-  const innerRadius = 0.4;
-  const width = 1 + 2 * padding;
-  const height =
-    Math.max(
-      centerY - radius * Math.sin(gaugeAngle),
-      centerY - innerRadius * Math.sin(gaugeAngle),
-    ) + padding;
-  const needleThickness = 8;
-  const needleExtraLength = 0.05;
-  const [clipPathId] = useState(() => `gauge-clip-path-${randomUUID()}`);
-  if (config.displayMode === "slider") {
-    return <Slider config={config} value={state.latestMatchingQueriedData} />;
-  }
-  if (config.displayMode !== "arc") {
-    return <Inclinometer config={config} value={state.latestMatchingQueriedData} />;
-  }
   return (
-    <div className={classes.root}>
-      <div className={classes.gaugeContainer}>
-        <div className={classes.gaugeWrapper} style={{ aspectRatio: `${width} / ${height}` }}>
-          <div
-            className={classes.conicGradient}
-            style={{
-              background: buildConicGradient({ config, width, height, gaugeAngle }),
-              clipPath: `url(#${clipPathId})`,
-              opacity: state.latestMatchingQueriedData == undefined ? 0.5 : 1,
-            }}
-          />
-          <div
-            className={classes.needle}
-            style={{
-              backgroundColor: outOfBounds ? "orange" : "white",
-              borderRadius: needleThickness / 2,
-              bottom: `${100 * (1 - centerY / height)}%`,
-              display: Number.isFinite(scaledValue) ? "block" : "none",
-              height: `${(100 * (radius + needleExtraLength)) / height}%`,
-              transform: [
-                `scaleZ(1)`,
-                `rotate(${
-                  -Math.PI / 2 + gaugeAngle + scaledValue * 2 * (Math.PI / 2 - gaugeAngle)
-                }rad)`,
-                `translateX(${-needleThickness / 2}px)`,
-                `translateY(${needleThickness / 2}px)`,
-              ].join(" "),
-              width: needleThickness,
-            }}
-          />
-        </div>
-        <svg style={{ position: "absolute" }}>
-          <clipPath id={clipPathId} clipPathUnits="objectBoundingBox">
-            <path
-              transform={`scale(${1 / width}, ${1 / height})`}
-              d={[
-                `M ${centerX - radius * Math.cos(gaugeAngle)},${
-                  centerY - radius * Math.sin(gaugeAngle)
-                }`,
-                `A 0.5,0.5 0 ${gaugeAngle < 0 ? 1 : 0} 1 ${
-                  centerX + radius * Math.cos(gaugeAngle)
-                },${centerY - radius * Math.sin(gaugeAngle)}`,
-                `L ${centerX + innerRadius * Math.cos(gaugeAngle)},${
-                  centerY - innerRadius * Math.sin(gaugeAngle)
-                }`,
-                `A ${innerRadius},${innerRadius} 0 ${gaugeAngle < 0 ? 1 : 0} 0 ${
-                  centerX - innerRadius * Math.cos(gaugeAngle)
-                },${centerY - innerRadius * Math.sin(gaugeAngle)}`,
-                `Z`,
-              ].join(" ")}
-            />
-          </clipPath>
-        </svg>
-      </div>
-    </div>
+    <ThemeProvider isDark={colorScheme === "dark"}>
+      {config.displayMode === "slider" ? (
+        <Slider config={config} value={state.latestMatchingQueriedData} />
+      ) : config.displayMode === "arc" ? (
+        <ArcGauge config={config} value={state.latestMatchingQueriedData} />
+      ) : (
+        <Inclinometer config={config} value={state.latestMatchingQueriedData} />
+      )}
+    </ThemeProvider>
   );
 }

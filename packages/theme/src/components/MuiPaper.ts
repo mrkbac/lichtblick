@@ -10,7 +10,6 @@ import { OverrideComponentReturn } from "../types";
 export const MuiPaper: OverrideComponentReturn<"MuiPaper"> = {
   defaultProps: {
     elevation: 2,
-    square: true,
   },
   styleOverrides: {
     elevation: {

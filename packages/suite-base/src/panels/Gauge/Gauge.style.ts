@@ -3,44 +3,64 @@
 
 import { makeStyles } from "tss-react/mui";
 
-export const useStyles = makeStyles()(() => ({
+export const useStyles = makeStyles()((theme) => ({
   root: {
     alignItems: "center",
     display: "flex",
-    flexDirection: "column",
+    justifyContent: "center",
     height: "100%",
-    justifyContent: "space-around",
+    width: "100%",
     overflow: "hidden",
     padding: 8,
-    width: "100%",
-  },
-  gaugeContainer: {
-    overflow: "hidden",
-    width: "100%",
+    // The gauge fits the panel in both directions.
+    containerType: "size",
   },
   gaugeWrapper: {
-    aspectRatio: "1 / 1",
-    margin: "0 auto",
-    maxHeight: "100%",
-    maxWidth: "100%",
+    flex: "none",
     position: "relative",
+    // Text sizes follow the gauge's width.
+    containerType: "inline-size",
     transform: "scale(1)", // Work around a Safari bug: https://bugs.webkit.org/show_bug.cgi?id=231849
   },
-  conicGradient: {
-    clipPath: "none",
-    height: "100%",
-    opacity: 0.5,
-    width: "100%",
-  },
-  needle: {
-    backgroundColor: "white",
-    border: "2px solid black",
-    borderRadius: 4,
-    bottom: 0,
-    display: "none",
-    left: "50%",
-    margin: "0 auto",
+  track: {
     position: "absolute",
-    transformOrigin: "bottom left",
+    inset: 0,
+    backgroundColor: theme.palette.action.selected,
+  },
+  arc: {
+    position: "absolute",
+    inset: 0,
+  },
+  knob: {
+    position: "absolute",
+    aspectRatio: "1",
+    borderRadius: "50%",
+    transform: "translate(-50%, -50%)",
+    backgroundColor: theme.palette.background.default,
+    boxShadow: `0 0 0 0.6cqw ${theme.palette.text.primary}, 0 0.4cqw 1.6cqw rgb(0 0 0 / 0.35)`,
+  },
+  value: {
+    position: "absolute",
+    left: "50%",
+    transform: "translate(-50%, -75%)",
+    fontSize: "16cqw",
+    fontWeight: 600,
+    letterSpacing: "-0.02em",
+    lineHeight: 1,
+    fontVariantNumeric: "tabular-nums",
+    whiteSpace: "nowrap",
+    color: theme.palette.text.primary,
+  },
+  outOfBounds: {
+    color: theme.palette.warning.main,
+  },
+  limit: {
+    position: "absolute",
+    transform: "translateX(-50%)",
+    fontSize: "5cqw",
+    lineHeight: 1,
+    fontVariantNumeric: "tabular-nums",
+    whiteSpace: "nowrap",
+    color: theme.palette.text.secondary,
   },
 }));

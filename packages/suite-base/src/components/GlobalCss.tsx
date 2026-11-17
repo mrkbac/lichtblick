@@ -27,6 +27,10 @@ export default function GlobalCss(): React.JSX.Element {
         "*, *:before, *:after": {
           boxSizing: "inherit",
         },
+        // Thin, themed scrollbars everywhere, including menus and dialogs outside the app root.
+        "::-webkit-scrollbar": { width: 6, height: 6 },
+        "::-webkit-scrollbar-corner, ::-webkit-scrollbar-track": { background: "transparent" },
+        "::-webkit-scrollbar-thumb": { background: theme.palette.action.focus, borderRadius: 3 },
         body: {
           background: theme.palette.background.default,
           color: theme.palette.text.primary,
