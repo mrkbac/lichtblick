@@ -670,6 +670,99 @@ function Row_Stride_Grid(): React.JSX.Element {
   );
 }
 
+function ElevationGrid({
+  settings,
+}: {
+  settings: Partial<LayerSettingsFoxgloveGrid>;
+}): React.JSX.Element {
+  const topics: Topic[] = [{ name: "/grid", schemaName: "foxglove.Grid" }];
+  const cols = 64;
+  const rows = 48;
+  const cellStride = 4;
+  const data = new Uint8Array(cols * rows * cellStride);
+  const view = new DataView(data.buffer);
+  for (let y = 0; y < rows; y++) {
+    for (let x = 0; x < cols; x++) {
+      // Two hills and a valley; a square hole of cells without data
+      const hole = x >= 40 && x < 46 && y >= 30 && y < 36;
+      const height =
+        1.2 * Math.exp(-((x - 18) ** 2 + (y - 20) ** 2) / 60) +
+        0.8 * Math.exp(-((x - 44) ** 2 + (y - 14) ** 2) / 90) -
+        0.4 * Math.exp(-((x - 30) ** 2 + (y - 38) ** 2) / 120);
+      view.setFloat32((y * cols + x) * cellStride, hole ? NaN : height, true);
+    }
+  }
+  const grid: MessageEvent<Grid> = {
+    topic: "/grid",
+    schemaName: "foxglove.Grid",
+    receiveTime: { sec: 10, nsec: 0 },
+    message: {
+      timestamp: { sec: 0, nsec: 0 },
+      frame_id: "map",
+      pose: { position: { x: -3.2, y: -2.4, z: 0 }, orientation: QUAT_IDENTITY },
+      cell_size: { x: 0.1, y: 0.1 },
+      column_count: cols,
+      cell_stride: cellStride,
+      row_stride: cols * cellStride,
+      fields: [{ name: "height", offset: 0, type: NumericType.FLOAT32 }],
+      data,
+    },
+    sizeInBytes: 0,
+  };
+  const fixture = useDelayedFixture({
+    topics,
+    frame: { "/grid": [grid] },
+    capabilities: [],
+    activeData: { currentTime: { sec: 0, nsec: 0 } },
+  });
+
+  return (
+    <PanelSetup fixture={fixture}>
+      <ThreeDeePanel
+        overrideConfig={{
+          followTf: "map",
+          topics: {
+            "/grid": {
+              visible: true,
+              colorField: "height",
+              colorMode: "colormap",
+              colorMap: "turbo",
+              minValue: -0.4,
+              maxValue: 1.2,
+              elevationField: "height",
+              ...settings,
+            } as LayerSettingsFoxgloveGrid,
+          },
+          cameraState: {
+            distance: 9,
+            perspective: true,
+            phi: rad2deg(1),
+            targetOffset: [0, 0, 0],
+            thetaOffset: rad2deg(0.5),
+            fovy: rad2deg(0.75),
+            near: 0.01,
+            far: 5000,
+            target: [0, 0, 0],
+            targetOrientation: [0, 0, 0, 1],
+          },
+        }}
+      />
+    </PanelSetup>
+  );
+}
+
+export const Foxglove_Grid_Elevation: StoryObj = {
+  render: () => <ElevationGrid settings={{}} />,
+};
+
+export const Foxglove_Grid_Elevation_Lines_Linear: StoryObj = {
+  render: () => <ElevationGrid settings={{ showLines: true, interpolation: "linear" }} />,
+};
+
+export const Foxglove_Grid_Elevation_Unlit: StoryObj = {
+  render: () => <ElevationGrid settings={{ lighting: false }} />,
+};
+
 export const Foxglove_Grid_Uint8_Values: StoryObj = {
   render: () => <Foxglove_Grid_Uint8 />,
 };
