@@ -269,3 +269,21 @@ export const RollRadians: StoryObj = {
 export const InclinometerNoData: StoryObj = {
   render: () => <GaugePanel overrideConfig={{ displayMode: "roll" }} />,
 };
+
+export const Slider: StoryObj = {
+  render: () => (
+    <GaugePanel
+      overrideConfig={{ path: "/data.value", displayMode: "slider", minValue: -10, maxValue: 30 }}
+    />
+  ),
+  parameters: { panelSetup: { fixture: makeFixture(12) } },
+};
+
+export const SliderAboveLimit: StoryObj = {
+  render: () => (
+    <GaugePanel
+      overrideConfig={{ path: "/data.value", displayMode: "slider", minValue: -10, maxValue: 30 }}
+    />
+  ),
+  parameters: { panelSetup: { fixture: makeFixture(42) } },
+};

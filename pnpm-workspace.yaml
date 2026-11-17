@@ -31,3 +31,10 @@ ignoredBuiltDependencies:
 # each workspace doesn't have to repeat the shared ones. Runtime packages stay strict (isolated).
 publicHoistPattern:
   - "@types/*"
+
+auditConfig:
+  ignoreGhsas:
+    # picomatch ReDoS with no patched release. Only reached through build tools
+    # (electron-builder's node-gyp rebuild, storybook's docgen plugin), never shipped.
+    # Drop once a fixed picomatch exists and can be pinned in `overrides`.
+    - GHSA-fc5q-39xc-vjpf

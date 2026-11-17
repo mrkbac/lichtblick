@@ -7,6 +7,7 @@ import { useTranslation } from "react-i18next";
 import { DATA_TYPES } from "@lichtblick/suite-base/panels/Gauge/constants";
 import type { DocumentedNode } from "@lichtblick/suite-base/panels/shared/documentedSettings";
 
+import { validAngles, validLimits } from "./limits";
 import { ColorMapConfig, ColorModeConfig, SettingsTreeNodesProps } from "./types";
 
 /** Shows the controls for the selected display and reports invalid inclinometer thresholds. */
@@ -28,6 +29,7 @@ export function buildSettingsTree(
     warningAngle,
     criticalAngle,
   } = config;
+  const isAngle = displayMode === "roll" || displayMode === "pitch";
   return {
     general: {
       error,
@@ -37,7 +39,7 @@ export function buildSettingsTree(
           help: t("displayModeHelp"),
           input: "select",
           value: displayMode,
-          options: (["arc", "roll", "pitch"] as const).map((mode) => ({
+          options: (["arc", "slider", "roll", "pitch"] as const).map((mode) => ({
             label: t(mode),
             value: mode,
           })),
@@ -51,7 +53,7 @@ export function buildSettingsTree(
           error: pathParseError,
           validTypes: DATA_TYPES,
         },
-        ...(displayMode !== "arc" && {
+        ...(isAngle && {
           angleUnit: {
             label: t("angleUnit"),
             help: t("angleUnitHelp"),
@@ -67,14 +69,7 @@ export function buildSettingsTree(
             help: t("angleRangeHelp"),
             input: "number",
             value: angleRange,
-            error: !(
-              warningAngle > 0 &&
-              criticalAngle > warningAngle &&
-              angleRange > criticalAngle &&
-              angleRange <= 90
-            )
-              ? t("invalidAngles")
-              : undefined,
+            error: validAngles(config) ? undefined : t("invalidAngles"),
           },
           warningAngle: {
             label: t("warningAngle"),
@@ -89,7 +84,7 @@ export function buildSettingsTree(
             value: criticalAngle,
           },
         }),
-        ...(displayMode === "arc" && {
+        ...(!isAngle && {
           minValue: {
             label: t("minValue.label"),
             help: t("minValue.help"),
@@ -101,6 +96,7 @@ export function buildSettingsTree(
             help: t("maxValue.help"),
             input: "number",
             value: maxValue,
+            error: validLimits(config) ? undefined : t("invalidLimits"),
           },
           colorMode: {
             label: t("colorMode.label"),
