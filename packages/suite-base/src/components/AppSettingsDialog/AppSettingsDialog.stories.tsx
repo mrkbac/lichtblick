@@ -5,7 +5,6 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import * as _ from "lodash-es";
 import { screen, userEvent } from "storybook/test";
 import { StoryObj } from "storybook-react-rsbuild";
 
@@ -18,21 +17,23 @@ import WorkspaceContextProvider from "@lichtblick/suite-base/providers/Workspace
 
 import { AppSettingsDialog } from "./AppSettingsDialog";
 
-const installedExtensions: ExtensionInfo[] = _.range(1, 10).map((index) => ({
-  id: "publisher.storyextension",
-  name: "privatestoryextension",
-  qualifiedName: "storyextension",
-  displayName: `Private Extension Name ${index + 1}`,
-  description: "Private extension sample description",
-  publisher: "Private Publisher",
-  homepage: "https://github.com/lichtblick-suite",
-  license: "MIT",
-  version: `1.${index}`,
-  keywords: ["storybook", "testing"],
-  namespace: index % 2 === 0 ? "local" : "org",
-  readme: "Readme for extension",
-  changelog: "Changes effectuated on extension",
-}));
+const installedExtensions: ExtensionInfo[] = Array.from({ length: 9 }, (_, i) => i + 1).map(
+  (index) => ({
+    id: "publisher.storyextension",
+    name: "privatestoryextension",
+    qualifiedName: "storyextension",
+    displayName: `Private Extension Name ${index + 1}`,
+    description: "Private extension sample description",
+    publisher: "Private Publisher",
+    homepage: "https://github.com/lichtblick-suite",
+    license: "MIT",
+    version: `1.${index}`,
+    keywords: ["storybook", "testing"],
+    namespace: index % 2 === 0 ? "local" : "org",
+    readme: "Readme for extension",
+    changelog: "Changes effectuated on extension",
+  }),
+);
 
 const marketplaceExtensions: ExtensionInfo[] = [
   {

@@ -251,7 +251,7 @@ function MapFrame(
 }
 
 /** CSS gradient of the color scale; reversed scales map high values to the low end. */
-const LEGEND_GRADIENT = _.range(0, 11).map((i) => turboColorString(i / 10));
+const LEGEND_GRADIENT = Array.from({ length: 11 }, (_unused, i) => turboColorString(i / 10));
 
 function ColorLegends(props: {
   legends: { topic: string; title: string; range: [number, number]; reverse: boolean }[];
@@ -488,7 +488,7 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
         preload: false,
       })),
       // Topics read by "color by message path" (unless already subscribed above).
-      ..._.uniq(colorPaths.map(({ parsed }) => parsed.topicName))
+      ...[...new Set(colorPaths.map(({ parsed }) => parsed.topicName))]
         .filter((topic) => !subscribed.has(topic))
         .map((topic) => ({ topic, preload: false })),
     ]);

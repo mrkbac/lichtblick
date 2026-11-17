@@ -38,14 +38,14 @@ function reducer(draft: LayoutSelectionState, action: LayoutSelectionAction) {
 
       if (modKey === true) {
         // Toggle selection (Ctrl / Cmd)
-        draft.selectedIds = _.xor(draft.selectedIds, _.compact([id]));
+        draft.selectedIds = _.xor(draft.selectedIds, id ? [id] : []);
       } else if (shiftKey === true) {
         // explicitly disable multi selection with shift key
         draft.multiAction = undefined;
       } else {
         // Normal click → single select
         draft.multiAction = undefined;
-        draft.selectedIds = _.compact([id]);
+        draft.selectedIds = id ? [id] : [];
       }
 
       draft.lastSelectedId = id;
