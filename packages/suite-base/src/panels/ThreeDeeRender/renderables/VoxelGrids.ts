@@ -504,8 +504,8 @@ export class VoxelGridRenderable extends Renderable<VoxelGridUserData> {
       material.blending = blending;
       material.needsUpdate = true;
     }
-    // Object picking reuses the render order: without depth writes, later objects win like on screen
-    this.#pickingMaterial.depthWrite = !settings.drawBehind;
+    // Picker reads this to keep later objects' ids on top while still reporting the grid's depth
+    this.#mesh.userData.drawBehind = settings.drawBehind;
   }
 
   #createMaterial(): THREE.MeshLambertMaterial | THREE.MeshBasicMaterial {
