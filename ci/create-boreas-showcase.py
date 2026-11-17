@@ -1581,9 +1581,8 @@ def main() -> None:
         "scene": codecs.Group("zstd", 4 << 20),
         # One message per chunk.
         "diagnostics": codecs.Group("", 0),
-        # ponytail: message indexes kept until the indexed reader can scan unindexed chunks
-        # (the MCAP spec allows them; it throws today). Then set message_index=False here.
-        "overlays": codecs.Group("", 1 << 20),
+        # Without message indexes: readers scan these chunks instead.
+        "overlays": codecs.Group("", 1 << 20, message_index=False),
         "small": codecs.Group("", 1 << 20, reverse_first_chunk=True),
     }
     group_of = {
