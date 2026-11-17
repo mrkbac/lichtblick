@@ -447,4 +447,22 @@ export const threeDee = {
     "Roll, pitch and yaw turn around the frame's own axes: X, then Y, then Z, each turn on the already rotated axes (intrinsic XYZ).",
   frameMeasureFromBadge: "from",
   frameMeasureToBadge: "to",
+
+  // Voxel grids
+  voxelBitColorModeHelp:
+    "By type colors each voxel by which of its two bits are set. Gradient and Rainbow color the voxels with both bits set by their height level.",
+  voxelByType: "By type",
+  voxelMarkedPresent: "Marked and present",
+  voxelMarkedPresentHelp: "Color of voxels with both bits set. Alpha 0 hides them.",
+  voxelPresent: "Present",
+  voxelPresentHelp:
+    "Color of voxels with only the present bit (bit z + 16) set. Alpha 0 hides them.",
+  voxelMarked: "Marked",
+  voxelMarkedHelp: "Color of voxels with only the marked bit (bit z) set. Alpha 0 hides them.",
+  voxelHeightGradientHelp: "Colors for the lowest and highest level; levels in between blend.",
+  voxelUseLighting: "Lighting",
+  voxelUseLightingHelp: "Shade the voxel faces by the scene lights so their edges stand out.",
+  voxelDrawBehind: "Draw behind",
+  voxelDrawBehindHelp:
+    "Draw the voxels first so every other object stays visible in front of them.",
 };

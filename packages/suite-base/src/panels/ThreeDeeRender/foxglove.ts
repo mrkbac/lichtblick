@@ -44,5 +44,8 @@ addFoxgloveSchema(POSES_IN_FRAME_DATATYPES, "foxglove.PosesInFrame");
 export const GRID_DATATYPES = new Set<string>();
 addFoxgloveSchema(GRID_DATATYPES, "foxglove.Grid");
 
+export const VOXEL_GRID_DATATYPES = new Set<string>();
+addFoxgloveSchema(VOXEL_GRID_DATATYPES, "foxglove.VoxelGrid");
+
 export const IMAGE_ANNOTATIONS_DATATYPES = new Set<string>();
 addFoxgloveSchema(IMAGE_ANNOTATIONS_DATATYPES, "foxglove.ImageAnnotations");

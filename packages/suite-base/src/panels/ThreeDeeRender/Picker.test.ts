@@ -2,7 +2,7 @@
 
 import * as THREE from "three";
 
-import { Picker } from "./Picker";
+import { Picker, pickingDepthWrite } from "./Picker";
 
 describe("Picker projection", () => {
   it.each([false, true])("crops and restores a camera projection (custom=%s)", (custom) => {
@@ -41,5 +41,16 @@ describe("Picker projection", () => {
     expect(camera.projectionMatrix.equals(original)).toBe(true);
     expect(camera.projectionMatrixInverse.equals(original.clone().invert())).toBe(true);
     picker.dispose();
+  });
+});
+
+describe("pickingDepthWrite", () => {
+  it("lets draw-behind objects report depth without hiding later objects' ids", () => {
+    // Draw-behind objects write no depth in the id pass, so later objects win like on screen
+    expect(pickingDepthWrite({ drawBehind: true, depthPass: false })).toBe(false);
+    // Depth picking (measuring) still hits their surface
+    expect(pickingDepthWrite({ drawBehind: true, depthPass: true })).toBe(true);
+    // Other objects keep writing depth
+    expect(pickingDepthWrite({ drawBehind: false, depthPass: false })).toBe(true);
   });
 });

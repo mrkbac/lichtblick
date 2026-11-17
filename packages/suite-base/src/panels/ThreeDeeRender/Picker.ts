@@ -65,6 +65,7 @@ export class Picker {
   #currClearColor = new THREE.Color();
   #pickingTarget: THREE.WebGLRenderTarget;
   #isDebugPass = false;
+  #isDepthPass = false;
   #depthPicking?: DepthPicking;
   #projectionBeforePick = new THREE.Matrix4();
 
@@ -119,7 +120,9 @@ export class Picker {
     this.#camera = camera;
     const { xInView, yInView } = this.#updateCameraForPickAndGetPickCoordsInView(x, y, {});
     const originalRenderState = this.#prepareGLRendererForPick(depthPicking.target);
+    this.#isDepthPass = true;
     this.#gl.render(this.#emptyScene, camera);
+    this.#isDepthPass = false;
     this.#resetCameraFromPick({});
 
     // WebGL2 can't read depth buffers directly, so copy the depth bits into a color target
@@ -359,6 +362,11 @@ export class Picker {
       renderMaterial.uniforms.rotation = { value: (material as THREE.SpriteMaterial).rotation };
       renderMaterial.uniforms.center = { value: (object as THREE.Sprite).center };
     }
+    const drawBehind: unknown = object.userData.drawBehind;
+    if (typeof drawBehind === "boolean") {
+      // Only for objects with their own picking material, which this mutates
+      renderMaterial.depthWrite = pickingDepthWrite({ drawBehind, depthPass: this.#isDepthPass });
+    }
     setObjectId(renderMaterial, objId);
     renderMaterial.uniformsNeedUpdate = true;
     this.#gl.renderBufferDirect(
@@ -561,4 +569,19 @@ function createDepthPicking(): DepthPicking {
   const scene = new THREE.Scene();
   scene.add(quad);
   return { target, readTarget, scene, quad, texel };
+}
+
+/**
+ * Depth writes when picking an object flagged with `userData.drawBehind`. It is drawn first and
+ * then covered by everything else, so in the id pass it must not hide later objects; depth picking
+ * (e.g. measuring) still needs its surface.
+ */
+export function pickingDepthWrite({
+  drawBehind,
+  depthPass,
+}: {
+  drawBehind: boolean;
+  depthPass: boolean;
+}): boolean {
+  return !drawBehind || depthPass;
 }

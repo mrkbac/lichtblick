@@ -25,6 +25,7 @@ import { FoxgloveSceneEntities } from "@lichtblick/suite-base/panels/ThreeDeeRen
 import { SceneSettings } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/SceneSettings";
 import { Urdfs } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/Urdfs";
 import { VelodyneScans } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/VelodyneScans";
+import { VoxelGrids } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/VoxelGrids";
 
 import type { Renderer } from "./Renderer";
 import { SceneExtension } from "./SceneExtension";
@@ -125,6 +126,9 @@ export const DEFAULT_SCENE_EXTENSION_CONFIG: SceneExtensionConfig = {
     },
     [VelodyneScans.extensionId]: {
       init: (renderer: Renderer) => new VelodyneScans(renderer),
+    },
+    [VoxelGrids.extensionId]: {
+      init: (renderer: Renderer) => new VoxelGrids(renderer),
     },
   },
 };

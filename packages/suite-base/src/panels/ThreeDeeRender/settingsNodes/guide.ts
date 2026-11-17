@@ -50,6 +50,7 @@ import {
   poseSettingsNode,
   sceneEntitySettingsNode,
 } from "./topics";
+import { bitVoxelGridSettingsNode, packedVoxelGridSettingsNode } from "./voxelGrids";
 import type { RendererConfig } from "../IRenderer";
 import { DEFAULT_FOLLOW_MODE } from "../constants";
 import { DEFAULT_CAMERA_STATE, DEFAULT_MESH_UP_AXIS, DEFAULT_PUBLISH_SETTINGS } from "../defaults";
@@ -133,6 +134,15 @@ function topicNodes(): DocumentedNodes {
     grid: merged(
       "Grid",
       ...COLOR_MODES.map((colorMode) => foxgloveGridSettingsNode(topic(""), { colorMode }, fields)),
+    ),
+    voxelGrid: merged(
+      "Voxel grid",
+      ...(["type", "gradient"] as const).map((bitColorMode) =>
+        bitVoxelGridSettingsNode(topic(""), { bitColorMode }),
+      ),
+      ...COLOR_MODES.map((colorMode) =>
+        packedVoxelGridSettingsNode(topic(""), { colorMode }, fields),
+      ),
     ),
     gridMap: merged(
       "Grid map",
