@@ -21,6 +21,7 @@ import { useSeriesDrag } from "@lichtblick/suite-base/panels/shared/useSeriesDra
 import { getLineColor } from "@lichtblick/suite-base/util/plotColors";
 import { customTypography } from "@lichtblick/theme";
 
+import { formatStat } from "./RangeStats";
 import { PLOT_BUTTONS } from "./buttons";
 import { PlotPath, plotPathDisplayName } from "./utils/config";
 
@@ -117,6 +118,10 @@ const useStyles = makeStyles<void, "plotName" | "actionButton">()((theme, _param
     height: ROW_HEIGHT,
     padding: theme.spacing(0.25, 1, 0.25, 0.25),
     whiteSpace: "pre-wrap",
+    // Fixed-width digits and a reserved width keep the legend from resizing as values change.
+    fontVariantNumeric: "tabular-nums",
+    minWidth: "12ch",
+    justifyContent: "flex-end",
   },
   errorIcon: {
     color: theme.palette.error.main,
@@ -145,6 +150,7 @@ function renderValue(value: unknown): string | number | undefined {
     case "boolean":
       return value.toString();
     case "number":
+      return formatStat(value);
     case "string":
       return value;
     case "object":
