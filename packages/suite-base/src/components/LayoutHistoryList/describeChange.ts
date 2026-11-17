@@ -1,0 +1,51 @@
+// SPDX-License-Identifier: MPL-2.0
+
+import * as _ from "lodash-es";
+
+import { LayoutData } from "@lichtblick/suite-base/context/CurrentLayoutContext/actions";
+import { getPanelTypeFromId } from "@lichtblick/suite-base/util/layout";
+import { getAllPanelIds } from "@lichtblick/suite-base/util/tabLayout";
+
+/** Short, human-readable lines describing what changed from `prev` to `next`. */
+export function describeChange(
+  prev: LayoutData | undefined,
+  next: LayoutData,
+  panelTitle: (type: string) => string,
+): string[] {
+  const nextIds = getAllPanelIds(next);
+  if (prev == undefined) {
+    return [`${nextIds.length} ${nextIds.length === 1 ? "panel" : "panels"}`];
+  }
+  const prevIds = getAllPanelIds(prev);
+  const names = (ids: string[]) =>
+    _.uniq(ids.map((id) => panelTitle(getPanelTypeFromId(id)))).join(", ");
+  const added = _.difference(nextIds, prevIds);
+  const removed = _.difference(prevIds, nextIds);
+  const edited = _.intersection(prevIds, nextIds).filter(
+    (id) => !_.isEqual(prev.configById[id], next.configById[id]),
+  );
+
+  const lines: string[] = [];
+  if (added.length > 0) {
+    lines.push(`Added ${names(added)}`);
+  }
+  if (removed.length > 0) {
+    lines.push(`Removed ${names(removed)}`);
+  }
+  if (edited.length > 0) {
+    lines.push(`Changed ${names(edited)} settings`);
+  }
+  if (added.length === 0 && removed.length === 0 && !_.isEqual(prev.layout, next.layout)) {
+    lines.push("Rearranged panels");
+  }
+  if (!_.isEqual(prev.globalVariables, next.globalVariables)) {
+    lines.push("Changed variables");
+  }
+  if (!_.isEqual(prev.userNodes, next.userNodes)) {
+    lines.push("Changed user scripts");
+  }
+  if (!_.isEqual(prev.playbackConfig, next.playbackConfig)) {
+    lines.push("Changed playback settings");
+  }
+  return lines;
+}

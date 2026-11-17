@@ -457,6 +457,9 @@ export default function CurrentLayoutProvider({
       reopenClosedPanel: () => {
         commitLayoutData((h, data) => h.reopenClosedPanel(data, performance.now()));
       },
+      restoreLayoutData: (next: LayoutData) => {
+        commitLayoutData((h, data) => h.replace(data, next, performance.now()));
+      },
     }),
     [
       analytics,

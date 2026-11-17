@@ -156,6 +156,7 @@ export default function MockCurrentLayoutProvider({
       undoLayoutChange: () => {},
       redoLayoutChange: () => {},
       reopenClosedPanel: () => {},
+      restoreLayoutData: () => {},
     }),
     [performAction, setCurrentLayout, updateSharedPanelState],
   );

@@ -19,6 +19,11 @@ import {
   useCurrentLayoutSelector,
 } from "@lichtblick/suite-base/context/CurrentLayoutContext";
 import { useLayoutManager } from "@lichtblick/suite-base/context/LayoutManagerContext";
+import { LayoutManagerEventTypes } from "@lichtblick/suite-base/services/ILayoutManager";
+import {
+  deleteLayoutVersions,
+  recordLayoutVersion,
+} from "@lichtblick/suite-base/services/layoutVersions";
 
 export function selectLayoutData(state: LayoutState): LayoutData | undefined {
   return state.selectedLayout?.data;
@@ -67,6 +72,17 @@ export function CurrentLayoutLocalStorageSyncAdapter(): React.JSX.Element {
       return;
     }
 
+    // Layout history: the opened state is a checkpoint, later saves become versions. Uses the
+    // selected layout's own data, so a debounced value from the previous layout can't leak in.
+    const { id, data } = layoutState.selectedLayout;
+    if (data) {
+      recordLayoutVersion(id, data, {
+        kind: isInitialLayoutLoad.current ? "opened" : undefined,
+      }).catch((error: unknown) => {
+        log.error(error);
+      });
+    }
+
     // Skip updating layout manager during initial layout load to prevent
     // false "edited" states from panel initialization
     if (isInitialLayoutLoad.current) {
@@ -87,6 +103,20 @@ export function CurrentLayoutLocalStorageSyncAdapter(): React.JSX.Element {
       log.error(error);
     }
   }, [debouncedLayoutData, getCurrentLayoutState, layoutManager]);
+
+  useEffect(() => {
+    const listener: LayoutManagerEventTypes["change"] = (event) => {
+      if (event.type === "delete") {
+        deleteLayoutVersions(event.layoutId).catch((error: unknown) => {
+          log.error(error);
+        });
+      }
+    };
+    layoutManager.on("change", listener);
+    return () => {
+      layoutManager.off("change", listener);
+    };
+  }, [layoutManager]);
 
   return <></>;
 }

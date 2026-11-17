@@ -206,6 +206,16 @@ export class LayoutHistory {
     return next;
   }
 
+  /** Replaces the data wholesale (e.g. restoring an older version) as one undo step. */
+  public replace(data: LayoutData, next: LayoutData, now: number): LayoutData | undefined {
+    if (_.isEqual(data, next)) {
+      return undefined;
+    }
+    this.#sync(data);
+    this.#record(data, next, undefined, now);
+    return next;
+  }
+
   #record(prev: LayoutData, next: LayoutData, key: string | undefined, now: number): void {
     const coalesce =
       key != undefined && key === this.#lastKey && now - this.#lastTime < COALESCE_MS;

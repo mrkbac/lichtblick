@@ -107,6 +107,8 @@ export interface ICurrentLayout {
     redoLayoutChange: () => void;
     /** Puts the most recently closed panel back, with its config. */
     reopenClosedPanel: () => void;
+    /** Replaces the current layout's data, e.g. with an older version. Undoable. */
+    restoreLayoutData: (data: LayoutData) => void;
   };
 }
 
