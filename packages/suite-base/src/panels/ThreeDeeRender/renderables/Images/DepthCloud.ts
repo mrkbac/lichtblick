@@ -19,6 +19,8 @@ export class DepthCloud extends THREE.Points<THREE.BufferGeometry, DepthCloudMat
   #imageColorTexture: THREE.Texture | undefined;
   #useImageColors = false;
   #raysFor: { cameraModel: ICameraModel; width: number; height: number } | undefined;
+  /** Color until a color texture exists */
+  readonly #white = new THREE.DataTexture(new Uint8Array([255, 255, 255, 255]), 1, 1);
 
   public constructor(name: string) {
     super(new THREE.BufferGeometry(), new DepthCloudMaterial());
@@ -27,6 +29,8 @@ export class DepthCloud extends THREE.Points<THREE.BufferGeometry, DepthCloudMat
     this.frustumCulled = false;
     // ponytail: no picking; add a picking material like LaserScanMaterial if selecting points is needed
     this.userData.picking = false;
+    this.#white.needsUpdate = true;
+    this.#bindTextures();
   }
 
   public setDepth({ width, height, depth, colors }: DecodedDepth): void {
@@ -126,6 +130,7 @@ export class DepthCloud extends THREE.Points<THREE.BufferGeometry, DepthCloudMat
     this.#depthTexture?.dispose();
     this.#depthColorTexture?.dispose();
     this.#disposeImageColorTexture();
+    this.#white.dispose();
     this.geometry.dispose();
     this.material.dispose();
   }
@@ -139,16 +144,13 @@ export class DepthCloud extends THREE.Points<THREE.BufferGeometry, DepthCloudMat
   #bindTextures(): void {
     const { uniforms } = this.material;
     const colorTexture = this.#useImageColors ? this.#imageColorTexture : this.#depthColorTexture;
-    uniforms.depthMap!.value = this.#depthTexture ?? WHITE;
-    uniforms.colorMap!.value = colorTexture ?? WHITE;
+    uniforms.depthMap!.value = this.#depthTexture ?? this.#white;
+    uniforms.colorMap!.value = colorTexture ?? this.#white;
     // Camera images are sRGB bytes; depth colors are linear
     uniforms.colorIsSrgb!.value = this.#useImageColors;
     this.visible = this.#depthTexture != undefined;
   }
 }
-
-const WHITE = new THREE.DataTexture(new Uint8Array([255, 255, 255, 255]), 1, 1);
-WHITE.needsUpdate = true;
 
 function closeBitmap(image: unknown): void {
   if (image instanceof ImageBitmap) {
@@ -225,8 +227,8 @@ export class DepthCloudMaterial extends THREE.RawShaderMaterial {
       `,
     });
     this.uniforms = {
-      depthMap: { value: WHITE },
-      colorMap: { value: WHITE },
+      depthMap: { value: null },
+      colorMap: { value: null },
       colorIsSrgb: { value: false },
       pointSize: { value: 2 },
       pixelRatio: { value: 1 },
