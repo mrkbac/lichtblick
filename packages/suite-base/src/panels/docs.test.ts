@@ -15,6 +15,10 @@ const INPUT_WORDS =
   /\b(esc|escape|enter|backspace|ctrl|cmd|shift-\w+|alt-\w+|right-click|double-click|right-drag|middle-drag)\b|⌘/i;
 
 describe("built-in panel docs", () => {
+  it.each(panels)("%s has an icon for the panel picker", (_type, info) => {
+    expect(info.icon).toBeDefined();
+  });
+
   it.each(panels)("%s has docs generated from its declarations", async (_type, info) => {
     expect(info.docs).toBeDefined();
     const docs = (await info.docs!()).default;

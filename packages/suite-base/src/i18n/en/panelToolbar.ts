@@ -9,6 +9,7 @@ export const panelToolbar = {
   changePanel: "Change panel",
   close: "Close",
   closeTab: "Close {{title}}",
+  newTab: "New tab",
   doubleClickToRename: "Double-click or F2 to rename",
   dragToMovePanel: "Drag to move panel",
   fullscreen: "Fullscreen",

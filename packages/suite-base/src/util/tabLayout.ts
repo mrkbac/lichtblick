@@ -14,6 +14,7 @@ import {
   isLayoutNode,
   mapGroups,
   normalizeLayout,
+  removePanels,
   setActivePanel,
 } from "@lichtblick/suite-base/util/layoutTree";
 
@@ -239,12 +240,31 @@ export function mapLayoutTrees<T extends TreeData>(
   );
 }
 
-/** The tabs of a Tab panel that hold panels, and which of them is shown. */
-function filledTabs(config: PanelConfig | undefined): { tabs: TabConfig[]; active: number } {
-  const all = getTabs(config);
-  const shown = all[getActiveTabIndex(config)];
-  const tabs = all.filter((tab) => getPanelIds(tab.layout).length > 0);
-  return { tabs, active: Math.max(0, shown ? tabs.indexOf(shown) : 0) };
+/**
+ * Remove panels from every layout tree. A tab whose last panel left goes with it; tabs that were
+ * already empty stay, since they show the panel picker until filled or closed.
+ */
+export function removePanelsFromTrees<T extends TreeData>(data: T, panelIds: readonly string[]): T {
+  const removed = mapLayoutTrees(data, (tree) => removePanels(tree, panelIds));
+  const configs: Record<string, PanelConfig> = {};
+  for (const [id, config] of Object.entries(removed.configById)) {
+    if (!isTabPanel(id)) {
+      continue;
+    }
+    const before = getTabs(data.configById[id]);
+    const all = getTabs(config);
+    const tabs = all.filter(
+      (tab, i) => getPanelIds(tab.layout).length > 0 || getPanelIds(before[i]?.layout).length === 0,
+    );
+    if (tabs.length !== all.length) {
+      const shown = all[getActiveTabIndex(config)];
+      const active = Math.max(0, shown ? tabs.indexOf(shown) : 0);
+      configs[id] = { ...config, tabs, activeTabIdx: active };
+    }
+  }
+  return _.isEmpty(configs)
+    ? removed
+    : { ...removed, configById: { ...removed.configById, ...configs } };
 }
 
 function normalizeTabsOnce<T extends TreeData>(data: T): T {
@@ -275,15 +295,9 @@ function normalizeTabsOnce<T extends TreeData>(data: T): T {
         if (configById[id]?.isWindow === true) {
           return group;
         }
-        const { tabs, active } = filledTabs(configById[id]);
+        const tabs = getTabs(configById[id]);
         // A Tab panel with one tab left becomes that tab's layout; one with none goes away.
-        if (tabs.length <= 1) {
-          return tabs[0]?.layout;
-        }
-        if (tabs.length !== getTabs(configById[id]).length) {
-          configs[id] = { ...configById[id], tabs, activeTabIdx: active };
-        }
-        return group;
+        return tabs.length <= 1 ? tabs[0]?.layout : group;
       }
       // Panels stacked onto each other become one Tab panel with a tab per panel. Stacked Tab
       // panels contribute their tabs; the first of them is kept.
@@ -293,11 +307,11 @@ function normalizeTabsOnce<T extends TreeData>(data: T): T {
       let activeTabIdx = 0;
       for (const id of group.panels) {
         if (isTabPanel(id)) {
-          const merged = filledTabs(configById[id] ?? configs[id]);
+          const merged = configById[id] ?? configs[id];
           if (id === shownId) {
-            activeTabIdx = tabs.length + merged.active;
+            activeTabIdx = tabs.length + getActiveTabIndex(merged);
           }
-          pushAll(tabs, merged.tabs);
+          pushAll(tabs, getTabs(merged));
         } else {
           if (id === shownId) {
             activeTabIdx = tabs.length;
@@ -315,8 +329,8 @@ function normalizeTabsOnce<T extends TreeData>(data: T): T {
 }
 
 /**
- * Keep tabs in one shape: panels stacked in a group become a Tab panel with a tab per panel, tabs
- * without panels go away, and a Tab panel with a single tab left is replaced by that tab's layout.
+ * Keep tabs in one shape: panels stacked in a group become a Tab panel with a tab per panel, and a
+ * Tab panel with a single tab left is replaced by that tab's layout. Empty tabs stay until closed.
  * Configs of panels that leave the layout are not removed here.
  */
 export function normalizeTabs<T extends TreeData>(data: T): T {

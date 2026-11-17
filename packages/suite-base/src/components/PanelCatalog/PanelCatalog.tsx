@@ -126,6 +126,15 @@ export function PanelCatalog(props: Props): React.JSX.Element {
     });
   }, [panelCatalog]);
 
+  // The list shows thumbnails only in a hover tooltip; fetch them now so the first hover isn't blank.
+  useEffect(() => {
+    for (const panel of namespacedPanels) {
+      if (panel.thumbnail != undefined) {
+        new Image().src = panel.thumbnail;
+      }
+    }
+  }, [namespacedPanels]);
+
   const { allRegularPanels, allPreconfiguredPanels } = useMemo(() => {
     const panels = namespacedPanels;
     const regular = panels.filter((panel) => !panel.config);
