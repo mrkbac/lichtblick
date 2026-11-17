@@ -3,6 +3,7 @@
 
 import { Immutable } from "@lichtblick/suite";
 import { RosDatatypes } from "@lichtblick/suite-base/types/RosDatatypes";
+import { toError } from "@lichtblick/suite-base/util/toError";
 
 import buildSampleMessage from "./buildSampleMessage";
 
@@ -19,7 +20,7 @@ export function parseMessageJson(text: string): ParsedMessage {
   try {
     parsed = JSON.parse(text);
   } catch (err) {
-    return { error: (err as Error).message };
+    return { error: toError(err).message };
   }
   if (parsed == undefined || typeof parsed !== "object" || Array.isArray(parsed)) {
     // JSON.parse never returns undefined, so `== undefined` means null here

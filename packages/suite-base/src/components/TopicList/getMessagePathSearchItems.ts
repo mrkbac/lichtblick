@@ -88,11 +88,10 @@ export function getMessagePathSearchItems(
 ): { items: MessagePathSearchItem[]; itemsByTopicName: Map<string, MessagePathSearchItem[]> } {
   const items: MessagePathSearchItem[] = [];
   const itemsByTopicName = new Map<string, MessagePathSearchItem[]>();
-  const topicsBySchemaName = Map.groupBy(
-    allTopics.filter((topic) => topic.schemaName != undefined),
-    (topic) => topic.schemaName!,
-  );
-  for (const [schemaName, topics] of topicsBySchemaName) {
+  for (const [schemaName, topics] of Map.groupBy(allTopics, (topic) => topic.schemaName)) {
+    if (schemaName == undefined) {
+      continue;
+    }
     const schema = schemasByName.get(schemaName);
     if (!schema) {
       continue;

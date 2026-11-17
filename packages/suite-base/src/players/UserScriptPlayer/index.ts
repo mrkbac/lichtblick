@@ -1011,7 +1011,7 @@ export default class UserScriptPlayer implements Player {
         return block; // converted once its inputs finish loading (the block is replaced then)
       }
       const inputs = sourceTopics
-        .flatMap((topic) => block.messagesByTopic[topic]!)
+        .flatMap((topic) => block.messagesByTopic[topic] ?? [])
         .sort(byReceiveTime);
       // ponytail: fresh converter instances per block, so converter state does not carry across
       // block boundaries; carry it over in time order if a stateful converter needs it.
@@ -1195,7 +1195,7 @@ export default class UserScriptPlayer implements Player {
       // clear any previous problem we had from making a new player state
       this.#alertStore.delete("player-state-update");
     } catch (e: unknown) {
-      const err = e as Error;
+      const err = toError(e);
       this.#alertStore.set("player-state-update", {
         severity: "error",
         message: err.message,
@@ -1548,7 +1548,7 @@ export default class UserScriptPlayer implements Player {
           UserScriptPlayer.#notify(cache);
         }
       } catch (err) {
-        cache.error = err as Error;
+        cache.error = toError(err);
       } finally {
         cache.done = true;
         UserScriptPlayer.#notify(cache);

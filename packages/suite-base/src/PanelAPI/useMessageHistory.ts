@@ -36,8 +36,8 @@ export function useMessageHistory<T>(params: {
       for (const message of messages) {
         const buffer = prev[message.topic];
         const item = buffer ? map(message) : undefined;
-        if (item != undefined) {
-          buffer!.push(item);
+        if (buffer && item != undefined) {
+          buffer.push(item);
           changed = true;
         }
       }

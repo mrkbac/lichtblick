@@ -47,7 +47,7 @@ function ModalPrompt({
       transformer?.(value);
       return undefined;
     } catch (err: unknown) {
-      return (err as Error).toString();
+      return String(err);
     }
   }, [transformer, value]);
 

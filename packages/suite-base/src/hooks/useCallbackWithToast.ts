@@ -30,9 +30,7 @@ export default function useCallbackWithToast<Args extends unknown[]>(
       } catch (error) {
         log.error(error);
         const errorMessage =
-          error instanceof HttpError
-            ? error.getUserFriendlyErrorMessage()
-            : (error as Error).toString();
+          error instanceof HttpError ? error.getUserFriendlyErrorMessage() : String(error);
         enqueueSnackbar(errorMessage, { variant: "error" });
       }
     },

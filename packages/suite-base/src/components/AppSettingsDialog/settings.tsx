@@ -56,6 +56,7 @@ import {
   timezoneOffsetMinutes,
 } from "@lichtblick/suite-base/util/formatTime";
 import { formatTimeRaw } from "@lichtblick/suite-base/util/time";
+import { toError } from "@lichtblick/suite-base/util/toError";
 
 const MESSAGE_RATES = [1, 3, 5, 10, 15, 20, 30, 60];
 const LANGUAGE_OPTIONS: { key: Language; value: string }[] = [{ key: "en", value: "English" }];
@@ -543,7 +544,7 @@ export function LanguageSettings(): React.ReactElement {
       void setSelectedLanguage(lang);
       i18n.changeLanguage(lang).catch((error: unknown) => {
         console.error("Failed to switch languages", error);
-        reportError(error as Error);
+        reportError(toError(error));
       });
     },
     [i18n, setSelectedLanguage],

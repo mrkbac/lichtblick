@@ -20,7 +20,7 @@ import showOpenFilePicker from "@lichtblick/suite-base/util/showOpenFilePicker";
 export function useOpenFile(sources: readonly IDataSourceFactory[]): () => Promise<void> {
   const { selectSource } = usePlayerSelection();
 
-  const throwErrorAndSnackbar = (message: string): void => {
+  const throwErrorAndSnackbar: (message: string) => never = (message) => {
     enqueueSnackbar(message, { variant: "error" });
     throw new Error(message);
   };
@@ -91,7 +91,8 @@ export function useOpenFile(sources: readonly IDataSourceFactory[]): () => Promi
     const [extension] = uniqueExtensions;
     const matchingSources = sourcesFor(extension);
 
-    if (matchingSources.length === 0) {
+    const [source] = matchingSources;
+    if (source == undefined) {
       throwErrorAndSnackbar(`Cannot find a source to handle files with extension ${extension}`);
     }
 
@@ -101,9 +102,9 @@ export function useOpenFile(sources: readonly IDataSourceFactory[]): () => Promi
       );
     }
 
-    if (matchingSources[0]!.supportsMultiFile !== true && processedFiles.length > 1) {
+    if (source.supportsMultiFile !== true && processedFiles.length > 1) {
       throwErrorAndSnackbar(`Opening multiple ${extension} files at once is not supported.`);
     }
-    selectSource(matchingSources[0]!.id, { type: "file", handles: filesHandle });
+    selectSource(source.id, { type: "file", handles: filesHandle });
   }, [allExtensions, normalizeExtensionsArray, selectSource, sources]);
 }
