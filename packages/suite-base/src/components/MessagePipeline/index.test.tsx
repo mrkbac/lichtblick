@@ -1104,6 +1104,11 @@ describe("MessagePipelineProvider/useMessagePipeline", () => {
     });
 
     it("Adding a promise that does not resolve eventually results in an error, and then continues playing", async () => {
+      // Fake timers so the test doesn't wait out the real 5 s pause timeout
+      vi.useFakeTimers();
+      onTestFinished(() => {
+        vi.useRealTimers();
+      });
       const player = new FakePlayer();
       const { Hook, Wrapper } = makeTestHook({ player });
       const { result } = renderHook(Hook, { wrapper: Wrapper });
@@ -1117,14 +1122,19 @@ describe("MessagePipelineProvider/useMessagePipeline", () => {
           hasFinishedFrame = true;
         });
       });
-      await delay(20);
+      await vi.advanceTimersByTimeAsync(20);
       expect(hasFinishedFrame).toEqual(false);
 
-      await delay(MAX_PROMISE_TIMEOUT_TIME_MS + 20);
+      await vi.advanceTimersByTimeAsync(MAX_PROMISE_TIMEOUT_TIME_MS + 20);
       expect(hasFinishedFrame).toEqual(true);
     });
 
     it("Adding multiple promises that do not resolve eventually results in an error, and then continues playing", async () => {
+      // Fake timers so the test doesn't wait out the real 5 s pause timeout
+      vi.useFakeTimers();
+      onTestFinished(() => {
+        vi.useRealTimers();
+      });
       const player = new FakePlayer();
       const { Hook, Wrapper } = makeTestHook({ player });
       const { result } = renderHook(Hook, { wrapper: Wrapper });
@@ -1140,10 +1150,10 @@ describe("MessagePipelineProvider/useMessagePipeline", () => {
           hasFinishedFrame = true;
         });
       });
-      await delay(20);
+      await vi.advanceTimersByTimeAsync(20);
       expect(hasFinishedFrame).toEqual(false);
 
-      await delay(MAX_PROMISE_TIMEOUT_TIME_MS + 20);
+      await vi.advanceTimersByTimeAsync(MAX_PROMISE_TIMEOUT_TIME_MS + 20);
       expect(hasFinishedFrame).toEqual(true);
     });
 

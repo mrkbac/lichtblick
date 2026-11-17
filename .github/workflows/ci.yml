@@ -30,9 +30,11 @@ jobs:
         config:
           # Specify names so that the GitHub branch protection settings for
           # required checks don't need to change if we ever change the commands used.
-          # Cheap checks share one job: on the shared runner pool, queue time per job
-          # (often minutes) dwarfs these commands' run time (seconds each).
-          - name: lint
+          # Lint and build share one job: the account runs at most 20 jobs at once and PR jobs
+          # often wait minutes for a runner, while lint plus build (~2.5 min) still finishes
+          # before the e2e jobs. This job also saves the pnpm store on licht.
+          - name: lint-build
+            save-cache: true
             # `check` (defined in the run step) keeps going after a failure so every result shows.
             command: |
               check pnpm license-check
@@ -42,30 +44,28 @@ jobs:
               check pnpm run format:ci
               check pnpm run lint:ci
               check pnpm run lint:knip
-              # last: advisories change without our code changing
-              check pnpm audit --audit-level high
-          - name: build
-            command: |
               check pnpm run build:packages
               check pnpm run web:build:prod
               check pnpm run desktop:build:prod
               check pnpm run benchmark:build:prod
+              # last: advisories change without our code changing
+              check pnpm audit --audit-level high
           - name: test
             command: check pnpm run test --maxWorkers=100%
 
     name: ${{ matrix.config.name }} (${{ matrix.os }})
 
+    permissions:
+      contents: read
+      # The setup action deletes superseded pnpm store caches after saving one on licht
+      actions: write
+
     steps:
       - uses: actions/checkout@v7
 
-      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
-
-      - uses: actions/setup-node@v7
+      - uses: ./.github/actions/setup
         with:
-          node-version: 26
-          cache: pnpm
-
-      - run: pnpm install --frozen-lockfile
+          save-cache: ${{ matrix.config.save-cache == true }}
 
       - name: Run checks
         run: |
@@ -99,14 +99,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
-
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 26
-          cache: pnpm
-
-      - run: pnpm install --frozen-lockfile
+      - uses: ./.github/actions/setup
 
       - name: Apply AppArmor Fix (Ubuntu)
         # Required for Playwright on Ubuntu to work properly
@@ -143,14 +136,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
-
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 26
-          cache: pnpm
-
-      - run: pnpm install --frozen-lockfile
+      - uses: ./.github/actions/setup
 
       - name: Install Playwright Browsers
         run: npx playwright install --with-deps chromium
@@ -188,14 +174,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
-
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 26
-          cache: pnpm
-
-      - run: pnpm install --frozen-lockfile
+      - uses: ./.github/actions/setup
 
       - name: Download all desktop blob reports
         uses: actions/download-artifact@v8

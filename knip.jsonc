@@ -25,7 +25,7 @@
         // Loaded by Chrome from chrome-extension/manifest.json
         "chrome-extension/*.js",
         "lint-test.ts",
-        "vitest.config.ts",
+        "vitest.config.mts",
         "e2e/**/*.spec.ts",
         "e2e/tests/*/web-{setup,teardown}.ts"
       ],

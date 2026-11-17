@@ -5,6 +5,7 @@
   "extends": "./tsconfig.base.json",
   "include": [
     "./*.ts",
+    "./*.mts",
     "./*.js",
     "./ci/**/*.ts",
     "./e2e/ci-helpers/**/*.ts",

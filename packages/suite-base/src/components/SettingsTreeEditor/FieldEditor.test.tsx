@@ -287,13 +287,14 @@ describe("FieldEditor", () => {
   describe("Vec3 input", () => {
     it("renders a vec3 input and triggers update action when value changes", async () => {
       const input = "vec3";
-      const value = BasicBuilder.numbers() as [number, number, number];
+      const value = [1, 2, 3] as [number, number, number];
       const { props } = await renderComponent({
         field: { input, label, value },
       });
-      const newValue0 = BasicBuilder.number({ max: 2000 });
-      const newValue1 = BasicBuilder.number({ max: 2000 });
-      const newValue2 = BasicBuilder.number({ max: 2000 });
+      // Above every starting value: a change to the value already shown fires no change event
+      const newValue0 = BasicBuilder.number({ min: 10, max: 2000 });
+      const newValue1 = BasicBuilder.number({ min: 10, max: 2000 });
+      const newValue2 = BasicBuilder.number({ min: 10, max: 2000 });
 
       const vec3Input0 = screen.getByTestId("Vec3Input-0").querySelector("input")!;
       fireEvent.change(vec3Input0, { target: { value: newValue0 } });
@@ -343,8 +344,9 @@ describe("FieldEditor", () => {
         field: { input, label, value },
       });
 
-      const newValue0 = BasicBuilder.number({ max: 2000 });
-      const newValue1 = BasicBuilder.number({ max: 2000 });
+      // Above every starting value: a change to the value already shown fires no change event
+      const newValue0 = BasicBuilder.number({ min: 10, max: 2000 });
+      const newValue1 = BasicBuilder.number({ min: 10, max: 2000 });
 
       const vec2Input0 = screen.getByTestId("Vec2Input-0").querySelector("input")!;
       fireEvent.change(vec2Input0, { target: { value: newValue0 } });
