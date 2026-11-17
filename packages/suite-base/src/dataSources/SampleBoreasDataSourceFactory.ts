@@ -30,6 +30,8 @@ class SampleBoreasDataSourceFactory implements IDataSourceFactory {
   public iconName: IDataSourceFactory["iconName"] = SAMPLE_BOREAS_DATA_SOURCE_ICON_NAME;
   public hidden = true;
   public sampleLayout = SampleBoreasLayout as IDataSourceFactory["sampleLayout"];
+  // Bump when SampleBoreasLayout.json changes so saved copies are replaced. 2: acceleration slider.
+  public sampleLayoutVersion = 2;
 
   public initialize(): ReturnType<IDataSourceFactory["initialize"]> {
     const bagUrl = SAMPLE_BOREAS_DATA_SOURCE_URL;
