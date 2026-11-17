@@ -25,7 +25,7 @@ export function treeChildren(
   path: string,
 ): { name: string; value: unknown; path: string }[] {
   if (Array.isArray(value) || isTypedArray(value)) {
-    const arr = value as ArrayLike<unknown>;
+    const arr: ArrayLike<unknown> = value;
     return Array.from({ length: Math.min(arr.length, MAX_CHILDREN) }, (_, i) => ({
       name: String(i),
       value: arr[i],
