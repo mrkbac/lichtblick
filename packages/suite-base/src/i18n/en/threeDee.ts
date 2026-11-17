@@ -205,6 +205,31 @@ export const threeDee = {
   planarProjectionFactorHelp:
     "0 projects onto a sphere around the camera, 1 onto a flat plane; values between blend.",
   imageColorHelp: "Tints the image; the alpha sets its opacity.",
+  renderMode: "Render mode",
+  renderModeHelp:
+    "Default draws the image at a distance from the camera, Plane projection lays it onto a frame's XY plane, Depth map turns a depth image into 3D points.",
+  renderModeDefault: "Default",
+  renderModePlane: "Plane projection",
+  renderModeDepth: "Depth map",
+  projectionFrame: "Projection frame",
+  projectionFrameHelp: "Frame whose XY plane (z = 0) the image is projected onto.",
+  projectionFrameFixed: "Fixed frame",
+  projectionDistance: "Projection distance",
+  projectionDistanceHelp:
+    "Farthest a pixel is drawn from the camera, in meters (at least 1). Empty stops rays that graze the plane.",
+  auto: "auto",
+  depthDistanceType: "Distance type",
+  depthDistanceTypeHelp:
+    "Z axis: depth is measured along the camera's optical axis (most depth cameras). Euclidean: along each pixel's ray.",
+  depthDistanceZ: "Z axis",
+  depthDistanceEuclidean: "Euclidean",
+  depthScale: "Depth scale",
+  depthScaleHelp:
+    "Meters per depth unit. Empty uses 1 for 32FC1 images and 0.001 (millimeters) otherwise.",
+  rgbTopic: "RGB topic",
+  rgbTopicHelp:
+    "Color image that colors the points. It should be registered to the depth image (same view).",
+  rgbTopicNone: "None",
   frustumLineWidthHelp: "Width of the frustum lines, in meters.",
   frustumColorHelp: "Color of the frustum lines.",
   pointShapeHelp: "Shape drawn for each point.",

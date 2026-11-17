@@ -7,6 +7,7 @@
 
 import { toNanoSec } from "@foxglove/rostime";
 import { CompressedImage, RawImage } from "@foxglove/schemas";
+import * as THREE from "three";
 import { assert } from "ts-essentials";
 
 import { filterMap } from "@lichtblick/den/collection";
@@ -20,6 +21,7 @@ import { toError } from "@lichtblick/suite-base/util/toError";
 import {
   IMAGE_RENDERABLE_DEFAULT_SETTINGS,
   ImageRenderable,
+  ImageRenderableSettings,
   ImageUserData,
 } from "./Images/ImageRenderable";
 import { ALL_CAMERA_INFO_SCHEMAS, AnyImage, CompressedVideo } from "./Images/ImageTypes";
@@ -55,21 +57,31 @@ import {
 import { BaseSettings } from "../settings";
 import { imageProjectionSettingsNode } from "../settingsNodes/topics";
 import { topicIsConvertibleToSchema } from "../topicIsConvertibleToSchema";
-import { makePose, AnyFrameId } from "../transforms";
+import { makePose, AnyFrameId, Pose } from "../transforms";
 
 const log = Logger.getLogger(__filename);
 void log;
 
-export type LayerSettingsImage = BaseSettings & {
-  cameraInfoTopic: string | undefined;
-  distance: number;
-  planarProjectionFactor: number;
-  color: string;
-};
+export type LayerSettingsImage = BaseSettings &
+  Pick<ImageRenderableSettings, "renderMode" | "rgbTopic"> & {
+    cameraInfoTopic: string | undefined;
+    distance: number;
+    planarProjectionFactor: number;
+    color: string;
+  };
 
 const DEFAULT_BITMAP_WIDTH = 512;
 const NO_CAMERA_INFO_ERR = "NoCameraInfo";
 const CAMERA_MODEL = "CameraModel";
+const PROJECTION_FRAME_ERR = "ProjectionFrame";
+
+const IDENTITY_POSE = makePose();
+const tempPose = makePose();
+const tempPlaneMatrix = new THREE.Matrix4();
+const tempCamToPlane = new THREE.Matrix4();
+const tempPosition = new THREE.Vector3();
+const tempQuaternion = new THREE.Quaternion();
+const UNIT_SCALE = new THREE.Vector3(1, 1, 1);
 
 export class Images extends SceneExtension<ImageRenderable> {
   public static extensionId = "foxglove.Images";
@@ -89,6 +101,12 @@ export class Images extends SceneExtension<ImageRenderable> {
    * This stores the last camera info message on each topic so it can be applied when rendering the image
    */
   #cameraInfoByTopic = new Map<string, CameraInfo>();
+
+  /**
+   * Latest image on each topic that colors a depth map. A depth map created or pointed at the
+   * topic after the image arrived (e.g. while paused) still gets colored.
+   */
+  #latestColorImageByTopic = new Map<string, AnyImage>();
 
   public customCameraModels: CameraModelsMap;
 
@@ -128,6 +146,54 @@ export class Images extends SceneExtension<ImageRenderable> {
       renderable.flushPendingDecodes();
     }
     super.startFrame(currentTime, renderFrameId, fixedFrameId);
+
+    for (const renderable of this.renderables.values()) {
+      const { renderMode } = renderable.userData.settings;
+      if (renderMode === "depth") {
+        renderable.setPixelRatio(this.renderer.getPixelRatio());
+      } else if (renderMode === "plane" && renderable.visible) {
+        this.#updatePlaneProjection(renderable, currentTime, renderFrameId, fixedFrameId);
+      }
+    }
+  }
+
+  /** Plane mode: tells the renderable where its projection plane is relative to the camera. */
+  #updatePlaneProjection(
+    renderable: ImageRenderable,
+    currentTime: bigint,
+    renderFrameId: AnyFrameId,
+    fixedFrameId: AnyFrameId,
+  ): void {
+    const planeFrameId = renderable.userData.settings.projectionFrameId ?? fixedFrameId;
+    const planePose: Pose | undefined = this.renderer.transformTree.apply(
+      tempPose,
+      IDENTITY_POSE,
+      renderFrameId,
+      fixedFrameId,
+      planeFrameId,
+      currentTime,
+      currentTime,
+    );
+    const topic = renderable.userData.topic;
+    if (!planePose) {
+      renderable.setPlaneProjection(undefined);
+      this.renderer.settings.errors.addToTopic(
+        topic,
+        PROJECTION_FRAME_ERR,
+        `No transform to projection frame ${String(planeFrameId)}`,
+      );
+      return;
+    }
+    this.renderer.settings.errors.removeFromTopic(topic, PROJECTION_FRAME_ERR);
+    const { position: p, orientation: q } = planePose;
+    tempPlaneMatrix.compose(
+      tempPosition.set(p.x, p.y, p.z),
+      tempQuaternion.set(q.x, q.y, q.z, q.w),
+      UNIT_SCALE,
+    );
+    renderable.updateMatrix();
+    tempCamToPlane.copy(tempPlaneMatrix.invert()).multiply(renderable.matrix);
+    renderable.setPlaneProjection(tempCamToPlane);
   }
 
   public override async settleVideoDecodes(): Promise<void> {
@@ -151,7 +217,11 @@ export class Images extends SceneExtension<ImageRenderable> {
       {
         type: "schema",
         schemaNames: ROS_IMAGE_DATATYPES,
-        subscription: { handler: this.#handleRosRawImage, filterQueue: onlyLastByTopicMessage },
+        subscription: {
+          handler: this.#handleRosRawImage,
+          filterQueue: onlyLastByTopicMessage,
+          shouldSubscribe: this.#imageShouldSubscribe,
+        },
       },
       {
         type: "schema",
@@ -159,6 +229,7 @@ export class Images extends SceneExtension<ImageRenderable> {
         subscription: {
           handler: this.#handleRosCompressedImage,
           filterQueue: onlyLastByTopicMessage,
+          shouldSubscribe: this.#imageShouldSubscribe,
         },
       },
       {
@@ -167,6 +238,7 @@ export class Images extends SceneExtension<ImageRenderable> {
         subscription: {
           handler: this.#handleRawImage,
           filterQueue: onlyLastByTopicMessage,
+          shouldSubscribe: this.#imageShouldSubscribe,
         },
       },
       {
@@ -175,6 +247,7 @@ export class Images extends SceneExtension<ImageRenderable> {
         subscription: {
           handler: this.#handleCompressedImage,
           filterQueue: onlyLastByTopicMessage,
+          shouldSubscribe: this.#imageShouldSubscribe,
         },
       },
       {
@@ -209,10 +282,14 @@ export class Images extends SceneExtension<ImageRenderable> {
     const configTopics = this.renderer.config.topics;
     const handler = this.handleSettingsAction;
     const entries: SettingsTreeEntry[] = [];
-    for (const topic of this.renderer.topics ?? []) {
-      if (!topicIsConvertibleToSchema(topic, this.supportedImageSchemas)) {
-        continue;
-      }
+    const imageTopics = (this.renderer.topics ?? []).filter((topic) =>
+      topicIsConvertibleToSchema(topic, this.supportedImageSchemas),
+    );
+    const imageTopicOptions = imageTopics.map((topic) => ({
+      label: topic.name,
+      value: topic.name,
+    }));
+    for (const topic of imageTopics) {
       const imageTopic = topic.name;
       const config = (configTopics[imageTopic] ?? {}) as Partial<LayerSettingsImage>;
 
@@ -224,9 +301,18 @@ export class Images extends SceneExtension<ImageRenderable> {
       cameraInfoOptions.sort();
       sortPrefixMatchesToFront(cameraInfoOptions, imageTopic, (option) => option.value);
 
+      const options =
+        config.renderMode === "plane"
+          ? { frameOptions: this.renderer.transformTree.frameList() }
+          : config.renderMode === "depth"
+            ? { rgbTopicOptions: imageTopicOptions.filter((option) => option.value !== imageTopic) }
+            : {};
       entries.push({
         path: ["topics", imageTopic],
-        node: { ...imageProjectionSettingsNode(topic, config, cameraInfoOptions), handler },
+        node: {
+          ...imageProjectionSettingsNode(topic, config, cameraInfoOptions, options),
+          handler,
+        },
       });
     }
     return entries;
@@ -259,6 +345,7 @@ export class Images extends SceneExtension<ImageRenderable> {
     }
 
     renderable.setSettings({ ...IMAGE_RENDERABLE_DEFAULT_SETTINGS, ...settings });
+    this.#applyLatestColorImage(renderable);
 
     // The camera info topic changed for our renderable
     // Remove the previous camera_info_topic -> image_topic mapping
@@ -284,6 +371,25 @@ export class Images extends SceneExtension<ImageRenderable> {
     this.#recomputeCameraModel(renderable, cameraInfo);
     renderable.update();
   };
+
+  /** Visible image topics, plus the RGB topics that color a visible depth map. */
+  #imageShouldSubscribe = (imageTopic: string): boolean =>
+    this.renderer.config.topics[imageTopic]?.visible === true || this.#isColorTopic(imageTopic);
+
+  #isColorTopic(imageTopic: string): boolean {
+    return Object.values(this.renderer.config.topics).some(
+      (config: Partial<LayerSettingsImage> | undefined) =>
+        config?.visible === true && config.renderMode === "depth" && config.rgbTopic === imageTopic,
+    );
+  }
+
+  #applyLatestColorImage(renderable: ImageRenderable): void {
+    const { renderMode, rgbTopic } = renderable.userData.settings;
+    const image = rgbTopic == undefined ? undefined : this.#latestColorImageByTopic.get(rgbTopic);
+    if (renderMode === "depth" && image) {
+      renderable.setColorImage(image);
+    }
+  }
 
   #cameraInfoShouldSubscribe = (cameraInfoTopic: string): boolean => {
     // Iterate over each topic config and check if it has a cameraInfoTopic setting that matches
@@ -324,6 +430,19 @@ export class Images extends SceneExtension<ImageRenderable> {
 
   protected handleImage = (messageEvent: PartialMessageEvent<AnyImage>, image: AnyImage): void => {
     const imageTopic = messageEvent.topic;
+    if (this.#isColorTopic(imageTopic)) {
+      this.#latestColorImageByTopic.set(imageTopic, image);
+      for (const depthRenderable of this.renderables.values()) {
+        const { settings } = depthRenderable.userData;
+        if (settings.renderMode === "depth" && settings.rgbTopic === imageTopic) {
+          depthRenderable.setColorImage(image);
+        }
+      }
+    }
+    // Subscribed only to color a depth map
+    if (this.renderer.config.topics[imageTopic]?.visible !== true) {
+      return;
+    }
     const receiveTime = toNanoSec(messageEvent.receiveTime);
     const frameId = "header" in image ? image.header.frame_id : image.frame_id;
 
@@ -475,6 +594,7 @@ export class Images extends SceneExtension<ImageRenderable> {
     });
 
     this.add(renderable);
+    this.#applyLatestColorImage(renderable);
     this.renderables.set(imageTopic, renderable);
     return renderable;
   }

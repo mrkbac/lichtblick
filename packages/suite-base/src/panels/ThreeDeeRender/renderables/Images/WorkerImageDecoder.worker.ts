@@ -11,6 +11,8 @@ import type { RawImage } from "@foxglove/schemas";
 import type { CompressedImageTypes } from "./ImageTypes";
 import { decodeCompressedDepth } from "./decodeCompressedDepth";
 import { decodeRawImage, RawImageOptions } from "./decodeImage";
+import { DecodedDepth, DepthDecodeOptions } from "./imageRenderModeSettings";
+import { colorizeDepth, decodeDepthImage, defaultDepthScale } from "./imageRenderModes";
 import type { Image as RosImage } from "../../ros";
 
 async function decode(
@@ -24,7 +26,25 @@ async function decode(
   return Comlink.transfer(result, [result.data.buffer]);
 }
 
+async function decodeDepth(
+  input: RosImage | RawImage | CompressedImageTypes,
+  options: DepthDecodeOptions,
+): Promise<DecodedDepth> {
+  const image = "format" in input ? await decodeCompressedDepth(input) : input;
+  const { width, height } = image;
+  const depth = new Float32Array(width * height);
+  decodeDepthImage(image, options.depthScale ?? defaultDepthScale(image.encoding), depth);
+  let colors: Uint8Array | undefined;
+  if (options.color) {
+    colors = new Uint8Array(width * height * 4);
+    colorizeDepth(depth, options.color, colors);
+  }
+  const transfers = colors ? [depth.buffer, colors.buffer] : [depth.buffer];
+  return Comlink.transfer({ width, height, depth, colors }, transfers);
+}
+
 export const service = {
   decode,
+  decodeDepth,
 };
 Comlink.expose(service);

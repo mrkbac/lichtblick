@@ -36,4 +36,62 @@ describe("Images", () => {
     expect(images.renderables.size).toBe(0);
     expect(hidden.parent).toBeNull();
   });
+
+  describe("depth map RGB topic", () => {
+    const config = {
+      topics: {
+        "/depth": { visible: true, renderMode: "depth", rgbTopic: "/color" },
+        "/other": { visible: false },
+      },
+    };
+    function makeImages() {
+      const renderer = {
+        on: vi.fn(),
+        off: vi.fn(),
+        topics: [],
+        customCameraModels: new Map(),
+        config,
+        settings: { errors: { clearPath: vi.fn() }, setNodesForKey: vi.fn() },
+      } as unknown as Renderer;
+      return new Images(renderer);
+    }
+    const rosImageSubscription = (images: Images) =>
+      images
+        .getSubscriptions()
+        .find((sub) => sub.type === "schema" && sub.schemaNames.has("sensor_msgs/Image"))!
+        .subscription;
+
+    it("subscribes to the RGB topic of a visible depth map", () => {
+      const shouldSubscribe = rosImageSubscription(makeImages()).shouldSubscribe!;
+      expect(shouldSubscribe("/depth")).toBe(true);
+      expect(shouldSubscribe("/color")).toBe(true);
+      expect(shouldSubscribe("/other")).toBe(false);
+    });
+
+    it("hands RGB images to the depth map without drawing them itself", () => {
+      const images = makeImages();
+      const setColorImage = vi.fn();
+      const depth = Object.assign(new THREE.Object3D(), {
+        userData: { topic: "/depth", settings: config.topics["/depth"] },
+        setColorImage,
+      }) as unknown as ImageRenderable;
+      images.renderables.set("/depth", depth);
+
+      rosImageSubscription(images).handler({
+        topic: "/color",
+        receiveTime: { sec: 0, nsec: 0 },
+        message: {
+          header: { frame_id: "camera", stamp: { sec: 0, nsec: 0 } },
+          encoding: "rgb8",
+          width: 1,
+          height: 1,
+          step: 3,
+          data: new Uint8Array(3),
+        },
+      } as never);
+
+      expect(setColorImage).toHaveBeenCalledTimes(1);
+      expect(images.renderables.has("/color")).toBe(false);
+    });
+  });
 });
