@@ -40,14 +40,12 @@ type GridColorModeSettings = ColorModeSettings & {
   colorMode: Exclude<ColorModeSettings["colorMode"], "rgb" | "rgba">;
 };
 
-export type GridInterpolation = "linear" | "nearest";
-
 export type LayerSettingsFoxgloveGrid = BaseSettings &
   GridColorModeSettings & {
     frameLocked: boolean;
     /** Numeric field whose value lifts each cell along the grid's Z axis; undefined = flat. */
     elevationField?: string;
-    interpolation: GridInterpolation;
+    interpolation: "linear" | "nearest";
     showLines: boolean;
     lineColor: string;
     /** Shade the elevated surface by its slope. */

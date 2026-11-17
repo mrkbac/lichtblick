@@ -759,10 +759,6 @@ export const Foxglove_Grid_Elevation_Lines_Linear: StoryObj = {
   render: () => <ElevationGrid settings={{ showLines: true, interpolation: "linear" }} />,
 };
 
-export const Foxglove_Grid_Elevation_Unlit: StoryObj = {
-  render: () => <ElevationGrid settings={{ lighting: false }} />,
-};
-
 export const Foxglove_Grid_Uint8_Values: StoryObj = {
   render: () => <Foxglove_Grid_Uint8 />,
 };
