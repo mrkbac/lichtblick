@@ -23,6 +23,8 @@ export type BaseSettings = {
   /** If true, always use `currentTime` for pose updates. This means objects in a coordinate frame
    * will move as the coordinate frame moves. */
   frameLocked?: boolean;
+  /** Held back until all topics marked "Sync" have a message with the same timestamp. */
+  sync?: boolean;
 };
 
 export type LayerSettingsEntity = BaseSettings & {
