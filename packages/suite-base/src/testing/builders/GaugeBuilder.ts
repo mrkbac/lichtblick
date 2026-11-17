@@ -10,6 +10,8 @@ import { BasicBuilder, defaults } from "@lichtblick/test-builders";
 
 export default class GaugeBuilder {
   public static config(props: Partial<GaugeConfig> = {}): GaugeConfig {
+    // Valid limits by default (max above min); tests of invalid limits set them explicitly.
+    const minValue = BasicBuilder.number();
     return defaults<GaugeConfig>(props, {
       displayMode: "arc",
       angleUnit: "degrees",
@@ -19,8 +21,8 @@ export default class GaugeBuilder {
       colorMap: BasicBuilder.sample(ColorMapConfig),
       colorMode: BasicBuilder.sample(ColorModeConfig),
       gradient: ["#000", "#fff"],
-      maxValue: BasicBuilder.number(),
-      minValue: BasicBuilder.number(),
+      maxValue: minValue + 1 + BasicBuilder.number({ min: 0, max: 100 }),
+      minValue,
       path: BasicBuilder.string(),
       reverse: BasicBuilder.boolean(),
     });
