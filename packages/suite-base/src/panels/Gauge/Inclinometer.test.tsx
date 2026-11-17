@@ -42,16 +42,19 @@ describe("Inclinometer", () => {
       <Inclinometer config={{ ...config, angleUnit: "radians" }} value={-Math.PI / 3} />,
     );
     expect(screen.getByRole("img").getAttribute("aria-label")).toBe("roll: -60.0°");
-    expect(container.querySelector('[transform="rotate(40 160 150)"]')).not.toBeNull();
+    expect(container.querySelector('[transform="rotate(-40 160 150)"]')).not.toBeNull();
   });
 
-  it("translates the pitch horizon instead of rotating it", () => {
-    const { container } = render(
-      <Inclinometer config={{ ...config, displayMode: "pitch" }} value={20} />,
-    );
-    expect(screen.getByRole("img").getAttribute("aria-label")).toBe("pitch: 20.0°");
-    expect(container.querySelector('[transform="translate(0 37.5)"]')).not.toBeNull();
-  });
+  it.each(["roll", "pitch"] as const)(
+    "tilts the %s horizon clockwise for positive angles",
+    (mode) => {
+      const { container } = render(
+        <Inclinometer config={{ ...config, displayMode: mode }} value={20} />,
+      );
+      expect(screen.getByRole("img").getAttribute("aria-label")).toBe(`${mode}: 20.0°`);
+      expect(container.querySelector('[transform="rotate(20 160 150)"]')).not.toBeNull();
+    },
+  );
 
   it.each([NaN, Infinity, -Infinity, "", "  ", "\t", undefined, null, false, "invalid"])(
     "shows no reading for %s",
@@ -71,3 +74,14 @@ describe("Inclinometer", () => {
     expect(container.querySelector("[clip-path]")).toBeNull();
   });
 });
+
+it.each(["angleRange", "warningAngle", "criticalAngle"])(
+  "shows no live horizon when %s is cleared",
+  (key) => {
+    const { container } = render(
+      <Inclinometer config={{ ...config, [key]: undefined }} value={0} />,
+    );
+    expect(screen.getByRole("img").getAttribute("aria-label")).toBe("roll: — invalidAngles");
+    expect(container.querySelector("[clip-path]")).toBeNull();
+  },
+);

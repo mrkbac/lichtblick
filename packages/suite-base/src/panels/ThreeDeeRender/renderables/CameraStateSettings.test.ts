@@ -207,6 +207,28 @@ describe("CameraStateSettings", () => {
     handler.dispose();
   });
 
+  it("pushes the orbit target forward instead of stalling when zooming in past the near plane", () => {
+    const handler = new CameraStateSettings(renderer, canvas, 1);
+    const camera = handler.getActiveCamera();
+    handler.setCameraState({ ...DEFAULT_CAMERA_STATE, distance: 2, near: 0.5 });
+    mockOrbitControls.getDistance.mockImplementation(() =>
+      mockOrbitControls.target.distanceTo(camera.position),
+    );
+    const listener = (type: string) =>
+      mockOrbitControls.addEventListener.mock.calls.find(([t]) => t === type)![1] as () => void;
+    const before = mockOrbitControls.target.clone();
+
+    // When: a wheel zoom moves the camera to 0.2 from the target (below 2 * near)
+    listener("start")();
+    camera.position.lerp(mockOrbitControls.target, 0.9);
+    listener("change")();
+
+    // Then: the target moved away so the distance stays at the floor
+    expect(mockOrbitControls.getDistance()).toBeCloseTo(1);
+    expect(mockOrbitControls.target.distanceTo(before)).toBeCloseTo(0.8);
+    handler.dispose();
+  });
+
   describe("screen space panning", () => {
     const aspect = 16 / 9;
 
