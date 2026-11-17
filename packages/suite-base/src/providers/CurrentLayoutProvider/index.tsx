@@ -50,6 +50,7 @@ import { AppEvent } from "@lichtblick/suite-base/services/IAnalytics";
 import { LayoutLoader } from "@lichtblick/suite-base/services/ILayoutLoader";
 import { LayoutManagerEventTypes } from "@lichtblick/suite-base/services/ILayoutManager";
 import {
+  deleteLayoutHistory,
   loadLayoutHistory,
   saveLayoutHistory,
 } from "@lichtblick/suite-base/services/layoutHistoryStorage";
@@ -186,7 +187,6 @@ export default function CurrentLayoutProvider({
           const data = history.current.load(
             saved,
             migratePanelsState(layout.working?.data ?? layout.baseline.data),
-            Date.now(),
           );
           setLayoutState({
             selectedLayout: { loading: false, id: layout.id, data, name: layout.name },
@@ -278,6 +278,11 @@ export default function CurrentLayoutProvider({
   // Make sure our layout still exists after changes. If not deselect it.
   useEffect(() => {
     const listener: LayoutManagerEventTypes["change"] = async (event) => {
+      if (event.type === "delete") {
+        deleteLayoutHistory(event.layoutId).catch((error: unknown) => {
+          log.error(error);
+        });
+      }
       if (event.type !== "delete" || !layoutStateRef.current.selectedLayout?.id) {
         return;
       }

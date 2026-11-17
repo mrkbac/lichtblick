@@ -28,9 +28,7 @@ function flush(): void {
   }
 }
 
-if (typeof window !== "undefined") {
-  window.addEventListener("pagehide", flush);
-}
+window.addEventListener("pagehide", flush);
 
 export async function loadLayoutHistory(layoutId: string): Promise<HistorySnapshot | undefined> {
   if (pending?.layoutId === layoutId) {

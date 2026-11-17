@@ -182,7 +182,7 @@ describe("LayoutHistory", () => {
     const saved = h.snapshot();
 
     const other = new LayoutHistory();
-    expect(other.load(saved, structuredClone(a), 5)).toBe(saved.entries[1]!.data);
+    expect(other.load(saved, structuredClone(a))).toBe(saved.entries[1]!.data);
     expect(other.undo(saved.entries[1]!.data)).toBe(initial);
     expect(other.snapshot().entries.some((e) => e.kind === "opened")).toBe(false);
   });
@@ -193,10 +193,10 @@ describe("LayoutHistory", () => {
     const changedElsewhere = { ...a, globalVariables: { v: 1 } };
 
     const other = new LayoutHistory();
-    expect(other.load(h.snapshot(), changedElsewhere, 5)).toBe(changedElsewhere);
+    expect(other.load(h.snapshot(), changedElsewhere)).toBe(changedElsewhere);
     expect(other.snapshot().entries.at(-1)).toEqual({
       data: changedElsewhere,
-      savedAt: 5,
+      savedAt: expect.any(Number),
       kind: "opened",
     });
     expect(other.undo(changedElsewhere)).toBe(a);

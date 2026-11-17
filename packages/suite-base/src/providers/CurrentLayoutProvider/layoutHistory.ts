@@ -114,8 +114,6 @@ export type HistoryEntry = {
 /** A layout's history: its steps, oldest first, and the step the layout shows. */
 export type HistorySnapshot = { entries: readonly HistoryEntry[]; index: number };
 
-const EMPTY: HistorySnapshot = { entries: [], index: -1 };
-
 /**
  * Undo/redo history of one layout's data, which is also the history the History tab shows and
  * that is saved per layout. Layout data is immutable, so steps are snapshots that share
@@ -127,7 +125,7 @@ export class LayoutHistory {
   #closed: ClosedPanel[] = [];
   #lastKey: string | undefined;
   #lastTime = -Infinity;
-  #snapshot = EMPTY;
+  #snapshot: HistorySnapshot = { entries: [], index: -1 };
   #listeners = new Set<() => void>();
 
   public canUndo(): boolean {
@@ -152,7 +150,7 @@ export class LayoutHistory {
    * Starts over with a newly selected layout's saved history. Returns the data to show: the saved
    * current step's data when it equals `data`, so later edits are recognised as this history's.
    */
-  public load(saved: HistorySnapshot | undefined, data: LayoutData, wallNow: number): LayoutData {
+  public load(saved: HistorySnapshot | undefined, data: LayoutData): LayoutData {
     this.#entries = [...(saved?.entries ?? [])];
     this.#index = Math.min(saved?.index ?? -1, this.#entries.length - 1);
     this.#closed = [];
@@ -163,7 +161,7 @@ export class LayoutHistory {
       return current.data;
     }
     // Changed elsewhere since (or no history yet): the opened state becomes the current step.
-    this.#push({ data, savedAt: wallNow, kind: "opened" });
+    this.#push({ data, savedAt: Date.now(), kind: "opened" });
     this.#changed();
     return data;
   }
@@ -177,7 +175,7 @@ export class LayoutHistory {
     if (_.isEqual(data, next)) {
       return undefined;
     }
-    this.#sync(data);
+    this.sync(data);
     if (fillsDefaults(data, action)) {
       // Fold into the current step: no undo step to get stuck on (the panel would save its
       // defaults again right away), and redo stays intact when undo remounts a panel.
@@ -201,16 +199,18 @@ export class LayoutHistory {
   }
 
   public undo(data: LayoutData): LayoutData | undefined {
-    return this.goTo(data, this.#indexAfterSync(data) - 1);
+    this.sync(data);
+    return this.goTo(data, this.#index - 1);
   }
 
   public redo(data: LayoutData): LayoutData | undefined {
-    return this.goTo(data, this.#indexAfterSync(data) + 1);
+    this.sync(data);
+    return this.goTo(data, this.#index + 1);
   }
 
   /** Moves to step `index`, keeping the steps after it for redo. */
   public goTo(data: LayoutData, index: number): LayoutData | undefined {
-    this.#sync(data);
+    this.sync(data);
     const entry = this.#entries[index];
     if (entry == undefined || index === this.#index) {
       return undefined;
@@ -224,7 +224,7 @@ export class LayoutHistory {
 
   /** Puts the most recently closed panel that is not in the layout back, with its config. */
   public reopenClosedPanel(data: LayoutData, now: number): LayoutData | undefined {
-    this.#sync(data);
+    this.sync(data);
     const present = new Set(getAllPanelIds(data));
     // Skip panels that are already back, e.g. through undo.
     let closed = this.#closed.pop();
@@ -274,17 +274,8 @@ export class LayoutHistory {
     this.#index = this.#entries.length - 1;
   }
 
-  #indexAfterSync(data: LayoutData): number {
-    this.#sync(data);
-    return this.#index;
-  }
-
   /** Data this history didn't produce (e.g. a revert) becomes a step of its own. */
   public sync(data: LayoutData): void {
-    this.#sync(data);
-  }
-
-  #sync(data: LayoutData): void {
     if (data !== this.#entries[this.#index]?.data) {
       this.#push({ data, savedAt: Date.now() });
       this.#lastKey = undefined;

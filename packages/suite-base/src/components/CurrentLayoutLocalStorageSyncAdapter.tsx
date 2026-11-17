@@ -19,8 +19,6 @@ import {
   useCurrentLayoutSelector,
 } from "@lichtblick/suite-base/context/CurrentLayoutContext";
 import { useLayoutManager } from "@lichtblick/suite-base/context/LayoutManagerContext";
-import { LayoutManagerEventTypes } from "@lichtblick/suite-base/services/ILayoutManager";
-import { deleteLayoutHistory } from "@lichtblick/suite-base/services/layoutHistoryStorage";
 
 export function selectLayoutData(state: LayoutState): LayoutData | undefined {
   return state.selectedLayout?.data;
@@ -89,20 +87,6 @@ export function CurrentLayoutLocalStorageSyncAdapter(): React.JSX.Element {
       log.error(error);
     }
   }, [debouncedLayoutData, getCurrentLayoutState, layoutManager]);
-
-  useEffect(() => {
-    const listener: LayoutManagerEventTypes["change"] = (event) => {
-      if (event.type === "delete") {
-        deleteLayoutHistory(event.layoutId).catch((error: unknown) => {
-          log.error(error);
-        });
-      }
-    };
-    layoutManager.on("change", listener);
-    return () => {
-      layoutManager.off("change", listener);
-    };
-  }, [layoutManager]);
 
   return <></>;
 }
