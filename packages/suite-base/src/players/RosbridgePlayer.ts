@@ -369,14 +369,19 @@ export default class RosbridgePlayer implements Player {
       // Regardless of what happens, request topics again in a little bit. A hidden window polls
       // again as soon as it is shown, instead of every 3 s in the background, unless a panel waits
       // for a topic that isn't advertised yet (it is subscribed as soon as it appears).
-      this.#requestTopicsTimeout = setTimeout(() => {
-        if (document.hidden && !this.#waitingForTopic()) {
-          this.#requestTopicsOnShow = () => void this.#requestTopics();
-          document.addEventListener("visibilitychange", this.#requestTopicsOnShow, { once: true });
-        } else {
-          void this.#requestTopics();
-        }
-      }, 3000);
+      // Not after close or a reconnect: that connection's cleanup already ran.
+      if (this.#isCurrentClient(rosClient)) {
+        this.#requestTopicsTimeout = setTimeout(() => {
+          if (isDocumentHidden() && !this.#waitingForTopic()) {
+            this.#requestTopicsOnShow = () => void this.#requestTopics();
+            document.addEventListener("visibilitychange", this.#requestTopicsOnShow, {
+              once: true,
+            });
+          } else {
+            void this.#requestTopics();
+          }
+        }, 3000);
+      }
     }
   }
 
@@ -460,6 +465,11 @@ export default class RosbridgePlayer implements Player {
   public setListener(listener: (arg0: PlayerState) => Promise<void>): void {
     this.#listener = listener;
     this.#emitState();
+  }
+
+  /** Whether `rosClient` is still this open player's connection (not closed or replaced). */
+  #isCurrentClient(rosClient: unknown): boolean {
+    return !this.#closed && this.#rosClient === rosClient;
   }
 
   /** Whether a requested subscription is on a topic the server doesn't advertise yet. */
@@ -879,4 +889,9 @@ export default class RosbridgePlayer implements Player {
       this.#isRefreshing = false;
     }
   }
+}
+
+/** Whether the window is hidden; false outside a browser (tests). */
+function isDocumentHidden(): boolean {
+  return (globalThis as { document?: Document }).document?.hidden === true;
 }

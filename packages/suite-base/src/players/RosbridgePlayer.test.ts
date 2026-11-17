@@ -85,12 +85,23 @@ class MockRosClient {
     // no-op
   }
 
+  /** While set, topic requests wait until the test calls `settleTopics`. */
+  public holdTopics = false;
+  public settleTopics?: () => void;
+
   public getTopicsAndRawTypes(callback: (...args: unknown[]) => void) {
-    callback({
-      topics: this.#topics,
-      types: this.#types,
-      typedefs_full_text: this.#typedefs_full_text,
-    });
+    const reply = () => {
+      callback({
+        topics: this.#topics,
+        types: this.#types,
+        typedefs_full_text: this.#typedefs_full_text,
+      });
+    };
+    if (this.holdTopics) {
+      this.settleTopics = reply;
+    } else {
+      reply();
+    }
   }
 
   public getMessagesByTopicName(topicName: string): { message: unknown }[] {
@@ -150,6 +161,34 @@ describe("RosbridgePlayer", () => {
 
   afterEach(() => {
     player.close();
+  });
+
+  it("doesn't poll topics again when a request settles after close", async () => {
+    vi.useFakeTimers();
+    const addListener = vi.fn();
+    vi.stubGlobal("document", {
+      hidden: true,
+      addEventListener: addListener,
+      removeEventListener: vi.fn(),
+    });
+    onTestFinished(() => {
+      vi.useRealTimers();
+      vi.unstubAllGlobals();
+    });
+    workerInstance.holdTopics = true;
+    // rosgraph_msgs/Log identifies ROS 1, so no version warning.
+    workerInstance.setup({ types: ["rosgraph_msgs/Log"] });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(workerInstance.settleTopics).toBeDefined();
+
+    player.close();
+    workerInstance.settleTopics?.();
+    await vi.advanceTimersByTimeAsync(10_000);
+
+    // A poll scheduled after close would wait for the hidden window here, leaking the player.
+    expect(addListener).not.toHaveBeenCalledWith("visibilitychange", expect.anything(), {
+      once: true,
+    });
   });
 
   it("subscribes to topics without errors", async () => {
