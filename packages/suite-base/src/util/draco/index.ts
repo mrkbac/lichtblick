@@ -13,6 +13,7 @@ import type { PackedElementField, PointCloud } from "@foxglove/schemas";
 
 import { InstalledMessageConverter } from "@lichtblick/suite-base/types/messageConverters";
 import { addFoxgloveSchema } from "@lichtblick/suite-base/util/foxgloveSchemas";
+import { preloadDecoder } from "@lichtblick/suite-base/util/preloadDecoder";
 import { toError } from "@lichtblick/suite-base/util/toError";
 
 export const COMPRESSED_POINT_CLOUD_SCHEMAS = new Set<string>();
@@ -92,35 +93,18 @@ export async function loadDraco(): Promise<void> {
   await loading;
 }
 
-const PRELOAD_TIMEOUT_MS = 5000;
-
-/** Loads the decoder if any topic needs it. Never rejects (the converter reports errors) and waits
- * at most PRELOAD_TIMEOUT_MS, or until `signal` aborts, so a stalled download cannot hold up
- * playback or closing. The load itself keeps going for later messages. */
+/** Loads the decoder if any topic needs it, waiting at most a few seconds (see preloadDecoder). */
 export async function preloadDraco(
   topics: readonly { schemaName?: string }[],
   signal?: AbortSignal,
 ): Promise<void> {
-  if (
-    signal?.aborted === true ||
-    !topics.some(
-      (topic) =>
-        topic.schemaName != undefined && COMPRESSED_POINT_CLOUD_SCHEMAS.has(topic.schemaName),
-    )
-  ) {
-    return;
+  const needed = topics.some(
+    (topic) =>
+      topic.schemaName != undefined && COMPRESSED_POINT_CLOUD_SCHEMAS.has(topic.schemaName),
+  );
+  if (needed) {
+    await preloadDecoder(loadDraco, signal);
   }
-  await new Promise<void>((resolve) => {
-    const timer = setTimeout(resolve, PRELOAD_TIMEOUT_MS);
-    const done = () => {
-      clearTimeout(timer);
-      resolve();
-    };
-    signal?.addEventListener("abort", done, { once: true });
-    void loadDraco()
-      .catch(() => {})
-      .finally(done);
-  });
 }
 
 // foxglove.NumericType values
@@ -137,15 +121,14 @@ const NumericType = {
 
 /** Field names for an attribute's components: positions are x/y/z, colors red/green/blue/alpha. */
 function componentNames(module: DracoModule, type: number, name: string, count: number): string[] {
-  const named = (names: string[]) => names.slice(0, count);
   if (type === module.POSITION && count <= 3) {
-    return named(["x", "y", "z"]);
+    return ["x", "y", "z"].slice(0, count);
   }
   if (type === module.COLOR && count <= 4) {
-    return named(["red", "green", "blue", "alpha"]);
+    return ["red", "green", "blue", "alpha"].slice(0, count);
   }
   if (type === module.NORMAL && count <= 3) {
-    return named(["normal_x", "normal_y", "normal_z"]);
+    return ["normal_x", "normal_y", "normal_z"].slice(0, count);
   }
   return count === 1 ? [name] : Array.from({ length: count }, (_, i) => `${name}_${i}`);
 }

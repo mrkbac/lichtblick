@@ -173,10 +173,8 @@ export class Poses extends SceneExtension<PoseRenderable> {
       const isOdometry =
         topicIsConvertibleToSchema(topic, FOXGLOVE_ODOMETRY_DATATYPES) ||
         topicIsConvertibleToSchema(topic, ROS_ODOMETRY_DATATYPES);
-      const isPoint = topicIsConvertibleToSchema(topic, POINT_DATATYPES);
-      if (
-        !(isPoseStamped || isPoseWithCovarianceStamped || isPoseInFrame || isOdometry || isPoint)
-      ) {
+      const isPose = isPoseStamped || isPoseWithCovarianceStamped || isPoseInFrame || isOdometry;
+      if (!isPose && !topicIsConvertibleToSchema(topic, POINT_DATATYPES)) {
         continue;
       }
       const config = (configTopics[topic.name] ?? {}) as Partial<LayerSettingsPose>;
@@ -185,7 +183,7 @@ export class Poses extends SceneExtension<PoseRenderable> {
         node: {
           ...poseSettingsNode(topic, config, {
             hasCovariance: isPoseWithCovarianceStamped || isOdometry,
-            isPoint: !(isPoseStamped || isPoseInFrame || isPoseWithCovarianceStamped || isOdometry),
+            isPoint: !isPose,
           }),
           handler,
         },
