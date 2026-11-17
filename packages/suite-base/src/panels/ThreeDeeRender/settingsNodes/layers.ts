@@ -133,6 +133,14 @@ export function gridSettingsNode(
 export const URDF_LAYER_ID = "foxglove.Urdf";
 const URDF_DEFAULT_COLOR_STR = "#ffffff";
 
+const URDF_ROBOT_DEFAULTS = {
+  controlMode: "transforms",
+  opacity: 1,
+  showOutlines: true,
+  showAxis: false,
+  axisScale: 1,
+} as const;
+
 export const URDF_DEFAULTS: LayerSettingsUrdf = {
   visible: false,
   frameLocked: true,
@@ -140,11 +148,7 @@ export const URDF_DEFAULTS: LayerSettingsUrdf = {
   displayMode: "auto",
   label: "URDF",
   fallbackColor: URDF_DEFAULT_COLOR_STR,
-  controlMode: "transforms",
-  opacity: 1,
-  showOutlines: true,
-  showAxis: false,
-  axisScale: 1,
+  ...URDF_ROBOT_DEFAULTS,
 };
 
 export const CUSTOM_URDF_DEFAULTS: LayerSettingsCustomUrdf = {
@@ -161,11 +165,7 @@ export const CUSTOM_URDF_DEFAULTS: LayerSettingsCustomUrdf = {
   framePrefix: "",
   displayMode: "auto",
   fallbackColor: URDF_DEFAULT_COLOR_STR,
-  controlMode: "transforms",
-  opacity: 1,
-  showOutlines: true,
-  showAxis: false,
-  axisScale: 1,
+  ...URDF_ROBOT_DEFAULTS,
 };
 
 /** Settings shared by robot descriptions from a topic, a parameter or a custom layer. */

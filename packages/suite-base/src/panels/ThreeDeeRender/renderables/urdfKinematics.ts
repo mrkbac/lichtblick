@@ -14,7 +14,7 @@ const tempOrigin = new THREE.Matrix4();
 const tempEuler = new THREE.Euler();
 
 /** The value a joint takes: its own, or for a mimic joint the mimicked joint's scaled and offset. */
-export function jointValue(joint: UrdfJoint, values: (jointName: string) => number): number {
+function jointValue(joint: UrdfJoint, values: (jointName: string) => number): number {
   if (joint.mimic) {
     return joint.mimic.multiplier * values(joint.mimic.joint) + joint.mimic.offset;
   }
