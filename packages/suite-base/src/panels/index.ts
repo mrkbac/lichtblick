@@ -26,6 +26,7 @@ import {
   Organization20Regular,
   PlugConnected20Regular,
   Pulse20Regular,
+  RowTriple20Regular,
   Send20Regular,
   Speaker220Regular,
   Stethoscope20Regular,
@@ -163,6 +164,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
   {
     title: t("stack"),
     type: "Stack",
+    icon: RowTriple20Regular,
     keywords: ["layout", "scroll", "list", "grid", "vstack", "hstack", "container"],
     description: t("stackDescription"),
     thumbnail: stackThumbnail,
