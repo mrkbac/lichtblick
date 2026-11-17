@@ -8,17 +8,25 @@ import { makeStyles } from "tss-react/mui";
 
 export const useStyles = makeStyles()(() => ({
   root: {
-    fontFamily: "Arial, sans-serif",
-    color: "#333",
+    display: "flex",
+    flexDirection: "column",
+    height: "100%",
+    width: "100%",
+    overflow: "hidden",
+    padding: 8,
   },
   title: {
+    margin: "0 0 4px",
     textAlign: "center",
-    fontSize: "24px",
-    marginBottom: "20px",
+    fontSize: 13,
+    fontWeight: 600,
   },
   chart: {
     position: "relative",
-    width: "100%",
-    height: 400,
+    flex: "1 1 0",
+    minHeight: 0,
+  },
+  empty: {
+    margin: "auto",
   },
 }));

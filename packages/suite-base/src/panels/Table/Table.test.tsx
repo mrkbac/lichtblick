@@ -158,7 +158,7 @@ describe("Table", () => {
       const nestedValue = BasicBuilder.number();
       renderTable([{ nested: { inner: nestedValue } }]);
       expect(screen.getByTestId("expand-cell-nested-0")).toHaveTextContent("Object");
-      expect(screen.getByTestId("AddBoxOutlinedIcon")).toBeInTheDocument();
+      expect(screen.getByTestId("ChevronRightIcon")).toBeInTheDocument();
 
       // When
       fireEvent.click(screen.getByTestId("expand-row-0"));
