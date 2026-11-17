@@ -79,7 +79,13 @@ describe("PieChart", () => {
     ];
 
     // When
-    const config = buildChartConfig(data, new Float32Array([1, 3]));
+    const config = buildChartConfig(data, new Float32Array([1, 3]), {
+      text: "#000",
+      mutedText: "#666",
+      surface: "#fff",
+      border: "#ccc",
+      fontFamily: "Inter",
+    });
 
     // Then
     expect(config.type).toBe("doughnut");
@@ -100,7 +106,7 @@ describe("PieChart", () => {
       ctx: { dataIndex: number },
     ) => string;
     const color = datalabels?.color as (ctx: { dataIndex: number }) => string;
-    expect(formatter(75, { dataIndex: 1 })).toBe("3.00");
+    expect(formatter(75, { dataIndex: 1 })).toBe("3");
     expect(color({ dataIndex: 1 })).toBe("blue");
   });
 });

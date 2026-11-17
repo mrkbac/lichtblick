@@ -15,7 +15,7 @@ export const MuiButton: OverrideComponentReturn<"MuiButton"> = {
   },
   styleOverrides: {
     root: {
-      transition: "none",
+      transition: "background-color 120ms ease, border-color 120ms ease, color 120ms ease",
     },
     contained: ({ theme }) => ({
       [`&.${buttonClasses.colorInherit}`]: {

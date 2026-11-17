@@ -6,6 +6,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { subtract as subtractTimes, toSec } from "@foxglove/rostime";
+import { darken } from "@mui/material";
 
 import { ChartDataset } from "@lichtblick/suite-base/components/TimeBasedChart/types";
 import { hashString } from "@lichtblick/suite-base/util/hashString";
@@ -25,7 +26,7 @@ const CONDITION_FALSE_COLOR = "rgba(128, 128, 128, 0.35)";
  * dataset with different labels and colors applied per-point.
  */
 export function messagesToDataset(args: MessageDatasetArgs): ChartDataset {
-  const { path, startTime, y, blocks, showPoints } = args;
+  const { path, startTime, y, blocks, showPoints, darkenLabels = false } = args;
 
   const dataset: ChartDataset = {
     borderWidth: 10,
@@ -95,6 +96,7 @@ export function messagesToDataset(args: MessageDatasetArgs): ChartDataset {
         y,
         label: isNewSegment ? label : undefined,
         labelColor: color,
+        ...(isNewSegment && darkenLabels && { labelTextColor: darken(color, 0.45) }),
         value,
         constantName,
       };

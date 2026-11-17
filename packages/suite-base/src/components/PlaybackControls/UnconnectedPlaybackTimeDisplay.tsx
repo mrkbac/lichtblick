@@ -92,7 +92,11 @@ const useStyles = makeStyles()((theme) => ({
       borderBottomLeftRadius: 0,
       borderLeft: `1px solid ${theme.palette.background.paper}`,
       opacity: 0,
-      marginRight: theme.spacing(-1),
+
+      // Only the last button reaches into the field's padding; the copy button sits beside it.
+      "&:last-child": {
+        marginRight: theme.spacing(-1),
+      },
     },
   },
   rowValue: {

@@ -16,30 +16,28 @@ describe("Slider", () => {
   it("shows the position across the limits", () => {
     const { container } = render(<Slider config={config} value=" 12.5 " />);
     expect(label()).toBe("12.5 (25%)");
-    expect(container.querySelector("path")?.getAttribute("d")).toMatch(/^M 90 /);
+    expect(container.querySelector("circle")?.getAttribute("cx")).toBe("90");
   });
 
   it.each([
-    [5, "belowLimit", 20],
-    [25, "aboveLimit", 300],
-  ])("pins %s to the end and flags it", (value, status, x) => {
+    [5, "5.00", "belowLimit", 20],
+    [25, "25.0", "aboveLimit", 300],
+  ])("pins %s to the end and flags it", (value, readout, status, x) => {
     const { container } = render(<Slider config={config} value={value} />);
-    expect(label()).toBe(`${value} (${status})`);
-    expect(screen.getByText(String(value)).getAttribute("fill")).toBe(
-      createTheme().palette.error.main,
-    );
-    expect(container.querySelector("path")?.getAttribute("d")).toMatch(new RegExp(`^M ${x} `));
+    expect(label()).toBe(`${readout} (${status})`);
+    expect(screen.getByText(readout).getAttribute("fill")).toBe(createTheme().palette.error.main);
+    expect(container.querySelector("circle")?.getAttribute("cx")).toBe(String(x));
   });
 
   it.each([NaN, "", undefined, "invalid"])("shows no marker for %s", (value) => {
     const { container } = render(<Slider config={config} value={value} />);
     expect(label()).toBe("—");
-    expect(container.querySelector("path")).toBeNull();
+    expect(container.querySelector("circle")).toBeNull();
   });
 
   it("shows no marker when max is not above min", () => {
     const { container } = render(<Slider config={{ ...config, maxValue: 10 }} value={10} />);
-    expect(container.querySelector("path")).toBeNull();
+    expect(container.querySelector("circle")).toBeNull();
   });
 });
 
@@ -47,7 +45,8 @@ describe("Slider with cleared settings", () => {
   // A cleared number field in the settings sidebar stores undefined despite the config type.
   it.each(["minValue", "maxValue"])("renders without a marker when %s is cleared", (key) => {
     const { container } = render(<Slider config={{ ...config, [key]: undefined }} value={12} />);
-    expect(label()).toBe("12");
-    expect(container.querySelector("path")).toBeNull();
+    // The readout keeps its trailing zero so it doesn't change width as the value changes.
+    expect(label()).toBe("12.0");
+    expect(container.querySelector("circle")).toBeNull();
   });
 });

@@ -15,6 +15,8 @@ export const MuiDialog: OverrideComponentReturn<"MuiDialog"> = {
   },
   styleOverrides: {
     paper: ({ theme }) => ({
+      borderRadius: 12,
+      border: `1px solid ${theme.palette.divider}`,
       // Prevent dialog from going underneath window title bar controls on Windows
       maxHeight: `calc(100% - 2 * (env(titlebar-area-height, ${theme.spacing(2)}) + ${theme.spacing(
         2,

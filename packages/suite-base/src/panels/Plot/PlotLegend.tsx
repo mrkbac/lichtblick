@@ -33,79 +33,73 @@ type Props = Immutable<{
   hoveredValuesBySeriesIndex?: string[];
 }>;
 
-const useStyles = makeStyles<void, "grid">()(
-  ({ palette, shadows, shape, spacing }, _params, classes) => ({
-    root: {
-      display: "flex",
-      overflow: "hidden",
-    },
-    rootFloating: {
-      pointerEvents: "none",
-      alignItems: "flex-start",
-      justifyContent: "flex-start",
-      position: "absolute",
-      inset: "0 0 0 0",
-      height: "100%",
-      width: "100%",
-      overflow: "hidden",
-      zIndex: 1000,
-      gap: spacing(0.75),
-      padding: spacing(1.5, 3.75, 4, 4.5),
-      paddingTop: `calc(${spacing(1.5)} + ${PANEL_FLOATING_TOOLBAR_HEIGHT})`,
+const useStyles = makeStyles<void, "grid">()(({ palette, spacing }, _params, classes) => ({
+  root: {
+    display: "flex",
+    overflow: "hidden",
+  },
+  rootFloating: {
+    pointerEvents: "none",
+    alignItems: "flex-start",
+    justifyContent: "flex-start",
+    position: "absolute",
+    inset: "0 0 0 0",
+    height: "100%",
+    width: "100%",
+    overflow: "hidden",
+    zIndex: 1000,
+    gap: spacing(0.75),
+    padding: spacing(1.5, 3.75, 4, 4.5),
+    paddingTop: `calc(${spacing(1.5)} + ${PANEL_FLOATING_TOOLBAR_HEIGHT})`,
 
-      [`.${classes.grid}`]: {
-        pointerEvents: "auto",
-        flex: "0 1 auto",
-        width: "max-content",
-        maxHeight: "100%",
-        borderRadius: shape.borderRadius,
-        gridTemplateColumns: "auto repeat(2, minmax(max-content, auto)) auto",
-        backgroundImage: `linear-gradient(${[
-          "0deg",
-          toHex8(parseColor(palette.background.default).alpha(0.2)),
-          toHex8(parseColor(palette.background.default).alpha(0.2)),
-        ].join(" ,")})`,
-        backgroundColor: toHex8(parseColor(palette.background.paper).alpha(0.8)),
-        backdropFilter: "blur(3px)",
-        boxShadow: shadows[3],
-      },
+    [`.${classes.grid}`]: {
+      pointerEvents: "auto",
+      flex: "0 1 auto",
+      width: "max-content",
+      maxHeight: "100%",
+      borderRadius: 8,
+      gridTemplateColumns: "auto repeat(2, minmax(max-content, auto)) auto",
+      backgroundColor: toHex8(parseColor(palette.background.paper).alpha(0.72)),
+      backdropFilter: "blur(8px)",
+      border: `1px solid ${palette.divider}`,
+      boxShadow: "0 4px 16px rgb(0 0 0 / 0.18)",
     },
-    rootLeft: {
-      alignItems: "flex-start",
-      maxWidth: "80%",
-      paddingTop: PANEL_FLOATING_TOOLBAR_HEIGHT,
+  },
+  rootLeft: {
+    alignItems: "flex-start",
+    maxWidth: "80%",
+    paddingTop: PANEL_FLOATING_TOOLBAR_HEIGHT,
 
-      [`.${classes.grid}`]: {
-        overflow: "auto",
-        height: "100%",
-        alignContent: "flex-start",
-      },
-    },
-    rootTop: {
-      flexDirection: "column",
-      maxHeight: "80%",
-      paddingTop: PANEL_FLOATING_TOOLBAR_HEIGHT,
-    },
-    grid: {
-      alignItems: "center",
-      display: "grid",
-      gridTemplateColumns: "auto repeat(2, minmax(max-content, 1fr)) auto",
-      gridAutoRows: ROW_HEIGHT,
-      width: "100%",
-      columnGap: 1,
+    [`.${classes.grid}`]: {
       overflow: "auto",
-      justifyItems: "flex-start",
+      height: "100%",
+      alignContent: "flex-start",
     },
-    dragHandle: {
-      userSelect: "none",
-      border: `0px solid ${palette.action.hover}`,
+  },
+  rootTop: {
+    flexDirection: "column",
+    maxHeight: "80%",
+    paddingTop: PANEL_FLOATING_TOOLBAR_HEIGHT,
+  },
+  grid: {
+    alignItems: "center",
+    display: "grid",
+    gridTemplateColumns: "auto repeat(2, minmax(max-content, 1fr)) auto",
+    gridAutoRows: ROW_HEIGHT,
+    width: "100%",
+    columnGap: 1,
+    overflow: "auto",
+    justifyItems: "flex-start",
+  },
+  dragHandle: {
+    userSelect: "none",
+    border: `0px solid ${palette.action.hover}`,
 
-      "&:hover": {
-        borderColor: palette.action.selected,
-      },
+    "&:hover": {
+      borderColor: palette.action.selected,
     },
-  }),
-);
+  },
+}));
 
 const emptyPaths: string[] = [];
 

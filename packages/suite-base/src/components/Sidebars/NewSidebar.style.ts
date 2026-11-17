@@ -35,26 +35,38 @@ export const useStyles = makeStyles()((theme) => ({
     overflow: "hidden",
     paddingLeft: theme.spacing(0.25),
 
+    // Panel tabs as in VS Code's modern UI: small uppercase labels; the active tab is a rounded,
+    // bordered pill instead of an underline.
     ".MuiTabs-indicator": {
-      transform: "scaleX(0.5)",
-      height: 2,
+      display: "none",
     },
     ".MuiTab-root": {
-      minHeight: 30,
+      minHeight: 22,
       minWidth: theme.spacing(4),
-      padding: theme.spacing(0, 1),
+      margin: theme.spacing(0.5, 0.25),
+      padding: theme.spacing(0, 0.75),
       color: theme.palette.text.secondary,
       fontSize: "0.6875rem",
+      fontWeight: 500,
+      textTransform: "uppercase",
+      letterSpacing: "0.02em",
+      border: "1px solid transparent",
+      borderRadius: 4,
 
+      "&:hover": {
+        backgroundColor: theme.palette.action.hover,
+      },
       "&.Mui-selected": {
         color: theme.palette.text.primary,
+        backgroundColor: theme.palette.background.default,
+        borderColor: theme.palette.divider,
       },
     },
   },
   iconButton: {
     padding: theme.spacing(0.91125), // round out the overall height to 30px
     color: theme.palette.text.secondary,
-    borderRadius: 0,
+    borderRadius: theme.shape.borderRadius,
 
     ":hover": {
       color: theme.palette.text.primary,

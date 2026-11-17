@@ -71,15 +71,7 @@ function PanelToolbarControlsComponent(
   const showSettingsButton = panelInfo?.hasCustomToolbar !== true || hasSettings;
 
   return (
-    <Stack
-      className={classes.root}
-      direction="row"
-      alignItems="center"
-      paddingLeft={1}
-      ref={ref}
-      fullHeight={true}
-      paddingTop={1}
-    >
+    <Stack direction="row" alignItems="center" paddingLeft={1} ref={ref} fullHeight={true}>
       <CompareSidePicker />
       {additionalIcons}
       <Badge

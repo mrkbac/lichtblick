@@ -456,7 +456,7 @@ export default class ChartJSManager {
       datalabelsOptions.color = (context: DatalabelContext) => {
         const value = context.dataset.data[context.dataIndex];
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        return (value as any)?.labelColor ?? staticColor;
+        return (value as any)?.labelTextColor ?? (value as any)?.labelColor ?? staticColor;
       };
     }
 

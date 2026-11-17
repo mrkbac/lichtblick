@@ -63,9 +63,7 @@ describe("TableCell", () => {
 
     // Then
     expect(screen.getByTestId(CHILD_TEST_ID)).toBeInTheDocument();
-    const collapseButton = screen
-      .getByTestId("IndeterminateCheckBoxOutlinedIcon")
-      .closest("button")!;
+    const collapseButton = screen.getByTestId("ExpandMoreIcon").closest("button")!;
 
     // When
     fireEvent.click(collapseButton);
@@ -81,7 +79,7 @@ describe("TableCell", () => {
 
     // Then
     expect(screen.getByTestId(CHILD_TEST_ID)).toBeInTheDocument();
-    expect(screen.queryByTestId("IndeterminateCheckBoxOutlinedIcon")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("ExpandMoreIcon")).not.toBeInTheDocument();
     expect(screen.queryByText("Object")).not.toBeInTheDocument();
   });
 });

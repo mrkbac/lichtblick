@@ -31,6 +31,7 @@ import {
 import { stateReducer } from "@lichtblick/suite-base/panels/shared/gaugeAndIndicatorStateReducer";
 import { useReplacePathDrop } from "@lichtblick/suite-base/panels/shared/pathDrop";
 import { GaugeAndIndicatorState } from "@lichtblick/suite-base/panels/shared/types";
+import ThemeProvider from "@lichtblick/suite-base/theme/ThemeProvider";
 import { randomUUID } from "@lichtblick/suite-base/util/randomUUID";
 
 import {
@@ -52,6 +53,8 @@ export function Indicator({ context }: IndicatorProps): React.JSX.Element {
   // panel extensions must notify when they've completed rendering
   // onRender will setRenderDone to a done callback which we can invoke after we've rendered
   const [renderDone, setRenderDone] = useState<() => void>(() => () => {});
+  // Follow the app's light/dark theme.
+  const [colorScheme, setColorScheme] = useState<"dark" | "light">("dark");
 
   const [config, setConfig] = useState(() => ({
     ...DEFAULT_CONFIG,
@@ -108,10 +111,15 @@ export function Indicator({ context }: IndicatorProps): React.JSX.Element {
       if (renderState.currentFrame) {
         dispatch({ type: "frame", messages: renderState.currentFrame });
       }
+
+      if (renderState.colorScheme) {
+        setColorScheme(renderState.colorScheme);
+      }
     };
     context.watch("currentFrame");
     context.watch("didSeek");
     context.watch("variables");
+    context.watch("colorScheme");
 
     return () => {
       context.onRender = undefined;
@@ -269,22 +277,24 @@ export function Indicator({ context }: IndicatorProps): React.JSX.Element {
   }, [style, bulbColor, augmentColor]);
 
   return (
-    <Stack fullHeight position="relative">
-      <Stack className={classes.indicatorStack}>
-        {style === "bulb" && <Bulb label={label} bulbColor={bulbColor} />}
-        {style === "background" && <Background label={label} textColor={textColor} />}
+    <ThemeProvider isDark={colorScheme === "dark"}>
+      <Stack fullHeight position="relative">
+        <Stack className={classes.indicatorStack}>
+          {style === "bulb" && <Bulb label={label} bulbColor={bulbColor} />}
+          {style === "background" && <Background label={label} textColor={textColor} />}
+        </Stack>
+        {rules.some(hasAlert) && (
+          <PanelIconButton
+            button={INDICATOR_BUTTONS.muteAlerts}
+            className={classes.muteButton}
+            onClick={toggleMuted}
+            aria-pressed={alertsMuted}
+          >
+            {alertsMuted ? <VolumeOffIcon fontSize="small" /> : undefined}
+          </PanelIconButton>
+        )}
       </Stack>
-      {rules.some(hasAlert) && (
-        <PanelIconButton
-          button={INDICATOR_BUTTONS.muteAlerts}
-          className={classes.muteButton}
-          onClick={toggleMuted}
-          aria-pressed={alertsMuted}
-        >
-          {alertsMuted ? <VolumeOffIcon fontSize="small" /> : undefined}
-        </PanelIconButton>
-      )}
-    </Stack>
+    </ThemeProvider>
   );
 }
 

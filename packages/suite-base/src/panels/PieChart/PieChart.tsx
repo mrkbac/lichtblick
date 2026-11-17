@@ -29,6 +29,7 @@ import { SettingsTreeAction } from "@lichtblick/suite";
 import { BuiltinPanelExtensionContext } from "@lichtblick/suite-base/components/PanelExtensionAdapter";
 import { useLegendCount } from "@lichtblick/suite-base/components/SettingsTreeEditor/inputs/useLegendCount";
 import { replaceDrop } from "@lichtblick/suite-base/panels/shared/pathDrop";
+import { createMuiTheme, fontSansSerif } from "@lichtblick/theme";
 
 import { useStyles } from "./PieChart.style";
 import { DEFAULT_CONFIG } from "./constants";
@@ -50,34 +51,75 @@ export function formatTooltip(value: unknown, name: string | number | undefined)
 
 Chart.register(ArcElement, DoughnutController, Tooltip, Legend);
 
+/** The theme colors and font the canvas needs; chart.js can't read CSS. */
+export type ChartTheme = {
+  text: string;
+  mutedText: string;
+  surface: string;
+  border: string;
+  fontFamily: string;
+};
+
+/** Two decimals at most, without trailing zeros. */
+const formatSliceValue = (value: number | undefined): string =>
+  value == undefined ? "" : String(Number(value.toFixed(2)));
+
 export function buildChartConfig(
   data: readonly PieChartDatum[],
   rawValue: Float32Array,
+  theme: ChartTheme,
 ): ChartConfiguration<"doughnut"> {
   const colors = data.map((entry) => entry.color);
+  const font = { family: theme.fontFamily, size: 12 };
   return {
     type: "doughnut",
     data: {
       labels: data.map((entry) => entry.name),
-      datasets: [{ data: data.map((entry) => entry.value), backgroundColor: colors }],
+      datasets: [
+        {
+          data: data.map((entry) => entry.value),
+          backgroundColor: colors,
+          // Thin gaps between slices in the panel's own background color.
+          borderColor: theme.surface,
+          borderWidth: 2,
+          hoverOffset: 4,
+        },
+      ],
     },
     // datalabels is registered per chart so other chart.js users are unaffected
     plugins: [ChartDataLabels],
     options: {
       responsive: true,
       maintainAspectRatio: false,
-      cutout: "50%", // innerRadius 40% / outerRadius 80%
-      radius: "80%",
-      animation: { duration: 1500, easing: "easeInOutQuad" },
+      cutout: "62%",
+      radius: "85%",
+      // Room around the ring for the value labels.
+      layout: { padding: 20 },
+      animation: { duration: 300, easing: "easeOutQuad" },
       plugins: {
-        legend: { position: "bottom" },
+        legend: {
+          position: "bottom",
+          labels: {
+            color: theme.mutedText,
+            usePointStyle: true,
+            pointStyle: "circle",
+            font: { ...font, size: 11 },
+            boxWidth: 7,
+            boxHeight: 7,
+            padding: 8,
+          },
+        },
         tooltip: {
-          backgroundColor: "rgba(255, 255, 255, 0.8)",
-          titleColor: "#333",
-          bodyColor: "#333",
-          cornerRadius: 10,
-          padding: 10,
-          bodyFont: { size: 14 },
+          backgroundColor: theme.surface,
+          titleColor: theme.text,
+          bodyColor: theme.text,
+          borderColor: theme.border,
+          borderWidth: 1,
+          cornerRadius: 6,
+          padding: 8,
+          titleFont: { ...font, weight: "bold" },
+          bodyFont: font,
+          usePointStyle: true,
           callbacks: {
             label: (item) => {
               const [value, name] = formatTooltip(item.raw, item.label);
@@ -88,8 +130,12 @@ export function buildChartConfig(
         datalabels: {
           anchor: "end",
           align: "end",
-          color: (ctx) => colors[ctx.dataIndex] ?? "#333",
-          formatter: (_value, ctx) => rawValue[ctx.dataIndex]?.toFixed(2) ?? "",
+          clamp: true,
+          // Labels on thin slices collide; the tooltip still has their values.
+          display: (ctx) => (data[ctx.dataIndex]?.value ?? 0) >= 6,
+          color: (ctx) => colors[ctx.dataIndex] ?? theme.text,
+          font: { family: theme.fontFamily, size: 11, weight: "bold" },
+          formatter: (_value, ctx) => formatSliceValue(rawValue[ctx.dataIndex]),
         },
       },
     },
@@ -102,6 +148,18 @@ export function PieChart({ context }: PieChartProps): React.JSX.Element {
   const { classes } = useStyles();
   const [renderDone, setRenderDone] = useState<() => void>(() => () => {});
   const { legendCount } = useLegendCount();
+  // Follow the app's light/dark theme; the canvas needs the colors as values.
+  const [colorScheme, setColorScheme] = useState<"dark" | "light">("dark");
+  const chartTheme = useMemo((): ChartTheme => {
+    const { palette } = createMuiTheme(colorScheme);
+    return {
+      text: palette.text.primary,
+      mutedText: palette.text.secondary,
+      surface: palette.background.default,
+      border: palette.divider,
+      fontFamily: fontSansSerif,
+    };
+  }, [colorScheme]);
 
   const [config, setConfig] = useState<PieChartConfig>(() => ({
     ...DEFAULT_CONFIG,
@@ -153,7 +211,7 @@ export function PieChart({ context }: PieChartProps): React.JSX.Element {
       chartRef.current = undefined;
       return;
     }
-    const chartConfig = buildChartConfig(chartData, rawValue);
+    const chartConfig = buildChartConfig(chartData, rawValue, chartTheme);
     if (chartRef.current) {
       chartRef.current.data = chartConfig.data;
       chartRef.current.options = chartConfig.options ?? {};
@@ -161,7 +219,7 @@ export function PieChart({ context }: PieChartProps): React.JSX.Element {
     } else {
       chartRef.current = new Chart(canvas, chartConfig);
     }
-  }, [chartData, rawValue]);
+  }, [chartData, rawValue, chartTheme]);
 
   useEffect(
     () => () => {
@@ -206,9 +264,14 @@ export function PieChart({ context }: PieChartProps): React.JSX.Element {
       if (renderState.currentFrame) {
         dispatch({ type: "frame", messages: renderState.currentFrame });
       }
+
+      if (renderState.colorScheme) {
+        setColorScheme(renderState.colorScheme);
+      }
     };
     context.watch("currentFrame");
     context.watch("didSeek");
+    context.watch("colorScheme");
 
     return () => {
       context.onRender = undefined;
@@ -239,10 +302,12 @@ export function PieChart({ context }: PieChartProps): React.JSX.Element {
   }, [renderDone]);
 
   return (
-    <div className={classes.root}>
-      <h1 className={classes.title}>{config.title}</h1>
+    <div className={classes.root} style={{ color: chartTheme.text }}>
+      {config.title !== "" && <h1 className={classes.title}>{config.title}</h1>}
       {chartData.length === 0 ? (
-        <div>{state.error?.message ?? "No data available"}</div>
+        <div className={classes.empty} style={{ color: chartTheme.mutedText }}>
+          {state.error?.message ?? "No data available"}
+        </div>
       ) : (
         <div className={classes.chart}>
           <canvas ref={canvasRef} />

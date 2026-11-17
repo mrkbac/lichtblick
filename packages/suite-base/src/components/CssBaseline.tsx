@@ -67,7 +67,7 @@ const useStyles = makeStyles()(({ palette, shape, typography }) => ({
       },
       "::-webkit-scrollbar-thumb": {
         background: palette.action.focus,
-        borderRadius: 0,
+        borderRadius: 3,
       },
     },
     "p:not([class^='Mui')": {

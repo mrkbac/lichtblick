@@ -31,7 +31,8 @@ const useStyles = makeStyles()(({ palette, spacing }) => ({
     minHeight: 0,
     padding: spacing(0, 1.5),
     backgroundColor: palette.background.paper,
-    "& .notes-heading": { fontWeight: 600 },
+    // Headings read as document text, not as syntax-highlighted source.
+    "& .notes-heading": { fontWeight: 600, color: palette.text.primary },
     "& .notes-heading-1": { fontSize: "2em" },
     "& .notes-heading-2": { fontSize: "1.6em" },
     "& .notes-heading-3": { fontSize: "1.35em" },

@@ -75,6 +75,8 @@ export type MessageDatasetArgs = {
   pathIndex: number;
   blocks: readonly (Iterable<PathSample> | undefined)[];
   showPoints: boolean;
+  /** Darken label text so light segment colors stay readable on a light background. */
+  darkenLabels?: boolean;
 };
 
 export type ValidQueriedDataValue = number | string | boolean | bigint;

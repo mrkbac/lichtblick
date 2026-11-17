@@ -3,12 +3,7 @@
 
 import { makeStyles } from "tss-react/mui";
 
-import { COMPACT_PANELS_ATTRIBUTE } from "@lichtblick/suite-base/components/PanelToolbar/constants";
-
 export const useStyles = makeStyles()(() => ({
-  root: {
-    [`[${COMPACT_PANELS_ATTRIBUTE}] &`]: { paddingTop: 0 },
-  },
   logsBadge: {
     "& .MuiBadge-dot": {
       minWidth: 8,

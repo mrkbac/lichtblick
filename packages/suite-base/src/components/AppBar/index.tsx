@@ -63,10 +63,11 @@ const useStyles = makeStyles<{ debugDragRegion?: boolean }, "avatar">()(
         alignItems: "center",
       },
       logo: {
-        padding: theme.spacing(0.75, 0.5),
+        padding: theme.spacing(0.25, 0.25),
+        margin: theme.spacing(0.5),
         fontSize: "2rem",
         color: theme.palette.appBar.primary,
-        borderRadius: 0,
+        borderRadius: 8,
 
         "svg:not(.MuiSvgIcon-root)": {
           fontSize: "1em",
@@ -133,8 +134,9 @@ const useStyles = makeStyles<{ debugDragRegion?: boolean }, "avatar">()(
         width: theme.spacing(3.5),
       },
       iconButton: {
-        padding: theme.spacing(1),
-        borderRadius: 0,
+        padding: theme.spacing(0.5),
+        margin: theme.spacing(0.5),
+        borderRadius: 8,
 
         "&:hover": {
           backgroundColor: parseColor(theme.palette.appBar.text).alpha(0.08).toRgbString(),

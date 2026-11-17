@@ -38,7 +38,10 @@ function useStateTransitionsData(
   decodedBlocks: readonly SamplesByPath[],
   // eslint-disable-next-line @lichtblick/no-boolean-parameters
   showPoints: boolean,
+  colorScheme: "light" | "dark" = "dark",
 ): UseStateTransitionsData {
+  // Light segment colors need darker label text on a light background.
+  const darkenLabels = colorScheme === "light";
   return useMemo(() => {
     // ignore all data when we don't have a start time
     if (!startTime) {
@@ -69,6 +72,7 @@ function useStateTransitionsData(
         startTime,
         y,
         showPoints,
+        darkenLabels,
       });
 
       const items = itemsByPath[path.value];
@@ -94,6 +98,7 @@ function useStateTransitionsData(
         startTime,
         y,
         showPoints,
+        darkenLabels,
       });
       outDatasets.push(newPathDataSet);
       if (hasCondition) {
@@ -107,7 +112,7 @@ function useStateTransitionsData(
       pathState: outPathState,
       matchStarts: [...matchStarts].sort((a, b) => a - b),
     };
-  }, [decodedBlocks, itemsByPath, paths, startTime, showPoints]);
+  }, [decodedBlocks, itemsByPath, paths, startTime, showPoints, darkenLabels]);
 }
 
 export default useStateTransitionsData;

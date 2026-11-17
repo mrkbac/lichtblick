@@ -12,6 +12,8 @@ type Datum = { x: number; y: number } & {
   // used by the state transition panel to show a label above the transition datum
   label?: string;
   labelColor?: string;
+  // Text color of the label when it differs from the line color (e.g. darker on a light theme)
+  labelTextColor?: string;
 
   // Our additional properties
   // value is the original value (rather than the plot x/y value) for the datum (used by state transitions)
