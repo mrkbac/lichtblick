@@ -5,8 +5,6 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import * as _ from "lodash-es";
-
 import { SettingsTreeAction } from "@lichtblick/suite";
 
 import { PublishClickType } from "./PublishClickTool";
@@ -17,6 +15,12 @@ import { DEFAULT_PUBLISH_SETTINGS } from "../defaults";
 import { publishSettingsNode } from "../settingsNodes/global";
 
 export { DEFAULT_PUBLISH_SETTINGS };
+
+const DEVIATION_KEYS = [
+  "poseEstimateXDeviation",
+  "poseEstimateYDeviation",
+  "poseEstimateThetaDeviation",
+] as const;
 
 export class PublishSettings extends SceneExtension {
   public static extensionId = "foxglove.PublishSettings";
@@ -75,8 +79,15 @@ export class PublishSettings extends SceneExtension {
           this.renderer.publishClickTool.setPublishClickType(value as PublishClickType);
           this.renderer.publishClickTool.stop();
         }
-      } else {
-        this.renderer.updateConfig((draft) => _.set(draft, path, value));
+      } else if (action.payload.input === "number") {
+        const key = DEVIATION_KEYS.find((deviationKey) => deviationKey === path[1]);
+        // A cleared field stores undefined, which would publish a NaN covariance: use the default
+        const deviation = action.payload.value;
+        if (key != undefined) {
+          this.renderer.updateConfig((draft) => {
+            draft.publish[key] = deviation ?? DEFAULT_PUBLISH_SETTINGS[key];
+          });
+        }
       }
     } else {
       return;
