@@ -18,17 +18,18 @@ export enum ColorModeConfig {
   GRADIENT = "gradient",
 }
 
+/** Number fields are `| undefined`: clearing one in the settings sidebar stores undefined. */
 export type GaugeConfig = {
-  displayMode: "arc" | "roll" | "pitch";
+  displayMode: "arc" | "slider" | "roll" | "pitch";
   angleUnit: "degrees" | "radians";
-  angleRange: number;
-  warningAngle: number;
-  criticalAngle: number;
+  angleRange: number | undefined;
+  warningAngle: number | undefined;
+  criticalAngle: number | undefined;
   colorMap: ColorMapConfig;
   colorMode: ColorModeConfig;
   gradient: [string, string];
-  maxValue: number;
-  minValue: number;
+  maxValue: number | undefined;
+  minValue: number | undefined;
   path: string;
   reverse: boolean;
 };
