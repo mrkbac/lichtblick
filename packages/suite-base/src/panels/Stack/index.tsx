@@ -5,6 +5,8 @@ import AddIcon from "@mui/icons-material/Add";
 import ViewAgendaOutlinedIcon from "@mui/icons-material/ViewAgendaOutlined";
 import ViewColumnOutlinedIcon from "@mui/icons-material/ViewColumnOutlined";
 import ViewModuleOutlinedIcon from "@mui/icons-material/ViewModuleOutlined";
+import WebAssetIcon from "@mui/icons-material/WebAsset";
+import WebAssetOffIcon from "@mui/icons-material/WebAssetOff";
 import { Button, Popover, Typography } from "@mui/material";
 import { getPanelData } from "dockview-react";
 import {
@@ -76,8 +78,8 @@ const useStyles = makeStyles()((theme) => ({
     minHeight: 0,
   },
   bodyX: { flexDirection: "column" },
+  hideTitleBars: FLOATING_TOOLBARS_STYLE,
   scroller: {
-    ...FLOATING_TOOLBARS_STYLE,
     position: "relative",
     flex: "auto",
     minHeight: 0,
@@ -287,7 +289,7 @@ function StackPanel({ config, saveConfig }: Props): React.JSX.Element {
 
   const rawTabs = config.tabs;
   const tabs = useMemo(() => getTabs({ tabs: rawTabs }), [rawTabs]);
-  const { arrangement, size, columns } = normalizeStackConfig(config);
+  const { arrangement, size, columns, titleBars } = normalizeStackConfig(config);
   const horizontal = arrangement === "horizontal";
   const titles = useMemo(
     () =>
@@ -329,6 +331,8 @@ function StackPanel({ config, saveConfig }: Props): React.JSX.Element {
         saveConfig({ arrangement: value as Arrangement });
       } else if (path[1] === "size" && typeof value === "number") {
         saveConfig({ size: Math.max(MIN_ITEM_SIZE, value) });
+      } else if (path[1] === "titleBars" && typeof value === "boolean") {
+        saveConfig({ titleBars: value });
       } else if (path[1] === "columns" && typeof value === "number") {
         saveConfig({ columns: Math.max(1, Math.floor(value)) });
       }
@@ -338,9 +342,9 @@ function StackPanel({ config, saveConfig }: Props): React.JSX.Element {
   useEffect(() => {
     updatePanelSettingsTree({
       actionHandler,
-      nodes: buildSettingsTree({ arrangement, size, columns }, t),
+      nodes: buildSettingsTree({ arrangement, size, columns, titleBars }, t),
     });
-  }, [actionHandler, arrangement, columns, size, t, updatePanelSettingsTree]);
+  }, [actionHandler, arrangement, columns, size, t, titleBars, updatePanelSettingsTree]);
 
   // Show a newly added item.
   const countRef = useRef(tabs.length);
@@ -456,6 +460,17 @@ function StackPanel({ config, saveConfig }: Props): React.JSX.Element {
               <ArrangementIcon />
             </PanelIconButton>
             <PanelIconButton
+              button={STACK_BUTTONS.titleBars}
+              data-testid="stack-title-bars"
+              aria-pressed={titleBars}
+              color={titleBars ? "default" : "primary"}
+              onClick={() => {
+                saveConfig({ titleBars: !titleBars });
+              }}
+            >
+              {titleBars ? <WebAssetIcon /> : <WebAssetOffIcon />}
+            </PanelIconButton>
+            <PanelIconButton
               button={STACK_BUTTONS.add}
               data-testid="stack-add"
               onClick={(event) => {
@@ -492,8 +507,8 @@ function StackPanel({ config, saveConfig }: Props): React.JSX.Element {
       >
         <div
           ref={setScroller}
-          className={classes.scroller}
-          {...{ [FLOATING_TOOLBARS_ATTRIBUTE]: "" }}
+          className={cx(classes.scroller, { [classes.hideTitleBars]: !titleBars })}
+          {...(titleBars ? {} : { [FLOATING_TOOLBARS_ATTRIBUTE]: "" })}
         >
           {tabs.length === 0 ? (
             <div

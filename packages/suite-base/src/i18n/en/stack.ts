@@ -9,6 +9,9 @@ export const stack = {
   vertical: "Vertical",
   horizontal: "Horizontal",
   grid: "Grid",
+  titleBars: "Title bars",
+  titleBarsHelp:
+    "Show each panel's title bar. Off, a title bar only shows while you point at its panel.",
   size: "Item size",
   sizeHelp:
     "Smallest height (width when horizontal) of an item in px. Items grow to fill the panel when they fit; drag an item's edge to resize it.",

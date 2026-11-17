@@ -275,6 +275,10 @@ export const panelButtons = {
     title: "Change arrangement",
     help: "Switches between a vertical list, a horizontal row and a grid. Its icon shows the current arrangement.",
   },
+  stackTitleBars: {
+    title: "Show title bars",
+    help: "Shows or hides the title bars of the panels in the stack. Hidden ones still show while you point at a panel.",
+  },
   tabAdd: {
     title: "New tab",
     help: "Opens the panel list; the panel you pick becomes a new tab.",

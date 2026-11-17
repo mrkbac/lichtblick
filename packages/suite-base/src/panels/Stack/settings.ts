@@ -14,6 +14,8 @@ export type StackPanelConfig = {
   arrangement: Arrangement;
   size: number;
   columns: number;
+  /** Off: the items' title bars only show while an item is pointed at. */
+  titleBars: boolean;
   tabs: TabConfig[];
 };
 
@@ -23,6 +25,7 @@ export const DEFAULT_STACK_CONFIG: StackPanelConfig = {
   arrangement: "vertical",
   size: 300,
   columns: 2,
+  titleBars: true,
   tabs: [],
 };
 
@@ -41,7 +44,8 @@ export function normalizeStackConfig(
     typeof config.columns === "number" && config.columns >= 1
       ? Math.floor(config.columns)
       : DEFAULT_STACK_CONFIG.columns;
-  return { arrangement, size, columns };
+  const titleBars = typeof config.titleBars === "boolean" ? config.titleBars : true;
+  return { arrangement, size, columns, titleBars };
 }
 
 export function buildSettingsTree(
@@ -58,6 +62,12 @@ export function buildSettingsTree(
           input: "toggle",
           value: config.arrangement,
           options: ARRANGEMENTS.map((value) => ({ label: t(value), value })),
+        },
+        titleBars: {
+          label: t("titleBars"),
+          help: t("titleBarsHelp"),
+          input: "boolean",
+          value: config.titleBars,
         },
         size: {
           label: t("size"),

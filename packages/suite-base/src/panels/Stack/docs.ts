@@ -22,7 +22,7 @@ const docs: PanelDocs = {
         ["Adding", "Drag a panel over the stack and drop it on the bar that appears at the end."],
         ["Splitting", "Drop a panel onto an item's edge to split that item like a layout."],
         ["Sizing", "Drag the edge of an item to resize it; in a grid this sets the row height."],
-        ["Title bars", "Each item's title bar shows while you point at the item."],
+        ["Title bars", "Hidden title bars still show while you point at a panel."],
         [
           "Scrolling",
           "The rail at the side has a bar per item. Scroll over it, drag along it, or pick an item's bar to jump to it.",
