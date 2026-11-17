@@ -24,6 +24,7 @@ import CopyButton from "@lichtblick/suite-base/components/CopyButton";
 import HoverableIconButton from "@lichtblick/suite-base/components/HoverableIconButton";
 import Stack from "@lichtblick/suite-base/components/Stack";
 import { downloadTextFile } from "@lichtblick/suite-base/util/download";
+import { toError } from "@lichtblick/suite-base/util/toError";
 import { customTypography } from "@lichtblick/theme";
 
 export type ShareJsonModalProps = {
@@ -63,7 +64,7 @@ export function ShareJsonModal({
     try {
       return { decodedValue: JSON.parse(value === "" ? "{}" : value) as unknown, error: undefined };
     } catch (err: unknown) {
-      return { decodedValue: undefined, error: err as Error };
+      return { decodedValue: undefined, error: toError(err) };
     }
   }, [value]);
 

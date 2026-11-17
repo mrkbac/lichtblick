@@ -71,6 +71,7 @@ import { UserScripts } from "@lichtblick/suite-base/types/panels";
 import { updateAppURLState } from "@lichtblick/suite-base/util/appURLState";
 import { rememberHandle } from "@lichtblick/suite-base/util/compareSides";
 import { recentArgs, recentFileTitle } from "@lichtblick/suite-base/util/recentSources";
+import { toError } from "@lichtblick/suite-base/util/toError";
 
 import { useTrustedUserScripts } from "./useTrustedUserScripts";
 
@@ -452,7 +453,7 @@ export default function PlayerManager(
       } catch (error) {
         // A superseded selection (closed or replaced meanwhile) shouldn't surface its error
         if (seq === selectionSeq.current) {
-          enqueueSnackbar((error as Error).message, { variant: "error" });
+          enqueueSnackbar(toError(error).message, { variant: "error" });
         }
       }
     },

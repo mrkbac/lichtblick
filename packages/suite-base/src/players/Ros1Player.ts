@@ -549,7 +549,7 @@ export default class Ros1Player implements Player {
           this.#addAlert(advertiseAlertId, {
             severity: "error",
             message: `Failed to advertise "${topic}"`,
-            error: error as Error,
+            error: toError(error),
           });
         });
     }
@@ -576,7 +576,7 @@ export default class Ros1Player implements Player {
             this.#addAlert(alertId, {
               severity: "error",
               message: `Publishing to ${topic} failed`,
-              error: error as Error,
+              error: toError(error),
             });
           });
       } else {

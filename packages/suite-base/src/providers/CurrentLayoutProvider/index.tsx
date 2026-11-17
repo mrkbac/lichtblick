@@ -169,12 +169,9 @@ export default function CurrentLayoutProvider({
           if (saveToProfile) {
             setUserProfile({ currentLayoutId: id }).catch((error: unknown) => {
               console.error(error);
-              enqueueSnackbar(
-                `The current layout could not be saved. ${(error as Error).toString()}`,
-                {
-                  variant: "error",
-                },
-              );
+              enqueueSnackbar(`The current layout could not be saved. ${String(error)}`, {
+                variant: "error",
+              });
             });
           }
         }

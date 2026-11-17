@@ -17,6 +17,7 @@ import { downloadTextFile } from "@lichtblick/suite-base/util/download";
 import { validateLayoutData } from "@lichtblick/suite-base/util/layout";
 import { basename, extname } from "@lichtblick/suite-base/util/path";
 import showOpenFilePicker from "@lichtblick/suite-base/util/showOpenFilePicker";
+import { toError } from "@lichtblick/suite-base/util/toError";
 
 import { useAnalytics } from "../context/AnalyticsContext";
 import { useLayoutManager } from "../context/LayoutManagerContext";
@@ -55,7 +56,7 @@ export function useLayoutTransfer(): UseLayoutTransfer {
       try {
         parsedState = JSON.parse(content);
       } catch (err: unknown) {
-        enqueueSnackbar(`${file.name} is not a valid layout: ${(err as Error).message}`, {
+        enqueueSnackbar(`${file.name} is not a valid layout: ${toError(err).message}`, {
           variant: "error",
         });
         return;

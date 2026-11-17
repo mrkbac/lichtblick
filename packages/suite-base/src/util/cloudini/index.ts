@@ -7,6 +7,7 @@
 /* eslint-disable no-underscore-dangle -- Emscripten prefixes the module's exports with "_" */
 
 import { InstalledMessageConverter } from "@lichtblick/suite-base/types/messageConverters";
+import { toError } from "@lichtblick/suite-base/util/toError";
 
 import type { CloudiniModule } from "./wasm/cloudini_decoder";
 import wasmUrl from "./wasm/cloudini_decoder.wasm";
@@ -135,7 +136,7 @@ export const cloudiniMessageConverter: InstalledMessageConverter = {
           {
             severity: "error",
             message: "Failed to load the Cloudini decoder",
-            error: err as Error,
+            error: toError(err),
           },
           "cloudini-load",
         );
@@ -151,7 +152,7 @@ export const cloudiniMessageConverter: InstalledMessageConverter = {
         {
           severity: "error",
           message: `Failed to decode Cloudini point cloud on ${event.topic}`,
-          error: err as Error,
+          error: toError(err),
         },
         `cloudini-decode-${event.topic}`,
       );

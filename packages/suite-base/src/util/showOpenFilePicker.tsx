@@ -15,7 +15,7 @@ export default async function showOpenFilePicker(
   try {
     return await window.showOpenFilePicker(options);
   } catch (err: unknown) {
-    if ((err as Error).name === "AbortError") {
+    if (err instanceof Error && err.name === "AbortError") {
       return [];
     }
     throw err;
