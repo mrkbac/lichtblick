@@ -4,7 +4,8 @@
 import { crc32 } from "@foxglove/crc";
 
 import { ChunkBuilder } from "./ChunkBuilder.ts";
-import { McapIndexedReader } from "./McapIndexedReader.ts";
+import type { ChunkMessageIndex } from "./ChunkCursor.ts";
+import { McapIndexedReader, type ChunkDataCache } from "./McapIndexedReader.ts";
 import { McapRecordBuilder } from "./McapRecordBuilder.ts";
 import { McapWriter } from "./McapWriter.ts";
 import { TempBuffer } from "./TempBuffer.ts";
@@ -89,6 +90,148 @@ function writeChunkWithMessageIndexes(
 }
 
 describe("McapIndexedReader", () => {
+  describe("chunks without message indexes", () => {
+    const channels: TypedMcapRecords["Channel"][] = [1, 2].map((id) => ({
+      type: "Channel",
+      id,
+      schemaId: 0,
+      topic: id === 1 ? "a" : "b",
+      messageEncoding: "json",
+      metadata: new Map(),
+    }));
+    const message = (channelId: number, logTime: bigint): TypedMcapRecords["Message"] => ({
+      type: "Message",
+      channelId,
+      sequence: Number(logTime),
+      logTime,
+      publishTime: logTime,
+      data: new Uint8Array([Number(logTime)]),
+    });
+
+    /** Writes a chunk and a chunk index without message indexes, as the spec allows */
+    function writeUnindexedChunk(
+      builder: McapRecordBuilder,
+      chunk: ChunkBuilder,
+      times: [bigint, bigint] = [chunk.messageStartTime, chunk.messageEndTime],
+    ): TypedMcapRecords["ChunkIndex"] {
+      const index = writeChunkWithMessageIndexes(new McapRecordBuilder(), chunk);
+      const chunkStartOffset = BigInt(builder.length);
+      const chunkLength = builder.writeChunk({
+        messageStartTime: times[0],
+        messageEndTime: times[1],
+        uncompressedSize: BigInt(chunk.buffer.length),
+        uncompressedCrc: 0,
+        compression: "",
+        records: chunk.buffer,
+      });
+      return {
+        ...index,
+        messageStartTime: times[0],
+        messageEndTime: times[1],
+        chunkStartOffset,
+        chunkLength,
+        messageIndexOffsets: new Map(),
+        messageIndexLength: 0n,
+      };
+    }
+
+    async function makeReader(chunkCache?: ChunkDataCache) {
+      // Unindexed, messages out of time order across two channels
+      const unindexed = new ChunkBuilder({ useMessageIndex: false });
+      channels.forEach((channel) => {
+        unindexed.addChannel(channel);
+      });
+      for (const [channelId, logTime] of [
+        [1, 3n],
+        [2, 1n],
+        [1, 6n],
+        [2, 4n],
+      ] as const) {
+        unindexed.addMessage(message(channelId, logTime));
+      }
+      // Indexed, overlapping the unindexed one in time
+      const indexed = new ChunkBuilder({ useMessageIndex: true });
+      indexed.addChannel(channels[0]!);
+      indexed.addMessage(message(1, 2n));
+      indexed.addMessage(message(1, 5n));
+
+      const builder = new McapRecordBuilder();
+      builder.writeMagic();
+      builder.writeHeader({ profile: "", library: "" });
+      const chunkIndexes = [
+        writeUnindexedChunk(builder, unindexed),
+        writeChunkWithMessageIndexes(builder, indexed),
+        // Empty, with times that aren't zero
+        writeUnindexedChunk(builder, new ChunkBuilder({ useMessageIndex: false }), [2n, 3n]),
+      ];
+      builder.writeDataEnd({ dataSectionCrc: 0 });
+      const summaryStart = BigInt(builder.length);
+      channels.forEach((channel) => builder.writeChannel(channel));
+      chunkIndexes.forEach((index) => builder.writeChunkIndex(index));
+      builder.writeFooter({ summaryStart, summaryOffsetStart: 0n, summaryCrc: 0 });
+      builder.writeMagic();
+      return await McapIndexedReader.Initialize({
+        readable: makeReadable(builder.buffer),
+        chunkCache,
+      });
+    }
+
+    const times = (messages: TypedMcapRecords["Message"][]) =>
+      messages.map((msg) => [msg.channelId, msg.logTime]);
+
+    it("reads them by scanning the chunk, in time order", async () => {
+      const reader = await makeReader();
+      const forward = [
+        [2, 1n],
+        [1, 2n],
+        [1, 3n],
+        [2, 4n],
+        [1, 5n],
+        [1, 6n],
+      ];
+      expect(times(await collect(reader.readMessages()))).toEqual(forward);
+      expect(times(await collect(reader.readMessages({ reverse: true })))).toEqual(
+        forward.reverse(),
+      );
+      await expect(collect(reader.readMessages())).resolves.toContainEqual(message(2, 4n));
+    });
+
+    it("filters them by topic and time", async () => {
+      const reader = await makeReader();
+      expect(times(await collect(reader.readMessages({ topics: ["b"] })))).toEqual([
+        [2, 1n],
+        [2, 4n],
+      ]);
+      expect(
+        times(await collect(reader.readMessages({ topics: ["a"], reverse: true, endingAt: 5n }))),
+      ).toEqual([
+        [1, 5n],
+        [1, 3n],
+        [1, 2n],
+      ]);
+      expect(times(await collect(reader.readMessages({ startingAt: 3n, endingAt: 4n })))).toEqual([
+        [1, 3n],
+        [2, 4n],
+      ]);
+    });
+
+    it("caches the scanned index", async () => {
+      const views = new Map<bigint, DataView>();
+      const indexes = new Map<bigint, ChunkMessageIndex>();
+      const cache = {
+        get: (offset: bigint) => views.get(offset),
+        set: (offset: bigint, view: DataView) => views.set(offset, view),
+        getChunkMessageIndex: (offset: bigint) => indexes.get(offset),
+        setChunkMessageIndex: (offset: bigint, index: ChunkMessageIndex) =>
+          indexes.set(offset, index),
+      };
+      const reader = await makeReader(cache);
+      const first = await collect(reader.readMessages());
+      expect(indexes.has(reader.chunkIndexes[0]!.chunkStartOffset)).toBe(true);
+      await expect(collect(reader.readMessages())).resolves.toEqual(first);
+    });
+  });
+
   it("rejects files that are too small", async () => {
     await expect(
       McapIndexedReader.Initialize({

@@ -69,12 +69,12 @@ export class ChunkMessageIndex {
       throw new Error(`${view.byteLength - pos} bytes remaining in message index section`);
     }
 
-    // Pass 2: copy the entries out in file order, then sort only if that order isn't sorted
-    // (one channel, or channels that don't overlap in time)
-    let logTimes = new BigUint64Array(total);
-    let words = new Uint32Array(logTimes.buffer);
-    let offsets = new Float64Array(total);
-    let channelIds = new Uint16Array(total);
+    // Pass 2: copy the entries out in file order, noting whether that order is sorted (one
+    // channel, or channels that don't overlap in time)
+    const logTimes = new BigUint64Array(total);
+    const words = new Uint32Array(logTimes.buffer);
+    const offsets = new Float64Array(total);
+    const channelIds = new Uint16Array(total);
     let sorted = true;
     let i = 0;
     for (const { channelId, start, count } of lists) {
@@ -92,29 +92,89 @@ export class ChunkMessageIndex {
         }
       }
     }
+    return ChunkMessageIndex.#sorted(logTimes, offsets, channelIds, chunkIndex, sorted);
+  }
+
+  /**
+   * Builds the index of a chunk without message indexes by scanning its decompressed records for
+   * Message records, as the MCAP spec asks readers to do for such chunks.
+   */
+  public static scan(view: DataView, chunkIndex: ChunkIndex): ChunkMessageIndex {
+    const logTimes: bigint[] = [];
+    const offsets: number[] = [];
+    const channelIds: number[] = [];
+    let sorted = true;
+    let pos = 0;
+    while (view.byteLength - pos >= 9) {
+      const opcode = view.getUint8(pos);
+      const recordLength = view.getBigUint64(pos + 1, true);
+      const start = pos + 9;
+      if (recordLength > BigInt(view.byteLength - start)) {
+        throw new Error(
+          `Record at offset ${pos} in chunk at offset ${chunkIndex.chunkStartOffset} is truncated`,
+        );
+      }
+      if (opcode === Opcode.MESSAGE) {
+        // channel_id u16, sequence u32, log_time u64
+        if (recordLength < 22n) {
+          throw new Error(`Message record at offset ${pos} is too short`);
+        }
+        const logTime = view.getBigUint64(start + 6, true);
+        sorted &&= logTimes.length === 0 || logTimes[logTimes.length - 1]! <= logTime;
+        logTimes.push(logTime);
+        offsets.push(pos);
+        channelIds.push(view.getUint16(start, true));
+      }
+      pos = start + Number(recordLength);
+    }
+    if (pos !== view.byteLength) {
+      throw new Error(
+        `${view.byteLength - pos} bytes remaining in chunk at offset ${chunkIndex.chunkStartOffset}`,
+      );
+    }
+    return ChunkMessageIndex.#sorted(
+      BigUint64Array.from(logTimes),
+      Float64Array.from(offsets),
+      Uint16Array.from(channelIds),
+      chunkIndex,
+      sorted,
+    );
+  }
+
+  /** Sorts entries by logTime then offset (unless `sorted` already) and checks the chunk's times */
+  static #sorted(
+    logTimes: BigUint64Array,
+    offsets: Float64Array,
+    channelIds: Uint16Array,
+    chunkIndex: ChunkIndex,
+    sorted: boolean,
+  ): ChunkMessageIndex {
+    const total = logTimes.length;
+    const words = new Uint32Array(logTimes.buffer);
     if (!sorted) {
       const order = new Uint32Array(total);
       for (let j = 0; j < total; j++) {
         order[j] = j;
       }
-      const w = words;
-      const o = offsets;
-      order.sort((a, b) => compareEntries(w, o, a, b));
+      order.sort((a, b) => compareEntries(words, offsets, a, b));
       const sortedLogTimes = new BigUint64Array(total);
       const sortedWords = new Uint32Array(sortedLogTimes.buffer);
       const sortedOffsets = new Float64Array(total);
       const sortedChannelIds = new Uint16Array(total);
       for (let j = 0; j < total; j++) {
         const from = order[j]!;
-        sortedWords[2 * j] = w[2 * from]!;
-        sortedWords[2 * j + 1] = w[2 * from + 1]!;
-        sortedOffsets[j] = o[from]!;
+        sortedWords[2 * j] = words[2 * from]!;
+        sortedWords[2 * j + 1] = words[2 * from + 1]!;
+        sortedOffsets[j] = offsets[from]!;
         sortedChannelIds[j] = channelIds[from]!;
       }
-      logTimes = sortedLogTimes;
-      words = sortedWords;
-      offsets = sortedOffsets;
-      channelIds = sortedChannelIds;
+      return ChunkMessageIndex.#sorted(
+        sortedLogTimes,
+        sortedOffsets,
+        sortedChannelIds,
+        chunkIndex,
+        true,
+      );
     }
 
     if (total > 0) {
@@ -192,16 +252,6 @@ export class ChunkCursor {
     this.#endingAt = params.endingAt;
     this.#reverse = params.reverse;
     this.#step = params.reverse ? -1 : 1;
-
-    if (this.chunkIndex.messageIndexLength === 0n) {
-      // Chunk has no message indexes.
-      // We only allow that if the chunk has no messages and the start and end times are 0.
-      if (this.chunkIndex.messageStartTime !== 0n || this.chunkIndex.messageEndTime !== 0n) {
-        throw new Error(
-          `Encountered a chunk index without message indexes and non-zero start and end times`,
-        );
-      }
-    }
   }
 
   /**
@@ -270,11 +320,28 @@ export class ChunkCursor {
     return this.#index != undefined;
   }
 
+  /**
+   * Loads the chunk's message index. A chunk without message indexes (allowed by the spec) is
+   * indexed by scanning its records, which `loadChunk` loads.
+   */
   public async loadMessageIndexes<TReadOptions>(
     readable: IReadable<TReadOptions>,
+    loadChunk: (chunkIndex: ChunkIndex) => Promise<DataView>,
     readOptions?: TReadOptions,
     cache?: ChunkMessageIndexCache,
   ): Promise<void> {
+    if (this.chunkIndex.messageIndexOffsets.size === 0 && this.chunkIndex.uncompressedSize > 0n) {
+      // Keyed by the chunk's start offset, which no message index section can have
+      const key = this.chunkIndex.chunkStartOffset;
+      let index = cache?.getChunkMessageIndex?.(key);
+      if (!index) {
+        index = ChunkMessageIndex.scan(await loadChunk(this.chunkIndex), this.chunkIndex);
+        cache?.setChunkMessageIndex?.(key, index, key);
+      }
+      this.#setIndex(index);
+      return;
+    }
+
     let messageIndexStartOffset: bigint | undefined;
     let anyRelevant = false;
     let allRelevant = true;
@@ -317,8 +384,11 @@ export class ChunkCursor {
         this.chunkIndex.chunkStartOffset,
       );
     }
-    this.#index = index;
+    this.#setIndex(index);
+  }
 
+  #setIndex(index: ChunkMessageIndex): void {
+    this.#index = index;
     // Entries within [startingAt, endingAt]
     this.#first =
       this.#startingAt == undefined ? 0 : _.sortedIndex(index.logTimes, this.#startingAt);

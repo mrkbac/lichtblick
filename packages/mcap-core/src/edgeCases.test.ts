@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import { ChunkCursor } from "./ChunkCursor.ts";
+import { ChunkCursor, ChunkMessageIndex } from "./ChunkCursor.ts";
 import McapByteReader from "./McapByteReader.ts";
 import { McapIndexedReader } from "./McapIndexedReader.ts";
 import { McapRecordBuilder } from "./McapRecordBuilder.ts";
@@ -48,11 +48,30 @@ describe("ChunkCursor", () => {
         read: async (offset: bigint, size: bigint) =>
           indexes.subarray(Number(offset), Number(offset + size)),
       };
-      await expect(cursor.loadMessageIndexes(readable)).rejects.toThrow(
+      await expect(cursor.loadMessageIndexes(readable, async () => view(indexes))).rejects.toThrow(
         "earlier than chunk messageStartTime",
       );
     },
   );
+});
+
+describe("ChunkMessageIndex.scan", () => {
+  it("rejects a truncated record at the end of the chunk", () => {
+    const chunkIndex = {
+      messageStartTime: 0n,
+      messageEndTime: 0n,
+      chunkStartOffset: 0n,
+      chunkLength: 0n,
+      messageIndexOffsets: new Map(),
+      messageIndexLength: 0n,
+      compression: "",
+      compressedSize: 0n,
+      uncompressedSize: 4n,
+    };
+    expect(() => ChunkMessageIndex.scan(view(new Uint8Array(4)), chunkIndex)).toThrow(
+      "4 bytes remaining",
+    );
+  });
 });
 
 describe("McapIndexedReader chunkCache and CRCs", () => {
