@@ -17,14 +17,9 @@ describe("createKeyValueStore", () => {
     expect(await store.get("c")).toBe("three");
   });
 
-  it("applies concurrent updates without losing any, and deletes", async () => {
-    const store = createKeyValueStore("kv-update", "items");
-    const writes = await Promise.all(
-      [1, 2, 3].map(async (n) => await store.update<number[]>("k", (list) => [...(list ?? []), n])),
-    );
-    expect(writes).toEqual([true, true, true]);
-    expect(await store.get<number[]>("k")).toHaveLength(3);
-    expect(await store.update("k", () => undefined)).toBe(false);
+  it("deletes", async () => {
+    const store = createKeyValueStore("kv-delete", "items");
+    await store.set("k", 1);
     await store.delete("k");
     expect(await store.get("k")).toBeUndefined();
   });

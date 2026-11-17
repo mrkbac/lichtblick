@@ -49,6 +49,10 @@ import { findFavoriteLayout } from "@lichtblick/suite-base/providers/CurrentLayo
 import { AppEvent } from "@lichtblick/suite-base/services/IAnalytics";
 import { LayoutLoader } from "@lichtblick/suite-base/services/ILayoutLoader";
 import { LayoutManagerEventTypes } from "@lichtblick/suite-base/services/ILayoutManager";
+import {
+  loadLayoutHistory,
+  saveLayoutHistory,
+} from "@lichtblick/suite-base/services/layoutHistoryStorage";
 import { migratePanelsState } from "@lichtblick/suite-base/services/migrateLayout";
 import { PanelConfig, PlaybackConfig, UserScripts } from "@lichtblick/suite-base/types/panels";
 import { windowAppURLState } from "@lichtblick/suite-base/util/appURLState";
@@ -133,6 +137,19 @@ export default function CurrentLayoutProvider({
     [],
   );
 
+  const history = useRef(new LayoutHistory());
+  /** The layout `history` belongs to, set before it loads that layout's saved steps. */
+  const historyLayoutId = useRef<LayoutID | undefined>(undefined);
+  useEffect(
+    () =>
+      history.current.subscribe(() => {
+        if (historyLayoutId.current != undefined) {
+          saveLayoutHistory(historyLayoutId.current, history.current.snapshot());
+        }
+      }),
+    [],
+  );
+
   const [, setSelectedLayoutId] = useAsyncFn(
     async (
       id: LayoutID | undefined,
@@ -158,13 +175,21 @@ export default function CurrentLayoutProvider({
         if (layout == undefined) {
           setLayoutState({ selectedLayout: undefined });
         } else {
+          const saved = await loadLayoutHistory(layout.id).catch((error: unknown) => {
+            log.error(error);
+            return undefined;
+          });
+          if (!isMounted()) {
+            return;
+          }
+          historyLayoutId.current = layout.id;
+          const data = history.current.load(
+            saved,
+            migratePanelsState(layout.working?.data ?? layout.baseline.data),
+            Date.now(),
+          );
           setLayoutState({
-            selectedLayout: {
-              loading: false,
-              id: layout.id,
-              data: migratePanelsState(layout.working?.data ?? layout.baseline.data),
-              name: layout.name,
-            },
+            selectedLayout: { loading: false, id: layout.id, data, name: layout.name },
           });
           if (saveToProfile) {
             setUserProfile({ currentLayoutId: id }).catch((error: unknown) => {
@@ -186,8 +211,6 @@ export default function CurrentLayoutProvider({
     },
     [enqueueSnackbar, isMounted, layoutManager, setLayoutState, setUserProfile],
   );
-
-  const history = useRef(new LayoutHistory());
 
   /** Every layout edit goes through here, so undo/redo sees all of them. */
   const commitLayoutData = useCallback(
@@ -238,13 +261,11 @@ export default function CurrentLayoutProvider({
         updatedLayout &&
         updatedLayout.id === layoutStateRef.current.selectedLayout?.id
       ) {
+        const data = migratePanelsState(updatedLayout.working?.data ?? updatedLayout.baseline.data);
+        // A revert is a step of the layout's history, so it can be undone.
+        history.current.sync(data);
         setLayoutState({
-          selectedLayout: {
-            loading: false,
-            id: updatedLayout.id,
-            data: migratePanelsState(updatedLayout.working?.data ?? updatedLayout.baseline.data),
-            name: updatedLayout.name,
-          },
+          selectedLayout: { loading: false, id: updatedLayout.id, data, name: updatedLayout.name },
         });
       }
     };
@@ -457,9 +478,11 @@ export default function CurrentLayoutProvider({
       reopenClosedPanel: () => {
         commitLayoutData((h, data) => h.reopenClosedPanel(data, performance.now()));
       },
-      restoreLayoutData: (next: LayoutData) => {
-        commitLayoutData((h, data) => h.replace(data, next, performance.now()));
+      goToLayoutHistory: (index: number) => {
+        commitLayoutData((h, data) => h.goTo(data, index));
       },
+      getLayoutHistory: () => history.current.snapshot(),
+      subscribeLayoutHistory: (listener: () => void) => history.current.subscribe(listener),
     }),
     [
       analytics,

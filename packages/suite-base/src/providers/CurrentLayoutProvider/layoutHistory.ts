@@ -102,24 +102,70 @@ function closePlacements(data: LayoutData, id: string): Placement[] {
   return [tabPanelId, ...others].map((targetPanelId) => ({ position: "center", targetPanelId }));
 }
 
+/** One step of a layout's history: the layout data after an edit. */
+export type HistoryEntry = {
+  data: LayoutData;
+  /** Wall-clock time of the step's latest edit. */
+  savedAt: number;
+  /** The layout as it was opened, when that differs from where its saved history left off. */
+  kind?: "opened";
+};
+
+/** A layout's history: its steps, oldest first, and the step the layout shows. */
+export type HistorySnapshot = { entries: readonly HistoryEntry[]; index: number };
+
+const EMPTY: HistorySnapshot = { entries: [], index: -1 };
+
 /**
- * Undo/redo history of one layout's data. Layout data is immutable, so steps are snapshots that
- * share structure. Any data it did not produce itself (another layout loaded, a revert) resets it.
+ * Undo/redo history of one layout's data, which is also the history the History tab shows and
+ * that is saved per layout. Layout data is immutable, so steps are snapshots that share
+ * structure. Data it did not produce itself (e.g. a revert) becomes a new step.
  */
 export class LayoutHistory {
-  #past: LayoutData[] = [];
-  #future: LayoutData[] = [];
+  #entries: HistoryEntry[] = [];
+  #index = -1;
   #closed: ClosedPanel[] = [];
-  #current: LayoutData | undefined;
   #lastKey: string | undefined;
   #lastTime = -Infinity;
+  #snapshot = EMPTY;
+  #listeners = new Set<() => void>();
 
   public canUndo(): boolean {
-    return this.#past.length > 0;
+    return this.#index > 0;
   }
 
   public canRedo(): boolean {
-    return this.#future.length > 0;
+    return this.#index < this.#entries.length - 1;
+  }
+
+  /** Stable until the history changes, for useSyncExternalStore. */
+  public snapshot(): HistorySnapshot {
+    return this.#snapshot;
+  }
+
+  public subscribe(listener: () => void): () => void {
+    this.#listeners.add(listener);
+    return () => this.#listeners.delete(listener);
+  }
+
+  /**
+   * Starts over with a newly selected layout's saved history. Returns the data to show: the saved
+   * current step's data when it equals `data`, so later edits are recognised as this history's.
+   */
+  public load(saved: HistorySnapshot | undefined, data: LayoutData, wallNow: number): LayoutData {
+    this.#entries = [...(saved?.entries ?? [])];
+    this.#index = Math.min(saved?.index ?? -1, this.#entries.length - 1);
+    this.#closed = [];
+    this.#lastKey = undefined;
+    const current = this.#entries[this.#index];
+    if (current != undefined && _.isEqual(current.data, data)) {
+      this.#changed();
+      return current.data;
+    }
+    // Changed elsewhere since (or no history yet): the opened state becomes the current step.
+    this.#push({ data, savedAt: wallNow, kind: "opened" });
+    this.#changed();
+    return data;
   }
 
   /**
@@ -133,9 +179,10 @@ export class LayoutHistory {
     }
     this.#sync(data);
     if (fillsDefaults(data, action)) {
-      // Fold into the current state: no undo step to get stuck on (the panel would save its
+      // Fold into the current step: no undo step to get stuck on (the panel would save its
       // defaults again right away), and redo stays intact when undo remounts a panel.
-      this.#current = next;
+      this.#entries[this.#index] = { ...this.#entries[this.#index]!, data: next };
+      this.#changed();
       return next;
     }
     if (action.type === "CLOSE_PANEL") {
@@ -149,28 +196,30 @@ export class LayoutHistory {
         this.#closed.shift();
       }
     }
-    this.#record(data, next, coalesceKey(action), now);
+    this.#record(next, coalesceKey(action), now);
     return next;
   }
 
   public undo(data: LayoutData): LayoutData | undefined {
-    this.#sync(data);
-    const prev = this.#past.pop();
-    if (prev == undefined) {
-      return undefined;
-    }
-    this.#future.push(data);
-    return this.#moveTo(prev);
+    return this.goTo(data, this.#indexAfterSync(data) - 1);
   }
 
   public redo(data: LayoutData): LayoutData | undefined {
+    return this.goTo(data, this.#indexAfterSync(data) + 1);
+  }
+
+  /** Moves to step `index`, keeping the steps after it for redo. */
+  public goTo(data: LayoutData, index: number): LayoutData | undefined {
     this.#sync(data);
-    const next = this.#future.pop();
-    if (next == undefined) {
+    const entry = this.#entries[index];
+    if (entry == undefined || index === this.#index) {
       return undefined;
     }
-    this.#past.push(data);
-    return this.#moveTo(next);
+    this.#index = index;
+    // The next edit starts a new step instead of folding into the one just moved to.
+    this.#lastKey = undefined;
+    this.#changed();
+    return entry.data;
   }
 
   /** Puts the most recently closed panel that is not in the layout back, with its config. */
@@ -202,49 +251,51 @@ export class LayoutHistory {
       type: "ADD_PANEL",
       payload: { id: closed.id, ...(placement ?? { position: "right" }) },
     });
-    this.#record(data, next, undefined, now);
+    this.#record(next, undefined, now);
     return next;
   }
 
-  /** Replaces the data wholesale (e.g. restoring an older version) as one undo step. */
-  public replace(data: LayoutData, next: LayoutData, now: number): LayoutData | undefined {
-    if (_.isEqual(data, next)) {
-      return undefined;
-    }
-    this.#sync(data);
-    this.#record(data, next, undefined, now);
-    return next;
-  }
-
-  #record(prev: LayoutData, next: LayoutData, key: string | undefined, now: number): void {
+  #record(next: LayoutData, key: string | undefined, now: number): void {
     const coalesce =
       key != undefined && key === this.#lastKey && now - this.#lastTime < COALESCE_MS;
-    if (!coalesce) {
-      this.#past.push(prev);
-      if (this.#past.length > HISTORY_LIMIT) {
-        this.#past.shift();
-      }
+    if (coalesce) {
+      this.#entries[this.#index] = { data: next, savedAt: Date.now() };
+    } else {
+      this.#push({ data: next, savedAt: Date.now() });
     }
-    this.#future = [];
     this.#lastKey = key;
     this.#lastTime = now;
-    this.#current = next;
+    this.#changed();
   }
 
-  #moveTo(data: LayoutData): LayoutData {
-    // The next edit starts a new step instead of folding into the one just undone.
-    this.#lastKey = undefined;
-    this.#current = data;
-    return data;
+  /** Adds a step after the current one, dropping the redo steps. */
+  #push(entry: HistoryEntry): void {
+    this.#entries = [...this.#entries.slice(0, this.#index + 1), entry].slice(-(HISTORY_LIMIT + 1));
+    this.#index = this.#entries.length - 1;
+  }
+
+  #indexAfterSync(data: LayoutData): number {
+    this.#sync(data);
+    return this.#index;
+  }
+
+  /** Data this history didn't produce (e.g. a revert) becomes a step of its own. */
+  public sync(data: LayoutData): void {
+    this.#sync(data);
   }
 
   #sync(data: LayoutData): void {
-    if (data !== this.#current) {
-      this.#past = [];
-      this.#future = [];
-      this.#closed = [];
+    if (data !== this.#entries[this.#index]?.data) {
+      this.#push({ data, savedAt: Date.now() });
       this.#lastKey = undefined;
-      this.#current = data;
+      this.#changed();
+    }
+  }
+
+  #changed(): void {
+    this.#snapshot = { entries: [...this.#entries], index: this.#index };
+    for (const listener of this.#listeners) {
+      listener();
     }
   }
 }

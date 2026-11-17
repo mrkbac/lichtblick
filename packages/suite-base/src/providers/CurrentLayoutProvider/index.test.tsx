@@ -36,6 +36,13 @@ import {
 import { ILayoutManager, LayoutFavorites } from "@lichtblick/suite-base/services/ILayoutManager";
 import { BasicBuilder } from "@lichtblick/test-builders";
 
+// Each test starts without a saved layout history.
+vi.mock("@lichtblick/suite-base/services/layoutHistoryStorage", () => ({
+  loadLayoutHistory: async () => undefined,
+  saveLayoutHistory: () => {},
+  deleteLayoutHistory: async () => {},
+}));
+
 vi.mock("notistack", async () => ({
   ...(await vi.importActual("notistack")),
   useSnackbar: vi.fn().mockReturnValue({
@@ -198,17 +205,18 @@ describe("CurrentLayoutProvider", () => {
     });
 
     expect(mockLayoutManager.getLayouts).toHaveBeenCalled();
-    expect(all.map((item) => (item instanceof Error ? undefined : item.layoutState))).toEqual([
-      { selectedLayout: undefined },
-      {
+    // The layout's saved history loads before the layout is shown.
+    await waitFor(() => {
+      const last = all.at(-1);
+      expect(last instanceof Error ? undefined : last?.layoutState).toEqual({
         selectedLayout: {
           loading: false,
           id: "example",
           data: expectedState,
           name: "Example layout",
         },
-      },
-    ]);
+      });
+    });
   });
 
   it("refuses to load an incompatible layout", async () => {
