@@ -48,6 +48,8 @@ export const panels = {
   studioPlaybackPerformance: "Studio - Playback Performance",
   studioPlaybackPerformanceDescription:
     "Display playback and data-streaming performance statistics.",
+  stack: "Stack",
+  stackDescription: "Scroll through panels stacked vertically, side by side, or in a grid.",
   tab: "Tab",
   tabDescription: "Tabs that each hold their own split layout of panels.",
   table: "Table",

@@ -37,6 +37,7 @@ export * from "./plot";
 export * from "./playbackTime";
 export * from "./alertsList";
 export * from "./settingsEditor";
+export * from "./stack";
 export * from "./stateTransitions";
 export * from "./syncTabs";
 export * from "./threeDee";

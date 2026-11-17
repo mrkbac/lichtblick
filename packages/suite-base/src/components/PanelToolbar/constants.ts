@@ -30,3 +30,12 @@ export const COMPACT_PANELS_STYLE = {
     "--panel-floating-toolbar-height": `${COMPACT_PANEL_TOOLBAR_HEIGHT}px`,
   },
 };
+
+/** Set on a container (e.g. the Stack panel) whose panels' toolbars all float and show on hover. */
+export const FLOATING_TOOLBARS_ATTRIBUTE = "data-floating-toolbars";
+
+/** Container styles for {@link FLOATING_TOOLBARS_ATTRIBUTE}: panels give their toolbars no space. */
+export const FLOATING_TOOLBARS_STYLE = {
+  "--panel-title-toolbar-space": "0px",
+  "--panel-floating-toolbar-height": `var(--panel-toolbar-height, ${PANEL_TOOLBAR_MIN_HEIGHT}px)`,
+};

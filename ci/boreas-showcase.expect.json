@@ -1,0 +1,417 @@
+{
+  "file": {
+    "url": "https://pub-28ff7cafca60457aa0fb10e79c70ff4b.r2.dev/boreas-showcase-v2.mcap",
+    "sha256": "0284c9994fb8d2ee52c68b9c873628c1f30fdeaf5d9cef588a39300d4cd0df6a",
+    "size": 308832468
+  },
+  "container": {
+    "chunk_count": 65,
+    "chunk_compressions": ["", "lz4", "zstd"],
+    "chunks_without_crc": 6,
+    "chunks_without_message_index": 1,
+    "empty_chunks": 1,
+    "out_of_order_chunks": 1,
+    "overlapping_chunks": true,
+    "unchunked_messages": 19,
+    "attachments": ["camera_info.yaml", "README.md"],
+    "metadata": ["attribution", "vehicle", "excerpt", "empty"],
+    "message_count": 6917
+  },
+  "channels": [
+    {
+      "topic": "/boreas/tf_static",
+      "schema_name": "tf2_msgs/msg/TFMessage",
+      "schema_encoding": "ros2idl",
+      "message_encoding": "cdr",
+      "count": 1,
+      "indexed_count": 1,
+      "first_log_time": "1598988240835735000",
+      "last_log_time": "1598988240835735000",
+      "first_sha256": "f76dcf9fe309e751bb9deef319407aefc1195d10ac84fb1dfcba06a4df61aa8e",
+      "fields": {
+        "transforms[0].header.frame_id": "lidar",
+        "transforms[0].child_frame_id": "camera",
+        "transforms[0].transform.translation.x": 0.8969058610203351,
+        "transforms[0].transform.translation.y": -0.03966007177591938,
+        "transforms[0].transform.translation.z": -0.3481550131182626,
+        "transforms[0].transform.rotation.x": 0.5110232555374747,
+        "transforms[0].transform.rotation.y": -0.4976702530140889,
+        "transforms[0].transform.rotation.z": 0.4842919210570992,
+        "transforms[0].transform.rotation.w": -0.5065973615837316
+      }
+    },
+    {
+      "topic": "/boreas/route",
+      "schema_name": "foxglove.SceneUpdate",
+      "schema_encoding": "jsonschema",
+      "message_encoding": "json",
+      "count": 20,
+      "indexed_count": 20,
+      "first_log_time": "1598988240835735000",
+      "last_log_time": "1598988259835735000",
+      "first_sha256": "afb68e1181f23da91c201344555db8ac8d7e42409b525ed9d246974c9e188f79",
+      "fields": {
+        "entities[0].frame_id": "map",
+        "entities[0].id": "route",
+        "entities[0].lifetime.sec": 0,
+        "entities[0].lifetime.nsec": 0,
+        "entities[0].frame_locked": false,
+        "entities[0].metadata[0].key": "max_speed_kmh",
+        "entities[0].metadata[0].value": "36.0"
+      }
+    },
+    {
+      "topic": "/boreas/map/route",
+      "schema_name": "foxglove.GeoJSON",
+      "schema_encoding": "jsonschema",
+      "message_encoding": "json",
+      "count": 20,
+      "indexed_count": 20,
+      "first_log_time": "1598988240835735000",
+      "last_log_time": "1598988259835735000",
+      "first_sha256": "f1d5cee73470c314f58977f7f5e5583008cb0a741fb34f0f047150d343a58443",
+      "fields": {}
+    },
+    {
+      "topic": "/boreas/motion",
+      "schema_name": "boreas::Motion",
+      "schema_encoding": "omgidl",
+      "message_encoding": "cdr",
+      "count": 1977,
+      "indexed_count": 1977,
+      "first_log_time": "1598988240837812000",
+      "last_log_time": "1598988260827849000",
+      "first_sha256": "6cf88ce6bc03220125764d889007a581f55aeedfc377196541a9081bfab74270",
+      "fields": {
+        "speed": 0.02712035276077625,
+        "accel_long": 0.002730079599742623,
+        "accel_lat": 0.0,
+        "yaw_rate": 0.0,
+        "heading": 246.67123203800566,
+        "roll": 0.5172233158159047
+      }
+    },
+    {
+      "topic": "/boreas/imu",
+      "schema_name": "boreas_imu.capnp:Imu",
+      "schema_encoding": "capnproto",
+      "message_encoding": "capnproto",
+      "count": 1977,
+      "indexed_count": 1977,
+      "first_log_time": "1598988240837812000",
+      "last_log_time": "1598988260827849000",
+      "first_sha256": "de31370094f7e6d84d6957097a933ca47e2a0d508a875716d67cfc8562d5d10f",
+      "fields": {
+        "angularVelocity.x": -0.00107221596267,
+        "angularVelocity.y": -0.000858880244635,
+        "angularVelocity.z": 0.00118781327859,
+        "roll": 0.5172233158159047,
+        "pitch": 0.07745080493754262,
+        "heading": 246.67123203800566
+      }
+    },
+    {
+      "topic": "/boreas/gps",
+      "schema_name": "foxglove.LocationFix",
+      "schema_encoding": "flatbuffer",
+      "message_encoding": "flatbuffer",
+      "count": 199,
+      "indexed_count": 199,
+      "first_log_time": "1598988240837812000",
+      "last_log_time": "1598988260777938000",
+      "first_sha256": "0eca3b37ef3c2bc05791dd43669220a1494a5c683d5c394ca7520d5a6118a2c2",
+      "fields": {
+        "frame_id": "base_link",
+        "latitude": 43.657913873572376,
+        "longitude": -79.40039956881236,
+        "position_covariance[0]": 0.0025,
+        "position_covariance_type": 2
+      }
+    },
+    {
+      "topic": "/boreas/vehicle/state",
+      "schema_name": "lichtblick.BoreasVehicleState",
+      "schema_encoding": "jsonschema",
+      "message_encoding": "cbor",
+      "count": 199,
+      "indexed_count": 199,
+      "first_log_time": "1598988240837812000",
+      "last_log_time": "1598988260777938000",
+      "first_sha256": "84b06c7804e0fb2fa2ea6a231aba194d13e6278dbca82decfdae247e1b8a5751",
+      "fields": {
+        "drive_state": 0,
+        "turn": 0,
+        "standstill": true
+      }
+    },
+    {
+      "topic": "/boreas/camera/image",
+      "schema_name": "foxglove.CompressedVideo",
+      "schema_encoding": "protobuf",
+      "message_encoding": "protobuf",
+      "count": 246,
+      "indexed_count": 246,
+      "first_log_time": "1598988240918831000",
+      "last_log_time": "1598988260761276000",
+      "first_sha256": "cdea15f9c209fdda27d7d9ed09da4baf53bead3bbfc5427834d04e8d55fad564",
+      "fields": {
+        "frame_id": "camera",
+        "format": "h265"
+      }
+    },
+    {
+      "topic": "/boreas/camera/calibration",
+      "schema_name": "sensor_msgs/msg/CameraInfo",
+      "schema_encoding": "ros2msg",
+      "message_encoding": "cdr",
+      "count": 246,
+      "indexed_count": 246,
+      "first_log_time": "1598988240915831000",
+      "last_log_time": "1598988260758276000",
+      "first_sha256": "99412371b6cac5570baca3068ddc2b13baa905d47215b92b560ab009a513d6f4",
+      "fields": {
+        "header.frame_id": "camera",
+        "height": 2048,
+        "width": 2448,
+        "distortion_model": "plumb_bob",
+        "d[0]": 0.0,
+        "k[0]": 1460.98
+      }
+    },
+    {
+      "topic": "/boreas/camera/annotations",
+      "schema_name": "foxglove.ImageAnnotations",
+      "schema_encoding": "jsonschema",
+      "message_encoding": "json",
+      "count": 246,
+      "indexed_count": 246,
+      "first_log_time": "1598988240915831000",
+      "last_log_time": "1598988260758276000",
+      "first_sha256": "1f21202fc865d3261420bf0ae4db815adf225a84e783d707763c4b32a6732f84",
+      "fields": {
+        "points[0].type": 2,
+        "points[0].points[0].x": 2110.533917740502,
+        "points[0].points[0].y": 1114.2557747442029,
+        "points[0].outline_color.r": 0.27,
+        "points[0].outline_color.g": 0.62,
+        "points[0].outline_color.b": 1.0,
+        "points[0].outline_color.a": 1.0
+      }
+    },
+    {
+      "topic": "/boreas/radar/image",
+      "schema_name": "sensor_msgs/CompressedImage",
+      "schema_encoding": "ros1msg",
+      "message_encoding": "ros1",
+      "count": 79,
+      "indexed_count": 79,
+      "first_log_time": "1598988240919816000",
+      "last_log_time": "1598988260670477000",
+      "first_sha256": "7cd30e664fd888177f0fee4f8b10bddc4903c330bae4a45e2e16b8362a9cb910",
+      "fields": {
+        "header.seq": 0,
+        "header.frame_id": "radar",
+        "format": "png"
+      }
+    },
+    {
+      "topic": "/boreas/radar/points",
+      "schema_name": "sensor_msgs/msg/PointCloud2",
+      "schema_encoding": "ros2msg",
+      "message_encoding": "cdr",
+      "count": 79,
+      "indexed_count": 79,
+      "first_log_time": "1598988240919816000",
+      "last_log_time": "1598988260670477000",
+      "first_sha256": "3813bd882603124c8961d99ed32f155012fb00b3336259bce0684ca8dd7d0aa8",
+      "fields": {
+        "header.frame_id": "radar",
+        "height": 1,
+        "width": 3837,
+        "fields[0].name": "x",
+        "fields[0].offset": 0,
+        "fields[0].datatype": 7,
+        "fields[0].count": 1
+      }
+    },
+    {
+      "topic": "/boreas/tf",
+      "schema_name": "tf2_msgs/msg/TFMessage",
+      "schema_encoding": "ros2idl",
+      "message_encoding": "cdr",
+      "count": 191,
+      "indexed_count": 191,
+      "first_log_time": "1598988240924685000",
+      "last_log_time": "1598988260732284000",
+      "first_sha256": "f7da41d16bc44ed6f42222821326ed2a4d43a4e6de551bed0408b9ca580ed0d6",
+      "fields": {
+        "transforms[0].header.frame_id": "map",
+        "transforms[0].child_frame_id": "lidar",
+        "transforms[0].transform.translation.x": 0.0,
+        "transforms[0].transform.translation.y": 0.0,
+        "transforms[0].transform.translation.z": 0.0,
+        "transforms[0].transform.rotation.x": -0.004571946071621102,
+        "transforms[0].transform.rotation.y": -0.00016135266849822615,
+        "transforms[0].transform.rotation.z": 0.1046321988811746,
+        "transforms[0].transform.rotation.w": 0.9945004646714474
+      }
+    },
+    {
+      "topic": "/boreas/lidar",
+      "schema_name": "point_cloud_interfaces/msg/CompressedPointCloud2",
+      "schema_encoding": "ros2msg",
+      "message_encoding": "cdr",
+      "count": 191,
+      "indexed_count": 191,
+      "first_log_time": "1598988240927685000",
+      "last_log_time": "1598988260735284000",
+      "first_sha256": "695a4bba898e18d63168324d79e9b9c67eecc3d2d9a38d79c73d87bd03b6164f",
+      "fields": {
+        "format": "cloudini"
+      }
+    },
+    {
+      "topic": "/boreas/objects",
+      "schema_name": "foxglove.SceneUpdate",
+      "schema_encoding": "jsonschema",
+      "message_encoding": "json",
+      "count": 191,
+      "indexed_count": 191,
+      "first_log_time": "1598988240924685000",
+      "last_log_time": "1598988260732284000",
+      "first_sha256": "626147058b03db5b91f735089720c1676883ee2a2c3aee3187d4225f8f78c137",
+      "fields": {
+        "deletions[0].type": 1,
+        "deletions[0].id": "",
+        "entities[0].frame_id": "map",
+        "entities[0].id": "1",
+        "entities[0].lifetime.sec": 0,
+        "entities[0].lifetime.nsec": 0,
+        "entities[0].frame_locked": false,
+        "entities[0].metadata[0].key": "class",
+        "entities[0].metadata[0].value": "Pedestrian"
+      }
+    },
+    {
+      "topic": "/boreas/objects/trails",
+      "schema_name": "foxglove.SceneUpdate",
+      "schema_encoding": "jsonschema",
+      "message_encoding": "json",
+      "count": 191,
+      "indexed_count": 191,
+      "first_log_time": "1598988240924685000",
+      "last_log_time": "1598988260732284000",
+      "first_sha256": "ee3e31c15453b7f62367772ac203b0a10576e750118c7446ac6cf31d2d65cd84",
+      "fields": {
+        "deletions[0].type": 1,
+        "deletions[0].id": ""
+      }
+    },
+    {
+      "topic": "/boreas/perception/stats",
+      "schema_name": "",
+      "schema_encoding": "",
+      "message_encoding": "msgpack",
+      "count": 191,
+      "indexed_count": 191,
+      "first_log_time": "1598988240924685000",
+      "last_log_time": "1598988260732284000",
+      "first_sha256": "a2a15d75b19847bfbb9c45e0860735e32bff72e7e4a4577749277880d1f21fca",
+      "fields": {
+        "cars": 28,
+        "pedestrians": 42,
+        "cyclists": 4,
+        "other": 0,
+        "total": 74,
+        "interpolated": true
+      }
+    },
+    {
+      "topic": "/boreas/objects/tracks",
+      "schema_name": "",
+      "schema_encoding": "",
+      "message_encoding": "json",
+      "count": 191,
+      "indexed_count": 191,
+      "first_log_time": "1598988240924685000",
+      "last_log_time": "1598988260732284000",
+      "first_sha256": "a46c3b7af9d6ec1e18246d39376fdceb3de1d338d105f8c3c94baa24ef96e374",
+      "fields": {
+        "tracks[0].id": "16",
+        "tracks[0].track": 16,
+        "tracks[0].class": "Car",
+        "tracks[0].distance_m": 6.7,
+        "tracks[0].bearing_deg": 0.9,
+        "tracks[0].speed_kmh": 0.0
+      }
+    },
+    {
+      "topic": "/boreas/objects/class_counts",
+      "schema_name": "boreas_msgs/msg/ClassCounts",
+      "schema_encoding": "ros2msg",
+      "message_encoding": "cdr",
+      "count": 191,
+      "indexed_count": 191,
+      "first_log_time": "1598988240924685000",
+      "last_log_time": "1598988260732284000",
+      "first_sha256": "117f6a97053fc21a55d6cc4531530f0553504caa9175edbd16bc39a053158106",
+      "fields": {
+        "counts[0]": 28.0
+      }
+    },
+    {
+      "topic": "/boreas/lidar/Δt",
+      "schema_name": "",
+      "schema_encoding": "",
+      "message_encoding": "json",
+      "count": 190,
+      "indexed_count": 171,
+      "first_log_time": "1598988241028332000",
+      "last_log_time": "1598988260732284000",
+      "first_sha256": "7278c2016ea694c0b8a6fb489d8e18be13d482d71577535d58dcf505daaaf4d2",
+      "fields": {
+        "interval_ms": 103.647
+      }
+    },
+    {
+      "topic": "/rosout",
+      "schema_name": "rcl_interfaces/msg/Log",
+      "schema_encoding": "ros2msg",
+      "message_encoding": "cdr",
+      "count": 82,
+      "indexed_count": 82,
+      "first_log_time": "1598988241028332000",
+      "last_log_time": "1598988260732284000",
+      "first_sha256": "ce0126bd4f5b2d5c49a400d4c5cf417e823d2c088a2917ba1901ca47da7e4789",
+      "fields": {
+        "level": 10,
+        "name": "/perception",
+        "msg": "New track 77 (Car) at 57 m",
+        "file": "",
+        "function": "",
+        "line": 0
+      }
+    },
+    {
+      "topic": "/diagnostics",
+      "schema_name": "diagnostic_msgs/DiagnosticArray",
+      "schema_encoding": "ros1msg",
+      "message_encoding": "ros1",
+      "count": 19,
+      "indexed_count": 19,
+      "first_log_time": "1598988241835735000",
+      "last_log_time": "1598988259835735000",
+      "first_sha256": "dd8ff4d9e8f1b5c9610b6acd383a4dd325d7be6d73e1ea1deae7298d0ed39022",
+      "fields": {
+        "header.seq": 0,
+        "header.frame_id": "",
+        "status[0].level": 0,
+        "status[0].name": "lidar: Velodyne Alpha Prime LiDAR",
+        "status[0].message": "OK",
+        "status[0].hardware_id": "lidar",
+        "status[0].values[0].key": "Rate (Hz)",
+        "status[0].values[0].value": "9"
+      }
+    }
+  ]
+}

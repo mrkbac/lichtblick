@@ -76,7 +76,11 @@ import { OpenSiblingPanel, PanelConfig, SaveConfig } from "@lichtblick/suite-bas
 import { shortcutKeyHandlers } from "@lichtblick/suite-base/util/keyboardShortcuts";
 import { getPanelIdForType, getPanelTypeFromId } from "@lichtblick/suite-base/util/layout";
 import { getSiblingGroup } from "@lichtblick/suite-base/util/layoutTree";
-import { findLayoutTree, isTabPanel, TAB_PANEL_TYPE } from "@lichtblick/suite-base/util/tabLayout";
+import {
+  findLayoutTree,
+  isContainerPanel,
+  isTabPanel,
+} from "@lichtblick/suite-base/util/tabLayout";
 
 const MAX_PANEL_LOGS = 1000;
 
@@ -488,8 +492,9 @@ export default function Panel<
     }, []);
     const connectDragHandle = usePanelDragHandle(onDragStart);
 
-    // A Tab panel holds other panels: an overlay over it would cover them and take their drops
-    const showDropOverlay = isDragging && type !== TAB_PANEL_TYPE;
+    // A Tab or Stack panel holds other panels: an overlay over it would cover them and take their
+    // drops.
+    const showDropOverlay = isDragging && !isContainerPanel(childId);
     const panelOverlayProps = useMemo(() => {
       const overlayProps: PanelOverlayProps = {
         open:

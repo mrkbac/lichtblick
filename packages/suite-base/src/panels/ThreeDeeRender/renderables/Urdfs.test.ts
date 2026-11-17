@@ -3,12 +3,14 @@
 
 import * as THREE from "three";
 
+import { ObjectPool } from "@lichtblick/den/collection";
 import * as urdf from "@lichtblick/den/urdf";
 import { UrdfRobot } from "@lichtblick/den/urdf";
 
 import { createRenderable, Urdfs } from "./Urdfs";
 import { LoadedModel } from "../ModelCache";
 import type { Renderer } from "../Renderer";
+import { Transform, TransformTree } from "../transforms";
 import { MESH_FETCH_FAILED, RenderableMeshResource } from "./markers/RenderableMeshResource";
 
 vi.mock("three/examples/jsm/libs/draco/draco_decoder.wasm", () => ({ default: "" }));
@@ -175,8 +177,50 @@ describe("Urdfs createRenderable", () => {
   });
 });
 
+describe("Urdfs mesh opacity", () => {
+  it("fades a copy of the model's own materials and restores them", async () => {
+    // Given a model with its own material
+    const cachedMaterial = new THREE.MeshStandardMaterial({ opacity: 0.8, transparent: true });
+    const model: LoadedModel = new THREE.Group();
+    model.add(new THREE.Mesh(new THREE.BoxGeometry(), cachedMaterial));
+    const load = vi.spyOn(renderer.modelCache, "load").mockResolvedValue(model);
+    const renderable = createRenderable({
+      visual: {
+        geometry: { geometryType: "mesh", filename: "file:///robot.dae" },
+        origin: { xyz: { x: 0, y: 0, z: 0 }, rpy: { x: 0, y: 0, z: 0 } },
+      },
+      robot,
+      id: 0,
+      frameId: "base_link",
+      renderer,
+    }) as RenderableMeshResource;
+    await vi.waitFor(() => {
+      expect(renderable.children).toHaveLength(1);
+    });
+    const mesh = renderable.children[0]!.children[0] as THREE.Mesh;
+    const marker = renderable.userData.marker;
+    // When
+    renderable.update({ ...marker, color: { ...marker.color, a: 0.5 } }, undefined);
+    // Then
+    const faded = mesh.material as THREE.MeshStandardMaterial;
+    expect(faded).not.toBe(cachedMaterial);
+    expect(faded.opacity).toBeCloseTo(0.4);
+    expect(cachedMaterial.opacity).toBe(0.8);
+    // When
+    renderable.update({ ...marker, color: { ...marker.color, a: 1 } }, undefined);
+    // Then
+    expect((mesh.material as THREE.MeshStandardMaterial).opacity).toBeCloseTo(0.8);
+    load.mockRestore();
+    renderable.dispose();
+  });
+});
+
 describe("URDF requests", () => {
-  function createExtension(fetchAsset: Renderer["fetchAsset"]) {
+  function createExtension(
+    fetchAsset: Renderer["fetchAsset"],
+    layer: Record<string, unknown> = {},
+    overrides: Record<string, unknown> = {},
+  ) {
     const addError = vi.fn();
     const removeError = vi.fn();
     const queueAnimationFrame = vi.fn();
@@ -192,6 +236,7 @@ describe("URDF requests", () => {
             sourceType: "url",
             url: "https://example.com/old.urdf",
             label: "URDF",
+            ...layer,
           },
         },
       },
@@ -202,6 +247,7 @@ describe("URDF requests", () => {
       fetchAsset,
       addTransform: vi.fn(),
       transformTree: { getOrCreateFrame: vi.fn() },
+      ...overrides,
     };
     const extension = new Urdfs(context as unknown as Renderer);
     return { extension, addError, removeError, queueAnimationFrame, context };
@@ -415,5 +461,166 @@ describe("URDF requests", () => {
     expect(frame.offsetEulerDegrees).toBeUndefined();
     parse.mockRestore();
     extension.dispose();
+  });
+
+  describe("joint states control mode", () => {
+    const meshVisual = {
+      geometry: { geometryType: "mesh" as const, filename: "model.stl" },
+      origin: { xyz: { x: 1, y: 0, z: 0 }, rpy: { x: 0, y: 0, z: 0 } },
+    };
+    const armRobot: UrdfRobot = {
+      ...robot,
+      links: new Map([
+        ["base", { name: "base", visuals: [], colliders: [] }],
+        ["arm", { name: "arm", visuals: [meshVisual], colliders: [] }],
+      ]),
+      joints: new Map([
+        [
+          "shoulder",
+          {
+            name: "shoulder",
+            jointType: "revolute",
+            origin: { xyz: { x: 1, y: 0, z: 0 }, rpy: { x: 0, y: 0, z: 0 } },
+            parent: "base",
+            child: "arm",
+            axis: { x: 0, y: 0, z: 1 },
+          },
+        ],
+      ]),
+    };
+
+    async function setup(layer: Record<string, unknown>) {
+      const parse = vi.spyOn(urdf, "parseRobot").mockResolvedValue(armRobot);
+      const transformTree = new TransformTree(new ObjectPool(Transform.Empty));
+      transformTree.getOrCreateFrame("base");
+      const config = {
+        topics: {},
+        layers: {
+          robot: {
+            layerId: "foxglove.Urdf",
+            sourceType: "url",
+            url: "https://example.com/arm.urdf",
+            label: "URDF",
+            ...layer,
+          } as Record<string, unknown>,
+        },
+      };
+      const { extension } = createExtension(
+        async (uri) => ({ uri, data: new TextEncoder().encode("URDF") }),
+        layer,
+        {
+          transformTree,
+          config,
+          topics: [{ name: "/arm/joints", schemaName: "sensor_msgs/JointState" }],
+          updateConfig: (update: (draft: typeof config) => void) => {
+            update(config);
+          },
+          removeTransform: vi.fn(),
+          sharedGeometry: { getGeometry: (_key: string, create: () => unknown) => create() },
+          maxLod: 0,
+        },
+      );
+      const parent = extension.renderables.get("robot")!;
+      await vi.waitFor(() => {
+        expect(parent.userData.parts).toHaveLength(1);
+      });
+      parse.mockRestore();
+      return { extension, parent, config };
+    }
+
+    function publishJointState(extension: Urdfs, position: number) {
+      const subscription = extension
+        .getSubscriptions()
+        .find((sub) => sub.type === "schema" && sub.schemaNames.has("sensor_msgs/JointState"))!;
+      subscription.subscription.handler({
+        topic: "/arm/joints",
+        schemaName: "sensor_msgs/JointState",
+        receiveTime: { sec: 1, nsec: 0 },
+        sizeInBytes: 0,
+        message: { name: ["shoulder"], position: [position] },
+      } as never);
+      return subscription;
+    }
+
+    it("places links by forward kinematics from the first joint states topic", async () => {
+      // Given
+      const { extension, parent } = await setup({ controlMode: "jointStates" });
+      // When
+      const subscription = publishJointState(extension, Math.PI / 2);
+      extension.startFrame(0n, "base", "base");
+      // Then the visual, 1 m along the arm, swings 90° around the shoulder at x = 1
+      const part = parent.userData.parts[0]!.object;
+      expect(part.visible).toBe(true);
+      expect(part.position.x).toBeCloseTo(1);
+      expect(part.position.y).toBeCloseTo(1);
+      expect(subscription.subscription.shouldSubscribe?.("/arm/joints")).toBe(true);
+      extension.dispose();
+    });
+
+    it("hides a link and applies its offset", async () => {
+      // Given
+      const { extension, parent } = await setup({
+        controlMode: "jointStates",
+        links: { arm: { position: [0, 0, 2] } },
+      });
+      // When
+      extension.startFrame(0n, "base", "base");
+      // Then
+      const part = parent.userData.parts[0]!.object;
+      expect(part.position.toArray()).toEqual([2, 0, 2]);
+      // When the link is hidden
+      const entry = extension.settingsNodes().find((e) => e.path[1] === "robot")!;
+      entry.node.handler!({
+        action: "update",
+        payload: {
+          path: ["layers", "robot", "links", "arm", "visible"],
+          input: "boolean",
+          value: false,
+        },
+      });
+      extension.startFrame(0n, "base", "base");
+      // Then
+      expect(part.visible).toBe(false);
+      extension.dispose();
+    });
+
+    it("does not subscribe to joint states in transforms mode", async () => {
+      // Given
+      const { extension } = await setup({});
+      // When
+      const subscription = publishJointState(extension, 0);
+      // Then
+      expect(subscription.subscription.shouldSubscribe?.("/arm/joints")).toBe(false);
+      extension.dispose();
+    });
+
+    it("applies opacity, outlines and axes in place", async () => {
+      // Given
+      const { extension, parent } = await setup({});
+      const part = parent.userData.parts[0]!.object as RenderableMeshResource;
+      const entry = extension.settingsNodes().find((e) => e.path[1] === "robot")!;
+      const update = (field: string, value: unknown) => {
+        entry.node.handler!({
+          action: "update",
+          payload: { path: ["layers", "robot", field], input: "number", value } as never,
+        });
+      };
+      // When
+      update("opacity", 0.25);
+      update("showOutlines", false);
+      update("showAxis", true);
+      update("axisScale", 2);
+      // Then the same renderable is kept, faded, without outlines, with one axis per link
+      expect(parent.userData.parts[0]!.object).toBe(part);
+      expect(part.userData.marker.color.a).toBeCloseTo(0.25);
+      expect(part.getSettings()?.showOutlines).toBe(false);
+      expect(parent.userData.axes.map((axis) => axis.frameId)).toEqual(["base", "arm"]);
+      expect(parent.userData.axes[0]!.object.scale.x).toBe(2);
+      // When
+      update("showAxis", false);
+      // Then
+      expect(parent.userData.axes).toHaveLength(0);
+      extension.dispose();
+    });
   });
 });

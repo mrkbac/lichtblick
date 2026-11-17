@@ -361,13 +361,15 @@ type Props = {
   layout?: LayoutNode;
   onChange: (layout: LayoutNode | undefined) => void;
   loadingComponent?: React.JSX.Element;
-  /** The Tab panel this layout is a tab of; the root layout has none. */
+  /** The Tab (or Stack) panel this layout is a tab of; the root layout has none. */
   tabId?: string;
+  /** Which tab of `tabId` this layout is; the shown one when not given. */
+  tabIndex?: number;
 };
 
 /** Synchronize a root or nested Dockview layout and resize each mounted container before paint. */
 export function UnconnectedPanelLayout(props: Readonly<Props>): React.ReactElement {
-  const { layout, onChange, loadingComponent, tabId } = props;
+  const { layout, onChange, loadingComponent, tabId, tabIndex } = props;
   const { addPanel, getCurrentLayoutState } = useCurrentLayoutActions();
   const panelCatalog = usePanelCatalog();
   const outerTabs = useContext(LayoutTabContext);
@@ -435,6 +437,11 @@ export function UnconnectedPanelLayout(props: Readonly<Props>): React.ReactEleme
       // except in a band along the edges of the Tab panel: dropping there splits beside it.
       api.onWillShowOverlay((event) => {
         const target = event.nativeEvent.target;
+        // A panel's own drop target (e.g. the Stack panel's drop bar) takes drops even at its edges.
+        if (target instanceof Element && target.closest("[data-drop-target]") != undefined) {
+          event.preventDefault();
+          return;
+        }
         if (
           target instanceof Element &&
           (target.closest("[data-panel-layout]") !== rootRef.current ||
@@ -494,9 +501,10 @@ export function UnconnectedPanelLayout(props: Readonly<Props>): React.ReactEleme
         // Without a group the panel was dropped on an edge of the whole layout.
         targetPanelId: event.group?.activePanel?.id,
         tabId,
+        tabIndex,
       });
     },
-    [addPanel, tabId],
+    [addPanel, tabId, tabIndex],
   );
 
   const content = (

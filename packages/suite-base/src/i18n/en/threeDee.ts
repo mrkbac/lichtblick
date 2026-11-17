@@ -167,6 +167,9 @@ export const threeDee = {
   fovyHelp: "Vertical field of view, in degrees.",
   nearHelp: "Closest distance drawn. Anything nearer the camera is cut off.",
   farHelp: "Farthest distance drawn. Anything beyond is cut off.",
+  logDepth: "Log depth",
+  logDepthHelp:
+    "Spreads depth precision evenly from near to far, which stops distant surfaces from flickering through each other. Can be slower and cause artifacts on some objects.",
   editableHelp: "Lets you offset each frame's translation and rotation.",
   adjustStepHelp: "Step size of the offset inputs and keyboard adjustments.",
   frameLabelsHelp: "Shows each frame's name next to its axes.",
@@ -235,6 +238,8 @@ export const threeDee = {
   pointShapeHelp: "Shape drawn for each point.",
   pointSizeHelp: "Point size in pixels.",
   cubeSizeHelp: "Edge length of each cube, in meters.",
+  sphereSizeHelp: "Diameter of each sphere, in meters.",
+  cubeOutlineHelp: "Draws dark edges around each cube.",
   decayTimeHelp: "Seconds that older messages stay visible. 0 shows only the latest one.",
   colorModeHelp:
     "How to color: one flat color, a gradient or color map over a field's value, or colors stored in the message.",
@@ -282,6 +287,27 @@ export const threeDee = {
   minColor: "Min color",
   unknownColor: "Unknown color",
 
+  // Grids (cell data)
+  cellGridElevation: "Elevation",
+  cellGridElevationHelp:
+    "Numeric field that lifts each cell along the grid's Z axis, in meters, turning the grid into a height map. Cells without a finite value are hidden. None keeps the grid flat.",
+  cellGridElevationNone: "None",
+  cellGridLighting: "Lighting",
+  cellGridLightingHelp:
+    "Shade the elevated surface by its slope so its shape is visible. Needs an elevation field.",
+  cellGridInterpolation: "Interpolation",
+  cellGridInterpolationHelp:
+    "How colors are sampled between cell centers. Nearest shows each cell as a solid block; Linear blends neighbouring cells smoothly.",
+  cellGridInterpolationNearest: "Nearest",
+  cellGridInterpolationLinear: "Linear",
+  cellGridShowLines: "Show lines",
+  cellGridShowLinesHelp: "Draw the border of every cell.",
+  cellGridLineColor: "Line color",
+  cellGridLineColorHelp: "Color of the cell borders. Lower the alpha to make them subtler.",
+  cellGridDrawBehind: "Draw behind",
+  cellGridDrawBehindHelp:
+    "Draw this grid before everything else and without depth, so other objects always show on top, like a map underlay. The grid is drawn opaque, and with elevation, near and far parts of the surface may overlap incorrectly.",
+
   // Point Extension Utils
   decayTime: "Decay time",
   decayTimeDefaultZeroSeconds: "0 seconds",
@@ -289,7 +315,9 @@ export const threeDee = {
   pointShapeCircle: "Circle",
   pointShapeSquare: "Square",
   pointShapeCube: "Cube",
+  pointShapeSphere: "Sphere",
   cubeSize: "Cube size (m)",
+  sphereSize: "Sphere size (m)",
   pointSize: "Point size",
 
   // Color Mode
