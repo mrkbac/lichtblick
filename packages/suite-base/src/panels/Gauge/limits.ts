@@ -2,6 +2,13 @@
 
 import { GaugeConfig } from "./types";
 
+/** A numeric reading from a number or numeric string; NaN for anything else, including "". */
+export function toNumber(value: unknown): number {
+  return typeof value === "number" || (typeof value === "string" && value.trim() !== "")
+    ? Number(value)
+    : NaN;
+}
+
 const finite = (v: number | undefined): v is number => v != undefined && Number.isFinite(v);
 
 /** Min/max limits, or undefined when a field is cleared or max is not above min. */

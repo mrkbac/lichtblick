@@ -8,7 +8,7 @@ import { useTheme } from "@mui/material";
 import { useId } from "react";
 import { useTranslation } from "react-i18next";
 
-import { validAngles } from "./limits";
+import { toNumber, validAngles } from "./limits";
 import { GaugeConfig } from "./types";
 
 /** Keeps invalid readings and thresholds from appearing as a live, level horizon. */
@@ -35,10 +35,7 @@ export function Inclinometer({
     warning: Infinity,
     critical: Infinity,
   };
-  const numericValue =
-    typeof value === "number" || (typeof value === "string" && value.trim() !== "")
-      ? Number(value)
-      : NaN;
+  const numericValue = toNumber(value);
   const degrees = angleUnit === "radians" ? (numericValue * 180) / Math.PI : numericValue;
   const hasValue = Number.isFinite(degrees) && validRange;
   const angle = hasValue ? Math.max(-range, Math.min(range, degrees)) : 0;

@@ -19,7 +19,7 @@ import { randomUUID } from "@lichtblick/suite-base/util/randomUUID";
 
 import { Inclinometer } from "./Inclinometer";
 import { Slider } from "./Slider";
-import { validLimits } from "./limits";
+import { toNumber, validLimits } from "./limits";
 import { settingsActionReducer } from "./settingsActionReducer";
 import { GaugeConfig, GaugeProps } from "./types";
 import { useSettingsTree } from "./useSettingsTree";
@@ -115,11 +115,7 @@ export function Gauge({ context }: GaugeProps): React.JSX.Element {
     renderDone();
   }, [renderDone]);
 
-  const rawValue =
-    typeof state.latestMatchingQueriedData === "number" ||
-    typeof state.latestMatchingQueriedData === "string"
-      ? Number(state.latestMatchingQueriedData)
-      : NaN;
+  const rawValue = toNumber(state.latestMatchingQueriedData);
 
   // Without valid limits the needle is hidden (scaledValue is NaN).
   const limits = validLimits(config);

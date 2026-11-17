@@ -5,7 +5,7 @@ import { useId } from "react";
 import { useTranslation } from "react-i18next";
 
 import { getColorStops } from "./buildConicGradient";
-import { validLimits } from "./limits";
+import { toNumber, validLimits } from "./limits";
 import { GaugeConfig } from "./types";
 
 const X0 = 20;
@@ -25,10 +25,7 @@ export function Slider({
   const { t } = useTranslation("gauge");
   const gradientId = useId();
   const { minValue, maxValue } = config;
-  const numericValue =
-    typeof value === "number" || (typeof value === "string" && value.trim() !== "")
-      ? Number(value)
-      : NaN;
+  const numericValue = toNumber(value);
   const limits = validLimits(config);
   const fraction = limits ? (numericValue - limits.min) / (limits.max - limits.min) : NaN;
   const hasValue = limits != undefined && Number.isFinite(numericValue);
