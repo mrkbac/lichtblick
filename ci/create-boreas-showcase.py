@@ -22,7 +22,9 @@ reader must find to ci/boreas-showcase.expect.json, which boreasShowcase.test.ts
 Every topic is generated lazily and merged in time order, so memory stays flat.
 
 Needs cmake and a C++ compiler: the LiDAR is Cloudini-compressed with upstream's converter,
-built on first use. The file is not committed.
+built on first use. The file is not committed; it is hosted at SAMPLE_BOREAS_DATA_SOURCE_URL
+(packages/suite-base/src/dataSources/constants.ts) and its layout is
+packages/suite-base/src/dataSources/SampleBoreasLayout.json.
 """
 
 import csv
