@@ -367,9 +367,10 @@ export default class RosbridgePlayer implements Player {
       this.#emitState();
 
       // Regardless of what happens, request topics again in a little bit. A hidden window polls
-      // again as soon as it is shown, instead of every 3 s in the background.
+      // again as soon as it is shown, instead of every 3 s in the background, unless a panel waits
+      // for a topic that isn't advertised yet (it is subscribed as soon as it appears).
       this.#requestTopicsTimeout = setTimeout(() => {
-        if (document.hidden) {
+        if (document.hidden && !this.#waitingForTopic()) {
           this.#requestTopicsOnShow = () => void this.#requestTopics();
           document.addEventListener("visibilitychange", this.#requestTopicsOnShow, { once: true });
         } else {
@@ -459,6 +460,12 @@ export default class RosbridgePlayer implements Player {
   public setListener(listener: (arg0: PlayerState) => Promise<void>): void {
     this.#listener = listener;
     this.#emitState();
+  }
+
+  /** Whether a requested subscription is on a topic the server doesn't advertise yet. */
+  #waitingForTopic(): boolean {
+    const advertised = new Set(this.#providerTopics?.map((topic) => topic.name));
+    return this.#requestedSubscriptions.some((sub) => !advertised.has(sub.topic));
   }
 
   #cancelTopicsPoll(): void {

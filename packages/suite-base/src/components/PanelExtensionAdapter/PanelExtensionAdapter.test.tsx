@@ -1191,6 +1191,9 @@ describe("PanelExtensionAdapter", () => {
       vi.useRealTimers();
     });
     const frames: number[][] = [];
+    // While set, the panel keeps rendering (doesn't call done) until the test calls heldDone.
+    let holdDone = false;
+    let heldDone: (() => void) | undefined;
     const initPanel = vi.fn((context: PanelExtensionContext) => {
       context.watch("currentFrame");
       context.subscribe([{ topic: "x" }]);
@@ -1198,7 +1201,11 @@ describe("PanelExtensionAdapter", () => {
         if (renderState.currentFrame) {
           frames.push(renderState.currentFrame.map((msg) => msg.message as number));
         }
-        done();
+        if (holdDone) {
+          heldDone = done;
+        } else {
+          done();
+        }
       };
     });
     const message = (value: number): MessageEvent =>
@@ -1218,12 +1225,20 @@ describe("PanelExtensionAdapter", () => {
       }
       return fixture;
     };
+    // Stable props: new ones would re-initialize the panel on every render.
+    const config = {};
+    const saveConfig = () => {};
     const Wrapper = ({ visible, value }: { visible: boolean; value: number }) => (
       <ThemeProvider isDark>
         <MockPanelContextProvider>
-          <PanelSetup fixture={fixtureFor(value)}>
+          {/* Frames keep coming while a render is in progress, as after the pipeline's pause timeout. */}
+          <PanelSetup fixture={fixtureFor(value)} pauseFrame={() => () => {}}>
             <PanelVisibleContext.Provider value={visible}>
-              <PanelExtensionAdapter config={{}} saveConfig={() => {}} initPanel={initPanel} />
+              <PanelExtensionAdapter
+                config={config}
+                saveConfig={saveConfig}
+                initPanel={initPanel}
+              />
             </PanelVisibleContext.Provider>
           </PanelSetup>
         </MockPanelContextProvider>
@@ -1247,10 +1262,9 @@ describe("PanelExtensionAdapter", () => {
 
     handle.rerender(<Wrapper visible value={3} />);
     await flush();
-    // Shown: one render right away with everything that arrived while hidden. (The mock pipeline
-    // re-emits the current message on every React render, so values can repeat.)
-    expect(frames.length).toBe(rendersBefore + 1);
-    expect(new Set(frames.at(-1))).toEqual(new Set([1, 2, 3]));
+    // Shown: the first render has everything that arrived while hidden. (The mock pipeline re-emits
+    // the current message on every React render, so more renders with repeated values can follow.)
+    expect(new Set(frames[rendersBefore])).toEqual(new Set([1, 2, 3]));
 
     // Hidden again with a frame queued and no frame after it: delivered when the interval ends.
     handle.rerender(<Wrapper visible={false} value={4} />);
@@ -1262,6 +1276,30 @@ describe("PanelExtensionAdapter", () => {
     });
     expect(frames.length).toBeGreaterThan(rendersHidden);
     expect(frames.at(-1)).toContain(4);
+
+    // A render still in progress: frames queued meanwhile wait for it instead of being dropped.
+    holdDone = true;
+    handle.rerender(<Wrapper visible={false} value={5} />);
+    await act(async () => {
+      vi.advanceTimersByTime(1000);
+      await Promise.resolve();
+    });
+    expect(frames.at(-1)).toContain(5);
+    const rendersBusy = frames.length;
+    handle.rerender(<Wrapper visible={false} value={6} />);
+    await flush();
+    handle.rerender(<Wrapper visible={false} value={7} />);
+    await act(async () => {
+      vi.advanceTimersByTime(1000);
+      await Promise.resolve();
+    });
+    expect(frames.length).toBe(rendersBusy);
+    holdDone = false;
+    await act(async () => {
+      heldDone?.();
+      await Promise.resolve();
+    });
+    expect(frames[rendersBusy]).toEqual(expect.arrayContaining([6, 7]));
   });
 
   it("should call pause frame with new frame and resume after rendering", async () => {
