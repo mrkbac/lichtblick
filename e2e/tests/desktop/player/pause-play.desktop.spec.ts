@@ -10,120 +10,58 @@ const MCAP_FILENAME = "example.mcap";
 
 /**
  * GIVEN a .mcap file is loaded
- * And Play button is shown
- * WHEN play button is clicked
- * THEN the play icon should change
- * And playback time should advance
+ * WHEN playback is started and then stopped with the given control
+ * THEN the play icon changes each time
+ * And playback time advances while playing and holds still once paused
+ *
+ * Start and stop share one test per control: each test launches the app and loads the file,
+ * which takes most of its time.
  */
+for (const { control, start, stop } of [
+  {
+    control: "Play button",
+    start: async (player: PlayerControls) => {
+      await player.play();
+    },
+    stop: async (player: PlayerControls) => {
+      await player.pause();
+    },
+  },
+  {
+    control: "Spacebar key",
+    start: async (player: PlayerControls) => {
+      await player.togglePlayback();
+    },
+    stop: async (player: PlayerControls) => {
+      await player.togglePlayback();
+    },
+  },
+]) {
+  test(`should start and stop playing when using the ${control}`, { tag: "@smoke" }, async ({
+    mainWindow,
+  }) => {
+    const player = new PlayerControls(mainWindow);
 
-test("should start playing when clicking on Play button", { tag: "@smoke" }, async ({
-  mainWindow,
-}) => {
-  const player = new PlayerControls(mainWindow);
+    // Given
+    await loadFiles({ mainWindow, filenames: MCAP_FILENAME });
+    await changeToEpochFormat(mainWindow);
+    const startTime = await player.getTimestampValue();
 
-  // Given
-  await loadFiles({ mainWindow, filenames: MCAP_FILENAME });
-  await changeToEpochFormat(mainWindow);
+    // When playback starts
+    await expect(player.getPlayButton()).toHaveAttribute("title", "Play");
+    await start(player);
 
-  const startTime = await player.getTimestampValue();
+    // Then the time advances
+    await expect(player.getPlayButton()).toHaveAttribute("title", "Pause");
+    expect(await player.getTimestampValue()).toBeGreaterThan(startTime);
 
-  // When
-  await expect(player.getPlayButton()).toHaveAttribute("title", "Play");
-  await player.play();
+    // When playback stops
+    await stop(player);
 
-  // Then
-  await expect(player.getPlayButton()).toHaveAttribute("title", "Pause");
-  const elapsedTimestamp = await player.getTimestampValue();
-  expect(elapsedTimestamp).toBeGreaterThan(startTime);
-});
-
-/**
- * GIVEN a .mcap file is loaded
- * WHEN spacebar key is pressed
- * THEN the play icon should change
- * And playback time should advance
- */
-
-test("should start playing when clicking on Spacebar key", { tag: "@smoke" }, async ({
-  mainWindow,
-}) => {
-  const player = new PlayerControls(mainWindow);
-
-  // Given
-  await loadFiles({ mainWindow, filenames: MCAP_FILENAME });
-  await changeToEpochFormat(mainWindow);
-  const startTime = await player.getTimestampValue();
-
-  // When
-  await expect(player.getPlayButton()).toHaveAttribute("title", "Play");
-  await player.togglePlayback();
-
-  // Then
-  await expect(player.getPlayButton()).toHaveAttribute("title", "Pause");
-  const elapsedTimestamp = await player.getTimestampValue();
-  expect(elapsedTimestamp).toBeGreaterThan(startTime);
-});
-
-/**
- * GIVEN a .mcap file is loaded
- * And player is playing
- * WHEN pause button is pressed
- * THEN the pause icon should change
- * And playback time should stop
- */
-
-test("should stop playing when clicking on Play button", { tag: "@smoke" }, async ({
-  mainWindow,
-}) => {
-  const player = new PlayerControls(mainWindow);
-
-  // Given
-  await loadFiles({ mainWindow, filenames: MCAP_FILENAME });
-  await changeToEpochFormat(mainWindow);
-
-  await player.play();
-
-  // When
-  await expect(player.getPlayButton()).toHaveAttribute("title", "Pause");
-  await player.pause();
-
-  // Then
-  await expect(player.getPlayButton()).toHaveAttribute("title", "Play");
-  const startTime = await player.getTimestampValue();
-
-  await mainWindow.waitForTimeout(1000);
-  const elapsedTimestamp = await player.getTimestampValue();
-  expect(elapsedTimestamp).toEqual(startTime);
-});
-
-/**
- * GIVEN a .mcap file is loaded
- * And player is playing
- * WHEN Spacebar key is pressed
- * THEN the pause icon should change
- * And playback time should stop
- */
-
-test("should stop playing when clicking on Spacebar key", { tag: "@smoke" }, async ({
-  mainWindow,
-}) => {
-  const player = new PlayerControls(mainWindow);
-
-  // Given
-  await loadFiles({ mainWindow, filenames: MCAP_FILENAME });
-  await changeToEpochFormat(mainWindow);
-
-  await player.togglePlayback();
-
-  // When
-  await expect(player.getPlayButton()).toHaveAttribute("title", "Pause");
-  await player.togglePlayback();
-
-  // Then
-  await expect(player.getPlayButton()).toHaveAttribute("title", "Play");
-  const startTime = await player.getTimestampValue();
-
-  await mainWindow.waitForTimeout(1000);
-  const elapsedTimestamp = await player.getTimestampValue();
-  expect(elapsedTimestamp).toEqual(startTime);
-});
+    // Then the time holds still
+    await expect(player.getPlayButton()).toHaveAttribute("title", "Play");
+    const pausedTime = await player.getTimestampValue();
+    await mainWindow.waitForTimeout(1000);
+    expect(await player.getTimestampValue()).toEqual(pausedTime);
+  });
+}
