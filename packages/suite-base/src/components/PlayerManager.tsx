@@ -89,11 +89,14 @@ function readLastFile(): LastFileSource | undefined {
     if (
       typeof value === "object" &&
       value != undefined &&
-      typeof (value as LastFileSource).sourceId === "string" &&
-      typeof (value as LastFileSource).title === "string" &&
-      ["string", "undefined"].includes(typeof (value as LastFileSource).recentId)
+      "sourceId" in value &&
+      typeof value.sourceId === "string" &&
+      "title" in value &&
+      typeof value.title === "string"
     ) {
-      return value as LastFileSource;
+      const recentId =
+        "recentId" in value && typeof value.recentId === "string" ? value.recentId : undefined;
+      return { sourceId: value.sourceId, title: value.title, recentId };
     }
   } catch (err: unknown) {
     log.warn("Unable to read last file source", err);
