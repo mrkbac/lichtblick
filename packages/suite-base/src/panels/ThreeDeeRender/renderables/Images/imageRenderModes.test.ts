@@ -10,7 +10,6 @@ import {
   decodeDepthImage,
   defaultDepthScale,
   planeProjectionMaxDistance,
-  unprojectDepth,
 } from "./imageRenderModes";
 
 // fx = fy = 100, cx = 1.5, cy = 0.5: a 4x2 image whose principal point is its center
@@ -152,20 +151,5 @@ describe("depth unprojection", () => {
     expect(rays[0]).toBeCloseTo(-0.01);
     expect(rays[1]).toBeCloseTo(0);
     expect(rays[3]).toBeCloseTo(0.01);
-  });
-
-  it("places Z-axis depths on the plane z = depth", () => {
-    const point = unprojectDepth({ x: 0.3, y: -0.4, z: 1 }, 2, "z");
-    expect(point).toEqual({ x: 0.6, y: -0.8, z: 2 });
-  });
-
-  it("places Euclidean depths at that distance from the camera", () => {
-    const point = unprojectDepth({ x: 0.3, y: -0.4, z: 1 }, 2, "euclidean")!;
-    expect(Math.hypot(point.x, point.y, point.z)).toBeCloseTo(2);
-    expect(point.x / point.z).toBeCloseTo(0.3);
-  });
-
-  it.each([0, -1, NaN, Infinity])("drops depth %s", (depth) => {
-    expect(unprojectDepth({ x: 0, y: 0, z: 1 }, depth, "z")).toBeUndefined();
   });
 });

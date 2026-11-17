@@ -57,7 +57,7 @@ import {
 import { BaseSettings } from "../settings";
 import { imageProjectionSettingsNode } from "../settingsNodes/topics";
 import { topicIsConvertibleToSchema } from "../topicIsConvertibleToSchema";
-import { makePose, AnyFrameId, Pose } from "../transforms";
+import { makePose, AnyFrameId } from "../transforms";
 
 const log = Logger.getLogger(__filename);
 void log;
@@ -79,9 +79,7 @@ const IDENTITY_POSE = makePose();
 const tempPose = makePose();
 const tempPlaneMatrix = new THREE.Matrix4();
 const tempCamToPlane = new THREE.Matrix4();
-const tempPosition = new THREE.Vector3();
 const tempQuaternion = new THREE.Quaternion();
-const UNIT_SCALE = new THREE.Vector3(1, 1, 1);
 
 export class Images extends SceneExtension<ImageRenderable> {
   public static extensionId = "foxglove.Images";
@@ -165,7 +163,7 @@ export class Images extends SceneExtension<ImageRenderable> {
     fixedFrameId: AnyFrameId,
   ): void {
     const planeFrameId = renderable.userData.settings.projectionFrameId ?? fixedFrameId;
-    const planePose: Pose | undefined = this.renderer.transformTree.apply(
+    const planePose = this.renderer.transformTree.apply(
       tempPose,
       IDENTITY_POSE,
       renderFrameId,
@@ -186,11 +184,9 @@ export class Images extends SceneExtension<ImageRenderable> {
     }
     this.renderer.settings.errors.removeFromTopic(topic, PROJECTION_FRAME_ERR);
     const { position: p, orientation: q } = planePose;
-    tempPlaneMatrix.compose(
-      tempPosition.set(p.x, p.y, p.z),
-      tempQuaternion.set(q.x, q.y, q.z, q.w),
-      UNIT_SCALE,
-    );
+    tempPlaneMatrix
+      .makeRotationFromQuaternion(tempQuaternion.set(q.x, q.y, q.z, q.w))
+      .setPosition(p.x, p.y, p.z);
     renderable.updateMatrix();
     tempCamToPlane.copy(tempPlaneMatrix.invert()).multiply(renderable.matrix);
     renderable.setPlaneProjection(tempCamToPlane);

@@ -8,11 +8,7 @@ import type { RawImage } from "@foxglove/schemas";
 
 import type { ICameraModel } from "@lichtblick/suite";
 
-import {
-  DepthColorSettings,
-  DepthDistanceType,
-  MIN_PROJECTION_DISTANCE,
-} from "./imageRenderModeSettings";
+import { DepthColorSettings, MIN_PROJECTION_DISTANCE } from "./imageRenderModeSettings";
 import type { Image as RosImage } from "../../ros";
 import { getColorConverter } from "../colorMode";
 
@@ -82,8 +78,6 @@ export function decodeDepthImage(
   }
 }
 
-const isValidDepth = (depth: number) => depth > 0 && depth < Infinity;
-
 /**
  * Colors each depth with the point cloud color modes, writing linear RGBA bytes. Without a value
  * range in `settings`, the range of the valid depths is used.
@@ -98,7 +92,7 @@ export function colorizeDepth(
     let min = Infinity;
     let max = -Infinity;
     for (const value of depth) {
-      if (isValidDepth(value)) {
+      if (value > 0 && value < Infinity) {
         min = Math.min(min, value);
         max = Math.max(max, value);
       }
@@ -144,18 +138,4 @@ export function computeDepthRays(
       out[i + 2] = 1;
     }
   }
-}
-
-/** CPU twin of the depth cloud vertex shader; used by tests. */
-export function unprojectDepth(
-  ray: { x: number; y: number; z: number },
-  depth: number,
-  distanceType: DepthDistanceType,
-): { x: number; y: number; z: number } | undefined {
-  if (!isValidDepth(depth)) {
-    return undefined;
-  }
-  const scale =
-    distanceType === "euclidean" ? depth / Math.hypot(ray.x, ray.y, ray.z) : depth / ray.z;
-  return { x: ray.x * scale, y: ray.y * scale, z: ray.z * scale };
 }
