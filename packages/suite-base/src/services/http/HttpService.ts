@@ -24,15 +24,13 @@ import {
 export class HttpService {
   private readonly apiVersion = "1.0";
   private readonly baseURL?: string;
-  private readonly defaultOptions: RequestInit;
+  private readonly defaultHeaders: Record<string, string>;
 
   public constructor() {
     this.baseURL = APP_CONFIG.apiUrl;
-    this.defaultOptions = {
-      headers: {
-        "Content-Type": "application/json",
-        "Api-Version": this.apiVersion,
-      },
+    this.defaultHeaders = {
+      "Content-Type": "application/json",
+      "Api-Version": this.apiVersion,
     };
   }
 
@@ -49,12 +47,12 @@ export class HttpService {
       credentials: "same-origin", // Include cookies in requests
       headers: shouldUseDefaultHeaders
         ? {
-            ...(this.defaultOptions.headers as Record<string, string>),
-            ...(fetchOptions.headers as Record<string, string>),
+            ...this.defaultHeaders,
+            ...fetchOptions.headers,
           }
         : {
             "Api-Version": this.apiVersion,
-            ...(fetchOptions.headers as Record<string, string>),
+            ...fetchOptions.headers,
           },
     };
 
@@ -162,14 +160,14 @@ export class HttpService {
       // For FormData, we need to remove Content-Type entirely
       // so the browser can set the proper multipart boundary
       requestOptions.headers = {
-        ...(options.headers as Record<string, string>),
+        ...options.headers,
       };
       delete requestOptions.headers["Content-Type"];
     } else if (data != undefined) {
       body = JSON.stringify(data);
       requestOptions.headers = {
         "Content-Type": "application/json",
-        ...(options.headers as Record<string, string>),
+        ...options.headers,
       };
     }
 
