@@ -139,8 +139,10 @@ export default function CurrentLayoutProvider({
   );
 
   const history = useRef(new LayoutHistory());
-  /** The layout `history` belongs to, set before it loads that layout's saved steps. */
+  /** The layout `history` belongs to; unset while another layout loads. */
   const historyLayoutId = useRef<LayoutID | undefined>(undefined);
+  /** A revert of the layout being loaded, applied once its history is ready. */
+  const revertedWhileLoading = useRef<{ id: LayoutID; data: LayoutData } | undefined>(undefined);
   useEffect(
     () =>
       history.current.subscribe(() => {
@@ -161,6 +163,9 @@ export default function CurrentLayoutProvider({
         return;
       }
       try {
+        historyLayoutId.current = undefined;
+        // Typed so TS doesn't keep it narrowed to undefined across the awaits below.
+        revertedWhileLoading.current = undefined as typeof revertedWhileLoading.current;
         setLayoutState({ selectedLayout: { id, loading: true, data: undefined } });
         const layout = await layoutManager.getLayout(id);
         const layoutVersion = layout?.baseline.data.version;
@@ -183,10 +188,14 @@ export default function CurrentLayoutProvider({
           if (!isMounted()) {
             return;
           }
+          const reverted = revertedWhileLoading.current;
+          revertedWhileLoading.current = undefined;
           historyLayoutId.current = layout.id;
           const data = history.current.load(
             saved,
-            migratePanelsState(layout.working?.data ?? layout.baseline.data),
+            reverted?.id === layout.id
+              ? reverted.data
+              : migratePanelsState(layout.working?.data ?? layout.baseline.data),
           );
           setLayoutState({
             selectedLayout: { loading: false, id: layout.id, data, name: layout.name },
@@ -262,11 +271,13 @@ export default function CurrentLayoutProvider({
         updatedLayout.id === layoutStateRef.current.selectedLayout?.id
       ) {
         const data = migratePanelsState(updatedLayout.working?.data ?? updatedLayout.baseline.data);
-        // A revert is a step of the layout's history, so it can be undone. While the layout is
-        // still loading, the history belongs to the previous layout: show the revert, don't record it.
-        if (historyLayoutId.current === updatedLayout.id) {
-          history.current.sync(data);
+        if (historyLayoutId.current !== updatedLayout.id) {
+          // Still loading: the load shows it once the layout's own history is ready.
+          revertedWhileLoading.current = { id: updatedLayout.id, data };
+          return;
         }
+        // A revert is a step of the layout's history, so it can be undone.
+        history.current.sync(data);
         setLayoutState({
           selectedLayout: { loading: false, id: updatedLayout.id, data, name: updatedLayout.name },
         });

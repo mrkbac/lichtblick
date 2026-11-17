@@ -402,6 +402,64 @@ describe("CurrentLayoutProvider", () => {
     expect(result.current.layoutState.selectedLayout?.data?.globalVariables).toEqual({ step: 1 });
   });
 
+  it("keeps a revert that happens while the layout's history is loading", async () => {
+    let finishLoad: (value: undefined) => void = () => {};
+    vi.mocked(loadLayoutHistory).mockReturnValueOnce(
+      new Promise((resolve) => {
+        finishLoad = resolve;
+      }),
+    );
+    mockLayoutManager.getLayouts.mockImplementation(async () => [
+      {
+        id: "example",
+        name: "Test layout",
+        data: { data: TEST_LAYOUT },
+        permission: "CREATOR_WRITE",
+      },
+    ]);
+    mockLayoutManager.getLayout.mockResolvedValue({
+      id: "example",
+      name: "Test layout",
+      baseline: { data: TEST_LAYOUT, updatedAt: new Date(10).toISOString() },
+    });
+    mockUserProfile.getUserProfile.mockResolvedValue({ currentLayoutId: "example" });
+    const { result, all } = renderTest({ mockLayoutManager, mockUserProfile });
+    await waitFor(() => {
+      expect(loadLayoutHistory).toHaveBeenCalledWith("example");
+    });
+
+    const reverted = { ...TEST_LAYOUT, globalVariables: { reverted: true } };
+    act(() => {
+      mockLayoutManager.on.mock.calls
+        .filter(([name]) => name === "change")
+        .forEach(([, listener]) => {
+          (listener as (event: unknown) => void)({
+            type: "revert",
+            updatedLayout: { id: "example", name: "Test layout", baseline: { data: reverted } },
+          });
+        });
+    });
+    // Not editable before the layout's own history is ready.
+    expect(result.current.layoutState.selectedLayout?.loading).toBe(true);
+
+    await act(async () => {
+      finishLoad(undefined);
+    });
+    await waitFor(() => {
+      expect(result.current.layoutState.selectedLayout?.data?.globalVariables).toEqual({
+        reverted: true,
+      });
+    });
+    expect(
+      all.some(
+        (item) =>
+          !(item instanceof Error) &&
+          item.layoutState.selectedLayout?.loading === false &&
+          item.layoutState.selectedLayout.data?.globalVariables.reverted !== true,
+      ),
+    ).toBe(false);
+  });
+
   it("saves the history under the selected layout and stops when that layout is deleted", async () => {
     mockLayoutManager.getLayouts.mockImplementation(async () => [
       {
