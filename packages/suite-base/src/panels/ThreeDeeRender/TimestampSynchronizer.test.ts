@@ -31,6 +31,12 @@ describe("syncTimestamp", () => {
     expect(syncTimestamp({ ...msg("a", 0, 9), message: { timestamp: { sec: 3, nsec: 1 } } })).toBe(
       3n * S + 1n,
     );
+    expect(
+      syncTimestamp({
+        ...msg("a", 0, 9),
+        message: { entities: [{ timestamp: { sec: 4, nsec: 0 } }] },
+      }),
+    ).toBe(4n * S);
     expect(syncTimestamp({ ...msg("a", 0, 9), message: { data: 1 } })).toBe(9n * S);
   });
 });

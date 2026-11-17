@@ -9,11 +9,17 @@ import { getTimestampForMessage } from "@lichtblick/suite-base/util/time";
 /** Unique timestamps buffered per topic while waiting for a match (~10 s at 25 Hz). */
 export const MAX_SYNC_STAMPS_PER_TOPIC = 250;
 
-/** Header stamp (ROS), `timestamp` field (foxglove schemas), else the log time. */
+type Stamped = { timestamp?: Partial<Time> };
+
+/**
+ * Header stamp (ROS), `timestamp` field or first entity's `timestamp` (foxglove schemas), else the
+ * log time.
+ */
 export function syncTimestamp(event: MessageEvent): bigint {
-  const timestamp = (event.message as { timestamp?: Partial<Time> } | undefined)?.timestamp;
+  const message = event.message as (Stamped & { entities?: Stamped[] }) | undefined;
+  const timestamp = message?.timestamp ?? message?.entities?.[0]?.timestamp;
   const stamp =
-    getTimestampForMessage(event.message) ??
+    getTimestampForMessage(message) ??
     (typeof timestamp?.sec === "number" && typeof timestamp.nsec === "number"
       ? (timestamp as Time)
       : undefined) ??
