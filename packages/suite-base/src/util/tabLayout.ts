@@ -14,6 +14,7 @@ import {
   isLayoutNode,
   mapGroups,
   normalizeLayout,
+  removePanels,
   setActivePanel,
 } from "@lichtblick/suite-base/util/layoutTree";
 
@@ -213,6 +214,33 @@ export function mapLayoutTrees<T extends TreeData>(
     (result, { location }) => setLayoutTree(result, location, fn(getLayoutTree(result, location))),
     data,
   );
+}
+
+/**
+ * Remove panels from every layout tree. A tab whose last panel left goes with it; tabs that were
+ * already empty stay, since they show the panel picker until filled or closed.
+ */
+export function removePanelsFromTrees<T extends TreeData>(data: T, panelIds: readonly string[]): T {
+  const removed = mapLayoutTrees(data, (tree) => removePanels(tree, panelIds));
+  const configs: Record<string, PanelConfig> = {};
+  for (const [id, config] of Object.entries(removed.configById)) {
+    if (!isTabPanel(id)) {
+      continue;
+    }
+    const before = getTabs(data.configById[id]);
+    const all = getTabs(config);
+    const tabs = all.filter(
+      (tab, i) => getPanelIds(tab.layout).length > 0 || getPanelIds(before[i]?.layout).length === 0,
+    );
+    if (tabs.length !== all.length) {
+      const shown = all[getActiveTabIndex(config)];
+      const active = Math.max(0, shown ? tabs.indexOf(shown) : 0);
+      configs[id] = { ...config, tabs, activeTabIdx: active };
+    }
+  }
+  return _.isEmpty(configs)
+    ? removed
+    : { ...removed, configById: { ...removed.configById, ...configs } };
 }
 
 function normalizeTabsOnce<T extends TreeData>(data: T): T {

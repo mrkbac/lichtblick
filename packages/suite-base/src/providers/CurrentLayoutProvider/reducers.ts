@@ -29,12 +29,7 @@ import {
 } from "@lichtblick/suite-base/context/CurrentLayoutContext/actions";
 import { PanelConfig, PlaybackConfig } from "@lichtblick/suite-base/types/panels";
 import { getPanelIdForType, getPanelTypeFromId } from "@lichtblick/suite-base/util/layout";
-import {
-  getPanelIds,
-  insertPanel,
-  removePanels,
-  replacePanel,
-} from "@lichtblick/suite-base/util/layoutTree";
+import { getPanelIds, insertPanel, replacePanel } from "@lichtblick/suite-base/util/layoutTree";
 import {
   findActiveTabTree,
   findLayoutTree,
@@ -44,6 +39,7 @@ import {
   isTabPanel,
   mapLayoutTrees,
   normalizeTabs,
+  removePanelsFromTrees,
   setLayoutTree,
   showPanel,
 } from "@lichtblick/suite-base/util/tabLayout";
@@ -225,7 +221,7 @@ function addPanel(
   if (location.ancestors.includes(id) || location.tabPanelId === id) {
     return panelsState;
   }
-  const removed = mapLayoutTrees(withConfig, (tree) => removePanels(tree, [id]));
+  const removed = removePanelsFromTrees(withConfig, [id]);
   const tree = insertPanel(
     getLayoutTree(removed, location),
     id,
@@ -325,7 +321,7 @@ export default function (panelsState: Readonly<LayoutData>, action: PanelsAction
         },
       };
     case "CLOSE_PANEL":
-      return finish(mapLayoutTrees(panelsState, (tree) => removePanels(tree, [action.payload.id])));
+      return finish(removePanelsFromTrees(panelsState, [action.payload.id]));
 
     case "SPLIT_PANEL":
       return splitPanel(panelsState, action.payload);
