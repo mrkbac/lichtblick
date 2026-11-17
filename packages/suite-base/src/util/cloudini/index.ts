@@ -7,6 +7,7 @@
 /* eslint-disable no-underscore-dangle -- Emscripten prefixes the module's exports with "_" */
 
 import { InstalledMessageConverter } from "@lichtblick/suite-base/types/messageConverters";
+import { preloadDecoder } from "@lichtblick/suite-base/util/preloadDecoder";
 import { toError } from "@lichtblick/suite-base/util/toError";
 
 import type { CloudiniModule } from "./wasm/cloudini_decoder";
@@ -46,32 +47,17 @@ export async function loadCloudini(): Promise<void> {
   await loading;
 }
 
-const PRELOAD_TIMEOUT_MS = 5000;
 const MAX_WASM_SIZE = 0xffff_ffff;
 
-/** Loads the decoder if any topic needs it. Never rejects (the converter reports errors) and waits
- * at most PRELOAD_TIMEOUT_MS, or until `signal` aborts, so a stalled download cannot hold up
- * playback or closing. The load itself keeps going for later messages. */
+/** Loads the decoder if any topic needs it, waiting at most a few seconds (see preloadDecoder). */
 export async function preloadCloudini(
   topics: readonly { schemaName?: string }[],
   signal?: AbortSignal,
 ): Promise<void> {
-  // an already-aborted signal never fires "abort" (e.g. closed while the source initialized)
-  if (signal?.aborted === true || !topics.some((topic) => topic.schemaName === CLOUDINI_SCHEMA)) {
-    return;
+  const needed = topics.some((topic) => topic.schemaName === CLOUDINI_SCHEMA);
+  if (needed) {
+    await preloadDecoder(loadCloudini, signal);
   }
-  // a hand-rolled race: every contender settles the same promise, and the timer is cleared
-  await new Promise<void>((resolve) => {
-    const timer = setTimeout(resolve, PRELOAD_TIMEOUT_MS);
-    const done = () => {
-      clearTimeout(timer);
-      resolve();
-    };
-    signal?.addEventListener("abort", done, { once: true });
-    void loadCloudini()
-      .catch(() => {})
-      .finally(done);
-  });
 }
 
 /** Decodes a Cloudini payload into `decodedSize` bytes of PointCloud2 data. Requires loadCloudini(). */

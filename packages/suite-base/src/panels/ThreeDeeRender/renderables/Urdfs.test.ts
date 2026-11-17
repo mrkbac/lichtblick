@@ -7,7 +7,7 @@ import { ObjectPool } from "@lichtblick/den/collection";
 import * as urdf from "@lichtblick/den/urdf";
 import { UrdfRobot } from "@lichtblick/den/urdf";
 
-import { createRenderable, Urdfs } from "./Urdfs";
+import { createRenderable, jointPositions, Urdfs } from "./Urdfs";
 import { LoadedModel } from "../ModelCache";
 import type { Renderer } from "../Renderer";
 import { Transform, TransformTree } from "../transforms";
@@ -622,5 +622,22 @@ describe("URDF requests", () => {
       expect(parent.userData.axes).toHaveLength(0);
       extension.dispose();
     });
+  });
+});
+
+describe("jointPositions", () => {
+  it("reads sensor_msgs/JointState, foxglove.JointStates and foxglove.JointState", () => {
+    expect(jointPositions({ name: ["a", "b"], position: [1, 2] })).toEqual({
+      names: ["a", "b"],
+      positions: [1, 2],
+    });
+    expect(
+      jointPositions({ joints: [{ name: "a", position: 1 }, { name: "b" }, undefined] }),
+    ).toEqual({ names: ["a", "b", undefined], positions: [1, undefined, undefined] });
+    expect(jointPositions({ name: "a", position: 0.5 })).toEqual({
+      names: ["a"],
+      positions: [0.5],
+    });
+    expect(jointPositions({})).toEqual({ names: [], positions: [] });
   });
 });

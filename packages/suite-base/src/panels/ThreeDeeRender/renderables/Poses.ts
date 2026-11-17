@@ -6,7 +6,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { toNanoSec } from "@foxglove/rostime";
-import { PoseInFrame } from "@foxglove/schemas";
+import { Odometry, Point3InFrame, PoseInFrame } from "@foxglove/schemas";
 import * as _ from "lodash-es";
 
 import { SettingsTreeAction } from "@lichtblick/suite";
@@ -25,12 +25,17 @@ import {
 } from "../SceneExtension";
 import { SettingsTreeEntry } from "../SettingsManager";
 import { makeRgba, stringToRgba } from "../color";
-import { POSE_IN_FRAME_DATATYPES } from "../foxglove";
+import {
+  ODOMETRY_DATATYPES as FOXGLOVE_ODOMETRY_DATATYPES,
+  POINT3_IN_FRAME_DATATYPES,
+  POSE_IN_FRAME_DATATYPES,
+} from "../foxglove";
 import {
   normalizeHeader,
   normalizeMatrix6,
   normalizePose,
   normalizeTime,
+  normalizeVector3,
 } from "../normalizeMessages";
 import {
   Marker,
@@ -43,6 +48,10 @@ import {
   POSE_STAMPED_DATATYPES,
   PoseWithCovariance,
   ColorRGBA,
+  Header,
+  ODOMETRY_DATATYPES as ROS_ODOMETRY_DATATYPES,
+  Point,
+  POINT_STAMPED_DATATYPES,
 } from "../ros";
 import { BaseSettings } from "../settings";
 import { POSE_DEFAULTS, poseSettingsNode } from "../settingsNodes/topics";
@@ -60,7 +69,15 @@ export type LayerSettingsPose = BaseSettings & {
   color: string;
   showCovariance: boolean;
   covarianceColor: string;
+  /** Sphere diameter for point topics, in meters. */
+  pointSize: number;
 };
+
+/** Point topics (no orientation), drawn as a sphere. */
+const POINT_DATATYPES = new Set([...POINT3_IN_FRAME_DATATYPES, ...POINT_STAMPED_DATATYPES]);
+
+type RosOdometry = { header: Header; child_frame_id: string; pose: PoseWithCovariance };
+type PointStamped = { header: Header; point: Point };
 
 const DEFAULT_SETTINGS = POSE_DEFAULTS;
 
@@ -69,9 +86,12 @@ export type PoseUserData = BaseUserData & {
   topic: string;
   poseMessage: PoseStamped | PoseWithCovarianceStamped;
   originalMessage: Record<string, RosValue>;
+  isPoint: boolean;
   axis?: Axis;
   arrow?: RenderableArrow;
   sphere?: RenderableSphere;
+  /** The sphere drawn for a point topic. */
+  point?: RenderableSphere;
 };
 
 export class PoseRenderable extends Renderable<PoseUserData> {
@@ -79,6 +99,7 @@ export class PoseRenderable extends Renderable<PoseUserData> {
     this.userData.axis?.dispose();
     this.userData.arrow?.dispose();
     this.userData.sphere?.dispose();
+    this.userData.point?.dispose();
     super.dispose();
   }
 
@@ -113,6 +134,29 @@ export class Poses extends SceneExtension<PoseRenderable> {
           filterQueue: onlyLastByTopicMessage,
         },
       },
+      {
+        type: "schema",
+        schemaNames: FOXGLOVE_ODOMETRY_DATATYPES,
+        subscription: {
+          handler: this.#handleFoxgloveOdometry,
+          filterQueue: onlyLastByTopicMessage,
+        },
+      },
+      {
+        type: "schema",
+        schemaNames: ROS_ODOMETRY_DATATYPES,
+        subscription: { handler: this.#handleRosOdometry, filterQueue: onlyLastByTopicMessage },
+      },
+      {
+        type: "schema",
+        schemaNames: POINT3_IN_FRAME_DATATYPES,
+        subscription: { handler: this.#handlePoint3InFrame, filterQueue: onlyLastByTopicMessage },
+      },
+      {
+        type: "schema",
+        schemaNames: POINT_STAMPED_DATATYPES,
+        subscription: { handler: this.#handlePointStamped, filterQueue: onlyLastByTopicMessage },
+      },
     ];
   }
 
@@ -126,14 +170,21 @@ export class Poses extends SceneExtension<PoseRenderable> {
       const isPoseWithCovarianceStamped = isPoseStamped
         ? false
         : topicIsConvertibleToSchema(topic, POSE_WITH_COVARIANCE_STAMPED_DATATYPES);
-      if (!(isPoseStamped || isPoseWithCovarianceStamped || isPoseInFrame)) {
+      const isOdometry =
+        topicIsConvertibleToSchema(topic, FOXGLOVE_ODOMETRY_DATATYPES) ||
+        topicIsConvertibleToSchema(topic, ROS_ODOMETRY_DATATYPES);
+      const isPose = isPoseStamped || isPoseWithCovarianceStamped || isPoseInFrame || isOdometry;
+      if (!isPose && !topicIsConvertibleToSchema(topic, POINT_DATATYPES)) {
         continue;
       }
       const config = (configTopics[topic.name] ?? {}) as Partial<LayerSettingsPose>;
       entries.push({
         path: ["topics", topic.name],
         node: {
-          ...poseSettingsNode(topic, config, { hasCovariance: isPoseWithCovarianceStamped }),
+          ...poseSettingsNode(topic, config, {
+            hasCovariance: isPoseWithCovarianceStamped || isOdometry,
+            isPoint: !isPose,
+          }),
           handler,
         },
       });
@@ -184,11 +235,45 @@ export class Poses extends SceneExtension<PoseRenderable> {
     this.#addPose(messageEvent.topic, poseMessage, messageEvent.message, receiveTime);
   };
 
+  #handleFoxgloveOdometry = (messageEvent: PartialMessageEvent<Odometry>): void => {
+    const poseMessage = normalizeFoxgloveOdometry(messageEvent.message);
+    const receiveTime = toNanoSec(messageEvent.receiveTime);
+    this.#addPose(messageEvent.topic, poseMessage, messageEvent.message, receiveTime);
+  };
+
+  #handleRosOdometry = (messageEvent: PartialMessageEvent<RosOdometry>): void => {
+    const poseMessage = normalizePoseWithCovarianceStamped(messageEvent.message);
+    const receiveTime = toNanoSec(messageEvent.receiveTime);
+    this.#addPose(messageEvent.topic, poseMessage, messageEvent.message, receiveTime);
+  };
+
+  #handlePoint3InFrame = (messageEvent: PartialMessageEvent<Point3InFrame>): void => {
+    const { timestamp, frame_id, point } = messageEvent.message;
+    const poseMessage = pointPose(
+      { stamp: normalizeTime(timestamp), frame_id: frame_id ?? "" },
+      point,
+    );
+    const receiveTime = toNanoSec(messageEvent.receiveTime);
+    this.#addPose(messageEvent.topic, poseMessage, messageEvent.message, receiveTime, {
+      isPoint: true,
+    });
+  };
+
+  #handlePointStamped = (messageEvent: PartialMessageEvent<PointStamped>): void => {
+    const { header, point } = messageEvent.message;
+    const poseMessage = pointPose(normalizeHeader(header), point);
+    const receiveTime = toNanoSec(messageEvent.receiveTime);
+    this.#addPose(messageEvent.topic, poseMessage, messageEvent.message, receiveTime, {
+      isPoint: true,
+    });
+  };
+
   #addPose(
     topic: string,
     poseMessage: PoseStamped | PoseWithCovarianceStamped,
     originalMessage: Record<string, RosValue>,
     receiveTime: bigint,
+    { isPoint = false }: { isPoint?: boolean } = {},
   ): void {
     let renderable = this.renderables.get(topic);
     if (!renderable) {
@@ -206,6 +291,7 @@ export class Poses extends SceneExtension<PoseRenderable> {
         topic,
         poseMessage,
         originalMessage,
+        isPoint,
         axis: undefined,
         arrow: undefined,
         sphere: undefined,
@@ -252,6 +338,17 @@ export class Poses extends SceneExtension<PoseRenderable> {
       (!renderable.userData.arrow && !renderable.userData.axis);
 
     renderable.userData.settings = settings;
+
+    if (renderable.userData.isPoint) {
+      const marker = createPointMarker(settings);
+      if (!renderable.userData.point) {
+        renderable.userData.point = new RenderableSphere(topic, marker, undefined, this.renderer);
+        renderable.add(renderable.userData.point);
+      }
+      renderable.userData.point.update(marker, undefined);
+      renderable.userData.pose = (poseMessage as PoseStamped).pose;
+      return;
+    }
 
     if (axisOrArrowSettingsChanged) {
       if (renderable.userData.settings.type === "axis") {
@@ -338,6 +435,14 @@ export function createArrowMarker(arrowScale: [number, number, number], color: C
   };
 }
 
+function createPointMarker(settings: LayerSettingsPose): Marker {
+  const size = settings.pointSize;
+  return {
+    ...createArrowMarker([size, size, size], stringToRgba(makeRgba(), settings.color)),
+    type: MarkerType.SPHERE,
+  };
+}
+
 function createSphereMarker(
   poseMessage: PoseWithCovarianceStamped,
   settings: LayerSettingsPose,
@@ -384,6 +489,24 @@ function normalizePoseInFrameToPoseStamped(pose: PartialMessage<PoseInFrame>): P
   return {
     header: { stamp: normalizeTime(pose.timestamp), frame_id: pose.frame_id ?? "" },
     pose: normalizePose(pose.pose),
+  };
+}
+
+/** A point as a pose with identity orientation, so it is placed like any other pose. */
+function pointPose(header: Header, point: PartialMessage<Point> | undefined): PoseStamped {
+  return {
+    header,
+    pose: { position: normalizeVector3(point), orientation: { x: 0, y: 0, z: 0, w: 1 } },
+  };
+}
+
+function normalizeFoxgloveOdometry(message: PartialMessage<Odometry>): PoseWithCovarianceStamped {
+  return {
+    header: { stamp: normalizeTime(message.timestamp), frame_id: message.frame_id ?? "" },
+    pose: normalizePoseWithCovariance({
+      pose: message.pose,
+      covariance: message.pose_covariance as PoseWithCovariance["covariance"] | undefined,
+    }),
   };
 }
 

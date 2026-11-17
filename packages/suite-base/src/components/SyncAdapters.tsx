@@ -6,6 +6,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { CurrentLayoutLocalStorageSyncAdapter } from "@lichtblick/suite-base/components/CurrentLayoutLocalStorageSyncAdapter";
+import { TopicEventsSync } from "@lichtblick/suite-base/components/TopicEventsSync";
 import { URLStateSyncAdapter } from "@lichtblick/suite-base/components/URLStateSyncAdapter";
 
 export function SyncAdapters(): React.JSX.Element {
@@ -13,6 +14,7 @@ export function SyncAdapters(): React.JSX.Element {
     <>
       <URLStateSyncAdapter />
       <CurrentLayoutLocalStorageSyncAdapter />
+      <TopicEventsSync />
     </>
   );
 }

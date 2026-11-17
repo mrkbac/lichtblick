@@ -188,6 +188,7 @@ export const POSE_DEFAULTS: LayerSettingsPose = {
   color: rgbaToCssString(PRIMARY),
   showCovariance: true,
   covarianceColor: rgbaToCssString({ r: 198 / 255, g: 107 / 255, b: 1, a: 0.25 }),
+  pointSize: 0.2,
 };
 
 function poseTypeField(
@@ -202,8 +203,34 @@ function poseTypeField(
 export function poseSettingsNode(
   topic: Pick<Topic, "name">,
   config: Partial<LayerSettingsPose>,
-  { hasCovariance }: { hasCovariance: boolean },
+  { hasCovariance, isPoint = false }: { hasCovariance: boolean; isPoint?: boolean },
 ): DocumentedNode {
+  if (isPoint) {
+    // A point has no orientation: draw it as a sphere instead of axes or an arrow.
+    return {
+      label: topic.name,
+      icon: "Points",
+      fields: {
+        pointSize: {
+          label: t("threeDee:size"),
+          help: t("threeDee:pointMarkerSizeHelp"),
+          input: "number",
+          step: 0.05,
+          min: 0,
+          precision: PRECISION_DISTANCE,
+          value: config.pointSize ?? POSE_DEFAULTS.pointSize,
+        },
+        color: {
+          label: t("threeDee:color"),
+          help: t("threeDee:pointMarkerColorHelp"),
+          input: "rgba",
+          value: config.color ?? POSE_DEFAULTS.color,
+        },
+      },
+      visible: config.visible ?? POSE_DEFAULTS.visible,
+      order: topic.name.toLocaleLowerCase(),
+    };
+  }
   const type = config.type ?? POSE_DEFAULTS.type;
   const fields = poseTypeField(
     type,

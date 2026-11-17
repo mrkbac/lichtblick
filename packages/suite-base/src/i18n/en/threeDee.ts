@@ -198,6 +198,8 @@ export const threeDee = {
   arrowScaleHelp: "Arrow length (X) and thickness (Y, Z), in meters.",
   arrowColorHelp: "Color of the arrow.",
   covarianceHelp: "Shows the position covariance as an ellipsoid.",
+  pointMarkerSizeHelp: "Diameter of the sphere drawn at the point, in meters.",
+  pointMarkerColorHelp: "Color of the sphere drawn at the point.",
   covarianceColorHelp: "Color of the covariance ellipsoid.",
   pathLineWidthHelp: "Width of the line through the poses, in meters.",
   poseGradientHelp: "Colors from the first pose to the last.",

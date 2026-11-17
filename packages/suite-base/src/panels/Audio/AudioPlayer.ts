@@ -1,6 +1,15 @@
 // SPDX-License-Identifier: MPL-2.0
 
-import { AudioChunk, decodePcm, isPcm, splitFrames, WEBCODECS_CODECS } from "./decode";
+import {
+  AudioChunk,
+  decodePcm,
+  G726Format,
+  isG726,
+  isPcm,
+  splitFrames,
+  WEBCODECS_CODECS,
+} from "./decode";
+import { decodeG726, G726Bits, G726Decoder } from "./g726";
 import { LATENCY_SEC, MAX_DRIFT_SEC, planChunk } from "./schedule";
 
 const FADE_SEC = 0.01;
@@ -30,6 +39,8 @@ export class AudioPlayer {
   /** Partial MP3/AAC frame left over from the previous message, and when it should play. */
   #pending = new Uint8Array(0);
   #pendingStart = 0;
+  /** G.726 predictor state carries over between messages until a cut or a format change. */
+  #g726: { format: G726Format; decoder: G726Decoder } | undefined;
 
   public constructor() {
     this.#ctx = new AudioContext({ latencyHint: "playback" });
@@ -76,6 +87,7 @@ export class AudioPlayer {
     this.#decoder = undefined;
     this.#fallbackQueue = Promise.resolve();
     this.#pending = new Uint8Array(0);
+    this.#g726 = undefined;
   }
 
   #fadeOut(): void {
@@ -109,6 +121,16 @@ export class AudioPlayer {
     const { format } = chunk;
     if (isPcm(format)) {
       this.#play(decodePcm(chunk.data, format, chunk.channels), chunk.sampleRate, idealStart);
+      return;
+    }
+    if (isG726(format)) {
+      // "g726-32" → 32 kbit/s at 8 kHz → 4 bits per codeword
+      const bits = (Number(format.slice(-2)) / 8) as G726Bits;
+      if (this.#g726?.format !== format) {
+        this.#g726 = { format, decoder: new G726Decoder(bits) };
+      }
+      const packing = format.startsWith("aal2-") ? "aal2" : "rfc3551";
+      this.#play([decodeG726(chunk.data, this.#g726.decoder, bits, packing)], 8000, idealStart);
       return;
     }
     const codec = WEBCODECS_CODECS[format];

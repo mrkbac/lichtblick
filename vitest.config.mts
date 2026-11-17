@@ -72,6 +72,9 @@ const project = (name: string, test: InlineConfig) =>
       environment: "node",
       // jest's jsdom URL; vitest defaults to http://localhost:3000
       environmentOptions: { jsdom: { url: "http://localhost/" } },
+      // .wasm files from packages (e.g. three's Draco decoder) go through testAssets() too, rather
+      // than to Node, which would load them as WebAssembly ES modules
+      server: { deps: { inline: [/\.wasm$/] } },
       ...test,
       setupFiles: [testGlobals, ...[test.setupFiles ?? []].flat()],
     },

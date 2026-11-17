@@ -39,6 +39,25 @@ describe("extractAudioChunk", () => {
     );
   });
 
+  it("takes sample rate and channels of foxglove.CompressedAudio from the stream", () => {
+    const stereoOpus = { format: "opus", data: Uint8Array.of(0xfc, 0xff, 0xfe) };
+    expect(extractAudioChunk(stereoOpus, overrides)).toMatchObject({
+      format: "opus",
+      sampleRate: 48000,
+      channels: 2,
+    });
+    // ADTS header: 44.1 kHz (index 4), channel configuration 2
+    const adts = Uint8Array.of(0xff, 0xf1, 0x50, 0x80, 0x02, 0x1f, 0xfc);
+    expect(extractAudioChunk({ format: "mp4a.40.2", data: adts }, overrides)).toMatchObject({
+      format: "aac",
+      sampleRate: 44100,
+      channels: 2,
+    });
+    expect(
+      extractAudioChunk({ format: "aal2-g726-24", data: new Uint8Array(3) }, overrides),
+    ).toMatchObject({ format: "aal2-g726-24", sampleRate: 8000, channels: 1 });
+  });
+
   it("lets the setting override the message's format", () => {
     expect(
       extractAudioChunk(

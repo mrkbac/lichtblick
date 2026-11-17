@@ -183,7 +183,7 @@ export type UrdfRobotSettings = Pick<
 
 /**
  * The joint states topic a robot follows in joint states mode: the configured one, else the first
- * `sensor_msgs/JointState` topic. `jointStateTopics`: the available ones.
+ * joint state topic. `jointStateTopics`: the available ones.
  */
 export function resolveJointStatesTopic(
   config: Partial<UrdfRobotSettings>,
@@ -215,7 +215,7 @@ function urdfRobotFields(
       controlMode === "jointStates"
         ? {
             label: "Joint states",
-            help: "Topic with joint positions (sensor_msgs/JointState). Empty uses the first one available. Joints it does not list use their manual value, or zero.",
+            help: "Topic with joint positions (sensor_msgs/JointState or foxglove.JointStates). Empty uses the first one available. Joints it does not list use their manual value, or zero.",
             input: "autocomplete",
             items: [...jointStateTopics],
             value: resolveJointStatesTopic(config, jointStateTopics) ?? "",

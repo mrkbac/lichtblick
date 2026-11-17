@@ -6,6 +6,10 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { toNanoSec } from "@foxglove/rostime";
+import type {
+  JointState as FoxgloveJointState,
+  JointStates as FoxgloveJointStates,
+} from "@foxglove/schemas";
 import { vec3 } from "gl-matrix";
 import i18next from "i18next";
 import * as _ from "lodash-es";
@@ -39,8 +43,14 @@ import { missingTransformMessage, MISSING_TRANSFORM } from "./transforms";
 import { forwardKinematics, LinkPose } from "./urdfKinematics";
 import type { AnyRendererSubscription } from "../IRenderer";
 import type { Renderer } from "../Renderer";
-import { PartialMessageEvent, SceneExtension, onlyLastByTopicMessage } from "../SceneExtension";
+import {
+  PartialMessage,
+  PartialMessageEvent,
+  SceneExtension,
+  onlyLastByTopicMessage,
+} from "../SceneExtension";
 import { SettingsTreeEntry } from "../SettingsManager";
+import { JOINT_STATES_DATATYPES } from "../foxglove";
 import {
   ColorRGBA,
   JointState,
@@ -139,6 +149,35 @@ const APPEARANCE_FIELDS = new Set([
 ]);
 
 const DEFAULT_CUSTOM_SETTINGS = CUSTOM_URDF_DEFAULTS;
+
+/** ROS `sensor_msgs/JointState`, `foxglove.JointStates`, and `foxglove.JointState` (one joint). */
+const ALL_JOINT_STATE_DATATYPES = new Set([...JOINTSTATE_DATATYPES, ...JOINT_STATES_DATATYPES]);
+
+/** Any joint state message: ROS (parallel arrays), `foxglove.JointStates` or `foxglove.JointState`. */
+type AnyJointState = Omit<PartialMessage<JointState>, "name" | "position"> &
+  PartialMessage<FoxgloveJointStates> & { name?: unknown; position?: unknown };
+
+/** Joint names and positions from any joint state message, as parallel arrays. */
+export function jointPositions(msg: AnyJointState): {
+  names: readonly (string | undefined)[];
+  positions: readonly (number | undefined)[];
+} {
+  if (msg.joints != undefined) {
+    return {
+      names: msg.joints.map((joint) => joint?.name),
+      positions: msg.joints.map((joint) => joint?.position),
+    };
+  }
+  if (typeof msg.name === "string") {
+    // foxglove.JointState: a single joint
+    const joint = msg as PartialMessage<FoxgloveJointState>;
+    return { names: [joint.name], positions: [joint.position] };
+  }
+  return {
+    names: Array.isArray(msg.name) ? (msg.name as (string | undefined)[]) : [],
+    positions: Array.isArray(msg.position) ? (msg.position as (number | undefined)[]) : [],
+  };
+}
 
 const tempVec3a = new THREE.Vector3();
 const tempVec3b = new THREE.Vector3();
@@ -278,7 +317,7 @@ export class Urdfs extends SceneExtension<UrdfRenderable> {
 
       {
         type: "schema",
-        schemaNames: JOINTSTATE_DATATYPES,
+        schemaNames: ALL_JOINT_STATE_DATATYPES,
         subscription: {
           shouldSubscribe: this.#jointStatesShouldSubscribe,
           handler: this.#handleJointState,
@@ -517,7 +556,7 @@ export class Urdfs extends SceneExtension<UrdfRenderable> {
     const topics = this.renderer.topics;
     if (this.#jointStateTopicsCache.topics !== topics) {
       const names = filterMap(topics ?? [], (topic) =>
-        JOINTSTATE_DATATYPES.has(topic.schemaName) ? topic.name : undefined,
+        ALL_JOINT_STATE_DATATYPES.has(topic.schemaName) ? topic.name : undefined,
       );
       this.#jointStateTopicsCache = { topics, names };
     }
@@ -769,10 +808,10 @@ export class Urdfs extends SceneExtension<UrdfRenderable> {
     );
   };
 
-  #handleJointState = (messageEvent: PartialMessageEvent<JointState>): void => {
-    const msg = messageEvent.message;
-    const names = msg.name ?? [];
-    const positions = msg.position ?? [];
+  #handleJointState = (
+    messageEvent: PartialMessageEvent<JointState | FoxgloveJointStates | FoxgloveJointState>,
+  ): void => {
+    const { names, positions } = jointPositions(messageEvent.message as AnyJointState);
     const timestamp = toNanoSec(messageEvent.receiveTime);
     let jointStates = this.#jointStates.get(messageEvent.topic);
     if (!jointStates) {
@@ -781,9 +820,9 @@ export class Urdfs extends SceneExtension<UrdfRenderable> {
     }
 
     for (let i = 0; i < names.length; i++) {
-      const name = names[i]!;
+      const name = names[i];
       const position = positions[i];
-      if (position == undefined || !Number.isFinite(position)) {
+      if (name == undefined || position == undefined || !Number.isFinite(position)) {
         continue;
       }
 
