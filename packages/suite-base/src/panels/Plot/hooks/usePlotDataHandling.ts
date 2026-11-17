@@ -60,11 +60,10 @@ const usePlotDataHandling = (
     const labels: Record<string, string> = {};
     const colors: Record<string, string> = {};
 
-    for (let idx = 0; idx < config.paths.length; ++idx) {
-      const item = config.paths[idx]!;
+    config.paths.forEach((item, idx) => {
       labels[idx] = item.label ?? item.value;
       colors[idx] = getLineColor(item.color, idx);
-    }
+    });
 
     return {
       colorsByDatasetIndex: colors,

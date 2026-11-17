@@ -108,7 +108,7 @@ export function alignTicksTo(
 }
 
 export class ChartRenderer {
-  #chartInstance: ChartType;
+  #chartInstance: ChartType & Pick<ZoomableChart, "$zoom">;
   #fakeNodeEvents = new EventEmitter();
   #fakeDocumentEvents = new EventEmitter();
   readonly #titleColor: string;
@@ -210,7 +210,8 @@ export class ChartRenderer {
     });
 
     ZoomPlugin.start = origZoomStart;
-    this.#chartInstance = chartInstance;
+    // The zoom plugin's start hook (run by the constructor) adds `$zoom`; chart.js types don't know it.
+    this.#chartInstance = chartInstance as ChartType & Pick<ZoomableChart, "$zoom">;
   }
 
   public update(action: Immutable<UpdateAction>): Bounds | undefined {
@@ -677,7 +678,7 @@ export class ChartRenderer {
         });
         break;
       case "panstart":
-        (this.#chartInstance as ZoomableChart | undefined)?.$zoom.panStartHandler({
+        this.#chartInstance.$zoom.panStartHandler({
           center: event.center,
           deltaX: event.deltaX,
           deltaY: event.deltaY,
@@ -689,10 +690,10 @@ export class ChartRenderer {
         });
         break;
       case "panmove":
-        (this.#chartInstance as ZoomableChart | undefined)?.$zoom.panHandler(event);
+        this.#chartInstance.$zoom.panHandler(event);
         break;
       case "panend":
-        (this.#chartInstance as ZoomableChart | undefined)?.$zoom.panEndHandler();
+        this.#chartInstance.$zoom.panEndHandler();
         break;
     }
   }
@@ -703,7 +704,7 @@ export class ChartRenderer {
    */
   #withWheelZoomMode(event: Immutable<WheelInteractionEvent>, zoom: () => void): void {
     // eslint-disable-next-line no-underscore-dangle -- the zoom plugin's resolved options
-    const zoomOptions = (this.#chartInstance as ZoomableChart | undefined)?.$zoom._options?.zoom;
+    const zoomOptions = this.#chartInstance.$zoom._options?.zoom;
     if (!zoomOptions) {
       zoom();
       return;
