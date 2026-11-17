@@ -61,6 +61,9 @@ export const HIDDEN_TAB_STYLE = {
   "& *": { visibility: "hidden !important" as "hidden" },
 } as const;
 
+/** Corner radius of the connected tabs, as VS Code's (medium radius plus the 1 px border). */
+const TAB_RADIUS = 7;
+
 const useStyles = makeStyles()((theme) => ({
   root: {
     display: "flex",
@@ -77,16 +80,20 @@ const useStyles = makeStyles()((theme) => ({
     overflowX: "auto",
     scrollbarWidth: "none",
   },
-  // Editor-style tabs: the strip sits on the darker background; the active tab takes the
-  // toolbar color of the panels below, with a thin accent line on top.
+  // Connected tabs as in VS Code's modern UI: the strip has a thin line along its bottom, and
+  // the active tab is a rounded cap in the toolbar color of the panels below whose border flows
+  // into that line through two curved shoulders.
   toolbar: {
     backgroundColor: "transparent",
     paddingBlock: 0,
+    boxShadow: `inset 0 -1px 0 ${theme.palette.divider}`,
   },
   tab: {
+    position: "relative",
     display: "flex",
     alignItems: "center",
     gap: theme.spacing(0.5),
+    marginTop: theme.spacing(0.5),
     padding: theme.spacing(0, 1.5),
     flex: "none",
     // Room for the title beside the close button, so clicking a short tab doesn't close it.
@@ -94,21 +101,45 @@ const useStyles = makeStyles()((theme) => ({
     maxWidth: 200,
     fontSize: theme.typography.body2.fontSize,
     color: theme.palette.text.secondary,
-    borderTop: "1px solid transparent",
-    borderRight: `1px solid ${theme.palette.divider}`,
+    border: "1px solid transparent",
+    borderBottom: 0,
+    borderRadius: `${TAB_RADIUS}px ${TAB_RADIUS}px 0 0`,
     whiteSpace: "nowrap",
     cursor: "pointer",
     userSelect: "none",
 
-    "&:hover": { color: theme.palette.text.primary, backgroundColor: theme.palette.action.hover },
+    "&:hover": { color: theme.palette.text.primary },
+    "&:hover:not(.active)": { backgroundColor: theme.palette.action.hover },
     "&:hover .close, &:focus-within .close": { visibility: "visible" },
   },
   active: {
+    zIndex: 1,
     color: theme.palette.text.primary,
     backgroundColor: theme.palette.background.paper,
-    borderTopColor: theme.palette.primary.main,
+    borderColor: theme.palette.divider,
 
-    "&:hover": { backgroundColor: theme.palette.background.paper },
+    // The shoulders: a quarter curve on each side from the tab's border into the strip's line.
+    "&::before, &::after": {
+      content: '""',
+      position: "absolute",
+      bottom: 0,
+      width: TAB_RADIUS,
+      height: TAB_RADIUS,
+      borderBottom: `1px solid ${theme.palette.divider}`,
+      pointerEvents: "none",
+    },
+    "&::before": {
+      right: "100%",
+      borderRight: `1px solid ${theme.palette.divider}`,
+      borderBottomRightRadius: TAB_RADIUS,
+      boxShadow: `${TAB_RADIUS / 2}px ${TAB_RADIUS / 2}px 0 ${TAB_RADIUS / 2}px ${theme.palette.background.paper}`,
+    },
+    "&::after": {
+      left: "100%",
+      borderLeft: `1px solid ${theme.palette.divider}`,
+      borderBottomLeftRadius: TAB_RADIUS,
+      boxShadow: `-${TAB_RADIUS / 2}px ${TAB_RADIUS / 2}px 0 ${TAB_RADIUS / 2}px ${theme.palette.background.paper}`,
+    },
   },
   dropOver: {
     backgroundColor: theme.palette.action.hover,
@@ -185,7 +216,11 @@ function TabButton(props: TabButtonProps): React.JSX.Element {
       tabIndex={0}
       title={t("doubleClickToRename")}
       data-testid="tab-panel-tab"
-      className={cx(classes.tab, { [classes.active]: isActive, [classes.dropOver]: isOver })}
+      className={cx(classes.tab, {
+        [classes.active]: isActive,
+        active: isActive,
+        [classes.dropOver]: isOver,
+      })}
       onClick={onSelect}
       onKeyDown={(event) => {
         // Keys on the close button are the button's own.
