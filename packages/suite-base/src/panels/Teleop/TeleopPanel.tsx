@@ -22,7 +22,11 @@ import {
   buildSettingsTreeTeleop,
 } from "@lichtblick/suite-base/panels/Teleop/buildSettingsTree";
 import { TELEOP_BUTTONS } from "@lichtblick/suite-base/panels/Teleop/buttons";
-import { BUTTON_LABELS } from "@lichtblick/suite-base/panels/Teleop/constants";
+import {
+  BUTTON_LABELS,
+  DEFAULT_GAMEPAD_DEADZONE,
+  DEFAULT_PUBLISH_RATE,
+} from "@lichtblick/suite-base/panels/Teleop/constants";
 import { TELEOP_SHORTCUTS } from "@lichtblick/suite-base/panels/Teleop/shortcuts";
 import {
   actionToVector,
@@ -203,7 +207,8 @@ function TeleopPanel(props: Readonly<TeleopPanelProps>): React.JSX.Element {
     context.setDefaultPanelTitle(currentTopic ? `Teleop ${currentTopic}` : undefined);
   }, [context, currentTopic]);
 
-  const canPublish = context.publish != undefined && config.publishRate > 0;
+  const publishRate = config.publishRate ?? DEFAULT_PUBLISH_RATE;
+  const canPublish = context.publish != undefined && publishRate > 0;
   const hasTopic = Boolean(currentTopic);
   const enabled = canPublish && hasTopic;
 
@@ -386,11 +391,11 @@ function TeleopPanel(props: Readonly<TeleopPanelProps>): React.JSX.Element {
       if (activeRef.current) {
         publishCommand(commandRef.current);
       }
-    }, 1000 / config.publishRate);
+    }, 1000 / publishRate);
     return () => {
       clearInterval(intervalHandle);
     };
-  }, [enabled, config.publishRate, publishCommand]);
+  }, [enabled, publishRate, publishCommand]);
 
   // key-up and pointer-up events get lost when the window loses focus, so stop instead of driving
   // on with a stuck input
@@ -426,7 +431,10 @@ function TeleopPanel(props: Readonly<TeleopPanelProps>): React.JSX.Element {
       setGamepadName(pad?.id);
       setGamepadNonStandard(pad != undefined && pad.mapping !== "standard");
 
-      const next = pad && document.hasFocus() ? readGamepad(pad, cfg.gamepadDeadzone) : NEUTRAL_PAD;
+      const next =
+        pad && document.hasFocus()
+          ? readGamepad(pad, cfg.gamepadDeadzone ?? DEFAULT_GAMEPAD_DEADZONE)
+          : NEUTRAL_PAD;
       const prev = sources.current.gamepad;
       if (!padsEqual(next, prev)) {
         sources.current.gamepad = next;

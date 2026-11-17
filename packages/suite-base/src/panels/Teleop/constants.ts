@@ -114,26 +114,32 @@ export const DEFAULT_TOPICS: Record<OutputType, string> = {
   Joy: "/joy",
 };
 
+export const DEFAULT_PUBLISH_RATE = 20;
+export const DEFAULT_GAMEPAD_DEADZONE = 0.1;
+
+/** Also the max used while a field's max is cleared in the settings */
+export const DEFAULT_MAPPING: Readonly<Record<TwistField, { input: AxisInput; max: number }>> = {
+  "linear-x": { input: "leftY", max: 1 },
+  "linear-y": { input: "none", max: 1 },
+  "linear-z": { input: "none", max: 1 },
+  "angular-x": { input: "none", max: 1 },
+  "angular-y": { input: "none", max: 1 },
+  "angular-z": { input: "leftX", max: 1.5 },
+};
+
 export const DEFAULT_CONFIG: TeleopConfig = {
   topic: DEFAULT_TOPICS.Twist,
   messageType: "Twist",
   frameId: "",
-  publishRate: 20,
+  publishRate: DEFAULT_PUBLISH_RATE,
   stopOnRelease: true,
   mode: "joystick",
   keyboard: true,
   gamepad: true,
   gamepadId: "",
-  gamepadDeadzone: 0.1,
+  gamepadDeadzone: DEFAULT_GAMEPAD_DEADZONE,
   speedScale: 0.5,
-  mapping: {
-    "linear-x": { input: "leftY", max: 1 },
-    "linear-y": { input: "none", max: 1 },
-    "linear-z": { input: "none", max: 1 },
-    "angular-x": { input: "none", max: 1 },
-    "angular-y": { input: "none", max: 1 },
-    "angular-z": { input: "leftX", max: 1.5 },
-  },
+  mapping: DEFAULT_MAPPING,
   enableButton: "none",
   turboButton: "rb",
   stopButton: "b",

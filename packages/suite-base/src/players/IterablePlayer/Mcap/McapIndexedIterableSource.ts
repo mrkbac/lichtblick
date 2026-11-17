@@ -149,10 +149,11 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
     const reader = this.#reader;
     const start = args.startingAt ?? 0n;
     const end = args.endingAt ?? BigInt("0xffffffffffffffff");
-    const channels = args.topics
+    const topics = args.topics;
+    const channels = topics
       ? new Set(
           [...reader.channelsById.values()]
-            .filter((channel) => args.topics!.includes(channel.topic))
+            .filter((channel) => topics.includes(channel.topic))
             .map((channel) => channel.id),
         )
       : undefined;

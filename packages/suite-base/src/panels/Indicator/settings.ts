@@ -17,6 +17,7 @@ import type {
 import { moveItem, moveUpDownActions } from "@lichtblick/suite-base/panels/utils";
 
 import { NotificationPermissionState, describeNotificationPermission, hasAlert } from "./alerts";
+import { DEFAULT_FALLBACK_COLOR } from "./constants";
 import { IndicatorConfig, IndicatorRule } from "./types";
 
 function ruleToString(rule: IndicatorRule): string {
@@ -241,6 +242,7 @@ export function buildSettingsTree(
               label: "Color",
               input: "rgb",
               value: fallbackColor,
+              placeholder: DEFAULT_FALLBACK_COLOR,
               help: "Color to use when no other rules match",
             },
             fallbackLabel: {

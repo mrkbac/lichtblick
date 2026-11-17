@@ -103,7 +103,9 @@ export default class McapByteReader {
         result.push([readKey(this), readValue(this)]);
       }
     } catch (err) {
-      throw new Error(`Error reading key-value pairs: ${(err as Error).message}`);
+      throw new Error(
+        `Error reading key-value pairs: ${err instanceof Error ? err.message : String(err)}`,
+      );
     }
     if (this.offset !== endOffset) {
       throw new Error(
@@ -141,7 +143,7 @@ export default class McapByteReader {
         result.set(key, value);
       }
     } catch (err) {
-      throw new Error(`Error reading map: ${(err as Error).message}`);
+      throw new Error(`Error reading map: ${err instanceof Error ? err.message : String(err)}`);
     }
     if (this.offset !== endOffset) {
       throw new Error(

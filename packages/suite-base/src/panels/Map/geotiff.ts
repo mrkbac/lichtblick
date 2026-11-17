@@ -38,23 +38,25 @@ function toRgba(
   noData: number | null,
 ): Uint8ClampedArray<ArrayBuffer> {
   const rgba = new Uint8ClampedArray(width * height * 4);
-  if (bands.length >= 3) {
-    const [r, g, b, a] = bands;
+  const [r, g, b, a] = bands;
+  if (r && g && b) {
     for (let i = 0; i < width * height; i++) {
-      rgba[i * 4] = r![i]!;
-      rgba[i * 4 + 1] = g![i]!;
-      rgba[i * 4 + 2] = b![i]!;
+      rgba[i * 4] = r[i]!;
+      rgba[i * 4 + 1] = g[i]!;
+      rgba[i * 4 + 2] = b[i]!;
       const transparent =
-        noData != undefined && r![i] === noData && g![i] === noData && b![i] === noData;
+        noData != undefined && r[i] === noData && g[i] === noData && b[i] === noData;
       rgba[i * 4 + 3] = transparent ? 0 : a ? a[i]! : 255;
     }
     return rgba;
   }
   // Single band (elevation, intensity, ...): stretch min..max to grayscale.
-  const band = bands[0]!;
+  if (!r) {
+    return rgba;
+  }
   let min = Infinity;
   let max = -Infinity;
-  for (const v of band) {
+  for (const v of r) {
     if (v !== noData && isFinite(v)) {
       min = Math.min(min, v);
       max = Math.max(max, v);
@@ -62,7 +64,7 @@ function toRgba(
   }
   const scale = max > min ? 255 / (max - min) : 0;
   for (let i = 0; i < width * height; i++) {
-    const v = band[i]!;
+    const v = r[i]!;
     const valid = v !== noData && isFinite(v);
     const gray = valid ? (v - min) * scale : 0;
     rgba[i * 4] = rgba[i * 4 + 1] = rgba[i * 4 + 2] = gray;

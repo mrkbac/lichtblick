@@ -24,7 +24,10 @@ import { PanelIconButton } from "@lichtblick/suite-base/components/PanelButton";
 import Stack from "@lichtblick/suite-base/components/Stack";
 import { GlobalVariables } from "@lichtblick/suite-base/hooks/useGlobalVariables";
 import { useStyles } from "@lichtblick/suite-base/panels/Indicator/Indicator.style";
-import { DEFAULT_CONFIG } from "@lichtblick/suite-base/panels/Indicator/constants";
+import {
+  DEFAULT_CONFIG,
+  DEFAULT_FALLBACK_COLOR,
+} from "@lichtblick/suite-base/panels/Indicator/constants";
 import { stateReducer } from "@lichtblick/suite-base/panels/shared/gaugeAndIndicatorStateReducer";
 import { useReplacePathDrop } from "@lichtblick/suite-base/panels/shared/pathDrop";
 import { GaugeAndIndicatorState } from "@lichtblick/suite-base/panels/shared/types";
@@ -250,7 +253,7 @@ export function Indicator({ context }: IndicatorProps): React.JSX.Element {
     setConfig((prev) => ({ ...prev, alertsMuted: prev.alertsMuted !== true }));
   }, []);
 
-  const bulbColor = matchingRule?.color ?? fallbackColor;
+  const bulbColor = matchingRule?.color ?? fallbackColor ?? DEFAULT_FALLBACK_COLOR;
   const {
     classes,
     theme: {

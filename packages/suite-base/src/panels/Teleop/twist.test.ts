@@ -11,6 +11,7 @@ import {
   NEUTRAL_PAD,
   readGamepad,
   toJoy,
+  zeroTwist,
 } from "@lichtblick/suite-base/panels/Teleop/twist";
 import { PadState } from "@lichtblick/suite-base/panels/Teleop/types";
 
@@ -39,19 +40,33 @@ describe("computeTwist", () => {
     });
   });
 
-  it("scales by speed, follows triggers and ignores cleared max values", () => {
-    // Given linear.x on the triggers and a cleared angular.z max
+  it("scales by speed, follows triggers and uses the default for a cleared max", () => {
+    // Given linear.x on the triggers and a cleared angular.z max (default 1.5)
     const mapping = {
       ...DEFAULT_CONFIG.mapping,
       "linear-x": { input: "triggers" as const, max: 2 },
-      "angular-z": { input: "leftX" as const, max: undefined as unknown as number },
+      "angular-z": { input: "leftX" as const, max: undefined },
     };
 
     // When the right trigger is fully pressed at half speed
     const twist = computeTwist(mapping, pad({ rt: 1, left: { x: 1, y: 0 } }), 0.5);
 
-    // Then only linear.x moves, never NaN
-    expect(twist).toEqual({ linear: { x: 1, y: 0, z: 0 }, angular: { x: 0, y: 0, z: 0 } });
+    // Then angular.z drives with the default max, as it will after the layout is reloaded
+    expect(twist).toEqual({ linear: { x: 1, y: 0, z: 0 }, angular: { x: 0, y: 0, z: -0.75 } });
+  });
+
+  it("leaves a field at zero when its max is not finite", () => {
+    // Given an angular.z max typed as 1e309, which parses to Infinity
+    const mapping = {
+      ...DEFAULT_CONFIG.mapping,
+      "angular-z": { input: "leftX" as const, max: Infinity },
+    };
+
+    // When the left stick is pushed fully left and centered vertically
+    const twist = computeTwist(mapping, pad({ left: { x: 1, y: 0 } }), 1);
+
+    // Then nothing non-finite is published
+    expect(twist).toEqual(zeroTwist());
   });
 });
 
@@ -148,9 +163,8 @@ describe("applyDeadzone", () => {
     expect(applyDeadzone(0, -1, 0.2)).toEqual({ x: 0, y: -1 });
   });
 
-  it("returns no motion for a non-numeric deadzone", () => {
+  it("returns no motion for a NaN deadzone", () => {
     expect(applyDeadzone(0, 0, Number.NaN)).toEqual({ x: 0, y: 0 });
-    expect(applyDeadzone(1, 0, undefined as unknown as number)).toEqual({ x: 0, y: 0 });
   });
 });
 

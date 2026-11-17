@@ -468,19 +468,12 @@ export const constructDatatypes = (
           | undefined;
 
         if (typeParam) {
-          if (typeMap[typeParam.name.escapedText.toString()]) {
-            let next = typeMap[typeParam.name.escapedText.toString()];
-            while (next?.parent) {
-              next = next.parent;
-            }
-            return getRosMsgField(
-              name,
-              next!.current!,
-              isArray,
-              isComplex,
-              typeMap,
-              innerDepth + 1,
-            );
+          let next = typeMap[typeParam.name.escapedText.toString()];
+          while (next?.parent) {
+            next = next.parent;
+          }
+          if (next?.current) {
+            return getRosMsgField(name, next.current, isArray, isComplex, typeMap, innerDepth + 1);
           }
           throw new Error(`Could not find type ${typeParam.getText()} in type map.`);
         }

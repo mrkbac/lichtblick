@@ -141,14 +141,7 @@ export function lastMatchingTopic(
   msgEvents: Immutable<MessageEvent[]>,
   topic: string,
 ): MessageEvent | undefined {
-  for (let i = msgEvents.length - 1; i >= 0; --i) {
-    const msgEvent = msgEvents[i]!;
-    if (msgEvent.topic === topic) {
-      return msgEvent;
-    }
-  }
-
-  return undefined;
+  return msgEvents.findLast((msgEvent) => msgEvent.topic === topic);
 }
 
 type SeriesCurrentAction<T> =

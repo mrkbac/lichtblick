@@ -68,7 +68,10 @@ export function main(): void {
         const infoPromise = file.name.endsWith(".mcap") ? getMcapInfo(file) : getBagInfo(file);
         const { fileInfo, error } = await infoPromise
           .then((info) => ({ fileInfo: info, error: undefined }))
-          .catch((err: unknown) => ({ fileInfo: undefined, error: err }));
+          .catch((err: unknown) => ({
+            fileInfo: undefined,
+            error: err instanceof Error ? err : new Error(String(err)),
+          }));
         return { fileStats, fileInfo, error };
       } finally {
         if (typeof quicklook !== "undefined") {
@@ -99,7 +102,7 @@ export function main(): void {
 
     const fileStats = state.value?.fileStats;
     const fileInfo = moreInfo.value ?? state.value?.fileInfo;
-    const fileError = moreInfo.error ?? (state.value?.error as Error | undefined);
+    const fileError = moreInfo.error ?? state.value?.error;
 
     return (
       <div>

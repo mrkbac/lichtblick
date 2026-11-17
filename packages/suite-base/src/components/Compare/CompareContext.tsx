@@ -124,9 +124,7 @@ export function CompareProvider({ children }: { children: React.ReactNode }): Re
         view: views.get(side.prefix)!,
       }),
     );
-    const activeSide = sides.some((side) => side.prefix === chosenSide)
-      ? chosenSide!
-      : sides[0]!.prefix;
+    const activeSide = (sides.find((side) => side.prefix === chosenSide) ?? sides[0]!).prefix;
     return { sides, activeSide, setActiveSide, rootStore, requestOffset };
   }, [chosenSide, compareSides, requestOffset, rootStore, views]);
 

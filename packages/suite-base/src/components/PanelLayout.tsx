@@ -483,12 +483,12 @@ export function UnconnectedPanelLayout(props: Readonly<Props>): React.ReactEleme
         return;
       }
       const selection = getPanelDragData(event.nativeEvent.dataTransfer);
-      const movedId = getForeignPanelId(event.api.id);
-      if (selection == undefined && movedId == undefined) {
+      const id = selection ? getPanelIdForType(selection.type) : getForeignPanelId(event.api.id);
+      if (id == undefined) {
         return;
       }
       addPanel({
-        id: selection ? getPanelIdForType(selection.type) : movedId!,
+        id,
         config: selection?.config,
         position: event.position,
         // Without a group the panel was dropped on an edge of the whole layout.

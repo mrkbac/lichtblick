@@ -57,6 +57,7 @@ import { defaultPlaybackConfig } from "@lichtblick/suite-base/providers/CurrentL
 import { AppEvent } from "@lichtblick/suite-base/services/IAnalytics";
 import { layoutIsFavorite } from "@lichtblick/suite-base/services/ILayoutManager";
 import { Layout, layoutIsShared } from "@lichtblick/suite-base/services/ILayoutStorage";
+import { toError } from "@lichtblick/suite-base/util/toError";
 
 import LayoutSection from "./LayoutSection";
 import { useStyles } from "./index.style";
@@ -193,7 +194,7 @@ export default function LayoutBrowser({
         }
         dispatch({ type: "shift-multi-action" });
       } catch (err: unknown) {
-        enqueueSnackbar(`Error processing layouts: ${(err as Error).message}`, {
+        enqueueSnackbar(`Error processing layouts: ${toError(err).message}`, {
           variant: "error",
         });
         dispatch({ type: "clear-multi-action" });

@@ -77,6 +77,7 @@ import {
 import { PanelConfig, SaveConfig } from "@lichtblick/suite-base/types/panels";
 import { assertNever } from "@lichtblick/suite-base/util/assertNever";
 import { randomUUID } from "@lichtblick/suite-base/util/randomUUID";
+import { toError } from "@lichtblick/suite-base/util/toError";
 
 import { PanelConfigVersionError } from "./PanelConfigVersionError";
 import { HiddenFrames } from "./hiddenFrames";
@@ -441,8 +442,7 @@ function PanelExtensionAdapter(
         retryIfHeld();
       });
     } catch (e: unknown) {
-      const err = e as Error;
-      setError(err);
+      setError(toError(e));
     }
   }, [
     appSettings,

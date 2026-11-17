@@ -42,7 +42,10 @@ export function useAsyncFn<T extends AsyncFn>(
         },
         (error: unknown) => {
           if (isMounted() && callId === lastCallId.current) {
-            setState({ error: error as Error, loading: false });
+            setState({
+              error: error instanceof Error ? error : new Error(String(error)),
+              loading: false,
+            });
           }
           return error;
         },

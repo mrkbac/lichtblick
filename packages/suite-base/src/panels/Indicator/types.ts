@@ -14,7 +14,8 @@ export type IndicatorStyle = "bulb" | "background";
 export type IndicatorAlertSound = "none" | "beep" | "chime" | "alarm";
 
 export type IndicatorRule = {
-  color: string;
+  /** undefined once cleared in the settings: the fallback color */
+  color?: string;
   label: string;
   operator: IndicatorOperator;
   rawValue: string;
@@ -33,7 +34,8 @@ export type RawValueIndicator =
   | { data?: boolean | bigint | number | string };
 
 export type IndicatorConfig = {
-  fallbackColor: string;
+  /** undefined once cleared in the settings: DEFAULT_FALLBACK_COLOR */
+  fallbackColor?: string;
   fallbackLabel: string;
   path: string;
   rules: IndicatorRule[];

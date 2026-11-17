@@ -5,7 +5,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import type { Feature, FeatureCollection, GeoJsonObject, Geometry } from "geojson";
+import type { Feature, FeatureCollection, GeoJSON } from "geojson";
 
 import { MessageEvent } from "@lichtblick/suite";
 import { FoxgloveMessages } from "@lichtblick/suite-base/types/FoxgloveMessages";
@@ -109,16 +109,15 @@ export type GeoJsonStyle = {
 /** Parse a GeoJSON string into flat features, extracting the nonstandard `style` property. */
 export function parseGeoJSON(json: string): { feature: Feature; style: GeoJsonStyle }[] {
   try {
-    const parsed = JSON.parse(json) as GeoJsonObject | GeoJsonObject[] | null;
+    const parsed = JSON.parse(json) as GeoJSON | GeoJSON[] | null;
     const objects = parsed ? (Array.isArray(parsed) ? parsed : [parsed]) : [];
     return objects.flatMap((object) => {
       switch (object.type) {
         case "Feature": {
-          const feature = object as Feature;
           return [
             {
-              feature,
-              style: (feature.properties?.style ?? {}) as GeoJsonStyle,
+              feature: object,
+              style: (object.properties?.style ?? {}) as GeoJsonStyle,
             },
           ];
         }
@@ -132,7 +131,7 @@ export function parseGeoJSON(json: string): { feature: Feature; style: GeoJsonSt
             {
               feature: {
                 type: "Feature",
-                geometry: object as Geometry,
+                geometry: object,
                 properties: {},
               },
               style: {},

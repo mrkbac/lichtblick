@@ -106,7 +106,7 @@ export class CustomDatasetsBuilder implements IDatasetsBuilder {
         { didSeek, hasRangeSource: this.#hasRangeSource },
         (config) => readSeriesItems(msgEvents, config),
       );
-      pushAll(this.#pendingDispatch, seriesActions as UpdateDataAction[]);
+      pushAll(this.#pendingDispatch, seriesActions);
       datasetsChanged ||= seriesChanged;
     }
 
@@ -166,7 +166,7 @@ export class CustomDatasetsBuilder implements IDatasetsBuilder {
     const actions = buildFullSeriesActions(this.#series, topic, options, (config) =>
       readSeriesItems(messages, config),
     );
-    pushAll(this.#pendingDispatch, actions as UpdateDataAction[]);
+    pushAll(this.#pendingDispatch, actions);
   }
 
   public setXPath(path: Immutable<MessagePath> | undefined): void {

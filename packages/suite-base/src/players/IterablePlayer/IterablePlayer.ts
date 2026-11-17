@@ -669,7 +669,7 @@ export class IterablePlayer implements Player {
         log.debug(`Done state ${state}`);
       }
     } catch (e: unknown) {
-      const err = e as Error;
+      const err = toError(e);
       log.error(err);
       this.#setError(err.message, err);
       this.#queueEmitState();
@@ -717,7 +717,7 @@ export class IterablePlayer implements Player {
 
       // Block loadings is constantly running and tries to keep the preloaded messages in memory
       this.#blockLoadingProcess = this.#startBlockLoading().catch((err: unknown) => {
-        this.#setError((err as Error).message, err as Error);
+        this.#setError(toError(err).message, toError(err));
       });
 
       // Only now: an update replaces the block loader, which must not race its first start above
@@ -752,7 +752,7 @@ export class IterablePlayer implements Player {
         this.#applyInitialization(update, { keepBlocks });
         this.#blockLoader?.setTopics(this.#preloadTopics);
         this.#blockLoadingProcess = this.#startBlockLoading().catch((err: unknown) => {
-          this.#setError((err as Error).message, err as Error);
+          this.#setError(toError(err).message, toError(err));
         });
         if (this.#nextState === "seek-backfill") {
           // The pending seek resets the playback iterator on the new range
@@ -889,7 +889,7 @@ export class IterablePlayer implements Player {
           severity: "warn",
           message: "Failed to initialize message preloading",
           tip: `The start (${startStr}) and end (${endStr}) of your data is too far apart.`,
-          error: err as Error,
+          error: toError(err),
         });
       }
     }
@@ -1132,7 +1132,7 @@ export class IterablePlayer implements Player {
       }
       this.#setState(this.#isPlaying ? "play" : "idle");
     } catch (e: unknown) {
-      const err = e as Error;
+      const err = toError(e);
       if (this.#nextState && err.name === "AbortError") {
         log.debug("Aborted backfill");
       } else {
@@ -1489,7 +1489,7 @@ export class IterablePlayer implements Player {
         }
       }
     } catch (e: unknown) {
-      const err = e as Error;
+      const err = toError(e);
       this.#setError(err.message, err);
       this.#queueEmitState();
     }
