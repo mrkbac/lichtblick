@@ -118,8 +118,10 @@ export type AddPanelPayload = {
   position?: LayoutDropPosition;
   /** Place the panel relative to the group holding this panel instead of the whole layout. */
   targetPanelId?: string;
-  /** Without a target panel: put the panel into the shown tab of this Tab panel. */
+  /** Without a target panel: put the panel into the shown tab of this Tab (or Stack) panel. */
   tabId?: string;
+  /** With `tabId`: this tab instead of the shown one; one past the last adds a tab. */
+  tabIndex?: number;
 };
 export type ADD_PANEL = { type: "ADD_PANEL"; payload: AddPanelPayload };
 

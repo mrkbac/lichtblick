@@ -43,9 +43,37 @@ type GridColorModeSettings = ColorModeSettings & {
 export type LayerSettingsFoxgloveGrid = BaseSettings &
   GridColorModeSettings & {
     frameLocked: boolean;
+    /** Numeric field whose value lifts each cell along the grid's Z axis; undefined = flat. */
+    elevationField?: string;
+    interpolation: "linear" | "nearest";
+    showLines: boolean;
+    lineColor: string;
+    /** Shade the elevated surface by its slope. */
+    lighting: boolean;
+    /** Render before the rest of the scene, so everything else draws on top. */
+    drawBehind: boolean;
   };
 function zeroReader(): number {
   return 0;
+}
+
+/**
+ * Elevation written for cells without a finite value. The shaders treat anything below
+ * -1e38 as "no data": the cell is not drawn and neighbouring corners ignore it.
+ */
+export const NO_ELEVATION = -3.4e38;
+
+/** Writes each cell's elevation (row-major, `cols * rows`) into `out`. */
+export function fillElevation(out: Float32Array, grid: Grid, reader: FieldReader): void {
+  const view = new DataView(grid.data.buffer, grid.data.byteOffset, grid.data.byteLength);
+  const { column_count: cols, row_stride, cell_stride } = grid;
+  const rows = grid.data.byteLength / row_stride;
+  for (let y = 0; y < rows; y++) {
+    for (let x = 0; x < cols; x++) {
+      const value = reader(view, y * row_stride + x * cell_stride);
+      out[y * cols + x] = Number.isFinite(value) ? value : NO_ELEVATION;
+    }
+  }
 }
 
 const floatTextureColorModes: GridColorModeSettings["colorMode"][] = ["gradient", "colormap"];
@@ -85,6 +113,13 @@ interface GridShaderMaterial extends THREE.ShaderMaterial {
 
     minGradientColorLinear: THREE.IUniform<THREE.Vector4>;
     maxGradientColorLinear: THREE.IUniform<THREE.Vector4>;
+
+    gridSize: THREE.IUniform<THREE.Vector2>;
+    elevationEnabled: THREE.IUniform<boolean>;
+    elevationMap: THREE.IUniform<THREE.DataTexture>;
+    lighting: THREE.IUniform<boolean>;
+    showLines: THREE.IUniform<boolean>;
+    lineColorLinear: THREE.IUniform<THREE.Vector4>;
   };
   defines: typeof COLOR_MODE_TO_GLSL &
     typeof COLOR_MAP_TO_GLSL & {
@@ -100,6 +135,10 @@ export type FoxgloveGridUserData = BaseUserData & {
   texture: THREE.DataTexture;
   material: GridShaderMaterial;
   pickingMaterial: THREE.ShaderMaterial;
+  /** Shared unit quad, used while the grid is flat. */
+  planeGeometry: THREE.BufferGeometry;
+  /** Attribute-less geometry, 6 vertices per cell, placed by the vertex shader. */
+  elevationGeometry: THREE.BufferGeometry;
 };
 
 type RgbaFieldReaders = {
@@ -141,8 +180,10 @@ const tempMinMaxColor: THREE.Vector2Tuple = [0, 0];
 export class FoxgloveGridRenderable extends Renderable<FoxgloveGridUserData> {
   public override dispose(): void {
     this.userData.texture.dispose();
+    this.userData.material.uniforms.elevationMap.value.dispose();
     this.userData.material.dispose();
     this.userData.pickingMaterial.dispose();
+    this.userData.elevationGeometry.dispose();
   }
 
   public override details(): Record<string, RosValue> {
@@ -197,8 +238,6 @@ export class FoxgloveGridRenderable extends Renderable<FoxgloveGridUserData> {
 
   public updateMaterial(settings: LayerSettingsFoxgloveGrid): void {
     const { colorMode } = settings;
-    const { material } = this.userData;
-    let updated = false;
     let transparent = false;
     if (colorMode === "flat") {
       stringToRgba(tempColor, settings.flatColor);
@@ -212,14 +251,72 @@ export class FoxgloveGridRenderable extends Renderable<FoxgloveGridUserData> {
     } else if (colorMode === "colormap") {
       transparent = settings.explicitAlpha < 1.0;
     }
-    if (transparent !== material.transparent) {
-      material.depthWrite = !transparent;
-      material.transparent = transparent;
-      updated = true;
+    this.#setTransparent({ transparentColors: transparent });
+
+    const filter = settings.interpolation === "linear" ? THREE.LinearFilter : THREE.NearestFilter;
+    const { texture } = this.userData;
+    if (texture.magFilter !== filter) {
+      texture.magFilter = filter;
+      texture.needsUpdate = true;
     }
-    if (updated) {
+
+    // Same approach as images drawn behind the scene: drawn first, without depth, so every
+    // other object ends up on top.
+    this.userData.mesh.renderOrder = settings.drawBehind ? -Number.MAX_SAFE_INTEGER : 0;
+  }
+
+  /** Applies transparency and the depth state that goes with it (and with "draw behind"). */
+  #setTransparent({ transparentColors }: { transparentColors: boolean }): void {
+    const { material, settings } = this.userData;
+    // A background layer stays in the opaque pass: the transparent pass runs after all opaque
+    // objects and would paint over them, since a background layer skips the depth test.
+    const transparent = transparentColors && !settings.drawBehind;
+    const depthWrite = !transparent && !settings.drawBehind;
+    const depthTest = !settings.drawBehind;
+    if (
+      material.transparent !== transparent ||
+      material.depthWrite !== depthWrite ||
+      material.depthTest !== depthTest
+    ) {
+      material.transparent = transparent;
+      material.depthWrite = depthWrite;
+      material.depthTest = depthTest;
       material.needsUpdate = true;
     }
+  }
+
+  /** Switches between the flat quad and the GPU-displaced surface, and uploads elevations. */
+  public updateElevation(foxgloveGrid: Grid, settings: LayerSettingsFoxgloveGrid): void {
+    const { material, mesh } = this.userData;
+    const { uniforms } = material;
+    const field = foxgloveGrid.fields.find((f) => f.name === settings.elevationField);
+    const reader = field ? getReader(field, foxgloveGrid.cell_stride) : undefined;
+    const cols = foxgloveGrid.column_count;
+    const rows = foxgloveGrid.data.byteLength / foxgloveGrid.row_stride;
+    uniforms.gridSize.value.set(cols, rows);
+
+    if (!reader || cols * rows === 0) {
+      uniforms.elevationEnabled.value = false;
+      mesh.geometry = this.userData.planeGeometry;
+      mesh.frustumCulled = true;
+      return;
+    }
+
+    let texture = uniforms.elevationMap.value;
+    if (texture.image.width !== cols || texture.image.height !== rows) {
+      texture.dispose();
+      texture = createElevationTexture(cols, rows);
+      uniforms.elevationMap.value = texture;
+    }
+    fillElevation(texture.image.data as unknown as Float32Array, foxgloveGrid, reader);
+    texture.needsUpdate = true;
+
+    const { elevationGeometry } = this.userData;
+    elevationGeometry.setDrawRange(0, cols * rows * 6);
+    uniforms.elevationEnabled.value = true;
+    mesh.geometry = elevationGeometry;
+    // The shared bounding sphere describes the flat quad, not the displaced surface.
+    mesh.frustumCulled = false;
   }
 
   public updateUniforms(foxgloveGrid: Grid, settings: LayerSettingsFoxgloveGrid): void {
@@ -264,6 +361,12 @@ export class FoxgloveGridRenderable extends Renderable<FoxgloveGridUserData> {
     const maxColor = stringToRgba(tempColor, settings.gradient[1]);
     rgbaToLinear(maxColor, maxColor);
     maxGradientColorLinear.value.set(maxColor.r, maxColor.g, maxColor.b, maxColor.a);
+
+    material.uniforms.showLines.value = settings.showLines;
+    material.uniforms.lighting.value = settings.lighting;
+    const lineColor = stringToRgba(tempColor, settings.lineColor);
+    rgbaToLinear(lineColor, lineColor);
+    material.uniforms.lineColorLinear.value.set(lineColor.r, lineColor.g, lineColor.b, lineColor.a);
     // unnecessary to update material because all uniforms are sent to GPU every frame
   }
 
@@ -367,11 +470,7 @@ export class FoxgloveGridRenderable extends Renderable<FoxgloveGridUserData> {
           }
         }
       }
-      if (this.userData.material.transparent !== hasTransparency) {
-        this.userData.material.transparent = hasTransparency;
-        this.userData.material.depthWrite = !hasTransparency;
-        this.userData.material.needsUpdate = true;
-      }
+      this.#setTransparent({ transparentColors: hasTransparency });
     }
     this.userData.material.uniforms.map.value.needsUpdate = true;
   }
@@ -443,6 +542,9 @@ export class FoxgloveGrid extends SceneExtension<FoxgloveGridRenderable> {
         // needs to recalculate texture when colorMode or colorField changes
         // technically it doesn't if it's going between gradient and colorMap, but since it's an infrequent user-action it's not a big hit
         renderable.updateTexture(renderable.userData.foxgloveGrid, renderable.userData.settings);
+      }
+      if (action.payload.path[2] === "elevationField") {
+        renderable.updateElevation(renderable.userData.foxgloveGrid, renderable.userData.settings);
       }
       renderable.syncPickingMaterial();
     }
@@ -519,6 +621,8 @@ export class FoxgloveGrid extends SceneExtension<FoxgloveGridRenderable> {
         texture,
         material,
         pickingMaterial,
+        planeGeometry: geometry,
+        elevationGeometry: new THREE.BufferGeometry(),
       });
       renderable.add(mesh);
 
@@ -604,6 +708,7 @@ export class FoxgloveGrid extends SceneExtension<FoxgloveGridRenderable> {
     renderable.updateMaterial(settings);
     renderable.updateUniforms(foxgloveGrid, settings);
     renderable.updateTexture(foxgloveGrid, settings);
+    renderable.updateElevation(foxgloveGrid, settings);
 
     renderable.scale.set(foxgloveGrid.cell_size.x * cols, foxgloveGrid.cell_size.y * rows, 1);
 
@@ -621,7 +726,7 @@ function invalidFoxgloveGridError(renderer: Renderer, topic: string, message: st
   renderer.settings.errors.addToTopic(topic, INVALID_LICHTBLICK_GRID, message);
 }
 
-function createTexture(foxgloveGrid: Grid, settings: GridColorModeSettings): THREE.DataTexture {
+function createTexture(foxgloveGrid: Grid, settings: LayerSettingsFoxgloveGrid): THREE.DataTexture {
   const { column_count: cols, row_stride } = foxgloveGrid;
   const rows = foxgloveGrid.data.byteLength / row_stride;
   const size = isFinite(cols * rows) ? cols * rows : 0;
@@ -638,10 +743,23 @@ function createTexture(foxgloveGrid: Grid, settings: GridColorModeSettings): THR
     THREE.UVMapping,
     THREE.ClampToEdgeWrapping,
     THREE.ClampToEdgeWrapping,
-    THREE.NearestFilter,
+    settings.interpolation === "linear" ? THREE.LinearFilter : THREE.NearestFilter,
     THREE.LinearFilter,
     1,
     getTextureColorSpace(settings),
+  );
+  texture.generateMipmaps = false;
+  return texture;
+}
+
+/** Float texture of raw cell elevations, read with texelFetch (so never filtered). */
+function createElevationTexture(cols: number, rows: number): THREE.DataTexture {
+  const texture = new THREE.DataTexture(
+    new Float32Array(cols * rows),
+    cols,
+    rows,
+    THREE.RedFormat,
+    THREE.FloatType,
   );
   texture.generateMipmaps = false;
   return texture;
@@ -682,6 +800,14 @@ export function numericTypeWidth(type: NumericType): number {
   }
 }
 
+// Shared by both shader stages. NO_ELEVATION_THRESHOLD sits just above NO_ELEVATION.
+const GLSL_ELEVATION = /* glsl */ `
+  #define NO_ELEVATION_THRESHOLD -1e38
+  uniform vec2 gridSize;
+  uniform bool elevationEnabled;
+  uniform sampler2D elevationMap;
+`;
+
 function createMaterial(texture: THREE.DataTexture, topic: string): GridShaderMaterial {
   return new THREE.ShaderMaterial({
     name: `${topic}:Material`,
@@ -699,12 +825,75 @@ function createMaterial(texture: THREE.DataTexture, topic: string): GridShaderMa
       minGradientColorLinear: { value: new THREE.Vector4() },
       maxGradientColorLinear: { value: new THREE.Vector4() },
       map: { value: texture },
+      gridSize: { value: new THREE.Vector2(1, 1) },
+      elevationEnabled: { value: false },
+      elevationMap: { value: createElevationTexture(1, 1) },
+      lighting: { value: true },
+      showLines: { value: false },
+      lineColorLinear: { value: new THREE.Vector4() },
     },
     vertexShader: /* glsl */ `
+      ${GLSL_ELEVATION}
+
+      // Two triangles per cell, counter-clockwise seen from +Z.
+      const ivec2 CELL_CORNERS[6] = ivec2[6](
+        ivec2(0, 0), ivec2(1, 0), ivec2(1, 1),
+        ivec2(0, 0), ivec2(1, 1), ivec2(0, 1)
+      );
+
       varying vec2 vUv;
+      varying vec3 vNormal;
+
+      // A corner's height: the mean of the (up to 4) touching cells that have data.
+      float cornerHeight(ivec2 corner) {
+        ivec2 size = ivec2(gridSize);
+        float sum = 0.0;
+        float count = 0.0;
+        for (int dy = -1; dy <= 0; dy++) {
+          for (int dx = -1; dx <= 0; dx++) {
+            ivec2 cell = corner + ivec2(dx, dy);
+            if (any(lessThan(cell, ivec2(0))) || any(greaterThanEqual(cell, size))) {
+              continue;
+            }
+            float h = texelFetch(elevationMap, cell, 0).r;
+            if (h > NO_ELEVATION_THRESHOLD) {
+              sum += h;
+              count += 1.0;
+            }
+          }
+        }
+        return count > 0.0 ? sum / count : 0.0;
+      }
+
       void main() {
+        vec3 localPosition = position;
+        vec3 localNormal = vec3(0.0, 0.0, 1.0);
         vUv = uv;
-        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        if (elevationEnabled) {
+          // No vertex buffers: each vertex finds its cell corner from its index, which keeps
+          // memory flat however large the grid is.
+          ivec2 size = ivec2(gridSize);
+          int cellIndex = gl_VertexID / 6;
+          ivec2 corner = ivec2(cellIndex % size.x, cellIndex / size.x) +
+            CELL_CORNERS[gl_VertexID - cellIndex * 6];
+          vUv = vec2(corner) / gridSize;
+          localPosition = vec3(vUv, cornerHeight(corner));
+
+          // Smooth normal from central differences of the neighbouring corners. The mesh is a
+          // unit square scaled to the grid's size, so slopes are per UV unit and normalMatrix
+          // applies that scale.
+          ivec2 left = max(corner - ivec2(1, 0), ivec2(0));
+          ivec2 right = min(corner + ivec2(1, 0), size);
+          ivec2 down = max(corner - ivec2(0, 1), ivec2(0));
+          ivec2 up = min(corner + ivec2(0, 1), size);
+          float dhdu = (cornerHeight(right) - cornerHeight(left)) /
+            (float(right.x - left.x) / gridSize.x);
+          float dhdv = (cornerHeight(up) - cornerHeight(down)) /
+            (float(up.y - down.y) / gridSize.y);
+          localNormal = vec3(-dhdu, -dhdv, 1.0);
+        }
+        vNormal = normalize(normalMatrix * localNormal);
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(localPosition, 1.0);
       }
     `,
     defines: {
@@ -727,7 +916,14 @@ function createMaterial(texture: THREE.DataTexture, topic: string): GridShaderMa
       uniform vec4 minGradientColorLinear;
       uniform vec4 maxGradientColorLinear;
 
+      uniform bool lighting;
+      uniform bool showLines;
+      uniform vec4 lineColorLinear;
+
+      ${GLSL_ELEVATION}
+
       varying vec2 vUv;
+      varying vec3 vNormal;
 
       ${FS_SRGB_TO_LINEAR}
 
@@ -788,6 +984,12 @@ function createMaterial(texture: THREE.DataTexture, topic: string): GridShaderMa
       }
 
       void main() {
+        if (elevationEnabled) {
+          ivec2 cell = clamp(ivec2(floor(vUv * gridSize)), ivec2(0), ivec2(gridSize) - 1);
+          if (texelFetch(elevationMap, cell, 0).r <= NO_ELEVATION_THRESHOLD) {
+            discard;
+          }
+        }
         vec4 color = texture2D(map, vUv);
         if(colorMode == COLOR_MODE_RGBA) {
           // input color is in sRGB, texture.colorSpace is sRGB, so no conversion is needed
@@ -826,6 +1028,19 @@ function createMaterial(texture: THREE.DataTexture, topic: string): GridShaderMa
         if(PICKING == 1) {
           gl_FragColor = objectId;
         } else {
+          if (elevationEnabled && lighting) {
+            // Light from above-right of the viewer, in view space
+            vec3 normal = normalize(gl_FrontFacing ? vNormal : -vNormal);
+            float diffuse = max(dot(normal, normalize(vec3(0.4, 0.6, 1.0))), 0.0);
+            gl_FragColor.rgb *= 0.35 + 0.65 * diffuse;
+          }
+          if (showLines) {
+            // Anti-aliased cell borders about one pixel wide at any zoom
+            vec2 cellCoord = vUv * gridSize;
+            vec2 distToEdge = abs(fract(cellCoord - 0.5) - 0.5) / max(fwidth(cellCoord), vec2(1e-6));
+            float line = 1.0 - min(min(distToEdge.x, distToEdge.y), 1.0);
+            gl_FragColor = mix(gl_FragColor, vec4(lineColorLinear.rgb, 1.0), line * lineColorLinear.a);
+          }
           #include <colorspace_fragment>
         }
       }

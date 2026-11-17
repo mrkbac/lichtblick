@@ -32,6 +32,12 @@ export function getMarkerId(topic: string, ns: string, id: number): string {
 }
 
 export class RenderableMarker extends Renderable<MarkerUserData> {
+  /**
+   * Settings for a marker owned by a layer rather than a topic (e.g. a URDF link). Set it, then
+   * call `update()` to apply.
+   */
+  public settingsOverride: Partial<LayerSettingsMarker> | undefined;
+
   public constructor(
     topic: string,
     marker: Marker,
@@ -64,8 +70,8 @@ export class RenderableMarker extends Renderable<MarkerUserData> {
     return settings?.selectedIdVariable;
   }
 
-  public getSettings(): LayerSettingsMarker | undefined {
-    return this.renderer.config.topics[this.userData.topic] as LayerSettingsMarker | undefined;
+  public getSettings(): Partial<LayerSettingsMarker> | undefined {
+    return this.settingsOverride ?? this.renderer.config.topics[this.userData.topic];
   }
 
   public override details(): Record<string, RosValue> {

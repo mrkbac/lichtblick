@@ -6,10 +6,12 @@ import { makeStyles } from "tss-react/mui";
 import { PANEL_ROOT_CLASS_NAME } from "@lichtblick/suite-base/components/PanelRoot";
 import {
   COMPACT_PANELS_ATTRIBUTE,
+  FLOATING_TOOLBARS_ATTRIBUTE,
   PANEL_TOOLBAR_HEIGHT,
 } from "@lichtblick/suite-base/components/PanelToolbar/constants";
 
 const COMPACT = `[${COMPACT_PANELS_ATTRIBUTE}]`;
+const FLOATING = `[${FLOATING_TOOLBARS_ATTRIBUTE}]`;
 const PANEL = `.${PANEL_ROOT_CLASS_NAME}`;
 /** The hovered panel itself, not a Tab panel around it. */
 const HOVERED_PANEL = `${PANEL}:hover:not(:has(${PANEL}:hover))`;
@@ -39,6 +41,17 @@ export const useStyles = makeStyles()((theme) => ({
       // `!important` beats the Autocomplete's own size rules, whatever their specificity.
       ".MuiInputBase-root": { paddingBlock: `${theme.spacing(0.25)} !important` },
     },
+
+    // Every toolbar in such a container floats over its panel and shows while it's hovered.
+    [`${FLOATING} &`]: {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      position: "absolute !important" as any,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      top: "0 !important" as any,
+      opacity: 0,
+    },
+    [`${FLOATING} ${HOVERED_PANEL} &:not(${HOVERED_PANEL} ${PANEL} *), ${FLOATING} &:focus-within`]:
+      { opacity: 1 },
   },
   // In compact mode a toolbar with only a title floats over the panel and shows while it's hovered.
   floating: {

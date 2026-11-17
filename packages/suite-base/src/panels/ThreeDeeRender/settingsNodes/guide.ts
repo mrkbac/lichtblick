@@ -32,6 +32,8 @@ import {
   mapSettingsNode,
   urdfJointNode,
   urdfJointsNodes,
+  urdfLinkNode,
+  urdfLinksNodes,
   urdfSettingsNode,
 } from "./layers";
 import {
@@ -143,7 +145,20 @@ function topicNodes(): DocumentedNodes {
     ),
     cameraInfo: { ...cameraInfoSettingsNode(topic(""), {}), label: "Camera calibration" },
     image: { ...imageProjectionSettingsNode(topic(""), {}, []), label: "Image" },
-    urdf: urdfSettingsNode("Robot description", {}, urdfJointsNodes({ example })),
+    urdf: merged(
+      "Robot description",
+      ...([false, true] as const).map((jointStates) =>
+        urdfSettingsNode(
+          "Robot description",
+          { controlMode: jointStates ? "jointStates" : "transforms", showAxis: jointStates },
+          [],
+          {
+            ...urdfJointsNodes({ example }),
+            ...urdfLinksNodes({ link: urdfLinkNode("link", undefined) }),
+          },
+        ),
+      ),
+    ),
   };
 }
 
@@ -153,7 +168,13 @@ function layerNodes(): DocumentedNodes {
     urdf: merged(
       "URDF",
       ...(["url", "filePath", "topic", "param"] as const).map((sourceType) =>
-        customUrdfSettingsNode({ sourceType }, [], [], {}),
+        customUrdfSettingsNode(
+          { sourceType, controlMode: "jointStates", showAxis: true },
+          [],
+          [],
+          [],
+          {},
+        ),
       ),
     ),
     map: mapSettingsNode(MAP_DEFAULTS, [], [], [], MAP_LAYER_SOURCE_KINDS, () => undefined),
