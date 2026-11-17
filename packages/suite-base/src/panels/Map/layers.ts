@@ -250,7 +250,7 @@ function withOpacity(layer: LayerSpecification, opacity: number): LayerSpecifica
     return layer;
   }
   const paint: Record<string, unknown> = {
-    ...(layer as { paint?: object }).paint,
+    ...("paint" in layer ? layer.paint : undefined),
   };
   for (const key of keys) {
     paint[key] = scaleOpacity(paint[key], opacity);
@@ -465,10 +465,14 @@ export function composeStyle(input: ComposeStyleInput): StyleSpecification {
           if (hidden.includes(vectorGroup(vectorLayer))) {
             continue;
           }
-          const namespaced = { ...vectorLayer, id: `${id}:${vectorLayer.id}` };
-          if ("source" in vectorLayer && typeof vectorLayer.source === "string") {
-            (namespaced as { source: string }).source = `${id}:${vectorLayer.source}`;
-          }
+          const namespaced =
+            "source" in vectorLayer && typeof vectorLayer.source === "string"
+              ? {
+                  ...vectorLayer,
+                  id: `${id}:${vectorLayer.id}`,
+                  source: `${id}:${vectorLayer.source}`,
+                }
+              : { ...vectorLayer, id: `${id}:${vectorLayer.id}` };
           style.layers.push(withOpacity(namespaced, layer.opacity));
         }
         break;

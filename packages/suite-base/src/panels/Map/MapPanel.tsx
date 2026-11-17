@@ -7,7 +7,7 @@
 
 import { toSec } from "@foxglove/rostime";
 import { Chip, alpha } from "@mui/material";
-import type { FeatureCollection, Position } from "geojson";
+import type { FeatureCollection } from "geojson";
 import * as _ from "lodash-es";
 import {
   GeoJSONSource,
@@ -134,8 +134,8 @@ function popupContent(hit: Hit): HTMLElement {
 }
 
 function extendWithCoordinates(bounds: LngLatBounds, coords: unknown): void {
-  if (Array.isArray(coords) && typeof coords[0] === "number") {
-    bounds.extend(coords as Position as [number, number]);
+  if (Array.isArray(coords) && typeof coords[0] === "number" && typeof coords[1] === "number") {
+    bounds.extend([coords[0], coords[1]]);
   } else if (Array.isArray(coords)) {
     for (const c of coords) {
       extendWithCoordinates(bounds, c);
@@ -679,7 +679,7 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
       if (!frame || frame.length === 0) {
         return;
       }
-      const [geo, nav] = _.partition(frame, isGeoJSONMessage) as [GeoJsonMessage[], NavMessage[]];
+      const [geo, nav] = _.partition(frame, isGeoJSONMessage);
       if (nav.length > 0) {
         // Only replace topics present in this frame; other topics keep their last position.
         setCurrentNav((prev) => new Map([...prev, ...Map.groupBy(nav, (m) => m.topic)]));
@@ -940,13 +940,13 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
     }
     // Free decoded images that no layer uses any more.
     setImages((prev) => {
-      const unused = [...prev.keys()].filter((url) => !wanted.has(url));
+      const unused = [...prev].filter(([url]) => !wanted.has(url));
       if (unused.length === 0) {
         return prev;
       }
       const next = new Map(prev);
-      for (const url of unused) {
-        URL.revokeObjectURL(prev.get(url)!.url);
+      for (const [url, image] of unused) {
+        URL.revokeObjectURL(image.url);
         next.delete(url);
       }
       return next;
@@ -1019,17 +1019,18 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
       return layer ? resolveSource(layer)?.url : undefined;
     };
     const onData = (event: { dataType: string; sourceId?: string; tile?: unknown }) => {
+      const { sourceId } = event;
       if (
         event.dataType !== "source" ||
-        !event.sourceId ||
+        !sourceId ||
         event.tile == undefined ||
-        loaded.has(event.sourceId)
+        loaded.has(sourceId)
       ) {
         return;
       }
-      loaded.add(event.sourceId);
-      const url = urlOfSource(event.sourceId);
-      rememberWorkingSource((id) => event.sourceId!.startsWith(id));
+      loaded.add(sourceId);
+      const url = urlOfSource(sourceId);
+      rememberWorkingSource((id) => sourceId.startsWith(id));
       if (url) {
         setSourceErrors((prev) =>
           prev.has(url) ? new Map([...prev].filter(([k]) => k !== url)) : prev,
@@ -1279,8 +1280,8 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
         { layers },
       );
       const feature = _.minBy(hits, (hit) => priority.indexOf(hit.layer.id));
-      const index = feature?.properties.i as number | undefined;
-      if (!feature || index == undefined) {
+      const index: unknown = feature?.properties.i;
+      if (!feature || typeof index !== "number") {
         return undefined;
       }
       const layerId = feature.layer.id;
