@@ -2,7 +2,6 @@
 
 import RestoreIcon from "@mui/icons-material/Restore";
 import { Chip, IconButton, List, ListItem, ListItemText, Tooltip, Typography } from "@mui/material";
-import * as _ from "lodash-es";
 import { useSnackbar } from "notistack";
 import { ReactElement, useCallback, useEffect, useMemo, useState } from "react";
 
@@ -23,7 +22,7 @@ import {
 
 import { describeChange } from "./describeChange";
 
-const selectLayout = (state: LayoutState) => state.selectedLayout;
+const selectLayoutId = (state: LayoutState) => state.selectedLayout?.id;
 
 const relativeFormat = new Intl.RelativeTimeFormat(undefined, { numeric: "auto" });
 const UNITS: [Intl.RelativeTimeFormatUnit, number][] = [
@@ -44,12 +43,10 @@ function formatAgo(savedAt: number, now: number): string {
 
 /** Local version history of the current layout, newest first, with one-click restore. */
 export default function LayoutHistoryList(): ReactElement {
-  const selectedLayout = useCurrentLayoutSelector(selectLayout);
+  const layoutId = useCurrentLayoutSelector(selectLayoutId);
   const { restoreLayoutData } = useCurrentLayoutActions();
   const panelCatalog = usePanelCatalog();
   const { enqueueSnackbar } = useSnackbar();
-  const layoutId = selectedLayout?.id;
-  const currentData = selectedLayout?.data;
 
   const [versions, setVersions] = useState<LayoutVersion[]>([]);
   useEffect(() => {
@@ -121,11 +118,14 @@ export default function LayoutHistoryList(): ReactElement {
   return (
     <Stack flex="auto" overflowY="auto">
       <List dense disablePadding>
-        {rows.map(({ version, changes }) => {
-          const isCurrent = currentData != undefined && _.isEqual(version.data, currentData);
+        {rows.map(({ version, changes }, index) => {
+          // Every edit, undo and restore records a version, so the newest one is the current
+          // state. Comparing data instead would flicker while a save is still debounced.
+          const isCurrent = index === 0;
           return (
             <ListItem
-              key={version.savedAt}
+              // Stable while an editing burst keeps updating the newest version.
+              key={version.startedAt ?? version.savedAt}
               divider
               secondaryAction={
                 !isCurrent && (
