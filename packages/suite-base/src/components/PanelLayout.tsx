@@ -437,6 +437,11 @@ export function UnconnectedPanelLayout(props: Readonly<Props>): React.ReactEleme
       // except in a band along the edges of the Tab panel: dropping there splits beside it.
       api.onWillShowOverlay((event) => {
         const target = event.nativeEvent.target;
+        // A panel's own drop target (e.g. the Stack panel's drop bar) takes drops even at its edges.
+        if (target instanceof Element && target.closest("[data-drop-target]") != undefined) {
+          event.preventDefault();
+          return;
+        }
         if (
           target instanceof Element &&
           (target.closest("[data-panel-layout]") !== rootRef.current ||

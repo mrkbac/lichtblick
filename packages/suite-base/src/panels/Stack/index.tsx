@@ -1,10 +1,11 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
+import AddIcon from "@mui/icons-material/Add";
 import ViewAgendaOutlinedIcon from "@mui/icons-material/ViewAgendaOutlined";
 import ViewColumnOutlinedIcon from "@mui/icons-material/ViewColumnOutlined";
 import ViewModuleOutlinedIcon from "@mui/icons-material/ViewModuleOutlined";
-import { ButtonBase, Popover } from "@mui/material";
+import { Button, Popover, Typography } from "@mui/material";
 import { getPanelData } from "dockview-react";
 import {
   CSSProperties,
@@ -30,14 +31,20 @@ import { usePanelContext } from "@lichtblick/suite-base/components/PanelContext"
 import { UnconnectedPanelLayout } from "@lichtblick/suite-base/components/PanelLayout";
 import { isPanelBeingDragged } from "@lichtblick/suite-base/components/PanelTab";
 import PanelToolbar from "@lichtblick/suite-base/components/PanelToolbar";
+import {
+  FLOATING_TOOLBARS_ATTRIBUTE,
+  FLOATING_TOOLBARS_STYLE,
+} from "@lichtblick/suite-base/components/PanelToolbar/constants";
 import { useCurrentLayoutActions } from "@lichtblick/suite-base/context/CurrentLayoutContext";
+import { usePanelCatalog } from "@lichtblick/suite-base/context/PanelCatalogContext";
 import { usePanelSettingsTreeUpdate } from "@lichtblick/suite-base/providers/PanelStateContextProvider";
 import { LayoutNode } from "@lichtblick/suite-base/types/layouts";
 import { SaveConfig } from "@lichtblick/suite-base/types/panels";
-import { getPanelIdForType } from "@lichtblick/suite-base/util/layout";
+import { getPanelIdForType, getPanelTypeFromId } from "@lichtblick/suite-base/util/layout";
 import { getPanelIds } from "@lichtblick/suite-base/util/layoutTree";
 import { STACK_PANEL_TYPE, TabConfig, getTabs } from "@lichtblick/suite-base/util/tabLayout";
 
+import { ScrollRail, STACK_ITEM_ATTRIBUTE } from "./ScrollRail";
 import { STACK_BUTTONS } from "./buttons";
 import {
   ARRANGEMENTS,
@@ -62,15 +69,28 @@ const useStyles = makeStyles()((theme) => ({
     flex: "auto",
     overflow: "hidden",
   },
+  body: {
+    position: "relative",
+    display: "flex",
+    flex: "auto",
+    minHeight: 0,
+  },
+  bodyX: { flexDirection: "column" },
   scroller: {
+    ...FLOATING_TOOLBARS_STYLE,
     position: "relative",
     flex: "auto",
     minHeight: 0,
+    minWidth: 0,
     overflow: "auto",
+    // The rail beside it scrolls instead.
+    scrollbarWidth: "none",
   },
+  // The gaps show the divider color between items, like the splits of a layout.
   track: {
     display: "flex",
-    gap: theme.spacing(0.5),
+    gap: 2,
+    backgroundColor: theme.palette.divider,
     minWidth: "100%",
     minHeight: "100%",
   },
@@ -83,7 +103,7 @@ const useStyles = makeStyles()((theme) => ({
   grid: {
     display: "grid",
     flex: "1 0 auto",
-    gap: theme.spacing(0.5),
+    gap: 2,
   },
   item: {
     position: "relative",
@@ -100,25 +120,43 @@ const useStyles = makeStyles()((theme) => ({
   },
   handleY: { left: 0, right: 0, bottom: 0, height: 5, cursor: "row-resize" },
   handleX: { top: 0, bottom: 0, right: 0, width: 5, cursor: "col-resize" },
-  dropZone: {
+  // Shown over the end of the stack while a panel is dragged over it.
+  dropBar: {
+    position: "absolute",
+    zIndex: 2,
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    flex: "none",
     padding: theme.spacing(1),
-    border: `1px dashed ${theme.palette.divider}`,
+    border: `1px dashed ${theme.palette.primary.main}`,
     borderRadius: theme.shape.borderRadius,
+    backgroundColor: theme.palette.background.paper,
     color: theme.palette.text.secondary,
     fontSize: theme.typography.body2.fontSize,
     textAlign: "center",
-    "&:hover": { color: theme.palette.text.primary },
+    boxShadow: theme.shadows[4],
   },
-  dropZoneY: { minHeight: 48 },
-  dropZoneX: { width: 120 },
-  dropZoneEmpty: { flex: "auto" },
+  dropBarY: {
+    left: theme.spacing(1),
+    right: theme.spacing(2),
+    bottom: theme.spacing(1),
+    height: 40,
+  },
+  dropBarX: { top: theme.spacing(1), bottom: theme.spacing(2), right: theme.spacing(1), width: 96 },
   dropOver: {
-    borderColor: theme.palette.primary.main,
-    backgroundColor: theme.palette.action.hover,
+    color: theme.palette.text.primary,
+    backgroundColor: theme.palette.action.selected,
+  },
+  empty: {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: theme.spacing(1),
+    flex: "auto",
+    padding: theme.spacing(2),
+    color: theme.palette.text.secondary,
+    textAlign: "center",
   },
 }));
 
@@ -202,7 +240,13 @@ function StackItem(props: ItemProps): React.JSX.Element {
   };
 
   return (
-    <div ref={setElement} className={classes.item} style={style} data-testid="stack-item">
+    <div
+      ref={setElement}
+      className={classes.item}
+      style={style}
+      data-testid="stack-item"
+      {...{ [STACK_ITEM_ATTRIBUTE]: index }}
+    >
       <PanelVisibleContext.Provider value={visible && inView}>
         <UnconnectedPanelLayout
           layout={layout}
@@ -235,6 +279,9 @@ function StackPanel({ config, saveConfig }: Props): React.JSX.Element {
   const [catalogAnchor, setCatalogAnchor] = useState<HTMLElement | undefined>(undefined);
   const [scroller, setScroller] = useState<HTMLDivElement | null>(null);
   const [isOver, setIsOver] = useState(false);
+  // A panel is being dragged over the stack: show where to drop it to add it at the end.
+  const [dragging, setDragging] = useState(false);
+  const panelCatalog = usePanelCatalog();
   // The size being dragged, shown before it is saved.
   const [draft, setDraft] = useState<{ index: number; size: number } | undefined>(undefined);
 
@@ -242,6 +289,35 @@ function StackPanel({ config, saveConfig }: Props): React.JSX.Element {
   const tabs = useMemo(() => getTabs({ tabs: rawTabs }), [rawTabs]);
   const { arrangement, size, columns } = normalizeStackConfig(config);
   const horizontal = arrangement === "horizontal";
+  const titles = useMemo(
+    () =>
+      tabs.map((tab) =>
+        getPanelIds(tab.layout)
+          .map((id) => {
+            const type = getPanelTypeFromId(id);
+            return panelCatalog.getPanelByType(type)?.title ?? type;
+          })
+          .join(" + "),
+      ),
+    [panelCatalog, tabs],
+  );
+
+  // A drag ends somewhere else, or is dropped into an item, without leaving the stack.
+  useEffect(() => {
+    if (!dragging) {
+      return undefined;
+    }
+    const stop = () => {
+      setDragging(false);
+      setIsOver(false);
+    };
+    window.addEventListener("dragend", stop, true);
+    window.addEventListener("drop", stop, true);
+    return () => {
+      window.removeEventListener("dragend", stop, true);
+      window.removeEventListener("drop", stop, true);
+    };
+  }, [dragging]);
 
   const actionHandler = useCallback(
     (action: SettingsTreeAction) => {
@@ -303,6 +379,7 @@ function StackPanel({ config, saveConfig }: Props): React.JSX.Element {
 
   const onDrop = (event: DragEvent<HTMLElement>) => {
     setIsOver(false);
+    setDragging(false);
     const selection = getPanelDragData(event.dataTransfer);
     const id = selection ? getPanelIdForType(selection.type) : getPanelData()?.panelId;
     if (id == undefined) {
@@ -310,6 +387,25 @@ function StackPanel({ config, saveConfig }: Props): React.JSX.Element {
     }
     event.preventDefault();
     append(id, selection?.config);
+  };
+
+  const dropTarget = {
+    onDragEnter: (event: DragEvent<HTMLElement>) => {
+      if (isPanelBeingDragged(event.dataTransfer)) {
+        setIsOver(true);
+      }
+    },
+    onDragLeave: (event: DragEvent<HTMLElement>) => {
+      if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+        setIsOver(false);
+      }
+    },
+    onDragOver: (event: DragEvent<HTMLElement>) => {
+      if (isPanelBeingDragged(event.dataTransfer)) {
+        event.preventDefault();
+      }
+    },
+    onDrop,
   };
 
   const addFromCatalog = ({ type, config: panelConfig }: PanelSelection) => {
@@ -380,10 +476,49 @@ function StackPanel({ config, saveConfig }: Props): React.JSX.Element {
       >
         <PanelCatalog mode="list" isMenu onPanelSelect={addFromCatalog} />
       </Popover>
-      <div ref={setScroller} className={classes.scroller}>
-        <div className={cx(classes.track, horizontal ? classes.horizontal : classes.vertical)}>
-          {arrangement === "grid"
-            ? tabs.length > 0 && (
+      <div
+        className={cx(classes.body, { [classes.bodyX]: horizontal })}
+        onDragEnterCapture={(event) => {
+          if (isPanelBeingDragged(event.dataTransfer)) {
+            setDragging(true);
+          }
+        }}
+        onDragLeaveCapture={(event) => {
+          if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+            setDragging(false);
+            setIsOver(false);
+          }
+        }}
+      >
+        <div
+          ref={setScroller}
+          className={classes.scroller}
+          {...{ [FLOATING_TOOLBARS_ATTRIBUTE]: "" }}
+        >
+          {tabs.length === 0 ? (
+            <div
+              className={cx(classes.empty, { [classes.dropOver]: isOver })}
+              style={{ height: "100%" }}
+              // The layouts leave drags over this to it.
+              data-drop-target
+              data-testid="stack-empty"
+              {...dropTarget}
+            >
+              <Typography variant="body2">{t("empty")}</Typography>
+              <Button
+                variant="outlined"
+                size="small"
+                startIcon={<AddIcon />}
+                onClick={(event) => {
+                  setCatalogAnchor(event.currentTarget);
+                }}
+              >
+                {t("addPanel")}
+              </Button>
+            </div>
+          ) : (
+            <div className={cx(classes.track, horizontal ? classes.horizontal : classes.vertical)}>
+              {arrangement === "grid" ? (
                 <div
                   className={classes.grid}
                   style={{
@@ -393,39 +528,26 @@ function StackPanel({ config, saveConfig }: Props): React.JSX.Element {
                 >
                   {items}
                 </div>
-              )
-            : items}
-          <ButtonBase
-            // The outer layout leaves drags over this zone to it.
-            data-tab-strip
-            data-testid="stack-drop-zone"
-            className={cx(classes.dropZone, horizontal ? classes.dropZoneX : classes.dropZoneY, {
-              [classes.dropZoneEmpty]: tabs.length === 0,
+              ) : (
+                items
+              )}
+            </div>
+          )}
+        </div>
+        <ScrollRail scroller={scroller} horizontal={horizontal} titles={titles} />
+        {dragging && tabs.length > 0 && (
+          <div
+            // The layouts leave drags over this to it.
+            data-drop-target
+            data-testid="stack-drop-bar"
+            className={cx(classes.dropBar, horizontal ? classes.dropBarX : classes.dropBarY, {
               [classes.dropOver]: isOver,
             })}
-            onClick={(event) => {
-              setCatalogAnchor(event.currentTarget);
-            }}
-            onDragEnter={(event) => {
-              if (isPanelBeingDragged(event.dataTransfer)) {
-                setIsOver(true);
-              }
-            }}
-            onDragLeave={(event) => {
-              if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
-                setIsOver(false);
-              }
-            }}
-            onDragOver={(event) => {
-              if (isPanelBeingDragged(event.dataTransfer)) {
-                event.preventDefault();
-              }
-            }}
-            onDrop={onDrop}
+            {...dropTarget}
           >
-            {t("dropHere")}
-          </ButtonBase>
-        </div>
+            {t("dropToAppend")}
+          </div>
+        )}
       </div>
     </div>
   );

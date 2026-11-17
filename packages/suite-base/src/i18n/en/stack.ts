@@ -14,6 +14,8 @@ export const stack = {
     "Smallest height (width when horizontal) of an item in px. Items grow to fill the panel when they fit; drag an item's edge to resize it.",
   columns: "Columns",
   columnsHelp: "Items per row in the grid.",
-  dropHere: "Drop a panel here, or click to add one",
+  empty: "Drag panels here to stack them, or",
+  addPanel: "Add panel",
+  dropToAppend: "Drop to add at the end",
   resize: "Drag to resize",
 };

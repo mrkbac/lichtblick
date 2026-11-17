@@ -19,10 +19,15 @@ const docs: PanelDocs = {
     {
       title: "Items",
       items: [
-        ["Adding", "Drop a panel on the box at the end of the stack, or pick one from the list."],
+        ["Adding", "Drag a panel over the stack and drop it on the bar that appears at the end."],
         ["Splitting", "Drop a panel onto an item's edge to split that item like a layout."],
         ["Sizing", "Drag the edge of an item to resize it; in a grid this sets the row height."],
-        ["Scrolling", "Items scrolled out of view pause where the panel supports it."],
+        ["Title bars", "Each item's title bar shows while you point at the item."],
+        [
+          "Scrolling",
+          "The rail at the side has a bar per item. Scroll over it, drag along it, or pick an item's bar to jump to it.",
+        ],
+        ["Pausing", "Items scrolled out of view pause where the panel supports it."],
       ],
     },
   ],
