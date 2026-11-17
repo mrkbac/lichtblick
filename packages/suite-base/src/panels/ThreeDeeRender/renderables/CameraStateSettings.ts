@@ -93,10 +93,31 @@ export class CameraStateSettings extends SceneExtension implements ICameraHandle
     this.#controls.mouseButtons.RIGHT = DEFAULT_ORBIT_CONTROLS_CONFIG.mouseButtons.RIGHT;
     this.#controls.touches.ONE = DEFAULT_ORBIT_CONTROLS_CONFIG.touches.ONE;
     this.#controls.touches.TWO = DEFAULT_ORBIT_CONTROLS_CONFIG.touches.TWO;
+    // Every user zoom (wheel, pinch) fires "start" first, so programmatic camera changes never
+    // leave a stale value here.
+    let lastDistance = 0;
+    this.#controls.addEventListener("start", () => {
+      lastDistance = this.#controls.getDistance();
+    });
     this.#controls.addEventListener("change", () => {
-      if (!this.#isUpdatingCameraState) {
-        renderer.emit("cameraMove", renderer);
+      if (this.#isUpdatingCameraState) {
+        return;
       }
+      // Pan and zoom speed scale with the distance to the orbit target, so zooming in toward the
+      // target makes everything crawl and zoom stalls at the target. Once a zoom-in gets closer
+      // than twice the near plane, push the target forward instead, so the camera flies through
+      // at a steady speed.
+      const { cameraState } = renderer.config;
+      const distance = this.#controls.getDistance();
+      const minDistance = cameraState.near * 2;
+      if (cameraState.perspective && distance < lastDistance && distance < minDistance) {
+        const forward = tempVec3
+          .subVectors(this.#controls.target, this.#perspectiveCamera.position)
+          .normalize();
+        this.#controls.target.addScaledVector(forward, minDistance - distance);
+      }
+      lastDistance = this.#controls.getDistance();
+      renderer.emit("cameraMove", renderer);
     });
 
     // Screen space panning when holding Alt key
