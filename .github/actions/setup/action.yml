@@ -26,34 +26,31 @@ runs:
       run: |
         echo "path=$(pnpm store path --silent)" >> "$GITHUB_OUTPUT"
         echo "key=pnpm-store-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}" >> "$GITHUB_OUTPUT"
+        echo "saving=${{ inputs.save-cache == 'true' && github.event_name == 'push' && github.ref == 'refs/heads/licht' }}" >> "$GITHUB_OUTPUT"
 
     # PRs and other branches only restore. A lockfile that licht doesn't have yet falls back
-    # to licht's newest store, so pnpm downloads just the changed packages.
+    # to licht's newest store, so pnpm downloads just the changed packages. The job that saves
+    # skips that fallback, so the saved store holds exactly this lockfile's packages instead of
+    # growing with every save. (`pnpm store prune` would shrink it too, but it deletes index
+    # files that `pnpm licenses list` still reads.)
     - id: restore
       uses: actions/cache/restore@v6
       with:
         path: ${{ steps.store.outputs.path }}
         key: ${{ steps.store.outputs.key }}
-        restore-keys: pnpm-store-${{ runner.os }}-
+        restore-keys: ${{ steps.store.outputs.saving != 'true' && format('pnpm-store-{0}-', runner.os) || '' }}
 
     - shell: bash
       run: pnpm install --frozen-lockfile
 
-    - id: should-save
-      if: >-
-        inputs.save-cache == 'true' && github.event_name == 'push' &&
-        github.ref == 'refs/heads/licht' && steps.restore.outputs.cache-hit != 'true'
-      shell: bash
-      # Drop packages the new lockfile no longer uses, so the store doesn't grow with each save
-      run: pnpm store prune
-
-    - if: steps.should-save.outcome == 'success'
+    - if: steps.store.outputs.saving == 'true' && steps.restore.outputs.cache-hit != 'true'
+      id: save
       uses: actions/cache/save@v6
       with:
         path: ${{ steps.store.outputs.path }}
         key: ${{ steps.store.outputs.key }}
 
-    - if: steps.should-save.outcome == 'success'
+    - if: steps.save.outcome == 'success'
       shell: bash
       env:
         GH_TOKEN: ${{ github.token }}
