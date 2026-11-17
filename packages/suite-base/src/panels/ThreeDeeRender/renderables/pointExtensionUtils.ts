@@ -88,6 +88,7 @@ export class PointsRenderable<TUserData extends BaseUserData = BaseUserData> ext
   public override dispose(): void {
     this.#points.geometry.dispose();
     this.#cubes?.geometry.dispose();
+    this.#outline?.geometry.dispose();
   }
 
   public updateMaterial(material: Material): void {
@@ -95,6 +96,8 @@ export class PointsRenderable<TUserData extends BaseUserData = BaseUserData> ext
   }
 
   #cubes?: THREE.Mesh<THREE.InstancedBufferGeometry, THREE.MeshLambertMaterial>;
+  #cubesShape?: PointMeshShape;
+  #outline?: THREE.LineSegments<THREE.InstancedBufferGeometry, THREE.LineBasicMaterial>;
 
   /**
    * Cube instance attributes alias the point geometry's arrays, so the cloud is only decoded once.
@@ -109,29 +112,62 @@ export class PointsRenderable<TUserData extends BaseUserData = BaseUserData> ext
     cubes.instanceCount = points.drawRange.count;
     syncInstanceAttribute(cubes, "instancePosition", points.attributes.position!);
     syncInstanceAttribute(cubes, "color", points.attributes.color!);
+    if (this.#outline?.visible === true) {
+      const outline = this.#outline.geometry;
+      outline.instanceCount = points.drawRange.count;
+      syncInstanceAttribute(outline, "instancePosition", points.attributes.position!);
+    }
   }
 
-  /** Render each point as a cube (one instanced draw call) instead of a GL point, or switch back */
-  public setCubeMaterials(materials: CubeMaterials | undefined): void {
+  /**
+   * Render each point as a cube or sphere (one instanced draw call) instead of a GL point, or
+   * switch back. `showOutline` draws cube edges.
+   */
+  public setCubeMaterials(
+    materials: CubeMaterials | undefined,
+    { shape, showOutline }: { shape: PointMeshShape; showOutline: boolean } = {
+      shape: "cube",
+      showOutline: false,
+    },
+  ): void {
     this.#points.visible = materials == undefined;
     if (!materials) {
       if (this.#cubes) {
         this.#cubes.visible = false;
       }
+      if (this.#outline) {
+        this.#outline.visible = false;
+      }
       return;
     }
+    if (this.#cubes && this.#cubesShape !== shape) {
+      this.remove(this.#cubes);
+      this.#cubes.geometry.dispose();
+      this.#cubes = undefined;
+    }
     if (!this.#cubes) {
-      const geometry = new THREE.InstancedBufferGeometry();
-      // Clone: disposing a geometry deletes its attributes' GL buffers, which must not affect
-      // other cubes sharing them
-      geometry.setIndex(UNIT_CUBE.index!.clone());
-      geometry.setAttribute("position", UNIT_CUBE.attributes.position!.clone());
-      geometry.setAttribute("normal", UNIT_CUBE.attributes.normal!.clone());
-      const cubes = new THREE.Mesh(geometry, materials.material);
+      const cubes = new THREE.Mesh(instancedCopy(UNIT_GEOMETRY[shape]), materials.material);
       cubes.frustumCulled = false;
-      cubes.name = `${this.userData.topic}:PointCloud:cubes`;
+      cubes.name = `${this.userData.topic}:PointCloud:${shape}s`;
       this.#cubes = cubes;
+      this.#cubesShape = shape;
       this.add(cubes);
+    }
+    const outlineVisible = showOutline && shape === "cube";
+    if (outlineVisible && !this.#outline) {
+      const outline = new THREE.LineSegments(
+        instancedCopy(UNIT_CUBE_EDGES),
+        materials.outlineMaterial,
+      );
+      outline.frustumCulled = false;
+      outline.userData.picking = false;
+      outline.name = `${this.userData.topic}:PointCloud:outline`;
+      this.#outline = outline;
+      this.add(outline);
+    }
+    if (this.#outline) {
+      this.#outline.visible = outlineVisible;
+      this.#outline.material = materials.outlineMaterial;
     }
     this.#cubes.visible = true;
     this.syncCubes();
@@ -144,7 +180,31 @@ export class PointsRenderable<TUserData extends BaseUserData = BaseUserData> ext
   }
 }
 
-const UNIT_CUBE = new THREE.BoxGeometry(1, 1, 1);
+/** Point shapes drawn as instanced meshes, sized in meters by `cubeSize` */
+export type PointMeshShape = "cube" | "sphere";
+
+const UNIT_GEOMETRY: Record<PointMeshShape, THREE.BufferGeometry> = {
+  cube: new THREE.BoxGeometry(1, 1, 1),
+  // Diameter 1 like the cube's edge; 10x6 segments look round at ~100 triangles per point
+  sphere: new THREE.SphereGeometry(0.5, 10, 6),
+};
+const UNIT_CUBE_EDGES = new THREE.EdgesGeometry(UNIT_GEOMETRY.cube);
+
+/**
+ * Instanced geometry with cloned attributes: disposing a geometry deletes its attributes' GL
+ * buffers, which must not affect other point clouds sharing them.
+ */
+function instancedCopy(source: THREE.BufferGeometry): THREE.InstancedBufferGeometry {
+  const geometry = new THREE.InstancedBufferGeometry();
+  if (source.index) {
+    geometry.setIndex(source.index.clone());
+  }
+  geometry.setAttribute("position", source.attributes.position!.clone());
+  if (source.attributes.normal) {
+    geometry.setAttribute("normal", source.attributes.normal.clone());
+  }
+  return geometry;
+}
 
 function syncInstanceAttribute(
   geometry: THREE.InstancedBufferGeometry,
@@ -169,7 +229,9 @@ export type CubeMaterials = {
   material: THREE.MeshLambertMaterial;
   pickingMaterial: THREE.ShaderMaterial;
   instancePickingMaterial: THREE.ShaderMaterial;
-  /** Shared by all three materials so size changes don't need a rebuild */
+  /** Cube edges */
+  outlineMaterial: THREE.LineBasicMaterial;
+  /** Shared by all materials so size changes don't need a rebuild */
   cubeSize: THREE.IUniform<number>;
 };
 
@@ -239,13 +301,22 @@ export function createCubeMaterials<T extends LayerSettingsPointExtension>(
     `,
     uniforms: { cubeSize },
   });
-  return { material, pickingMaterial, instancePickingMaterial, cubeSize };
+  const outlineMaterial = new THREE.LineBasicMaterial({ color: 0x000000 });
+  outlineMaterial.customProgramCacheKey = () => "cube-outline";
+  outlineMaterial.onBeforeCompile = (shader) => {
+    shader.uniforms.cubeSize = cubeSize;
+    shader.vertexShader =
+      "uniform float cubeSize;\nattribute vec3 instancePosition;\n" +
+      shader.vertexShader.replace("#include <begin_vertex>", VS_CUBE_TRANSFORM);
+  };
+  return { material, pickingMaterial, instancePickingMaterial, outlineMaterial, cubeSize };
 }
 
 export function disposeCubeMaterials(materials: CubeMaterials): void {
   materials.material.dispose();
   materials.pickingMaterial.dispose();
   materials.instancePickingMaterial.dispose();
+  materials.outlineMaterial.dispose();
 }
 
 // Fragment shader chunk to convert sRGB to linear RGB
