@@ -608,6 +608,7 @@ export type UrdfLinkSettings = {
 export function urdfLinkNode(name: string, settings: UrdfLinkSettings | undefined): DocumentedNode {
   return {
     label: name,
+    defaultExpansionState: "collapsed",
     visible: settings?.visible ?? true,
     fields: {
       position: {
