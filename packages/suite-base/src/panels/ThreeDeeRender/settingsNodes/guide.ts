@@ -39,6 +39,7 @@ import {
 import {
   cameraInfoSettingsNode,
   foxgloveGridSettingsNode,
+  gridMapSettingsNode,
   imageProjectionSettingsNode,
   laserScanSettingsNode,
   markerSettingsNode,
@@ -132,6 +133,12 @@ function topicNodes(): DocumentedNodes {
     grid: merged(
       "Grid",
       ...COLOR_MODES.map((colorMode) => foxgloveGridSettingsNode(topic(""), { colorMode }, fields)),
+    ),
+    gridMap: merged(
+      "Grid map",
+      ...(["colormap", "gradient"] as const).map((colorMode) =>
+        gridMapSettingsNode(topic(""), { colorMode }, ["elevation"]),
+      ),
     ),
     cameraInfo: { ...cameraInfoSettingsNode(topic(""), {}), label: "Camera calibration" },
     image: { ...imageProjectionSettingsNode(topic(""), {}, []), label: "Image" },

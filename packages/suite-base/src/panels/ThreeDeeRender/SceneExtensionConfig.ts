@@ -8,6 +8,7 @@
 import { Cameras } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/Cameras";
 import { FoxgloveGrid } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/FoxgloveGrid";
 import { FrameAxes } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/FrameAxes";
+import { GridMaps } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/GridMaps";
 import { Grids } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/Grids";
 import { ImageMode } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/ImageMode/ImageMode";
 import { Images } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/Images";
@@ -97,6 +98,9 @@ export const DEFAULT_SCENE_EXTENSION_CONFIG: SceneExtensionConfig = {
     },
     [FoxgloveGrid.extensionId]: {
       init: (renderer: Renderer) => new FoxgloveGrid(renderer),
+    },
+    [GridMaps.extensionId]: {
+      init: (renderer: Renderer) => new GridMaps(renderer),
     },
     [LaserScans.extensionId]: {
       init: (renderer: Renderer) => new LaserScans(renderer),

@@ -201,6 +201,21 @@ export const threeDee = {
   covarianceColorHelp: "Color of the covariance ellipsoid.",
   pathLineWidthHelp: "Width of the line through the poses, in meters.",
   poseGradientHelp: "Colors from the first pose to the last.",
+  gridMapColorLayer: "Color layer",
+  gridMapColorLayerHelp: "The map layer whose values set each cell's color.",
+  gridMapElevationLayer: "Elevation layer",
+  gridMapElevationLayerHelp:
+    "The map layer whose values lift each cell along Z, in meters. Choose None for a flat map.",
+  gridMapNoLayer: "None",
+  gridMapInterpolation: "Interpolation",
+  gridMapInterpolationHelp:
+    "Linear blends colors between cell centers. Nearest shows each cell as a solid block.",
+  gridMapInterpolationLinear: "Linear",
+  gridMapInterpolationNearest: "Nearest",
+  gridMapLighting: "Lighting",
+  gridMapLightingHelp: "Shade slopes of the elevation surface so terrain shape is easier to read.",
+  gridMapDrawBehind: "Draw behind",
+  gridMapDrawBehindHelp: "Draw the map underneath everything else in the scene, ignoring depth.",
   occupancyColorModeHelp:
     "Custom blends between your colors; Map and Costmap use the rviz palettes; Raw shows cell values as gray levels.",
   minColorHelp: "Color of free cells (0); values up to 100 blend toward the max color.",

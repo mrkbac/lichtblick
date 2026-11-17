@@ -238,6 +238,38 @@ export type OccupancyGrid = {
   data: Int8Array | number[];
 };
 
+export type MultiArrayDimension = {
+  label: string;
+  size: number;
+  stride: number;
+};
+
+export type Float32MultiArray = {
+  layout: { dim: MultiArrayDimension[]; data_offset: number };
+  data: Float32Array | number[];
+};
+
+export type GridMapInfo = {
+  /** ROS 1 only; ROS 2 has the header on the message */
+  header?: Header;
+  resolution: number;
+  length_x: number;
+  length_y: number;
+  /** Center of the map in the header frame */
+  pose: Pose;
+};
+
+export type GridMap = {
+  /** ROS 2 only; ROS 1 has the header in `info` */
+  header?: Header;
+  info: GridMapInfo;
+  layers: string[];
+  basic_layers: string[];
+  data: Float32MultiArray[];
+  outer_start_index: number;
+  inner_start_index: number;
+};
+
 export type PoseStamped = {
   header: Header;
   pose: Pose;
@@ -349,6 +381,9 @@ addRosDataType(MARKER_ARRAY_DATATYPES, "studio_msgs/MarkerArray");
 
 export const OCCUPANCY_GRID_DATATYPES = new Set<string>();
 addRosDataType(OCCUPANCY_GRID_DATATYPES, "nav_msgs/OccupancyGrid");
+
+export const GRID_MAP_DATATYPES = new Set<string>();
+addRosDataType(GRID_MAP_DATATYPES, "grid_map_msgs/GridMap");
 
 export const POINTCLOUD_DATATYPES = new Set<string>();
 addRosDataType(POINTCLOUD_DATATYPES, "sensor_msgs/PointCloud2");
