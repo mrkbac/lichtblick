@@ -63,7 +63,8 @@ export function CurrentLayoutLocalStorageSyncAdapter(): React.JSX.Element {
   useAsync(async () => {
     const layoutState = getCurrentLayoutState();
 
-    if (!layoutState.selectedLayout) {
+    // While loading, the data still belongs to the previous layout.
+    if (!layoutState.selectedLayout || layoutState.selectedLayout.loading === true) {
       return;
     }
 

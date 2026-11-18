@@ -66,7 +66,10 @@ export function useLayoutNavigation(menuClose?: () => void): UseLayoutNavigation
           });
         }
       } else {
-        setSelectedLayoutId(item.id);
+        // Re-selecting the shown layout would reload every panel for nothing.
+        if (item.id !== currentLayoutId) {
+          setSelectedLayoutId(item.id);
+        }
         dispatch({ type: "select-id", id: item.id });
         menuClose?.();
       }
