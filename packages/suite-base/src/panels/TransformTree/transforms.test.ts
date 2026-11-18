@@ -24,4 +24,17 @@ describe("samplesFromMessage", () => {
     expect(malformed).toBe(false);
     expect(samples).toHaveLength(1);
   });
+
+  it("reads ROS 2 stamps, which the CDR decoder gives as `nanosec`", () => {
+    const { samples, malformed } = samplesFromMessage("tf2_msgs/msg/TFMessage", {
+      transforms: [
+        {
+          ...message({ x: 0, y: 0, z: 0, w: 1 }),
+          header: { stamp: { sec: 1, nanosec: 500_000_000 }, frame_id: "world" },
+        },
+      ],
+    });
+    expect(malformed).toBe(false);
+    expect(samples[0]?.stamp).toBe(1.5);
+  });
 });

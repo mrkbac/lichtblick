@@ -60,6 +60,17 @@ const hasNumbers = <K extends string>(
   value != null &&
   keys.every((key) => typeof Reflect.get(value, key) === "number");
 
+/** ROS 1 and Foxglove stamps use `nsec`; the ROS 2 CDR decoder gives `nanosec`. */
+function toTime(stamp: unknown): Time | undefined {
+  if (hasNumbers(stamp, ["sec", "nsec"])) {
+    return stamp;
+  }
+  if (hasNumbers(stamp, ["sec", "nanosec"])) {
+    return { sec: stamp.sec, nsec: stamp.nanosec };
+  }
+  return undefined;
+}
+
 /**
  * The sample, or undefined when a field is missing or has the wrong type, e.g. a message sliced
  * to fewer fields or a hand-written JSON recording. One bad transform must not break the panel.
@@ -71,12 +82,13 @@ function toSample(
   rotation: unknown,
   stamp: unknown,
 ): TransformSample | undefined {
+  const time = toTime(stamp);
   if (
     typeof parent !== "string" ||
     typeof child !== "string" ||
     !hasNumbers(translation, ["x", "y", "z"]) ||
     !hasNumbers(rotation, ["x", "y", "z", "w"]) ||
-    !hasNumbers(stamp, ["sec", "nsec"])
+    time == undefined
   ) {
     return undefined;
   }
@@ -85,7 +97,7 @@ function toSample(
     child: normalizeFrameId(child),
     translation,
     rotation,
-    stamp: toSec(stamp),
+    stamp: toSec(time),
   };
 }
 
