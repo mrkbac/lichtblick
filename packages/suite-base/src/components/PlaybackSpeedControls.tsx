@@ -16,7 +16,8 @@ import {
   ToggleButtonGroup,
   Typography,
 } from "@mui/material";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 import { useLatest } from "@lichtblick/hooks";
 import HoverableIconButton from "@lichtblick/suite-base/components/HoverableIconButton";
@@ -62,12 +63,14 @@ export const stepSpeed = (speed: number, dir: 1 | -1): number => {
 // Wheel delta needed per speed step: one mouse-wheel notch (~100px) is one step, while a
 // trackpad's stream of small deltas doesn't skip through presets too fast.
 const WHEEL_STEP_PX = 50;
+const DOM_DELTA_PIXEL = 0; // WheelEvent.DOM_DELTA_PIXEL
 
 const configSpeedSelector = (state: LayoutState) =>
   state.selectedLayout?.data?.playbackConfig.speed;
 
 export default function PlaybackSpeedControls(): React.JSX.Element {
   const { classes } = useStyles();
+  const { t } = useTranslation("playbackSpeed");
   const [anchorEl, setAnchorEl] = useState<undefined | HTMLElement>(undefined);
   const open = Boolean(anchorEl);
   const configSpeed = useCurrentLayoutSelector(configSpeedSelector);
@@ -76,22 +79,39 @@ export default function PlaybackSpeedControls(): React.JSX.Element {
   );
   const setPlaybackSpeed = useMessagePipeline(useCallback((state) => state.setPlaybackSpeed, []));
   const { setPlaybackConfig } = useCurrentLayoutActions();
+
   // Optimistic value: the player echoes speed changes back asynchronously (throttled), so a
   // control bound to the echoed speed lags and snaps back while dragging. Show the draft until
-  // the player reports the same speed.
-  const [draft, setDraft] = useState<number | undefined>(undefined);
+  // the player reports the same speed. The ref mirrors it synchronously so back-to-back steps
+  // (a fast wheel burst) build on each other instead of on the last render.
+  const [draft, setDraftState] = useState<number | undefined>(undefined);
+  const draftRef = useRef<number | undefined>(undefined);
+  const setDraft = useCallback((value: number | undefined) => {
+    draftRef.current = value;
+    setDraftState(value);
+  }, []);
   useEffect(() => {
     if (speed === draft) {
       setDraft(undefined);
     }
-  }, [speed, draft]);
+  }, [speed, draft, setDraft]);
+
+  // A layout change we didn't write (undo/redo, command palette) wins over a pending draft.
+  const lastWrittenRef = useRef<number | undefined>(undefined);
+  useEffect(() => {
+    if (configSpeed !== lastWrittenRef.current) {
+      setDraft(undefined);
+    }
+  }, [configSpeed, setDraft]);
+
   const setSpeed = useCallback(
     (newSpeed: number) => {
       setDraft(newSpeed);
+      lastWrittenRef.current = newSpeed;
       setPlaybackConfig({ speed: newSpeed });
       setPlaybackSpeed?.(newSpeed);
     },
-    [setPlaybackConfig, setPlaybackSpeed],
+    [setDraft, setPlaybackConfig, setPlaybackSpeed],
   );
 
   // Set the speed to the speed that we got from the config whenever we get a new Player.
@@ -104,12 +124,34 @@ export default function PlaybackSpeedControls(): React.JSX.Element {
   const displayedSpeed = speed ?? configSpeed;
   const current = displayedSpeed ?? 1;
   const shown = draft ?? current;
+  const latestShown = useLatest(shown);
+  const step = useCallback(
+    (dir: 1 | -1) => {
+      setSpeed(stepSpeed(draftRef.current ?? latestShown.current, dir));
+    },
+    [latestShown, setSpeed],
+  );
+
+  // Slider drag: live speed on every move, one layout write on release. The slider keeps its
+  // unrounded log coordinate while that still rounds to the shown speed, so small keyboard steps
+  // accumulate instead of rounding back to where they started.
+  const [sliderPos, setSliderPos] = useState<number | undefined>(undefined);
+  const sliderValue =
+    sliderPos != undefined && roundSpeed(10 ** sliderPos) === shown ? sliderPos : Math.log10(shown);
+  const dragRef = useRef<{ start: number; value?: number } | undefined>(undefined);
+  const cancelDrag = useCallback(() => {
+    const drag = dragRef.current;
+    dragRef.current = undefined;
+    if (drag?.value != undefined) {
+      // A drag that never got its release: put the player back on the persisted speed.
+      setDraft(drag.start);
+      setPlaybackSpeed?.(drag.start);
+    }
+  }, [setDraft, setPlaybackSpeed]);
 
   // Scroll over the speed button: up = faster, down = slower. Non-passive so the page doesn't
   // scroll; React's onWheel is passive and can't preventDefault.
-  const wheelStep = useLatest((dir: 1 | -1) => {
-    setSpeed(stepSpeed(shown, dir));
-  });
+  const latestStep = useLatest(step);
   const wheelRef = useCallback(
     (el: HTMLButtonElement | null) => {
       if (!el) {
@@ -117,13 +159,18 @@ export default function PlaybackSpeedControls(): React.JSX.Element {
       }
       let acc = 0;
       const onWheel = (event: WheelEvent) => {
-        if (el.disabled) {
+        // Ctrl+wheel is browser zoom (and trackpad pinch in Chromium); leave it alone.
+        if (el.disabled || event.ctrlKey) {
           return;
         }
         event.preventDefault();
-        acc += event.deltaY;
+        // Line/page-mode wheels (e.g. Firefox) report notches, not pixels: one event, one step.
+        acc +=
+          event.deltaMode === DOM_DELTA_PIXEL
+            ? event.deltaY
+            : Math.sign(event.deltaY) * WHEEL_STEP_PX;
         if (Math.abs(acc) >= WHEEL_STEP_PX) {
-          wheelStep.current(acc < 0 ? 1 : -1);
+          latestStep.current(acc < 0 ? 1 : -1);
           acc = 0;
         }
       };
@@ -132,7 +179,7 @@ export default function PlaybackSpeedControls(): React.JSX.Element {
         el.removeEventListener("wheel", onWheel);
       };
     },
-    [wheelStep],
+    [latestStep],
   );
 
   return (
@@ -141,7 +188,7 @@ export default function PlaybackSpeedControls(): React.JSX.Element {
         ref={wheelRef}
         id="playback-speed-button"
         aria-controls={open ? "playback-speed-popover" : undefined}
-        aria-haspopup="true"
+        aria-haspopup="dialog"
         aria-expanded={open ? "true" : undefined}
         icon={<ArrowDropDownIcon fontSize="small" />}
         iconPosition="end"
@@ -150,7 +197,7 @@ export default function PlaybackSpeedControls(): React.JSX.Element {
         }}
         data-testid="PlaybackSpeedControls-Dropdown"
         disabled={setPlaybackSpeed == undefined}
-        title="Playback speed (scroll to change)"
+        title={t("scrollToChange")}
         color="inherit"
       >
         <span className={classes.speedText}>
@@ -158,20 +205,33 @@ export default function PlaybackSpeedControls(): React.JSX.Element {
         </span>
       </HoverableIconButton>
       <Popover
-        id="playback-speed-popover"
         anchorEl={anchorEl}
         open={open}
         onClose={() => {
           setAnchorEl(undefined);
+          cancelDrag();
+          setSliderPos(undefined);
           setDraft(undefined); // don't keep a stale draft if the player clamped the speed
         }}
         anchorOrigin={{ vertical: "top", horizontal: "right" }}
         transformOrigin={{ vertical: "bottom", horizontal: "right" }}
-        slotProps={{ paper: { className: classes.paper } }}
+        slotProps={{
+          paper: {
+            id: "playback-speed-popover",
+            role: "dialog",
+            "aria-labelledby": "playback-speed-title",
+            className: classes.paper,
+          },
+        }}
       >
         <Stack direction="row" alignItems="baseline" justifyContent="space-between">
-          <Typography variant="overline" color="text.secondary" className={classes.title}>
-            Playback speed
+          <Typography
+            id="playback-speed-title"
+            variant="overline"
+            color="text.secondary"
+            className={classes.title}
+          >
+            {t("playbackSpeed")}
           </Typography>
           <Typography variant="h5" className={classes.value}>
             {formatSpeed(shown)}
@@ -181,41 +241,50 @@ export default function PlaybackSpeedControls(): React.JSX.Element {
           <IconButton
             size="small"
             className={classes.stepButton}
-            aria-label="Slower"
-            disabled={current <= MIN_SPEED}
+            aria-label={t("slower")}
+            disabled={shown <= MIN_SPEED}
             onClick={() => {
-              setSpeed(stepSpeed(current, -1));
+              step(-1);
             }}
           >
             <RemoveIcon fontSize="small" />
           </IconButton>
           <Slider
             className={classes.slider}
-            aria-label="Playback speed"
+            aria-label={t("playbackSpeed")}
             min={LOG_MIN}
             max={LOG_MAX}
             step={0.01}
             marks={SLIDER_MARKS}
-            value={Math.log10(shown)}
+            value={sliderValue}
             valueLabelDisplay="off"
             getAriaValueText={(v) => formatSpeed(roundSpeed(10 ** v))}
-            // Live speed while dragging; persist on release so a drag is one layout undo step.
+            onPointerCancel={cancelDrag}
             onChange={(_e, v) => {
               const next = roundSpeed(10 ** v);
+              dragRef.current ??= { start: configSpeed ?? current };
+              dragRef.current.value = next;
+              setSliderPos(v);
               setDraft(next);
               setPlaybackSpeed?.(next);
             }}
-            onChangeCommitted={(_e, v) => {
-              setSpeed(roundSpeed(10 ** v));
+            onChangeCommitted={() => {
+              // Only commit what this interaction changed; MUI also commits on a key press at
+              // the limit or a click that didn't move the value.
+              const drag = dragRef.current;
+              dragRef.current = undefined;
+              if (drag?.value != undefined) {
+                setSpeed(drag.value);
+              }
             }}
           />
           <IconButton
             size="small"
             className={classes.stepButton}
-            aria-label="Faster"
-            disabled={current >= MAX_SPEED}
+            aria-label={t("faster")}
+            disabled={shown >= MAX_SPEED}
             onClick={() => {
-              setSpeed(stepSpeed(current, 1));
+              step(1);
             }}
           >
             <AddIcon fontSize="small" />
