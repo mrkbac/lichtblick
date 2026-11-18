@@ -11,6 +11,8 @@ import { Fragment, useState } from "react";
 
 import { formatByteSize } from "@lichtblick/den/format";
 import { Immutable } from "@lichtblick/suite";
+import { AttachmentDialog } from "@lichtblick/suite-base/components/Attachments/AttachmentDialog";
+import { useExportableFile } from "@lichtblick/suite-base/components/ExportRecordingDialog/exportRecording";
 import { useMessagePipeline } from "@lichtblick/suite-base/components/MessagePipeline";
 import { selectCurrentTime } from "@lichtblick/suite-base/components/MessagePipeline/selectors";
 import { RecordingFileInfo } from "@lichtblick/suite-base/players/types";
@@ -231,6 +233,10 @@ export function ContainerDetails({
   files: readonly Immutable<RecordingFileInfo>[];
 }): React.JSX.Element {
   const { classes } = useStyles();
+  // Attachment bytes are read from the local file; remote and compared files only list them.
+  const localFile = useExportableFile();
+  const viewableFile = files.length === 1 ? localFile : undefined;
+  const [viewing, setViewing] = useState<number>();
   if (files.length === 0) {
     return (
       <Typography color="textSecondary" className={classes.emptyNoteY}>
@@ -316,7 +322,22 @@ export function ContainerDetails({
                     <tbody>
                       {file.attachments.map((attachment, attachmentIndex) => (
                         <tr key={attachmentIndex}>
-                          <td>{attachment.name}</td>
+                          <td>
+                            {viewableFile ? (
+                              <Button
+                                size="small"
+                                className={classes.attachmentName}
+                                title={`View ${attachment.name}`}
+                                onClick={() => {
+                                  setViewing(attachmentIndex);
+                                }}
+                              >
+                                {attachment.name}
+                              </Button>
+                            ) : (
+                              attachment.name
+                            )}
+                          </td>
                           <td>{attachment.mediaType}</td>
                           <td>{formatByteSize(attachment.sizeBytes)}</td>
                         </tr>
@@ -324,6 +345,16 @@ export function ContainerDetails({
                     </tbody>
                   </table>
                 </div>
+                {viewableFile && viewing != undefined && file.attachments[viewing] && (
+                  <AttachmentDialog
+                    file={viewableFile}
+                    attachmentIndex={viewing}
+                    {...file.attachments[viewing]}
+                    onClose={() => {
+                      setViewing(undefined);
+                    }}
+                  />
+                )}
               </>
             )}
           </section>

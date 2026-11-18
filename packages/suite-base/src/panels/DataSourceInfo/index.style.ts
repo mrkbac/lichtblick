@@ -148,6 +148,13 @@ export const useStyles = makeStyles()((theme) => ({
     fontSize: 10,
     fontFamily: fontMonospace,
   },
+  attachmentName: {
+    padding: 0,
+    minWidth: 0,
+    textTransform: "none",
+    textAlign: "left",
+    font: "inherit",
+  },
   emptyChart: {
     display: "flex",
     alignItems: "center",
