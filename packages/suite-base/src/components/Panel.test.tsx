@@ -290,11 +290,11 @@ describe("Panel", () => {
         const panelContext = useContext(PanelContext);
 
         const logInfo = useCallback(() => {
-          panelContext?.logError?.(logInfoText);
+          panelContext?.log?.("info", logInfoText);
         }, [panelContext]);
 
         const logError = useCallback(() => {
-          panelContext?.logError?.(logErrorText, new Error(logErrorText));
+          panelContext?.log?.("error", logErrorText, new Error(logErrorText));
         }, [panelContext]);
 
         const toggleLogs = useCallback(() => {
@@ -317,6 +317,25 @@ describe("Panel", () => {
       LoggingComponent.defaultConfig = { someString: "hello world" };
       return Panel(LoggingComponent);
     }
+
+    it("When the same message is logged twice in a row Then it is folded into one entry", async () => {
+      const LoggingPanel = getLoggingPanel(vi.fn());
+
+      render(
+        <PanelSetup>
+          <LoggingPanel childId="LoggingDummy!repeat" />
+        </PanelSetup>,
+      );
+
+      fireEvent.click(screen.getByText("Log Info"));
+      fireEvent.click(screen.getByText("Log Info"));
+      fireEvent.click(screen.getByText("Toggle Logs"));
+
+      await waitFor(() => {
+        expect(screen.getByTestId("log-count").textContent).toBe("1");
+        expect(screen.getByText("×2")).toBeInTheDocument();
+      });
+    });
 
     it("When logging messages Then log count increases", async () => {
       // Given
@@ -522,7 +541,7 @@ describe("Panel", () => {
 
       // Then
       await waitFor(() => {
-        const infoMessage = screen.getByText(`[INFO] ${logInfoText}`);
+        const infoMessage = screen.getByText(logInfoText);
         expect(infoMessage).toBeInTheDocument();
       });
     });
@@ -545,7 +564,7 @@ describe("Panel", () => {
 
       // Then
       await waitFor(() => {
-        const errorMessage = screen.getByText(`[ERROR] ${logErrorText}`);
+        const errorMessage = screen.getByText(logErrorText);
         expect(errorMessage).toBeInTheDocument();
       });
     });
@@ -603,17 +622,8 @@ describe("Panel", () => {
 
       // Verify messages appear in chronological order: Info → Error → Info
       await waitFor(() => {
-        const allLogElements = screen.getAllByText(/\[(INFO|ERROR)\]/);
-        expect(allLogElements).toHaveLength(3);
-
-        // Extract the log messages in order
-        const logTexts = allLogElements.map((el) => el.textContent);
-
-        expect(logTexts).toEqual([
-          `[INFO] ${logInfoText}`,
-          `[ERROR] ${logErrorText}`,
-          `[INFO] ${logInfoText}`,
-        ]);
+        const levels = screen.getAllByText(/^(INFO|ERROR)$/).map((el) => el.textContent);
+        expect(levels).toEqual(["INFO", "ERROR", "INFO"]);
       });
     });
 
@@ -660,7 +670,7 @@ describe("Panel", () => {
       // Note: not toggling logs to show them
 
       // Then
-      const logsPanel = screen.queryByText(`[INFO] ${logInfoText}`);
+      const logsPanel = screen.queryByText(logInfoText);
       expect(logsPanel).not.toBeInTheDocument();
 
       const logsPanelTitle = screen.queryByText((_content, element) => {

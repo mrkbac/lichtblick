@@ -26,8 +26,11 @@ export type SetVisibleLogs = {
 export type PanelContextType<T> = {
   showLogs?: boolean;
   setShowLogs?: (options: SetVisibleLogs) => void;
-  logError?: (message: string, error?: Error) => void;
+  /** Add an entry to the panel's log, shown in the toolbar's logs drawer. */
+  log?: (level: PanelLogLevel, message: string, error?: Error) => void;
   logCount?: number;
+  /** Most severe level among the current log entries. */
+  logSeverity?: PanelLogLevel;
   type: string;
   id: string;
   title: string;
@@ -66,7 +69,16 @@ export type PanelErrorBoundaryState = {
   currentError: { error: Error; errorInfo: ErrorInfo } | undefined;
 };
 
-export type PanelLog = { timestamp: string; message: string; error?: Error };
+export type PanelLogLevel = "debug" | "info" | "warn" | "error";
+
+export type PanelLog = {
+  timestamp: string;
+  level: PanelLogLevel;
+  message: string;
+  error?: Error;
+  /** How many times this entry was logged in a row; repeats are folded into one row. */
+  count?: number;
+};
 
 export type PanelLogsProps = {
   logs: PanelLog[];
