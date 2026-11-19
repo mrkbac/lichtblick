@@ -12,7 +12,7 @@ import { ColorModeSettings } from "@lichtblick/suite-base/panels/ThreeDeeRender/
 import { DEFAULT_POINT_SETTINGS } from "@lichtblick/suite-base/panels/ThreeDeeRender/settingsNodes/topics";
 import { updatePose } from "@lichtblick/suite-base/panels/ThreeDeeRender/updatePose";
 
-import { createStixelMaterial, PointCloudHistoryRenderable } from "./PointClouds";
+import { createStixelMaterial, DECAY_LIMITED, PointCloudHistoryRenderable } from "./PointClouds";
 import { getColorConverter } from "./colorMode";
 import { DecayPointRing } from "./pointClouds/DecayPointRing";
 import {
@@ -244,24 +244,36 @@ describe("PointCloudHistoryRenderable decay", () => {
     const ringPositions = (ring.children[0] as THREE.Points).geometry.attributes.position!.array;
     expect(Array.from(ringPositions.slice(0, 12))).toEqual(POSITIONS.flat());
 
-    const latest = renderable.children[0] as unknown as { geometry: DynamicBufferGeometry };
-    expect(latest.geometry.attributes.position!.array[0]).toBe(42);
+    const latest = renderable.children[0] as unknown as {
+      pickableInstances: boolean;
+      instanceDetails: (instanceId: number) => Record<string, unknown> | undefined;
+    };
+    expect(latest.pickableInstances).toBe(true);
+    expect(latest.instanceDetails(0)).toMatchObject({ x: 42, y: 2, z: 3 });
   });
 
-  it("drops the ring and its limit error when the decay time is turned off", () => {
+  it("drops the ring and its limit notice when the decay time is turned off", () => {
     const errors = new LayerErrors();
+    const path = ["topics", "/points"];
     const { renderable, settings } = decode(makeCloud(), { decayTime: 10 }, {
       ...rendererMock,
-      transformTree: { apply: () => undefined },
+      transformTree: { apply: (out: unknown) => out },
       settings: { errors },
     } as unknown as Renderer);
-    renderable.pushHistory(makeCloud(), settings, 1n);
     vi.mocked(updatePose).mockReturnValue(true);
-    renderable.startFrame(1n, "map", "map");
-    vi.mocked(console.warn).mockClear(); // missing transform for the ring scan
+    // One more scan than the 1,000-scan limit allows next to the latest
+    for (let i = 1; i <= 1001; i++) {
+      renderable.pushHistory(makeCloud(), settings, BigInt(i));
+      renderable.updatePointCloud(makeCloud(), undefined, settings, BigInt(i));
+    }
+    renderable.startFrame(1001n, "map", "map");
+    expect(errors.hasError(path, DECAY_LIMITED)).toBe(true);
+    vi.mocked(console.warn).mockClear(); // the limit notice is logged once
 
-    renderable.updatePointCloud(makeCloud(), undefined, { ...settings, decayTime: 0 }, 2n);
-    renderable.startFrame(2n, "map", "map");
+    renderable.updatePointCloud(makeCloud(), undefined, { ...settings, decayTime: 0 }, 1002n);
+    renderable.startFrame(1002n, "map", "map");
+
     expect(renderable.children.some((child) => child instanceof DecayPointRing)).toBe(false);
+    expect(errors.hasError(path, DECAY_LIMITED)).toBe(false);
   });
 });

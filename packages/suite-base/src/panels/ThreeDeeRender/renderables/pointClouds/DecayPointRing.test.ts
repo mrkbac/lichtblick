@@ -80,22 +80,47 @@ describe("DecayPointRing", () => {
     expect(ring.visible).toBe(true);
   });
 
-  it("hides expired scans and reuses the freed space before growing", () => {
-    const { ring, slots, positions } = makeRing();
+  it("hides expired scans", () => {
+    const { ring, slots } = makeRing();
+    push(ring, 1n, 4);
+    push(ring, 2n, 4);
+    push(ring, 3n, 4);
+
+    ring.expire(3n);
+
+    expect(ring.scanCount()).toBe(1);
+    expect(ring.pointCount()).toBe(4);
+    const hidden = 100; // maxEntries
+    expect(slots().slice(0, 8)).toEqual(Array(8).fill(hidden));
+    expect(ring.budgetEvictedUntil()).toBeUndefined();
+  });
+
+  it("reuses space freed by expired scans before growing", () => {
+    const { ring, positions } = makeRing();
     push(ring, 1n, 4); // capacity grows to 16
     push(ring, 2n, 4);
     push(ring, 3n, 4);
     ring.expire(3n);
 
-    expect(ring.scanCount()).toBe(1);
-    const hidden = 100; // maxEntries
-    expect(slots().slice(0, 8)).toEqual(Array(8).fill(hidden));
-
     push(ring, 4n, 4); // fits after the newest scan
-    push(ring, 5n, 4); // wraps into the expired space instead of growing
+    push(ring, 5n, 4); // wraps into the expired space
+
     expect(positions()).toHaveLength(16 * 3);
     expect(positions()[0]).toBe(5);
+  });
+
+  it("uses a free gap between scans instead of evicting a live one", () => {
+    const { ring, positions } = makeRing({ maxEntries: 100, maxPoints: 10 });
+    push(ring, 1n, 4); // [0, 4), capacity 10
+    push(ring, 2n, 4); // [4, 8)
+    ring.expire(2n);
+    push(ring, 3n, 3); // wraps to [0, 3)
+
+    push(ring, 4n, 2); // only [8, 10) is free
+
+    expect(ring.scanCount()).toBe(3);
     expect(ring.budgetEvictedUntil()).toBeUndefined();
+    expect(positions()[8 * 3]).toBe(4);
   });
 
   it("evicts the oldest scans at the point budget and reports it", () => {
@@ -124,6 +149,52 @@ describe("DecayPointRing", () => {
     const { ring } = makeRing({ maxEntries: 100, maxPoints: 10 });
     push(ring, 1n, 25);
     expect(ring.pointCount()).toBe(25);
+  });
+
+  it("enforces the point budget on live points, not buffer size", () => {
+    const { ring } = makeRing({ maxEntries: 100, maxPoints: 10 });
+    push(ring, 1n, 15); // buffers grow to 15
+    ring.expire(2n);
+    push(ring, 2n, 6);
+    push(ring, 3n, 6); // fits in the buffers, but 12 points exceed the budget
+
+    ring.enforceLimits({ reservePoints: 0 });
+
+    expect(ring.pointCount()).toBe(6);
+    expect(ring.budgetEvictedUntil()).toBe(2n);
+  });
+
+  it("reserves room for the latest scan in both limits", () => {
+    const { ring } = makeRing({ maxEntries: 3, maxPoints: 10 });
+    push(ring, 1n, 3);
+    push(ring, 2n, 3);
+
+    ring.enforceLimits({ reservePoints: 5 }); // 3 + 3 + 5 > 10
+    expect(ring.oldestReceiveTime()).toBe(2n);
+
+    push(ring, 3n, 1);
+    push(ring, 4n, 1);
+    ring.enforceLimits({ reservePoints: 0 }); // 3 history scans + the latest > 3 slots
+    expect(ring.scanCount()).toBe(2);
+
+    ring.enforceLimits({ reservePoints: 50 }); // the latest alone exceeds the budget
+    expect(ring.scanCount()).toBe(0);
+  });
+
+  it("bounds live scans where the shader draws them", () => {
+    const { ring, geometry } = makeRing();
+    push(ring, 10n, 1); // local x = 10, placed at x = 10 + 10
+    push(ring, 20n, 1, "missing");
+    ring.updatePoses(transformTree, 0n, "map", "map");
+
+    const box = new THREE.Box3();
+    const points = ring.children[0] as THREE.Points;
+    (points.userData.computeBounds as (box: THREE.Box3) => void)(box);
+    box.applyMatrix4(new THREE.Matrix4().makeTranslation(ring.position));
+
+    expect(box.min.x).toBe(20);
+    expect(box.max.x).toBe(20);
+    expect(geometry.drawRange.count).toBe(2);
   });
 
   it("poses each scan relative to the newest scan's origin and hides scans without a transform", () => {

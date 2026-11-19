@@ -7,6 +7,7 @@
 
 import { Time, toNanoSec } from "@foxglove/rostime";
 import { NumericType, PackedElementField, PointCloud } from "@foxglove/schemas";
+import i18next from "i18next";
 import * as THREE from "three";
 
 import { SettingsTreeAction, MessageEvent } from "@lichtblick/suite";
@@ -105,7 +106,7 @@ const ALL_POINTCLOUD_DATATYPES = new Set<string>([
 ]);
 
 const INVALID_POINTCLOUD = "INVALID_POINTCLOUD";
-const DECAY_LIMITED = "DECAY_LIMITED";
+export const DECAY_LIMITED = "DECAY_LIMITED";
 
 const tempColor = { r: 0, g: 0, b: 0, a: 0 };
 const tempFieldReaders: PointCloudFieldReaders = {
@@ -255,6 +256,7 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
     this.#pointsHistory.dispose();
     this.#stixelsHistory.dispose();
     this.#decayRing?.dispose();
+    this.renderer.settings.errors.remove(this.userData.settingsPath, DECAY_LIMITED);
     super.dispose();
   }
 
@@ -494,6 +496,10 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
     const decayNs = BigInt(Math.round(settings.decayTime * 1e9));
     const expireTime = currentTime - decayNs;
     ring.expire(expireTime);
+    // The latest scan counts toward the limits too, as when it was part of the history
+    ring.enforceLimits({
+      reservePoints: this.#pointsHistory.latest().renderable.geometry.drawRange.count,
+    });
 
     // Say so when the limits, not the decay time, decide how far back the history goes
     const evictedUntil = ring.budgetEvictedUntil();
@@ -503,7 +509,12 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
       this.renderer.settings.errors.add(
         settingsPath,
         DECAY_LIMITED,
-        `Decay history limit reached (${DECAY_HISTORY_LIMITS.maxPoints.toLocaleString()} points or ${DECAY_HISTORY_LIMITS.maxEntries.toLocaleString()} scans): showing the last ${shownSeconds.toFixed(0)} s of ${settings.decayTime} s`,
+        i18next.t("threeDee:decayHistoryLimited", {
+          maxPoints: DECAY_HISTORY_LIMITS.maxPoints.toLocaleString(),
+          maxScans: DECAY_HISTORY_LIMITS.maxEntries.toLocaleString(),
+          shownSeconds: shownSeconds.toFixed(0),
+          decaySeconds: settings.decayTime.toLocaleString(),
+        }),
       );
     } else {
       this.renderer.settings.errors.remove(settingsPath, DECAY_LIMITED);

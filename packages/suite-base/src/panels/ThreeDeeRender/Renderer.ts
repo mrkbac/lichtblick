@@ -1152,7 +1152,14 @@ export class Renderer extends EventEmitter<RendererEvents> {
             object instanceof THREE.Points ||
             object instanceof THREE.Line
           ) {
-            if (object instanceof THREE.InstancedMesh) {
+            // Objects whose shader moves vertices (e.g. per-scan poses) report their own bounds
+            const computeBounds = object.userData.computeBounds as
+              | ((box: THREE.Box3) => void)
+              | undefined;
+            if (computeBounds) {
+              box.makeEmpty();
+              computeBounds(box);
+            } else if (object instanceof THREE.InstancedMesh) {
               object.computeBoundingBox();
               box.copy(object.boundingBox!);
             } else {

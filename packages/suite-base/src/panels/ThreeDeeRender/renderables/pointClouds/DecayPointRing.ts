@@ -45,6 +45,10 @@ const tempMatrix = new THREE.Matrix4();
 const tempPosition = new THREE.Vector3();
 const tempQuaternion = new THREE.Quaternion();
 const UNIT_SCALE = new THREE.Vector3(1, 1, 1);
+const tempPoint = new THREE.Vector3();
+
+/** Instanced alias of one point array: its own GL buffer, viewed from the first live point */
+type InstanceAlias = { buffer: THREE.InstancedInterleavedBuffer; normalized: boolean };
 
 /**
  * Older scans of a point cloud decay history, accumulated in one set of GPU buffers.
@@ -75,6 +79,10 @@ export class DecayPointRing extends Renderable<BaseUserData, /*TRenderer=*/ unde
   readonly #scanPoses: ScanPoses;
   /** Receive time of the newest scan evicted to stay in budget, not because it expired */
   #budgetEvictedUntil: bigint | undefined;
+  /** Points across live scans (the buffers can be larger, e.g. after one oversized scan) */
+  #livePoints = 0;
+  /** First live point of the current draw, where the instance views start */
+  #drawStart = 0;
 
   #geometry = new THREE.BufferGeometry();
   #points: THREE.Points<THREE.BufferGeometry, THREE.PointsMaterial>;
@@ -86,9 +94,9 @@ export class DecayPointRing extends Renderable<BaseUserData, /*TRenderer=*/ unde
   #outline?: THREE.LineSegments<THREE.InstancedBufferGeometry, THREE.LineBasicMaterial>;
   /** Instanced aliases of the point arrays for cubes (their own GL buffers, like PointsRenderable) */
   #instanceAttributes?: {
-    position: THREE.InstancedBufferAttribute;
-    color: THREE.InstancedBufferAttribute;
-    scanSlot: THREE.InstancedBufferAttribute;
+    instancePosition: InstanceAlias;
+    color: InstanceAlias;
+    scanSlot: InstanceAlias;
   };
 
   public constructor(topic: string, settings: LayerSettingsPointExtension, limits: HistoryLimits) {
@@ -125,7 +133,11 @@ export class DecayPointRing extends Renderable<BaseUserData, /*TRenderer=*/ unde
     this.#points = new THREE.Points(this.#geometry, this.#material);
     this.#points.frustumCulled = false;
     this.#points.name = `${topic}:PointCloud:decay`;
-    this.#points.userData = { pickingMaterial: this.#pickingMaterial, pose: this.userData.pose };
+    this.#points.userData = {
+      pickingMaterial: this.#pickingMaterial,
+      pose: this.userData.pose,
+      computeBounds: this.#computeBounds,
+    };
     this.add(this.#points);
     this.visible = false;
   }
@@ -152,11 +164,7 @@ export class DecayPointRing extends Renderable<BaseUserData, /*TRenderer=*/ unde
 
   /** Total points across accumulated scans */
   public pointCount(): number {
-    let points = 0;
-    for (const scan of this.#scans) {
-      points += scan.count;
-    }
-    return points;
+    return this.#livePoints;
   }
 
   /** Receive time of the oldest accumulated scan */
@@ -214,11 +222,26 @@ export class DecayPointRing extends Renderable<BaseUserData, /*TRenderer=*/ unde
     const start = this.#allocate(count);
     const slot = this.#freeSlots.pop()!;
     this.#scans.push({ ...info, slot, start, count });
+    this.#livePoints += count;
 
     this.#position.array.set(positions, start * 3);
     this.#color.array.set(colors, start * 4);
     (this.#scanSlot.array as Uint16Array).fill(slot, start, start + count);
     this.#markRange(start, count);
+  }
+
+  /**
+   * Evicts the oldest scans until the history plus `reservePoints` and one scan (the latest, drawn
+   * separately) fit in the limits. A latest scan bigger than the budget leaves no history.
+   */
+  public enforceLimits({ reservePoints }: { reservePoints: number }): void {
+    while (
+      this.#scans.length > 0 &&
+      (this.#livePoints + reservePoints > this.#limits.maxPoints ||
+        this.#scans.length + 1 > this.#limits.maxEntries)
+    ) {
+      this.#evictOldest({ budget: true });
+    }
   }
 
   /** Drops scans received before `expireTime` */
@@ -275,6 +298,26 @@ export class DecayPointRing extends Renderable<BaseUserData, /*TRenderer=*/ unde
     return missingFrame;
   }
 
+  /**
+   * Zoom to Data bounds in this object's space: live, resolved scans placed by their matrices, as
+   * the shader draws them (the raw buffers hold scan-local and expired points).
+   */
+  #computeBounds = (box: THREE.Box3): void => {
+    const positions = this.#position.array;
+    for (const scan of this.#scans) {
+      if (this.#poseData[scan.slot * 16 + 15] === 0) {
+        continue; // hidden: no transform
+      }
+      tempMatrix.fromArray(this.#poseData, scan.slot * 16);
+      for (let i = scan.start * 3; i < (scan.start + scan.count) * 3; i += 3) {
+        tempPoint.fromArray(positions, i).applyMatrix4(tempMatrix);
+        if (Number.isFinite(tempPoint.x + tempPoint.y + tempPoint.z)) {
+          box.expandByPoint(tempPoint);
+        }
+      }
+    }
+  };
+
   #setAttributes(): void {
     this.#geometry.setAttribute("position", this.#position);
     this.#geometry.setAttribute("color", this.#color);
@@ -285,7 +328,8 @@ export class DecayPointRing extends Renderable<BaseUserData, /*TRenderer=*/ unde
 
   /**
    * Start of a free range of `count` points: after the newest scan, else at the start (space freed
-   * by expired scans), else in grown buffers, else evicting the oldest scans once at the budget.
+   * by expired scans), else any other free gap, else in grown buffers, else evicting the oldest
+   * scans once at the budget.
    */
   #allocate(count: number): number {
     const fits = (start: number) =>
@@ -297,6 +341,10 @@ export class DecayPointRing extends Renderable<BaseUserData, /*TRenderer=*/ unde
     }
     if (fits(0)) {
       return 0;
+    }
+    const gap = this.#findGap(count);
+    if (gap != undefined) {
+      return gap;
     }
     // A single scan bigger than the budget still fits; the budget only limits accumulation
     const maxCapacity = Math.max(this.#limits.maxPoints, count);
@@ -318,6 +366,19 @@ export class DecayPointRing extends Renderable<BaseUserData, /*TRenderer=*/ unde
     return start;
   }
 
+  /** First free range of `count` points between live scans or after the last one */
+  #findGap(count: number): number | undefined {
+    const byStart = [...this.#scans].sort((a, b) => a.start - b.start);
+    let free = 0;
+    for (const scan of byStart) {
+      if (scan.start - free >= count) {
+        return free;
+      }
+      free = scan.start + scan.count;
+    }
+    return this.#capacity - free >= count ? free : undefined;
+  }
+
   #overlapsScan(start: number, count: number): boolean {
     const end = start + count;
     return this.#scans.some((scan) => scan.start < end && scan.start + scan.count > start);
@@ -333,6 +394,8 @@ export class DecayPointRing extends Renderable<BaseUserData, /*TRenderer=*/ unde
     scanSlot.set(this.#scanSlot.array);
     scanSlot.fill(this.#hiddenSlot, this.#capacity);
     this.#capacity = capacity;
+    // three.js frees GL buffers only for the attributes installed when the geometry is disposed
+    this.#geometry.dispose();
     // New attribute objects get new GL buffers, uploaded in full on first use
     this.#position = new THREE.BufferAttribute(position, 3);
     this.#color = new THREE.BufferAttribute(color, 4, true);
@@ -351,6 +414,7 @@ export class DecayPointRing extends Renderable<BaseUserData, /*TRenderer=*/ unde
     if (budget) {
       this.#budgetEvictedUntil = scan.receiveTime;
     }
+    this.#livePoints -= scan.count;
     (this.#scanSlot.array as Uint16Array).fill(
       this.#hiddenSlot,
       scan.start,
@@ -371,8 +435,8 @@ export class DecayPointRing extends Renderable<BaseUserData, /*TRenderer=*/ unde
     }
     this.#markSlotRange(start, count);
     if (this.#instanceAttributes) {
-      addRange(this.#instanceAttributes.position, start, count);
-      addRange(this.#instanceAttributes.color, start, count);
+      addRange(this.#instanceAttributes.instancePosition.buffer, start, count);
+      addRange(this.#instanceAttributes.color.buffer, start, count);
     }
   }
 
@@ -381,7 +445,7 @@ export class DecayPointRing extends Renderable<BaseUserData, /*TRenderer=*/ unde
       addRange(this.#scanSlot, start, count);
     }
     if (this.#instanceAttributes) {
-      addRange(this.#instanceAttributes.scanSlot, start, count);
+      addRange(this.#instanceAttributes.scanSlot.buffer, start, count);
     }
   }
 
@@ -394,13 +458,60 @@ export class DecayPointRing extends Renderable<BaseUserData, /*TRenderer=*/ unde
       end = Math.max(end, scan.start + scan.count);
     }
     this.visible = this.#scans.length > 0;
-    this.#geometry.setDrawRange(this.visible ? start : 0, this.visible ? end - start : 0);
-    // Instances can't start at an offset; hidden slots cover the range before `start`
-    if (this.#cubes) {
-      this.#cubes.geometry.instanceCount = end;
+    if (!this.visible) {
+      start = end = 0;
+      this.#discardPendingUploads();
     }
-    if (this.#outline) {
-      this.#outline.geometry.instanceCount = end;
+    this.#geometry.setDrawRange(start, end - start);
+    if (start !== this.#drawStart) {
+      this.#drawStart = start;
+      this.#setInstanceViews();
+    }
+    for (const geometry of [this.#cubes?.geometry, this.#outline?.geometry]) {
+      if (geometry) {
+        geometry.instanceCount = end - start;
+      }
+    }
+  }
+
+  /**
+   * three.js skips hidden objects, so ranges queued while the ring is empty would pile up. Drop them
+   * and upload everything once the ring is drawn again.
+   */
+  #discardPendingUploads(): void {
+    const targets: (THREE.BufferAttribute | THREE.InterleavedBuffer)[] = [
+      this.#position,
+      this.#color,
+      this.#scanSlot,
+    ];
+    if (this.#instanceAttributes) {
+      const { instancePosition, color, scanSlot } = this.#instanceAttributes;
+      targets.push(instancePosition.buffer, color.buffer, scanSlot.buffer);
+    }
+    for (const target of targets) {
+      target.clearUpdateRanges();
+      target.needsUpdate = true;
+    }
+  }
+
+  /** Points the instanced attributes at the first live point, so expired ones are not submitted */
+  #setInstanceViews(): void {
+    if (!this.#instanceAttributes) {
+      return;
+    }
+    for (const geometry of [this.#cubes?.geometry, this.#outline?.geometry]) {
+      for (const [name, alias] of Object.entries(this.#instanceAttributes)) {
+        const { stride } = alias.buffer;
+        geometry?.setAttribute(
+          name,
+          new THREE.InterleavedBufferAttribute(
+            alias.buffer,
+            stride,
+            this.#drawStart * stride,
+            alias.normalized,
+          ),
+        );
+      }
     }
   }
 
@@ -436,7 +547,11 @@ export class DecayPointRing extends Renderable<BaseUserData, /*TRenderer=*/ unde
       this.add(this.#cubes);
     }
     this.#cubes.material = materials.material;
-    this.#cubes.userData = { shape, pickingMaterial: materials.pickingMaterial };
+    this.#cubes.userData = {
+      shape,
+      pickingMaterial: materials.pickingMaterial,
+      computeBounds: this.#computeBounds,
+    };
     if (shape === "cube" && showOutline) {
       if (!this.#outline) {
         this.#outline = new THREE.LineSegments(
@@ -460,27 +575,31 @@ export class DecayPointRing extends Renderable<BaseUserData, /*TRenderer=*/ unde
       return;
     }
     if (!this.#instanceAttributes) {
+      const alias = (array: THREE.TypedArray, stride: number, { normalized = false } = {}) => ({
+        buffer: new THREE.InstancedInterleavedBuffer(array, stride, 1),
+        normalized,
+      });
       this.#instanceAttributes = {
-        position: new THREE.InstancedBufferAttribute(this.#position.array, 3),
-        color: new THREE.InstancedBufferAttribute(this.#color.array, 4, true),
-        scanSlot: new THREE.InstancedBufferAttribute(this.#scanSlot.array, 1),
+        instancePosition: alias(this.#position.array, 3),
+        color: alias(this.#color.array, 4, { normalized: true }),
+        scanSlot: alias(this.#scanSlot.array, 1),
       };
       resetInstanceLimit(this.#cubes.geometry);
       if (this.#outline) {
         resetInstanceLimit(this.#outline.geometry);
       }
     }
-    const { position, color, scanSlot } = this.#instanceAttributes;
-    for (const geometry of [this.#cubes.geometry, this.#outline?.geometry]) {
-      geometry?.setAttribute("instancePosition", position);
-      geometry?.setAttribute("color", color);
-      geometry?.setAttribute("scanSlot", scanSlot);
-    }
+    this.#setInstanceViews();
     this.#updateDrawRange();
   }
 }
 
-function addRange(attribute: THREE.BufferAttribute, start: number, count: number): void {
-  attribute.addUpdateRange(start * attribute.itemSize, count * attribute.itemSize);
-  attribute.needsUpdate = true;
+function addRange(
+  target: THREE.BufferAttribute | THREE.InterleavedBuffer,
+  start: number,
+  count: number,
+): void {
+  const stride = target instanceof THREE.InterleavedBuffer ? target.stride : target.itemSize;
+  target.addUpdateRange(start * stride, count * stride);
+  target.needsUpdate = true;
 }

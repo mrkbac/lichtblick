@@ -60,6 +60,8 @@ export const threeDee = {
   labelSize: "Label size",
   lineColor: "Line color",
   noCoordinateFramesFound: "No coordinate frames found",
+  decayHistoryLimited:
+    "Decay history limit reached ({{maxPoints}} points or {{maxScans}} scans): showing the last {{shownSeconds}} s of {{decaySeconds}} s",
   parent: "Parent",
   pose: "Pose",
   rotationOffset: "Rotation offset",
