@@ -46,6 +46,8 @@ export type WorkspaceContextStore = {
     dataSource: {
       activeDataSource: undefined | IDataSourceFactory;
       item: undefined | DataSourceDialogItem;
+      /** The catalog the "demo" view lists; the sample data catalog when undefined. */
+      catalogUrl?: string;
       open: boolean;
     };
     preferences: {

@@ -31,7 +31,11 @@ export type WorkspaceActions = {
   dialogActions: {
     dataSource: {
       close: () => void;
-      open: (item: DataSourceDialogItem, dataSource?: IDataSourceFactory) => void;
+      open: (
+        item: DataSourceDialogItem,
+        dataSource?: IDataSourceFactory,
+        catalogUrl?: string,
+      ) => void;
     };
     openFile: {
       open: () => Promise<void>;
@@ -117,8 +121,10 @@ export function useWorkspaceActions(): WorkspaceActions {
           open: (
             selectedDataSourceDialogItem: DataSourceDialogItem,
             dataSource?: IDataSourceFactory,
+            catalogUrl?: string,
           ) => {
             set((draft) => {
+              draft.dialogs.dataSource.catalogUrl = catalogUrl;
               // This cast is necessary to keep typescript from complaining about type depth.
               (draft as WorkspaceContextStore).dialogs.dataSource.activeDataSource = dataSource;
               draft.dialogs.dataSource.item = selectedDataSourceDialogItem;

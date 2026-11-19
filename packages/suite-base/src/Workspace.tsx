@@ -96,6 +96,7 @@ import { PlayerPresence } from "@lichtblick/suite-base/players/types";
 import { PanelStateContextProvider } from "@lichtblick/suite-base/providers/PanelStateContextProvider";
 import WorkspaceContextProvider from "@lichtblick/suite-base/providers/WorkspaceContextProvider";
 import { Namespace, WorkspaceProps } from "@lichtblick/suite-base/types";
+import { useAppLaunch } from "@lichtblick/suite-base/util/appLaunch";
 import { parseAppURLState } from "@lichtblick/suite-base/util/appURLState";
 import useBroadcast from "@lichtblick/suite-base/util/broadcast/useBroadcast";
 import isDesktopApp from "@lichtblick/suite-base/util/isDesktopApp";
@@ -274,6 +275,14 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
     });
     return () => window.launchQueue?.setConsumer(() => {});
   }, [enqueueSnackbar]);
+
+  // Launches from inside the app, e.g. a catalog entry with its layout, apply like a link.
+  const appLaunchURL = useAppLaunch((state) => state.url);
+  useEffect(() => {
+    if (appLaunchURL) {
+      setLaunchedURL(appLaunchURL);
+    }
+  }, [appLaunchURL]);
 
   const dropHandler = useCallback(
     async ({
@@ -760,8 +769,19 @@ export default function Workspace(props: WorkspaceProps): React.JSX.Element {
 
   const isPlayerPresent = useMessagePipeline(selectPlayerIsPresent);
 
-  const initialItem: undefined | DataSourceDialogItem =
-    isPlayerPresent || !showOpenDialogOnStartup ? undefined : "start";
+  // `?catalog=<url>` opens on that catalog's recordings.
+  const [catalogUrl] = useState(() =>
+    typeof window === "undefined"
+      ? undefined
+      : (new URL(window.location.href).searchParams.get("catalog") ?? undefined),
+  );
+  const initialItem: undefined | DataSourceDialogItem = isPlayerPresent
+    ? undefined
+    : catalogUrl != undefined
+      ? "demo"
+      : showOpenDialogOnStartup
+        ? "start"
+        : undefined;
 
   const initialState: Pick<WorkspaceContextStore, "dialogs"> = {
     dialogs: {
@@ -769,6 +789,7 @@ export default function Workspace(props: WorkspaceProps): React.JSX.Element {
         activeDataSource: undefined,
         open: initialItem != undefined,
         item: initialItem,
+        catalogUrl,
       },
       preferences: {
         initialTab: undefined,
