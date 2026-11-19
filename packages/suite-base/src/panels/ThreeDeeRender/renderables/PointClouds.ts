@@ -60,8 +60,9 @@ import {
 import { pointCloudSettingsNode } from "../settingsNodes/topics";
 import { topicIsConvertibleToSchema } from "../topicIsConvertibleToSchema";
 import { makePose, Pose } from "../transforms";
+import { DecayPointRing } from "./pointClouds/DecayPointRing";
 import { FieldReader, getReader, isSupportedField } from "./pointClouds/fieldReaders";
-import { MISSING_TRANSFORM } from "./transforms";
+import { MISSING_TRANSFORM, missingTransformMessage } from "./transforms";
 
 type PointCloudFieldReaders = {
   xReader: FieldReader;
@@ -104,6 +105,7 @@ const ALL_POINTCLOUD_DATATYPES = new Set<string>([
 ]);
 
 const INVALID_POINTCLOUD = "INVALID_POINTCLOUD";
+const DECAY_LIMITED = "DECAY_LIMITED";
 
 const tempColor = { r: 0, g: 0, b: 0, a: 0 };
 const tempFieldReaders: PointCloudFieldReaders = {
@@ -166,15 +168,18 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
   #pointsHistory: RenderObjectHistory<PointCloudRenderable>;
   #stixelsHistory: RenderObjectHistory<StixelsRenderable>;
   #cubeMaterials: CubeMaterials;
+  /**
+   * With a decay time, scans older than the latest accumulate here. The latest stays a regular
+   * PointCloudRenderable, so picking it still shows the message and per-point fields.
+   */
+  #decayRing: DecayPointRing | undefined;
 
   public constructor(topic: string, renderer: Renderer, userData: PointCloudHistoryUserData) {
     super(topic, renderer, userData);
 
     const isDecay = userData.settings.decayTime > 0;
-    const geometry = createGeometry(
-      topic,
-      isDecay ? THREE.StaticDrawUsage : THREE.DynamicDrawUsage,
-    );
+    // Rewritten by every message, also with a decay time (older scans are copied to the ring)
+    const geometry = createGeometry(topic, THREE.DynamicDrawUsage);
 
     const points = new PointCloudRenderable(
       topic,
@@ -249,6 +254,7 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
     disposeCubeMaterials(this.#cubeMaterials);
     this.#pointsHistory.dispose();
     this.#stixelsHistory.dispose();
+    this.#decayRing?.dispose();
     super.dispose();
   }
 
@@ -301,6 +307,10 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
       material.size = settings.pointSize;
       this.#cubeMaterials.cubeSize.value = settings.cubeSize;
     }
+    this.#decayRing?.updateSettings(settings, { rebuild: needsRebuild });
+    if (needsRebuild) {
+      this.#applyRingShape();
+    }
 
     if (settings.colorField === colorFieldComputedPrefix + "distance") {
       settings.colorFieldComputed = "distance";
@@ -339,7 +349,6 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
 
     const isDecay = settings.decayTime > 0;
     if (!isDecay && prevIsDecay !== isDecay) {
-      latestPointsEntry.renderable.geometry.setUsage(THREE.DynamicDrawUsage);
       latestStixelEntry.renderable.geometry.setUsage(THREE.DynamicDrawUsage);
     }
 
@@ -389,6 +398,8 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
   public startFrame(currentTime: bigint, renderFrameId: string, fixedFrameId: string): void {
     this.#pointsHistory.updateHistoryFromCurrentTime(currentTime);
     let posesResolved = this.#pointsHistory.updatePoses(currentTime, renderFrameId, fixedFrameId);
+    posesResolved =
+      this.#updateDecayRing(currentTime, renderFrameId, fixedFrameId) && posesResolved;
     this.#pointsHistory.forEach((entry) => {
       entry.renderable.syncCubes();
     });
@@ -405,40 +416,37 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
   public pushHistory(
     this: PointCloudHistoryRenderable,
     pointCloud: PointCloud | PointCloud2,
-    originalMessage: RosObject | undefined,
     settings: LayerSettingsPointClouds,
     receiveTime: bigint,
   ): void {
     const messageTime = toNanoSec(getTimestamp(pointCloud));
     const pointsHistory = this.#pointsHistory;
     const stixelsHistory = this.#stixelsHistory;
-    const material = this.userData.material;
     const stixelMaterial = this.userData.stixelMaterial;
     const topic = this.userData.topic;
 
-    // Push a new (empty) entry to the history of points
-    const geometry = createGeometry(topic, THREE.StaticDrawUsage);
-    const points = new PointCloudRenderable(
-      topic,
-      {
-        receiveTime: -1n, // unused
-        messageTime: -1n, // unused
-        frameId: "", //unused
-        pose: getPose(pointCloud),
-        settingsPath: [], //unused
-        settings: { visible: true }, //unused
-        topic,
-        pointCloud,
-        originalMessage,
-      },
-      geometry,
-      material,
-      this.userData.pickingMaterial,
-      this.userData.instancePickingMaterial,
-    );
-    this.#applyShape(points);
-    pointsHistory.addHistoryEntry({ receiveTime, messageTime, renderable: points });
-    this.add(points);
+    // The latest scan moves into the decay ring; updatePointCloud() then decodes the new message
+    // into the latest renderable's buffers
+    const latest = pointsHistory.latest();
+    const latestCount = latest.renderable.decoded ? latest.renderable.geometry.drawRange.count : 0;
+    if (latestCount > 0) {
+      if (!this.#decayRing) {
+        this.#decayRing = new DecayPointRing(topic, settings, DECAY_HISTORY_LIMITS);
+        this.#applyRingShape();
+        this.add(this.#decayRing);
+      }
+      const { position, color } = latest.renderable.geometry.attributes;
+      this.#decayRing.push(
+        {
+          receiveTime: latest.receiveTime,
+          messageTime: latest.messageTime,
+          frameId: this.userData.frameId,
+          pose: latest.renderable.userData.pose,
+        },
+        (position!.array as Float32Array).subarray(0, latestCount * 3),
+        (color!.array as Uint8Array).subarray(0, latestCount * 4),
+      );
+    }
 
     if (settings.stixelsEnabled) {
       const stixelGeometry = createStixelGeometry(topic, THREE.StaticDrawUsage);
@@ -459,6 +467,63 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
       stixelsHistory.addHistoryEntry({ receiveTime, messageTime, renderable: stixels });
       this.add(stixels);
     }
+  }
+
+  #applyRingShape(): void {
+    const { pointShape, showOutlines } = this.userData.settings;
+    this.#decayRing?.setShape({
+      shape: pointShape === "cube" || pointShape === "sphere" ? pointShape : undefined,
+      showOutline: showOutlines === true,
+    });
+  }
+
+  /** Expires, poses and budget-checks the decay ring. Returns whether all its scans resolved. */
+  #updateDecayRing(currentTime: bigint, renderFrameId: string, fixedFrameId: string): boolean {
+    const ring = this.#decayRing;
+    const { settings, settingsPath } = this.userData;
+    if (!ring) {
+      return true;
+    }
+    if (settings.decayTime <= 0) {
+      ring.removeFromParent();
+      ring.dispose();
+      this.#decayRing = undefined;
+      this.renderer.settings.errors.remove(settingsPath, DECAY_LIMITED);
+      return true;
+    }
+    const decayNs = BigInt(Math.round(settings.decayTime * 1e9));
+    const expireTime = currentTime - decayNs;
+    ring.expire(expireTime);
+
+    // Say so when the limits, not the decay time, decide how far back the history goes
+    const evictedUntil = ring.budgetEvictedUntil();
+    const oldest = ring.oldestReceiveTime();
+    if (evictedUntil != undefined && evictedUntil >= expireTime && oldest != undefined) {
+      const shownSeconds = Number(currentTime - oldest) / 1e9;
+      this.renderer.settings.errors.add(
+        settingsPath,
+        DECAY_LIMITED,
+        `Decay history limit reached (${DECAY_HISTORY_LIMITS.maxPoints.toLocaleString()} points or ${DECAY_HISTORY_LIMITS.maxEntries.toLocaleString()} scans): showing the last ${shownSeconds.toFixed(0)} s of ${settings.decayTime} s`,
+      );
+    } else {
+      this.renderer.settings.errors.remove(settingsPath, DECAY_LIMITED);
+    }
+
+    const missingFrame = ring.updatePoses(
+      this.renderer.transformTree,
+      currentTime,
+      renderFrameId,
+      fixedFrameId,
+    );
+    if (missingFrame != undefined) {
+      this.renderer.settings.errors.add(
+        settingsPath,
+        MISSING_TRANSFORM,
+        missingTransformMessage(renderFrameId, fixedFrameId, missingFrame),
+      );
+      return false;
+    }
+    return true;
   }
 
   #applyShape(points: PointCloudRenderable): void {
@@ -1071,7 +1136,7 @@ export class PointClouds extends SceneExtension<PointCloudHistoryRenderable> {
     const { settings } = renderable.userData;
 
     if (settings.decayTime > 0) {
-      renderable.pushHistory(pointCloud, originalMessage, settings, receiveTime);
+      renderable.pushHistory(pointCloud, settings, receiveTime);
     }
 
     renderable.updatePointCloud(pointCloud, originalMessage, settings, receiveTime);

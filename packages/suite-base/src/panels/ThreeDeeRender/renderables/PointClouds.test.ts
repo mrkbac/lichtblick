@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
+import * as THREE from "three";
+
 import { DynamicBufferGeometry } from "@lichtblick/suite-base/panels/ThreeDeeRender/DynamicBufferGeometry";
 import { LayerErrors } from "@lichtblick/suite-base/panels/ThreeDeeRender/LayerErrors";
 import type { Renderer } from "@lichtblick/suite-base/panels/ThreeDeeRender/Renderer";
@@ -12,6 +14,7 @@ import { updatePose } from "@lichtblick/suite-base/panels/ThreeDeeRender/updateP
 
 import { createStixelMaterial, PointCloudHistoryRenderable } from "./PointClouds";
 import { getColorConverter } from "./colorMode";
+import { DecayPointRing } from "./pointClouds/DecayPointRing";
 import {
   createInstancePickingMaterial,
   createPickingMaterial,
@@ -224,5 +227,41 @@ describe("PointCloudHistoryRenderable missing transform error", () => {
     // both resolve: the error clears
     renderable.startFrame(0n, "map", "map");
     expect(errors.hasError(path, MISSING_TRANSFORM)).toBe(false);
+  });
+});
+
+describe("PointCloudHistoryRenderable decay", () => {
+  it("moves the previous scan into the decay ring and keeps the newest one pickable", () => {
+    const { renderable, settings } = decode(makeCloud(), { colorMode: "flat", decayTime: 10 });
+    const next = makeCloud();
+    new DataView(next.data.buffer).setFloat32(0, 42, true);
+    renderable.pushHistory(next, settings, 1n);
+    renderable.updatePointCloud(next, undefined, settings, 1n);
+
+    const ring = renderable.children.find((child) => child instanceof DecayPointRing)!;
+    expect(ring).toBeInstanceOf(DecayPointRing);
+    expect(ring.scanCount()).toBe(1);
+    const ringPositions = (ring.children[0] as THREE.Points).geometry.attributes.position!.array;
+    expect(Array.from(ringPositions.slice(0, 12))).toEqual(POSITIONS.flat());
+
+    const latest = renderable.children[0] as unknown as { geometry: DynamicBufferGeometry };
+    expect(latest.geometry.attributes.position!.array[0]).toBe(42);
+  });
+
+  it("drops the ring and its limit error when the decay time is turned off", () => {
+    const errors = new LayerErrors();
+    const { renderable, settings } = decode(makeCloud(), { decayTime: 10 }, {
+      ...rendererMock,
+      transformTree: { apply: () => undefined },
+      settings: { errors },
+    } as unknown as Renderer);
+    renderable.pushHistory(makeCloud(), settings, 1n);
+    vi.mocked(updatePose).mockReturnValue(true);
+    renderable.startFrame(1n, "map", "map");
+    vi.mocked(console.warn).mockClear(); // missing transform for the ring scan
+
+    renderable.updatePointCloud(makeCloud(), undefined, { ...settings, decayTime: 0 }, 2n);
+    renderable.startFrame(2n, "map", "map");
+    expect(renderable.children.some((child) => child instanceof DecayPointRing)).toBe(false);
   });
 });
