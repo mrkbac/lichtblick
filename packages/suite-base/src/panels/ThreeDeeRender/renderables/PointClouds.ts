@@ -501,19 +501,21 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
       reservePoints: this.#pointsHistory.latest().renderable.geometry.drawRange.count,
     });
 
-    // Say so when the limits, not the decay time, decide how far back the history goes
+    // Say so when the limits, not the decay time, decide how far back the history goes. With the
+    // ring emptied by the limits, only the latest scan is shown.
     const evictedUntil = ring.budgetEvictedUntil();
-    const oldest = ring.oldestReceiveTime();
-    if (evictedUntil != undefined && evictedUntil >= expireTime && oldest != undefined) {
-      const shownSeconds = Number(currentTime - oldest) / 1e9;
+    const oldest = ring.oldestReceiveTime() ?? this.#pointsHistory.latest().receiveTime;
+    if (evictedUntil != undefined && evictedUntil >= expireTime) {
+      const shownSeconds = Math.max(0, Number(currentTime - oldest) / 1e9);
+      const locale = i18next.language;
       this.renderer.settings.errors.add(
         settingsPath,
         DECAY_LIMITED,
         i18next.t("threeDee:decayHistoryLimited", {
-          maxPoints: DECAY_HISTORY_LIMITS.maxPoints.toLocaleString(),
-          maxScans: DECAY_HISTORY_LIMITS.maxEntries.toLocaleString(),
-          shownSeconds: shownSeconds.toFixed(0),
-          decaySeconds: settings.decayTime.toLocaleString(),
+          maxPoints: DECAY_HISTORY_LIMITS.maxPoints.toLocaleString(locale),
+          maxScans: DECAY_HISTORY_LIMITS.maxEntries.toLocaleString(locale),
+          shownSeconds: shownSeconds.toLocaleString(locale, { maximumFractionDigits: 0 }),
+          decaySeconds: settings.decayTime.toLocaleString(locale),
         }),
       );
     } else {

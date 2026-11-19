@@ -181,6 +181,38 @@ describe("DecayPointRing", () => {
     expect(ring.scanCount()).toBe(0);
   });
 
+  it("draws a wrapped ring as two spans without the free gap", () => {
+    const { ring } = makeRing({ maxEntries: 100, maxPoints: 10 });
+    push(ring, 1n, 6); // [0, 6)
+    push(ring, 2n, 1); // [6, 7)
+    ring.expire(2n);
+    push(ring, 3n, 4); // wraps to [0, 4); [4, 6) is free
+
+    ring.updatePoses(transformTree, 0n, "map", "map");
+
+    expect(ring.drawSpans()).toEqual([
+      { start: 0, count: 4 },
+      { start: 6, count: 1 },
+    ]);
+  });
+
+  it("uploads whole buffers after the ring was empty, not just later writes", () => {
+    const { ring, geometry } = makeRing();
+    push(ring, 1n, 2);
+    ring.expire(2n);
+    ring.updatePoses(transformTree, 0n, "map", "map"); // empty: queued ranges dropped
+    const position = geometry.attributes.position as THREE.BufferAttribute;
+    const version = position.version;
+
+    push(ring, 2n, 2);
+    expect(position.updateRanges).toEqual([]); // no ranges: three.js uploads everything
+    expect(position.version).toBeGreaterThan(version);
+
+    ring.updatePoses(transformTree, 0n, "map", "map"); // drawn this frame
+    push(ring, 3n, 2);
+    expect(position.updateRanges).toHaveLength(1);
+  });
+
   it("bounds live scans where the shader draws them", () => {
     const { ring, geometry } = makeRing();
     push(ring, 10n, 1); // local x = 10, placed at x = 10 + 10

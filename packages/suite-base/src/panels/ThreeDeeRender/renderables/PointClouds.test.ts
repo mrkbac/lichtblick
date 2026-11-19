@@ -18,6 +18,7 @@ import { DecayPointRing } from "./pointClouds/DecayPointRing";
 import {
   createInstancePickingMaterial,
   createPickingMaterial,
+  DECAY_HISTORY_LIMITS,
   pointCloudMaterial,
 } from "./pointExtensionUtils";
 
@@ -275,5 +276,30 @@ describe("PointCloudHistoryRenderable decay", () => {
 
     expect(renderable.children.some((child) => child instanceof DecayPointRing)).toBe(false);
     expect(errors.hasError(path, DECAY_LIMITED)).toBe(false);
+  });
+
+  it("keeps the limit notice when the latest scan alone fills the point budget", () => {
+    const errors = new LayerErrors();
+    const path = ["topics", "/points"];
+    const maxPoints = DECAY_HISTORY_LIMITS.maxPoints;
+    DECAY_HISTORY_LIMITS.maxPoints = 6; // one 4-point cloud fits, two don't
+    try {
+      const { renderable, settings } = decode(makeCloud(), { decayTime: 10 }, {
+        ...rendererMock,
+        transformTree: { apply: (out: unknown) => out },
+        settings: { errors },
+      } as unknown as Renderer);
+      vi.mocked(updatePose).mockReturnValue(true);
+      renderable.pushHistory(makeCloud(), settings, 1n);
+      renderable.updatePointCloud(makeCloud(), undefined, settings, 1n);
+
+      renderable.startFrame(1n, "map", "map");
+
+      expect(renderable.children.some((child) => child instanceof DecayPointRing)).toBe(true);
+      expect(errors.hasError(path, DECAY_LIMITED)).toBe(true);
+      vi.mocked(console.warn).mockClear(); // the limit notice is logged once
+    } finally {
+      DECAY_HISTORY_LIMITS.maxPoints = maxPoints;
+    }
   });
 });
