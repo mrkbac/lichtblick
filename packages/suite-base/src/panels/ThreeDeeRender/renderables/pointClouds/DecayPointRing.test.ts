@@ -216,6 +216,42 @@ describe("DecayPointRing", () => {
     expect(position.updateRanges).toHaveLength(1);
   });
 
+  it("uploads whole point buffers after switching back from cubes", () => {
+    const { ring, geometry } = makeRing();
+    ring.setShape({ shape: "cube", showOutline: false });
+    push(ring, 1n, 2); // written while drawing cubes: not queued for the point buffers
+    ring.setShape({ shape: undefined, showOutline: false });
+    const position = geometry.attributes.position as THREE.BufferAttribute;
+
+    push(ring, 2n, 2);
+    expect(position.updateRanges).toEqual([]);
+
+    position.onUploadCallback();
+    push(ring, 3n, 2);
+    expect(position.updateRanges).toHaveLength(1);
+  });
+
+  it("uploads whole instance buffers after the ring was empty, until three.js uploads them", () => {
+    const { ring } = makeRing();
+    ring.setShape({ shape: "cube", showOutline: false });
+    push(ring, 1n, 2);
+    ring.expire(2n);
+    ring.updatePoses(transformTree, 0n, "map", "map"); // empty: queued ranges dropped
+    const cubes = ring.children.find((child) => child instanceof THREE.Mesh)!;
+    const instances = (
+      cubes.geometry.getAttribute("instancePosition") as THREE.InterleavedBufferAttribute
+    ).data;
+
+    push(ring, 2n, 2);
+    ring.updatePoses(transformTree, 0n, "map", "map"); // a frame without a draw
+    push(ring, 3n, 2);
+    expect(instances.updateRanges).toEqual([]);
+
+    instances.onUploadCallback();
+    push(ring, 4n, 2);
+    expect(instances.updateRanges).toHaveLength(1);
+  });
+
   it("caps queued uploads while nothing is drawn", () => {
     const { ring, geometry } = makeRing({ maxEntries: 1000, maxPoints: 1000 });
     push(ring, 0n, 200); // sizes the buffers for everything below

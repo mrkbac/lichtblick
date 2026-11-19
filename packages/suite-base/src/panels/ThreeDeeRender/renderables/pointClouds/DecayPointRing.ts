@@ -243,8 +243,7 @@ export class DecayPointRing extends Renderable<BaseUserData, /*TRenderer=*/ unde
     if (shape.shape == undefined && !wasPoints) {
       // Writes were not queued while drawing shapes: upload everything
       for (const attribute of [this.#position, this.#color, this.#scanSlot]) {
-        attribute.clearUpdateRanges();
-        attribute.needsUpdate = true;
+        this.#requireFullUpload(attribute);
       }
     }
     this.#applyShape();
