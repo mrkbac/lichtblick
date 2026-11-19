@@ -66,6 +66,11 @@ type DrawSpan = {
 
 const noBounds = (): void => {};
 
+/** Queued partial uploads per buffer before it falls back to one full upload */
+const MAX_UPDATE_RANGES = 64;
+
+type UploadTarget = THREE.BufferAttribute | THREE.InterleavedBuffer;
+
 /**
  * Older scans of a point cloud decay history, accumulated in one set of GPU buffers.
  *
@@ -98,10 +103,11 @@ export class DecayPointRing extends Renderable<BaseUserData, /*TRenderer=*/ unde
   /** Points across live scans (the buffers can be larger, e.g. after one oversized scan) */
   #livePoints = 0;
   /**
-   * Set once queued partial uploads were dropped: the next draw must upload whole buffers, so no
-   * new partial ranges are queued until then.
+   * Buffers whose queued partial uploads were dropped: they must be uploaded whole, so no partial
+   * ranges are queued for them until three.js reports an upload. Frames can run without drawing
+   * (a hidden tab), so only the upload itself clears this.
    */
-  #fullUploadPending = false;
+  #fullUploadPending = new WeakSet<UploadTarget>();
 
   #material: THREE.PointsMaterial;
   #pickingMaterial: THREE.ShaderMaterial;
@@ -332,10 +338,6 @@ export class DecayPointRing extends Renderable<BaseUserData, /*TRenderer=*/ unde
     }
     this.#poseTexture.needsUpdate = true;
     this.#updateDrawSpans();
-    if (this.visible) {
-      // This frame's draw uploads whatever is pending
-      this.#fullUploadPending = false;
-    }
     return missingFrame;
   }
 
@@ -497,12 +499,26 @@ export class DecayPointRing extends Renderable<BaseUserData, /*TRenderer=*/ unde
     }
   }
 
-  #addRange(target: THREE.BufferAttribute | THREE.InterleavedBuffer, start: number, count: number) {
-    if (!this.#fullUploadPending) {
+  #addRange(target: UploadTarget, start: number, count: number) {
+    if (target.updateRanges.length >= MAX_UPDATE_RANGES) {
+      // Not drawn for a while (e.g. a hidden tab): stop queueing and upload it whole
+      this.#requireFullUpload(target);
+    } else if (!this.#fullUploadPending.has(target)) {
       const stride = target instanceof THREE.InterleavedBuffer ? target.stride : target.itemSize;
       target.addUpdateRange(start * stride, count * stride);
     }
     target.needsUpdate = true;
+  }
+
+  #requireFullUpload(target: UploadTarget): void {
+    target.clearUpdateRanges();
+    target.needsUpdate = true;
+    if (!this.#fullUploadPending.has(target)) {
+      this.#fullUploadPending.add(target);
+      target.onUpload(() => {
+        this.#fullUploadPending.delete(target);
+      });
+    }
   }
 
   /**
@@ -557,20 +573,14 @@ export class DecayPointRing extends Renderable<BaseUserData, /*TRenderer=*/ unde
    * and upload whole buffers on the next draw.
    */
   #discardPendingUploads(): void {
-    const targets: (THREE.BufferAttribute | THREE.InterleavedBuffer)[] = [
-      this.#position,
-      this.#color,
-      this.#scanSlot,
-    ];
+    const targets: UploadTarget[] = [this.#position, this.#color, this.#scanSlot];
     if (this.#instanceAttributes) {
       const { instancePosition, color, scanSlot } = this.#instanceAttributes;
       targets.push(instancePosition.buffer, color.buffer, scanSlot.buffer);
     }
     for (const target of targets) {
-      target.clearUpdateRanges();
-      target.needsUpdate = true;
+      this.#requireFullUpload(target);
     }
-    this.#fullUploadPending = true;
   }
 
   /** Points each span's instanced attributes at its first point, so nothing before it is drawn */

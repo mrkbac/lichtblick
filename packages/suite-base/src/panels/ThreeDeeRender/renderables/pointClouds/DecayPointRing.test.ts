@@ -196,7 +196,7 @@ describe("DecayPointRing", () => {
     ]);
   });
 
-  it("uploads whole buffers after the ring was empty, not just later writes", () => {
+  it("uploads whole buffers after the ring was empty, until three.js uploads them", () => {
     const { ring, geometry } = makeRing();
     push(ring, 1n, 2);
     ring.expire(2n);
@@ -205,11 +205,35 @@ describe("DecayPointRing", () => {
     const version = position.version;
 
     push(ring, 2n, 2);
+    // A frame without a draw (hidden tab) must not end the full upload
+    ring.updatePoses(transformTree, 0n, "map", "map");
+    push(ring, 3n, 2);
     expect(position.updateRanges).toEqual([]); // no ranges: three.js uploads everything
     expect(position.version).toBeGreaterThan(version);
 
-    ring.updatePoses(transformTree, 0n, "map", "map"); // drawn this frame
-    push(ring, 3n, 2);
+    position.onUploadCallback(); // three.js uploaded it
+    push(ring, 4n, 2);
+    expect(position.updateRanges).toHaveLength(1);
+  });
+
+  it("caps queued uploads while nothing is drawn", () => {
+    const { ring, geometry } = makeRing({ maxEntries: 1000, maxPoints: 1000 });
+    push(ring, 0n, 200); // sizes the buffers for everything below
+    ring.expire(1n);
+    const position = geometry.attributes.position as THREE.BufferAttribute;
+    position.onUploadCallback(); // the first full upload happened
+
+    for (let i = 1; i <= 100; i++) {
+      push(ring, BigInt(i), 1);
+      ring.updatePoses(transformTree, 0n, "map", "map");
+    }
+
+    expect(geometry.attributes.position).toBe(position); // no regrow
+    // Past the cap the queue was dropped for one full upload, instead of 100 partial ranges
+    expect(position.updateRanges).toEqual([]);
+
+    position.onUploadCallback();
+    push(ring, 101n, 1);
     expect(position.updateRanges).toHaveLength(1);
   });
 
