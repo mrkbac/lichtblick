@@ -129,9 +129,10 @@ export async function exerciseSharedMap(page: Page): Promise<void> {
   await expect(canvas).toBeVisible();
   await expect(page.getByText("Map rendering", { exact: true })).toHaveCount(0);
   await loadFiles({ mainWindow: page, filenames: "shared-map.mcap" });
-  // Software WebGPU on CI compiles every pipeline on the CPU; the first frame takes a while
+  // Software WebGPU on CI compiles every pipeline on the CPU before the first frame: over 30 s on
+  // the slower desktop runners
   await expect
-    .poll(async () => (await pixels(canvas)).red, { timeout: 30_000 })
+    .poll(async () => (await pixels(canvas)).red, { timeout: 90_000 })
     .toBeGreaterThan(100);
   await expect.poll(async () => (await pixels(canvas)).green).toBeGreaterThan(500);
   const before = await pixels(canvas);

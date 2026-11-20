@@ -7,7 +7,7 @@ test("renders sharp vectors and picks the shared 3D scene", { tag: "@smoke" }, a
   mainWindow,
 }) => {
   // Software WebGPU and WebGL in CI need more time for the projection and extreme-zoom round trips.
-  test.setTimeout(120_000);
+  test.setTimeout(180_000);
   await expect(mainWindow.getByTestId("DataSourceDialog")).toBeVisible();
   await mainWindow.keyboard.press("Escape");
   await expect(mainWindow.getByTestId("DataSourceDialog")).toBeHidden();
