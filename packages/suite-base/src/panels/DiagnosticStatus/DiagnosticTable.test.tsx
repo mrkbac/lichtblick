@@ -81,9 +81,9 @@ describe("DiagnosticTable", () => {
   it("triggers onChangeSplitFraction while dragging the resize handle", () => {
     renderTable(props([DiagnosticsBuilder.info()]));
 
-    fireEvent.mouseDown(screen.getByTestId("DiagnosticTable-resizeHandle"));
-    fireEvent.mouseMove(window, { clientX: 100 });
-    fireEvent.mouseUp(window);
+    fireEvent.pointerDown(screen.getByTestId("DiagnosticTable-resizeHandle"));
+    fireEvent.pointerMove(window, { clientX: 100 });
+    fireEvent.pointerUp(window);
 
     expect(mockOnChangeSplitFraction).toHaveBeenCalled();
   });

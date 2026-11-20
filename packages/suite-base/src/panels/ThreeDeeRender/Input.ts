@@ -76,9 +76,9 @@ export class Input extends EventEmitter<InputEvents> {
     this.#resizeObserver = new Observer(this.#onResize);
     this.#resizeObserver.observe(parentEl);
 
-    canvas.addEventListener("mousedown", this.#onMouseDown);
-    canvas.addEventListener("mousemove", this.#onMouseMove);
-    canvas.addEventListener("mouseup", this.#onMouseUp);
+    canvas.addEventListener("pointerdown", this.#onMouseDown);
+    canvas.addEventListener("pointermove", this.#onMouseMove);
+    canvas.addEventListener("pointerup", this.#onMouseUp);
     canvas.addEventListener("click", this.#onClick);
     canvas.addEventListener("wheel", this.#onWheel);
     canvas.addEventListener("touchstart", this.#onTouchStart, { passive: false });
@@ -93,9 +93,9 @@ export class Input extends EventEmitter<InputEvents> {
     this.removeAllListeners();
     this.#resizeObserver.disconnect();
 
-    canvas.removeEventListener("mousedown", this.#onMouseDown);
-    canvas.removeEventListener("mousemove", this.#onMouseMove);
-    canvas.removeEventListener("mouseup", this.#onMouseUp);
+    canvas.removeEventListener("pointerdown", this.#onMouseDown);
+    canvas.removeEventListener("pointermove", this.#onMouseMove);
+    canvas.removeEventListener("pointerup", this.#onMouseUp);
     canvas.removeEventListener("click", this.#onClick);
     canvas.removeEventListener("wheel", this.#onWheel);
     canvas.removeEventListener("touchstart", this.#onTouchStart);
@@ -105,24 +105,24 @@ export class Input extends EventEmitter<InputEvents> {
   }
 
   /**
-   * Call this from mousedown to activate event tracking for a drag. mousemove events will be
-   * handled on the window and `onUpdate()` will be called until mouseup occurs.
+   * Call this from mousedown to activate event tracking for a drag. Pointer moves are handled on
+   * the window and `onUpdate()` is called until the pointer is released or the drag is canceled.
    */
   public trackDrag(onUpdate: (cursorCoords: THREE.Vector2) => void): void {
-    const listener = (event: MouseEvent) => {
+    const listener = (event: PointerEvent) => {
       event.preventDefault();
       this.#updateCursorCoords(event);
       onUpdate(this.#cursorCoords);
     };
     const ownerWindow = this.#canvas.ownerDocument.defaultView ?? window;
-    ownerWindow.addEventListener("mousemove", listener);
-    ownerWindow.addEventListener(
-      "mouseup",
-      () => {
-        ownerWindow.removeEventListener("mousemove", listener);
-      },
-      { once: true },
-    );
+    const stop = () => {
+      ownerWindow.removeEventListener("pointermove", listener);
+      ownerWindow.removeEventListener("pointerup", stop);
+      ownerWindow.removeEventListener("pointercancel", stop);
+    };
+    ownerWindow.addEventListener("pointermove", listener);
+    ownerWindow.addEventListener("pointerup", stop);
+    ownerWindow.addEventListener("pointercancel", stop);
   }
 
   #onResize = (_entries: ResizeObserverEntry[]): void => {

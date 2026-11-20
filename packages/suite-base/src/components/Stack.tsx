@@ -5,7 +5,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { CSSProperties, PropsWithChildren, forwardRef } from "react";
+import { CSSProperties, PropsWithChildren } from "react";
 import { makeStyles } from "tss-react/mui";
 
 const useStyles = makeStyles<StackProps>({ name: "FoxgloveStack" })((theme, props) => ({
@@ -89,101 +89,102 @@ const useStyles = makeStyles<StackProps>({ name: "FoxgloveStack" })((theme, prop
   },
 }));
 
-export default forwardRef<HTMLDivElement, PropsWithChildren<StackProps>>(
-  function Stack(props, ref): React.JSX.Element {
-    const {
-      alignItems,
-      alignSelf,
-      children,
-      className,
-      direction = "column",
-      flex,
-      flexBasis,
-      flexGrow,
-      flexShrink,
-      flexWrap,
-      fullHeight = false,
-      fullWidth = false,
-      gap,
-      gapX,
-      gapY,
-      inline = false,
-      justifyContent,
-      order,
-      overflow,
-      overflowX,
-      overflowY,
-      padding,
-      paddingBottom,
-      paddingLeft,
-      paddingRight,
-      paddingTop,
-      paddingX,
-      paddingY,
-      paddingBlock,
-      paddingBlockStart,
-      paddingBlockEnd,
-      paddingInline,
-      paddingInlineStart,
-      paddingInlineEnd,
-      position,
-      testId,
-      style,
-      zeroMinWidth = false,
-      ...rest
-    } = props;
+export default function Stack(
+  props: PropsWithChildren<StackProps> & { ref?: React.Ref<HTMLDivElement> },
+): React.JSX.Element {
+  const {
+    alignItems,
+    alignSelf,
+    children,
+    className,
+    direction = "column",
+    flex,
+    flexBasis,
+    flexGrow,
+    flexShrink,
+    flexWrap,
+    fullHeight = false,
+    fullWidth = false,
+    gap,
+    gapX,
+    gapY,
+    inline = false,
+    justifyContent,
+    order,
+    overflow,
+    overflowX,
+    overflowY,
+    padding,
+    paddingBottom,
+    paddingLeft,
+    paddingRight,
+    paddingTop,
+    paddingX,
+    paddingY,
+    paddingBlock,
+    paddingBlockStart,
+    paddingBlockEnd,
+    paddingInline,
+    paddingInlineStart,
+    paddingInlineEnd,
+    position,
+    testId,
+    style,
+    zeroMinWidth = false,
+    ref,
+    ...rest
+  } = props;
 
-    const { classes, cx } = useStyles({
-      alignItems,
-      alignSelf,
-      direction,
-      flex,
-      flexBasis,
-      flexGrow,
-      flexShrink,
-      flexWrap,
-      fullHeight,
-      fullWidth,
-      gap,
-      gapX,
-      gapY,
-      inline,
-      justifyContent,
-      order,
-      overflow,
-      overflowX,
-      overflowY,
-      padding,
-      paddingBlock,
-      paddingBlockEnd,
-      paddingBlockStart,
-      paddingBottom,
-      paddingInline,
-      paddingInlineEnd,
-      paddingInlineStart,
-      paddingLeft,
-      paddingRight,
-      paddingTop,
-      paddingX,
-      paddingY,
-      position,
-      testId,
-      zeroMinWidth,
-    });
+  const { classes, cx } = useStyles({
+    alignItems,
+    alignSelf,
+    direction,
+    flex,
+    flexBasis,
+    flexGrow,
+    flexShrink,
+    flexWrap,
+    fullHeight,
+    fullWidth,
+    gap,
+    gapX,
+    gapY,
+    inline,
+    justifyContent,
+    order,
+    overflow,
+    overflowX,
+    overflowY,
+    padding,
+    paddingBlock,
+    paddingBlockEnd,
+    paddingBlockStart,
+    paddingBottom,
+    paddingInline,
+    paddingInlineEnd,
+    paddingInlineStart,
+    paddingLeft,
+    paddingRight,
+    paddingTop,
+    paddingX,
+    paddingY,
+    position,
+    testId,
+    zeroMinWidth,
+  });
 
-    return (
-      <div
-        ref={ref}
-        className={cx(classes.root, className)}
-        style={style}
-        data-testid={testId}
-        {...rest}
-      >
-        {children}
-      </div>
-    );
-  },
-);
+  return (
+    <div
+      ref={ref}
+      className={cx(classes.root, className)}
+      style={style}
+      data-testid={testId}
+      {...rest}
+    >
+      {children}
+    </div>
+  );
+}
 
 export type StackProps = {
   /** Class name applied to the root element. */
