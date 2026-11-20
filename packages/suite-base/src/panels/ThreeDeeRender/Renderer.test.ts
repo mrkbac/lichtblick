@@ -532,6 +532,9 @@ describe("3D Renderer", () => {
       // Input relies on clientWidth/clientHeight of the canvas parent.
       Object.defineProperty(inputParent, "clientWidth", { configurable: true, value: 300 });
       Object.defineProperty(inputParent, "clientHeight", { configurable: true, value: 300 });
+      // jsdom lacks pointer capture; the camera's OrbitControls capture on pointerdown.
+      inputCanvas.setPointerCapture = vi.fn();
+      inputCanvas.releasePointerCapture = vi.fn();
       inputCanvas.getBoundingClientRect = vi.fn(function () {
         return {
           left: 0,
@@ -571,15 +574,15 @@ describe("3D Renderer", () => {
       const hoveredSpy = vi.fn();
       renderer.addListener("renderableHovered", hoveredSpy);
 
-      hoverCanvas.dispatchEvent(new MouseEvent("mousemove", { clientX: 10, clientY: 10 }));
-      hoverCanvas.dispatchEvent(new MouseEvent("mousemove", { clientX: 11, clientY: 11 }));
-      hoverCanvas.dispatchEvent(new MouseEvent("mousemove", { clientX: 12, clientY: 12 }));
+      hoverCanvas.dispatchEvent(new MouseEvent("pointermove", { clientX: 10, clientY: 10 }));
+      hoverCanvas.dispatchEvent(new MouseEvent("pointermove", { clientX: 11, clientY: 11 }));
+      hoverCanvas.dispatchEvent(new MouseEvent("pointermove", { clientX: 12, clientY: 12 }));
       await flushPicks();
 
       expect(hoveredSpy).toHaveBeenCalledTimes(1);
 
       vi.advanceTimersByTime(HOVER_PICK_THROTTLE_MS);
-      hoverCanvas.dispatchEvent(new MouseEvent("mousemove", { clientX: 13, clientY: 13 }));
+      hoverCanvas.dispatchEvent(new MouseEvent("pointermove", { clientX: 13, clientY: 13 }));
       await flushPicks();
       expect(hoveredSpy).toHaveBeenCalledTimes(2);
 
@@ -593,12 +596,12 @@ describe("3D Renderer", () => {
       const hoveredSpy = vi.fn();
       renderer.addListener("renderableHovered", hoveredSpy);
 
-      hoverCanvas.dispatchEvent(new MouseEvent("mousedown", { clientX: 10, clientY: 10 }));
-      hoverCanvas.dispatchEvent(new MouseEvent("mousemove", { clientX: 11, clientY: 11 }));
+      hoverCanvas.dispatchEvent(new MouseEvent("pointerdown", { clientX: 10, clientY: 10 }));
+      hoverCanvas.dispatchEvent(new MouseEvent("pointermove", { clientX: 11, clientY: 11 }));
       expect(hoveredSpy).toHaveBeenCalledTimes(0);
 
-      hoverCanvas.dispatchEvent(new MouseEvent("mouseup", { clientX: 11, clientY: 11 }));
-      hoverCanvas.dispatchEvent(new MouseEvent("mousemove", { clientX: 12, clientY: 12 }));
+      hoverCanvas.dispatchEvent(new MouseEvent("pointerup", { clientX: 11, clientY: 11 }));
+      hoverCanvas.dispatchEvent(new MouseEvent("pointermove", { clientX: 12, clientY: 12 }));
       await flushPicks();
       expect(hoveredSpy).toHaveBeenCalledTimes(1);
 
@@ -617,9 +620,9 @@ describe("3D Renderer", () => {
       const hoveredSpy = vi.fn();
       renderer.addListener("renderableHovered", hoveredSpy);
 
-      hoverCanvas.dispatchEvent(new MouseEvent("mousemove", { clientX: 10, clientY: 10 }));
+      hoverCanvas.dispatchEvent(new MouseEvent("pointermove", { clientX: 10, clientY: 10 }));
       vi.advanceTimersByTime(HOVER_PICK_THROTTLE_MS * 2);
-      hoverCanvas.dispatchEvent(new MouseEvent("mousemove", { clientX: 11, clientY: 11 }));
+      hoverCanvas.dispatchEvent(new MouseEvent("pointermove", { clientX: 11, clientY: 11 }));
 
       expect(hoveredSpy).toHaveBeenCalledTimes(0);
 

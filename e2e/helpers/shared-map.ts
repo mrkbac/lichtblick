@@ -1,9 +1,12 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import { expect, Locator, Page } from "@playwright/test";
+import { expect as baseExpect, Locator, Page } from "@playwright/test";
 
 import { loadFiles } from "../fixtures/load-files";
+
+// Software rendering on CI (SwiftShader WebGPU for the scene, WebGL for the map) is slow per frame
+const expect = baseExpect.configure({ timeout: 20_000 });
 
 /**
  * Color counts of what the panel shows over the map canvas: the map (WebGL) and the 3D scene

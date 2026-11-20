@@ -40,6 +40,7 @@ export const useStylesPanelLogs = makeStyles()((theme) => {
       right: 0,
       height: 8,
       cursor: "ns-resize",
+      touchAction: "none",
       display: "flex",
       alignItems: "center",
       justifyContent: "center",

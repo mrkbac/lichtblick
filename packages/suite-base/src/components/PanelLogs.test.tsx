@@ -365,10 +365,10 @@ describe("PanelLogs", () => {
       const container = document.querySelector('[class*="root"]');
 
       // When
-      fireEvent.mouseDown(resizeHandle, { clientY: 100 });
+      fireEvent.pointerDown(resizeHandle, { clientY: 100 });
 
-      fireEvent(document, new MouseEvent("mousemove", { clientY: 50 }));
-      fireEvent(document, new MouseEvent("mouseup"));
+      fireEvent(document, new MouseEvent("pointermove", { clientY: 50 }));
+      fireEvent(document, new MouseEvent("pointerup"));
 
       // Then
       expect(container?.getAttribute("style")).toContain("height: 450px");
@@ -383,9 +383,9 @@ describe("PanelLogs", () => {
       const container = document.querySelector('[class*="root"]');
 
       // When - simulate dragging way up (beyond max height)
-      fireEvent.mouseDown(resizeHandle, { clientY: 100 });
-      fireEvent(document, new MouseEvent("mousemove", { clientY: -1000 })); // Very large upward movement
-      fireEvent(document, new MouseEvent("mouseup"));
+      fireEvent.pointerDown(resizeHandle, { clientY: 100 });
+      fireEvent(document, new MouseEvent("pointermove", { clientY: -1000 })); // Very large upward movement
+      fireEvent(document, new MouseEvent("pointerup"));
 
       // Then - should be constrained to max height (600px)
       expect(container?.getAttribute("style")).toContain("height: 600px");
@@ -412,9 +412,9 @@ describe("PanelLogs", () => {
       const resizeHandle = screen.getByTitle("Drag to resize panel logs");
 
       // When
-      fireEvent.mouseDown(resizeHandle, { clientY: 100 });
-      fireEvent(document, new MouseEvent("mousemove", { clientY: 50 }));
-      fireEvent(document, new MouseEvent("mouseup"));
+      fireEvent.pointerDown(resizeHandle, { clientY: 100 });
+      fireEvent(document, new MouseEvent("pointermove", { clientY: 50 }));
+      fireEvent(document, new MouseEvent("pointerup"));
 
       // Then
       expect(onHeightChange).toHaveBeenCalledWith(450); // 400 + (100 - 50)
@@ -434,9 +434,9 @@ describe("PanelLogs", () => {
 
       // When/Then - should not throw error
       expect(() => {
-        fireEvent.mouseDown(resizeHandle, { clientY: 100 });
-        fireEvent(document, new MouseEvent("mousemove", { clientY: 50 }));
-        fireEvent(document, new MouseEvent("mouseup"));
+        fireEvent.pointerDown(resizeHandle, { clientY: 100 });
+        fireEvent(document, new MouseEvent("pointermove", { clientY: 50 }));
+        fireEvent(document, new MouseEvent("pointerup"));
       }).not.toThrow();
     });
   });

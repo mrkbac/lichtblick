@@ -44,8 +44,8 @@ export default function PanelLogs({
   const listRef = useRef<HTMLDivElement>(null);
   const followRef = useRef(true);
 
-  const handleMouseDown = useCallback(
-    (e: React.MouseEvent) => {
+  const handlePointerDown = useCallback(
+    (e: React.PointerEvent) => {
       e.preventDefault();
       setIsDragging(true);
       startYRef.current = e.clientY;
@@ -56,8 +56,8 @@ export default function PanelLogs({
     [height],
   );
 
-  const handleMouseMove = useCallback(
-    (e: MouseEvent) => {
+  const handlePointerMove = useCallback(
+    (e: PointerEvent) => {
       if (!isDragging) {
         return;
       }
@@ -69,7 +69,7 @@ export default function PanelLogs({
     [isDragging],
   );
 
-  const handleMouseUp = useCallback(() => {
+  const handlePointerUp = useCallback(() => {
     setIsDragging(false);
     document.body.style.cursor = "";
     document.body.style.userSelect = "";
@@ -82,15 +82,17 @@ export default function PanelLogs({
 
   useEffect(() => {
     if (isDragging) {
-      document.addEventListener("mousemove", handleMouseMove);
-      document.addEventListener("mouseup", handleMouseUp);
+      document.addEventListener("pointermove", handlePointerMove);
+      document.addEventListener("pointerup", handlePointerUp);
+      document.addEventListener("pointercancel", handlePointerUp);
       return () => {
-        document.removeEventListener("mousemove", handleMouseMove);
-        document.removeEventListener("mouseup", handleMouseUp);
+        document.removeEventListener("pointermove", handlePointerMove);
+        document.removeEventListener("pointerup", handlePointerUp);
+        document.removeEventListener("pointercancel", handlePointerUp);
       };
     }
     return undefined;
-  }, [isDragging, handleMouseMove, handleMouseUp]);
+  }, [isDragging, handlePointerMove, handlePointerUp]);
 
   const levelCounts = useMemo(() => {
     const counts = new Map<PanelLogLevel, number>();
@@ -139,7 +141,7 @@ export default function PanelLogs({
 
   return (
     <div className={classes.root} style={{ height: `${height}px`, maxHeight: "none" }}>
-      <div className={classes.resizeHandle} onMouseDown={handleMouseDown} title={t("resize")}>
+      <div className={classes.resizeHandle} onPointerDown={handlePointerDown} title={t("resize")}>
         <DragIndicatorIcon className={classes.resizeIcon} />
       </div>
 

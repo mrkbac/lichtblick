@@ -327,7 +327,7 @@ describe("<HoverTooltip />", () => {
     expect(view.container.querySelector(".MuiPaper-root")).not.toBeNull();
 
     // Outside click dismisses.
-    fireEvent.mouseDown(document.body);
+    fireEvent.pointerDown(document.body);
     await waitFor(() => {
       expect(view.container.querySelector(".MuiPaper-root")).toBeNull();
     });
