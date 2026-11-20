@@ -203,12 +203,13 @@ export class CameraStateSettings extends SceneExtension implements ICameraHandle
     return { path: ["general"], node: { ...node, handler } };
   }
   public override handleSettingsAction = (action: SettingsTreeAction): void => {
-    // A pending commit holds the camera from before this edit and must not overwrite it
-    this.#commitCameraState.cancel();
+    // Write a pending camera move first, so the edit applies on top of the camera the user sees
+    this.#commitCameraState.flush();
     if (action.action === "perform-node-action" && action.payload.id === "reset-camera") {
       this.renderer.updateConfig((draft) => {
         draft.cameraState = structuredClone(DEFAULT_CAMERA_STATE);
       });
+      this.#applyConfigCamera();
       this.updateSettingsTree();
       return;
     }
@@ -252,6 +253,7 @@ export class CameraStateSettings extends SceneExtension implements ICameraHandle
             ];
           }
         });
+        this.#applyConfigCamera();
       }
 
       this.updateSettingsTree();
@@ -374,6 +376,13 @@ export class CameraStateSettings extends SceneExtension implements ICameraHandle
     this.renderer.queueAnimationFrame();
     this.#commitCameraState();
   };
+
+  // Apply a camera edit here instead of relying on the panel noticing the config change: the
+  // config can equal the live camera exactly (e.g. switching to 2D), which skips that update.
+  #applyConfigCamera(): void {
+    this.setCameraState(this.renderer.config.cameraState);
+    this.renderer.queueAnimationFrame();
+  }
 
   #commitCameraState = _.debounce((): void => {
     const cameraState = this.getCameraState();

@@ -263,20 +263,25 @@ describe("CameraStateSettings", () => {
     }
   });
 
-  it("drops a pending camera write when a settings edit changes the camera", () => {
+  it("writes a pending camera move before applying a settings edit", () => {
     vi.useFakeTimers();
     try {
       const handler = renderer.cameraHandler as CameraStateSettings;
+      // When: the camera moves and the 2D/3D toggle follows before the camera rests
       mockOrbitControls.getDistance.mockReturnValue(30);
       renderer.emit("cameraMove", renderer);
-
       handler.handleSettingsAction({
         action: "update",
-        payload: { path: ["cameraState", "distance"], input: "number", value: 5 },
+        payload: { path: ["cameraState", "perspective"], input: "boolean", value: false },
       });
-      vi.advanceTimersByTime(500);
 
-      expect(renderer.config.cameraState.distance).toBe(5);
+      // Then: the edit applies on top of the moved camera instead of the old one, at once
+      expect(renderer.config.cameraState).toMatchObject({ distance: 30, perspective: false });
+      const camera = handler.getActiveCamera() as THREE.OrthographicCamera;
+      expect(camera.type).toBe("OrthographicCamera");
+      expect(camera.top).toBe(15); // half the distance
+      vi.advanceTimersByTime(500);
+      expect(renderer.config.cameraState).toMatchObject({ distance: 30, perspective: false });
     } finally {
       vi.useRealTimers();
     }
