@@ -153,11 +153,16 @@ export default function CurrentLayoutProvider({
     [],
   );
 
+  /** Bumped by every selection, so a slower earlier one can tell it was superseded. */
+  const selectionSeq = useRef(0);
+
   const [, setSelectedLayoutId] = useAsyncFn(
     async (
       id: LayoutID | undefined,
       { saveToProfile = true }: { saveToProfile?: boolean } = {},
     ) => {
+      const seq = ++selectionSeq.current;
+      const superseded = () => !isMounted() || seq !== selectionSeq.current;
       if (id == undefined) {
         setLayoutState({ selectedLayout: undefined });
         return;
@@ -170,6 +175,9 @@ export default function CurrentLayoutProvider({
         const previous = layoutStateRef.current.selectedLayout?.data;
         setLayoutState({ selectedLayout: { id, loading: true, data: previous } });
         const layout = await layoutManager.getLayout(id);
+        if (superseded()) {
+          return;
+        }
         const layoutVersion = layout?.baseline.data.version;
         if (layoutVersion != undefined && layoutVersion > MAX_SUPPORTED_LAYOUT_VERSION) {
           setIncompatibleLayoutVersionError(true);
@@ -187,7 +195,7 @@ export default function CurrentLayoutProvider({
             log.error(error);
             return undefined;
           });
-          if (!isMounted()) {
+          if (superseded()) {
             return;
           }
           const reverted = revertedWhileLoading.current;
@@ -215,6 +223,9 @@ export default function CurrentLayoutProvider({
           }
         }
       } catch (error) {
+        if (superseded()) {
+          return;
+        }
         console.error(error);
         enqueueSnackbar(`The layout could not be loaded. ${toError(error).toString()}`, {
           variant: "error",
@@ -329,6 +340,15 @@ export default function CurrentLayoutProvider({
       return;
     }
 
+    // A layout picked while this runs (e.g. installed from a `layoutUrl` link) wins over the
+    // startup choice, so every selection below goes through here.
+    const startSeq = selectionSeq.current;
+    const selectInitial = async (id: LayoutID, options?: { saveToProfile?: boolean }) => {
+      if (selectionSeq.current === startSeq) {
+        await setSelectedLayoutId(id, options);
+      }
+    };
+
     // For some reason, this needs to go before the setSelectedLayoutId, probably some initialization
     const { currentLayoutId } = await getUserProfile();
 
@@ -369,7 +389,7 @@ export default function CurrentLayoutProvider({
     if (defaultLayoutFromParameters) {
       // Apply the URL-selected layout for the current session only, without persisting it to the
       // user's profile, so a one-off ?layout= override does not become sticky on later visits.
-      await setSelectedLayoutId(defaultLayoutFromParameters.id, { saveToProfile: false });
+      await selectInitial(defaultLayoutFromParameters.id, { saveToProfile: false });
       return;
     }
 
@@ -397,7 +417,7 @@ export default function CurrentLayoutProvider({
     }
     const favoriteLayout = findFavoriteLayout(layouts, loadedFavorites ?? layoutManager.favorites);
     if (favoriteLayout) {
-      await setSelectedLayoutId(favoriteLayout.id, { saveToProfile: false });
+      await selectInitial(favoriteLayout.id, { saveToProfile: false });
       return;
     }
 
@@ -408,7 +428,7 @@ export default function CurrentLayoutProvider({
       : undefined;
 
     if (layout) {
-      await setSelectedLayoutId(currentLayoutId, { saveToProfile: false });
+      await selectInitial(layout.id, { saveToProfile: false });
       return;
     }
 
@@ -416,12 +436,15 @@ export default function CurrentLayoutProvider({
       const orgLayouts = layouts.filter((l) => l.permission.startsWith(ORG_PERMISSION_PREFIX));
       const layoutsToSort = orgLayouts.length > 0 ? orgLayouts : layouts;
       const sortedLayouts = [...layoutsToSort].sort((a, b) => a.name.localeCompare(b.name));
-      await setSelectedLayoutId(sortedLayouts[0]!.id);
+      await selectInitial(sortedLayouts[0]!.id);
       return;
     }
 
+    if (selectionSeq.current !== startSeq) {
+      return;
+    }
     const defaultLayout = await layoutManager.saveNewLayout(DEFAULT_LAYOUT);
-    await setSelectedLayoutId(defaultLayout.id);
+    await selectInitial(defaultLayout.id);
 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [getUserProfile, layoutManager, setSelectedLayoutId, enqueueSnackbar]);

@@ -19,6 +19,7 @@ import { CatalogRecording } from "./types";
 import { CatalogFolder } from "./useCatalogFolder";
 
 export type LiveCatalog = CatalogFolder & {
+  pickFolder: () => Promise<void>;
   /** Recordings being written right now; they can't be read until the session ends. */
   active: LiveRecording[];
   /** Bytes of finished recordings in browser storage, from the listing (no indexing needed). */

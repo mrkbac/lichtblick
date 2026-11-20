@@ -6,21 +6,22 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { Dialog } from "@mui/material";
-import { useCallback, useLayoutEffect, useMemo, useRef } from "react";
+import { useCallback, useLayoutEffect, useRef } from "react";
 import { makeStyles } from "tss-react/mui";
 
 import { useMountedState } from "@lichtblick/hooks";
 import { APP_BAR_HEIGHT } from "@lichtblick/suite-base/components/AppBar/constants";
 import Stack from "@lichtblick/suite-base/components/Stack";
 import { useAnalytics } from "@lichtblick/suite-base/context/AnalyticsContext";
-import { usePlayerSelection } from "@lichtblick/suite-base/context/PlayerSelectionContext";
 import {
   WorkspaceContextStore,
   useWorkspaceStore,
 } from "@lichtblick/suite-base/context/Workspace/WorkspaceContext";
 import { useWorkspaceActions } from "@lichtblick/suite-base/context/Workspace/useWorkspaceActions";
+import { SAMPLES_CATALOG_URL } from "@lichtblick/suite-base/dataSources/constants";
 import { AppEvent } from "@lichtblick/suite-base/services/IAnalytics";
 
+import { CatalogUrlView } from "./CatalogUrlView";
 import Start from "./Start";
 
 export type DataSourceDialogItem = "start" | "file" | "demo" | "remote";
@@ -41,15 +42,14 @@ const selectDataSourceDialog = (store: WorkspaceContextStore) => store.dialogs.d
 
 export function DataSourceDialog(): React.JSX.Element {
   const { classes } = useStyles();
-  const { availableSources, selectSource } = usePlayerSelection();
   const { dialogActions } = useWorkspaceActions();
-  const { activeDataSource, item: activeView } = useWorkspaceStore(selectDataSourceDialog);
+  const {
+    activeDataSource,
+    item: activeView,
+    catalogUrl,
+  } = useWorkspaceStore(selectDataSourceDialog);
 
   const isMounted = useMountedState();
-
-  const firstSampleSource = useMemo(() => {
-    return availableSources.find((source) => source.type === "sample");
-  }, [availableSources]);
 
   const analytics = useAnalytics();
 
@@ -77,10 +77,8 @@ export function DataSourceDialog(): React.JSX.Element {
             dialogActions.dataSource.open("start");
           }
         });
-    } else if (activeView === "demo" && firstSampleSource) {
-      selectSource(firstSampleSource.id);
     }
-  }, [activeView, dialogActions, firstSampleSource, isMounted, selectSource]);
+  }, [activeView, dialogActions, isMounted]);
 
   return (
     <Dialog
@@ -104,7 +102,17 @@ export function DataSourceDialog(): React.JSX.Element {
     >
       {/* The full-page start screen is left by opening something (or Escape), not a close button. */}
       <Stack flexGrow={1} fullHeight justifyContent="space-between" overflow="hidden">
-        {activeView !== "demo" && <Start />}
+        {activeView === "demo" ? (
+          <CatalogUrlView
+            url={catalogUrl ?? SAMPLES_CATALOG_URL}
+            onBack={() => {
+              dialogActions.dataSource.open("start");
+            }}
+            onOpened={onModalClose}
+          />
+        ) : (
+          <Start />
+        )}
       </Stack>
     </Dialog>
   );

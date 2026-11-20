@@ -21,6 +21,7 @@ import { usePanelButtonTitle } from "@lichtblick/suite-base/components/PanelButt
 import { usePanelContext } from "@lichtblick/suite-base/components/PanelContext";
 import PanelToolbar from "@lichtblick/suite-base/components/PanelToolbar";
 import Stack from "@lichtblick/suite-base/components/Stack";
+import { PanelLogLevel } from "@lichtblick/suite-base/components/types";
 import useGlobalVariables from "@lichtblick/suite-base/hooks/useGlobalVariables";
 import {
   FROM_COLOR,
@@ -68,6 +69,8 @@ import {
   EMPTY_TRANSFORM_STATE,
   measureBetween,
   mergeEntries,
+  sameFields,
+  sameRow,
   TransformState,
 } from "./tree";
 import { FrameEntries, FrameEntry, FrameRow, FrameWarning, TransformTreeConfig } from "./types";
@@ -342,44 +345,50 @@ export function TransformTree({ config, saveConfig }: Props): React.JSX.Element 
 
   // Report each problem once in the panel log when it appears, with details. "noData" is left out
   // because it is expected for a moment after every seek.
-  const { logError } = usePanelContext();
+  const { log } = usePanelContext();
   const loggedRef = useRef(new Set<string>());
   useEffect(() => {
-    if (logError == undefined) {
+    if (log == undefined) {
       return;
     }
-    const messages = new Map<string, string>();
+    const messages = new Map<string, { level: PanelLogLevel; message: string }>();
     for (const topic of resolvedTopics) {
       if (topic.visible && !topic.available) {
-        messages.set(`topic:${topic.name}`, `${topic.name}: ${t("settings.topicUnavailable")}`);
+        messages.set(`topic:${topic.name}`, {
+          level: "warn",
+          message: `${topic.name}: ${t("settings.topicUnavailable")}`,
+        });
       }
     }
     for (const topic of malformedTopics) {
-      messages.set(`malformed:${topic}`, `${topic}: ${t("settings.malformedTransforms")}`);
+      messages.set(`malformed:${topic}`, {
+        level: "error",
+        message: `${topic}: ${t("settings.malformedTransforms")}`,
+      });
     }
     for (const row of allRows) {
       for (const warning of row.warnings) {
         if (warning !== "noData") {
-          messages.set(
-            `${warning}:${row.frame}`,
-            `${row.frame}: ${warningMessage(t, row, warning)}`,
-          );
+          messages.set(`${warning}:${row.frame}`, {
+            level: "warn",
+            message: `${row.frame}: ${warningMessage(t, row, warning)}`,
+          });
         }
       }
     }
     if (roots.length > 1) {
-      messages.set(
-        `roots:${roots.join(",")}`,
-        `${t("multipleRoots", { count: roots.length })}: ${roots.join(", ")}`,
-      );
+      messages.set(`roots:${roots.join(",")}`, {
+        level: "warn",
+        message: `${t("multipleRoots", { count: roots.length })}: ${roots.join(", ")}`,
+      });
     }
-    for (const [key, message] of messages) {
+    for (const [key, { level, message }] of messages) {
       if (!loggedRef.current.has(key)) {
-        logError(message);
+        log(level, message);
       }
     }
     loggedRef.current = new Set(messages.keys());
-  }, [allRows, logError, malformedTopics, resolvedTopics, roots, t]);
+  }, [allRows, log, malformedTopics, resolvedTopics, roots, t]);
 
   const toggleCollapsed = useCallback(
     (frame: string) => {
@@ -792,4 +801,12 @@ const FrameTableRow = memo(function FrameTableRowImpl({
       </td>
     </tr>
   );
-});
+}, sameRowProps);
+
+/** Rows are rebuilt on every update, so compare them by value: unchanged rows skip rendering. */
+function sameRowProps<P extends { row: FrameRow }>(prev: P, next: P): boolean {
+  return (
+    sameFields({ ...prev, row: undefined }, { ...next, row: undefined }) &&
+    sameRow(prev.row, next.row)
+  );
+}

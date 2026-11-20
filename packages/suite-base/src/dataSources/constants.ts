@@ -6,6 +6,10 @@
 export const SAMPLE_BOREAS_DATA_SOURCE_URL =
   "https://pub-28ff7cafca60457aa0fb10e79c70ff4b.r2.dev/boreas-showcase-v2.mcap";
 export const SAMPLE_BOREAS_DATA_SOURCE_ID = "sample-boreas";
+// "Explore sample data" lists this catalog (see components/Catalog/catalogUrl.ts); editing it on
+// R2 adds, changes or removes samples without a release.
+export const SAMPLES_CATALOG_URL =
+  "https://pub-28ff7cafca60457aa0fb10e79c70ff4b.r2.dev/catalog.json";
 export const SAMPLE_BOREAS_DATA_SOURCE_TYPE = "sample";
 export const SAMPLE_BOREAS_DATA_SOURCE_DISPLAY_NAME = "Sample: Boreas";
 export const SAMPLE_BOREAS_DATA_SOURCE_ICON_NAME = "FileASPX";

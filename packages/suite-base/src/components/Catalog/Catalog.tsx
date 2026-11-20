@@ -222,15 +222,18 @@ type Props = {
   onQueryChange?: (query: string) => void;
   /** Set by a page that shows the view switch itself; otherwise the catalog shows its own. */
   view?: "list" | "grid" | "map";
+  /** The first view of the catalog's own switch. */
+  initialView?: "list" | "grid" | "map";
 };
 
-/** The catalog section of the start page: every recording in a local folder. */
+/** Every recording of a catalog: a local folder, live recordings or a catalog URL. */
 export default function Catalog({
   folder,
   query,
   lastOpenedByName,
   onQueryChange,
   view: viewProp,
+  initialView = "list",
 }: Props): React.JSX.Element {
   const { classes, cx } = useStyles();
   const { t, i18n } = useTranslation("catalog");
@@ -238,7 +241,7 @@ export default function Catalog({
 
   const [selectedId, setSelectedId] = useState<string>();
   const [dragging, setDragging] = useState(false);
-  const [localView, setView] = useState<"list" | "grid" | "map">("list");
+  const [localView, setView] = useState<"list" | "grid" | "map">(initialView);
   const view = viewProp ?? localView;
   const [gpsTopic, setGpsTopic] = useState<string>();
   const [area, setArea] = useState<Bounds>();
@@ -369,7 +372,7 @@ export default function Catalog({
             {t("emptyDescription")}
           </Typography>
           <Stack direction="row" gap={1}>
-            <Button variant="contained" onClick={() => void folder.pickFolder()}>
+            <Button variant="contained" onClick={() => void folder.pickFolder?.()}>
               {t("openFolder")}
             </Button>
             {folder.lastFolder && (
@@ -391,17 +394,23 @@ export default function Catalog({
     >
       {/* One line: folder, count, filters, then the view's controls. */}
       <div className={classes.header}>
-        <Tooltip title={t("changeFolder")}>
-          <Button
-            size="small"
-            color="inherit"
-            startIcon={<FolderOpenOutlinedIcon fontSize="small" />}
-            className={classes.folderButton}
-            onClick={() => void folder.pickFolder()}
-          >
-            <span className={classes.folderName}>{folder.name}</span>
-          </Button>
-        </Tooltip>
+        {folder.pickFolder ? (
+          <Tooltip title={t("changeFolder")}>
+            <Button
+              size="small"
+              color="inherit"
+              startIcon={<FolderOpenOutlinedIcon fontSize="small" />}
+              className={classes.folderButton}
+              onClick={() => void folder.pickFolder?.()}
+            >
+              <span className={classes.folderName}>{folder.name}</span>
+            </Button>
+          </Tooltip>
+        ) : (
+          <Typography variant="subtitle2" noWrap className={classes.folderName}>
+            {folder.name}
+          </Typography>
+        )}
         <Typography variant="body2" noWrap color="textSecondary">
           {query.trim() === "" && !area
             ? t("recordingCount", { count: recordings.length })
@@ -496,7 +505,7 @@ export default function Catalog({
           </Suspense>
         ) : view === "grid" ? (
           <div className={classes.grid}>
-            {shown.length === 0 && progress == undefined && (
+            {shown.length === 0 && progress == undefined && error == undefined && (
               <Typography className={classes.message} color="textSecondary">
                 {recordings.length === 0 ? t("noRecordings") : t("noMatches")}
               </Typography>
@@ -544,7 +553,7 @@ export default function Catalog({
               {!compact && sortLabel("topics", t("topics"))}
             </div>
             <div ref={scrollRef} className={classes.scroller}>
-              {shown.length === 0 && progress == undefined && (
+              {shown.length === 0 && progress == undefined && error == undefined && (
                 <Typography className={classes.message} color="textSecondary">
                   {recordings.length === 0 ? t("noRecordings") : t("noMatches")}
                 </Typography>
@@ -570,7 +579,7 @@ export default function Catalog({
                           ago: formatTimeAgo(lastOpened, Date.now(), i18n.language),
                         })
                       : undefined,
-                    path !== r.name ? path : undefined,
+                    r.description ?? (path !== r.name ? path : undefined),
                   ]
                     .filter(Boolean)
                     .join(" · ");

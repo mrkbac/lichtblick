@@ -16,6 +16,7 @@ import { Condvar } from "@lichtblick/den/async";
 import {
   CurrentLayoutActions,
   LayoutData,
+  LayoutID,
   LayoutState,
   useCurrentLayoutActions,
   useCurrentLayoutSelector,
@@ -536,6 +537,85 @@ describe("CurrentLayoutProvider", () => {
     await waitFor(() => {
       expect(mockLayoutManager.getLayout).toHaveBeenCalledWith("layout2");
     });
+  });
+
+  it("keeps a layout selected while the startup selection is still running", async () => {
+    // e.g. a `layoutUrl` link installs and selects its layout before favorites finish loading.
+    const favoritesLoaded = new Condvar();
+    const favoritesWait = favoritesLoaded.wait();
+    mockLayoutManager.loadFavorites.mockImplementation(async () => {
+      await favoritesWait;
+      return { personal: new Set(), shared: new Set() };
+    });
+    mockLayoutManager.getLayouts.mockImplementation(async () => [
+      { id: "startup", name: "A startup layout", permission: "CREATOR_WRITE" },
+      { id: "linked", name: "Z linked layout", permission: "CREATOR_WRITE" },
+    ]);
+    mockLayoutManager.getLayout.mockImplementation(async (id: string) => ({
+      id,
+      name: id,
+      baseline: { updatedAt: new Date(10).toISOString(), data: TEST_LAYOUT },
+    }));
+    mockUserProfile.setUserProfile.mockResolvedValue(undefined);
+
+    const { result } = renderTest({ mockLayoutManager, mockUserProfile });
+    await waitFor(() => {
+      expect(mockLayoutManager.loadFavorites).toHaveBeenCalled();
+    });
+    act(() => {
+      result.current.actions.setSelectedLayoutId("linked" as LayoutID);
+    });
+    await act(async () => {
+      favoritesLoaded.notifyAll();
+      await favoritesWait;
+    });
+
+    await waitFor(() => {
+      expect(result.current.layoutState.selectedLayout).toMatchObject({
+        id: "linked",
+        loading: false,
+      });
+    });
+    expect(mockLayoutManager.getLayout).not.toHaveBeenCalledWith("startup");
+  });
+
+  it("ignores an earlier selection that finishes after a later one", async () => {
+    mockLayoutManager.getLayouts.mockImplementation(async () => [
+      { id: "slow", name: "Slow", permission: "CREATOR_WRITE" },
+    ]);
+    const slowLoaded = new Condvar();
+    const slowWait = slowLoaded.wait();
+    mockLayoutManager.getLayout.mockImplementation(async (id: string) => {
+      if (id === "slow") {
+        await slowWait;
+      }
+      return {
+        id,
+        name: id,
+        baseline: { updatedAt: new Date(10).toISOString(), data: TEST_LAYOUT },
+      };
+    });
+    mockUserProfile.setUserProfile.mockResolvedValue(undefined);
+
+    const { result } = renderTest({ mockLayoutManager, mockUserProfile });
+    await waitFor(() => {
+      expect(mockLayoutManager.getLayout).toHaveBeenCalledWith("slow");
+    });
+    act(() => {
+      result.current.actions.setSelectedLayoutId("fast" as LayoutID);
+    });
+    await waitFor(() => {
+      expect(result.current.layoutState.selectedLayout).toMatchObject({
+        id: "fast",
+        loading: false,
+      });
+    });
+    await act(async () => {
+      slowLoaded.notifyAll();
+      await slowWait;
+    });
+
+    expect(result.current.layoutState.selectedLayout?.id).toBe("fast");
   });
 
   it("selects the first org layout, when current layout is not found", async () => {

@@ -73,6 +73,17 @@ function ThreeDeeRenderAdapter(interfaceMode: InterfaceMode, props: Props) {
 
   const forwardedAnalytics = useForwardAnalytics();
 
+  const panelLog = panelContext?.log;
+  const logError = useMemo(
+    () =>
+      panelLog
+        ? (message: string, error?: Error) => {
+            panelLog("error", message, error);
+          }
+        : undefined,
+    [panelLog],
+  );
+
   const boundInitPanel = useMemo(
     () =>
       initPanel.bind(undefined, {
@@ -90,7 +101,7 @@ function ThreeDeeRenderAdapter(interfaceMode: InterfaceMode, props: Props) {
         ) => {
           enqueueSnackbar(message, { variant: variant ?? "default" });
         },
-        logError: panelContext?.logError,
+        logError,
       }),
     [
       crash,
@@ -100,7 +111,7 @@ function ThreeDeeRenderAdapter(interfaceMode: InterfaceMode, props: Props) {
       props.debugPicking,
       customCameraModels,
       enqueueSnackbar,
-      panelContext?.logError,
+      logError,
     ],
   );
 
