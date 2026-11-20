@@ -229,6 +229,59 @@ describe("CameraStateSettings", () => {
     handler.dispose();
   });
 
+  it("draws camera moves at once but writes them to the config only when the camera rests", () => {
+    vi.useFakeTimers();
+    try {
+      const handler = new CameraStateSettings(renderer, canvas, 1);
+      const onConfigChange = vi.fn();
+      renderer.on("configChange", onConfigChange);
+      const queueFrame = vi.spyOn(renderer, "queueAnimationFrame");
+      const change = mockOrbitControls.addEventListener.mock.calls.findLast(
+        ([type]) => type === "change",
+      )![1] as () => void;
+
+      // When: the user drags the camera over several pointer moves
+      for (const distance of [30, 31, 32]) {
+        mockOrbitControls.getDistance.mockReturnValue(distance);
+        change();
+        vi.advanceTimersByTime(16);
+      }
+
+      // Then: every move draws a frame, but nothing reaches React yet
+      expect(queueFrame).toHaveBeenCalled();
+      expect(onConfigChange).not.toHaveBeenCalled();
+
+      // When: the camera rests
+      vi.advanceTimersByTime(150);
+
+      // Then: the final camera state is written once
+      expect(onConfigChange).toHaveBeenCalledTimes(1);
+      expect(renderer.config.cameraState.distance).toBe(32);
+      handler.dispose();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("drops a pending camera write when a settings edit changes the camera", () => {
+    vi.useFakeTimers();
+    try {
+      const handler = renderer.cameraHandler as CameraStateSettings;
+      mockOrbitControls.getDistance.mockReturnValue(30);
+      renderer.emit("cameraMove", renderer);
+
+      handler.handleSettingsAction({
+        action: "update",
+        payload: { path: ["cameraState", "distance"], input: "number", value: 5 },
+      });
+      vi.advanceTimersByTime(500);
+
+      expect(renderer.config.cameraState.distance).toBe(5);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   describe("screen space panning", () => {
     const aspect = 16 / 9;
 

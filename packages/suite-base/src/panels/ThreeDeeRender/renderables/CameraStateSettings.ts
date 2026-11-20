@@ -6,6 +6,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { t } from "i18next";
+import * as _ from "lodash-es";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 
@@ -43,6 +44,8 @@ const tempVec3 = new THREE.Vector3();
 const tempSpherical = new THREE.Spherical();
 const tempEuler = new THREE.Euler();
 const FOLLOW_TF_PATH = ["general", "followTf"];
+/** How long the camera must rest before its state is written to the config and settings tree */
+const CAMERA_COMMIT_DELAY_MS = 150;
 export class CameraStateSettings extends SceneExtension implements ICameraHandler {
   // The frameId's of the fixed and render frames used to create the current unfollowPoseSnapshot
   #unfollowSnapshotFrameIds:
@@ -143,6 +146,7 @@ export class CameraStateSettings extends SceneExtension implements ICameraHandle
 
   public override dispose(): void {
     this.#controls.dispose();
+    this.#commitCameraState.cancel();
     // for camera settings
     this.renderer.off("cameraMove", this.#handleCameraMove);
 
@@ -199,6 +203,8 @@ export class CameraStateSettings extends SceneExtension implements ICameraHandle
     return { path: ["general"], node: { ...node, handler } };
   }
   public override handleSettingsAction = (action: SettingsTreeAction): void => {
+    // A pending commit holds the camera from before this edit and must not overwrite it
+    this.#commitCameraState.cancel();
     if (action.action === "perform-node-action" && action.payload.id === "reset-camera") {
       this.renderer.updateConfig((draft) => {
         draft.cameraState = structuredClone(DEFAULT_CAMERA_STATE);
@@ -360,9 +366,24 @@ export class CameraStateSettings extends SceneExtension implements ICameraHandle
     }
   }
 
+  // Camera moves draw straight to the canvas. Writing them to the config re-renders the panel
+  // and rebuilds the settings tree, so that only happens once the camera comes to rest.
   #handleCameraMove = (): void => {
-    this.updateSettingsTree();
+    // Also moves the orthographic camera, which the orbit controls don't drive
+    this.setCameraState(this.getCameraState());
+    this.renderer.queueAnimationFrame();
+    this.#commitCameraState();
   };
+
+  #commitCameraState = _.debounce((): void => {
+    const cameraState = this.getCameraState();
+    if (!_.isEqual(cameraState, this.renderer.config.cameraState)) {
+      this.renderer.updateConfig((draft) => {
+        draft.cameraState = cameraState;
+      });
+    }
+    this.updateSettingsTree();
+  }, CAMERA_COMMIT_DELAY_MS);
 
   #handleTransformTreeUpdated = (): void => {
     this.#updateFollowFrameId();

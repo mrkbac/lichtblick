@@ -209,15 +209,11 @@ export class SharedMap {
           Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) *
           Math.max(512 * 2 ** this.map.getMinZoom(), height) *
           origin.meterInMercatorCoordinateUnits());
-      const distance = camera.position.distanceTo(
-        this.#translation.fromArray(renderer.config.cameraState.targetOffset),
-      );
-      if (distance > this.maxCameraDistance) {
-        const state = renderer.getCameraState();
-        if (state) {
-          renderer.setCameraState({ ...state, distance: this.maxCameraDistance });
-          renderer.emit("cameraMove", renderer);
-        }
+      // The live camera: the config only catches up once the camera rests
+      const liveCamera = renderer.getCameraState();
+      if (liveCamera && liveCamera.distance > this.maxCameraDistance) {
+        renderer.setCameraState({ ...liveCamera, distance: this.maxCameraDistance });
+        renderer.emit("cameraMove", renderer);
       }
       const renderToEnu = this.#renderToEnu.compose(
         this.#translation.set(pose.position.x, pose.position.y, pose.position.z),

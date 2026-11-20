@@ -70,7 +70,6 @@ describe("SharedMap", () => {
     const queueAnimationFrame = vi.fn();
     const renderer = {
       currentTime: 0n,
-      config: { cameraState: { targetOffset: [0, 0, 0] } },
       transformTree,
       cameraHandler: { getActiveCamera: () => camera },
       getCameraState: () => ({ distance: 20 }),
@@ -188,9 +187,9 @@ describe("SharedMap ground height", () => {
     transformTree.addTransform("base", "map", 0n, Transform.Identity().setPosition([10, 20, 5]));
     const renderer = {
       currentTime: 0n,
-      config: { cameraState: { targetOffset: [0, 0, 0] } },
       transformTree,
       cameraHandler: { getActiveCamera: () => camera },
+      getCameraState: () => ({ distance: 20 }),
       hud: { displayIfTrue: vi.fn() },
     } as unknown as Renderer;
     const shared = new SharedMap(map as unknown as MapLibreMap, "map-layer");

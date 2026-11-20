@@ -309,30 +309,24 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
     renderer,
   );
 
-  // Config cameraState
+  // Share camera moves with synced panels. The renderer draws them itself and writes them to the
+  // config once the camera rests (see CameraStateSettings), so no React update runs per move.
   useEffect(() => {
+    if (!renderer || config.scene.syncCamera !== true) {
+      return;
+    }
     const listener = () => {
-      if (renderer) {
-        const newCameraState = renderer.getCameraState();
-        if (!newCameraState) {
-          return;
-        }
-        // This needs to be before `setConfig` otherwise flickering will occur during
-        // non-follow mode playback
-        renderer.setCameraState(newCameraState);
-        setConfig((prevConfig) => ({ ...prevConfig, cameraState: newCameraState }));
-
-        if (config.scene.syncCamera === true) {
-          context.setSharedPanelState({
-            cameraState: newCameraState,
-            followMode: config.followMode,
-            followTf: renderer.followFrameId,
-          });
-        }
+      const newCameraState = renderer.getCameraState();
+      if (newCameraState) {
+        context.setSharedPanelState({
+          cameraState: newCameraState,
+          followMode: config.followMode,
+          followTf: renderer.followFrameId,
+        });
       }
     };
-    renderer?.addListener("cameraMove", listener);
-    return () => void renderer?.removeListener("cameraMove", listener);
+    renderer.addListener("cameraMove", listener);
+    return () => void renderer.removeListener("cameraMove", listener);
   }, [config.scene.syncCamera, config.followMode, context, renderer?.followFrameId, renderer]);
 
   // Handle user changes in the settings sidebar
