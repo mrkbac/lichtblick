@@ -14,8 +14,9 @@ const expect = baseExpect.configure({ timeout: 20_000 });
  */
 async function pixels(canvas: Locator) {
   const rect = (await canvas.boundingBox())!;
-  // A screenshot waits for a new frame, which software WebGPU on the desktop runners can take long for
-  const png = (await canvas.screenshot({ timeout: 90_000 })).toString("base64");
+  // A page screenshot clipped to the canvas: Electron's element screenshots can miss the WebGPU
+  // canvas layered above the map. It waits for a frame, which software WebGPU can take long for.
+  const png = (await canvas.page().screenshot({ clip: rect, timeout: 90_000 })).toString("base64");
   return await canvas.page().evaluate(
     async ({ data, rect: box }) => {
       const image = new Image();
