@@ -166,7 +166,9 @@ export default function CurrentLayoutProvider({
         historyLayoutId.current = undefined;
         // Typed so TS doesn't keep it narrowed to undefined across the awaits below.
         revertedWhileLoading.current = undefined as typeof revertedWhileLoading.current;
-        setLayoutState({ selectedLayout: { id, loading: true, data: undefined } });
+        // Keep showing the previous layout while loading, so panels both layouts share stay mounted.
+        const previous = layoutStateRef.current.selectedLayout?.data;
+        setLayoutState({ selectedLayout: { id, loading: true, data: previous } });
         const layout = await layoutManager.getLayout(id);
         const layoutVersion = layout?.baseline.data.version;
         if (layoutVersion != undefined && layoutVersion > MAX_SUPPORTED_LAYOUT_VERSION) {

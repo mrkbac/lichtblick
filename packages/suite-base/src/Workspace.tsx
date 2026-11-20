@@ -25,6 +25,7 @@ import { useStyles } from "@lichtblick/suite-base/Workspace.style";
 import McapBundleAPI from "@lichtblick/suite-base/api/mcapBundle/McapBundleAPI";
 import { AlertsList } from "@lichtblick/suite-base/components/AlertList/AlertsList";
 import { AppBar } from "@lichtblick/suite-base/components/AppBar";
+import { AttachmentList } from "@lichtblick/suite-base/components/Attachments/AttachmentList";
 import { CommandPalette } from "@lichtblick/suite-base/components/CommandPalette/CommandPalette";
 import { LayoutShortcutListener } from "@lichtblick/suite-base/components/CommandPalette/layoutShortcuts";
 import { CompareDialog } from "@lichtblick/suite-base/components/Compare/CompareDialog";
@@ -53,6 +54,7 @@ import {
   selectPausePlayback,
   selectPlayerId,
   selectPlayerPresence,
+  selectRecordingFiles,
   selectSeekPlayback,
   selectStartPlayback,
 } from "@lichtblick/suite-base/components/MessagePipeline/selectors";
@@ -347,6 +349,10 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
   // Events come from the recording's foxglove.Event topics, no account needed
   const showEventsTab = eventsSupported;
 
+  const hasAttachments = useMessagePipeline(
+    (ctx) => selectRecordingFiles(ctx)?.some((file) => file.attachments.length > 0) ?? false,
+  );
+
   const leftSidebarItems = useMemo(() => {
     const items = new Map<LeftSidebarItemKey, SidebarItem>([
       ["panel-settings", { title: "Panel", component: PanelSettingsSidebar }],
@@ -364,8 +370,12 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
       ],
       ["layouts", { title: "Layouts", component: LayoutBrowser }],
     ]);
+    if (hasAttachments) {
+      // Like the events tab, shown only when there is something to show.
+      items.set("attachments", { title: t("workspace:attachments"), component: AttachmentList });
+    }
     return items;
-  }, [PanelSettingsSidebar, alertCount, highestSeverity]);
+  }, [PanelSettingsSidebar, alertCount, highestSeverity, hasAttachments]);
 
   const rightSidebarItems = useMemo(() => {
     const items = new Map<RightSidebarItemKey, SidebarItem>([

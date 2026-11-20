@@ -11,6 +11,7 @@ export const workspace = {
   panel: "Panel",
   performance: "Performance",
   alerts: "Alerts",
+  attachments: "Attachments",
   studioLogs: "Logs",
   topics: "Topics",
   variables: "Variables",

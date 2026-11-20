@@ -225,10 +225,10 @@ export default function PlayerManager(
     });
   }, [extensionCatalogContext, player]);
 
-  // During layout switches, selectedLayout.data is briefly undefined (loading: true)
+  // During layout switches (loading: true) the data still belongs to the previous layout.
   useLayoutEffect(() => {
-    // which causes userScripts to become {}. Don't forward that transient empty state
-    // to the player — it would tear down registrations and kill active batch iterators.
+    // Don't forward its scripts to the player only to replace them once the new layout
+    // loads — it would tear down registrations and kill active batch iterators.
     if (isLayoutLoading) {
       return;
     }

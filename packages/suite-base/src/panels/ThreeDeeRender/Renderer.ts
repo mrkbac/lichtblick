@@ -2050,15 +2050,17 @@ export class Renderer extends EventEmitter<RendererEvents> {
   };
 
   /**
-   * The 3D point (in render frame coordinates) of the nearest pickable surface under the cursor, or
-   * undefined when nothing pickable is under the cursor.
+   * The 3D point (in render frame coordinates) of the nearest pickable surface under a canvas pixel,
+   * or undefined when nothing pickable is there. `camera` defaults to the active view camera.
    */
   public async pickPoint(
     cursorCoords: THREE.Vector2,
     out: THREE.Vector3,
+    camera:
+      | THREE.OrthographicCamera
+      | THREE.PerspectiveCamera = this.cameraHandler.getActiveCamera(),
   ): Promise<THREE.Vector3 | undefined> {
-    const camera = this.cameraHandler.getActiveCamera();
-    const hit = await this.#pick(cursorCoords);
+    const hit = await this.#pick(cursorCoords, undefined, camera);
     if (!hit) {
       return undefined;
     }
@@ -2084,17 +2086,29 @@ export class Renderer extends EventEmitter<RendererEvents> {
   async #pick(
     cursorCoords: THREE.Vector2,
     hidden?: ReadonlySet<THREE.Object3D>,
+    camera:
+      | THREE.OrthographicCamera
+      | THREE.PerspectiveCamera = this.cameraHandler.getActiveCamera(),
   ): Promise<PickResult | undefined> {
     if (!this.#gpuReady || this.#disposed) {
       return undefined;
     }
-    const camera = this.cameraHandler.getActiveCamera();
     camera.layers.set(LAYER_DEFAULT);
-    // The selection pass leaves only selected points in the raster buffers
-    if (this.pointRaster.preparedLayers !== camera.layers.mask) {
+    // Points are picked from the raster's screen buffers, so they must be rasterized for this
+    // camera: another camera (e.g. a measurement looking straight down) needs its own pass, and
+    // the selection pass leaves only selected points in them
+    const ownCamera = camera !== this.cameraHandler.getActiveCamera();
+    if (ownCamera || this.pointRaster.preparedLayers !== camera.layers.mask) {
       this.pointRaster.prepare(camera);
     }
-    return await this.#picker.pick(cursorCoords.x, cursorCoords.y, camera, hidden);
+    // The pick is drawn synchronously; only its readback is awaited
+    const result = this.#picker.pick(cursorCoords.x, cursorCoords.y, camera, hidden);
+    if (ownCamera) {
+      // ponytail: every pick from another camera re-rasterizes all points; fine for occasional
+      // measurement picks, cache per camera if they become frequent
+      this.pointRaster.preparedLayers = -1;
+    }
+    return await result;
   }
 
   async #pickSingleObject(

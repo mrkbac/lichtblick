@@ -11,14 +11,12 @@ import type { Renderer } from "../Renderer";
 import { Transform, TransformTree } from "../transforms";
 import { MeasurementTool } from "./MeasurementTool";
 
-/** Picks resolve asynchronously */
+/** Picks resolve asynchronously; a macrotask runs after every pending pick has */
 async function flushPicks(): Promise<void> {
-  for (let i = 0; i < 20; i++) {
-    await Promise.resolve();
-  }
+  await new Promise((resolve) => setTimeout(resolve, 0));
 }
 
-async function setup() {
+async function setup(kind: "distance" | "profile" = "distance") {
   const transformTree = new TransformTree(new ObjectPool(Transform.Empty));
   const addBase = () => transformTree.addTransform("base", "map", 0n, Transform.Identity());
   addBase();
@@ -41,7 +39,13 @@ async function setup() {
       addListener: (event: string, fn: (cursor: THREE.Vector2) => void) => listeners.set(event, fn),
       removeListener: vi.fn(),
     },
-    pickPoint: async (_cursor: THREE.Vector2, out: THREE.Vector3) => out.copy(picks.shift()!),
+    pickPoint: async (_cursor: THREE.Vector2, out: THREE.Vector3, camera?: THREE.Camera) => {
+      if (camera) {
+        // Profile samples look straight down onto a surface at z = 2
+        return out.set(camera.position.x, camera.position.y, 2);
+      }
+      return out.copy(picks.shift()!);
+    },
   } as unknown as Renderer;
 
   const tool = new MeasurementTool(renderer);
@@ -49,13 +53,19 @@ async function setup() {
     tool.startFrame(0n, "base", "map");
   };
   frame();
-  tool.startMeasuring("distance");
+  tool.startMeasuring(kind);
   picks.push(new THREE.Vector3(0, 0, 0), new THREE.Vector3(3, 4, 0));
   listeners.get("click")!(new THREE.Vector2(10, 10));
   await flushPicks();
   listeners.get("click")!(new THREE.Vector2(20, 20));
   await flushPicks();
+  if (kind === "profile") {
+    picks.push(new THREE.Vector3(3, 4, 0)); // the cursor point, dropped when finishing
+    frame();
+    await flushPicks();
+  }
   tool.stopMeasuring();
+  await flushPicks();
   frame();
   return { tool, transformTree, addBase, frame };
 }
@@ -74,7 +84,7 @@ describe("MeasurementTool", () => {
     frame();
     const info = tool.measurements[0]!;
     expect(info.unavailable).toBe(true);
-    expect(info.summary.label).toBe("— (missing transform base)");
+    expect(info.summary.label).toBe("— (missing transform map)");
     expect(info.summary.details).toEqual([]);
     expect(tool.copyText()).toBe("");
     expect(tool.copyText(info.id)).toBe("");
@@ -95,5 +105,26 @@ describe("MeasurementTool", () => {
     expect(tool.measurements[0]!.unavailable).toBe(true);
     expect(tool.measurements[0]!.summary.label).toBe("— (transform unavailable)");
     expect(tool.copyText()).toBe("");
+  });
+
+  it("stays fixed in the world when the display frame moves", async () => {
+    const { tool, transformTree, frame } = await setup();
+    expect(tool.measurements[0]!.summary.details[0]).toBe("P1: 0.000, 0.000, 0.000");
+    // The robot drives 1 m forward: the world point is now 1 m behind it
+    transformTree.clear();
+    transformTree.addTransform("base", "map", 0n, new Transform([1, 0, 0], [0, 0, 0, 1]));
+    frame();
+    expect(tool.measurements[0]!.summary.details[0]).toBe("P1: -1.000, 0.000, 0.000");
+    expect(tool.measurements[0]!.summary.label).toContain("5");
+  });
+
+  it("samples the profile straight below the line", async () => {
+    const { tool } = await setup("profile");
+    const profile = tool.measurements[0]!.summary.profile!;
+    expect(profile.z.length).toBeGreaterThan(10);
+    expect(profile.z[0]).toBe(0);
+    expect(profile.z.at(-1)).toBe(0);
+    expect(profile.z.slice(1, -1).every((z) => z === 2)).toBe(true);
+    expect(profile.x.at(-1)).toBeCloseTo(5);
   });
 });
