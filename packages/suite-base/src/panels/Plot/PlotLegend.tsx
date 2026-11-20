@@ -163,7 +163,11 @@ function PlotLegendComponent(props: Props): React.JSX.Element {
       return;
     }
     const handler = (newPaths: readonly string[]) => {
-      setPathsWithMismatchedDataLengths(newPaths.slice());
+      // Emitted on every downsample, usually with the same (empty) list; keep the old array so
+      // the legend and all its rows don't re-render.
+      setPathsWithMismatchedDataLengths((prev) =>
+        prev.length === newPaths.length && sameValues(prev, newPaths) ? prev : newPaths.slice(),
+      );
     };
     coordinator.on("pathsWithMismatchedDataLengthsChanged", handler);
     return () => {

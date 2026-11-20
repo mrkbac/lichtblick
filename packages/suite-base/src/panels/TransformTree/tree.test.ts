@@ -14,6 +14,7 @@ import {
   EMPTY_TRANSFORM_STATE,
   measureBetween,
   mergeEntries,
+  sameRow,
 } from "./tree";
 import { FrameEntries, FrameEntry } from "./types";
 
@@ -310,5 +311,25 @@ describe("malformed transforms", () => {
     // Then it is skipped without throwing, and its topic is reported
     expect([...state.entries.keys()]).toEqual(["b"]);
     expect([...state.malformedTopics]).toEqual(["/tf"]);
+  });
+});
+
+describe("sameRow", () => {
+  it("should treat rows rebuilt from unchanged data as the same, and changed ones as different", () => {
+    // Given
+    const streamed = addTransformEvents(new Map(), [
+      rosTf("/tf", 1, [["map", "odom"]]),
+      rosTf("/tf_static", 0, [["odom", "base_link"]]),
+    ]);
+    const rebuild = (now: number) => rows(mergeEntries(new Map(), streamed), now);
+
+    // When
+    const before = rebuild(2);
+    const same = rebuild(2);
+    const later = rebuild(3);
+
+    // Then
+    expect(before.map((row, i) => sameRow(row, same[i]!))).toEqual([true, true, true]);
+    expect(before.map((row, i) => sameRow(row, later[i]!))).toEqual([true, false, false]);
   });
 });
