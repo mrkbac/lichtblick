@@ -182,26 +182,38 @@ export class PointsRenderable<TUserData extends BaseUserData = BaseUserData> ext
 
 /**
  * Per-scan poses for points that share one buffer across scans (see DecayPointRing): row `s` of
- * the texture holds the 4 columns of scan `s`'s matrix, read through each point's `scanSlot`
- * attribute. A row of zeros hides the scan (no transform, or a free slot).
+ * the texture holds the 3 rows of scan `s`'s affine matrix (3 texels), read through each point's
+ * `scanSlot` attribute. Rows of zeros hide the scan (no transform, or a free slot).
  */
 export type ScanPoses = THREE.IUniform<THREE.Texture>;
 
+/** Texels per scan in the pose texture: the 3 rows of a 3x4 affine matrix */
+export const SCAN_POSE_TEXELS = 3;
+
+// Three texture reads per vertex: this runs for every accumulated point, the GPU hot path
 const VS_SCAN_POSE_DECL = /* glsl */ `
 uniform highp sampler2D scanPoses;
 attribute float scanSlot;
-mat4 scanMatrix() {
+vec4 scanRow0;
+vec4 scanRow1;
+vec4 scanRow2;
+void loadScanPose() {
   int s = int(scanSlot);
-  return mat4(
-    texelFetch(scanPoses, ivec2(0, s), 0),
-    texelFetch(scanPoses, ivec2(1, s), 0),
-    texelFetch(scanPoses, ivec2(2, s), 0),
-    texelFetch(scanPoses, ivec2(3, s), 0));
+  scanRow0 = texelFetch(scanPoses, ivec2(0, s), 0);
+  scanRow1 = texelFetch(scanPoses, ivec2(1, s), 0);
+  scanRow2 = texelFetch(scanPoses, ivec2(2, s), 0);
+}
+vec3 scanTransform(vec3 p) {
+  vec4 h = vec4(p, 1.0);
+  return vec3(dot(scanRow0, h), dot(scanRow1, h), dot(scanRow2, h));
+}
+vec3 scanRotate(vec3 n) {
+  return vec3(dot(scanRow0.xyz, n), dot(scanRow1.xyz, n), dot(scanRow2.xyz, n));
 }
 `;
-// Moves every vertex of a hidden scan (matrix element [3][3] is 0) outside the clip volume
+// Moves every vertex of a hidden scan (a rotation row can't be zero) outside the clip volume
 const VS_SCAN_HIDE = /* glsl */ `
-if (texelFetch(scanPoses, ivec2(3, int(scanSlot)), 0).w == 0.0) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); }
+if (scanRow0 == vec4(0.0)) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); }
 `;
 
 /**
@@ -216,14 +228,15 @@ function patchScanPoseShader(
 ): void {
   shader.uniforms.scanPoses = scanPoses;
   let vs = VS_SCAN_POSE_DECL + shader.vertexShader;
+  // Lambert computes normals before positions; load the pose wherever it is needed first
   vs = vs.replace(
     "#include <begin_vertex>",
-    `vec3 transformed = (scanMatrix() * vec4(${localPosition}, 1.0)).xyz;`,
+    `${normals ? "" : "loadScanPose();"} vec3 transformed = scanTransform(${localPosition});`,
   );
   if (normals) {
     vs = vs.replace(
       "#include <beginnormal_vertex>",
-      "vec3 objectNormal = mat3(scanMatrix()) * vec3(normal);",
+      "loadScanPose(); vec3 objectNormal = scanRotate(vec3(normal));",
     );
   }
   shader.vertexShader = vs.replace("#include <fog_vertex>", "#include <fog_vertex>" + VS_SCAN_HIDE);
@@ -231,12 +244,14 @@ function patchScanPoseShader(
 
 /** Vertex shader main() for picking materials: clip position plus the scan-hide check */
 function pickingVertexMain(localPosition: string, scanPoses: ScanPoses | undefined): string {
-  const local = scanPoses
-    ? `scanMatrix() * vec4(${localPosition}, 1.0)`
-    : `vec4(${localPosition}, 1.0)`;
+  if (!scanPoses) {
+    return /* glsl */ `
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(${localPosition}, 1.0);`;
+  }
   return /* glsl */ `
-      gl_Position = projectionMatrix * modelViewMatrix * ${local};
-      ${scanPoses ? VS_SCAN_HIDE : ""}`;
+      loadScanPose();
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(scanTransform(${localPosition}), 1.0);
+      ${VS_SCAN_HIDE}`;
 }
 
 /** Point shapes drawn as instanced meshes, sized in meters by `cubeSize` */

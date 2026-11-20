@@ -336,6 +336,9 @@ export const threeDee = {
 
   // Point Extension Utils
   decayTime: "Decay time",
+  decayMaxPoints: "Max points (M)",
+  decayMaxPointsHelp:
+    "Limits the points kept from older messages, in millions. Every point is drawn on every frame, so lower this on slower GPUs (e.g. 3 for smooth camera moves on a laptop). When the limit cuts the decay time short, the topic says so.",
   decayTimeDefaultZeroSeconds: "0 seconds",
   pointShape: "Point shape",
   pointShapeCircle: "Circle",

@@ -43,8 +43,13 @@ function makeRing(limits = { maxEntries: 100, maxPoints: 1000 }) {
     slots: () => Array.from(geometry.attributes.scanSlot!.array),
     positions: () => Array.from(geometry.attributes.position!.array),
     poseRow: (slot: number) =>
-      Array.from((poses.image.data as Float32Array).slice(slot * 16, slot * 16 + 16)),
+      Array.from((poses.image.data as Float32Array).slice(slot * 12, slot * 12 + 12)),
   };
+}
+
+/** The top 3 rows of an affine matrix, as the pose texture stores them */
+function rows(m: THREE.Matrix4): number[] {
+  return [0, 1, 2].flatMap((r) => [0, 1, 2, 3].map((c) => m.elements[c * 4 + r]!));
 }
 
 /** A scan of `count` points whose x coordinates are `value` */
@@ -158,7 +163,7 @@ describe("DecayPointRing", () => {
     push(ring, 2n, 6);
     push(ring, 3n, 6); // fits in the buffers, but 12 points exceed the budget
 
-    ring.enforceLimits({ reservePoints: 0 });
+    ring.enforceLimits({ maxPoints: 10, reservePoints: 0 });
 
     expect(ring.pointCount()).toBe(6);
     expect(ring.budgetEvictedUntil()).toBe(2n);
@@ -169,15 +174,15 @@ describe("DecayPointRing", () => {
     push(ring, 1n, 3);
     push(ring, 2n, 3);
 
-    ring.enforceLimits({ reservePoints: 5 }); // 3 + 3 + 5 > 10
+    ring.enforceLimits({ maxPoints: 10, reservePoints: 5 }); // 3 + 3 + 5 > 10
     expect(ring.oldestReceiveTime()).toBe(2n);
 
     push(ring, 3n, 1);
     push(ring, 4n, 1);
-    ring.enforceLimits({ reservePoints: 0 }); // 3 history scans + the latest > 3 slots
+    ring.enforceLimits({ maxPoints: 10, reservePoints: 0 }); // 3 history scans + the latest > 3 slots
     expect(ring.scanCount()).toBe(2);
 
-    ring.enforceLimits({ reservePoints: 50 }); // the latest alone exceeds the budget
+    ring.enforceLimits({ maxPoints: 10, reservePoints: 50 }); // the latest alone exceeds the budget
     expect(ring.scanCount()).toBe(0);
   });
 
@@ -198,7 +203,7 @@ describe("DecayPointRing", () => {
 
   it("uploads whole buffers after the ring was empty, until three.js uploads them", () => {
     const { ring, geometry } = makeRing();
-    push(ring, 1n, 2);
+    push(ring, 1n, 20); // sizes the buffers so later pushes don't reallocate
     ring.expire(2n);
     ring.updatePoses(transformTree, 0n, "map", "map"); // empty: queued ranges dropped
     const position = geometry.attributes.position as THREE.BufferAttribute;
@@ -219,7 +224,7 @@ describe("DecayPointRing", () => {
   it("uploads whole point buffers after switching back from cubes", () => {
     const { ring, geometry } = makeRing();
     ring.setShape({ shape: "cube", showOutline: false });
-    push(ring, 1n, 2); // written while drawing cubes: not queued for the point buffers
+    push(ring, 1n, 20); // sizes the buffers so later pushes don't reallocate // written while drawing cubes: not queued for the point buffers
     ring.setShape({ shape: undefined, showOutline: false });
     const position = geometry.attributes.position as THREE.BufferAttribute;
 
@@ -234,7 +239,7 @@ describe("DecayPointRing", () => {
   it("uploads whole instance buffers after the ring was empty, until three.js uploads them", () => {
     const { ring } = makeRing();
     ring.setShape({ shape: "cube", showOutline: false });
-    push(ring, 1n, 2);
+    push(ring, 1n, 20); // sizes the buffers so later pushes don't reallocate
     ring.expire(2n);
     ring.updatePoses(transformTree, 0n, "map", "map"); // empty: queued ranges dropped
     const cubes = ring.children.find((child) => child instanceof THREE.Mesh)!;
@@ -273,6 +278,46 @@ describe("DecayPointRing", () => {
     expect(position.updateRanges).toHaveLength(1);
   });
 
+  it("grows the buffers by at most 1.5x what the scans need", () => {
+    const { ring, positions } = makeRing({ maxEntries: 100, maxPoints: 1_000_000 });
+    for (let i = 1; i <= 10; i++) {
+      push(ring, BigInt(i), 100);
+    }
+
+    expect(ring.pointCount()).toBe(1000);
+    expect(positions().length / 3).toBeLessThanOrEqual(1500);
+  });
+
+  it("shrinks the buffers once the history needs far less, keeping the live scans", () => {
+    const { ring, positions } = makeRing({ maxEntries: 100, maxPoints: 5_000_000 });
+    push(ring, 1n, 1_000_000);
+    push(ring, 2n, 1_000_000);
+    push(ring, 3n, 1_000_000);
+    push(ring, 4n, 10_000);
+    expect(positions().length / 3).toBeGreaterThanOrEqual(3_010_000);
+
+    ring.expire(4n); // e.g. the decay time was lowered
+
+    expect(ring.pointCount()).toBe(10_000);
+    expect(positions().length / 3).toBe(15_000);
+    expect(positions().slice(0, 3)).toEqual([4, 0, 0]);
+    ring.updatePoses(transformTree, 0n, "map", "map");
+    expect(ring.drawSpans()).toEqual([{ start: 0, count: 10_000 }]);
+  });
+
+  it("applies a lowered point budget at runtime", () => {
+    const { ring } = makeRing({ maxEntries: 100, maxPoints: 1000 });
+    push(ring, 1n, 100);
+    push(ring, 2n, 100);
+    push(ring, 3n, 100);
+
+    ring.enforceLimits({ maxPoints: 150, reservePoints: 0 }); // the setting was lowered
+
+    expect(ring.pointCount()).toBe(100);
+    expect(ring.oldestReceiveTime()).toBe(3n);
+    expect(ring.budgetEvictedUntil()).toBe(2n);
+  });
+
   it("bounds live scans where the shader draws them", () => {
     const { ring, geometry } = makeRing();
     push(ring, 10n, 1); // local x = 10, placed at x = 10 + 10
@@ -298,10 +343,10 @@ describe("DecayPointRing", () => {
     expect(ring.updatePoses(transformTree, 0n, "map", "map")).toBe("missing");
     // Origin is the newest resolved scan; its own matrix is the identity
     expect(ring.position.x).toBe(30);
-    expect(poseRow(2)).toEqual(new THREE.Matrix4().elements);
-    expect(poseRow(0)).toEqual(new THREE.Matrix4().makeTranslation(-20, 0, 0).elements);
-    expect(poseRow(1)).toEqual(Array(16).fill(0));
+    expect(poseRow(2)).toEqual(rows(new THREE.Matrix4()));
+    expect(poseRow(0)).toEqual(rows(new THREE.Matrix4().makeTranslation(-20, 0, 0)));
+    expect(poseRow(1)).toEqual(Array(12).fill(0));
     // The all-zero row hides free slots and evicted points
-    expect(poseRow(100)).toEqual(Array(16).fill(0));
+    expect(poseRow(100)).toEqual(Array(12).fill(0));
   });
 });

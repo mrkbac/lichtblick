@@ -27,6 +27,7 @@ import {
 } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/pointExtensionUtils";
 import { colorFieldComputedPrefix } from "@lichtblick/suite-base/panels/ThreeDeeRender/settingsNodes/colorMode";
 import {
+  DEFAULT_DECAY_MAX_POINTS_MILLIONS,
   DEFAULT_POINT_SETTINGS,
   LayerSettingsPointExtension,
   POINT_CLOUD_REQUIRED_FIELDS,
@@ -81,7 +82,17 @@ type PointCloudFieldReaders = {
 type LayerSettingsPointClouds = LayerSettingsPointExtension & {
   stixelsEnabled: boolean;
   colorFieldComputed: "distance" | undefined;
+  /** Limit on accumulated decay points, in millions; DEFAULT_DECAY_MAX_POINTS_MILLIONS if unset */
+  decayMaxPoints?: number;
 };
+
+/** The decay point budget for these settings, in points */
+function decayMaxPoints(settings: LayerSettingsPointClouds): number {
+  const millions = settings.decayMaxPoints;
+  return millions != undefined && Number.isFinite(millions) && millions > 0
+    ? Math.round(millions * 1e6)
+    : DEFAULT_DECAY_MAX_POINTS_MILLIONS * 1e6;
+}
 
 const DEFAULT_SETTINGS = {
   ...DEFAULT_POINT_SETTINGS,
@@ -433,7 +444,10 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
     const latestCount = latest.renderable.decoded ? latest.renderable.geometry.drawRange.count : 0;
     if (latestCount > 0) {
       if (!this.#decayRing) {
-        this.#decayRing = new DecayPointRing(topic, settings, DECAY_HISTORY_LIMITS);
+        this.#decayRing = new DecayPointRing(topic, settings, {
+          maxEntries: DECAY_HISTORY_LIMITS.maxEntries,
+          maxPoints: decayMaxPoints(settings),
+        });
         this.#applyRingShape();
         this.add(this.#decayRing);
       }
@@ -498,6 +512,7 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
     ring.expire(expireTime);
     // The latest scan counts toward the limits too, as when it was part of the history
     ring.enforceLimits({
+      maxPoints: decayMaxPoints(settings),
       reservePoints: this.#pointsHistory.latest().renderable.geometry.drawRange.count,
     });
 
@@ -512,7 +527,7 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
         settingsPath,
         DECAY_LIMITED,
         i18next.t("threeDee:decayHistoryLimited", {
-          maxPoints: DECAY_HISTORY_LIMITS.maxPoints.toLocaleString(locale),
+          maxPoints: decayMaxPoints(settings).toLocaleString(locale),
           maxScans: DECAY_HISTORY_LIMITS.maxEntries.toLocaleString(locale),
           shownSeconds: shownSeconds.toLocaleString(locale, { maximumFractionDigits: 0 }),
           decaySeconds: settings.decayTime.toLocaleString(locale),

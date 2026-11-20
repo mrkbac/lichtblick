@@ -19,6 +19,7 @@ import {
   PointMeshShape,
   pointCloudMaterial,
   resetInstanceLimit,
+  SCAN_POSE_TEXELS,
   ScanPoses,
   UNIT_CUBE_EDGES,
   UNIT_GEOMETRY,
@@ -66,6 +67,26 @@ type DrawSpan = {
 
 const noBounds = (): void => {};
 
+/** Capacity growth factor: bounds overshoot to 50% at the cost of a few more reallocations */
+const GROWTH = 1.5;
+/** Shrink once live points use less than 1/SHRINK_BELOW of the buffers (hysteresis vs. GROWTH) */
+const SHRINK_BELOW = 4;
+/** Buffers below this many points are never shrunk; not worth a reallocation */
+const MIN_SHRINK_CAPACITY = 1_000_000;
+
+/** Floats per scan in the pose texture */
+const POSE_FLOATS = SCAN_POSE_TEXELS * 4;
+
+/** Writes the top 3 rows of an affine matrix (three.js stores columns) */
+function writePoseRows(out: Float32Array, offset: number, m: THREE.Matrix4): void {
+  const e = m.elements;
+  for (let row = 0; row < 3; row++) {
+    for (let col = 0; col < 4; col++) {
+      out[offset + row * 4 + col] = e[col * 4 + row]!;
+    }
+  }
+}
+
 /** Queued partial uploads per buffer before it falls back to one full upload */
 const MAX_UPDATE_RANGES = 64;
 
@@ -87,6 +108,8 @@ export class DecayPointRing extends Renderable<BaseUserData, /*TRenderer=*/ unde
   public override pickableInstances = false;
 
   readonly #limits: HistoryLimits;
+  /** Point budget (a setting, so it can change at runtime; see enforceLimits) */
+  #maxPoints: number;
   /** Row index of the all-zero matrix */
   readonly #hiddenSlot: number;
   #capacity = 0;
@@ -128,15 +151,16 @@ export class DecayPointRing extends Renderable<BaseUserData, /*TRenderer=*/ unde
       topic,
     });
     this.#limits = limits;
+    this.#maxPoints = limits.maxPoints;
     this.#hiddenSlot = limits.maxEntries;
     this.#freeSlots = Array.from(
       { length: limits.maxEntries },
       (_, i) => limits.maxEntries - 1 - i,
     );
-    this.#poseData = new Float32Array(4 * 4 * (limits.maxEntries + 1));
+    this.#poseData = new Float32Array(POSE_FLOATS * (limits.maxEntries + 1));
     this.#poseTexture = new THREE.DataTexture(
       this.#poseData,
-      4,
+      SCAN_POSE_TEXELS,
       limits.maxEntries + 1,
       THREE.RGBAFormat,
       THREE.FloatType,
@@ -276,20 +300,33 @@ export class DecayPointRing extends Renderable<BaseUserData, /*TRenderer=*/ unde
    * Evicts the oldest scans until the history plus `reservePoints` and one scan (the latest, drawn
    * separately) fit in the limits. A latest scan bigger than the budget leaves no history.
    */
-  public enforceLimits({ reservePoints }: { reservePoints: number }): void {
+  public enforceLimits({
+    maxPoints,
+    reservePoints,
+  }: {
+    maxPoints: number;
+    reservePoints: number;
+  }): void {
+    this.#maxPoints = maxPoints;
     while (
       this.#scans.length > 0 &&
-      (this.#livePoints + reservePoints > this.#limits.maxPoints ||
+      (this.#livePoints + reservePoints > maxPoints ||
         this.#scans.length + 1 > this.#limits.maxEntries)
     ) {
       this.#evictOldest({ budget: true });
     }
   }
 
-  /** Drops scans received before `expireTime` */
+  /**
+   * Drops scans received before `expireTime`, and shrinks the buffers once the history needs far
+   * less than they hold (e.g. after lowering the decay time).
+   */
   public expire(expireTime: bigint): void {
     while (this.#scans.length > 0 && this.#scans[0]!.receiveTime < expireTime) {
       this.#evictOldest({ budget: false });
+    }
+    if (this.#capacity > MIN_SHRINK_CAPACITY && this.#livePoints * SHRINK_BELOW < this.#capacity) {
+      this.#resize(Math.ceil(this.#livePoints * GROWTH));
     }
   }
 
@@ -333,7 +370,7 @@ export class DecayPointRing extends Renderable<BaseUserData, /*TRenderer=*/ unde
       tempPosition.set(p.x - this.position.x, p.y - this.position.y, p.z - this.position.z);
       tempQuaternion.set(q.x, q.y, q.z, q.w);
       tempMatrix.compose(tempPosition, tempQuaternion, UNIT_SCALE);
-      data.set(tempMatrix.elements, scan.slot * 16);
+      writePoseRows(data, scan.slot * POSE_FLOATS, tempMatrix);
     }
     this.#poseTexture.needsUpdate = true;
     this.#updateDrawSpans();
@@ -347,10 +384,30 @@ export class DecayPointRing extends Renderable<BaseUserData, /*TRenderer=*/ unde
   #computeBounds = (box: THREE.Box3): void => {
     const positions = this.#position.array;
     for (const scan of this.#scans) {
-      if (this.#poseData[scan.slot * 16 + 15] === 0) {
-        continue; // hidden: no transform
+      const o = scan.slot * POSE_FLOATS;
+      const d = this.#poseData;
+      if (d[o] === 0 && d[o + 1] === 0 && d[o + 2] === 0) {
+        continue; // hidden: no transform (a rotation row is never zero)
       }
-      tempMatrix.fromArray(this.#poseData, scan.slot * 16);
+      // prettier-ignore
+      tempMatrix.set(
+        d[o]!,
+        d[o + 1]!,
+        d[o + 2]!,
+        d[o + 3]!,
+        d[o + 4]!,
+        d[o + 5]!,
+        d[o + 6]!,
+        d[o + 7]!,
+        d[o + 8]!,
+        d[o + 9]!,
+        d[o + 10]!,
+        d[o + 11]!,
+        0,
+        0,
+        0,
+        1,
+      );
       for (let i = scan.start * 3; i < (scan.start + scan.count) * 3; i += 3) {
         tempPoint.fromArray(positions, i).applyMatrix4(tempMatrix);
         if (Number.isFinite(tempPoint.x + tempPoint.y + tempPoint.z)) {
@@ -391,18 +448,22 @@ export class DecayPointRing extends Renderable<BaseUserData, /*TRenderer=*/ unde
       return gap;
     }
     // A single scan bigger than the budget still fits; the budget only limits accumulation
-    const maxCapacity = Math.max(this.#limits.maxPoints, count);
+    const maxCapacity = Math.max(this.#maxPoints, count);
     if (this.#capacity < maxCapacity) {
-      let top = 0;
-      for (const scan of this.#scans) {
-        top = Math.max(top, scan.start + scan.count);
-      }
-      this.#grow(Math.min(maxCapacity, Math.max(this.#capacity * 2, top + count, count * 4)));
-      if (top + count <= this.#capacity) {
-        return top;
+      // Resizing packs live scans from 0, so the new scan goes right after them
+      this.#resize(
+        Math.min(
+          maxCapacity,
+          Math.max(Math.ceil(this.#capacity * GROWTH), this.#livePoints + count * 2),
+        ),
+      );
+      if (this.#livePoints + count <= this.#capacity) {
+        return this.#livePoints;
       }
     }
-    const start = next + count <= this.#capacity ? next : 0;
+    const newestNow = this.#scans[this.#scans.length - 1];
+    const after = newestNow ? newestNow.start + newestNow.count : 0;
+    const start = after + count <= this.#capacity ? after : 0;
     // Evict in age order: an older scan never outlives a newer one
     while (this.#overlapsScan(start, count)) {
       this.#evictOldest({ budget: true });
@@ -431,15 +492,23 @@ export class DecayPointRing extends Renderable<BaseUserData, /*TRenderer=*/ unde
     return this.#scans.some((scan) => scan.start < end && scan.start + scan.count > start);
   }
 
-  /** Grows the buffers, keeping every scan at its offset */
-  #grow(capacity: number): void {
+  /**
+   * Reallocates the buffers at `capacity` points with the live scans packed from 0 in age order,
+   * which also drops any gaps between them.
+   */
+  #resize(capacity: number): void {
     const position = new Float32Array(capacity * 3);
     const color = new Uint8Array(capacity * 4);
-    const scanSlot = new Uint16Array(capacity);
-    position.set(this.#position.array);
-    color.set(this.#color.array);
-    scanSlot.set(this.#scanSlot.array);
-    scanSlot.fill(this.#hiddenSlot, this.#capacity);
+    const scanSlot = new Uint16Array(capacity).fill(this.#hiddenSlot);
+    let next = 0;
+    for (const scan of this.#scans) {
+      const { start, count } = scan;
+      position.set(this.#position.array.subarray(start * 3, (start + count) * 3), next * 3);
+      color.set(this.#color.array.subarray(start * 4, (start + count) * 4), next * 4);
+      scanSlot.fill(scan.slot, next, next + count);
+      scan.start = next;
+      next += count;
+    }
     this.#capacity = capacity;
     // three.js frees GL buffers only for the attributes installed when the geometry is disposed
     for (const { geometry } of this.#spans) {
