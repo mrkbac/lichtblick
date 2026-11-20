@@ -10,3 +10,8 @@ export function clampLeftSidebarPercentage(percentage: number): number {
   const minPercentage = (LEFT_SIDEBAR_MIN_WIDTH_PX / window.innerWidth) * 100;
   return Math.max(percentage, minPercentage);
 }
+
+/** The selected key if its tab exists, else the first tab; undefined (closed) stays undefined. */
+export function availableKey<K>(key: K | undefined, items: ReadonlyMap<K, unknown>): K | undefined {
+  return key == undefined || items.has(key) ? key : items.keys().next().value;
+}
