@@ -33,6 +33,8 @@ export type PointShape = "point" | "cube" | "sphere";
 export type PointSource = (i: THREE.Node<"uint">) => {
   position: THREE.Node<"vec3">;
   color: THREE.Node<"uint">;
+  /** False skips the point (default: drawn when its position is finite) */
+  valid?: THREE.Node<"bool">;
 };
 
 /** Floats per scan pose: the 3 rows of an affine matrix */

@@ -41,7 +41,7 @@ export class DynamicInstancedMesh<
     const count = points.length;
     this.#setCount(count);
 
-    const colorArray = this.instanceColor!.array as Uint8ClampedArray;
+    const colorArray = this.instanceColor!.array as Float32Array;
     for (let i = 0; i < count; i++) {
       const point = points[i]!;
       const color = colors[i] ?? defaultColor;
@@ -50,9 +50,9 @@ export class DynamicInstancedMesh<
       tempMat4.scale(scale as THREE.Vector3);
       this.setMatrixAt(i, tempMat4);
 
-      colorArray[i * 3 + 0] = (color.r * 255) | 0;
-      colorArray[i * 3 + 1] = (color.g * 255) | 0;
-      colorArray[i * 3 + 2] = (color.b * 255) | 0;
+      colorArray[i * 3 + 0] = color.r;
+      colorArray[i * 3 + 1] = color.g;
+      colorArray[i * 3 + 2] = color.b;
     }
     this.instanceMatrix.needsUpdate = true;
     if (this.instanceColor) {
@@ -74,10 +74,11 @@ export class DynamicInstancedMesh<
 
   #resize() {
     const oldMatrixArray = this.instanceMatrix.array as Float32Array;
-    const oldColorArray = this.instanceColor?.array as Uint8ClampedArray | undefined;
+    const oldColorArray = this.instanceColor?.array as Float32Array | undefined;
 
     const newMatrixArray = new Float32Array(this.#capacity * 16);
-    const newColorArray = new Uint8ClampedArray(this.#capacity * 3);
+    // Floats: WebGPU has no 3-component 8-bit vertex format
+    const newColorArray = new Float32Array(this.#capacity * 3);
 
     if (oldMatrixArray.length > 0) {
       newMatrixArray.set(oldMatrixArray);
@@ -87,7 +88,7 @@ export class DynamicInstancedMesh<
     }
 
     this.instanceMatrix = new THREE.InstancedBufferAttribute(newMatrixArray, 16);
-    this.instanceColor = new THREE.InstancedBufferAttribute(newColorArray, 3, true);
+    this.instanceColor = new THREE.InstancedBufferAttribute(newColorArray, 3);
 
     this.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     this.instanceColor.setUsage(THREE.DynamicDrawUsage);

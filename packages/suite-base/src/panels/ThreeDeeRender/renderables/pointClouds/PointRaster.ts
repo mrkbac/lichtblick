@@ -39,7 +39,7 @@ import {
 } from "three/tsl";
 import * as THREE from "three/webgpu";
 
-import type { RasterPoints } from "./RasterPoints";
+import type { PointSource, RasterPoints } from "./RasterPoints";
 import { pickOutput, pickPixel } from "../../Picker";
 
 /** Point sets drawn at once; a set's index lives in the top bits of each pixel's point id */
@@ -267,7 +267,7 @@ export class PointRaster {
     const positions = storage(points.positionAttribute(), "float", capacity * 3).toReadOnly();
     const colors = storage(points.colorAttribute(), "uint", capacity).toReadOnly();
     /** Point `i` in the set's space and its packed RGBA8 color */
-    const fetch =
+    const fetch: PointSource =
       points.source() ??
       ((i: Uint) => {
         const b = i.mul(3);
@@ -307,7 +307,20 @@ export class PointRaster {
         If(alpha.lessThan(255).and(alpha.lessThanEqual(hash8(i))), () => {
           Return();
         });
-        const local = vec4(point.position, 1).toVar();
+        // Skip invalid points (e.g. NaN ranges) explicitly: with fast math, NaN comparisons below
+        // can't be relied on to fail. Non-finite floats have all exponent bits set.
+        const position = point.position.toVar();
+        const exponents = uint(0x7f800000);
+        const finite = bitsOf(position.x)
+          .bitAnd(exponents)
+          .notEqual(exponents)
+          .and(bitsOf(position.y).bitAnd(exponents).notEqual(exponents))
+          .and(bitsOf(position.z).bitAnd(exponents).notEqual(exponents));
+        const valid = point.valid ? finite.and(point.valid) : finite;
+        If(valid.not(), () => {
+          Return();
+        });
+        const local = vec4(position, 1).toVar();
         if (slots && poses) {
           const slot = uint(slots.element(i.shiftRight(1)))
             .shiftRight(i.bitAnd(1).mul(16))
@@ -330,7 +343,6 @@ export class PointRaster {
         const distance = view.z.negate().toVar();
         const clip = projection.mul(view).toVar();
         const ndc = clip.xyz.div(clip.w).toVar();
-        // Written so NaN positions (invalid returns) fail every test and are skipped
         const inside = distance
           .greaterThan(0)
           .and(ndc.x.abs().lessThanEqual(1))

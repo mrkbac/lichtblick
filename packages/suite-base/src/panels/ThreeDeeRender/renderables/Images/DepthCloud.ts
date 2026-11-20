@@ -166,10 +166,10 @@ export class DepthCloud extends RasterPoints {
         float(rayNode.element(b.add(2))),
       );
       const depth = float(textureLoad(depthTexture, pixel).x);
-      // Invalid depths (0, negative, NaN, infinite) become NaN, which the raster skips
+      // Invalid depths (0, negative, NaN, infinite) are skipped
       const valid = depth.greaterThan(0).and(depth.lessThan(float(3.4e38)));
       const direction = select(euclidean.equal(1), normalize(ray), ray);
-      const position = select(valid, direction.mul(depth), vec3(float(NaN)));
+      const position = direction.mul(depth);
       // The color image may have another size than the depth image
       const colorPixel = ivec2(vec2(pixel).mul(colorScale));
       const c = textureLoad(colorTexture, colorPixel).mul(255);
@@ -177,7 +177,7 @@ export class DepthCloud extends RasterPoints {
         .bitOr(uint(c.y).shiftLeft(8))
         .bitOr(uint(c.z).shiftLeft(16))
         .bitOr(uint(c.w).shiftLeft(24));
-      return { position, color };
+      return { position, color, valid };
     });
   }
 
