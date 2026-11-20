@@ -190,6 +190,7 @@ export class Renderer extends EventEmitter<RendererEvents> {
   public readonly gl: THREE.WebGPURenderer;
   /** Set once the WebGPU device is ready; until then frames update the scene without drawing */
   #gpuReady = false;
+  readonly #requiredLimits: Record<string, number> = {};
   /** GPU milliseconds of the last measured frame (render + compute), when stats are enabled */
   public gpuTimeMs: number | undefined;
   #measuringGpu = false;
@@ -347,6 +348,9 @@ export class Renderer extends EventEmitter<RendererEvents> {
       logarithmicDepthBuffer: config.scene.logDepth === true,
       // GPU time per frame for the stats overlay; fixed at creation like logDepth
       trackTimestamp: config.scene.enableStats === true,
+      powerPreference: "high-performance",
+      // Filled from the adapter before init(); three keeps this object (see #initGpu)
+      requiredLimits: this.#requiredLimits,
     });
     this.ready = this.#initGpu();
     this.gl.autoClear = false;
@@ -513,6 +517,14 @@ export class Renderer extends EventEmitter<RendererEvents> {
       if (typeof navigator === "undefined" || !("gpu" in navigator)) {
         throw new Error(i18next.t("threeDee:webGpuRequired"));
       }
+      // WebGPU defaults to 128 MB per storage binding; accumulated point clouds need far more
+      // (12 bytes per point for positions alone), so ask for what the GPU supports
+      const adapter = await navigator.gpu.requestAdapter({ powerPreference: "high-performance" });
+      if (!adapter) {
+        throw new Error(i18next.t("threeDee:webGpuRequired"));
+      }
+      this.#requiredLimits.maxStorageBufferBindingSize = adapter.limits.maxStorageBufferBindingSize;
+      this.#requiredLimits.maxBufferSize = adapter.limits.maxBufferSize;
       await this.gl.init();
       if (this.#disposed) {
         return;

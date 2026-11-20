@@ -10,7 +10,11 @@ export async function mockThreeWebGPU(): Promise<Record<string, unknown>> {
   const actual = await vi.importActual<Record<string, unknown>>("three/webgpu");
   // The renderer refuses to start without WebGPU
   if (!("gpu" in navigator)) {
-    Object.defineProperty(navigator, "gpu", { value: {}, configurable: true });
+    const limits = { maxStorageBufferBindingSize: 1 << 30, maxBufferSize: 1 << 30 };
+    Object.defineProperty(navigator, "gpu", {
+      value: { requestAdapter: async () => ({ limits }) },
+      configurable: true,
+    });
   }
   return { ...actual, WebGPURenderer: FakeWebGPURenderer };
 }
