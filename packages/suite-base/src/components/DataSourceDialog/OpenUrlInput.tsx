@@ -111,6 +111,9 @@ export function OpenUrlInput({
     picked ??
     (isUrl ? connectionSources.find((s) => s.id === sourceId && hasUrlField(s)) : undefined);
   const connects = picked != undefined || isUrl;
+  // A .json URL lists recordings: a catalog (see Catalog/catalogUrl.ts)
+  const isCatalog =
+    picked == undefined && explicitUrl && /^https?:\/\/[^?#]+\.json([?#]|$)/i.test(trimmed);
   // Extra fields only show for a picked source, so a detected one opens with their defaults
   const extraFields = fields.filter((field) => field.id !== "url");
   const hasFieldErrors = Object.values(fieldErrors).some((err) => err != undefined);
@@ -131,6 +134,10 @@ export function OpenUrlInput({
   };
 
   const connect = () => {
+    if (isCatalog) {
+      dialogActions.dataSource.open("demo", undefined, trimmed);
+      return;
+    }
     if (!source || hasFieldErrors) {
       return;
     }
@@ -168,7 +175,11 @@ export function OpenUrlInput({
     </Stack>
   );
 
-  const hint = connects ? (
+  const hint = isCatalog ? (
+    <Typography variant="caption" color="textSecondary" noWrap>
+      {t("enterOpensCatalog")}
+    </Typography>
+  ) : connects ? (
     <Typography variant="caption" color={source ? "textSecondary" : "error"} noWrap>
       {source == undefined
         ? t("unrecognizedUrl")
@@ -232,7 +243,9 @@ export function OpenUrlInput({
           className={classes.button}
           variant="contained"
           size="small"
-          disabled={connects ? !source || hasFieldErrors : topMatch == undefined}
+          disabled={
+            isCatalog ? false : connects ? !source || hasFieldErrors : topMatch == undefined
+          }
           onClick={open}
         >
           {t("open")}

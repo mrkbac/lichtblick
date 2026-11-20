@@ -13,6 +13,9 @@ export const openDialog = {
   createAFreeAccount: "Create a free account",
   dontShowThisAgain: "Don't show this again on startup",
   exploreSampleData: "Explore sample data",
+  backToStart: "Back",
+  searchCatalog: "Search recordings",
+  enterOpensCatalog: "Enter opens the catalog",
   openPanelGuide: "Panel guide",
   learnMore: "Learn more",
   needHelp: "Need help?",
@@ -48,7 +51,7 @@ export const openDialog = {
   noRecentMatches: "No recent sources match this search.",
   searchHelpTitle: "Search and connect",
   searchHelpConnect:
-    "Connect by typing a host (robot-1, robot.local, 192.168.1.5: a Foxglove WebSocket on port 8765, when nothing in recents or the catalog matches), host:port, or a full URL (ws://, wss://, https://…/file.mcap). Pick another connection type, or one without a URL, under ⋯.",
+    "Connect by typing a host (robot-1, robot.local, 192.168.1.5: a Foxglove WebSocket on port 8765, when nothing in recents or the catalog matches), host:port, or a full URL (ws://, wss://, https://…/file.mcap, or https://…/catalog.json for a list of recordings). Pick another connection type, or one without a URL, under ⋯.",
   searchHelpSearch: "Anything else searches recents and the catalog. Combine filters with text:",
   searchHelpFilters:
     "topic:/camera · schema:Image · path:2026/ · since:2026-10-01 · until:2026-10-31 · duration>5m · size<2GB · status:error|nosummary|ok · has:image|gps|pointcloud|tf|video",

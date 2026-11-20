@@ -52,6 +52,7 @@ import {
 import {
   PanelContextType,
   PanelLog,
+  PanelLogLevel,
   PanelStatics,
   GenericPanelProps,
 } from "@lichtblick/suite-base/components/types";
@@ -83,6 +84,7 @@ import {
 } from "@lichtblick/suite-base/util/tabLayout";
 
 const MAX_PANEL_LOGS = 1000;
+const LOG_SEVERITY: Record<PanelLogLevel, number> = { debug: 0, info: 1, warn: 2, error: 3 };
 
 /** Used in storybook when panels are renered outside of a <PanelLayout/> */
 const FALLBACK_PANEL_ID = "$unknown_id";
@@ -114,13 +116,42 @@ export default function Panel<
     const [logs, setLogs] = useState<PanelLog[]>([]);
     const [showLogs, setShowLogs] = useState(false);
 
-    const addLog = useCallback((message: string, error?: Error) => {
+    const nextLogId = useRef(0);
+    const addLog = useCallback((level: PanelLogLevel, message: string, error?: Error) => {
       // Keep only the newest entries: an unbounded log copies an ever-growing array per append
-      setLogs((prev) => [
-        ...prev.slice(-(MAX_PANEL_LOGS - 1)),
-        { timestamp: new Date().toLocaleString(), message, error },
-      ]);
+      const timestamp = new Date().toLocaleTimeString();
+      setLogs((prev) => {
+        const last = prev.at(-1);
+        // Fold an identical repeat into the previous row so a noisy source can't flood the log
+        if (
+          last?.level === level &&
+          last.message === message &&
+          last.error == undefined &&
+          !error
+        ) {
+          return [...prev.slice(0, -1), { ...last, timestamp, count: (last.count ?? 1) + 1 }];
+        }
+        return [
+          ...prev.slice(-(MAX_PANEL_LOGS - 1)),
+          { id: nextLogId.current++, timestamp, level, message, error },
+        ];
+      });
     }, []);
+    const logSeverity = useMemo(() => {
+      let severity: PanelLogLevel | undefined;
+      for (const { level } of logs) {
+        if (severity == undefined || LOG_SEVERITY[level] > LOG_SEVERITY[severity]) {
+          severity = level;
+        }
+      }
+      return severity;
+    }, [logs]);
+    const logRenderError = useCallback(
+      (message: string, error?: Error) => {
+        addLog("error", message, error);
+      },
+      [addLog],
+    );
     const { childId = FALLBACK_PANEL_ID, overrideConfig, ...otherProps } = props;
     const { classes, cx, theme } = useStyles();
     const isMounted = useMountedState();
@@ -594,8 +625,9 @@ export default function Panel<
       setShowLogs: ({ show }) => {
         setShowLogs(show);
       },
-      logError: addLog,
+      log: addLog,
       logCount: logs.length,
+      logSeverity,
     };
     const panelBody =
       compare && support.mode !== "none" ? (
@@ -671,7 +703,7 @@ export default function Panel<
                 <PanelErrorBoundary
                   onRemovePanel={removePanel}
                   onResetPanel={resetPanel}
-                  onLogError={addLog}
+                  onLogError={logRenderError}
                 >
                   {panelBody}
                 </PanelErrorBoundary>

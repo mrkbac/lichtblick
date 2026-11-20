@@ -94,6 +94,11 @@ export function RecordingDetails({
           <CloseIcon fontSize="small" />
         </IconButton>
       </Stack>
+      {recording.description != undefined && (
+        <Typography variant="body2" color="textSecondary">
+          {recording.description}
+        </Typography>
+      )}
       <PreviewPlayer recording={recording} loadPreview={loadPreview} />
       <Stack direction="row" gap={1}>
         <Button variant="contained" onClick={onOpen} style={{ flex: "auto" }}>

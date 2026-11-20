@@ -34,6 +34,7 @@ export * from "./panelConfigVersionGuard";
 export * from "./panelButtons";
 export * from "./panels";
 export * from "./panelSettings";
+export * from "./panelLogs";
 export * from "./panelToolbar";
 export * from "./plot";
 export * from "./playbackSpeed";

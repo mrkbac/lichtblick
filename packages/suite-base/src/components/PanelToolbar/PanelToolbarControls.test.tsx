@@ -55,7 +55,7 @@ function renderPanelToolbarControls({
     title: "Test Panel",
     showLogs: false,
     setShowLogs: vi.fn(),
-    logError: vi.fn(),
+    log: vi.fn(),
     logCount: 0,
     config: {},
     saveConfig: vi.fn(),
@@ -248,18 +248,25 @@ describe("PanelToolbarControls", () => {
       expect(screen.getByTitle(`Show logs (${logCount})`)).toBeInTheDocument();
     });
 
-    it("When panel has logs Then shows error badge", () => {
-      // Given / When
-      const { container } = renderPanelToolbarControls({
-        panelContextOverrides: {
-          logCount: BasicBuilder.number(),
-        },
-      });
+    it.each([
+      ["error", "Error"],
+      ["warn", "Warning"],
+      ["info", "Info"],
+    ] as const)(
+      "When the worst log level is %s Then the badge uses the %s color",
+      (level, color) => {
+        // Given / When
+        const { container } = renderPanelToolbarControls({
+          panelContextOverrides: {
+            logCount: BasicBuilder.number(),
+            logSeverity: level,
+          },
+        });
 
-      // Then
-      const badge = container.querySelector(".MuiBadge-colorError");
-      expect(badge).toBeInTheDocument();
-    });
+        // Then
+        expect(container.querySelector(`.MuiBadge-color${color}`)).toBeInTheDocument();
+      },
+    );
 
     it("When panel has no logs Then hides error badge", () => {
       // Given / When
@@ -545,7 +552,7 @@ describe("PanelToolbarControls", () => {
                 title: "Test Panel",
                 showLogs: false,
                 setShowLogs: vi.fn(),
-                logError: vi.fn(),
+                log: vi.fn(),
                 logCount: 0,
                 config: {},
                 saveConfig: vi.fn(),
@@ -608,8 +615,9 @@ describe("PanelToolbarControls", () => {
                 title: "Test Panel",
                 showLogs: false,
                 setShowLogs: vi.fn(),
-                logError: vi.fn(),
+                log: vi.fn(),
                 logCount: 3,
+                logSeverity: "error",
                 config: {},
                 saveConfig: vi.fn(),
                 updatePanelConfigs: vi.fn(),
@@ -651,7 +659,7 @@ describe("PanelToolbarControls", () => {
                 title: "Test",
                 showLogs: false,
                 setShowLogs: vi.fn(),
-                logError: vi.fn(),
+                log: vi.fn(),
                 logCount: 0,
                 config: {},
                 saveConfig: vi.fn(),

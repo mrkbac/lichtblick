@@ -3,7 +3,8 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import * as notistack from "notistack";
 import type { Mock } from "vitest";
 import "@testing-library/jest-dom/vitest";
 
@@ -74,11 +75,15 @@ describe("PanelLogs", () => {
       // Given
       const logs: PanelLog[] = [
         {
+          id: 1,
           timestamp: "2023-12-01 10:00:00",
+          level: "info",
           message: infoMessage,
         },
         {
+          id: 2,
           timestamp: "2023-12-01 10:01:00",
+          level: "info",
           message: anotherInforMessage,
         },
       ];
@@ -88,10 +93,96 @@ describe("PanelLogs", () => {
 
       // Then
       expect(getLogCountText(2)).toBeInTheDocument();
-      expect(screen.getByText(`[INFO] ${infoMessage}`)).toBeInTheDocument();
-      expect(screen.getByText(`[INFO] ${anotherInforMessage}`)).toBeInTheDocument();
+      expect(screen.getByText(infoMessage)).toBeInTheDocument();
+      expect(screen.getByText(anotherInforMessage)).toBeInTheDocument();
       expect(screen.getByText("2023-12-01 10:00:00")).toBeInTheDocument();
       expect(screen.getByText("2023-12-01 10:01:00")).toBeInTheDocument();
+    });
+  });
+
+  describe("Given warn and debug logs", () => {
+    it("When rendered Then shows each entry's own level", () => {
+      renderPanelLogs([
+        { id: 3, timestamp: "t1", level: "warn", message: "w" },
+        { id: 4, timestamp: "t2", level: "debug", message: "d" },
+      ]);
+
+      expect(screen.getByText("WARN")).toBeInTheDocument();
+      expect(screen.getByText("DEBUG")).toBeInTheDocument();
+      expect(screen.getByText("w")).toBeInTheDocument();
+      expect(screen.getByText("d")).toBeInTheDocument();
+    });
+  });
+
+  describe("Given level filter chips", () => {
+    it("When a level chip is clicked Then entries of that level are hidden and shown again", () => {
+      renderPanelLogs([
+        { id: 5, timestamp: "t1", level: "error", message: "boom" },
+        { id: 6, timestamp: "t2", level: "info", message: "hello" },
+      ]);
+
+      const infoChip = screen.getByText("INFO 1");
+      fireEvent.click(infoChip);
+      expect(screen.queryByText("hello")).not.toBeInTheDocument();
+      expect(screen.getByText("boom")).toBeInTheDocument();
+
+      fireEvent.click(infoChip);
+      expect(screen.getByText("hello")).toBeInTheDocument();
+    });
+
+    it("When every entry is filtered out Then explains why the list is empty", () => {
+      renderPanelLogs([{ id: 7, timestamp: "t1", level: "info", message: "hello" }]);
+
+      fireEvent.click(screen.getByText("INFO 1"));
+
+      expect(screen.getByText("All entries are hidden by the level filter.")).toBeInTheDocument();
+    });
+  });
+
+  describe("Given an open stack trace", () => {
+    it("When a level above it is filtered out Then the disclosure stays with its own entry", () => {
+      const warn = new Error("warn");
+      const error = new Error("error");
+      renderPanelLogs([
+        { id: 1, timestamp: "t1", level: "warn", message: "a", error: warn },
+        { id: 2, timestamp: "t2", level: "error", message: "b", error },
+      ]);
+      const [warnDetails] = document.querySelectorAll("details");
+      warnDetails!.open = true;
+
+      fireEvent.click(screen.getByText("WARN 1"));
+
+      expect(document.querySelectorAll("details")).toHaveLength(1);
+      expect(document.querySelector("details")!.open).toBe(false);
+    });
+  });
+
+  describe("Given the clipboard rejects the write", () => {
+    it("When copy is clicked Then reports the failure", async () => {
+      const writeText = vi.fn().mockRejectedValue(new Error("denied"));
+      Object.assign(navigator, { clipboard: { writeText } });
+      const enqueueSnackbar = vi.fn();
+      vi.spyOn(notistack, "useSnackbar").mockReturnValue({
+        enqueueSnackbar,
+        closeSnackbar: vi.fn(),
+      });
+      renderPanelLogs([{ id: 1, timestamp: "t1", level: "info", message: "x" }]);
+
+      fireEvent.click(screen.getByRole("button", { name: "Copy to clipboard" }));
+
+      await waitFor(() => {
+        expect(enqueueSnackbar).toHaveBeenCalledWith("Could not copy the logs to the clipboard.", {
+          variant: "error",
+        });
+      });
+    });
+  });
+
+  describe("Given a repeated entry", () => {
+    it("When rendered Then shows the repeat count", () => {
+      renderPanelLogs([{ id: 8, timestamp: "t1", level: "warn", message: "again", count: 3 }]);
+
+      expect(screen.getByText("×3")).toBeInTheDocument();
     });
   });
 
@@ -102,7 +193,9 @@ describe("PanelLogs", () => {
       error.stack = "Error: Test error\n    at test.js:1:1";
       const logs: PanelLog[] = [
         {
+          id: 9,
           timestamp: "2023-12-01 10:00:00",
+          level: "error",
           message: "Something went wrong",
           error,
         },
@@ -113,7 +206,7 @@ describe("PanelLogs", () => {
 
       // Then
       expect(getLogCountText(1)).toBeInTheDocument();
-      expect(screen.getByText("[ERROR] Something went wrong")).toBeInTheDocument();
+      expect(screen.getByText("Something went wrong")).toBeInTheDocument();
       expect(screen.getByText("2023-12-01 10:00:00")).toBeInTheDocument();
 
       // Check for error stack - it's rendered in a pre element
@@ -134,7 +227,9 @@ describe("PanelLogs", () => {
       delete error.stack;
       const logs: PanelLog[] = [
         {
+          id: 10,
           timestamp: "2023-12-01 10:00:00",
+          level: "error",
           message: errorMessage,
           error,
         },
@@ -144,8 +239,8 @@ describe("PanelLogs", () => {
       renderPanelLogs(logs);
 
       // Then
-      expect(screen.getByText(`[ERROR] ${errorMessage}`)).toBeInTheDocument();
-      expect(screen.getByText(errorMessage)).toBeInTheDocument();
+      // Shown once as the message and once as the stack fallback
+      expect(screen.getAllByText(errorMessage)).toHaveLength(2);
     });
   });
 
@@ -158,16 +253,22 @@ describe("PanelLogs", () => {
       const error = new Error(errorMessage);
       const logs: PanelLog[] = [
         {
+          id: 11,
           timestamp: "2023-12-01 10:00:00",
+          level: "info",
           message: infoMessage,
         },
         {
+          id: 12,
           timestamp: "2023-12-01 10:01:00",
+          level: "error",
           message: errorMessage,
           error,
         },
         {
+          id: 13,
           timestamp: "2023-12-01 10:02:00",
+          level: "info",
           message: anotherInfoMessage,
         },
       ];
@@ -177,9 +278,9 @@ describe("PanelLogs", () => {
 
       // Then
       expect(getLogCountText(3)).toBeInTheDocument();
-      expect(screen.getByText(`[INFO] ${infoMessage}`)).toBeInTheDocument();
-      expect(screen.getByText(`[ERROR] ${errorMessage}`)).toBeInTheDocument();
-      expect(screen.getByText(`[INFO] ${anotherInfoMessage}`)).toBeInTheDocument();
+      expect(screen.getByText(infoMessage)).toBeInTheDocument();
+      expect(screen.getByText(errorMessage)).toBeInTheDocument();
+      expect(screen.getByText(anotherInfoMessage)).toBeInTheDocument();
 
       // Then
       expect(screen.getByText("2023-12-01 10:00:00")).toBeInTheDocument();
@@ -194,7 +295,9 @@ describe("PanelLogs", () => {
       const logsLength = 20;
       // Given
       const logs: PanelLog[] = Array.from({ length: logsLength }, (_, i) => ({
+        id: i,
         timestamp: `2023-12-01 10:${i.toString().padStart(2, "0")}:00`,
+        level: "info" as const,
         message: `${logMessage} ${i + 1}`,
       }));
 
@@ -355,6 +458,8 @@ describe("PanelLogs", () => {
       // Given
       const logs: PanelLog[] = [
         {
+          id: 1,
+          level: "info",
           timestamp: "2023-12-01 10:00:00",
           message: "Test log",
         },
@@ -373,6 +478,8 @@ describe("PanelLogs", () => {
       // Given
       const logs: PanelLog[] = [
         {
+          id: 1,
+          level: "info",
           timestamp: "2023-12-01 10:00:00",
           message: logMessage,
         },
@@ -393,6 +500,8 @@ describe("PanelLogs", () => {
       // Given
       const logs: PanelLog[] = [
         {
+          id: 1,
+          level: "info",
           timestamp: "2023-12-01 10:00:00",
           message: logMessage,
         },
@@ -415,6 +524,8 @@ describe("PanelLogs", () => {
       // Given
       const logs: PanelLog[] = [
         {
+          id: 1,
+          level: "info",
           timestamp: "2023-12-01 10:00:00",
           message: logMessage,
         },
@@ -434,6 +545,8 @@ describe("PanelLogs", () => {
       // Given
       const logs: PanelLog[] = [
         {
+          id: 1,
+          level: "info",
           timestamp: "2023-12-01 10:00:00",
           message: logMessage,
         },
@@ -444,6 +557,7 @@ describe("PanelLogs", () => {
 
       // Then
       const buttons = container.querySelectorAll('button[title*="logs"]');
+      // "Copy to clipboard" sits before both
       expect(buttons).toHaveLength(2);
       expect(buttons[0]?.getAttribute("title")).toBe("Clear logs");
       expect(buttons[1]?.getAttribute("title")).toBe("Close logs");

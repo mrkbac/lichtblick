@@ -10,7 +10,7 @@ Visualization and diagnosis for robotics, in your browser or as a desktop app on
 
 ## :rocket: Try it
 
-**[Open Lichtblick in your browser](https://licht.marko.im/)**: no install. **[Open the sample](https://licht.marko.im/?ds=sample-boreas)** (or "Explore sample data" on the start screen) for a camera, LiDAR, radar, GPS and IMU recording with a layout that shows off the panels.
+**[Open Lichtblick in your browser](https://licht.marko.im/)**: no install. **[Open the sample](https://licht.marko.im/?ds=sample-boreas)** for a camera, LiDAR, radar, GPS and IMU recording with a layout that shows off the panels, or choose **Explore sample data** on the start screen for more robotics recordings.
 
 ## :sparkles: Highlights
 
@@ -70,4 +70,4 @@ Off unless the build sets `OTLP_ENDPOINT`; there is no runtime toggle. When enab
 
 This is a fork of **[Lichtblick](https://github.com/lichtblick-suite/lichtblick)** by BMW AG and the Lichtblick contributors, licensed under MPL 2.0. Most of this code comes from upstream Lichtblick; thank you to everyone who built and maintains it. Lichtblick itself began as a fork of [Foxglove Studio](https://github.com/foxglove/studio) by [Foxglove](https://foxglove.dev/).
 
-The sample recording and the screenshot's recording are adapted from the [Boreas dataset](https://www.boreas.utias.utoronto.ca/) (CC BY 4.0, Keenan Burnett et al., University of Toronto).
+The sample recordings are adapted from public datasets; see [sample credits and conversion details](packages/suite-base/src/dataSources/samples/README.md). The Boreas sample recording and the screenshot's recording are adapted from the [Boreas dataset](https://www.boreas.utias.utoronto.ca/) (CC BY 4.0, Keenan Burnett et al., University of Toronto).
