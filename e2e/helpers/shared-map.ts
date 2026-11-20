@@ -12,11 +12,23 @@ const expect = baseExpect.configure({ timeout: 20_000 });
  * Color counts of what the panel shows over the map canvas: the map (WebGL) and the 3D scene
  * (WebGPU, its own canvas stacked above) composite only on screen, so read a screenshot.
  */
+/** PNG of what the window shows in `rect` (CSS pixels) */
+export type CaptureRect = (rect: {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}) => Promise<Buffer>;
+
+let capture: CaptureRect | undefined;
+
 async function pixels(canvas: Locator) {
   const rect = (await canvas.boundingBox())!;
-  // A page screenshot clipped to the canvas: Electron's element screenshots can miss the WebGPU
-  // canvas layered above the map. It waits for a frame, which software WebGPU can take long for.
-  const png = (await canvas.page().screenshot({ clip: rect, timeout: 90_000 })).toString("base64");
+  // A page screenshot clipped to the canvas (both stacked canvases). It waits for a frame, which
+  // software WebGPU can take long for.
+  const png = (
+    capture ? await capture(rect) : await canvas.page().screenshot({ clip: rect, timeout: 90_000 })
+  ).toString("base64");
   return await canvas.page().evaluate(
     async ({ data, rect: box }) => {
       const image = new Image();
@@ -68,7 +80,12 @@ async function pixels(canvas: Locator) {
 }
 
 /** Offline fixture: a red 3D cube at the GPS fix on a green vector road. */
-export async function exerciseSharedMap(page: Page): Promise<void> {
+/**
+ * `captureRect` replaces Playwright's screenshot (Electron: its own window capture, which includes
+ * the WebGPU canvas above the map that Playwright's capture can miss there)
+ */
+export async function exerciseSharedMap(page: Page, captureRect?: CaptureRect): Promise<void> {
+  capture = captureRect;
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
   await page.route("https://shared-map.test/style.json", async (route) => {
