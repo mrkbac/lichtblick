@@ -151,11 +151,13 @@ export default function DiagnosticTable(props: DiagnosticTableProps): React.JSX.
     const stop = () => {
       setResizing(false);
     };
-    window.addEventListener("mousemove", resizeMouseMove);
-    window.addEventListener("mouseup", stop);
+    window.addEventListener("pointermove", resizeMouseMove);
+    window.addEventListener("pointerup", stop);
+    window.addEventListener("pointercancel", stop);
     return () => {
-      window.removeEventListener("mousemove", resizeMouseMove);
-      window.removeEventListener("mouseup", stop);
+      window.removeEventListener("pointermove", resizeMouseMove);
+      window.removeEventListener("pointerup", stop);
+      window.removeEventListener("pointercancel", stop);
     };
   }, [resizeMouseMove, resizing]);
 
@@ -274,7 +276,7 @@ export default function DiagnosticTable(props: DiagnosticTableProps): React.JSX.
       <div
         className={classes.resizeHandle}
         style={{ left: `${100 * splitFraction}%` }}
-        onMouseDown={(event) => {
+        onPointerDown={(event) => {
           setResizing(true);
           event.preventDefault();
         }}

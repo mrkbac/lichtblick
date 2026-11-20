@@ -222,9 +222,9 @@ export function HoverTooltip({
         setVisibleEntities([]);
       }
     };
-    document.addEventListener("mousedown", handler);
+    document.addEventListener("pointerdown", handler);
     return () => {
-      document.removeEventListener("mousedown", handler);
+      document.removeEventListener("pointerdown", handler);
     };
   }, [mode]);
 

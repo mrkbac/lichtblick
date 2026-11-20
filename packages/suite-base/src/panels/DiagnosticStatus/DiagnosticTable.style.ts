@@ -31,6 +31,7 @@ export const useStyles = makeStyles()((theme) => {
       width: 12,
       marginLeft: -6,
       cursor: "col-resize",
+      touchAction: "none",
       zIndex: 1,
 
       "&:hover, &:active, &:focus": {

@@ -21,14 +21,6 @@ export const ThemeDocumentContext = createContext<Document | undefined>(undefine
 // take precedence.
 const muiCache = createCache({ key: "mui", prepend: true });
 
-// By default the ThemeProvider adds an extra div to the DOM tree. We can disable this with a
-// custom `as` component to FluentThemeProvider. The component must support a `ref` property
-// otherwise we get react warnings.
-const ThemeContainer = React.forwardRef((props: React.PropsWithChildren, _ref) => (
-  <>{props.children}</>
-));
-ThemeContainer.displayName = "ThemeContainer";
-
 export default function ThemeProvider({
   children,
   isDark,
