@@ -59,9 +59,14 @@ const SELECTED_COLOR = 0x00e5ff;
 const VERTEX_GRAB_RADIUS = 8;
 /** Max movement for a right-click to count as "finish" rather than a pan */
 const RIGHT_CLICK_SLOP = 4;
-// ponytail: one GPU pick per sample of the visible surface; resample from a depth readback if
-// profiles over huge point clouds hitch
+// ponytail: one GPU pick per sample; resample from a depth readback if profiles over huge point
+// clouds hitch
 const PROFILE_SAMPLES = 64;
+/**
+ * Heights above the line a profile sample looks straight down from. Starting low keeps ceilings and
+ * overhangs out; when nothing is below (the line cuts through a hill) it retries from higher up.
+ */
+const PROFILE_LIFTS = [1, 4, 16, 64];
 
 const XY_PLANE = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
 const tempVec2 = new THREE.Vector2();
@@ -116,7 +121,7 @@ class FixedSizeMeshMaterial extends THREE.ShaderMaterial {
 type Measurement = {
   id: number;
   kind: MeasureKind;
-  /** Frame the points are stored in; the measurement moves with this frame */
+  /** Frame the points are stored in: the fixed frame at creation */
   frameId: AnyFrameId;
   /** Points in `frameId`. While placing, the last point follows the cursor. */
   points: THREE.Vector3[];
@@ -150,7 +155,8 @@ interface MeasurementToolEventMap extends THREE.Object3DEventMap {
 /**
  * Potree-style measurements: point, distance, polyline, angle, area, height and height profile.
  * Points snap to the nearest rendered surface via the GPU picker (ground plane fallback), can be
- * dragged to edit, and stay attached to the frame that was displayed when they were made.
+ * dragged to edit, and stay attached to the world (fixed frame), so they keep marking the same spot
+ * while the robot drives, even when the view follows the robot.
  */
 export class MeasurementTool extends SceneExtension<Renderable, MeasurementToolEventMap> {
   public static extensionId = "foxglove.MeasurementTool";
@@ -200,6 +206,7 @@ export class MeasurementTool extends SceneExtension<Renderable, MeasurementToolE
   #dragPending = false;
   #suppressClick = false;
   #rightDown = new THREE.Vector2(NaN, NaN);
+  #profileCamera = new THREE.OrthographicCamera();
   #labelContainer?: HTMLDivElement;
 
   public constructor(renderer: Renderer, name: string = MeasurementTool.extensionId) {
@@ -641,11 +648,11 @@ export class MeasurementTool extends SceneExtension<Renderable, MeasurementToolE
     group.matrixAutoUpdate = false;
     group.add(lines);
     this.add(group);
-    // The display frame at creation time is the frame the measurement stays attached to
+    // Measured things are almost always part of the world, so stay put in it as the robot moves
     return {
       id: this.#nextId++,
       kind,
-      frameId: this.#renderFrameId,
+      frameId: this.#fixedFrameId,
       points: [],
       complete: false,
       profileLine: [],
@@ -741,35 +748,68 @@ export class MeasurementTool extends SceneExtension<Renderable, MeasurementToolE
       total += item.points[i - 1]!.distanceTo(item.points[i]!);
     }
     const step = total / PROFILE_SAMPLES;
-    const { width, height } = this.renderer.input.canvasSize;
     // Vertices were snapped when placed, so they are their own surface point
     const addVertex = (vertex: THREE.Vector3) => {
       item.profileLine.push(vertex.clone());
       item.profileHit.push(vertex.clone());
     };
-    const sample = (linePoint: THREE.Vector3) => {
-      const hit = new THREE.Vector3();
-      const onScreen =
-        this.#toScreen(item, linePoint, tempVec2) &&
-        tempVec2.x >= 0 &&
-        tempVec2.y >= 0 &&
-        tempVec2.x < width &&
-        tempVec2.y < height;
-      if (onScreen && this.renderer.pickPoint(tempVec2, hit)) {
-        item.profileLine.push(linePoint.clone());
-        item.profileHit.push(item.group.worldToLocal(hit));
-      }
-    };
+    item.group.updateMatrixWorld();
     for (let i = 1; i < item.points.length; i++) {
       const a = item.points[i - 1]!;
       const b = item.points[i]!;
       addVertex(a);
       const length = a.distanceTo(b);
       for (let d = step; d < length; d += step) {
-        sample(a.clone().lerp(b, d / length));
+        const linePoint = a.clone().lerp(b, d / length);
+        const hit = new THREE.Vector3();
+        if (this.#pickBelow(item, linePoint, step, hit)) {
+          item.profileLine.push(linePoint);
+          item.profileHit.push(hit);
+        }
       }
     }
     addVertex(item.points.at(-1)!);
+  }
+
+  /**
+   * Find the topmost surface straight below `linePoint` (along the item frame's -z, i.e. gravity in
+   * the fixed frame), independent of where the view camera is. Both points are item-local.
+   */
+  #pickBelow(
+    item: Measurement,
+    linePoint: THREE.Vector3,
+    step: number,
+    out: THREE.Vector3,
+  ): boolean {
+    const { width, height } = this.renderer.input.canvasSize;
+    if (width <= 0 || height <= 0) {
+      return false;
+    }
+    const camera = this.#profileCamera;
+    const world = item.group.matrixWorld;
+    // ponytail: one canvas pixel covers half a sample step, so a point a few pixels wide is caught
+    // within about one step of the line; widen if sparse clouds leave gaps
+    const perPixel = Math.max(step / 2, 0.005);
+    camera.left = (-perPixel * width) / 2;
+    camera.right = (perPixel * width) / 2;
+    camera.top = (perPixel * height) / 2;
+    camera.bottom = (-perPixel * height) / 2;
+    camera.near = 0;
+    camera.up.set(1, 0, 0).transformDirection(world);
+    const target = tempVec3b.copy(linePoint).applyMatrix4(world);
+    const center = tempScreen.set(width / 2, height / 2);
+    for (const lift of PROFILE_LIFTS) {
+      camera.far = lift + 1000;
+      camera.position.set(linePoint.x, linePoint.y, linePoint.z + lift).applyMatrix4(world);
+      camera.lookAt(target);
+      camera.updateProjectionMatrix();
+      camera.updateMatrixWorld();
+      if (this.renderer.pickPoint(center, out, camera)) {
+        item.group.worldToLocal(out);
+        return true;
+      }
+    }
+    return false;
   }
 
   #finishDraft(): void {

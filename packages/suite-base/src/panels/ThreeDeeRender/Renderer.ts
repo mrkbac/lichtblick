@@ -1975,11 +1975,17 @@ export class Renderer extends EventEmitter<RendererEvents> {
    * Find the 3D point (in render frame coordinates) of the nearest pickable surface under the
    * cursor, writing it into `out`. Returns false when nothing pickable is under the cursor.
    */
-  public pickPoint(cursorCoords: THREE.Vector2, out: THREE.Vector3): boolean {
+  /** Depth-pick the surface under a canvas pixel; `camera` defaults to the active view camera */
+  public pickPoint(
+    cursorCoords: THREE.Vector2,
+    out: THREE.Vector3,
+    camera:
+      | THREE.OrthographicCamera
+      | THREE.PerspectiveCamera = this.cameraHandler.getActiveCamera(),
+  ): boolean {
     if (this.sharedMap) {
       this.gl.resetState();
     }
-    const camera = this.cameraHandler.getActiveCamera();
     const depth = this.#picker.pickDepth(cursorCoords.x, cursorCoords.y, camera);
     if (depth == undefined) {
       return false;
