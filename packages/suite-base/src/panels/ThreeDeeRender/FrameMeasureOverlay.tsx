@@ -124,23 +124,25 @@ export function FrameMeasureOverlay({
       return;
     }
     renderer.framePicking = true;
-    const frameAt = (cursor: THREE.Vector2) => frameAxes.frameIdOf(renderer.pickObject(cursor));
+    const frameAt = async (cursor: THREE.Vector2) =>
+      frameAxes.frameIdOf(await renderer.pickObject(cursor));
     const onClick = (cursor: THREE.Vector2) => {
-      const frame = frameAt(cursor);
-      if (frame == undefined) {
-        return;
-      }
-      const current = latest.current;
-      const base =
-        current.from != undefined && current.to != undefined ? clearFrames(current) : current;
-      const next = pickFrame(base, frame);
-      setMeasurement(next);
-      if (next.from != undefined && next.to != undefined) {
-        onStopPicking();
-      }
+      void frameAt(cursor).then((frame) => {
+        if (frame == undefined) {
+          return;
+        }
+        const current = latest.current;
+        const base =
+          current.from != undefined && current.to != undefined ? clearFrames(current) : current;
+        const next = pickFrame(base, frame);
+        setMeasurement(next);
+        if (next.from != undefined && next.to != undefined) {
+          onStopPicking();
+        }
+      });
     };
     const onMove = _.throttle((cursor: THREE.Vector2) => {
-      setHovered(frameAt(cursor));
+      void frameAt(cursor).then(setHovered);
     }, HOVER_PICK_INTERVAL_MS);
     const onKeyDown = (event: KeyboardEvent) => {
       if (isThreeDeeShortcut("3d.finishMeasurement", event)) {

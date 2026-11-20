@@ -67,6 +67,7 @@ const XY_PLANE = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
 const tempVec2 = new THREE.Vector2();
 const tempScreen = new THREE.Vector2();
 const tempVec3 = new THREE.Vector3();
+const tempHit = new THREE.Vector3();
 const tempVec3b = new THREE.Vector3();
 const tempMatrix = new THREE.Matrix4();
 const tempRaycaster = new THREE.Raycaster();
@@ -198,6 +199,8 @@ export class MeasurementTool extends SceneExtension<Renderable, MeasurementToolE
   #drag?: { item: Measurement; index: number };
   #dragCursor = new THREE.Vector2();
   #dragPending = false;
+  /** Newest snap request; older picks that resolve later are dropped */
+  #snapRequest = 0;
   #suppressClick = false;
   #rightDown = new THREE.Vector2(NaN, NaN);
   #labelContainer?: HTMLDivElement;
@@ -368,9 +371,10 @@ export class MeasurementTool extends SceneExtension<Renderable, MeasurementToolE
       if (this.#draft.points.length === 0) {
         this.#draft.points.push(new THREE.Vector3());
       }
-      this.#snapToLocal(this.#cursor, this.#draft, this.#draft.points.at(-1)!);
-      this.#draft.dirty = true;
-      this.#updateItem(this.#draft, currentTime);
+      const draft = this.#draft;
+      void this.#snapLatest(this.#cursor, draft, draft.points.at(-1)!);
+      draft.dirty = true;
+      this.#updateItem(draft, currentTime);
     }
 
     if (this.#changed) {
@@ -676,7 +680,11 @@ export class MeasurementTool extends SceneExtension<Renderable, MeasurementToolE
    * into `out` in the item's frame. Returns false if the cursor is off the canvas, its
    * ray misses everything, or the item's frame is currently unavailable.
    */
-  #snapToLocal(cursor: THREE.Vector2, item: Measurement, out: THREE.Vector3): boolean {
+  async #snapToLocal(
+    cursor: THREE.Vector2,
+    item: Measurement,
+    out: THREE.Vector3,
+  ): Promise<boolean> {
     // Hidden means the item's frame isn't in the tree right now (e.g. after a seek), so its matrix
     // is stale and converting into it would misplace the point
     const { width, height } = this.renderer.input.canvasSize;
@@ -685,7 +693,10 @@ export class MeasurementTool extends SceneExtension<Renderable, MeasurementToolE
     if (!item.group.visible || !onCanvas) {
       return false;
     }
-    if (!this.renderer.pickPoint(cursor, out)) {
+    const hit = await this.renderer.pickPoint(cursor, tempHit);
+    if (hit) {
+      out.copy(hit);
+    } else {
       tempRaycaster.setFromCamera(
         tempVec2.set((cursor.x / width) * 2 - 1, -(cursor.y / height) * 2 + 1),
         this.renderer.cameraHandler.getActiveCamera(),
@@ -730,7 +741,28 @@ export class MeasurementTool extends SceneExtension<Renderable, MeasurementToolE
     return best;
   }
 
-  #sampleProfile(item: Measurement): void {
+  /**
+   * Snaps like #snapToLocal, but only the newest of overlapping requests writes `out` (picks resolve
+   * asynchronously while the cursor keeps moving)
+   */
+  async #snapLatest(
+    cursor: THREE.Vector2,
+    item: Measurement,
+    out: THREE.Vector3,
+  ): Promise<boolean> {
+    const request = ++this.#snapRequest;
+    const point = new THREE.Vector3().copy(out);
+    const ok = await this.#snapToLocal(cursor.clone(), item, point);
+    if (!ok || request !== this.#snapRequest) {
+      return false;
+    }
+    out.copy(point);
+    item.dirty = true;
+    this.renderer.queueAnimationFrame();
+    return true;
+  }
+
+  async #sampleProfile(item: Measurement): Promise<void> {
     item.profileLine = [];
     item.profileHit = [];
     if (item.kind !== "profile" || item.points.length < 2) {
@@ -747,15 +779,18 @@ export class MeasurementTool extends SceneExtension<Renderable, MeasurementToolE
       item.profileLine.push(vertex.clone());
       item.profileHit.push(vertex.clone());
     };
-    const sample = (linePoint: THREE.Vector3) => {
-      const hit = new THREE.Vector3();
+    // ponytail: one pick (render + readback) per sample; batch into one readback if profiles feel slow
+    const sample = async (linePoint: THREE.Vector3) => {
       const onScreen =
         this.#toScreen(item, linePoint, tempVec2) &&
         tempVec2.x >= 0 &&
         tempVec2.y >= 0 &&
         tempVec2.x < width &&
         tempVec2.y < height;
-      if (onScreen && this.renderer.pickPoint(tempVec2, hit)) {
+      const hit = onScreen
+        ? await this.renderer.pickPoint(tempVec2, new THREE.Vector3())
+        : undefined;
+      if (hit) {
         item.profileLine.push(linePoint.clone());
         item.profileHit.push(item.group.worldToLocal(hit));
       }
@@ -766,10 +801,12 @@ export class MeasurementTool extends SceneExtension<Renderable, MeasurementToolE
       addVertex(a);
       const length = a.distanceTo(b);
       for (let d = step; d < length; d += step) {
-        sample(a.clone().lerp(b, d / length));
+        await sample(a.clone().lerp(b, d / length));
       }
     }
     addVertex(item.points.at(-1)!);
+    item.dirty = true;
+    this.renderer.queueAnimationFrame();
   }
 
   #finishDraft(): void {
@@ -786,7 +823,7 @@ export class MeasurementTool extends SceneExtension<Renderable, MeasurementToolE
       return;
     }
     draft.complete = true;
-    this.#sampleProfile(draft);
+    void this.#sampleProfile(draft);
     draft.dirty = true;
     this.#items.push(draft);
     this.select(draft.id);
@@ -862,15 +899,15 @@ export class MeasurementTool extends SceneExtension<Renderable, MeasurementToolE
     }
     // Place the cursor point where it is now, then add a new point to follow the cursor
     this.#updateItem(draft, this.renderer.currentTime);
-    if (!this.#snapToLocal(cursor, draft, draft.points.at(-1)!)) {
-      return;
-    }
-    draft.points.push(draft.points.at(-1)!.clone());
-    draft.dirty = true;
-    if (draft.points.length - 1 >= KIND_POINTS[draft.kind].max) {
-      this.#finishDraft();
-    }
-    this.renderer.queueAnimationFrame();
+    void this.#snapLatest(cursor, draft, draft.points.at(-1)!).then((ok) => {
+      if (!ok || this.#draft !== draft) {
+        return;
+      }
+      draft.points.push(draft.points.at(-1)!.clone());
+      if (draft.points.length - 1 >= KIND_POINTS[draft.kind].max) {
+        this.#finishDraft();
+      }
+    });
   };
 
   #handleMouseDown = (cursor: THREE.Vector2, _world: unknown, event: MouseEvent): void => {
@@ -924,9 +961,7 @@ export class MeasurementTool extends SceneExtension<Renderable, MeasurementToolE
       }
       this.#drag = undefined;
       canvas.style.cursor = "grab";
-      this.#sampleProfile(hit.item);
-      hit.item.dirty = true;
-      this.renderer.queueAnimationFrame();
+      void this.#sampleProfile(hit.item);
     };
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp, { once: true });
@@ -935,9 +970,8 @@ export class MeasurementTool extends SceneExtension<Renderable, MeasurementToolE
   #snapDrag(): void {
     this.#dragPending = false;
     const drag = this.#drag;
-    if (drag && this.#snapToLocal(this.#dragCursor, drag.item, drag.item.points[drag.index]!)) {
-      drag.item.dirty = true;
-      this.renderer.queueAnimationFrame();
+    if (drag) {
+      void this.#snapLatest(this.#dragCursor, drag.item, drag.item.points[drag.index]!);
     }
   }
 

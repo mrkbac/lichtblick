@@ -72,7 +72,7 @@ import { PublishClickEventMap } from "./renderables/PublishClickTool";
 import { DEFAULT_PUBLISH_SETTINGS } from "./renderables/PublishSettings";
 import { THREE_DEE_SHORTCUTS } from "./shortcuts";
 import { Shared3DPanelState, ThreeDeeRenderProps } from "./types";
-import { useWebGLContextRecovery } from "./useWebGLContextRecovery";
+import { useGpuRecovery } from "./useGpuRecovery";
 
 import "maplibre-gl/dist/maplibre-gl.css";
 
@@ -159,11 +159,7 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
   );
   const [renderer, setRenderer] = useState<Renderer | undefined>(undefined);
   const rendererRef = useRef<Renderer | undefined>(undefined);
-  const {
-    canvasKey,
-    status: contextStatus,
-    recreate,
-  } = useWebGLContextRecovery(canvas, renderer?.gl);
+  const { canvasKey, status: contextStatus, recreate } = useGpuRecovery(renderer);
 
   const displayTemporaryError = useCallback(
     (errorString: string) => {
@@ -1211,7 +1207,9 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
         )}
         {contextStatus !== "ok" && (
           <div className={classes.contextLost} role="status">
-            {contextStatus === "restoring" ? (
+            {contextStatus === "unsupported" ? (
+              t("webGpuRequired")
+            ) : contextStatus === "restoring" ? (
               t("graphicsContextRestoring")
             ) : (
               <>

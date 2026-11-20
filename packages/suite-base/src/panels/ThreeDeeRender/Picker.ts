@@ -1,587 +1,234 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-// This Source Code Form is subject to the terms of the Mozilla Public
-// License, v2.0. If a copy of the MPL was not distributed with this
-// file, You can obtain one at http://mozilla.org/MPL/2.0/
-//
-// Adapted from <https://github.com/bzztbomb/three_js_gpu_picking/blob/main/src/gpupicker.js>
-// released under the public domain. Original authors:
-// - bzztbomb https://github.com/bzztbomb
-// - jfaust https://github.com/jfaust
-
-import * as THREE from "three";
-import { assert } from "ts-essentials";
+import {
+  float,
+  floatBitsToUint,
+  instanceIndex,
+  positionView,
+  uint,
+  uniform,
+  uvec4,
+  vertexStage,
+} from "three/tsl";
+import * as THREE from "three/webgpu";
 
 import type { Renderable } from "./Renderable";
-
-type Camera = THREE.PerspectiveCamera | THREE.OrthographicCamera;
-
-// The width and height of the output viewport. This could be 1 to sample a
-// single pixel, but GL_POINTS with a >1 point size would be clipped
-const PIXEL_WIDTH = 31;
-const tempResolution = new THREE.Vector2(0, 0);
-
-const WHITE_COLOR = new THREE.Color(0xffffff);
-
-// These work around incorrect method definitions, where passing null is valid
-const NullScene = null as unknown as THREE.Scene;
-const NullGroup = null as unknown as THREE.GeometryGroup;
 
 export type PickedRenderable = {
   renderable: Renderable;
   instanceIndex?: number;
 };
 
-export type PickerOptions = {
-  debug?: boolean;
-  /**
-   * Disable the setting of the projection matrix in the picking pass.
-   * Use this if you are setting the projection matrix of the camera manually elsewhere
-   */
-  disableSetViewOffset?: boolean;
+/** One pixel of the picking pass: what is under the cursor */
+export type PickResult = {
+  /** `Object3D.id` of the drawn object */
+  objectId: number;
+  /** Instance (or point) index within the object, if it draws instances */
+  instanceIndex?: number;
+  /** Distance in front of the camera along its view axis (positive) */
+  viewDepth: number;
 };
 
+/** Written where nothing was drawn */
+const NONE = 0xffffffff;
+
 /**
- * Handles picking of objects in a scene (detecting 3D objects at a given screen
- * coordinate). This works by performing a second rendering pass after
- * `WebGLRenderer.renderLists` has been populated from a normal rendering pass.
- * In the second pass, objectIds are written as colors to a small offscreen
- * rendering target surrounding the sample point. The color at the sample point
- * is then read back and used to determine which object was picked.
+ * Picking material output for an object, used by materials that compute their own pick values
+ * (e.g. point rasterization). `instance` defaults to "no instance".
+ */
+export function pickOutput(
+  objectId: THREE.Node<"uint">,
+  instance?: THREE.Node<"uint">,
+): THREE.Node {
+  return uvec4(
+    objectId,
+    instance ?? uint(NONE),
+    uint(floatBitsToUint(float(positionView.z).negate())),
+    uint(1),
+  );
+}
+
+/** The object being drawn, as a per-object uniform shared by all picking materials */
+export const pickObjectId = uniform(0, "uint").onObjectUpdate(({ object }) => object?.id ?? 0);
+
+/**
+ * GPU picking: draws the scene into a 1x1 uint target centered on the cursor, where every object's
+ * material is swapped for a picking variant that writes (object id, instance index, view depth).
+ * One pass answers object, instance and depth picking.
  *
- * Objects can set their own `userData.pickingMaterial` to override the default
- * shader used for picking.
+ * Picking variants are derived from the object's own material (same vertex nodes, so custom
+ * transforms, line widths and point sizes pick exactly as drawn); objects can provide their own with
+ * `userData.pickingMaterial`, and opt out with `userData.picking = false`.
  */
 export class Picker {
-  #gl: THREE.WebGLRenderer;
-  #scene: THREE.Scene;
-  #camera?: Camera;
-  #materialCache = new Map<number, THREE.ShaderMaterial>();
-  #emptyScene: THREE.Scene;
-  #pixelBuffer = new Uint8Array(4);
-  /** Big-endian view of `#pixelBuffer`: object ids are int32, depth bits float32 */
-  #pixelView = new DataView(this.#pixelBuffer.buffer);
-  #currClearColor = new THREE.Color();
-  #pickingTarget: THREE.WebGLRenderTarget;
-  #isDebugPass = false;
-  #isDepthPass = false;
-  #depthPicking?: DepthPicking;
+  readonly #renderer: THREE.WebGPURenderer;
+  readonly #scene: THREE.Scene;
+  readonly #target = new THREE.RenderTarget(1, 1, {
+    type: THREE.UnsignedIntType,
+    format: THREE.RGBAIntegerFormat,
+    depthBuffer: true,
+  });
+  /** Picking variants per source material and instancing, rebuilt when the source changes */
+  #pickMaterials = new WeakMap<THREE.Material, Map<boolean, THREE.NodeMaterial>>();
   #projectionBeforePick = new THREE.Matrix4();
+  #clearColor = new THREE.Color();
 
-  public constructor(gl: THREE.WebGLRenderer, scene: THREE.Scene) {
-    this.#gl = gl;
+  public constructor(renderer: THREE.WebGPURenderer, scene: THREE.Scene) {
+    this.#renderer = renderer;
     this.#scene = scene;
-
-    // This is the PIXEL_WIDTH x PIXEL_WIDTH render target we use to do the picking
-    this.#pickingTarget = new THREE.WebGLRenderTarget(PIXEL_WIDTH, PIXEL_WIDTH, {
-      minFilter: THREE.NearestFilter,
-      magFilter: THREE.NearestFilter,
-      format: THREE.RGBAFormat, // stores objectIds as uint32
-      generateMipmaps: false,
-    });
-    // We need to be inside of .render in order to call renderBufferDirect in
-    // renderList() so create an empty scene
-    this.#emptyScene = new THREE.Scene();
   }
 
   public dispose(): void {
-    for (const material of this.#materialCache.values()) {
-      material.dispose();
-    }
-    this.#materialCache.clear();
-    this.#pickingTarget.dispose();
-    const depthPicking = this.#depthPicking;
-    depthPicking?.target.depthTexture?.dispose();
-    depthPicking?.target.dispose();
-    depthPicking?.readTarget.dispose();
-    depthPicking?.quad.material.dispose();
-    depthPicking?.quad.geometry.dispose();
+    this.#target.dispose();
   }
 
   /**
-   * Returns the window-space depth [0, 1) of the nearest pickable surface under the cursor, or
-   * undefined when nothing was hit. Uses the same picking materials as `pick()`, so point sizes,
-   * instancing etc. behave exactly as for object picking.
+   * What is under canvas pixel (x, y) in CSS pixels, drawn with `camera`. Objects in `hidden` are
+   * skipped, so repeated picks can walk through stacked objects.
    */
-  public pickDepth(
+  public async pick(
     x: number,
     y: number,
-    camera: THREE.OrthographicCamera | THREE.PerspectiveCamera,
-  ): number | undefined {
-    // Off-canvas cursors (e.g. a drag leaving the panel) would read outside the depth target
-    const pixelRatio = this.#gl.getPixelRatio();
-    const { width, height } = this.#gl.domElement;
-    if (x < 0 || y < 0 || x * pixelRatio >= width || y * pixelRatio >= height) {
+    camera: THREE.PerspectiveCamera | THREE.OrthographicCamera,
+    hidden: ReadonlySet<THREE.Object3D> = new Set(),
+  ): Promise<PickResult | undefined> {
+    const renderer = this.#renderer;
+    const pixelRatio = renderer.getPixelRatio();
+    const { width, height } = renderer.domElement;
+    const px = Math.floor(x * pixelRatio);
+    const py = Math.floor(y * pixelRatio);
+    if (px < 0 || py < 0 || px >= width || py >= height) {
       return undefined;
     }
-    const depthPicking = (this.#depthPicking ??= createDepthPicking());
-    this.#emptyScene.onAfterRender = this.#renderForPicking;
-    this.#camera = camera;
-    const { xInView, yInView } = this.#updateCameraForPickAndGetPickCoordsInView(x, y, {});
-    const originalRenderState = this.#prepareGLRendererForPick(depthPicking.target);
-    this.#isDepthPass = true;
-    this.#gl.render(this.#emptyScene, camera);
-    this.#isDepthPass = false;
-    this.#resetCameraFromPick({});
 
-    // WebGL2 can't read depth buffers directly, so copy the depth bits into a color target
-    depthPicking.texel.set(xInView, yInView);
-    this.#gl.setRenderTarget(depthPicking.readTarget);
-    this.#gl.render(depthPicking.scene, camera);
-    this.#gl.readRenderTargetPixels(depthPicking.readTarget, 0, 0, 1, 1, this.#pixelBuffer);
-    this.#cleanUpGlRendererFromPick(originalRenderState);
+    // Crop the projection to the cursor's pixel. Works for any projection, including custom ones
+    // (image mode, map cameras)
+    this.#projectionBeforePick.copy(camera.projectionMatrix);
+    const crop = new THREE.Matrix4().makeScale(width, height, 1);
+    crop.elements[12] = width - 2 * px - 1;
+    crop.elements[13] = 2 * py + 1 - height;
+    camera.projectionMatrix.premultiply(crop);
+    camera.projectionMatrixInverse.copy(camera.projectionMatrix).invert();
 
-    const depth = this.#pixelView.getFloat32(0);
-    return depth < 1 ? depth : undefined;
-  }
-
-  public pick(
-    x: number,
-    y: number,
-    camera: THREE.OrthographicCamera | THREE.PerspectiveCamera,
-    options: PickerOptions = {},
-  ): number {
-    // Use the onAfterRender callback to actually render geometry for picking
-    this.#emptyScene.onAfterRender = this.#renderForPicking;
-
-    this.#camera = camera;
-    const { xInView, yInView } = this.#updateCameraForPickAndGetPickCoordsInView(x, y, options);
-
-    const originalRenderState = this.#prepareGLRendererForPick();
-
-    this.#gl.render(this.#emptyScene, camera);
-    this.#gl.readRenderTargetPixels(this.#pickingTarget, xInView, yInView, 1, 1, this.#pixelBuffer);
-
-    this.#cleanUpGlRendererFromPick(originalRenderState);
-    this.#resetCameraFromPick(options);
-
-    const val = this.#pixelView.getInt32(0);
-
-    if (options.debug === true) {
-      this.#pickDebugRender(camera);
-    }
-
-    return val;
-  }
-
-  public pickInstance(
-    x: number,
-    y: number,
-    camera: THREE.OrthographicCamera | THREE.PerspectiveCamera,
-    renderable: THREE.Object3D,
-    options: PickerOptions = {},
-  ): number {
-    this.#emptyScene.onAfterRender = this.#renderForPickingInstance.bind(this, renderable);
-
-    this.#camera = camera;
-    const { xInView, yInView } = this.#updateCameraForPickAndGetPickCoordsInView(x, y, options);
-
-    const originalRenderState = this.#prepareGLRendererForPick();
-
-    this.#gl.render(this.#emptyScene, this.#camera);
-    this.#gl.readRenderTargetPixels(this.#pickingTarget, xInView, yInView, 1, 1, this.#pixelBuffer);
-
-    this.#cleanUpGlRendererFromPick(originalRenderState);
-    this.#resetCameraFromPick(options);
-
-    if (options.debug === true) {
-      this.#pickInstanceDebugRender(camera, renderable);
-    }
-
-    return this.#pixelView.getInt32(0);
-  }
-
-  #updateCameraForPickAndGetPickCoordsInView(
-    x: number,
-    y: number,
-    options: PickerOptions,
-  ): { xInView: number; yInView: number } {
-    assert(this.#camera, "camera must be set before updating for pick");
-    const w = this.#gl.domElement.width;
-    const h = this.#gl.domElement.height;
-    const pixelRatio = this.#gl.getPixelRatio();
-
-    if (options.disableSetViewOffset !== true) {
-      this.#projectionBeforePick.copy(this.#camera.projectionMatrix);
-      const hw = (PIXEL_WIDTH / 2) | 0;
-      const px = Math.floor(x * pixelRatio);
-      const py = Math.floor(y * pixelRatio);
-      const xi = Math.max(0, px - hw);
-      const yi = Math.max(0, py - hw);
-      // Set the projection matrix to only look at the pixels we are interested in
-      // Crop the actual projection, including a map-backed camera's custom near/far planes.
-      const crop = new THREE.Matrix4().makeScale(w / PIXEL_WIDTH, h / PIXEL_WIDTH, 1);
-      crop.elements[12] = (w - 2 * xi - PIXEL_WIDTH) / PIXEL_WIDTH;
-      crop.elements[13] = (2 * yi + PIXEL_WIDTH - h) / PIXEL_WIDTH;
-      this.#camera.projectionMatrix.copy(crop).multiply(this.#projectionBeforePick);
-      this.#camera.projectionMatrixInverse.copy(this.#camera.projectionMatrix).invert();
-      // The offset is clamped at the left/top edges, so the cursor is not always centered.
-      // GL rows count from the bottom.
-      return { xInView: px - xi, yInView: PIXEL_WIDTH - 1 - (py - yi) };
-    } else {
-      if (this.#pickingTarget.width !== w || this.#pickingTarget.height !== h) {
-        this.#pickingTarget.setSize(w, h);
-      }
-      const xi = Math.max(0, x * pixelRatio);
-      // Flip y coordinate to match WebGL coordinate system
-      const yi = Math.max(0, h - y * pixelRatio);
-      return { xInView: xi, yInView: yi };
-    }
-  }
-
-  #resetCameraFromPick(options: PickerOptions): void {
-    assert(this.#camera, "camera must be set before resetting from pick");
-    if (options.disableSetViewOffset !== true) {
-      this.#camera.projectionMatrix.copy(this.#projectionBeforePick);
-      this.#camera.projectionMatrixInverse.copy(this.#projectionBeforePick).invert();
-    }
-  }
-
-  #prepareGLRendererForPick(target: THREE.WebGLRenderTarget = this.#pickingTarget): {
-    originalRenderTarget: THREE.WebGLRenderTarget | null;
-    originalAlpha: number;
-  } {
-    const originalRenderTarget = this.#gl.getRenderTarget();
-    const originalAlpha = this.#gl.getClearAlpha();
-    this.#gl.getClearColor(this.#currClearColor);
-    this.#gl.setRenderTarget(target);
-    this.#gl.setClearColor(WHITE_COLOR, 1);
-    this.#gl.clear();
-    return { originalRenderTarget, originalAlpha };
-  }
-
-  #cleanUpGlRendererFromPick({
-    originalRenderTarget,
-    originalAlpha,
-  }: {
-    originalRenderTarget: THREE.WebGLRenderTarget | null;
-    originalAlpha: number;
-  }): void {
-    this.#gl.setRenderTarget(originalRenderTarget);
-    this.#gl.setClearColor(this.#currClearColor, originalAlpha);
-  }
-
-  #pickDebugRender(camera: THREE.OrthographicCamera | THREE.PerspectiveCamera): void {
-    this.#isDebugPass = true;
-    this.#emptyScene.onAfterRender = this.#renderForPicking;
-    const currAlpha = this.#gl.getClearAlpha();
-    this.#gl.getClearColor(this.#currClearColor);
-    this.#gl.setClearColor(WHITE_COLOR, 1);
-    this.#gl.clear();
-    this.#gl.render(this.#emptyScene, camera);
-    this.#gl.setClearColor(this.#currClearColor, currAlpha);
-    this.#isDebugPass = false;
-  }
-
-  #pickInstanceDebugRender(
-    camera: THREE.OrthographicCamera | THREE.PerspectiveCamera,
-    renderable: THREE.Object3D,
-  ): void {
-    this.#isDebugPass = true;
-    this.#emptyScene.onAfterRender = this.#renderForPickingInstance.bind(this, renderable);
-    const currAlpha = this.#gl.getClearAlpha();
-    this.#gl.getClearColor(this.#currClearColor);
-    this.#gl.setClearColor(WHITE_COLOR, 1);
-    this.#gl.clear();
-    this.#gl.render(this.#emptyScene, camera);
-    this.#gl.setClearColor(this.#currClearColor, currAlpha);
-    this.#isDebugPass = false;
-  }
-
-  #renderForPicking = (): void => {
-    // This is the magic, these render lists are still filled with valid data.
-    // So we can submit them again for picking and save lots of work!
-    const renderList = this.#gl.renderLists.get(this.#scene, 0);
-    renderList.opaque.forEach(this.#renderItemForPicking);
-    renderList.transmissive.forEach(this.#renderItemForPicking);
-    renderList.transparent.forEach(this.#renderItemForPicking);
-  };
-
-  #renderForPickingInstance(renderable: THREE.Object3D) {
-    // Note that no attempt is made to define a sensible sort order. Since the
-    // instanced picking pass should only be rendering opaque pixels, the
-    // worst that will happen is some overdraw
-    renderable.traverseVisible((object) => {
-      const maybeRender = object as Partial<THREE.Mesh>;
-      if (maybeRender.id != undefined && maybeRender.geometry && maybeRender.material) {
-        const renderItem: THREE.RenderItem = {
-          id: maybeRender.id,
-          object,
-          geometry: maybeRender.geometry,
-          material: maybeRender.material as THREE.Material,
-          materialVariant: 0,
-          groupOrder: 0,
-          renderOrder: 0,
-          z: 0,
-          group: null,
-        };
-        this.#renderInstancedItemForPicking(renderItem);
-      }
-    });
-  }
-
-  #renderItemForPicking = (renderItem: THREE.RenderItem): void => {
-    if (!this.#camera) {
-      return;
-    }
-    const object = renderItem.object;
-    const objId = this.#isDebugPass ? hashInt(object.id) : object.id;
-    const material = renderItem.material;
-    const geometry = renderItem.geometry;
-    if (
-      !geometry || // Skip if geometry is not defined
-      renderItem.object.userData.picking === false // Skip if object is marked no picking
-    ) {
-      return;
-    }
-
-    const isSprite = material.type === "SpriteMaterial";
-
-    const pickResolution = tempResolution.set(
-      this.#pickingTarget.width,
-      this.#pickingTarget.height,
-    );
-    const sizeAttenuation = (material as Partial<THREE.PointsMaterial>).sizeAttenuation === true;
-    const pickingMaterial = renderItem.object.userData.pickingMaterial as
-      | THREE.ShaderMaterial
-      | undefined;
-    // scale picking material to picking target size
-    if (pickingMaterial?.uniforms.resolution != undefined) {
-      pickingMaterial.uniforms.resolution.value.copy(pickResolution);
-    }
-    const renderMaterial =
-      pickingMaterial ??
-      this.#renderMaterial({
-        isSprite,
-        sizeAttenuation,
-        depthTest: material.depthTest,
-        depthWrite: material.depthWrite,
-      });
-    if (isSprite) {
-      renderMaterial.uniforms.rotation = { value: (material as THREE.SpriteMaterial).rotation };
-      renderMaterial.uniforms.center = { value: (object as THREE.Sprite).center };
-    }
-    const drawBehind: unknown = object.userData.drawBehind;
-    if (typeof drawBehind === "boolean") {
-      // Only for objects with their own picking material, which this mutates
-      renderMaterial.depthWrite = pickingDepthWrite({ drawBehind, depthPass: this.#isDepthPass });
-    }
-    setObjectId(renderMaterial, objId);
-    renderMaterial.uniformsNeedUpdate = true;
-    this.#gl.renderBufferDirect(
-      this.#camera,
-      NullScene,
-      geometry,
-      renderMaterial,
-      object,
-      NullGroup,
-    );
-  };
-
-  #renderInstancedItemForPicking = (renderItem: THREE.RenderItem): void => {
-    if (!this.#camera) {
-      return;
-    }
-    const object = renderItem.object;
-    const geometry = renderItem.geometry;
-    if (
-      !geometry || // Skip if geometry is not defined
-      renderItem.object.userData.picking === false // Skip if object is marked no picking
-    ) {
-      return;
-    }
-
-    const instancePickingMaterial = renderItem.object.userData.instancePickingMaterial as
-      | THREE.ShaderMaterial
-      | undefined;
-    const renderMaterial = instancePickingMaterial ?? this.#instanceRenderMaterial();
-    this.#gl.renderBufferDirect(
-      this.#camera,
-      NullScene,
-      geometry,
-      renderMaterial,
-      object,
-      NullGroup,
-    );
-  };
-
-  /** Create a unique picking material for each combination of parameters */
-  #renderMaterial({
-    isSprite,
-    sizeAttenuation,
-    depthTest,
-    depthWrite,
-  }: {
-    isSprite: boolean;
-    sizeAttenuation: boolean;
-    depthTest: boolean;
-    depthWrite: boolean;
-  }): THREE.ShaderMaterial {
-    const index =
-      ((isSprite ? 1 : 0) << 0) |
-      ((sizeAttenuation ? 1 : 0) << 1) |
-      ((depthTest ? 1 : 0) << 2) |
-      ((depthWrite ? 1 : 0) << 3);
-    let renderMaterial = this.#materialCache.get(index);
-    if (renderMaterial) {
-      return renderMaterial;
-    }
-
-    let vertexShader = THREE.ShaderChunk.meshbasic_vert;
-    if (isSprite) {
-      vertexShader = THREE.ShaderChunk.sprite_vert!;
-    }
-    if (sizeAttenuation) {
-      vertexShader = "#define USE_SIZEATTENUATION\n\n" + vertexShader;
-    }
-    renderMaterial = new THREE.ShaderMaterial({
-      vertexShader,
-      fragmentShader: /* glsl */ `
-          uniform vec4 objectId;
-          void main() {
-            gl_FragColor = objectId;
+    const previousTarget = renderer.getRenderTarget();
+    const previousFunction = renderer.getRenderObjectFunction();
+    const previousAlpha = renderer.getClearAlpha();
+    renderer.getClearColor(this.#clearColor);
+    try {
+      renderer.setRenderTarget(this.#target);
+      renderer.setClearColor(0xffffff, 1);
+      renderer.clear();
+      renderer.setRenderObjectFunction(
+        (object, scene, cam, geometry, material, group, lightsNode, clippingContext) => {
+          if (object.userData.picking === false || isHidden(object, hidden)) {
+            return;
           }
-        `,
-      side: THREE.DoubleSide,
-      uniforms: { objectId: { value: [NaN, NaN, NaN, NaN] } },
-      depthTest,
-      depthWrite,
-    });
-    this.#materialCache.set(index, renderMaterial);
-    return renderMaterial;
-  }
-
-  #instanceRenderMaterial(): THREE.ShaderMaterial {
-    const index = -1; // special materialCache index used for the instanced picking material
-    let renderMaterial = this.#materialCache.get(index);
-    if (renderMaterial) {
-      return renderMaterial;
+          const pickMaterial =
+            (object.userData.pickingMaterial as THREE.NodeMaterial | undefined) ??
+            this.#pickMaterialFor(material, { instanced: isInstanced(object, geometry) });
+          renderer.renderObject(
+            object,
+            scene,
+            cam,
+            geometry,
+            pickMaterial,
+            group,
+            lightsNode,
+            clippingContext,
+            "pick",
+          );
+        },
+      );
+      renderer.render(this.#scene, camera);
+    } finally {
+      renderer.setRenderObjectFunction(previousFunction);
+      renderer.setRenderTarget(previousTarget);
+      renderer.setClearColor(this.#clearColor, previousAlpha);
+      camera.projectionMatrix.copy(this.#projectionBeforePick);
+      camera.projectionMatrixInverse.copy(this.#projectionBeforePick).invert();
     }
 
-    let vertexShader = THREE.ShaderChunk.meshbasic_vert;
-    vertexShader = vertexShader.replace(
-      "void main() {",
-      /* glsl */ `
-      varying vec4 objectId;
+    const pixel = (await renderer.readRenderTargetPixelsAsync(
+      this.#target,
+      0,
+      0,
+      1,
+      1,
+    )) as Uint32Array;
+    return decodePick(pixel);
+  }
 
-      void main() {
-        objectId = vec4(
-          float((gl_InstanceID >> 24) & 255) / 255.0,
-          float((gl_InstanceID >> 16) & 255) / 255.0,
-          float((gl_InstanceID >> 8) & 255) / 255.0,
-          float(gl_InstanceID & 255) / 255.0);
-      `,
-    );
-    renderMaterial = new THREE.ShaderMaterial({
-      vertexShader,
-      fragmentShader: /* glsl */ `
-          varying vec4 objectId;
-          void main() {
-            gl_FragColor = objectId;
-          }
-        `,
-      side: THREE.DoubleSide,
-      uniforms: { objectId: { value: [NaN, NaN, NaN, NaN] } },
-    });
-    this.#materialCache.set(index, renderMaterial);
-    return renderMaterial;
+  #pickMaterialFor(
+    material: THREE.Material,
+    { instanced }: { instanced: boolean },
+  ): THREE.NodeMaterial {
+    let variants = this.#pickMaterials.get(material);
+    if (!variants) {
+      variants = new Map();
+      this.#pickMaterials.set(material, variants);
+    }
+    let pickMaterial = variants.get(instanced);
+    if (pickMaterial?.userData.sourceVersion !== material.version) {
+      pickMaterial?.dispose();
+      pickMaterial = derivePickMaterial(material, { instanced });
+      pickMaterial.userData.sourceVersion = material.version;
+      variants.set(instanced, pickMaterial);
+    }
+    return pickMaterial;
   }
 }
 
-function setObjectId(material: THREE.ShaderMaterial, objectId: number): void {
-  const iObjectId = material.uniforms.objectId;
-  if (!iObjectId) {
-    throw new Error(`objectId uniform not found in picking material`);
+/** Decodes a picking pass pixel; exported for tests */
+export function decodePick(pixel: ArrayLike<number>): PickResult | undefined {
+  const objectId = pixel[0]!;
+  if (objectId === NONE || pixel[3] !== 1) {
+    return undefined;
   }
-  iObjectId.value = [
-    ((objectId >> 24) & 255) / 255,
-    ((objectId >> 16) & 255) / 255,
-    ((objectId >> 8) & 255) / 255,
-    (objectId & 255) / 255,
-  ];
+  const instance = pixel[1]!;
+  const bits = new Uint32Array([pixel[2]!]);
+  return {
+    objectId,
+    instanceIndex: instance === NONE ? undefined : instance,
+    viewDepth: new Float32Array(bits.buffer)[0]!,
+  };
 }
 
-// Used for debug colors, this remaps objectIds to pseudo-random 32-bit integers
-const A = new Uint32Array(1);
-function hashInt(x: number): number {
-  A[0] = x | 0;
-  A[0] -= A[0] << 6;
-  A[0] ^= A[0] >>> 17;
-  A[0] -= A[0] << 9;
-  A[0] ^= A[0] << 4;
-  A[0] -= A[0] << 3;
-  A[0] ^= A[0] << 10;
-  A[0] ^= A[0] >>> 15;
-  return A[0];
+function isInstanced(object: THREE.Object3D, geometry: THREE.BufferGeometry): boolean {
+  return (
+    (object as Partial<THREE.InstancedMesh>).isInstancedMesh === true ||
+    (geometry as Partial<THREE.InstancedBufferGeometry>).isInstancedBufferGeometry === true ||
+    (object as Partial<THREE.Points>).isPoints === true
+  );
 }
 
-type DepthPicking = {
-  target: THREE.WebGLRenderTarget;
-  readTarget: THREE.WebGLRenderTarget;
-  scene: THREE.Scene;
-  quad: THREE.Mesh<THREE.PlaneGeometry, THREE.ShaderMaterial>;
-  /** The copy shader's `texel` uniform value */
-  texel: THREE.Vector2;
-};
-
-function createDepthPicking(): DepthPicking {
-  const texel = new THREE.Vector2();
-  const target = new THREE.WebGLRenderTarget(PIXEL_WIDTH, PIXEL_WIDTH, {
-    minFilter: THREE.NearestFilter,
-    magFilter: THREE.NearestFilter,
-    generateMipmaps: false,
-  });
-  target.depthTexture = new THREE.DepthTexture(PIXEL_WIDTH, PIXEL_WIDTH, THREE.FloatType);
-  const readTarget = new THREE.WebGLRenderTarget(1, 1, {
-    minFilter: THREE.NearestFilter,
-    magFilter: THREE.NearestFilter,
-    generateMipmaps: false,
-    depthBuffer: false,
-  });
-  const material = new THREE.ShaderMaterial({
-    vertexShader: /* glsl */ `
-      void main() {
-        gl_Position = vec4(position.xy, 0.0, 1.0);
-      }
-    `,
-    fragmentShader: /* glsl */ `
-      uniform highp sampler2D depthTexture;
-      uniform vec2 texel;
-      void main() {
-        uint bits = floatBitsToUint(texelFetch(depthTexture, ivec2(texel), 0).r);
-        gl_FragColor = vec4(
-          float((bits >> 24) & 255u),
-          float((bits >> 16) & 255u),
-          float((bits >> 8) & 255u),
-          float(bits & 255u)) / 255.0;
-      }
-    `,
-    uniforms: {
-      depthTexture: { value: target.depthTexture },
-      texel: { value: texel },
-    },
-    depthTest: false,
-    depthWrite: false,
-  });
-  const quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), material);
-  quad.frustumCulled = false;
-  const scene = new THREE.Scene();
-  scene.add(quad);
-  return { target, readTarget, scene, quad, texel };
+function isHidden(object: THREE.Object3D, hidden: ReadonlySet<THREE.Object3D>): boolean {
+  if (hidden.size === 0) {
+    return false;
+  }
+  for (let o: THREE.Object3D | null = object; o; o = o.parent) {
+    if (hidden.has(o)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 /**
- * Depth writes when picking an object flagged with `userData.drawBehind`. It is drawn first and
- * then covered by everything else, so in the id pass it must not hide later objects; depth picking
- * (e.g. measuring) still needs its surface.
+ * A picking variant of `material`: same class and vertex nodes, opaque, writing the pick output.
+ * Instanced objects report their instance index.
  */
-export function pickingDepthWrite({
-  drawBehind,
-  depthPass,
-}: {
-  drawBehind: boolean;
-  depthPass: boolean;
-}): boolean {
-  return !drawBehind || depthPass;
+function derivePickMaterial(
+  material: THREE.Material,
+  { instanced }: { instanced: boolean },
+): THREE.NodeMaterial {
+  const source = material as THREE.NodeMaterial;
+  const pick = source.isNodeMaterial ? source.clone() : new THREE.MeshBasicNodeMaterial();
+  pick.side = material.side;
+  pick.depthTest = material.depthTest;
+  pick.depthWrite = material.depthWrite;
+  pick.transparent = false;
+  pick.blending = THREE.NoBlending;
+  pick.outputNode = pickOutput(pickObjectId, instanced ? vertexStage(instanceIndex) : undefined);
+  return pick;
 }

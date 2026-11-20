@@ -7,10 +7,12 @@
 
 import { useEffect, useRef } from "react";
 import StatsMonitor from "stats.js";
-import type { WebGLInfo } from "three";
+import type { WebGPURenderer } from "three/webgpu";
 
 import type { Renderer } from "./Renderer";
 import { useRendererEvent } from "./RendererContext";
+
+type Info = WebGPURenderer["info"];
 
 export function Stats(): React.JSX.Element {
   const container = useRef<HTMLDivElement>(null);
@@ -27,10 +29,10 @@ export function Stats(): React.JSX.Element {
     stats.dom.style.position = "relative";
     stats.dom.style.zIndex = "auto";
     const counters = [
-      ["draws", "red", (info: WebGLInfo) => info.render.calls],
-      ["tris", "cyan", (info: WebGLInfo) => info.render.triangles],
-      ["textures", "yellow", (info: WebGLInfo) => info.memory.textures],
-      ["geometries", "green", (info: WebGLInfo) => info.memory.geometries],
+      ["draws", "red", (info: Info) => info.render.calls],
+      ["tris", "cyan", (info: Info) => info.render.triangles],
+      ["textures", "yellow", (info: Info) => info.memory.textures],
+      ["geometries", "green", (info: Info) => info.memory.geometries],
     ] as const;
     const panels = counters.map(([name, color]) =>
       stats.addPanel(new StatsMonitor.Panel(name, color, "black")),

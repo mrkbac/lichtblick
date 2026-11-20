@@ -12,8 +12,8 @@ import EventEmitter from "eventemitter3";
 import { quat, vec3 } from "gl-matrix";
 import i18next from "i18next";
 import { produce } from "immer";
-import * as THREE from "three";
 import { LineSegmentsGeometry } from "three/examples/jsm/lines/LineSegmentsGeometry.js";
+import * as THREE from "three/webgpu";
 import { DeepPartial, assert } from "ts-essentials";
 
 import { ObjectPool } from "@lichtblick/den/collection";
@@ -61,7 +61,7 @@ import {
 } from "./IRenderer";
 import { Input } from "./Input";
 import { ModelCache } from "./ModelCache";
-import { PickedRenderable, Picker } from "./Picker";
+import { PickedRenderable, PickResult, Picker } from "./Picker";
 import type { Renderable } from "./Renderable";
 import { SceneExtension } from "./SceneExtension";
 import { SceneExtensionConfig } from "./SceneExtensionConfig";
@@ -74,7 +74,7 @@ import { CameraState } from "./camera";
 import { DARK_OUTLINE, LIGHT_OUTLINE, stringToRgb } from "./color";
 import { HOVER_PICK_THROTTLE_MS, isTransformPreloadEnabled } from "./constants";
 import { FRAME_TRANSFORMS_DATATYPES, FRAME_TRANSFORM_DATATYPES } from "./foxglove";
-import { DetailLevel, msaaSamples } from "./lod";
+import { DetailLevel } from "./lod";
 import {
   normalizeFrameTransform,
   normalizeFrameTransforms,
@@ -186,7 +186,11 @@ export class Renderer extends EventEmitter<RendererEvents> {
   readonly #ownerWindow: Window & typeof globalThis;
   // The label atlas never shrinks, so an overflow stays true across clear()
   #labelAtlasError: string | undefined;
-  public readonly gl: THREE.WebGLRenderer;
+  public readonly gl: THREE.WebGPURenderer;
+  /** Set once the WebGPU device is ready; until then frames update the scene without drawing */
+  #gpuReady = false;
+  /** Why WebGPU could not start, if it couldn't (also emitted as `gpuUnsupported`) */
+  public gpuError: Error | undefined;
   public readonly sharedMap?: SharedMap;
   public maxLod = DetailLevel.High;
 
@@ -274,7 +278,6 @@ export class Renderer extends EventEmitter<RendererEvents> {
   public markerPool = new MarkerPool(this);
   public sharedGeometry = new SharedGeometry();
 
-  #prevResolution = new THREE.Vector2();
   #pickingEnabled = false;
   #rendering = false;
   #disposed = false;
@@ -325,18 +328,16 @@ export class Renderer extends EventEmitter<RendererEvents> {
     this.settings.setNodesForKey(RENDERER_ID, []);
     this.updateCustomLayersCount();
 
-    this.gl = new THREE.WebGLRenderer({
+    this.gl = new THREE.WebGPURenderer({
       canvas,
       alpha: true,
       antialias: true,
-      // Line materials use a stencil prepass; three.js stopped allocating a stencil buffer by default in r163
+      // Line materials use a stencil prepass
       stencil: true,
       // Fixed at creation; the panel recreates the renderer when this setting changes
       logarithmicDepthBuffer: config.scene.logDepth === true,
     });
-    if (!this.gl.capabilities.isWebGL2) {
-      throw new Error("WebGL2 is not supported");
-    }
+    void this.#initGpu();
     this.gl.autoClear = false;
     this.gl.info.autoReset = false;
     this.gl.shadowMap.type = THREE.VSMShadowMap;
@@ -430,9 +431,7 @@ export class Renderer extends EventEmitter<RendererEvents> {
     this.#selectionBackdropScene = new THREE.Scene();
     this.#selectionBackdropScene.add(this.#selectionBackdrop);
 
-    const samples = msaaSamples(this.gl.capabilities);
     const renderSize = this.gl.getDrawingBufferSize(tempVec2);
-    log.debug(`Initialized ${renderSize.width}x${renderSize.height} renderer (${samples}x MSAA)`);
 
     const { reserved } = args.sceneExtensionConfig;
 
@@ -489,6 +488,37 @@ export class Renderer extends EventEmitter<RendererEvents> {
     this.setCameraState(config.cameraState);
     this.sharedMap?.attach(this, this.#drawScene);
     this.animationFrame();
+  }
+
+  /**
+   * Starts the WebGPU device. There is no WebGL fallback: three.js would silently pick its WebGL2
+   * backend, which can't run the compute passes, so that is reported as an error instead.
+   */
+  async #initGpu(): Promise<void> {
+    try {
+      if (typeof navigator === "undefined" || !("gpu" in navigator)) {
+        throw new Error(i18next.t("threeDee:webGpuRequired"));
+      }
+      await this.gl.init();
+      if (this.#disposed) {
+        return;
+      }
+      if ((this.gl.backend as { isWebGPUBackend?: boolean }).isWebGPUBackend !== true) {
+        throw new Error(i18next.t("threeDee:webGpuRequired"));
+      }
+      this.gl.onDeviceLost = (info) => {
+        log.warn(`WebGPU device lost: ${info.message}`);
+        if (!this.#disposed) {
+          this.emit("gpuLost", this);
+        }
+      };
+      this.#gpuReady = true;
+      this.queueAnimationFrame();
+    } catch (error) {
+      log.error(error);
+      this.gpuError = toError(error);
+      this.emit("gpuUnsupported", this.gpuError, this);
+    }
   }
 
   #onHUDItemsChange = () => {
@@ -550,7 +580,7 @@ export class Renderer extends EventEmitter<RendererEvents> {
     this.#transformPool.clear();
     this.#picker.dispose();
     this.input.dispose();
-    this.gl.dispose();
+    void this.gl.dispose();
   }
 
   public cameraSyncError(): undefined | string {
@@ -1680,11 +1710,10 @@ export class Renderer extends EventEmitter<RendererEvents> {
     });
     this.#updateFrameErrors();
     this.#updateFixedFrameId();
-    this.#updateResolution();
 
     // A hidden tab shows nothing, but live data keeps driving frames: keep the scene state current
     // and skip the GPU work. #onVisibilityChange repaints when the tab is shown again.
-    const draw = this.#canvas.ownerDocument.visibilityState !== "hidden";
+    const draw = this.#gpuReady && this.#canvas.ownerDocument.visibilityState !== "hidden";
     if (draw && !this.sharedMap) {
       this.gl.clear();
     }
@@ -1808,38 +1837,11 @@ export class Renderer extends EventEmitter<RendererEvents> {
       return;
     }
 
-    // Deselect the currently selected object, if one is selected and re-render
-    // the scene to update the render lists
     this.setSelectedRenderable(undefined);
-
-    // Pick a single renderable, hide it, re-render, and run picking again until
-    // the backdrop is hit or we exceed MAX_SELECTIONS
-    const camera = this.cameraHandler.getActiveCamera();
-    const selections: PickedRenderable[] = [];
-    let curSelection: PickedRenderable | undefined;
-    while (
-      (curSelection = this.#pickSingleObject(cursorCoords)) &&
-      selections.length < MAX_SELECTIONS
-    ) {
-      selections.push(curSelection);
-      // If debugPicking is on, we don't want to overwrite the hitmap by doing more iterations
-      if (this.debugPicking) {
-        break;
-      }
-      curSelection.renderable.visible = false;
-      this.gl.render(this.#scene, camera);
-    }
-
-    // Put everything back to normal and render one last frame
-    for (const selection of selections) {
-      selection.renderable.visible = true;
-    }
-    if (!this.debugPicking) {
-      this.animationFrame();
-    }
-
-    log.debug(`Clicked ${selections.length} renderable(s)`);
-    this.emit("renderablesClicked", selections, cursorCoords, this);
+    void this.#pickStack(cursorCoords).then((selections) => {
+      log.debug(`Clicked ${selections.length} renderable(s)`);
+      this.emit("renderablesClicked", selections, cursorCoords, this);
+    });
   };
 
   readonly #hoverHandler = (cursorCoords: THREE.Vector2): void => {
@@ -1855,24 +1857,29 @@ export class Renderer extends EventEmitter<RendererEvents> {
       return;
     }
 
-    const camera = this.cameraHandler.getActiveCamera();
-    const selections: PickedRenderable[] = [];
-    let curSelection: PickedRenderable | undefined = this.#pickSingleObject(cursorCoords);
-    while (curSelection && selections.length < MAX_SELECTIONS) {
-      selections.push(curSelection);
-      curSelection.renderable.visible = false;
-      this.gl.render(this.#scene, camera);
-      curSelection = this.#pickSingleObject(cursorCoords);
-    }
-    for (const selection of selections) {
-      selection.renderable.visible = true;
-    }
-    // Picking renders offscreen; only the hide-and-repick renders above touch the canvas
-    if (selections.length > 0) {
-      this.animationFrame();
-    }
-    this.emit("renderableHovered", selections, cursorCoords, this);
+    void this.#pickStack(cursorCoords).then((selections) => {
+      this.emit("renderableHovered", selections, cursorCoords, this);
+    });
   };
+
+  /**
+   * Every renderable under the cursor, nearest first: picks, skips the picked renderable, and picks
+   * again until nothing is hit or MAX_SELECTIONS is reached. Only the 1-pixel picking target is
+   * drawn; the canvas is untouched.
+   */
+  async #pickStack(cursorCoords: THREE.Vector2): Promise<PickedRenderable[]> {
+    const selections: PickedRenderable[] = [];
+    const hidden = new Set<THREE.Object3D>();
+    while (selections.length < MAX_SELECTIONS) {
+      const selection = await this.#pickSingleObject(cursorCoords, hidden);
+      if (!selection) {
+        break;
+      }
+      selections.push(selection);
+      hidden.add(selection.renderable);
+    }
+    return selections;
+  }
 
   readonly #handleFrameTransform = ({
     message,
@@ -1979,60 +1986,60 @@ export class Renderer extends EventEmitter<RendererEvents> {
   };
 
   /**
-   * Find the 3D point (in render frame coordinates) of the nearest pickable surface under the
-   * cursor, writing it into `out`. Returns false when nothing pickable is under the cursor.
+   * The 3D point (in render frame coordinates) of the nearest pickable surface under the cursor, or
+   * undefined when nothing pickable is under the cursor.
    */
-  public pickPoint(cursorCoords: THREE.Vector2, out: THREE.Vector3): boolean {
-    if (this.sharedMap) {
-      this.gl.resetState();
-    }
+  public async pickPoint(
+    cursorCoords: THREE.Vector2,
+    out: THREE.Vector3,
+  ): Promise<THREE.Vector3 | undefined> {
     const camera = this.cameraHandler.getActiveCamera();
-    const depth = this.#picker.pickDepth(cursorCoords.x, cursorCoords.y, camera);
-    if (depth == undefined) {
-      return false;
+    const hit = await this.#pick(cursorCoords);
+    if (!hit) {
+      return undefined;
     }
+    // A point on the cursor's ray in view space, then scaled to the picked view depth
     const { width, height } = this.input.canvasSize;
     out
-      .set((cursorCoords.x / width) * 2 - 1, -(cursorCoords.y / height) * 2 + 1, depth * 2 - 1)
-      .unproject(camera);
-    return true;
+      .set((cursorCoords.x / width) * 2 - 1, -(cursorCoords.y / height) * 2 + 1, 0.5)
+      .applyMatrix4(camera.projectionMatrixInverse);
+    if ((camera as Partial<THREE.OrthographicCamera>).isOrthographicCamera === true) {
+      out.z = -hit.viewDepth;
+    } else {
+      out.multiplyScalar(hit.viewDepth / -out.z);
+    }
+    return out.applyMatrix4(camera.matrixWorld);
   }
 
   /** The topmost object under the cursor, or undefined for the background */
-  public pickObject(cursorCoords: THREE.Vector2): THREE.Object3D | undefined {
-    if (this.sharedMap) {
-      this.gl.resetState();
-    }
-    const objectId = this.#picker.pick(
-      cursorCoords.x,
-      cursorCoords.y,
-      this.cameraHandler.getActiveCamera(),
-      { disableSetViewOffset: this.interfaceMode === "image" },
-    );
-    return objectId === -1 ? undefined : this.#scene.getObjectById(objectId);
+  public async pickObject(cursorCoords: THREE.Vector2): Promise<THREE.Object3D | undefined> {
+    const hit = await this.#pick(cursorCoords);
+    return hit ? this.#scene.getObjectById(hit.objectId) : undefined;
   }
 
-  #pickSingleObject(cursorCoords: THREE.Vector2): PickedRenderable | undefined {
-    if (this.sharedMap) {
-      this.gl.resetState();
-    }
-    // Render a single pixel using a fragment shader that writes object IDs as
-    // colors, then read the value of that single pixel back
-    const objectId = this.#picker.pick(
-      cursorCoords.x,
-      cursorCoords.y,
-      this.cameraHandler.getActiveCamera(),
-      { debug: this.debugPicking, disableSetViewOffset: this.interfaceMode === "image" },
-    );
-    if (objectId === -1) {
-      log.debug("Picking did not return an object");
+  async #pick(
+    cursorCoords: THREE.Vector2,
+    hidden?: ReadonlySet<THREE.Object3D>,
+  ): Promise<PickResult | undefined> {
+    if (!this.#gpuReady || this.#disposed) {
       return undefined;
     }
+    const camera = this.cameraHandler.getActiveCamera();
+    camera.layers.set(LAYER_DEFAULT);
+    return await this.#picker.pick(cursorCoords.x, cursorCoords.y, camera, hidden);
+  }
 
-    // Traverse the scene looking for this objectId
-    const pickedObject = this.#scene.getObjectById(objectId);
+  async #pickSingleObject(
+    cursorCoords: THREE.Vector2,
+    hidden: ReadonlySet<THREE.Object3D>,
+  ): Promise<PickedRenderable | undefined> {
+    const hit = await this.#pick(cursorCoords, hidden);
+    if (!hit) {
+      return undefined;
+    }
+    const pickedObject = this.#scene.getObjectById(hit.objectId);
 
-    // Find the highest ancestor of the picked object that is a Renderable
+    // The highest ancestor of the picked object that is a Renderable
     let renderable: Renderable | undefined;
     let maybeRenderable = pickedObject as Partial<Renderable> | undefined;
     while (maybeRenderable) {
@@ -2041,29 +2048,11 @@ export class Renderer extends EventEmitter<RendererEvents> {
       }
       maybeRenderable = (maybeRenderable.parent ?? undefined) as Partial<Renderable> | undefined;
     }
-
     if (!renderable) {
-      log.warn(
-        `No Renderable found for objectId ${objectId} (name="${pickedObject?.name}" uuid=${pickedObject?.uuid})`,
-      );
+      log.warn(`No Renderable found for objectId ${hit.objectId} (name="${pickedObject?.name}")`);
       return undefined;
     }
-
-    log.debug(`Picking pass returned ${renderable.id} (${renderable.name})`, renderable);
-
-    let instanceIndex: number | undefined;
-    if (renderable.pickableInstances) {
-      instanceIndex = this.#picker.pickInstance(
-        cursorCoords.x,
-        cursorCoords.y,
-        this.cameraHandler.getActiveCamera(),
-        renderable,
-        { debug: this.debugPicking, disableSetViewOffset: this.interfaceMode === "image" },
-      );
-      instanceIndex = instanceIndex === -1 ? undefined : instanceIndex;
-      log.debug("Instance picking pass on", renderable, "returned", instanceIndex);
-    }
-
+    const instanceIndex = renderable.pickableInstances ? hit.instanceIndex : undefined;
     return { renderable, instanceIndex };
   }
 
@@ -2103,27 +2092,6 @@ export class Renderer extends EventEmitter<RendererEvents> {
       extension.getContextMenuItems(),
     );
   };
-
-  #updateResolution(): void {
-    const resolution = this.input.canvasSize;
-    if (this.#prevResolution.equals(resolution)) {
-      return;
-    }
-    this.#prevResolution.copy(resolution);
-
-    this.#scene.traverse((object) => {
-      if ((object as Partial<THREE.Mesh>).material) {
-        const mesh = object as THREE.Mesh;
-        const material = mesh.material as Partial<THREE.ShaderMaterial>;
-
-        // Update render resolution uniforms
-        if (material.uniforms?.resolution) {
-          material.uniforms.resolution.value.copy(resolution);
-          material.uniformsNeedUpdate = true;
-        }
-      }
-    });
-  }
 
   public getDropStatus = (paths: readonly DraggedMessagePath[]): MessagePathDropStatus => {
     const effects: ("add" | "replace")[] = [];

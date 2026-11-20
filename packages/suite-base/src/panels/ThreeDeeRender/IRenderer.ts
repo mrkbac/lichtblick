@@ -53,6 +53,10 @@ export type RendererEvents = {
   resetAllFramesCursor: (renderer: Renderer) => void;
   hudItemsChanged: (renderer: Renderer) => void;
   clearPreloadBuffer: (renderer: Renderer) => void;
+  /** The WebGPU device was lost; the panel recreates the renderer */
+  gpuLost: (renderer: Renderer) => void;
+  /** WebGPU is unavailable, so nothing can be drawn */
+  gpuUnsupported: (error: Error, renderer: Renderer) => void;
 };
 
 export type FollowMode = "follow-pose" | "follow-position" | "follow-none";
