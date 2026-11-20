@@ -911,6 +911,10 @@ export class ImageMode
     this.#updateViewAndRenderables();
   }
 
+  public getCameraDistance(): undefined {
+    return undefined;
+  }
+
   public getCameraState(): undefined {
     return undefined;
   }

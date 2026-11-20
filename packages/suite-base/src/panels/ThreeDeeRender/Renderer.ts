@@ -1125,6 +1125,10 @@ export class Renderer extends EventEmitter<RendererEvents> {
     return this.cameraHandler.getCameraState();
   }
 
+  public getCameraDistance(): number | undefined {
+    return this.cameraHandler.getCameraDistance();
+  }
+
   /** Fit visible topic geometry, excluding map tiles, grids, and transform helpers. */
   public zoomToData(): void {
     const state = this.getCameraState();

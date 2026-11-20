@@ -67,12 +67,14 @@ describe("SharedMap", () => {
     transformTree.addTransform("base", "map", 0n, Transform.Identity().setPosition([10, 20, 0]));
     const resetState = vi.fn();
     const setCameraState = vi.fn();
+    const getCameraState = vi.fn(() => ({ distance: 20 }));
     const queueAnimationFrame = vi.fn();
     const renderer = {
       currentTime: 0n,
       transformTree,
       cameraHandler: { getActiveCamera: () => camera },
-      getCameraState: () => ({ distance: 20 }),
+      getCameraState,
+      getCameraDistance: () => 20,
       setCameraState,
       emit: vi.fn(),
       queueAnimationFrame,
@@ -91,6 +93,8 @@ describe("SharedMap", () => {
     expect(map.getStyle().layers).toEqual([]);
     shared.locate({ lat: 48, lon: 11, enuFrame: "map", position: new THREE.Vector3(10, 20, 0) }, 0);
     shared.render("base", "map");
+    // Within the zoom-out limit, a frame reads only the distance, not a full camera snapshot
+    expect(getCameraState).not.toHaveBeenCalled();
     expect(map.getStyle()).toBe(mapStyle);
     expect(map.setVerticalFieldOfView).toHaveBeenCalledWith(45);
     expect(map.jumpTo).toHaveBeenCalled();
@@ -190,6 +194,7 @@ describe("SharedMap ground height", () => {
       transformTree,
       cameraHandler: { getActiveCamera: () => camera },
       getCameraState: () => ({ distance: 20 }),
+      getCameraDistance: () => 20,
       hud: { displayIfTrue: vi.fn() },
     } as unknown as Renderer;
     const shared = new SharedMap(map as unknown as MapLibreMap, "map-layer");

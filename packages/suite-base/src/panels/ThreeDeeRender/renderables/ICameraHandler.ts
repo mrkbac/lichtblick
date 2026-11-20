@@ -25,6 +25,11 @@ export interface ICameraHandler extends SceneExtension {
    */
   getCameraState(): CameraState | undefined;
   /**
+   * Distance from the camera to its orbit target, without allocating a full camera state.
+   * Undefined if the interface mode has no orbit camera.
+   */
+  getCameraDistance(): number | undefined;
+  /**
    * Used to update the aspect ratio of the camera when necessary
    * @param width - The width of the render canvas in CSS pixels
    * @param height - The height of the render canvas in CSS pixels

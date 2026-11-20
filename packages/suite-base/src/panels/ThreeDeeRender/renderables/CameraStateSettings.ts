@@ -493,6 +493,10 @@ export class CameraStateSettings extends SceneExtension implements ICameraHandle
     };
   }
 
+  public getCameraDistance(): number {
+    return this.#controls.getDistance();
+  }
+
   public setCameraState(cameraState: CameraState): void {
     this.#isUpdatingCameraState = true;
     this.#updateCameras(cameraState);
