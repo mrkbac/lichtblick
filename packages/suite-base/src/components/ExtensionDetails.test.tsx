@@ -76,7 +76,7 @@ describe("ExtensionDetails Component", () => {
   });
 
   afterEach(() => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
   });
 
   it("renders the extension details correctly", () => {
@@ -379,6 +379,7 @@ describe("ExtensionDetails Component", () => {
       await waitFor(() => {
         expect(mockUninstallExtension).toHaveBeenCalled();
       });
+      await mockUninstallExtension.mock.results[0]?.value;
 
       // logEvent should not be called because component was unmounted
       expect(mockLogEvent).not.toHaveBeenCalled();
