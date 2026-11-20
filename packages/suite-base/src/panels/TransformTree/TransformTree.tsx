@@ -68,6 +68,8 @@ import {
   EMPTY_TRANSFORM_STATE,
   measureBetween,
   mergeEntries,
+  sameFields,
+  sameRow,
   TransformState,
 } from "./tree";
 import { FrameEntries, FrameEntry, FrameRow, FrameWarning, TransformTreeConfig } from "./types";
@@ -792,4 +794,12 @@ const FrameTableRow = memo(function FrameTableRowImpl({
       </td>
     </tr>
   );
-});
+}, sameRowProps);
+
+/** Rows are rebuilt on every update, so compare them by value: unchanged rows skip rendering. */
+function sameRowProps<P extends { row: FrameRow }>(prev: P, next: P): boolean {
+  return (
+    sameFields({ ...prev, row: undefined }, { ...next, row: undefined }) &&
+    sameRow(prev.row, next.row)
+  );
+}
