@@ -6,7 +6,7 @@ import { useTranslation } from "react-i18next";
 import { useAppLaunch } from "@lichtblick/suite-base/util/appLaunch";
 import { toError } from "@lichtblick/suite-base/util/toError";
 
-import { ServedCatalog, parseCatalog } from "./catalogUrl";
+import { CatalogError, ServedCatalog, parseCatalog } from "./catalogUrl";
 import { CatalogRecording } from "./types";
 import { CatalogFolder } from "./useCatalogFolder";
 
@@ -39,9 +39,15 @@ export function useCatalogUrl(url: string): CatalogFolder {
         }
         setCatalog(parseCatalog(await response.json(), response.url || url));
       } catch (err) {
-        if (!controller.signal.aborted) {
-          setError(t("catalogLoadError", { reason: toError(err).message }));
+        if (controller.signal.aborted) {
+          return;
         }
+        // Schema errors have their own messages; anything else (network, JSON) is passed on.
+        setError(
+          err instanceof CatalogError
+            ? t(err.key, err.params)
+            : t("catalogLoadError", { reason: toError(err).message }),
+        );
       }
     })();
     return () => {

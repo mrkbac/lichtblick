@@ -31,6 +31,17 @@ export type ServedCatalog = { name?: string; recordings: CatalogRecording[] };
 
 const SOURCE_TYPES = new Set(["remote-file", "foxglove-websocket"]);
 
+/** A catalog that doesn't follow the schema; `key` is its message in the "catalog" namespace. */
+export class CatalogError extends Error {
+  public constructor(
+    message: string,
+    public readonly key: "catalogNotV1" | "catalogNeedsId" | "catalogNeedsSource",
+    public readonly params: Record<string, string | number> = {},
+  ) {
+    super(message);
+  }
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value != undefined && !Array.isArray(value);
 }
@@ -74,20 +85,29 @@ function fileName(url: string): string {
 /** Parse a catalog fetched from `catalogUrl`. Throws when it is not a v1 catalog. */
 export function parseCatalog(json: unknown, catalogUrl: string): ServedCatalog {
   if (!isRecord(json) || json.version !== 1 || !Array.isArray(json.recordings)) {
-    throw new Error("Not a catalog: expected version 1 and a recordings list");
+    throw new CatalogError(
+      "Not a catalog: expected version 1 and a recordings list",
+      "catalogNotV1",
+    );
   }
   const resolve = (url: unknown) =>
     typeof url === "string" && url !== "" ? new URL(url, catalogUrl).href : undefined;
   const ids = new Set<string>();
   const recordings = json.recordings.map((entry: unknown, index): CatalogRecording => {
     if (!isRecord(entry) || typeof entry.id !== "string" || entry.id === "" || ids.has(entry.id)) {
-      throw new Error(`Recording ${index + 1} needs a unique id`);
+      throw new CatalogError(`Recording ${index + 1} needs a unique id`, "catalogNeedsId", {
+        number: index + 1,
+      });
     }
     ids.add(entry.id);
     const source = entry.source;
     const url = isRecord(source) ? resolve(source.url) : undefined;
     if (!isRecord(source) || !SOURCE_TYPES.has(source.type as string) || url == undefined) {
-      throw new Error(`Recording "${entry.id}" needs a remote-file or foxglove-websocket source`);
+      throw new CatalogError(
+        `Recording "${entry.id}" needs a remote-file or foxglove-websocket source`,
+        "catalogNeedsSource",
+        { id: entry.id },
+      );
     }
     return {
       id: entry.id,
