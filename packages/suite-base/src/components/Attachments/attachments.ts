@@ -8,6 +8,8 @@ import {
   openCachedMcapReader,
 } from "@lichtblick/mcap-core";
 
+import { PreviewKind } from "./types";
+
 /** Reads only the file's summary; attachment data stays on disk until sliced. */
 export async function readAttachmentIndexes(
   file: Blob,
@@ -40,8 +42,6 @@ export function attachmentData(file: Blob, index: McapTypes.AttachmentIndex): Bl
     8;
   return file.slice(start, start + Number(index.dataSize), index.mediaType);
 }
-
-export type PreviewKind = "image" | "video" | "audio" | "pdf" | "text" | "binary";
 
 const TEXT_TYPE = /^text\/|[/+](json|xml|yaml|x-yaml|toml|javascript|csv|x-sh|x-python)$/i;
 
@@ -76,16 +76,27 @@ export function previewKind(mediaType: string, head: Uint8Array): PreviewKind {
   }
 }
 
-/** JSON is pretty-printed; anything else is shown as is. */
+/**
+ * JSON is re-indented; anything else is shown as is. Numbers keep their source text, so integers
+ * beyond 2^53 and long decimals aren't rounded. Without `JSON.rawJSON` the text is shown as is.
+ */
 export function formatText(text: string, mediaType: string): string {
-  if (/json/i.test(mediaType)) {
-    try {
-      return JSON.stringify(JSON.parse(text), undefined, 2) ?? text;
-    } catch {
-      // Not valid JSON after all: show the raw text.
-    }
+  // ES2025 (Chrome 114+, Firefox 135+, Safari 18.4+); not in TypeScript's lib yet.
+  const rawJSON = (JSON as JSON & { rawJSON?: (source: string) => unknown }).rawJSON;
+  if (!/json/i.test(mediaType) || rawJSON == undefined) {
+    return text;
   }
-  return text;
+  try {
+    const parsed: unknown = JSON.parse(
+      text,
+      (_key, value: unknown, context?: { source?: string }) =>
+        typeof value === "number" && context?.source != undefined ? rawJSON(context.source) : value,
+    );
+    return JSON.stringify(parsed, undefined, 2) ?? text;
+  } catch {
+    // Not valid JSON after all: show the raw text.
+    return text;
+  }
 }
 
 /** Classic 16-bytes-per-row hex dump with an ASCII column. */

@@ -8,6 +8,7 @@
 import { Time, subtract, toSec } from "@foxglove/rostime";
 import { Button, Chip, Typography } from "@mui/material";
 import { Fragment, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 import { formatByteSize } from "@lichtblick/den/format";
 import { Immutable } from "@lichtblick/suite";
@@ -233,6 +234,7 @@ export function ContainerDetails({
   files: readonly Immutable<RecordingFileInfo>[];
 }): React.JSX.Element {
   const { classes } = useStyles();
+  const { t } = useTranslation("attachments");
   // Attachment bytes are read from the local file; remote and compared files only list them.
   const localFile = useExportableFile();
   const viewableFile = files.length === 1 ? localFile : undefined;
@@ -327,7 +329,7 @@ export function ContainerDetails({
                               <Button
                                 size="small"
                                 className={classes.attachmentName}
-                                title={`View ${attachment.name}`}
+                                title={t("view", { name: attachment.name })}
                                 onClick={() => {
                                   setViewing(attachmentIndex);
                                 }}

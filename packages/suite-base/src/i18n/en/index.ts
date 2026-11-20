@@ -8,6 +8,7 @@
 export * from "./addPanel";
 export * from "./appBar";
 export * from "./appSettings";
+export * from "./attachments";
 export * from "./audio";
 export * from "./cameraGrid";
 export * from "./catalog";

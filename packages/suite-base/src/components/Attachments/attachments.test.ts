@@ -3,7 +3,13 @@
 
 import { McapWriter, TempBuffer } from "@lichtblick/mcap-core";
 
-import { attachmentData, hexDump, previewKind, readAttachmentIndexes } from "./attachments";
+import {
+  attachmentData,
+  formatText,
+  hexDump,
+  previewKind,
+  readAttachmentIndexes,
+} from "./attachments";
 
 describe("attachments", () => {
   it("slices exactly each attachment's data out of the file", async () => {
@@ -41,6 +47,13 @@ describe("attachments", () => {
     expect(previewKind("application/octet-stream", bytes("<robot/>"))).toBe("text");
     expect(previewKind("", new Uint8Array([0x89, 0x50, 0, 1]))).toBe("binary");
     expect(previewKind("", new Uint8Array([0xff, 0xfe]))).toBe("binary");
+  });
+
+  it("re-indents JSON without rounding its numbers", () => {
+    expect(formatText('{"id":9007199254740993,"x":[1.10]}', "application/json")).toBe(
+      '{\n  "id": 9007199254740993,\n  "x": [\n    1.10\n  ]\n}',
+    );
+    expect(formatText("{not json", "application/json")).toBe("{not json");
   });
 
   it("hex dumps with an ASCII column", () => {

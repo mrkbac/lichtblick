@@ -372,7 +372,7 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
     ]);
     if (hasAttachments) {
       // Like the events tab, shown only when there is something to show.
-      items.set("attachments", { title: "Attachments", component: AttachmentList });
+      items.set("attachments", { title: t("workspace:attachments"), component: AttachmentList });
     }
     return items;
   }, [PanelSettingsSidebar, alertCount, highestSeverity, hasAttachments]);
