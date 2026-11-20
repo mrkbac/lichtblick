@@ -14,7 +14,8 @@ const expect = baseExpect.configure({ timeout: 20_000 });
  */
 async function pixels(canvas: Locator) {
   const rect = (await canvas.boundingBox())!;
-  const png = (await canvas.screenshot()).toString("base64");
+  // A screenshot waits for a new frame, which software WebGPU on the desktop runners can take long for
+  const png = (await canvas.screenshot({ timeout: 90_000 })).toString("base64");
   return await canvas.page().evaluate(
     async ({ data, rect: box }) => {
       const image = new Image();
