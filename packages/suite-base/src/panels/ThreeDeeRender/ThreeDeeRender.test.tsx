@@ -410,6 +410,39 @@ describe("ThreeDeeRender", () => {
     expect(mockedRenderer.mock.calls.length).toBe(initialCalls + 1);
   });
 
+  it("saves a camera move that the renderer writes while the panel unmounts", () => {
+    // Given: a renderer that writes a pending camera move when it is disposed
+    const props = setup();
+    const { unmount } = render(<ThreeDeeRender {...props} />);
+    const renderer = mockedRenderer.mock.results.at(-1)!.value as ReturnType<
+      typeof createMockRenderer
+    >;
+    const movedConfig = { ...renderer.config, cameraState: { distance: 30 } };
+    renderer.dispose.mockImplementation(() => {
+      renderer.config = movedConfig;
+      renderer.emit("configChange", renderer);
+    });
+    vi.mocked(props.context.saveState).mockClear();
+
+    // When: the panel unmounts, without any re-render or debounce timer
+    unmount();
+
+    // Then: the moved camera is saved
+    expect(props.context.saveState).toHaveBeenCalledWith(movedConfig);
+  });
+
+  it("does not save when a renderer is replaced without writing a camera move", () => {
+    const props = setup();
+    render(<ThreeDeeRender {...props} />);
+    vi.mocked(props.context.saveState).mockClear();
+
+    act(() => {
+      localResourceFolders.remove("unchanged-folder");
+    });
+
+    expect(props.context.saveState).not.toHaveBeenCalled();
+  });
+
   it("initializes with default camera state when no initial state is provided", () => {
     // Given
     const props = setup();

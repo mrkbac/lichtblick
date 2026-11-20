@@ -137,6 +137,39 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
   });
   const configRef = useLatest(config);
   const lastSavedConfig = useRef<Immutable<RendererConfig> | undefined>(undefined);
+
+  // Save panel settings whenever they change
+  const throttledSave = useDebouncedCallback(
+    (newConfig: Immutable<RendererConfig>) => {
+      // Immediate converter saves already persist this config.
+      if (newConfig !== lastSavedConfig.current) {
+        saveState(newConfig);
+        lastSavedConfig.current = newConfig;
+      }
+    },
+    100,
+    { leading: false, trailing: true, maxWait: 1000 },
+  );
+
+  // Disposing a renderer can write a camera move that was waiting for the camera to rest (see
+  // Renderer.dispose). An unmounting panel never re-renders to run the debounced save, so when
+  // disposing changed the config, save it right away.
+  const latestDisposeRenderer = useLatest((disposedRenderer: Renderer) => {
+    const configBefore = disposedRenderer.config;
+    disposedRenderer.dispose();
+    const configAfter = disposedRenderer.config;
+    if (configAfter !== configBefore && configAfter !== lastSavedConfig.current) {
+      throttledSave.cancel();
+      saveState(configAfter);
+      lastSavedConfig.current = configAfter;
+    }
+  });
+  const disposeRenderer = useCallback(
+    (disposedRenderer: Renderer) => {
+      latestDisposeRenderer.current(disposedRenderer);
+    },
+    [latestDisposeRenderer],
+  );
   const { cameraState } = config;
   const backgroundColor = config.scene.backgroundColor;
 
@@ -207,12 +240,15 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
       });
     return () => {
       disposed = true;
-      rendererRef.current?.dispose();
+      const disposedRenderer = rendererRef.current;
       rendererRef.current = undefined;
+      if (disposedRenderer) {
+        disposeRenderer(disposedRenderer);
+      }
       instance?.dispose();
       setSharedMap(undefined);
     };
-  }, [mapContainer, sharedMapLayerId, canvasKey, displayTemporaryError]);
+  }, [mapContainer, sharedMapLayerId, canvasKey, displayTemporaryError, disposeRenderer]);
 
   useEffect(() => {
     const newRenderer =
@@ -232,8 +268,11 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
     setRenderer(newRenderer);
     rendererRef.current = newRenderer;
     return () => {
-      rendererRef.current?.dispose();
+      const disposedRenderer = rendererRef.current;
       rendererRef.current = undefined;
+      if (disposedRenderer) {
+        disposeRenderer(disposedRenderer);
+      }
     };
   }, [
     canvas,
@@ -248,6 +287,7 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
     resourceRevision,
     testOptions,
     displayTemporaryError,
+    disposeRenderer,
   ]);
 
   useEffect(() => {
@@ -432,19 +472,6 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
   const onShowTopicSettings = useCallback((topic: string) => {
     setFocusedSettingsPath(["topics", topic]);
   }, []);
-
-  // Save panel settings whenever they change
-  const throttledSave = useDebouncedCallback(
-    (newConfig: Immutable<RendererConfig>) => {
-      // Immediate converter saves already persist this config.
-      if (newConfig !== lastSavedConfig.current) {
-        saveState(newConfig);
-        lastSavedConfig.current = newConfig;
-      }
-    },
-    100,
-    { leading: false, trailing: true, maxWait: 1000 },
-  );
 
   // Rebuild the settings sidebar tree as needed
   useEffect(() => {
