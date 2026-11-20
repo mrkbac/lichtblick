@@ -175,6 +175,8 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
    * PointCloudRenderable, so picking it still shows the message and per-point fields.
    */
   #decayRing: DecayPointRing | undefined;
+  /** What the shown decay limit notice says, to format it again only when that changes */
+  #decayNoticeKey: string | undefined;
 
   public constructor(topic: string, renderer: Renderer, userData: PointCloudHistoryUserData) {
     super(topic, renderer, userData);
@@ -414,6 +416,8 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
         this.add(this.#decayRing);
       }
       const { position, color } = latest.renderable.geometry.attributes;
+      // A limit changed since the last frame applies to this scan already
+      this.#decayRing.setMaxPoints(decayMaxPoints(settings));
       this.#decayRing.push(
         {
           receiveTime: latest.receiveTime,
@@ -475,19 +479,30 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
     const evictedUntil = ring.budgetEvictedUntil();
     const oldest = ring.oldestReceiveTime() ?? this.#pointsHistory.latest().receiveTime;
     if (evictedUntil != undefined && evictedUntil >= expireTime) {
-      const shownSeconds = Math.max(0, Number(currentTime - oldest) / 1e9);
+      const shownSeconds = Math.round(Math.max(0, Number(currentTime - oldest) / 1e9));
       const locale = i18next.language;
-      this.renderer.settings.errors.add(
-        settingsPath,
-        DECAY_LIMITED,
-        i18next.t("threeDee:decayHistoryLimited", {
-          maxPoints: decayMaxPoints(settings).toLocaleString(locale),
-          maxScans: DECAY_HISTORY_LIMITS.maxEntries.toLocaleString(locale),
-          shownSeconds: shownSeconds.toLocaleString(locale, { maximumFractionDigits: 0 }),
-          decaySeconds: settings.decayTime.toLocaleString(locale),
-        }),
-      );
+      const maxPoints = decayMaxPoints(settings);
+      // Formatted only when what it shows changes, not on every frame
+      const key = `${locale} ${maxPoints} ${shownSeconds} ${settings.decayTime}`;
+      // (errors can also be cleared elsewhere, e.g. on a topic reset)
+      if (
+        key !== this.#decayNoticeKey ||
+        !this.renderer.settings.errors.hasError(settingsPath, DECAY_LIMITED)
+      ) {
+        this.#decayNoticeKey = key;
+        this.renderer.settings.errors.add(
+          settingsPath,
+          DECAY_LIMITED,
+          i18next.t("threeDee:decayHistoryLimited", {
+            maxPoints: maxPoints.toLocaleString(locale),
+            maxScans: DECAY_HISTORY_LIMITS.maxEntries.toLocaleString(locale),
+            shownSeconds: shownSeconds.toLocaleString(locale),
+            decaySeconds: settings.decayTime.toLocaleString(locale),
+          }),
+        );
+      }
     } else {
+      this.#decayNoticeKey = undefined;
       this.renderer.settings.errors.remove(settingsPath, DECAY_LIMITED);
     }
 
@@ -944,7 +959,7 @@ export class PointClouds extends SceneExtension<PointCloudHistoryRenderable> {
       const config = (configTopics[topic.name] ?? {}) as Partial<LayerSettingsPointClouds>;
       const messageFields = this.#fieldsByTopic.get(topic.name) ?? POINT_CLOUD_REQUIRED_FIELDS;
       const node: SettingsTreeNodeWithActionHandler = {
-        ...pointCloudSettingsNode(topic, messageFields, config),
+        ...pointCloudSettingsNode(topic, messageFields, config, { decayLimit: true }),
         handler,
       };
       entries.push({ path: ["topics", topic.name], node });

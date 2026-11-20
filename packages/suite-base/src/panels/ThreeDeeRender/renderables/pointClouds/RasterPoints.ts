@@ -244,6 +244,8 @@ export class RasterPoints extends THREE.Object3D {
       this.#mesh = new THREE.Mesh(instancedCopy(UNIT_GEOMETRY[shape]), material);
       this.#mesh.name = `${this.name}:${shape}s`;
       this.#mesh.frustumCulled = false;
+      // Keep the selection highlight (Renderer sets the layers of existing children only)
+      this.#mesh.layers.mask = this.layers.mask;
       this.add(this.#mesh);
       if (shape === "cube" && this.#outline) {
         const edges = new THREE.LineBasicNodeMaterial({ color: 0x000000 });
@@ -252,6 +254,7 @@ export class RasterPoints extends THREE.Object3D {
         this.#edges.name = `${this.name}:outline`;
         this.#edges.frustumCulled = false;
         this.#edges.userData.picking = false;
+        this.#edges.layers.mask = this.layers.mask;
         this.add(this.#edges);
       }
     }

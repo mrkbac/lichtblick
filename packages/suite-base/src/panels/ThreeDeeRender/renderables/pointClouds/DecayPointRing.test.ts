@@ -288,4 +288,36 @@ describe("DecayPointRing", () => {
     // The all-zero row hides free slots and evicted points
     expect(poseRow(100)).toEqual(Array(12).fill(0));
   });
+
+  it("applies a raised point budget before the next push", () => {
+    const { ring } = makeRing({ maxEntries: 100, maxPoints: 10 });
+    push(ring, 1n, 4);
+    push(ring, 2n, 4);
+    ring.setMaxPoints(100); // raised, and more scans arrive before the next frame
+    push(ring, 3n, 4);
+
+    expect(ring.scanCount()).toBe(3);
+    expect(ring.budgetEvictedUntil()).toBeUndefined();
+  });
+
+  it("puts new shape objects in the point set's layers (the selection highlight)", () => {
+    const { ring, points } = makeRing();
+    push(ring, 1n, 4);
+    ring.updatePoses(transformTree, 0n, "map", "map");
+    points.layers.set(5);
+    ring.setStyle({ ...style, shape: "cube", outline: true });
+
+    const shapes = points.children;
+    expect(shapes.length).toBe(2);
+    expect(shapes.every((child) => child.layers.mask === points.layers.mask)).toBe(true);
+  });
+
+  it("drops its point arrays on dispose, in case it stays selected", () => {
+    const { ring, points } = makeRing();
+    push(ring, 1n, 50);
+    ring.dispose();
+
+    expect(ring.pointCount()).toBe(0);
+    expect(points.positionAttribute().array).toHaveLength(0);
+  });
 });

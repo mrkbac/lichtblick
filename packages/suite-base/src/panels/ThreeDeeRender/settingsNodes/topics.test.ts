@@ -62,13 +62,23 @@ describe("imageProjectionSettingsNode render modes", () => {
 describe("pointCloudSettingsNode decay point limit", () => {
   const cloud = { name: "/points", schemaName: "sensor_msgs/msg/PointCloud2" };
 
+  const opts = { decayLimit: true };
+
   it("offers the limit only while accumulating", () => {
-    expect(pointCloudSettingsNode(cloud, ["x"], {}).fields?.decayMaxPoints).toBeUndefined();
-    const field = pointCloudSettingsNode(cloud, ["x"], { decayTime: 5, decayMaxPoints: 3 }).fields
-      ?.decayMaxPoints;
+    expect(pointCloudSettingsNode(cloud, ["x"], {}, opts).fields?.decayMaxPoints).toBeUndefined();
+    const field = pointCloudSettingsNode(cloud, ["x"], { decayTime: 5, decayMaxPoints: 3 }, opts)
+      .fields?.decayMaxPoints;
     expect(field).toMatchObject({ input: "number", value: 3 });
     // Listed right below the decay time it limits
-    const keys = Object.keys(pointCloudSettingsNode(cloud, ["x"], { decayTime: 5 }).fields ?? {});
+    const keys = Object.keys(
+      pointCloudSettingsNode(cloud, ["x"], { decayTime: 5 }, opts).fields ?? {},
+    );
     expect(keys.indexOf("decayMaxPoints")).toBe(keys.indexOf("decayTime") + 1);
+  });
+
+  it("leaves it out for topics without a decay ring (velodyne scans)", () => {
+    expect(
+      pointCloudSettingsNode(cloud, ["x"], { decayTime: 5 }).fields?.decayMaxPoints,
+    ).toBeUndefined();
   });
 });

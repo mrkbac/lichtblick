@@ -1013,16 +1013,20 @@ export function pointSettingsNode(
   };
 }
 
-/** Point clouds and velodyne scans: the point settings plus stixels. */
+/**
+ * Point clouds and velodyne scans: the point settings plus stixels. `decayLimit` adds the decay
+ * point limit, for topics whose history goes through the decay ring.
+ */
 export function pointCloudSettingsNode(
   topic: Pick<Topic, "name" | "schemaName" | "convertibleTo">,
   messageFields: string[],
   config: Partial<
     LayerSettingsPointExtension & { stixelsEnabled: boolean; decayMaxPoints: number }
   >,
+  { decayLimit = false }: { decayLimit?: boolean } = {},
 ): DocumentedNode {
   const node = pointSettingsNode(topic, messageFields, config);
-  if ((config.decayTime ?? 0) > 0) {
+  if (decayLimit && (config.decayTime ?? 0) > 0) {
     // Accumulating more points costs GPU time on every frame; slower GPUs want a lower limit.
     // Listed right below the decay time it limits.
     const limitField: DocumentedField = {

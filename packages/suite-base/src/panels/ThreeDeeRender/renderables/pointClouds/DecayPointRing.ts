@@ -124,8 +124,17 @@ export class DecayPointRing extends Renderable<BaseUserData, /*TRenderer=*/ unde
   }
 
   public override dispose(): void {
+    // A disposed ring can stay reachable (e.g. as the selection), so drop the point arrays too
+    this.#scans = [];
+    this.#livePoints = 0;
+    this.#resize(0);
     this.#points.dispose();
     super.dispose();
+  }
+
+  /** Point budget for growing the buffers; set before push() so a raised limit applies at once */
+  public setMaxPoints(maxPoints: number): void {
+    this.#maxPoints = maxPoints;
   }
 
   public override details(): Record<string, RosValue> {
