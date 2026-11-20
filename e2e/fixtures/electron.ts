@@ -41,6 +41,8 @@ export const test = base.extend<ElectronFixtures & { electronArgs: string[] }>({
         // Electron build has no SwiftShader WebGL2, so local macOS runs use Metal.
         "--use-gl=angle",
         "--enable-unsafe-webgpu",
+        // Headless Chromium disables the GPU process, which WebGPU (even SwiftShader) needs
+        "--enable-gpu",
         ...(process.platform === "darwin"
           ? ["--use-angle=metal"]
           : [

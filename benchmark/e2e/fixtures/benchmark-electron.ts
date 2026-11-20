@@ -30,6 +30,8 @@ export const test = base.extend<BenchmarkElectronFixtures>({
         "--use-angle=swiftshader",
         "--enable-unsafe-swiftshader",
         "--enable-unsafe-webgpu",
+        // Headless Chromium disables the GPU process, which WebGPU (even SwiftShader) needs
+        "--enable-gpu",
         "--enable-features=Vulkan",
         "--use-vulkan=swiftshader",
         "--use-webgpu-adapter=swiftshader",
