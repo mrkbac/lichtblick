@@ -911,6 +911,10 @@ export class ImageMode
     this.#updateViewAndRenderables();
   }
 
+  public commitPendingCameraState(): void {
+    // The image camera is not saved per move
+  }
+
   public getCameraDistance(): undefined {
     return undefined;
   }

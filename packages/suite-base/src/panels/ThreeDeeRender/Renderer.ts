@@ -522,6 +522,9 @@ export class Renderer extends EventEmitter<RendererEvents> {
     if (this.#disposed) {
       return;
     }
+    // Save a camera move that is still waiting for the camera to rest, while the panel still
+    // listens for config changes, so the next renderer starts from it
+    this.cameraHandler.commitPendingCameraState();
     this.#disposed = true;
     this.sharedMap?.detach(this);
     if (this.#animationFrame != undefined) {

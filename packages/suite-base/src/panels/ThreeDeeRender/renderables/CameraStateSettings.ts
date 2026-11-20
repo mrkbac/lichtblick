@@ -495,6 +495,10 @@ export class CameraStateSettings extends SceneExtension implements ICameraHandle
     };
   }
 
+  public commitPendingCameraState(): void {
+    this.#commitCameraState.flush();
+  }
+
   public getCameraDistance(): number {
     return this.#controls.getDistance();
   }

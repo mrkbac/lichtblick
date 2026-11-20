@@ -357,9 +357,15 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
   useRendererEvent("settingsTreeChange", updateSettingsTree, renderer);
 
   // Save the panel configuration when it changes
-  const updateConfig = useCallback((curRenderer: Renderer) => {
-    setConfig(curRenderer.config);
-  }, []);
+  const updateConfig = useCallback(
+    (curRenderer: Renderer) => {
+      // A renderer created before the next render (e.g. replacing a disposed one) must start from
+      // this config, not the one from the last render
+      configRef.current = curRenderer.config;
+      setConfig(curRenderer.config);
+    },
+    [configRef],
+  );
   useRendererEvent("configChange", updateConfig, renderer);
 
   // Write to a global variable when the current selection changes

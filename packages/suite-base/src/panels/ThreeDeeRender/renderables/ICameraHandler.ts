@@ -30,6 +30,11 @@ export interface ICameraHandler extends SceneExtension {
    */
   getCameraDistance(): number | undefined;
   /**
+   * Writes a camera move that has not been saved to the config yet (moves are saved once the
+   * camera rests). Called before the renderer is disposed so the move is not lost.
+   */
+  commitPendingCameraState(): void;
+  /**
    * Used to update the aspect ratio of the camera when necessary
    * @param width - The width of the render canvas in CSS pixels
    * @param height - The height of the render canvas in CSS pixels

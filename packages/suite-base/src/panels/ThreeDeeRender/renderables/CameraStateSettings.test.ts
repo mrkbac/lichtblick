@@ -303,6 +303,24 @@ describe("CameraStateSettings", () => {
     }
   });
 
+  it("saves a camera move that is still pending when the renderer is disposed", () => {
+    vi.useFakeTimers();
+    try {
+      const onConfigChange = vi.fn();
+      renderer.on("configChange", onConfigChange);
+      mockOrbitControls.getDistance.mockReturnValue(30);
+      renderer.emit("cameraMove", renderer);
+
+      renderer.dispose();
+
+      // The panel hears about the move before the renderer drops its listeners
+      expect(onConfigChange).toHaveBeenCalledTimes(1);
+      expect(renderer.config.cameraState.distance).toBe(30);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   describe("screen space panning", () => {
     const aspect = 16 / 9;
 
