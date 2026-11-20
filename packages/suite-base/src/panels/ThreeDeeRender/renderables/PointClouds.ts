@@ -452,6 +452,8 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
         this.add(this.#decayRing);
       }
       const { position, color } = latest.renderable.geometry.attributes;
+      // A limit changed since the last frame applies to this scan already
+      this.#decayRing.setMaxPoints(decayMaxPoints(settings));
       this.#decayRing.push(
         {
           receiveTime: latest.receiveTime,
@@ -998,7 +1000,7 @@ export class PointClouds extends SceneExtension<PointCloudHistoryRenderable> {
       const config = (configTopics[topic.name] ?? {}) as Partial<LayerSettingsPointClouds>;
       const messageFields = this.#fieldsByTopic.get(topic.name) ?? POINT_CLOUD_REQUIRED_FIELDS;
       const node: SettingsTreeNodeWithActionHandler = {
-        ...pointCloudSettingsNode(topic, messageFields, config),
+        ...pointCloudSettingsNode(topic, messageFields, config, { decayLimit: true }),
         handler,
       };
       entries.push({ path: ["topics", topic.name], node });

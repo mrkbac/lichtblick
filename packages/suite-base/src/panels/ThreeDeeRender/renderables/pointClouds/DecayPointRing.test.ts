@@ -318,6 +318,37 @@ describe("DecayPointRing", () => {
     expect(ring.budgetEvictedUntil()).toBe(2n);
   });
 
+  it("applies a raised point budget before the next push", () => {
+    const { ring } = makeRing({ maxEntries: 100, maxPoints: 10 });
+    push(ring, 1n, 4);
+    push(ring, 2n, 4);
+    ring.setMaxPoints(100); // raised, and more scans arrive before the next frame
+    push(ring, 3n, 4);
+
+    expect(ring.scanCount()).toBe(3);
+    expect(ring.budgetEvictedUntil()).toBeUndefined();
+  });
+
+  it("puts new shape objects in the ring's layers (the selection highlight)", () => {
+    const { ring } = makeRing();
+    push(ring, 1n, 4);
+    ring.layers.set(5);
+    ring.setShape({ shape: "cube", showOutline: true });
+
+    const meshes = ring.children.filter((c) => !(c instanceof THREE.Points));
+    expect(meshes.length).toBeGreaterThan(0);
+    expect(meshes.every((m) => m.layers.mask === ring.layers.mask)).toBe(true);
+  });
+
+  it("drops its point arrays on dispose, in case it stays selected", () => {
+    const { ring, geometry } = makeRing();
+    push(ring, 1n, 50);
+    ring.dispose();
+
+    expect(ring.pointCount()).toBe(0);
+    expect(geometry.attributes.position!.array).toHaveLength(0);
+  });
+
   it("bounds live scans where the shader draws them", () => {
     const { ring, geometry } = makeRing();
     push(ring, 10n, 1); // local x = 10, placed at x = 10 + 10

@@ -125,6 +125,8 @@ export class DecayPointRing extends Renderable<BaseUserData, /*TRenderer=*/ unde
   #budgetEvictedUntil: bigint | undefined;
   /** Points across live scans (the buffers can be larger, e.g. after one oversized scan) */
   #livePoints = 0;
+  /** Scan ranges changed since the draw spans were computed */
+  #spansDirty = true;
   /**
    * Buffers whose queued partial uploads were dropped: they must be uploaded whole, so no partial
    * ranges are queued for them until three.js reports an upload. Frames can run without drawing
@@ -191,6 +193,10 @@ export class DecayPointRing extends Renderable<BaseUserData, /*TRenderer=*/ unde
   }
 
   public override dispose(): void {
+    // A disposed ring can stay reachable (e.g. as the selection), so drop the point arrays too
+    this.#scans = [];
+    this.#livePoints = 0;
+    this.#resize(0);
     for (const span of this.#spans) {
       span.geometry.dispose();
       span.cubes?.geometry.dispose();
@@ -289,11 +295,17 @@ export class DecayPointRing extends Renderable<BaseUserData, /*TRenderer=*/ unde
     const slot = this.#freeSlots.pop()!;
     this.#scans.push({ ...info, slot, start, count });
     this.#livePoints += count;
+    this.#spansDirty = true;
 
     this.#position.array.set(positions, start * 3);
     this.#color.array.set(colors, start * 4);
     (this.#scanSlot.array as Uint16Array).fill(slot, start, start + count);
     this.#markRange(start, count);
+  }
+
+  /** Point budget for growing the buffers; set before push() so a raised limit applies at once */
+  public setMaxPoints(maxPoints: number): void {
+    this.#maxPoints = maxPoints;
   }
 
   /**
@@ -373,7 +385,9 @@ export class DecayPointRing extends Renderable<BaseUserData, /*TRenderer=*/ unde
       writePoseRows(data, scan.slot * POSE_FLOATS, tempMatrix);
     }
     this.#poseTexture.needsUpdate = true;
-    this.#updateDrawSpans();
+    if (this.#spansDirty) {
+      this.#updateDrawSpans();
+    }
     return missingFrame;
   }
 
@@ -510,6 +524,7 @@ export class DecayPointRing extends Renderable<BaseUserData, /*TRenderer=*/ unde
       next += count;
     }
     this.#capacity = capacity;
+    this.#spansDirty = true;
     // three.js frees GL buffers only for the attributes installed when the geometry is disposed
     for (const { geometry } of this.#spans) {
       geometry.dispose();
@@ -533,6 +548,7 @@ export class DecayPointRing extends Renderable<BaseUserData, /*TRenderer=*/ unde
       this.#budgetEvictedUntil = scan.receiveTime;
     }
     this.#livePoints -= scan.count;
+    this.#spansDirty = true;
     (this.#scanSlot.array as Uint16Array).fill(
       this.#hiddenSlot,
       scan.start,
@@ -595,6 +611,7 @@ export class DecayPointRing extends Renderable<BaseUserData, /*TRenderer=*/ unde
    * their slot.
    */
   #updateDrawSpans(): void {
+    this.#spansDirty = false;
     const [first, second] = this.#spans;
     first.start = first.count = second.start = second.count = 0;
     const sorted = this.#scansByStart();
@@ -708,6 +725,8 @@ export class DecayPointRing extends Renderable<BaseUserData, /*TRenderer=*/ unde
         span.cubes = new THREE.Mesh(instancedCopy(UNIT_GEOMETRY[shape]), materials.material);
         span.cubes.frustumCulled = false;
         span.cubes.name = `${this.userData.topic}:PointCloud:decay:${shape}s:${index}`;
+        // Keep the selection highlight (Renderer sets the layers of existing children only)
+        span.cubes.layers.mask = this.layers.mask;
         this.add(span.cubes);
       }
       span.cubes.material = materials.material;
@@ -725,6 +744,7 @@ export class DecayPointRing extends Renderable<BaseUserData, /*TRenderer=*/ unde
           span.outline.frustumCulled = false;
           span.outline.userData.picking = false;
           span.outline.name = `${this.userData.topic}:PointCloud:decay:outline:${index}`;
+          span.outline.layers.mask = this.layers.mask;
           this.add(span.outline);
         }
         span.outline.material = materials.outlineMaterial;
