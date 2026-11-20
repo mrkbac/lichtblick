@@ -180,21 +180,95 @@ export class PointsRenderable<TUserData extends BaseUserData = BaseUserData> ext
   }
 }
 
+/**
+ * Per-scan poses for points that share one buffer across scans (see DecayPointRing): row `s` of
+ * the texture holds the 3 rows of scan `s`'s affine matrix (3 texels), read through each point's
+ * `scanSlot` attribute. Rows of zeros hide the scan (no transform, or a free slot).
+ */
+export type ScanPoses = THREE.IUniform<THREE.Texture>;
+
+/** Texels per scan in the pose texture: the 3 rows of a 3x4 affine matrix */
+export const SCAN_POSE_TEXELS = 3;
+
+// Three texture reads per vertex: this runs for every accumulated point, the GPU hot path
+const VS_SCAN_POSE_DECL = /* glsl */ `
+uniform highp sampler2D scanPoses;
+attribute float scanSlot;
+vec4 scanRow0;
+vec4 scanRow1;
+vec4 scanRow2;
+void loadScanPose() {
+  int s = int(scanSlot);
+  scanRow0 = texelFetch(scanPoses, ivec2(0, s), 0);
+  scanRow1 = texelFetch(scanPoses, ivec2(1, s), 0);
+  scanRow2 = texelFetch(scanPoses, ivec2(2, s), 0);
+}
+vec3 scanTransform(vec3 p) {
+  vec4 h = vec4(p, 1.0);
+  return vec3(dot(scanRow0, h), dot(scanRow1, h), dot(scanRow2, h));
+}
+vec3 scanRotate(vec3 n) {
+  return vec3(dot(scanRow0.xyz, n), dot(scanRow1.xyz, n), dot(scanRow2.xyz, n));
+}
+`;
+// Moves every vertex of a hidden scan (a rotation row can't be zero) outside the clip volume
+const VS_SCAN_HIDE = /* glsl */ `
+if (scanRow0 == vec4(0.0)) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); }
+`;
+
+/**
+ * Patches a built-in three.js vertex shader to place each point by its scan's pose. `localPosition`
+ * is the GLSL expression for the vertex in its scan's frame.
+ */
+function patchScanPoseShader(
+  shader: THREE.WebGLProgramParametersWithUniforms,
+  scanPoses: ScanPoses,
+  localPosition: string,
+  { normals }: { normals: boolean },
+): void {
+  shader.uniforms.scanPoses = scanPoses;
+  let vs = VS_SCAN_POSE_DECL + shader.vertexShader;
+  // Lambert computes normals before positions; load the pose wherever it is needed first
+  vs = vs.replace(
+    "#include <begin_vertex>",
+    `${normals ? "" : "loadScanPose();"} vec3 transformed = scanTransform(${localPosition});`,
+  );
+  if (normals) {
+    vs = vs.replace(
+      "#include <beginnormal_vertex>",
+      "loadScanPose(); vec3 objectNormal = scanRotate(vec3(normal));",
+    );
+  }
+  shader.vertexShader = vs.replace("#include <fog_vertex>", "#include <fog_vertex>" + VS_SCAN_HIDE);
+}
+
+/** Vertex shader main() for picking materials: clip position plus the scan-hide check */
+function pickingVertexMain(localPosition: string, scanPoses: ScanPoses | undefined): string {
+  if (!scanPoses) {
+    return /* glsl */ `
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(${localPosition}, 1.0);`;
+  }
+  return /* glsl */ `
+      loadScanPose();
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(scanTransform(${localPosition}), 1.0);
+      ${VS_SCAN_HIDE}`;
+}
+
 /** Point shapes drawn as instanced meshes, sized in meters by `cubeSize` */
 export type PointMeshShape = "cube" | "sphere";
 
-const UNIT_GEOMETRY: Record<PointMeshShape, THREE.BufferGeometry> = {
+export const UNIT_GEOMETRY: Record<PointMeshShape, THREE.BufferGeometry> = {
   cube: new THREE.BoxGeometry(1, 1, 1),
   // Diameter 1 like the cube's edge; 10x6 segments look round at ~100 triangles per point
   sphere: new THREE.SphereGeometry(0.5, 10, 6),
 };
-const UNIT_CUBE_EDGES = new THREE.EdgesGeometry(UNIT_GEOMETRY.cube);
+export const UNIT_CUBE_EDGES = new THREE.EdgesGeometry(UNIT_GEOMETRY.cube);
 
 /**
  * Instanced geometry with cloned attributes: disposing a geometry deletes its attributes' GL
  * buffers, which must not affect other point clouds sharing them.
  */
-function instancedCopy(source: THREE.BufferGeometry): THREE.InstancedBufferGeometry {
+export function instancedCopy(source: THREE.BufferGeometry): THREE.InstancedBufferGeometry {
   const geometry = new THREE.InstancedBufferGeometry();
   if (source.index) {
     geometry.setIndex(source.index.clone());
@@ -214,6 +288,9 @@ function syncInstanceAttribute(
   let attribute = geometry.getAttribute(name) as THREE.InstancedBufferAttribute | undefined;
   if (attribute?.array !== source.array) {
     // DynamicBufferGeometry replaced the array on resize
+    if (attribute) {
+      resetInstanceLimit(geometry);
+    }
     attribute = new THREE.InstancedBufferAttribute(
       source.array,
       source.itemSize,
@@ -223,6 +300,14 @@ function syncInstanceAttribute(
     geometry.setAttribute(name, attribute);
   }
   attribute.version = source.version;
+}
+
+/**
+ * three.js caps the drawn instances at the length of the first instanced attribute it binds and only
+ * forgets that cap when the geometry is disposed. Call before swapping in longer instance attributes.
+ */
+export function resetInstanceLimit(geometry: THREE.InstancedBufferGeometry): void {
+  geometry.dispose();
 }
 
 export type CubeMaterials = {
@@ -241,20 +326,30 @@ vec3 transformed = position * cubeSize + instancePosition;
 
 export function createCubeMaterials<T extends LayerSettingsPointExtension>(
   settings: T,
+  scanPoses?: ScanPoses,
 ): CubeMaterials {
   const cubeSize = { value: settings.cubeSize };
   const encoding = pointCloudColorEncoding(settings);
+  const scanKey = scanPoses ? "-scan" : "";
+  const CUBE_LOCAL = "position * cubeSize + instancePosition";
   const material = new THREE.MeshLambertMaterial({
     vertexColors: true,
     transparent: colorHasTransparency(settings),
     depthWrite: true,
   });
-  material.customProgramCacheKey = () => `cube-${encoding}`;
+  material.customProgramCacheKey = () => `cube-${encoding}${scanKey}`;
   material.onBeforeCompile = (shader) => {
     shader.uniforms.cubeSize = cubeSize;
+    if (scanPoses) {
+      patchScanPoseShader(shader, scanPoses, CUBE_LOCAL, { normals: true });
+    } else {
+      shader.vertexShader = shader.vertexShader.replace(
+        "#include <begin_vertex>",
+        VS_CUBE_TRANSFORM,
+      );
+    }
     shader.vertexShader =
-      "uniform float cubeSize;\nattribute vec3 instancePosition;\n" +
-      shader.vertexShader.replace("#include <begin_vertex>", VS_CUBE_TRANSFORM);
+      "uniform float cubeSize;\nattribute vec3 instancePosition;\n" + shader.vertexShader;
     if (encoding === "srgb") {
       const SEARCH = "#include <color_fragment>";
       shader.fragmentShader =
@@ -269,8 +364,9 @@ export function createCubeMaterials<T extends LayerSettingsPointExtension>(
   const vertexShader = (header: string) => /* glsl */ `
     uniform float cubeSize;
     attribute vec3 instancePosition;
+    ${scanPoses ? VS_SCAN_POSE_DECL : ""}
     ${header}
-      gl_Position = projectionMatrix * modelViewMatrix * vec4(position * cubeSize + instancePosition, 1.0);
+      ${pickingVertexMain(CUBE_LOCAL, scanPoses)}
     }
   `;
   const pickingMaterial = new THREE.ShaderMaterial({
@@ -281,7 +377,7 @@ export function createCubeMaterials<T extends LayerSettingsPointExtension>(
         gl_FragColor = objectId;
       }
     `,
-    uniforms: { cubeSize, objectId: { value: [NaN, NaN, NaN, NaN] } },
+    uniforms: { cubeSize, objectId: { value: [NaN, NaN, NaN, NaN] }, ...scanUniforms(scanPoses) },
   });
   const instancePickingMaterial = new THREE.ShaderMaterial({
     vertexShader: vertexShader(/* glsl */ `
@@ -299,17 +395,28 @@ export function createCubeMaterials<T extends LayerSettingsPointExtension>(
         gl_FragColor = objectId;
       }
     `,
-    uniforms: { cubeSize },
+    uniforms: { cubeSize, ...scanUniforms(scanPoses) },
   });
   const outlineMaterial = new THREE.LineBasicMaterial({ color: 0x000000 });
-  outlineMaterial.customProgramCacheKey = () => "cube-outline";
+  outlineMaterial.customProgramCacheKey = () => `cube-outline${scanKey}`;
   outlineMaterial.onBeforeCompile = (shader) => {
     shader.uniforms.cubeSize = cubeSize;
+    if (scanPoses) {
+      patchScanPoseShader(shader, scanPoses, CUBE_LOCAL, { normals: false });
+    } else {
+      shader.vertexShader = shader.vertexShader.replace(
+        "#include <begin_vertex>",
+        VS_CUBE_TRANSFORM,
+      );
+    }
     shader.vertexShader =
-      "uniform float cubeSize;\nattribute vec3 instancePosition;\n" +
-      shader.vertexShader.replace("#include <begin_vertex>", VS_CUBE_TRANSFORM);
+      "uniform float cubeSize;\nattribute vec3 instancePosition;\n" + shader.vertexShader;
   };
   return { material, pickingMaterial, instancePickingMaterial, outlineMaterial, cubeSize };
+}
+
+function scanUniforms(scanPoses: ScanPoses | undefined): Record<string, THREE.IUniform> {
+  return scanPoses ? { scanPoses } : {};
 }
 
 export function disposeCubeMaterials(materials: CubeMaterials): void {
@@ -332,6 +439,7 @@ if (dot(cxy, cxy) > 1.0) { discard; }
 
 export function pointCloudMaterial<T extends LayerSettingsPointExtension>(
   settings: T,
+  scanPoses?: ScanPoses,
 ): THREE.PointsMaterial {
   const transparent = colorHasTransparency(settings);
   const encoding = pointCloudColorEncoding(settings);
@@ -349,8 +457,11 @@ export function pointCloudMaterial<T extends LayerSettingsPointExtension>(
   });
 
   // Tell three.js to recompile the shader when `shape` or `encoding` change
-  material.customProgramCacheKey = () => `${shape}-${encoding}`;
+  material.customProgramCacheKey = () => `${shape}-${encoding}${scanPoses ? "-scan" : ""}`;
   material.onBeforeCompile = (shader) => {
+    if (scanPoses) {
+      patchScanPoseShader(shader, scanPoses, "position", { normals: false });
+    }
     const SEARCH = "#include <opaque_fragment>";
     if (shape === "circle") {
       // Patch the fragment shader to render points as circles
@@ -369,6 +480,7 @@ export function pointCloudMaterial<T extends LayerSettingsPointExtension>(
 
 export function createPickingMaterial<T extends LayerSettingsPointExtension>(
   settings: T,
+  scanPoses?: ScanPoses,
 ): THREE.ShaderMaterial {
   const MIN_PICKING_POINT_SIZE = 8;
 
@@ -378,8 +490,9 @@ export function createPickingMaterial<T extends LayerSettingsPointExtension>(
   return new THREE.ShaderMaterial({
     vertexShader: /* glsl */ `
       uniform float pointSize;
+      ${scanPoses ? VS_SCAN_POSE_DECL : ""}
       void main() {
-        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        ${pickingVertexMain("position", scanPoses)}
         gl_PointSize = pointSize;
       }
     `,
@@ -390,7 +503,11 @@ export function createPickingMaterial<T extends LayerSettingsPointExtension>(
       }
     `,
     side: THREE.DoubleSide,
-    uniforms: { pointSize: { value: pointSize }, objectId: { value: [NaN, NaN, NaN, NaN] } },
+    uniforms: {
+      pointSize: { value: pointSize },
+      objectId: { value: [NaN, NaN, NaN, NaN] },
+      ...scanUniforms(scanPoses),
+    },
   });
 }
 

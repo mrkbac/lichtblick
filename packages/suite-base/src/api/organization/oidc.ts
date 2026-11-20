@@ -235,10 +235,7 @@ function readJson<T>(storage: Storage, key: string): T | undefined {
 }
 
 function base64Url(bytes: Uint8Array): string {
-  return btoa(String.fromCharCode(...bytes))
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_")
-    .replace(/=+$/, "");
+  return bytes.toBase64({ alphabet: "base64url", omitPadding: true });
 }
 
 function randomString(): string {
