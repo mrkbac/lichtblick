@@ -60,6 +60,8 @@ export const threeDee = {
   labelSize: "Label size",
   lineColor: "Line color",
   noCoordinateFramesFound: "No coordinate frames found",
+  decayHistoryLimited:
+    "Decay history limit reached ({{maxPoints}} points or {{maxScans}} scans): showing the last {{shownSeconds}} s of {{decaySeconds}} s",
   parent: "Parent",
   pose: "Pose",
   rotationOffset: "Rotation offset",
@@ -334,6 +336,9 @@ export const threeDee = {
 
   // Point Extension Utils
   decayTime: "Decay time",
+  decayMaxPoints: "Max points (M)",
+  decayMaxPointsHelp:
+    "Limits the accumulated points, in millions, counting the latest message too (which always stays visible, even when it alone exceeds the limit). Every point is drawn on every frame, so lower this on slower GPUs (e.g. 3 for smooth camera moves on a laptop). When the limit cuts the decay time short, the topic says so.",
   decayTimeDefaultZeroSeconds: "0 seconds",
   pointShape: "Point shape",
   pointShapeCircle: "Circle",

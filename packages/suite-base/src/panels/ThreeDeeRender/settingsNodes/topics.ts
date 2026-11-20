@@ -8,6 +8,7 @@ import { t } from "i18next";
 
 import type { Topic } from "@lichtblick/suite";
 import type {
+  DocumentedField,
   DocumentedFields,
   DocumentedNode,
 } from "@lichtblick/suite-base/panels/shared/documentedSettings";
@@ -880,6 +881,9 @@ export type LayerSettingsPointExtension = BaseSettings &
     decayTime: number;
   };
 
+/** Default limit on accumulated decay points, in millions (see `decayMaxPoints`) */
+export const DEFAULT_DECAY_MAX_POINTS_MILLIONS = 10;
+
 // used by LaserScans, VelodyneScans, and PointClouds
 export const DEFAULT_POINT_SETTINGS: LayerSettingsPointExtension = {
   visible: false,
@@ -1009,13 +1013,43 @@ export function pointSettingsNode(
   };
 }
 
-/** Point clouds and velodyne scans: the point settings plus stixels. */
+/**
+ * Point clouds and velodyne scans: the point settings plus stixels. `decayLimit` adds the decay
+ * point limit, for topics whose history goes through the decay ring.
+ */
 export function pointCloudSettingsNode(
   topic: Pick<Topic, "name" | "schemaName" | "convertibleTo">,
   messageFields: string[],
-  config: Partial<LayerSettingsPointExtension & { stixelsEnabled: boolean }>,
+  config: Partial<
+    LayerSettingsPointExtension & { stixelsEnabled: boolean; decayMaxPoints: number }
+  >,
+  { decayLimit = false }: { decayLimit?: boolean } = {},
 ): DocumentedNode {
   const node = pointSettingsNode(topic, messageFields, config);
+  if (decayLimit && (config.decayTime ?? 0) > 0) {
+    // Accumulating more points costs GPU time on every frame; slower GPUs want a lower limit.
+    // Listed right below the decay time it limits.
+    const limitField: DocumentedField = {
+      label: t("threeDee:decayMaxPoints"),
+      help: t("threeDee:decayMaxPointsHelp"),
+      input: "number",
+      step: 1,
+      min: 0.1,
+      precision: 1,
+      placeholder: String(DEFAULT_DECAY_MAX_POINTS_MILLIONS),
+      value: config.decayMaxPoints,
+    };
+    node.fields = Object.fromEntries(
+      Object.entries(node.fields).flatMap(([key, field]) =>
+        key === "decayTime"
+          ? [
+              [key, field],
+              ["decayMaxPoints", limitField],
+            ]
+          : [[key, field]],
+      ),
+    );
+  }
   node.fields.stixelsEnabled = {
     label: "Stixel view",
     help: "Draws a vertical line from each point down to its frame's ground plane (z = 0).",

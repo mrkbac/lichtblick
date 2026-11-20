@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import { imageProjectionSettingsNode } from "./topics";
+import { imageProjectionSettingsNode, pointCloudSettingsNode } from "./topics";
 
 const topic = { name: "/camera/depth" };
 const fieldKeys = (config: Parameters<typeof imageProjectionSettingsNode>[1]) =>
@@ -56,5 +56,29 @@ describe("imageProjectionSettingsNode render modes", () => {
     const keys = fieldKeys({ renderMode: "depth", rgbTopic: "/camera/color" });
     expect(keys).not.toContain("colorMode");
     expect(keys).not.toContain("flatColor");
+  });
+});
+
+describe("pointCloudSettingsNode decay point limit", () => {
+  const cloud = { name: "/points", schemaName: "sensor_msgs/msg/PointCloud2" };
+
+  const opts = { decayLimit: true };
+
+  it("offers the limit only while accumulating", () => {
+    expect(pointCloudSettingsNode(cloud, ["x"], {}, opts).fields?.decayMaxPoints).toBeUndefined();
+    const field = pointCloudSettingsNode(cloud, ["x"], { decayTime: 5, decayMaxPoints: 3 }, opts)
+      .fields?.decayMaxPoints;
+    expect(field).toMatchObject({ input: "number", value: 3 });
+    // Listed right below the decay time it limits
+    const keys = Object.keys(
+      pointCloudSettingsNode(cloud, ["x"], { decayTime: 5 }, opts).fields ?? {},
+    );
+    expect(keys.indexOf("decayMaxPoints")).toBe(keys.indexOf("decayTime") + 1);
+  });
+
+  it("leaves it out for topics without a decay ring (velodyne scans)", () => {
+    expect(
+      pointCloudSettingsNode(cloud, ["x"], { decayTime: 5 }).fields?.decayMaxPoints,
+    ).toBeUndefined();
   });
 });
