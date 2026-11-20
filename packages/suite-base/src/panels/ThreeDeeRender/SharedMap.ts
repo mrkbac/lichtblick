@@ -32,6 +32,25 @@ const WAITING_NOTICE: HUDItem = {
   getMessage: () => t("threeDee:mapWaitingForView"),
 };
 const CUSTOM_LAYER_ID = "lichtblick-3d-scene";
+// prettier-ignore
+const WEBGL_TO_WEBGPU_CLIP = new THREE.Matrix4().set(
+  1,
+  0,
+  0,
+  0,
+  0,
+  1,
+  0,
+  0,
+  0,
+  0,
+  0.5,
+  0.5,
+  0,
+  0,
+  0,
+  1,
+);
 const IDENTITY_POSE = makePose();
 const UNIT_SCALE = new THREE.Vector3(1, 1, 1);
 const forward = new THREE.Vector3();
@@ -63,7 +82,12 @@ export function mapCameraAngles(matrix: THREE.Matrix4): {
   };
 }
 
-/** One MapLibre canvas and context, with the existing Three.js scene as a custom layer. */
+/**
+ * A MapLibre map under the 3D scene. The map drives the frame: its custom layer hands the scene
+ * the map camera's projection and draws the scene (WebGPU) into the panel's canvas stacked above
+ * the map, so both show the same frame. The scene is drawn over the map; it doesn't share depth
+ * with 3D terrain or buildings.
+ */
 export class SharedMap {
   public readonly map: MapLibreMap;
   public readonly layerId: string;
@@ -156,14 +180,12 @@ export class SharedMap {
           // Three.js line shaders recognize perspective cameras by this normalized entry.
           camera.projectionMatrix.multiplyScalar(-1 / camera.projectionMatrix.elements[11]);
           camera.projectionMatrix.elements[11] = -1;
+          // MapLibre's clip z is WebGL's [-w, w]; WebGPU clips z to [0, w]
+          camera.projectionMatrix.premultiply(WEBGL_TO_WEBGPU_CLIP);
           camera.projectionMatrixInverse.copy(camera.projectionMatrix).invert();
         }
-        renderer.gl.resetState();
-        try {
-          this.#draw?.();
-        } finally {
-          renderer.gl.resetState();
-        }
+        // The scene draws into its own WebGPU canvas above the map, in step with the map's frame
+        this.#draw?.();
       },
     };
     // Keep map labels above the robotics scene, with terrain/building depth below it.

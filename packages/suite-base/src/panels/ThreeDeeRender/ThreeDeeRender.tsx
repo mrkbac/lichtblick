@@ -152,7 +152,8 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
       : undefined;
   const sharedMapLayerId =
     requestedSharedMapLayerId === failedSharedMapLayerId ? undefined : requestedSharedMapLayerId;
-  const canvas = sharedMapLayerId ? (sharedMap?.map.getCanvas() ?? null) : sceneCanvas;
+  // The scene always draws into its own canvas; a map shows through it from below
+  const canvas = sceneCanvas;
   const { revision: resourceRevision } = useSyncExternalStore(
     localResourceFolders.subscribe,
     localResourceFolders.getSnapshot,
@@ -1181,6 +1182,12 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
       ownerDocument={context.panelElement.ownerDocument}
     >
       <div style={PANEL_STYLE} onKeyDown={onKeyDown}>
+        <div
+          key={`map-${canvasKey}`}
+          ref={setMapContainer}
+          className={classes.sharedMap}
+          style={{ display: sharedMapLayerId ? undefined : "none" }}
+        />
         <canvas
           key={`canvas-${sharedMapLayerId ?? "3d"}-${canvasKey}`}
           ref={setSceneCanvas}
@@ -1188,15 +1195,8 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
             position: "absolute",
             top: 0,
             left: 0,
-            display: sharedMapLayerId ? "none" : undefined,
             ...((measureActive || publishActive) && { cursor: "crosshair" }),
           }}
-        />
-        <div
-          key={`map-${canvasKey}`}
-          ref={setMapContainer}
-          className={classes.sharedMap}
-          style={{ display: sharedMapLayerId ? undefined : "none" }}
         />
         {isLoadingTransforms && config.scene.enableStats === true && (
           <div className={classes.loadingTransforms}>

@@ -1084,6 +1084,11 @@ export class Renderer extends EventEmitter<RendererEvents> {
     }
   }
 
+  /** The scene canvas is transparent over a map, which draws its own background */
+  #clearAlpha(): number {
+    return this.sharedMap ? 0 : 1;
+  }
+
   /** Update the color scheme and background color, rebuilding any materials as necessary */
   public setColorScheme(colorScheme: "dark" | "light", backgroundColor: string | undefined): void {
     this.colorScheme = colorScheme;
@@ -1097,14 +1102,14 @@ export class Renderer extends EventEmitter<RendererEvents> {
     }
 
     if (colorScheme === "dark") {
-      this.gl.setClearColor(bgColor ?? DARK_BACKDROP);
+      this.gl.setClearColor(bgColor ?? DARK_BACKDROP, this.#clearAlpha());
       this.outlineMaterial.color.set(DARK_OUTLINE);
       this.outlineMaterial.needsUpdate = true;
       this.instancedOutlineMaterial.color.set(DARK_OUTLINE);
       this.instancedOutlineMaterial.needsUpdate = true;
       this.#selectionBackdrop.setColor(DARK_BACKDROP, 0.8);
     } else {
-      this.gl.setClearColor(bgColor ?? LIGHT_BACKDROP);
+      this.gl.setClearColor(bgColor ?? LIGHT_BACKDROP, this.#clearAlpha());
       this.outlineMaterial.color.set(LIGHT_OUTLINE);
       this.outlineMaterial.needsUpdate = true;
       this.instancedOutlineMaterial.color.set(LIGHT_OUTLINE);
@@ -1763,7 +1768,7 @@ export class Renderer extends EventEmitter<RendererEvents> {
     // A hidden tab shows nothing, but live data keeps driving frames: keep the scene state current
     // and skip the GPU work. #onVisibilityChange repaints when the tab is shown again.
     const draw = this.#gpuReady && this.#canvas.ownerDocument.visibilityState !== "hidden";
-    if (draw && !this.sharedMap) {
+    if (draw) {
       this.gl.clear();
     }
     this.emit("startFrame", currentTime, this);
