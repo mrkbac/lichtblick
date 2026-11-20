@@ -105,7 +105,8 @@ class Recording:
         self.channels: dict[str, Schema] = {}
 
     def raw(self, t: int, topic: str, schema: Schema, data: bytes) -> None:
-        assert self.channels.setdefault(topic, schema) == schema
+        if self.channels.setdefault(topic, schema) != schema:
+            raise ValueError(f"{topic}: schema changed")
         self.events.append((t, topic, data))
 
     def ros(self, t: int, topic: str, kind: str, msg) -> None:
@@ -756,7 +757,8 @@ def bag_messages(path: Path):
                 connections[connection.id] = connection
     end = path.stat().st_size
     with path.open("rb") as stream:
-        assert stream.readline() == b"#ROSBAG V2.0\n"
+        if stream.readline() != b"#ROSBAG V2.0\n":
+            raise ValueError(f"{path}: not a ROS 1 bag")
         Header.read(stream, RecordType.BAGHEADER)
         stream.seek(read_uint32(stream), 1)
         while stream.tell() < end:
@@ -841,9 +843,8 @@ def citrusfarm(source: Path, rec: Recording, lidar: Recording, preview: Path) ->
         )
     ]:
         for c, t, data in bag_messages(path):
-            if t >= CF_END:
-                break
-            if t < CF_START:
+            # Record times may go back within a bag, so skip rather than stop.
+            if not CF_START <= t < CF_END:
                 continue
             name, kind = c.topic, c.msgtype
             if name in videos:
@@ -856,6 +857,10 @@ def citrusfarm(source: Path, rec: Recording, lidar: Recording, preview: Path) ->
             elif name == "/velodyne_points":
                 msg = ROS1.deserialize_ros1(data, kind)
                 lidar_frame = msg.header.frame_id
+                if msg.row_step != msg.width * msg.point_step:
+                    raise ValueError(
+                        "Velodyne clouds with padded rows are not supported"
+                    )
                 fields = {field.name: field.offset for field in msg.fields}
                 assert all(
                     next(f.datatype for f in msg.fields if f.name == axis) == 7
@@ -1082,9 +1087,13 @@ def main() -> None:
     out = args.output / (args.dataset + ".mcap")
     rec.write(out, f"{name}\n{url}\n{license_url}\n\nAdapted for Lichtblick. {changes}")
     with out.open("rb") as stream:
-        summary = make_reader(stream, validate_crcs=True).get_summary()
+        reader = make_reader(stream, validate_crcs=True)
+        summary = reader.get_summary()
         assert summary.statistics.channel_count == len(rec.channels)
         assert summary.statistics.message_count == len(rec.events)
+        # Reading every message checks each chunk's CRC, not only the summary's.
+        if sum(1 for _ in reader.iter_messages()) != len(rec.events):
+            raise ValueError(f"{out}: message count does not match the summary")
     print(out, out.stat().st_size, "bytes")
 
 

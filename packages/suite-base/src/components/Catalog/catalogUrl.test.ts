@@ -51,6 +51,17 @@ describe("parseCatalog", () => {
     });
   });
 
+  it("keeps an undecodable file name as it is", () => {
+    const catalog = parseCatalog(
+      {
+        version: 1,
+        recordings: [{ id: "a", source: { type: "remote-file", url: "run%FF.mcap" } }],
+      },
+      CATALOG_URL,
+    );
+    expect(catalog.recordings[0]?.name).toBe("run%FF.mcap");
+  });
+
   it.each([
     [{ version: 2, recordings: [] }, /version 1/],
     [{ version: 1 }, /version 1/],

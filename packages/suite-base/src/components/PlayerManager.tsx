@@ -493,7 +493,9 @@ export default function PlayerManager(
       return;
     }
     const lastFile = readLastFile();
-    if (!lastFile || new URL(window.location.href).searchParams.has("ds")) {
+    // A link that opens a source or a catalog asked for that instead.
+    const params = new URL(window.location.href).searchParams;
+    if (!lastFile || params.has("ds") || params.has("catalog")) {
       return;
     }
     const recent = recents.find((r) =>

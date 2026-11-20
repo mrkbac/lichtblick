@@ -61,6 +61,16 @@ function parseTopics(value: unknown): CatalogTopic[] | undefined {
   });
 }
 
+/** The URL's last path segment, decoded when it is valid UTF-8. */
+function fileName(url: string): string {
+  const name = new URL(url).pathname.split("/").pop()!;
+  try {
+    return decodeURIComponent(name);
+  } catch {
+    return name;
+  }
+}
+
 /** Parse a catalog fetched from `catalogUrl`. Throws when it is not a v1 catalog. */
 export function parseCatalog(json: unknown, catalogUrl: string): ServedCatalog {
   if (!isRecord(json) || json.version !== 1 || !Array.isArray(json.recordings)) {
@@ -81,8 +91,7 @@ export function parseCatalog(json: unknown, catalogUrl: string): ServedCatalog {
     }
     return {
       id: entry.id,
-      name:
-        optionalString(entry.name) ?? decodeURIComponent(new URL(url).pathname.split("/").pop()!),
+      name: optionalString(entry.name) ?? fileName(url),
       source: { type: source.type as "remote-file" | "foxglove-websocket", url },
       start: typeof entry.start === "string" ? fromRFC3339String(entry.start) : undefined,
       end: typeof entry.end === "string" ? fromRFC3339String(entry.end) : undefined,

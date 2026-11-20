@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 import { useAppLaunch } from "@lichtblick/suite-base/util/appLaunch";
 import { toError } from "@lichtblick/suite-base/util/toError";
@@ -9,8 +10,18 @@ import { ServedCatalog, parseCatalog } from "./catalogUrl";
 import { CatalogRecording } from "./types";
 import { CatalogFolder } from "./useCatalogFolder";
 
+/** A name for the catalog until it loads; a URL that doesn't parse fails in the fetch instead. */
+function hostOf(url: string): string {
+  try {
+    return new URL(url, window.location.href).hostname;
+  } catch {
+    return url;
+  }
+}
+
 /** The recordings a catalog URL lists, opened from their URLs with their layouts. */
 export function useCatalogUrl(url: string): CatalogFolder {
+  const { t } = useTranslation("catalog");
   const [catalog, setCatalog] = useState<ServedCatalog>();
   const [error, setError] = useState<string>();
   const launch = useAppLaunch((state) => state.launch);
@@ -23,23 +34,24 @@ export function useCatalogUrl(url: string): CatalogFolder {
       try {
         const response = await fetch(url, { signal: controller.signal });
         if (!response.ok) {
-          throw new Error(`Could not load the catalog (HTTP ${response.status})`);
+          setError(t("catalogHttpError", { status: response.status }));
+          return;
         }
         setCatalog(parseCatalog(await response.json(), response.url || url));
       } catch (err) {
         if (!controller.signal.aborted) {
-          setError(toError(err).message);
+          setError(t("catalogLoadError", { reason: toError(err).message }));
         }
       }
     })();
     return () => {
       controller.abort();
     };
-  }, [url]);
+  }, [url, t]);
 
   return useMemo(
     (): CatalogFolder => ({
-      name: catalog?.name ?? new URL(url, window.location.href).hostname,
+      name: catalog?.name ?? hostOf(url),
       recordings: catalog?.recordings ?? [],
       progress: catalog == undefined && error == undefined ? { done: 0, total: 1 } : undefined,
       error,

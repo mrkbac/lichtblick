@@ -38,6 +38,8 @@ export const catalog = {
     "This file has no summary section, so its contents are unknown until it is opened.",
   openFolder: "Open folder…",
   openRecording: "Open recording",
+  catalogHttpError: "Could not load the catalog (HTTP {{status}})",
+  catalogLoadError: "Could not load the catalog: {{reason}}",
   pausePreview: "Pause preview",
   playPreview: "Play preview",
   previewFailed: "Preview failed: {{error}}",
