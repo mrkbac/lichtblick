@@ -74,6 +74,7 @@ import { CameraState } from "./camera";
 import { DARK_OUTLINE, LIGHT_OUTLINE, stringToRgb } from "./color";
 import { HOVER_PICK_THROTTLE_MS, isTransformPreloadEnabled } from "./constants";
 import { FRAME_TRANSFORMS_DATATYPES, FRAME_TRANSFORM_DATATYPES } from "./foxglove";
+import { getGpuDevice } from "./gpuDevice";
 import { DetailLevel } from "./lod";
 import {
   normalizeFrameTransform,
@@ -190,7 +191,6 @@ export class Renderer extends EventEmitter<RendererEvents> {
   public readonly gl: THREE.WebGPURenderer;
   /** Set once the WebGPU device is ready; until then frames update the scene without drawing */
   #gpuReady = false;
-  readonly #requiredLimits: Record<string, number> = {};
   /** GPU milliseconds of the last measured frame (render + compute), when stats are enabled */
   public gpuTimeMs: number | undefined;
   #measuringGpu = false;
@@ -348,9 +348,6 @@ export class Renderer extends EventEmitter<RendererEvents> {
       logarithmicDepthBuffer: config.scene.logDepth === true,
       // GPU time per frame for the stats overlay; fixed at creation like logDepth
       trackTimestamp: config.scene.enableStats === true,
-      powerPreference: "high-performance",
-      // Filled from the adapter before init(); three keeps this object (see #initGpu)
-      requiredLimits: this.#requiredLimits,
     });
     this.ready = this.#initGpu();
     this.gl.autoClear = false;
@@ -514,17 +511,13 @@ export class Renderer extends EventEmitter<RendererEvents> {
    */
   async #initGpu(): Promise<void> {
     try {
-      if (typeof navigator === "undefined" || !("gpu" in navigator)) {
+      const device = await getGpuDevice();
+      if (!device) {
         throw new Error(i18next.t("threeDee:webGpuRequired"));
       }
-      // WebGPU defaults to 128 MB per storage binding; accumulated point clouds need far more
-      // (12 bytes per point for positions alone), so ask for what the GPU supports
-      const adapter = await navigator.gpu.requestAdapter({ powerPreference: "high-performance" });
-      if (!adapter) {
-        throw new Error(i18next.t("threeDee:webGpuRequired"));
-      }
-      this.#requiredLimits.maxStorageBufferBindingSize = adapter.limits.maxStorageBufferBindingSize;
-      this.#requiredLimits.maxBufferSize = adapter.limits.maxBufferSize;
+      // The renderer copied its parameters; hand it the shared device before it creates its own
+      (this.gl.backend as unknown as { parameters: { device?: GPUDevice } }).parameters.device =
+        device;
       await this.gl.init();
       if (this.#disposed) {
         return;
@@ -1808,6 +1801,10 @@ export class Renderer extends EventEmitter<RendererEvents> {
   };
 
   #drawScene = (): void => {
+    // A map may draw its layer before the GPU is ready; that frame shows only the map
+    if (!this.#gpuReady) {
+      return;
+    }
     const camera = this.cameraHandler.getActiveCamera();
     camera.layers.set(LAYER_DEFAULT);
     this.pointRaster.prepare(camera);

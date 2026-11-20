@@ -34,7 +34,9 @@ export default defineConfig({
         video: "retain-on-failure",
         screenshot: "only-on-failure",
         ...devices["Desktop Chrome"],
-        // The 3D panel needs WebGPU; headless Linux CI has no GPU, so use SwiftShader's Vulkan
+        // The 3D panel needs WebGPU: the full Chromium build in new headless mode has it (the
+        // default headless shell doesn't), and Linux CI has no GPU, so it uses SwiftShader's Vulkan
+        channel: "chromium",
         launchOptions: {
           args: [
             "--enable-unsafe-webgpu",

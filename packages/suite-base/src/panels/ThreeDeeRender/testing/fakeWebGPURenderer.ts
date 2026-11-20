@@ -12,7 +12,13 @@ export async function mockThreeWebGPU(): Promise<Record<string, unknown>> {
   if (!("gpu" in navigator)) {
     const limits = { maxStorageBufferBindingSize: 1 << 30, maxBufferSize: 1 << 30 };
     Object.defineProperty(navigator, "gpu", {
-      value: { requestAdapter: async () => ({ limits }) },
+      value: {
+        requestAdapter: async () => ({
+          limits,
+          features: new Set(),
+          requestDevice: async () => ({ lost: new Promise(() => {}) }),
+        }),
+      },
       configurable: true,
     });
   }
@@ -21,7 +27,7 @@ export async function mockThreeWebGPU(): Promise<Record<string, unknown>> {
 
 class FakeWebGPURenderer {
   public domElement: HTMLCanvasElement;
-  public backend = { isWebGPUBackend: true };
+  public backend = { isWebGPUBackend: true, parameters: {} };
   public info = {
     reset: vi.fn(),
     render: { calls: 0, triangles: 0 },
