@@ -53,17 +53,30 @@ it("updates renderer counters independently for each mounted monitor and removes
   const second = render(<Stats />);
   const renderer = {
     gl: { info: { render: { calls: 5, triangles: 10 }, memory: { textures: 2, geometries: 3 } } },
+    gpuTimeMs: undefined as number | undefined,
   };
   mocks.listeners[0]!(undefined, renderer);
   expect(mocks.panels[0]!.update).toHaveBeenLastCalledWith(5, 5);
-  expect(mocks.panels[4]!.update).not.toHaveBeenCalled();
+  expect(mocks.panels[5]!.update).not.toHaveBeenCalled();
   renderer.gl.info.render.calls = 1;
   mocks.listeners[0]!(undefined, renderer);
   mocks.listeners[1]!(undefined, renderer);
   expect(mocks.panels[0]!.update).toHaveBeenLastCalledWith(1, 5);
-  expect(mocks.panels[4]!.update).toHaveBeenLastCalledWith(1, 1);
+  expect(mocks.panels[5]!.update).toHaveBeenLastCalledWith(1, 1);
   const node = first.container.firstElementChild!.firstElementChild!;
   first.unmount();
   expect(node.isConnected).toBe(false);
   expect(second.container.firstElementChild!.childElementCount).toBe(1);
+});
+
+it("shows the GPU time per frame when the renderer measures it", () => {
+  const { container } = render(<Stats />);
+  const renderer = {
+    gl: { info: { render: { calls: 0, triangles: 0 }, memory: { textures: 0, geometries: 0 } } },
+    gpuTimeMs: 2.5,
+  };
+  mocks.listeners[0]!(undefined, renderer);
+  // Counters first, then the GPU panel
+  expect(mocks.panels[4]!.update).toHaveBeenLastCalledWith(2.5, 2.5);
+  expect((container.firstElementChild as HTMLElement).dataset.gpuMs).toBe("2.500");
 });

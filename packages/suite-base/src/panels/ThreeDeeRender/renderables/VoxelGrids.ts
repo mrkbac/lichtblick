@@ -3,7 +3,8 @@
 
 import { toNanoSec } from "@foxglove/rostime";
 import { VoxelGrid } from "@foxglove/schemas";
-import * as THREE from "three";
+import { attribute, float, positionGeometry, uniform, vec4 } from "three/tsl";
+import * as THREE from "three/webgpu";
 
 import { SettingsTreeAction } from "@lichtblick/suite";
 import type { RosValue } from "@lichtblick/suite-base/players/types";
@@ -360,41 +361,28 @@ const UNIT_CUBE = new THREE.BoxGeometry(1, 1, 1);
 export class VoxelGridRenderable extends Renderable<VoxelGridUserData> {
   public override pickableInstances = true;
   public readonly voxels = new VoxelBuffer();
-  #cellSize = { value: new THREE.Vector3(1, 1, 1) };
+  #cellSize = uniform(new THREE.Vector3(1, 1, 1));
   #mesh: THREE.Mesh<
     THREE.InstancedBufferGeometry,
-    THREE.MeshLambertMaterial | THREE.MeshBasicMaterial
+    THREE.MeshLambertNodeMaterial | THREE.MeshBasicNodeMaterial
   >;
-  #pickingMaterial: THREE.ShaderMaterial;
-  #instancePickingMaterial: THREE.ShaderMaterial;
+  /** Draw behind: drawn right after the voxels, resets depth so later objects draw over them */
+  readonly #depthReset = createDepthReset();
 
   public constructor(name: string, renderer: Renderer, userData: VoxelGridUserData) {
     super(name, renderer, userData);
-    const pickingMaterials = createPickingMaterials(this.#cellSize);
-    this.#pickingMaterial = pickingMaterials.picking;
-    this.#instancePickingMaterial = pickingMaterials.instancePicking;
     this.#mesh = new THREE.Mesh(createInstancedGeometry(), this.#createMaterial());
     // Instances are placed in the vertex shader, so three.js can't compute bounds
     this.#mesh.frustumCulled = false;
     this.#mesh.name = `${userData.topic}:VoxelGrid`;
-    // Draw behind: the mesh renders first, then clearing depth lets later objects draw over it
-    this.#mesh.onAfterRender = (gl) => {
-      if (this.userData.settings.drawBehind) {
-        gl.clearDepth();
-      }
-    };
-    this.#mesh.userData = {
-      pickingMaterial: this.#pickingMaterial,
-      instancePickingMaterial: this.#instancePickingMaterial,
-    };
-    this.add(this.#mesh);
+    this.add(this.#mesh, this.#depthReset);
   }
 
   public override dispose(): void {
     this.#mesh.geometry.dispose();
     this.#mesh.material.dispose();
-    this.#pickingMaterial.dispose();
-    this.#instancePickingMaterial.dispose();
+    this.#depthReset.geometry.dispose();
+    this.#depthReset.material.dispose();
     super.dispose();
   }
 
@@ -458,7 +446,8 @@ export class VoxelGridRenderable extends Renderable<VoxelGridUserData> {
     this.#cellSize.value.set(size.x, size.y, size.z);
     this.#syncGeometry();
     this.#syncMaterial();
-    this.#mesh.renderOrder = settings.drawBehind ? -1e6 : 0;
+    this.#mesh.renderOrder = settings.drawBehind ? DRAW_BEHIND_ORDER : 0;
+    this.#depthReset.visible = settings.drawBehind;
   }
 
   #syncGeometry(): void {
@@ -489,7 +478,7 @@ export class VoxelGridRenderable extends Renderable<VoxelGridUserData> {
 
   #syncMaterial(): void {
     const { settings } = this.userData;
-    if (this.#mesh.material instanceof THREE.MeshLambertMaterial !== settings.useLighting) {
+    if (this.#mesh.material instanceof THREE.MeshLambertNodeMaterial !== settings.useLighting) {
       this.#mesh.material.dispose();
       this.#mesh.material = this.#createMaterial();
     }
@@ -504,31 +493,21 @@ export class VoxelGridRenderable extends Renderable<VoxelGridUserData> {
       material.blending = blending;
       material.needsUpdate = true;
     }
-    // Picker reads this to keep later objects' ids on top while still reporting the grid's depth
-    this.#mesh.userData.drawBehind = settings.drawBehind;
   }
 
-  #createMaterial(): THREE.MeshLambertMaterial | THREE.MeshBasicMaterial {
-    const options: THREE.MeshBasicMaterialParameters = {
+  #createMaterial(): THREE.MeshLambertNodeMaterial | THREE.MeshBasicNodeMaterial {
+    const options: THREE.MeshBasicNodeMaterialParameters = {
       vertexColors: true,
       transparent: this.voxels.transparent,
       // Self-sorting artifacts without depth writes are worse than blending order artifacts
       depthWrite: true,
     };
     const material = this.userData.settings.useLighting
-      ? new THREE.MeshLambertMaterial(options)
-      : new THREE.MeshBasicMaterial(options);
-    const cellSize = this.#cellSize;
-    material.customProgramCacheKey = () => "voxel-grid";
-    material.onBeforeCompile = (shader) => {
-      shader.uniforms.cellSize = cellSize;
-      shader.vertexShader =
-        "uniform vec3 cellSize;\nattribute vec3 instancePosition;\n" +
-        shader.vertexShader.replace(
-          "#include <begin_vertex>",
-          "vec3 transformed = position * cellSize + instancePosition;",
-        );
-    };
+      ? new THREE.MeshLambertNodeMaterial(options)
+      : new THREE.MeshBasicNodeMaterial(options);
+    material.positionNode = positionGeometry
+      .mul(this.#cellSize)
+      .add(attribute<"vec3">("instancePosition", "vec3"));
     return material;
   }
 }
@@ -543,46 +522,35 @@ function createInstancedGeometry(): THREE.InstancedBufferGeometry {
   return geometry;
 }
 
-function createPickingMaterials(cellSize: THREE.IUniform<THREE.Vector3>): {
-  picking: THREE.ShaderMaterial;
-  instancePicking: THREE.ShaderMaterial;
-} {
-  const vertexShader = (header: string) => /* glsl */ `
-    uniform vec3 cellSize;
-    attribute vec3 instancePosition;
-    ${header}
-      gl_Position = projectionMatrix * modelViewMatrix * vec4(position * cellSize + instancePosition, 1.0);
-    }
-  `;
-  const picking = new THREE.ShaderMaterial({
-    vertexShader: vertexShader("void main() {"),
-    fragmentShader: /* glsl */ `
-      uniform vec4 objectId;
-      void main() {
-        gl_FragColor = objectId;
-      }
-    `,
-    uniforms: { cellSize, objectId: { value: [NaN, NaN, NaN, NaN] } },
+/** Render order of voxel grids drawn behind the scene; their depth reset comes right after */
+const DRAW_BEHIND_ORDER = -1e6;
+
+/**
+ * Clears depth in the middle of the render pass: a full-screen triangle that writes the far depth
+ * everywhere and no color, drawn after the voxels drawn behind. The voxels keep their own depth
+ * order among themselves, and everything drawn later ends up on top. (WebGL cleared the depth
+ * buffer from `onAfterRender`; WebGPU can't clear inside a pass.) The picking pass derives its
+ * material from this one, so it also resets depth there and later objects win the pick too.
+ */
+function createDepthReset(): THREE.Mesh<THREE.BufferGeometry, THREE.MeshBasicNodeMaterial> {
+  const material = new THREE.MeshBasicNodeMaterial({
+    colorWrite: false,
+    depthFunc: THREE.AlwaysDepth,
+    side: THREE.DoubleSide,
   });
-  const instancePicking = new THREE.ShaderMaterial({
-    vertexShader: vertexShader(/* glsl */ `
-      varying vec4 objectId;
-      void main() {
-        objectId = vec4(
-          float((gl_InstanceID >> 24) & 255) / 255.0,
-          float((gl_InstanceID >> 16) & 255) / 255.0,
-          float((gl_InstanceID >> 8) & 255) / 255.0,
-          float(gl_InstanceID & 255) / 255.0);
-    `),
-    fragmentShader: /* glsl */ `
-      varying vec4 objectId;
-      void main() {
-        gl_FragColor = objectId;
-      }
-    `,
-    uniforms: { cellSize },
-  });
-  return { picking, instancePicking };
+  // Clip-space triangle covering the screen; depth written explicitly, so log depth doesn't matter
+  material.vertexNode = vec4(positionGeometry.xy, 0.5, 1);
+  material.depthNode = float(1);
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute(
+    "position",
+    new THREE.Float32BufferAttribute([-1, -1, 0, 3, -1, 0, -1, 3, 0], 3),
+  );
+  const mesh = new THREE.Mesh(geometry, material);
+  mesh.frustumCulled = false;
+  mesh.renderOrder = DRAW_BEHIND_ORDER + 1;
+  mesh.visible = false;
+  return mesh;
 }
 
 export class VoxelGrids extends SceneExtension<VoxelGridRenderable> {

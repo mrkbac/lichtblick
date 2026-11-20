@@ -11,7 +11,14 @@ import type { Renderer } from "../Renderer";
 import { Transform, TransformTree } from "../transforms";
 import { MeasurementTool } from "./MeasurementTool";
 
-function setup() {
+/** Picks resolve asynchronously */
+async function flushPicks(): Promise<void> {
+  for (let i = 0; i < 20; i++) {
+    await Promise.resolve();
+  }
+}
+
+async function setup() {
   const transformTree = new TransformTree(new ObjectPool(Transform.Empty));
   const addBase = () => transformTree.addTransform("base", "map", 0n, Transform.Identity());
   addBase();
@@ -34,10 +41,7 @@ function setup() {
       addListener: (event: string, fn: (cursor: THREE.Vector2) => void) => listeners.set(event, fn),
       removeListener: vi.fn(),
     },
-    pickPoint: (_cursor: THREE.Vector2, out: THREE.Vector3) => {
-      out.copy(picks.shift()!);
-      return true;
-    },
+    pickPoint: async (_cursor: THREE.Vector2, out: THREE.Vector3) => out.copy(picks.shift()!),
   } as unknown as Renderer;
 
   const tool = new MeasurementTool(renderer);
@@ -48,15 +52,17 @@ function setup() {
   tool.startMeasuring("distance");
   picks.push(new THREE.Vector3(0, 0, 0), new THREE.Vector3(3, 4, 0));
   listeners.get("click")!(new THREE.Vector2(10, 10));
+  await flushPicks();
   listeners.get("click")!(new THREE.Vector2(20, 20));
+  await flushPicks();
   tool.stopMeasuring();
   frame();
   return { tool, transformTree, addBase, frame };
 }
 
 describe("MeasurementTool", () => {
-  it("marks a measurement unavailable while its transform is missing and recovers", () => {
-    const { tool, transformTree, addBase, frame } = setup();
+  it("marks a measurement unavailable while its transform is missing and recovers", async () => {
+    const { tool, transformTree, addBase, frame } = await setup();
     expect(tool.measurements).toHaveLength(1);
     expect(tool.measurements[0]!.unavailable).toBe(false);
     expect(tool.measurements[0]!.summary.label).toContain("5");
@@ -80,8 +86,8 @@ describe("MeasurementTool", () => {
     expect(tool.copyText()).toBe(copied);
   });
 
-  it("does not name a present frame when only the path between frames is missing", () => {
-    const { tool, transformTree, frame } = setup();
+  it("does not name a present frame when only the path between frames is missing", async () => {
+    const { tool, transformTree, frame } = await setup();
     // Every frame exists, but the result frame isn't connected to the measurement's frame
     transformTree.addTransform("other", "elsewhere", 0n, Transform.Identity());
     tool.setResultFrame("other");

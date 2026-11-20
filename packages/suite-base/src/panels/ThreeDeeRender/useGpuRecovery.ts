@@ -52,11 +52,11 @@ export function useGpuRecovery(renderer: Renderer | undefined): {
     if (renderer.gpuError) {
       onUnsupported();
     }
-    renderer.on("gpuLost", onLost);
-    renderer.on("gpuUnsupported", onUnsupported);
+    renderer.addListener("gpuLost", onLost);
+    renderer.addListener("gpuUnsupported", onUnsupported);
     return () => {
-      renderer.off("gpuLost", onLost);
-      renderer.off("gpuUnsupported", onUnsupported);
+      renderer.removeListener("gpuLost", onLost);
+      renderer.removeListener("gpuUnsupported", onUnsupported);
     };
   }, [renderer, recreate]);
 

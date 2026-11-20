@@ -1,15 +1,16 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 import type { Renderer } from "@lichtblick/suite-base/panels/ThreeDeeRender/Renderer";
 import { DEFAULT_POINT_SETTINGS } from "@lichtblick/suite-base/panels/ThreeDeeRender/settingsNodes/topics";
 import { makePose, Pose } from "@lichtblick/suite-base/panels/ThreeDeeRender/transforms";
 
 import { DecayPointRing } from "./DecayPointRing";
+import { pointStyle } from "../pointExtensionUtils";
 
-const settings = { ...DEFAULT_POINT_SETTINGS, visible: true };
+const style = pointStyle({ ...DEFAULT_POINT_SETTINGS, visible: true });
 
 /** Places each scan at x = its message time, so pose rows are easy to check */
 const transformTree = {
@@ -32,18 +33,17 @@ const transformTree = {
 } as unknown as Renderer["transformTree"];
 
 function makeRing(limits = { maxEntries: 100, maxPoints: 1000 }) {
-  const ring = new DecayPointRing("/points", settings, limits);
-  const points = ring.children[0] as THREE.Points;
-  const geometry = points.geometry;
-  const poses = (points.userData.pickingMaterial as THREE.ShaderMaterial).uniforms.scanPoses!
-    .value as THREE.DataTexture;
+  const ring = new DecayPointRing("/points", style, limits);
+  const points = ring.points();
   return {
     ring,
-    geometry,
-    slots: () => Array.from(geometry.attributes.scanSlot!.array),
-    positions: () => Array.from(geometry.attributes.position!.array),
-    poseRow: (slot: number) =>
-      Array.from((poses.image.data as Float32Array).slice(slot * 12, slot * 12 + 12)),
+    points,
+    slots: () => {
+      const words = points.slotAttribute()!.array as Uint32Array;
+      return Array.from(new Uint16Array(words.buffer, words.byteOffset, ring.capacity()));
+    },
+    positions: () => Array.from(points.positionAttribute().array),
+    poseRow: (slot: number) => Array.from(points.poses()!.slice(slot * 12, slot * 12 + 12)),
   };
 }
 
@@ -67,7 +67,7 @@ function push(ring: DecayPointRing, time: bigint, count: number, frameId = "lida
 
 describe("DecayPointRing", () => {
   it("writes scans back to back with their slot on every point", () => {
-    const { ring, geometry, slots, positions } = makeRing();
+    const { ring, slots, positions } = makeRing();
     push(ring, 1n, 2);
     push(ring, 2n, 3);
 
@@ -81,7 +81,7 @@ describe("DecayPointRing", () => {
     ).toEqual([1, 1, 2, 2, 2]);
 
     ring.updatePoses(transformTree, 0n, "map", "map");
-    expect(geometry.drawRange).toEqual({ start: 0, count: 5 });
+    expect(ring.drawCount()).toBe(5);
     expect(ring.visible).toBe(true);
   });
 
@@ -186,8 +186,8 @@ describe("DecayPointRing", () => {
     expect(ring.scanCount()).toBe(0);
   });
 
-  it("draws a wrapped ring as two spans without the free gap", () => {
-    const { ring } = makeRing({ maxEntries: 100, maxPoints: 10 });
+  it("walks one range covering every live scan, free gaps hidden by their slot", () => {
+    const { ring, slots } = makeRing({ maxEntries: 100, maxPoints: 10 });
     push(ring, 1n, 6); // [0, 6)
     push(ring, 2n, 1); // [6, 7)
     ring.expire(2n);
@@ -195,87 +195,27 @@ describe("DecayPointRing", () => {
 
     ring.updatePoses(transformTree, 0n, "map", "map");
 
-    expect(ring.drawSpans()).toEqual([
-      { start: 0, count: 4 },
-      { start: 6, count: 1 },
-    ]);
+    expect(ring.drawCount()).toBe(7);
+    // The third scan reuses the expired scan's slot 0; slot 100 is the hidden slot
+    expect(slots().slice(0, 7)).toEqual([0, 0, 0, 0, 100, 100, 1]);
   });
 
-  it("uploads whole buffers after the ring was empty, until three.js uploads them", () => {
-    const { ring, geometry } = makeRing();
-    push(ring, 1n, 20); // sizes the buffers so later pushes don't reallocate
-    ring.expire(2n);
-    ring.updatePoses(transformTree, 0n, "map", "map"); // empty: queued ranges dropped
-    const position = geometry.attributes.position as THREE.BufferAttribute;
-    const version = position.version;
-
-    push(ring, 2n, 2);
-    // A frame without a draw (hidden tab) must not end the full upload
-    ring.updatePoses(transformTree, 0n, "map", "map");
-    push(ring, 3n, 2);
-    expect(position.updateRanges).toEqual([]); // no ranges: three.js uploads everything
-    expect(position.version).toBeGreaterThan(version);
-
-    position.onUploadCallback(); // three.js uploaded it
-    push(ring, 4n, 2);
-    expect(position.updateRanges).toHaveLength(1);
-  });
-
-  it("uploads whole point buffers after switching back from cubes", () => {
-    const { ring, geometry } = makeRing();
-    ring.setShape({ shape: "cube", showOutline: false });
-    push(ring, 1n, 20); // sizes the buffers so later pushes don't reallocate // written while drawing cubes: not queued for the point buffers
-    ring.setShape({ shape: undefined, showOutline: false });
-    const position = geometry.attributes.position as THREE.BufferAttribute;
-
-    push(ring, 2n, 2);
-    expect(position.updateRanges).toEqual([]);
-
-    position.onUploadCallback();
-    push(ring, 3n, 2);
-    expect(position.updateRanges).toHaveLength(1);
-  });
-
-  it("uploads whole instance buffers after the ring was empty, until three.js uploads them", () => {
-    const { ring } = makeRing();
-    ring.setShape({ shape: "cube", showOutline: false });
-    push(ring, 1n, 20); // sizes the buffers so later pushes don't reallocate
-    ring.expire(2n);
-    ring.updatePoses(transformTree, 0n, "map", "map"); // empty: queued ranges dropped
-    const cubes = ring.children.find((child) => child instanceof THREE.Mesh)!;
-    const instances = (
-      cubes.geometry.getAttribute("instancePosition") as THREE.InterleavedBufferAttribute
-    ).data;
-
-    push(ring, 2n, 2);
-    ring.updatePoses(transformTree, 0n, "map", "map"); // a frame without a draw
-    push(ring, 3n, 2);
-    expect(instances.updateRanges).toEqual([]);
-
-    instances.onUploadCallback();
-    push(ring, 4n, 2);
-    expect(instances.updateRanges).toHaveLength(1);
-  });
-
-  it("caps queued uploads while nothing is drawn", () => {
-    const { ring, geometry } = makeRing({ maxEntries: 1000, maxPoints: 1000 });
+  it("queues partial uploads, and one full upload once too many piled up", () => {
+    const { ring, points } = makeRing({ maxEntries: 1000, maxPoints: 1000 });
     push(ring, 0n, 200); // sizes the buffers for everything below
-    ring.expire(1n);
-    const position = geometry.attributes.position as THREE.BufferAttribute;
-    position.onUploadCallback(); // the first full upload happened
+    const position = points.positionAttribute();
+    position.clearUpdateRanges();
 
-    for (let i = 1; i <= 100; i++) {
-      push(ring, BigInt(i), 1);
-      ring.updatePoses(transformTree, 0n, "map", "map");
-    }
-
-    expect(geometry.attributes.position).toBe(position); // no regrow
-    // Past the cap the queue was dropped for one full upload, instead of 100 partial ranges
-    expect(position.updateRanges).toEqual([]);
-
-    position.onUploadCallback();
-    push(ring, 101n, 1);
+    push(ring, 1n, 1);
     expect(position.updateRanges).toHaveLength(1);
+
+    // e.g. while nothing is drawn (a hidden tab)
+    for (let i = 2; i <= 100; i++) {
+      push(ring, BigInt(i), 1);
+    }
+    expect(points.positionAttribute()).toBe(position); // no regrow
+    expect(position.updateRanges.length).toBeLessThan(64);
+    expect(position.version).toBeGreaterThan(0);
   });
 
   it("grows the buffers by at most 1.5x what the scans need", () => {
@@ -302,7 +242,7 @@ describe("DecayPointRing", () => {
     expect(positions().length / 3).toBe(15_000);
     expect(positions().slice(0, 3)).toEqual([4, 0, 0]);
     ring.updatePoses(transformTree, 0n, "map", "map");
-    expect(ring.drawSpans()).toEqual([{ start: 0, count: 10_000 }]);
+    expect(ring.drawCount()).toBe(10_000);
   });
 
   it("applies a lowered point budget at runtime", () => {
@@ -319,19 +259,18 @@ describe("DecayPointRing", () => {
   });
 
   it("bounds live scans where the shader draws them", () => {
-    const { ring, geometry } = makeRing();
+    const { ring, points } = makeRing();
     push(ring, 10n, 1); // local x = 10, placed at x = 10 + 10
     push(ring, 20n, 1, "missing");
     ring.updatePoses(transformTree, 0n, "map", "map");
 
     const box = new THREE.Box3();
-    const points = ring.children[0] as THREE.Points;
     (points.userData.computeBounds as (box: THREE.Box3) => void)(box);
     box.applyMatrix4(new THREE.Matrix4().makeTranslation(ring.position));
 
     expect(box.min.x).toBe(20);
     expect(box.max.x).toBe(20);
-    expect(geometry.drawRange.count).toBe(2);
+    expect(ring.drawCount()).toBe(2);
   });
 
   it("poses each scan relative to the newest scan's origin and hides scans without a transform", () => {

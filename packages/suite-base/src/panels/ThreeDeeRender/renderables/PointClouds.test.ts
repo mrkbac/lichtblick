@@ -1,8 +1,6 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import * as THREE from "three";
-
 import { DynamicBufferGeometry } from "@lichtblick/suite-base/panels/ThreeDeeRender/DynamicBufferGeometry";
 import { LayerErrors } from "@lichtblick/suite-base/panels/ThreeDeeRender/LayerErrors";
 import type { Renderer } from "@lichtblick/suite-base/panels/ThreeDeeRender/Renderer";
@@ -15,11 +13,6 @@ import { updatePose } from "@lichtblick/suite-base/panels/ThreeDeeRender/updateP
 import { createStixelMaterial, DECAY_LIMITED, PointCloudHistoryRenderable } from "./PointClouds";
 import { getColorConverter } from "./colorMode";
 import { DecayPointRing } from "./pointClouds/DecayPointRing";
-import {
-  createInstancePickingMaterial,
-  createPickingMaterial,
-  pointCloudMaterial,
-} from "./pointExtensionUtils";
 
 vi.mock("@lichtblick/suite-base/panels/ThreeDeeRender/updatePose", () => ({
   updatePose: vi.fn(),
@@ -104,9 +97,6 @@ function decode(cloud: PointCloud2, overrides: Partial<Settings>, rendererOverri
     topic: "/points",
     latestPointCloud: cloud,
     latestOriginalMessage: undefined,
-    material: pointCloudMaterial(settings),
-    pickingMaterial: createPickingMaterial(settings),
-    instancePickingMaterial: createInstancePickingMaterial(settings),
     stixelMaterial: createStixelMaterial(settings),
   });
   renderable.updatePointCloud(cloud, undefined, settings, 0n);
@@ -242,7 +232,7 @@ describe("PointCloudHistoryRenderable decay", () => {
     const ring = renderable.children.find((child) => child instanceof DecayPointRing)!;
     expect(ring).toBeInstanceOf(DecayPointRing);
     expect(ring.scanCount()).toBe(1);
-    const ringPositions = (ring.children[0] as THREE.Points).geometry.attributes.position!.array;
+    const ringPositions = ring.points().positionAttribute().array;
     expect(Array.from(ringPositions.slice(0, 12))).toEqual(POSITIONS.flat());
 
     const latest = renderable.children[0] as unknown as {

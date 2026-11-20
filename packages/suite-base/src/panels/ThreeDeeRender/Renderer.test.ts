@@ -39,12 +39,7 @@ vi.mock("./Picker", async () => {
     ...actual,
     Picker: vi.fn().mockImplementation(function () {
       return {
-        pick: vi.fn(function () {
-          return -1;
-        }),
-        pickInstance: vi.fn(function () {
-          return -1;
-        }),
+        pick: vi.fn(async () => undefined),
         dispose: vi.fn(),
       };
     }),
@@ -54,38 +49,12 @@ vi.mock("./Picker", async () => {
 // Jest doesn't support ES module imports fully yet, so we need to mock the wasm file
 vi.mock("three/examples/jsm/libs/draco/draco_decoder.wasm", () => ({ default: "" }));
 
-// We need to mock the WebGLRenderer because it's not available in jsdom
+// jsdom has no WebGPU
 // only mocking what we currently use
-vi.mock("three", async () => {
-  const actualThree = await vi.importActual("three");
-  return {
-    ...actualThree,
-    WebGLRenderer: function WebGLRenderer() {
-      return {
-        capabilities: {
-          isWebGL2: true,
-        },
-
-        setPixelRatio: vi.fn(),
-        getPixelRatio: vi.fn(function () {
-          return 1;
-        }),
-        setSize: vi.fn(),
-        render: vi.fn(),
-        clear: vi.fn(),
-        setClearColor: vi.fn(),
-        readRenderTargetPixels: vi.fn(),
-        info: {
-          reset: vi.fn(),
-        },
-        shadowMap: {},
-        dispose: vi.fn(),
-        clearDepth: vi.fn(),
-        getDrawingBufferSize: () => ({ width: 100, height: 100 }),
-      };
-    },
-  };
-});
+vi.mock(
+  "three/webgpu",
+  async () => await (await import("./testing/fakeWebGPURenderer")).mockThreeWebGPU(),
+);
 
 beforeEach(() => {
   // Copied from: https://jestjs.io/docs/manual-mocks#mocking-methods-which-are-not-implemented-in-jsdom
@@ -460,7 +429,7 @@ describe("3D Renderer", () => {
     renderer.dispose();
   });
 
-  it("draws when the panel document is visible while the opener is hidden", () => {
+  it("draws when the panel document is visible while the opener is hidden", async () => {
     // Given
     const iframe = document.createElement("iframe");
     document.body.appendChild(iframe);
@@ -473,6 +442,7 @@ describe("3D Renderer", () => {
     const hidden = vi.spyOn(document, "visibilityState", "get").mockReturnValue("hidden");
     const frame = vi.spyOn(child, "requestAnimationFrame").mockReturnValue(1);
     const renderer = new Renderer({ ...defaultRendererProps, canvas: childCanvas });
+    await renderer.ready;
     try {
       const draw = vi.spyOn(renderer.gl, "render");
       // When
@@ -491,7 +461,7 @@ describe("3D Renderer", () => {
     }
   });
 
-  it("skips GPU work while the tab is hidden and repaints when it is shown", () => {
+  it("skips GPU work while the tab is hidden and repaints when it is shown", async () => {
     const visibility = vi.spyOn(document, "visibilityState", "get");
     const requestAnimationFrameSpy = vi
       .spyOn(window, "requestAnimationFrame")
@@ -499,6 +469,7 @@ describe("3D Renderer", () => {
         return 1;
       });
     const renderer = new Renderer({ ...defaultRendererProps, canvas });
+    await renderer.ready;
     const render = vi.spyOn(renderer.gl, "render");
 
     try {
@@ -576,6 +547,13 @@ describe("3D Renderer", () => {
       });
     }
 
+    /** Picks resolve asynchronously */
+    async function flushPicks(): Promise<void> {
+      for (let i = 0; i < 20; i++) {
+        await Promise.resolve();
+      }
+    }
+
     function createHoverRenderer(): { renderer: Renderer; hoverCanvas: HTMLCanvasElement } {
       const hoverParent = document.createElement("div");
       const hoverCanvas = document.createElement("canvas");
@@ -586,8 +564,9 @@ describe("3D Renderer", () => {
       return { renderer, hoverCanvas };
     }
 
-    it("emits renderableHovered at most once per HOVER_PICK_THROTTLE_MS while moving the mouse", () => {
+    it("emits renderableHovered at most once per HOVER_PICK_THROTTLE_MS while moving the mouse", async () => {
       const { renderer, hoverCanvas } = createHoverRenderer();
+      await renderer.ready;
 
       const hoveredSpy = vi.fn();
       renderer.addListener("renderableHovered", hoveredSpy);
@@ -595,18 +574,21 @@ describe("3D Renderer", () => {
       hoverCanvas.dispatchEvent(new MouseEvent("mousemove", { clientX: 10, clientY: 10 }));
       hoverCanvas.dispatchEvent(new MouseEvent("mousemove", { clientX: 11, clientY: 11 }));
       hoverCanvas.dispatchEvent(new MouseEvent("mousemove", { clientX: 12, clientY: 12 }));
+      await flushPicks();
 
       expect(hoveredSpy).toHaveBeenCalledTimes(1);
 
       vi.advanceTimersByTime(HOVER_PICK_THROTTLE_MS);
       hoverCanvas.dispatchEvent(new MouseEvent("mousemove", { clientX: 13, clientY: 13 }));
+      await flushPicks();
       expect(hoveredSpy).toHaveBeenCalledTimes(2);
 
       renderer.dispose();
     });
 
-    it("does not hover-pick while mouse is down, then resumes after mouseup", () => {
+    it("does not hover-pick while mouse is down, then resumes after mouseup", async () => {
       const { renderer, hoverCanvas } = createHoverRenderer();
+      await renderer.ready;
 
       const hoveredSpy = vi.fn();
       renderer.addListener("renderableHovered", hoveredSpy);
@@ -617,6 +599,7 @@ describe("3D Renderer", () => {
 
       hoverCanvas.dispatchEvent(new MouseEvent("mouseup", { clientX: 11, clientY: 11 }));
       hoverCanvas.dispatchEvent(new MouseEvent("mousemove", { clientX: 12, clientY: 12 }));
+      await flushPicks();
       expect(hoveredSpy).toHaveBeenCalledTimes(1);
 
       renderer.dispose();
@@ -1186,7 +1169,7 @@ describe("3D Renderer", () => {
       renderer.dispose();
     });
 
-    it("applies configured hemisphere light intensity", () => {
+    it("applies configured hemisphere light intensity", async () => {
       // Given: A renderer with a custom hemisphere light intensity
       const renderer = new Renderer({
         ...defaultRendererProps,
@@ -1196,6 +1179,7 @@ describe("3D Renderer", () => {
           scene: { hemisphereLightIntensity: 3.5 },
         },
       });
+      await renderer.ready;
       const renderSpy = vi.spyOn(renderer.gl, "render");
 
       // When: Rendering a frame (updateSceneRenderSettings runs during construction and applies
@@ -1214,9 +1198,10 @@ describe("3D Renderer", () => {
       renderer.dispose();
     });
 
-    it("applies the default hemisphere light intensity when not configured", () => {
+    it("applies the default hemisphere light intensity when not configured", async () => {
       // Given: A renderer without a custom hemisphere light intensity
       const renderer = new Renderer({ ...defaultRendererProps, canvas });
+      await renderer.ready;
       const renderSpy = vi.spyOn(renderer.gl, "render");
 
       // When: Rendering a frame

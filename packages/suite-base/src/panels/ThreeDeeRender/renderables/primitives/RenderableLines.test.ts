@@ -3,7 +3,7 @@
 
 import { LinePrimitive, LineType, SceneEntity } from "@foxglove/schemas";
 import * as THREE from "three";
-import { LineSegments2 } from "three/examples/jsm/lines/LineSegments2.js";
+import { LineSegments2 } from "three/examples/jsm/lines/webgpu/LineSegments2.js";
 
 import { RenderableLines } from "./RenderableLines";
 import type { Renderer } from "../../Renderer";

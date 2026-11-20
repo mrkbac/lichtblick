@@ -40,14 +40,18 @@ const NONE = 0xffffffff;
 export function pickOutput(
   objectId: THREE.Node<"uint">,
   instance?: THREE.Node<"uint">,
+  viewDistance: THREE.Node = float(positionView.z).negate(),
 ): THREE.Node {
-  return uvec4(
-    objectId,
-    instance ?? uint(NONE),
-    uint(floatBitsToUint(float(positionView.z).negate())),
-    uint(1),
-  );
+  // three's TSL types don't type bitcasts
+  const distanceBits = floatBitsToUint(viewDistance) as unknown as THREE.Node<"uint">;
+  return uvec4(objectId, instance ?? uint(NONE), distanceBits, uint(1));
 }
+
+/**
+ * The cursor's pixel in the full-size canvas during a pick (the picking target itself is 1x1), for
+ * materials that look up screen-space buffers
+ */
+export const pickPixel = uniform(new THREE.Vector2(), "vec2");
 
 /** The object being drawn, as a per-object uniform shared by all picking materials */
 export const pickObjectId = uniform(0, "uint").onObjectUpdate(({ object }) => object?.id ?? 0);
@@ -109,6 +113,7 @@ export class Picker {
     crop.elements[12] = width - 2 * px - 1;
     crop.elements[13] = 2 * py + 1 - height;
     camera.projectionMatrix.premultiply(crop);
+    pickPixel.value.set(px, py);
     camera.projectionMatrixInverse.copy(camera.projectionMatrix).invert();
 
     const previousTarget = renderer.getRenderTarget();
@@ -117,7 +122,9 @@ export class Picker {
     renderer.getClearColor(this.#clearColor);
     try {
       renderer.setRenderTarget(this.#target);
-      renderer.setClearColor(0xffffff, 1);
+      // Integer targets clear to these values as-is: all zero, so the 4th channel (1 where an
+      // object was drawn) is 0 where nothing was
+      renderer.setClearColor(0x000000, 0);
       renderer.clear();
       renderer.setRenderObjectFunction(
         (object, scene, cam, geometry, material, group, lightsNode, clippingContext) => {

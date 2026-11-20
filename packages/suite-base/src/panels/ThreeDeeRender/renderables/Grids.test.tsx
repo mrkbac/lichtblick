@@ -18,33 +18,6 @@ import { Grids } from "./Grids";
 
 vi.mock("three/examples/jsm/libs/draco/draco_decoder.wasm", () => ({ default: "" }));
 
-vi.mock("three", async () => {
-  const ActualTHREE = await vi.importActual("three");
-  return {
-    ...ActualTHREE,
-    WebGLRenderer: function WebGLRenderer() {
-      return {
-        capabilities: {
-          isWebGL2: true,
-        },
-        setPixelRatio: vi.fn(),
-        setSize: vi.fn(),
-        render: vi.fn(),
-        clear: vi.fn(),
-        setClearColor: vi.fn(),
-        readRenderTargetPixels: vi.fn(),
-        info: {
-          reset: vi.fn(),
-        },
-        shadowMap: {},
-        dispose: vi.fn(),
-        clearDepth: vi.fn(),
-        getDrawingBufferSize: () => ({ width: 100, height: 100 }),
-      };
-    },
-  };
-});
-
 beforeEach(() => {
   Object.defineProperty(window, "matchMedia", {
     writable: true,
@@ -107,7 +80,9 @@ describe("Grids", () => {
 
   afterEach(() => {
     renderer.dispose();
+    // jsdom has no WebGPU, so Renderer reports that; not what these tests check.
     (console.warn as Mock).mockClear();
+    (console.error as Mock).mockClear();
   });
 
   describe("handleSettingsAction() - reorder-node action", () => {

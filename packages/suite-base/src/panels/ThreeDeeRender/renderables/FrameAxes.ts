@@ -5,13 +5,13 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { Label } from "@foxglove/three-text";
+import { Label } from "@foxglove/three-text/webgpu";
 import { t } from "i18next";
 import * as _ from "lodash-es";
 import * as THREE from "three";
-import { Line2 } from "three/examples/jsm/lines/Line2.js";
 import { LineGeometry } from "three/examples/jsm/lines/LineGeometry.js";
-import { LineMaterial } from "three/examples/jsm/lines/LineMaterial.js";
+import { Line2 } from "three/examples/jsm/lines/webgpu/Line2.js";
+import { Line2NodeMaterial } from "three/webgpu";
 
 import { SettingsTreeAction, SettingsTreeNodeAction } from "@lichtblick/suite";
 import { DEFAULT_LABEL_SCALE_FACTOR } from "@lichtblick/suite-base/panels/ThreeDeeRender/defaults";
@@ -134,8 +134,8 @@ const tempTfPath: [string, string] = ["transforms", ""];
 
 export class FrameAxes extends SceneExtension<FrameAxisRenderable> {
   public static extensionId = "foxglove.FrameAxes";
-  #lineMaterial: LineMaterial;
-  #linePickingMaterial: THREE.ShaderMaterial;
+  #lineMaterial: Line2NodeMaterial;
+  #linePickingMaterial: Line2NodeMaterial;
 
   #labelForegroundColor = 1;
   #labelBackgroundColor = new THREE.Color();
@@ -164,17 +164,14 @@ export class FrameAxes extends SceneExtension<FrameAxisRenderable> {
       new THREE.Color(),
       this.renderer.config.scene.transforms?.lineColor ?? DEFAULT_LINE_COLOR_STR,
     );
-    this.#lineMaterial = new LineMaterial({ linewidth });
-    this.#lineMaterial.color = color;
-
-    const options = { resolution: renderer.input.canvasSize, worldUnits: false };
+    this.#lineMaterial = new Line2NodeMaterial({ linewidth, color });
 
     this.#lineGeometry = this.renderer.sharedGeometry.getGeometry(
       this.constructor.name,
       createLineGeometry,
     );
 
-    this.#linePickingMaterial = makeLinePickingMaterial(PICKING_LINE_SIZE, options);
+    this.#linePickingMaterial = makeLinePickingMaterial(PICKING_LINE_SIZE, { worldUnits: false });
 
     renderer.on("transformTreeUpdated", this.#handleTransformTreeUpdated);
     renderer.on("variablesChange", this.#handleVariablesChange);
@@ -293,9 +290,6 @@ export class FrameAxes extends SceneExtension<FrameAxisRenderable> {
     renderFrameId: string,
     fixedFrameId: string,
   ): void {
-    // Keep the material's `resolution` uniform in sync with the actual canvas size
-    this.#lineMaterial.resolution = this.renderer.input.canvasSize;
-
     // The transforms settings nodes show age/translation/rotation, which only change with
     // currentTime or the transform tree; skip rebuilding them for e.g. camera moves while paused
     const transformsVersion = this.renderer.transformTree.version;

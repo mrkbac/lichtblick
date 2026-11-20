@@ -48,38 +48,3 @@ export const NO_IMAGE_TOPICS_HUD_ITEM: HUDItem = {
   getMessage: () => t3D("noImageTopicsAvailable"),
   displayType: "empty",
 };
-
-export const VERTEX_SHADER = `
-    varying vec2 vUv;
-    void main() {
-        vUv = uv;
-        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-    }
-`;
-
-// Custom GLSL scrpit to apply brightness, contrast and other properties to the image texture
-// Source: https://github.com/mrdoob/three.js/blob/master/src/materials/ShaderMaterial.js
-export const FRAGMENT_SHADER = `
-    uniform sampler2D map;
-    uniform float brightness;
-    uniform float contrast;
-    uniform vec3 color;
-    uniform float opacity;
-    varying vec2 vUv;
-
-    void main() {
-        vec4 texColor = texture2D(map, vUv);
-
-        // Apply brightness
-        texColor.rgb += brightness;
-
-        // Apply contrast
-        texColor.rgb = ((texColor.rgb - 0.5) * contrast) + 0.5;
-
-        // Apply tint color and opacity
-        texColor.rgb *= color;
-        texColor.a *= opacity;
-
-        gl_FragColor = texColor;
-    }
-`;

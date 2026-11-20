@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import { NumericType, VoxelGrid } from "@foxglove/schemas";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 import {
   BitVoxelGrid,
@@ -11,7 +11,6 @@ import {
   VoxelBuffer,
   VoxelGridRenderable,
 } from "./VoxelGrids";
-import { Picker } from "../Picker";
 import type { Renderer } from "../Renderer";
 import {
   LayerSettingsVoxelGrid,
@@ -269,41 +268,8 @@ describe("packedVoxelGridSettingsNode", () => {
   });
 });
 
-describe("Draw behind picking", () => {
-  // A stub renderer that runs the picker's passes and records each draw's material state
-  function setup() {
-    const draws: { material: THREE.Material; depthWrite: boolean }[] = [];
-    const scene = new THREE.Scene();
-    const gl = {
-      domElement: { width: 800, height: 400 },
-      getPixelRatio: () => 1,
-      getRenderTarget: () => null,
-      getClearAlpha: () => 1,
-      getClearColor: vi.fn(),
-      setRenderTarget: vi.fn(),
-      setClearColor: vi.fn(),
-      clear: vi.fn(),
-      readRenderTargetPixels: vi.fn(),
-      render: (target: THREE.Scene, camera: THREE.Camera) => {
-        target.onAfterRender(
-          gl,
-          target,
-          camera,
-          undefined as never,
-          undefined as never,
-          undefined as never,
-        );
-      },
-      renderBufferDirect: (
-        _camera: THREE.Camera,
-        _scene: THREE.Scene,
-        _geometry: THREE.BufferGeometry,
-        material: THREE.Material,
-      ) => {
-        draws.push({ material, depthWrite: material.depthWrite });
-      },
-      renderLists: { get: () => ({ opaque: renderItems, transmissive: [], transparent: [] }) },
-    } as unknown as THREE.WebGLRenderer;
+describe("Draw behind", () => {
+  function setup({ drawBehind }: { drawBehind: boolean }) {
     const renderer = {
       settings: { errors: { addToTopic: vi.fn(), removeFromTopic: vi.fn() } },
     } as unknown as Renderer;
@@ -322,36 +288,34 @@ describe("Draw behind picking", () => {
       frameId: "map",
       pose: { position: { x: 0, y: 0, z: 0 }, orientation: { x: 0, y: 0, z: 0, w: 1 } },
       settingsPath: ["topics", "/voxels"],
-      settings: { ...VOXEL_GRID_DEFAULTS, drawBehind: true },
+      settings: { ...VOXEL_GRID_DEFAULTS, drawBehind },
       topic: "/voxels",
       grid: { kind: "bit", message: grid },
     });
     renderable.update();
-    const mesh = renderable.children[0] as THREE.Mesh;
-    const renderItems = [
-      { id: mesh.id, object: mesh, geometry: mesh.geometry, material: mesh.material },
+    const [voxelMesh, depthReset] = renderable.children as [
+      THREE.Mesh<THREE.BufferGeometry, THREE.Material>,
+      THREE.Mesh<THREE.BufferGeometry, THREE.Material>,
     ];
-    const camera = new THREE.PerspectiveCamera(45, 2, 0.5, 500);
-    return { picker: new Picker(gl, scene), draws, mesh, renderable, camera };
+    return { voxelMesh, depthReset };
   }
 
-  it("lets later objects win the id pass but keeps depth and nearest-voxel picking", () => {
-    const { picker, draws, mesh, renderable, camera } = setup();
-    const { pickingMaterial, instancePickingMaterial } = mesh.userData as {
-      pickingMaterial: THREE.Material;
-      instancePickingMaterial: THREE.Material;
-    };
+  it("resets depth right after the voxels, so later objects draw (and pick) on top", () => {
+    const { voxelMesh, depthReset } = setup({ drawBehind: true });
+    expect(depthReset.visible).toBe(true);
+    expect(depthReset.renderOrder).toBe(voxelMesh.renderOrder + 1);
+    expect(voxelMesh.renderOrder).toBeLessThan(0);
+    // The voxels keep depth among themselves
+    expect(voxelMesh.material.depthWrite).toBe(true);
+    expect(voxelMesh.material.transparent).toBe(false);
+    expect(depthReset.material.colorWrite).toBe(false);
+    expect(depthReset.material.depthFunc).toBe(THREE.AlwaysDepth);
+    expect(depthReset.material.transparent).toBe(false);
+  });
 
-    // Object id pass: the grid writes no depth, so foreground objects drawn after it win
-    picker.pick(100, 100, camera);
-    expect(draws.at(-1)).toEqual({ material: pickingMaterial, depthWrite: false });
-
-    // Depth pass (measuring): the grid's surface is still recorded
-    picker.pickDepth(100, 100, camera);
-    expect(draws.at(-1)).toEqual({ material: pickingMaterial, depthWrite: true });
-
-    // Instance pass: depth writes stay on, so the nearest voxel wins
-    picker.pickInstance(100, 100, camera, renderable);
-    expect(draws.at(-1)).toEqual({ material: instancePickingMaterial, depthWrite: true });
+  it("draws nothing extra otherwise", () => {
+    const { voxelMesh, depthReset } = setup({ drawBehind: false });
+    expect(depthReset.visible).toBe(false);
+    expect(voxelMesh.renderOrder).toBe(0);
   });
 });

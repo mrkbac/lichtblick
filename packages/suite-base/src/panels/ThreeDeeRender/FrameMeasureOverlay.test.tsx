@@ -42,7 +42,7 @@ function setup(initial: FrameMeasurement | undefined, { picking = false } = {}) 
     currentTime: 0n,
     framePicking: false,
     input: new EventEmitter(),
-    pickObject: vi.fn(() => new THREE.Object3D()),
+    pickObject: vi.fn(async () => new THREE.Object3D()),
     sceneExtensions: new Map([["foxglove.FrameAxes", frameAxes]]),
   }) as unknown as Renderer;
   const written: unknown[] = [];
@@ -57,9 +57,10 @@ function setup(initial: FrameMeasurement | undefined, { picking = false } = {}) 
       <FrameMeasureOverlay renderer={renderer} picking={picking} onStopPicking={onStopPicking} />
     </ThemeProvider>,
   );
-  const click = (frame: string | undefined) => {
+  // Picks resolve asynchronously
+  const click = async (frame: string | undefined) => {
     frameUnderCursor.id = frame;
-    act(() => {
+    await act(async () => {
       renderer.input.emit(
         "click",
         new THREE.Vector2(),
@@ -98,19 +99,19 @@ describe("FrameMeasureOverlay", () => {
     expect([...highlights.keys()].sort()).toEqual(["lidar", "map"]);
   });
 
-  it("picks From, then To from clicks on frames, writes the shared pair and stops picking", () => {
+  it("picks From, then To from clicks on frames, writes the shared pair and stops picking", async () => {
     const { written, click, onStopPicking, renderer } = setup(undefined, { picking: true });
     expect(renderer.framePicking).toBe(true);
-    click(undefined); // background
-    click("base");
-    click("lidar");
+    await click(undefined); // background
+    await click("base");
+    await click("lidar");
     expect(written).toEqual([{ from: "base" }, { from: "base", to: "lidar" }]);
     expect(onStopPicking).toHaveBeenCalled();
   });
 
-  it("starts a new pair when picking again after both ends are set", () => {
+  it("starts a new pair when picking again after both ends are set", async () => {
     const { written, click } = setup({ from: "base", to: "lidar" }, { picking: true });
-    click("map");
+    await click("map");
     expect(written).toEqual([{ from: "map" }]);
   });
 

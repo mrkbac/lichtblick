@@ -7,7 +7,6 @@
 
 import { Time, fromNanoSec, isLessThan, toNanoSec } from "@foxglove/rostime";
 import type { FrameTransform, FrameTransforms, SceneUpdate } from "@foxglove/schemas";
-import { LabelPool } from "@foxglove/three-text";
 import EventEmitter from "eventemitter3";
 import { quat, vec3 } from "gl-matrix";
 import i18next from "i18next";
@@ -61,6 +60,7 @@ import {
 } from "./IRenderer";
 import { Input } from "./Input";
 import { ModelCache } from "./ModelCache";
+import { PickableLabelPool } from "./PickableLabelPool";
 import { PickedRenderable, PickResult, Picker } from "./Picker";
 import type { Renderable } from "./Renderable";
 import { SceneExtension } from "./SceneExtension";
@@ -87,6 +87,7 @@ import { MeasurementTool } from "./renderables/MeasurementTool";
 import { PublishClickTool } from "./renderables/PublishClickTool";
 import { Urdfs } from "./renderables/Urdfs";
 import { MarkerPool } from "./renderables/markers/MarkerPool";
+import { PointRaster } from "./renderables/pointClouds/PointRaster";
 import {
   Header,
   MarkerArray,
@@ -189,6 +190,12 @@ export class Renderer extends EventEmitter<RendererEvents> {
   public readonly gl: THREE.WebGPURenderer;
   /** Set once the WebGPU device is ready; until then frames update the scene without drawing */
   #gpuReady = false;
+  /** GPU milliseconds of the last measured frame (render + compute), when stats are enabled */
+  public gpuTimeMs: number | undefined;
+  #measuringGpu = false;
+  #framesSinceGpuMeasure = 0;
+  /** Resolves once the GPU is ready to draw (or failed to start; see gpuError) */
+  public readonly ready: Promise<void>;
   /** Why WebGPU could not start, if it couldn't (also emitted as `gpuUnsupported`) */
   public gpuError: Error | undefined;
   public readonly sharedMap?: SharedMap;
@@ -248,6 +255,8 @@ export class Renderer extends EventEmitter<RendererEvents> {
   public ros = false;
 
   #picker: Picker;
+  /** Draws every point set (point clouds, scans, depth clouds) with compute rasterization */
+  public readonly pointRaster: PointRaster;
   #selectionBackdropScene: THREE.Scene;
   #selectionBackdrop: ScreenOverlay;
   #selectedRenderable: PickedRenderable | undefined;
@@ -274,7 +283,7 @@ export class Renderer extends EventEmitter<RendererEvents> {
   public fixedFrameId: string | undefined;
   public followFrameId: string | undefined;
 
-  public labelPool = new LabelPool({ fontFamily: fontMonospace });
+  public labelPool = new PickableLabelPool({ fontFamily: fontMonospace });
   public markerPool = new MarkerPool(this);
   public sharedGeometry = new SharedGeometry();
 
@@ -336,8 +345,10 @@ export class Renderer extends EventEmitter<RendererEvents> {
       stencil: true,
       // Fixed at creation; the panel recreates the renderer when this setting changes
       logarithmicDepthBuffer: config.scene.logDepth === true,
+      // GPU time per frame for the stats overlay; fixed at creation like logDepth
+      trackTimestamp: config.scene.enableStats === true,
     });
-    void this.#initGpu();
+    this.ready = this.#initGpu();
     this.gl.autoClear = false;
     this.gl.info.autoReset = false;
     this.gl.shadowMap.type = THREE.VSMShadowMap;
@@ -426,6 +437,9 @@ export class Renderer extends EventEmitter<RendererEvents> {
     });
 
     this.#picker = new Picker(this.gl, this.#scene);
+    this.pointRaster = new PointRaster(this.gl, this.#scene, {
+      logDepth: config.scene.logDepth === true,
+    });
 
     this.#selectionBackdrop = new ScreenOverlay(this);
     this.#selectionBackdropScene = new THREE.Scene();
@@ -521,6 +535,27 @@ export class Renderer extends EventEmitter<RendererEvents> {
     }
   }
 
+  /**
+   * Reads back the GPU time of the frames drawn since the last readback (timestamps resolve a few
+   * frames late and cover every frame since) and averages it per frame.
+   */
+  async #measureGpuTime(): Promise<void> {
+    this.#measuringGpu = true;
+    const frames = this.#framesSinceGpuMeasure;
+    this.#framesSinceGpuMeasure = 0;
+    try {
+      const [render, compute] = await Promise.all([
+        this.gl.resolveTimestampsAsync("render"),
+        this.gl.resolveTimestampsAsync("compute"),
+      ]);
+      if (frames > 0 && (render != undefined || compute != undefined)) {
+        this.gpuTimeMs = ((render ?? 0) + (compute ?? 0)) / frames;
+      }
+    } finally {
+      this.#measuringGpu = false;
+    }
+  }
+
   #onHUDItemsChange = () => {
     this.hudItems = this.hud.getHUDItems();
     this.emit("hudItemsChanged", this);
@@ -579,6 +614,7 @@ export class Renderer extends EventEmitter<RendererEvents> {
     this.markerPool.dispose();
     this.#transformPool.clear();
     this.#picker.dispose();
+    this.pointRaster.dispose();
     this.input.dispose();
     void this.gl.dispose();
   }
@@ -1177,15 +1213,16 @@ export class Renderer extends EventEmitter<RendererEvents> {
           if (object.userData.picking === false) {
             return;
           }
+          // Objects drawn from their own buffers (point sets, per-scan poses) report their bounds
+          const computeBounds = object.userData.computeBounds as
+            | ((box: THREE.Box3) => void)
+            | undefined;
           if (
+            computeBounds ||
             object instanceof THREE.Mesh ||
             object instanceof THREE.Points ||
             object instanceof THREE.Line
           ) {
-            // Objects whose shader moves vertices (e.g. per-scan poses) report their own bounds
-            const computeBounds = object.userData.computeBounds as
-              | ((box: THREE.Box3) => void)
-              | undefined;
             if (computeBounds) {
               box.makeEmpty();
               computeBounds(box);
@@ -1193,7 +1230,7 @@ export class Renderer extends EventEmitter<RendererEvents> {
               object.computeBoundingBox();
               box.copy(object.boundingBox!);
             } else {
-              const geometry = object.geometry as THREE.BufferGeometry;
+              const geometry = (object as THREE.Mesh).geometry;
               // Bound only the active range of reused buffers, skipping NaN points (e.g. in clouds)
               const expand = (name: string, from: number, to: number) => {
                 const attribute = geometry.attributes[name];
@@ -1743,6 +1780,12 @@ export class Renderer extends EventEmitter<RendererEvents> {
     }
 
     this.emit("endFrame", currentTime, this);
+    if (draw && this.config.scene.enableStats === true) {
+      this.#framesSinceGpuMeasure++;
+      if (!this.#measuringGpu) {
+        void this.#measureGpuTime();
+      }
+    }
 
     this.gl.info.reset();
   };
@@ -1750,12 +1793,14 @@ export class Renderer extends EventEmitter<RendererEvents> {
   #drawScene = (): void => {
     const camera = this.cameraHandler.getActiveCamera();
     camera.layers.set(LAYER_DEFAULT);
+    this.pointRaster.prepare(camera);
     this.gl.render(this.#scene, camera);
 
     if (this.#selectedRenderable) {
       this.gl.render(this.#selectionBackdropScene, camera);
       this.gl.clearDepth();
       camera.layers.set(LAYER_SELECTED);
+      this.pointRaster.prepare(camera);
       this.gl.render(this.#scene, camera);
     }
   };
@@ -1872,7 +1917,9 @@ export class Renderer extends EventEmitter<RendererEvents> {
     const hidden = new Set<THREE.Object3D>();
     while (selections.length < MAX_SELECTIONS) {
       const selection = await this.#pickSingleObject(cursorCoords, hidden);
-      if (!selection) {
+      // Rasterized points are drawn by one shared quad, so hiding their renderable doesn't hide
+      // them from the next pick
+      if (!selection || hidden.has(selection.renderable)) {
         break;
       }
       selections.push(selection);
@@ -2026,6 +2073,10 @@ export class Renderer extends EventEmitter<RendererEvents> {
     }
     const camera = this.cameraHandler.getActiveCamera();
     camera.layers.set(LAYER_DEFAULT);
+    // The selection pass leaves only selected points in the raster buffers
+    if (this.pointRaster.preparedLayers !== camera.layers.mask) {
+      this.pointRaster.prepare(camera);
+    }
     return await this.#picker.pick(cursorCoords.x, cursorCoords.y, camera, hidden);
   }
 

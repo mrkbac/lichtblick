@@ -61,43 +61,6 @@ function setupOrbitControlsMock() {
   };
 }
 
-// --- WebGLRenderer mock ---
-// Prefixed with "mock" so Jest's module-factory scope check allows the reference.
-
-let mockGl: {
-  toneMapping: THREE.ToneMapping;
-  shadowMap: { enabled: boolean };
-  capabilities: { isWebGL2: boolean };
-  setPixelRatio: Mock;
-  setSize: Mock;
-  render: Mock;
-  clear: Mock;
-  setClearColor: Mock;
-  readRenderTargetPixels: Mock;
-  info: { reset: Mock };
-  dispose: Mock;
-  clearDepth: Mock;
-  getDrawingBufferSize: () => { width: number; height: number };
-};
-
-function resetMockGl() {
-  mockGl = {
-    toneMapping: THREE.NoToneMapping,
-    shadowMap: { enabled: false },
-    capabilities: { isWebGL2: true },
-    setPixelRatio: vi.fn(),
-    setSize: vi.fn(),
-    render: vi.fn(),
-    clear: vi.fn(),
-    setClearColor: vi.fn(),
-    readRenderTargetPixels: vi.fn(),
-    info: { reset: vi.fn() },
-    dispose: vi.fn(),
-    clearDepth: vi.fn(),
-    getDrawingBufferSize: () => ({ width: 100, height: 100 }),
-  };
-}
-
 // --- Jest module mocks ---
 
 vi.mock("three/examples/jsm/libs/draco/draco_decoder.wasm", () => ({ default: "" }));
@@ -108,15 +71,10 @@ vi.mock("three/examples/jsm/controls/OrbitControls", () => ({
   }),
 }));
 
-vi.mock("three", async () => {
-  const ActualTHREE = await vi.importActual("three");
-  return {
-    ...ActualTHREE,
-    WebGLRenderer: function WebGLRenderer() {
-      return mockGl;
-    },
-  };
-});
+vi.mock(
+  "three/webgpu",
+  async () => await (await import("../testing/fakeWebGPURenderer")).mockThreeWebGPU(),
+);
 
 // --- Shared beforeEach setup ---
 
@@ -136,7 +94,6 @@ beforeEach(() => {
       };
     }),
   });
-  resetMockGl();
   setupOrbitControlsMock();
   setupVitestCanvasMock();
 });

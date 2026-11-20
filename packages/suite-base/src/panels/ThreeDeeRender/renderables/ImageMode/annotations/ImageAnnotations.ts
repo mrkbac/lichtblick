@@ -6,7 +6,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { ImageAnnotations as FoxgloveImageAnnotations } from "@foxglove/schemas";
-import { LabelPool } from "@foxglove/three-text";
+import { LabelPool } from "@foxglove/three-text/webgpu";
 import * as THREE from "three";
 import { Opaque } from "ts-essentials";
 

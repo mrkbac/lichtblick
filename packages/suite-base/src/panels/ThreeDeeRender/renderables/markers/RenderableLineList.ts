@@ -6,8 +6,8 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import * as THREE from "three";
-import { LineSegments2 } from "three/examples/jsm/lines/LineSegments2.js";
 import { LineSegmentsGeometry } from "three/examples/jsm/lines/LineSegmentsGeometry.js";
+import { LineSegments2 } from "three/examples/jsm/lines/webgpu/LineSegments2.js";
 
 import { RenderableMarker } from "./RenderableMarker";
 import {
@@ -16,7 +16,6 @@ import {
   makeLinePickingMaterial,
   markerHasTransparency,
 } from "./materials";
-import { LineMaterialWithAlphaVertex } from "../../LineMaterialWithAlphaVertex";
 import type { Renderer } from "../../Renderer";
 import { Marker } from "../../ros";
 import { setLinePositions } from "../../setLinePositions";
@@ -40,7 +39,7 @@ export class RenderableLineList extends RenderableMarker {
     this.#geometry = new LineSegmentsGeometry();
 
     const { worldUnits = true } = options;
-    const lineOptions = { resolution: this.renderer.input.canvasSize, worldUnits };
+    const lineOptions = { worldUnits };
 
     // We alleviate corner artifacts using a two-pass render for lines. The
     // first pass writes to depth only, followed by a color pass with stencil
@@ -70,7 +69,7 @@ export class RenderableLineList extends RenderableMarker {
     this.#linePrepass.material.dispose();
     this.#line.material.dispose();
 
-    const pickingMaterial = this.#line.userData.pickingMaterial as THREE.ShaderMaterial;
+    const pickingMaterial = this.#line.userData.pickingMaterial as THREE.Material;
     pickingMaterial.dispose();
 
     this.#geometry.dispose();
@@ -98,10 +97,8 @@ export class RenderableLineList extends RenderableMarker {
       this.#line.material.needsUpdate = true;
     }
 
-    const matLinePrepass = this.#linePrepass.material as LineMaterialWithAlphaVertex;
-    matLinePrepass.lineWidth = lineWidth;
-    const matLine = this.#line.material as LineMaterialWithAlphaVertex;
-    matLine.lineWidth = lineWidth;
+    this.#linePrepass.material.linewidth = lineWidth;
+    this.#line.material.linewidth = lineWidth;
 
     const prevPointsLength = this.#positionBuffer.length / 3;
     if (pointsLength > prevPointsLength) {

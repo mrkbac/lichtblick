@@ -6,9 +6,24 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 import i18next from "i18next";
 import * as THREE from "three";
-import { LineMaterial } from "three/examples/jsm/lines/LineMaterial.js";
-import { LineSegments2 } from "three/examples/jsm/lines/LineSegments2.js";
 import { LineSegmentsGeometry } from "three/examples/jsm/lines/LineSegmentsGeometry.js";
+import { LineSegments2 } from "three/examples/jsm/lines/webgpu/LineSegments2.js";
+import {
+  cameraProjectionMatrix,
+  length as lengthNode,
+  modelViewMatrix,
+  modelWorldMatrix,
+  positionGeometry,
+  screenDPR,
+  screenSize,
+  vec2,
+  vec4,
+} from "three/tsl";
+import {
+  Line2NodeMaterial,
+  MeshBasicNodeMaterial,
+  type MeshBasicNodeMaterialParameters,
+} from "three/webgpu";
 
 import { Renderable } from "../Renderable";
 import type { Renderer } from "../Renderer";
@@ -76,41 +91,19 @@ const tempRaycaster = new THREE.Raycaster();
  * A material that interprets the input mesh coordinates in pixel space, regardless of the camera
  * perspective/zoom level.
  */
-class FixedSizeMeshMaterial extends THREE.ShaderMaterial {
-  public constructor({
-    color,
-    ...params
-  }: { color: THREE.ColorRepresentation } & THREE.MaterialParameters) {
-    super({
-      ...params,
-      vertexShader: /* glsl */ `
-        #include <common>
-        uniform vec2 canvasSize;
-        void main() {
-          vec4 mvPosition = modelViewMatrix * vec4(0., 0., 0., 1.);
-
-          // Adapted from THREE.ShaderLib.sprite
-          vec2 scale;
-          scale.x = length(vec3(modelMatrix[0].xyz));
-          scale.y = length(vec3(modelMatrix[1].xyz));
-
-          gl_Position = projectionMatrix * mvPosition;
-
-          // Add position after projection to maintain constant pixel size
-          gl_Position.xy += position.xy / canvasSize * scale * gl_Position.w;
-        }
-      `,
-      fragmentShader: /* glsl */ `
-        uniform vec3 color;
-        void main() {
-          gl_FragColor = vec4(color, 1.0);
-        }
-      `,
-      uniforms: {
-        canvasSize: { value: [0, 0] },
-        color: { value: new THREE.Color(color).convertSRGBToLinear() },
-      },
-    });
+class FixedSizeMeshMaterial extends MeshBasicNodeMaterial {
+  public constructor(params: MeshBasicNodeMaterialParameters) {
+    super(params);
+    // The object's origin projected as usual, then the vertex offset added in clip space, so
+    // geometry units are CSS pixels (scaled by the object's x/y scale). screenSize is the render
+    // target's size, which also keeps the size right in the 1x1 picking pass.
+    const clip = cameraProjectionMatrix.mul(modelViewMatrix).mul(vec4(0, 0, 0, 1));
+    const scale = vec2(
+      lengthNode(modelWorldMatrix.mul(vec4(1, 0, 0, 0)).xyz),
+      lengthNode(modelWorldMatrix.mul(vec4(0, 1, 0, 0)).xyz),
+    );
+    const offset = positionGeometry.xy.mul(screenDPR).div(screenSize).mul(scale).mul(clip.w);
+    this.vertexNode = vec4(clip.xy.add(offset), clip.zw);
   }
 }
 
@@ -174,13 +167,13 @@ export class MeasurementTool extends SceneExtension<Renderable, MeasurementToolE
     depthTest: false,
     depthWrite: false,
   });
-  #lineMaterial = new LineMaterial({
+  #lineMaterial = new Line2NodeMaterial({
     color: COLOR,
     linewidth: 2,
     depthTest: false,
     depthWrite: false,
   });
-  #selectedLineMaterial = new LineMaterial({
+  #selectedLineMaterial = new Line2NodeMaterial({
     color: SELECTED_COLOR,
     linewidth: 2,
     depthTest: false,
@@ -345,13 +338,6 @@ export class MeasurementTool extends SceneExtension<Renderable, MeasurementToolE
     super.startFrame(currentTime, renderFrameId, fixedFrameId);
     this.#renderFrameId = renderFrameId;
     this.#fixedFrameId = fixedFrameId;
-    const { canvasSize } = this.renderer.input;
-    for (const material of [this.#circleMaterial, this.#selectedCircleMaterial]) {
-      material.uniforms.canvasSize!.value[0] = canvasSize.x;
-      material.uniforms.canvasSize!.value[1] = canvasSize.y;
-    }
-    this.#lineMaterial.resolution.copy(canvasSize);
-    this.#selectedLineMaterial.resolution.copy(canvasSize);
 
     for (const item of this.#items) {
       this.#updateItem(item, currentTime);

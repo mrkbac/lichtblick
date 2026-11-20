@@ -3,7 +3,7 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 import type { Mock } from "vitest";
 
 import { PinholeCameraModel } from "@lichtblick/den/image";
@@ -134,7 +134,7 @@ describe("ImageRenderable", () => {
   it("should dispose resources", () => {
     const renderable = new ImageRenderable(mockUserData.topic, mockRenderer, { ...mockUserData });
     renderable.userData.texture = new THREE.Texture();
-    renderable.userData.material = new THREE.ShaderMaterial();
+    renderable.userData.material = new THREE.MeshBasicNodeMaterial();
     renderable.userData.geometry = new THREE.PlaneGeometry();
     const close = vi.fn();
     renderable.videoPlayer = {
@@ -156,7 +156,7 @@ describe("ImageRenderable", () => {
     const renderable = new ImageRenderable(mockUserData.topic, mockRenderer, { ...mockUserData });
 
     renderable.userData.texture = new THREE.Texture();
-    renderable.userData.material = new THREE.ShaderMaterial();
+    renderable.userData.material = new THREE.MeshBasicNodeMaterial();
     renderable.setSettings({ ...renderable.userData.settings, brightness: newBrightnessValue });
     renderable.userData.geometry = new THREE.PlaneGeometry();
 
@@ -168,7 +168,7 @@ describe("ImageRenderable", () => {
     const renderable = new ImageRenderable(mockUserData.topic, mockRenderer, { ...mockUserData });
 
     renderable.userData.texture = new THREE.Texture();
-    renderable.userData.material = new THREE.ShaderMaterial();
+    renderable.userData.material = new THREE.MeshBasicNodeMaterial();
     renderable.setSettings({ ...renderable.userData.settings, contrast: newContrastValue });
     renderable.userData.geometry = new THREE.PlaneGeometry();
 

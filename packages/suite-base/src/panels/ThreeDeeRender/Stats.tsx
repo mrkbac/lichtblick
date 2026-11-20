@@ -37,6 +37,8 @@ export function Stats(): React.JSX.Element {
     const panels = counters.map(([name, color]) =>
       stats.addPanel(new StatsMonitor.Panel(name, color, "black")),
     );
+    const gpuPanel = stats.addPanel(new StatsMonitor.Panel("GPU ms", "orange", "black"));
+    let gpuMax = 0;
     const maxima = counters.map(() => 0);
     element.appendChild(stats.dom);
     stats.showPanel(1);
@@ -46,6 +48,12 @@ export function Stats(): React.JSX.Element {
         maxima[index] = Math.max(maxima[index]!, current);
         panels[index]!.update(current, maxima[index]);
       });
+      if (renderer.gpuTimeMs != undefined) {
+        gpuMax = Math.max(gpuMax, renderer.gpuTimeMs);
+        gpuPanel.update(renderer.gpuTimeMs, gpuMax);
+        // Readable by scripts (benchmarks); the panels are drawn into a canvas
+        element.dataset.gpuMs = renderer.gpuTimeMs.toFixed(3);
+      }
       stats.update();
     };
     return () => {

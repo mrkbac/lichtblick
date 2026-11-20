@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 import { SettingsTreeField, Topic } from "@lichtblick/suite";
 import {
@@ -11,12 +11,11 @@ import {
 import { BasicBuilder } from "@lichtblick/test-builders";
 
 import {
-  createCubeMaterials,
   createGeometry,
-  disposeCubeMaterials,
   HistoryLimits,
   PointsRenderable,
   RenderObjectHistory,
+  pointStyle,
 } from "./pointExtensionUtils";
 import type { BaseUserData } from "../Renderable";
 import type { Renderer } from "../Renderer";
@@ -227,48 +226,47 @@ describe("RenderObjectHistory", () => {
 
 describe("PointsRenderable mesh shapes", () => {
   function setup() {
-    const materials = createCubeMaterials(DEFAULT_POINT_SETTINGS);
     const geometry = createGeometry("/points", THREE.DynamicDrawUsage);
-    const points = new PointsRenderable(
-      "/points",
-      { topic: "/points" } as BaseUserData,
-      geometry,
-      new THREE.PointsMaterial(),
-      new THREE.MeshBasicMaterial(),
-      new THREE.MeshBasicMaterial(),
-    );
-    const meshes = () =>
-      points.children.filter((child): child is THREE.Mesh => child instanceof THREE.Mesh);
+    geometry.resize(3);
+    const points = new PointsRenderable("/points", { topic: "/points" } as BaseUserData, geometry);
+    points.syncPoints();
+    const all = () => {
+      const found: THREE.Object3D[] = [];
+      points.traverse((child) => found.push(child));
+      return found;
+    };
+    const meshes = () => all().filter((child): child is THREE.Mesh => child instanceof THREE.Mesh);
     const lines = () =>
-      points.children.filter(
-        (child): child is THREE.LineSegments => child instanceof THREE.LineSegments,
-      );
-    return { materials, points, meshes, lines };
+      all().filter((child): child is THREE.LineSegments => child instanceof THREE.LineSegments);
+    const style = (shape: "point" | "cube" | "sphere", { outline = false } = {}) => ({
+      ...pointStyle(DEFAULT_POINT_SETTINGS),
+      shape,
+      outline,
+    });
+    return { points, meshes, lines, style };
   }
 
   it("swaps the instanced geometry between cubes and spheres", () => {
-    const { materials, points, meshes } = setup();
-    points.setCubeMaterials(materials, { shape: "cube", showOutline: false });
+    const { points, meshes, style } = setup();
+    points.setStyle(style("cube"));
     const cubeVertices = meshes()[0]!.geometry.attributes.position!.count;
-    points.setCubeMaterials(materials, { shape: "sphere", showOutline: false });
+    points.setStyle(style("sphere"));
     expect(meshes()).toHaveLength(1);
     expect(meshes()[0]!.visible).toBe(true);
     expect(meshes()[0]!.geometry.attributes.position!.count).toBeGreaterThan(cubeVertices);
+    points.setStyle(style("point"));
+    expect(meshes()).toHaveLength(0);
     points.dispose();
-    disposeCubeMaterials(materials);
   });
 
   it("draws cube outlines only when asked and never for spheres", () => {
-    const { materials, points, lines } = setup();
-    points.setCubeMaterials(materials, { shape: "cube", showOutline: false });
+    const { points, lines, style } = setup();
+    points.setStyle(style("cube"));
     expect(lines()).toHaveLength(0);
-    points.setCubeMaterials(materials, { shape: "cube", showOutline: true });
-    expect(lines()[0]!.visible).toBe(true);
-    points.setCubeMaterials(materials, { shape: "sphere", showOutline: true });
-    expect(lines()[0]!.visible).toBe(false);
-    points.setCubeMaterials(undefined);
-    expect(lines()[0]!.visible).toBe(false);
+    points.setStyle(style("cube", { outline: true }));
+    expect(lines()).toHaveLength(1);
+    points.setStyle(style("sphere", { outline: true }));
+    expect(lines()).toHaveLength(0);
     points.dispose();
-    disposeCubeMaterials(materials);
   });
 });

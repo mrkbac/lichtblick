@@ -5,7 +5,30 @@
 // float texture and the vertex shader displaces and shades the surface.
 
 import { toNanoSec } from "@foxglove/rostime";
-import * as THREE from "three";
+import {
+  Discard,
+  Fn,
+  If,
+  clamp,
+  dot,
+  floor,
+  ivec2,
+  max as maxNode,
+  min as minNode,
+  mix,
+  modelWorldMatrix,
+  normalize,
+  positionGeometry,
+  select,
+  texture as textureNode,
+  uniform,
+  uv as uvNode,
+  varyingProperty,
+  vec2,
+  vec3,
+  vec4,
+} from "three/tsl";
+import * as THREE from "three/webgpu";
 
 import { SettingsTreeAction } from "@lichtblick/suite";
 import type { RosValue } from "@lichtblick/suite-base/players/types";
@@ -99,33 +122,23 @@ export function decodeGridMapLayer(
 
 // ---- Rendering ----
 
-type GridMapMaterial = THREE.ShaderMaterial & {
-  uniforms: {
-    map: THREE.IUniform<THREE.DataTexture>;
-    cells: THREE.IUniform<THREE.DataTexture>;
-    cellResolution: THREE.IUniform<number>;
-    useElevation: THREE.IUniform<boolean>;
-    lighting: THREE.IUniform<boolean>;
-    objectId: THREE.IUniform<number[]>;
-  };
-};
+type GridMapUniforms = ReturnType<typeof createUniforms>;
 
 export type GridMapUserData = BaseUserData & {
   settings: LayerSettingsGridMap;
   topic: string;
   gridMap: GridMap;
-  mesh: THREE.Mesh<THREE.PlaneGeometry, GridMapMaterial>;
-  pickingMaterial: GridMapMaterial;
+  mesh: THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicNodeMaterial>;
+  uniforms: GridMapUniforms;
 };
 
 export class GridMapRenderable extends Renderable<GridMapUserData> {
   public override dispose(): void {
-    const { mesh, pickingMaterial } = this.userData;
+    const { mesh, uniforms } = this.userData;
     mesh.geometry.dispose();
-    mesh.material.uniforms.map.value.dispose();
-    mesh.material.uniforms.cells.value.dispose();
+    uniforms.map.value.dispose();
+    uniforms.cells.value.dispose();
     mesh.material.dispose();
-    pickingMaterial.dispose();
   }
 
   public override details(): Record<string, RosValue> {
@@ -204,12 +217,8 @@ export class GridMaps extends SceneExtension<GridMapRenderable> {
 
     let renderable = this.renderables.get(topic);
     if (!renderable) {
-      const material = createMaterial(topic);
-      const pickingMaterial = material.clone();
-      pickingMaterial.defines = { PICKING: 1 };
-      pickingMaterial.uniforms = material.uniforms;
-      const mesh = new THREE.Mesh(new THREE.PlaneGeometry(), material);
-      mesh.userData.pickingMaterial = pickingMaterial;
+      const uniforms = createUniforms();
+      const mesh = new THREE.Mesh(new THREE.PlaneGeometry(), createMaterial(uniforms, topic));
       renderable = new GridMapRenderable(topic, this.renderer, {
         receiveTime: 0n,
         messageTime: 0n,
@@ -220,7 +229,7 @@ export class GridMaps extends SceneExtension<GridMapRenderable> {
         topic,
         gridMap,
         mesh,
-        pickingMaterial,
+        uniforms,
       });
       renderable.add(mesh);
       this.add(renderable);
@@ -236,7 +245,7 @@ export class GridMaps extends SceneExtension<GridMapRenderable> {
   };
 
   #update(renderable: GridMapRenderable): void {
-    const { gridMap, settings, topic, mesh } = renderable.userData;
+    const { gridMap, settings, topic, mesh, uniforms } = renderable.userData;
     const size = gridMapSize(gridMap);
     const { sizeX, sizeY } = size;
     const error = (message: string) => {
@@ -285,29 +294,30 @@ export class GridMaps extends SceneExtension<GridMapRenderable> {
 
     const { resolution } = gridMap.info;
     const material = mesh.material;
-    const { uniforms } = material;
-    uniforms.map.value = updateTexture(
-      uniforms.map.value,
+    const map = updateTexture(
+      uniforms.map.value as THREE.DataTexture,
       colorTextureData(colors, sizeX, settings),
       sizeX,
       sizeY,
       THREE.RGBAFormat,
       THREE.UnsignedByteType,
     );
-    uniforms.map.value.colorSpace = THREE.SRGBColorSpace;
+    map.colorSpace = THREE.SRGBColorSpace;
     const filter = settings.interpolation === "nearest" ? THREE.NearestFilter : THREE.LinearFilter;
-    uniforms.map.value.magFilter = uniforms.map.value.minFilter = filter;
+    map.magFilter = map.minFilter = filter;
+    uniforms.map.value = map;
     uniforms.cells.value = updateTexture(
-      uniforms.cells.value,
+      uniforms.cells.value as THREE.DataTexture,
       cellTextureData(colors, heights),
       sizeX,
       sizeY,
       THREE.RGFormat,
       THREE.FloatType,
     );
+    uniforms.cellCount.value.set(sizeX, sizeY);
     uniforms.cellResolution.value = resolution;
-    uniforms.useElevation.value = heights != undefined;
-    uniforms.lighting.value = settings.lighting;
+    uniforms.useElevation.value = heights != undefined ? 1 : 0;
+    uniforms.lighting.value = settings.lighting ? 1 : 0;
 
     const transparent = colorHasTransparency(settings);
     if (material.transparent !== transparent || material.depthTest === settings.drawBehind) {
@@ -460,95 +470,74 @@ function emptyTexture(format: THREE.PixelFormat, type: THREE.TextureDataType): T
   );
 }
 
-function createMaterial(topic: string): GridMapMaterial {
-  return new THREE.ShaderMaterial({
+function createUniforms() {
+  return {
+    map: textureNode(emptyTexture(THREE.RGBAFormat, THREE.UnsignedByteType)),
+    /** Per cell: (height, valid) */
+    cells: textureNode(emptyTexture(THREE.RGFormat, THREE.FloatType)),
+    /** Cells in x and y */
+    cellCount: uniform(new THREE.Vector2(1, 1)),
+    cellResolution: uniform(1),
+    useElevation: uniform(0),
+    lighting: uniform(1),
+  };
+}
+
+function createMaterial(u: GridMapUniforms, topic: string): THREE.MeshBasicNodeMaterial {
+  const material = new THREE.MeshBasicNodeMaterial({
     name: `${topic}:Material`,
     side: THREE.DoubleSide,
-    uniforms: {
-      map: { value: emptyTexture(THREE.RGBAFormat, THREE.UnsignedByteType) },
-      cells: { value: emptyTexture(THREE.RGFormat, THREE.FloatType) },
-      cellResolution: { value: 1 },
-      useElevation: { value: false },
-      lighting: { value: true },
-      objectId: { value: [NaN, NaN, NaN, NaN] },
-    },
-    defines: { PICKING: 0 },
-    vertexShader: /* glsl */ `
-      uniform sampler2D cells;
-      uniform float cellResolution;
-      uniform bool useElevation;
-      uniform bool lighting;
-      varying vec2 vUv;
-      varying float vShade;
+  });
+  const size = u.cellCount;
+  // (height, valid) of the cell at `c` (cell coordinates), clamped to the map edge
+  const cellAt = (c: THREE.Node<"vec2">) =>
+    u.cells.load(ivec2(minNode(maxNode(c, 0), size.sub(1)))).rg;
+  const vShade = varyingProperty("float", "vShade");
 
-      // (height, valid) of cell c, clamped to the map edge
-      vec2 cellAt(ivec2 c) {
-        return texelFetch(cells, clamp(c, ivec2(0), textureSize(cells, 0) - 1), 0).rg;
-      }
+  material.positionNode = Fn(() => {
+    const pos = positionGeometry.toVar();
+    const normal = vec3(0, 0, 1).toVar();
+    If(u.useElevation.greaterThan(0.5), () => {
+      const c = floor(uvNode().mul(size));
+      const l = cellAt(c.sub(vec2(1, 0)));
+      const r = cellAt(c.add(vec2(1, 0)));
+      const d = cellAt(c.sub(vec2(0, 1)));
+      const t = cellAt(c.add(vec2(0, 1)));
+      const self = cellAt(c);
+      // A hole has no height: take the mean of its valid neighbors, so the valid half of each
+      // adjacent triangle stays level instead of dropping to zero
+      const count = l.y.add(r.y).add(d.y).add(t.y);
+      const sum = l.x.mul(l.y).add(r.x.mul(r.y)).add(d.x.mul(d.y)).add(t.x.mul(t.y));
+      const mean = select(count.greaterThan(0), sum.div(count), 0);
+      const h = select(self.y.greaterThan(0.5), self.x, mean);
+      const heightOr = (cell: THREE.Node<"vec2">) => select(cell.y.greaterThan(0.5), cell.x, h);
+      pos.z.assign(h);
+      normal.assign(
+        normalize(
+          vec3(
+            heightOr(l).sub(heightOr(r)).div(u.cellResolution.mul(2)),
+            heightOr(d).sub(heightOr(t)).div(u.cellResolution.mul(2)),
+            1,
+          ),
+        ),
+      );
+    });
+    // Light from above and slightly to the side; a level surface keeps its true color
+    const lightDir = normalize(vec3(-0.4, -0.3, 1));
+    const worldNormal = normalize(modelWorldMatrix.mul(vec4(normal, 0)).xyz);
+    const shade = clamp(dot(worldNormal, lightDir).div(lightDir.z).mul(0.65).add(0.35), 0.35, 1.15);
+    vShade.assign(mix(1, shade, u.lighting));
+    return pos;
+  })();
 
-      void main() {
-        vUv = uv;
-        vec3 pos = position;
-        vec3 normal = vec3(0.0, 0.0, 1.0);
-        if (useElevation) {
-          ivec2 c = ivec2(floor(uv * vec2(textureSize(cells, 0))));
-          vec2 l = cellAt(c - ivec2(1, 0));
-          vec2 r = cellAt(c + ivec2(1, 0));
-          vec2 d = cellAt(c - ivec2(0, 1));
-          vec2 u = cellAt(c + ivec2(0, 1));
-          vec2 self = cellAt(c);
-          // A hole has no height: take the mean of its valid neighbors, so the valid half of
-          // each adjacent triangle stays level instead of dropping to zero
-          float count = l.g + r.g + d.g + u.g;
-          float mean = count > 0.0 ? (l.r * l.g + r.r * r.g + d.r * d.g + u.r * u.g) / count : 0.0;
-          float h = self.g > 0.5 ? self.r : mean;
-          float left = l.g > 0.5 ? l.r : h;
-          float right = r.g > 0.5 ? r.r : h;
-          float down = d.g > 0.5 ? d.r : h;
-          float up = u.g > 0.5 ? u.r : h;
-          pos.z = h;
-          normal = normalize(vec3(
-            (left - right) / (2.0 * cellResolution),
-            (down - up) / (2.0 * cellResolution),
-            1.0
-          ));
-        }
-        vShade = 1.0;
-        if (lighting) {
-          // Light from above and slightly to the side; a level surface keeps its true color
-          const vec3 lightDir = normalize(vec3(-0.4, -0.3, 1.0));
-          vec3 worldNormal = normalize(mat3(modelMatrix) * normal);
-          vShade = clamp(0.35 + 0.65 * dot(worldNormal, lightDir) / lightDir.z, 0.35, 1.15);
-        }
-        gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
-      }
-    `,
-    fragmentShader: /* glsl */ `
-      uniform sampler2D map;
-      uniform sampler2D cells;
-      uniform vec4 objectId;
-      varying vec2 vUv;
-      varying float vShade;
-
-      void main() {
-        ivec2 size = textureSize(cells, 0);
-        ivec2 c = clamp(ivec2(floor(vUv * vec2(size))), ivec2(0), size - 1);
-        if (texelFetch(cells, c, 0).g < 0.5) {
-          discard;
-        }
-        vec4 color = texture2D(map, vUv);
-        if (color.a <= 0.0) {
-          discard;
-        }
-        #if PICKING == 1
-          gl_FragColor = objectId;
-        #else
-          gl_FragColor = vec4(color.rgb * vShade, color.a);
-          #include <colorspace_fragment>
-        #endif
-      }
-    `,
-  }) as GridMapMaterial;
+  material.colorNode = Fn(() => {
+    const c = floor(uvNode().mul(size));
+    Discard(cellAt(c).y.lessThan(0.5));
+    const color = u.map.sample(uvNode());
+    Discard(color.a.lessThanEqual(0));
+    return vec4(color.rgb.mul(vShade), color.a);
+  })();
+  return material;
 }
 
 function normalizeFloat32MultiArray(

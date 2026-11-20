@@ -238,6 +238,8 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
     configRef,
     config.scene.transforms?.enablePreloading,
     config.scene.logDepth,
+    // GPU timing is set up with the renderer
+    config.scene.enableStats,
     customCameraModels,
     interfaceMode,
     fetchAsset,

@@ -6,7 +6,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { toNanoSec } from "@foxglove/rostime";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 import { SettingsTreeAction } from "@lichtblick/suite";
 import type { RosValue } from "@lichtblick/suite-base/players/types";
@@ -55,15 +55,13 @@ export type OccupancyGridUserData = BaseUserData & {
   occupancyGrid: OccupancyGrid;
   mesh: THREE.Mesh;
   texture: THREE.DataTexture;
-  material: THREE.MeshBasicMaterial;
-  pickingMaterial: THREE.ShaderMaterial;
+  material: THREE.MeshBasicNodeMaterial;
 };
 
 export class OccupancyGridRenderable extends Renderable<OccupancyGridUserData> {
   public override dispose(): void {
     this.userData.texture.dispose();
     this.userData.material.dispose();
-    this.userData.pickingMaterial.dispose();
   }
 
   public override details(): Record<string, RosValue> {
@@ -154,8 +152,7 @@ export class OccupancyGrids extends SceneExtension<OccupancyGridRenderable> {
         createGeometry,
       );
       const mesh = createMesh(topic, geometry, texture, settings);
-      const material = mesh.material as THREE.MeshBasicMaterial;
-      const pickingMaterial = mesh.userData.pickingMaterial as THREE.ShaderMaterial;
+      const material = mesh.material as THREE.MeshBasicNodeMaterial;
 
       // Create the renderable
       renderable = new OccupancyGridRenderable(topic, this.renderer, {
@@ -170,7 +167,6 @@ export class OccupancyGrids extends SceneExtension<OccupancyGridRenderable> {
         mesh,
         texture,
         material,
-        pickingMaterial,
       });
       renderable.add(mesh);
 
@@ -261,14 +257,9 @@ function createMesh(
   texture: THREE.DataTexture,
   settings: LayerSettingsOccupancyGrid,
 ): THREE.Mesh {
-  // Create the texture, material, and mesh
-  const pickingMaterial = createPickingMaterial(texture);
-  const material = createMaterial(texture, topic, settings);
-  const mesh = new THREE.Mesh(geometry, material);
+  const mesh = new THREE.Mesh(geometry, createMaterial(texture, topic, settings));
   mesh.castShadow = true;
   mesh.receiveShadow = true;
-  // This overrides the picking material used for `mesh`. See Picker.ts
-  mesh.userData.pickingMaterial = pickingMaterial;
   return mesh;
 }
 
@@ -337,9 +328,10 @@ function createMaterial(
   texture: THREE.DataTexture,
   topic: string,
   settings: LayerSettingsOccupancyGrid,
-): THREE.MeshBasicMaterial {
+): THREE.MeshBasicNodeMaterial {
   const transparent = occupancyGridHasTransparency(settings);
-  return new THREE.MeshBasicMaterial({
+  // The alpha test also discards empty cells in the picking pass, which derives from this material
+  return new THREE.MeshBasicNodeMaterial({
     name: `${topic}:Material`,
     // Enable alpha clipping. Fully transparent (alpha=0) pixels are skipped
     // even when transparency is disabled
@@ -348,32 +340,6 @@ function createMaterial(
     map: texture,
     side: THREE.DoubleSide,
     transparent,
-  });
-}
-
-function createPickingMaterial(texture: THREE.DataTexture): THREE.ShaderMaterial {
-  return new THREE.ShaderMaterial({
-    vertexShader: /* glsl */ `
-      varying vec2 vUv;
-      void main() {
-        vUv = uv;
-        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-      }
-    `,
-    fragmentShader: /* glsl */ `
-      uniform sampler2D map;
-      uniform vec4 objectId;
-      varying vec2 vUv;
-      void main() {
-        vec4 color = texture2D(map, vUv);
-        if (color.a == 0.0) {
-          discard;
-        }
-        gl_FragColor = objectId;
-      }
-    `,
-    side: THREE.DoubleSide,
-    uniforms: { map: { value: texture }, objectId: { value: [NaN, NaN, NaN, NaN] } },
   });
 }
 
