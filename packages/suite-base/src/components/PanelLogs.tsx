@@ -6,7 +6,9 @@ import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import DeleteSweep from "@mui/icons-material/DeleteSweep";
 import DragIndicatorIcon from "@mui/icons-material/DragIndicator";
 import { Chip, IconButton, Typography } from "@mui/material";
+import { useSnackbar } from "notistack";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 import { useStylesPanelLogs } from "@lichtblick/suite-base/components/PanelLogs.style";
 import { PanelLog, PanelLogLevel, PanelLogsProps } from "@lichtblick/suite-base/components/types";
@@ -32,6 +34,8 @@ export default function PanelLogs({
   onHeightChange,
 }: PanelLogsProps): React.ReactElement {
   const { classes, cx } = useStylesPanelLogs();
+  const { t } = useTranslation("panelLogs");
+  const { enqueueSnackbar } = useSnackbar();
   const [height, setHeight] = useState(initialHeight);
   const [isDragging, setIsDragging] = useState(false);
   const [hiddenLevels, setHiddenLevels] = useState<ReadonlySet<PanelLogLevel>>(new Set());
@@ -112,8 +116,10 @@ export default function PanelLogs({
   }, []);
 
   const copyLogs = useCallback(() => {
-    void navigator.clipboard.writeText(visibleLogs.map(formatLog).join("\n"));
-  }, [visibleLogs]);
+    navigator.clipboard.writeText(visibleLogs.map(formatLog).join("\n")).catch(() => {
+      enqueueSnackbar(t("copyFailed"), { variant: "error" });
+    });
+  }, [enqueueSnackbar, t, visibleLogs]);
 
   // Keep the newest entry in view unless the user scrolled up to read older ones.
   useLayoutEffect(() => {
@@ -133,17 +139,13 @@ export default function PanelLogs({
 
   return (
     <div className={classes.root} style={{ height: `${height}px`, maxHeight: "none" }}>
-      <div
-        className={classes.resizeHandle}
-        onMouseDown={handleMouseDown}
-        title="Drag to resize panel logs"
-      >
+      <div className={classes.resizeHandle} onMouseDown={handleMouseDown} title={t("resize")}>
         <DragIndicatorIcon className={classes.resizeIcon} />
       </div>
 
       <div className={classes.header}>
         <Typography variant="subtitle2" className={classes.title}>
-          Logs ({logs.length})
+          {t("title", { count: logs.length })}
         </Typography>
         <div className={classes.filters}>
           {LEVELS.map((level) => {
@@ -160,7 +162,7 @@ export default function PanelLogs({
                 variant={shown ? "filled" : "outlined"}
                 className={cx(classes.chip, shown && classes[`${level}Chip`])}
                 aria-pressed={shown}
-                title={shown ? `Hide ${level} entries` : `Show ${level} entries`}
+                title={t(shown ? "hideLevel" : "showLevel", { level })}
                 onClick={() => {
                   toggleLevel(level);
                 }}
@@ -172,7 +174,7 @@ export default function PanelLogs({
           <IconButton
             size="small"
             onClick={copyLogs}
-            title="Copy to clipboard"
+            title={t("copy")}
             disabled={visibleLogs.length === 0}
           >
             <ContentCopyIcon fontSize="small" />
@@ -180,12 +182,12 @@ export default function PanelLogs({
           <IconButton
             size="small"
             onClick={onClear}
-            title="Clear logs"
+            title={t("clear")}
             disabled={logs.length === 0}
           >
             <DeleteSweep fontSize="small" />
           </IconButton>
-          <IconButton size="small" onClick={onClose} title="Close logs">
+          <IconButton size="small" onClick={onClose} title={t("close")}>
             <CloseIcon fontSize="small" />
           </IconButton>
         </div>
@@ -194,20 +196,20 @@ export default function PanelLogs({
       <div className={classes.listContainer} ref={listRef} onScroll={handleScroll} role="log">
         {logs.length === 0 ? (
           <div className={classes.empty}>
-            <Typography variant="body2">No logs yet.</Typography>
+            <Typography variant="body2">{t("empty")}</Typography>
             <Typography variant="caption" color="text.secondary">
-              Errors and log messages will appear here.
+              {t("emptyHint")}
             </Typography>
           </div>
         ) : visibleLogs.length === 0 ? (
           <div className={classes.empty}>
             <Typography variant="body2" color="text.secondary">
-              All entries are hidden by the level filter.
+              {t("allFiltered")}
             </Typography>
           </div>
         ) : (
-          visibleLogs.map((log, idx) => (
-            <div key={idx} className={cx(classes.row, classes[`${log.level}Row`])}>
+          visibleLogs.map((log) => (
+            <div key={log.id} className={cx(classes.row, classes[`${log.level}Row`])}>
               <span className={cx(classes.level, classes[log.level])}>
                 {log.level.toUpperCase()}
               </span>
@@ -215,13 +217,13 @@ export default function PanelLogs({
                 <span className={classes.message}>{log.message}</span>
                 {log.error && (
                   <details className={classes.details}>
-                    <summary>Stack trace</summary>
+                    <summary>{t("stackTrace")}</summary>
                     <pre className={classes.stack}>{log.error.stack ?? log.error.message}</pre>
                   </details>
                 )}
               </div>
               {(log.count ?? 1) > 1 && (
-                <span className={classes.repeat} title={`Repeated ${log.count} times`}>
+                <span className={classes.repeat} title={t("repeated", { count: log.count })}>
                   ×{log.count}
                 </span>
               )}

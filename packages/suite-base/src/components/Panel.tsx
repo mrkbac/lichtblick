@@ -116,6 +116,7 @@ export default function Panel<
     const [logs, setLogs] = useState<PanelLog[]>([]);
     const [showLogs, setShowLogs] = useState(false);
 
+    const nextLogId = useRef(0);
     const addLog = useCallback((level: PanelLogLevel, message: string, error?: Error) => {
       // Keep only the newest entries: an unbounded log copies an ever-growing array per append
       const timestamp = new Date().toLocaleTimeString();
@@ -130,7 +131,10 @@ export default function Panel<
         ) {
           return [...prev.slice(0, -1), { ...last, timestamp, count: (last.count ?? 1) + 1 }];
         }
-        return [...prev.slice(-(MAX_PANEL_LOGS - 1)), { timestamp, level, message, error }];
+        return [
+          ...prev.slice(-(MAX_PANEL_LOGS - 1)),
+          { id: nextLogId.current++, timestamp, level, message, error },
+        ];
       });
     }, []);
     const logSeverity = useMemo(() => {

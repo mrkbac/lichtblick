@@ -72,6 +72,8 @@ export type PanelErrorBoundaryState = {
 export type PanelLogLevel = "debug" | "info" | "warn" | "error";
 
 export type PanelLog = {
+  /** Unique within the panel; stays the same when repeats are folded into the entry. */
+  id: number;
   timestamp: string;
   level: PanelLogLevel;
   message: string;
