@@ -45,6 +45,10 @@ export default defineConfig({
             "--enable-features=Vulkan",
             "--use-vulkan=swiftshader",
             "--use-webgpu-adapter=swiftshader",
+            // Without a display (no xvfb), the GPU process also needs SwiftShader GL to start
+            ...(process.platform === "linux"
+              ? ["--use-angle=swiftshader", "--enable-unsafe-swiftshader"]
+              : []),
           ],
         },
       },
