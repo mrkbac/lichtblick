@@ -474,6 +474,8 @@ export class CameraStateSettings extends SceneExtension implements ICameraHandle
 
   public handleResize(width: number, height: number, _pixelRatio: number): void {
     this.#aspect = width / height;
+    // Write a pending camera move first, or this would put the camera back where it last rested
+    this.#commitCameraState.flush();
     this.setCameraState(this.renderer.config.cameraState);
   }
 

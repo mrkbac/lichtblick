@@ -287,6 +287,22 @@ describe("CameraStateSettings", () => {
     }
   });
 
+  it("keeps a camera move that is followed by a resize before the camera rests", () => {
+    vi.useFakeTimers();
+    try {
+      const handler = renderer.cameraHandler as CameraStateSettings;
+      mockOrbitControls.getDistance.mockReturnValue(30);
+      renderer.emit("cameraMove", renderer);
+
+      handler.handleResize(200, 100, 1);
+
+      expect(renderer.config.cameraState.distance).toBe(30);
+      expect(handler.getActiveCamera().position.length()).toBeCloseTo(30);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   describe("screen space panning", () => {
     const aspect = 16 / 9;
 
