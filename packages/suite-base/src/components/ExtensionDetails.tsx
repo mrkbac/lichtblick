@@ -11,7 +11,7 @@ import DOMPurify from "dompurify";
 import { useState } from "react";
 
 import { formatByteSize } from "@lichtblick/den/format";
-import { useAsync, useMountedState } from "@lichtblick/hooks";
+import { useAsync } from "@lichtblick/hooks";
 import { useStylesExtensionDetails } from "@lichtblick/suite-base/components/ExtensionDetails.style";
 import { InstallButton } from "@lichtblick/suite-base/components/ExtensionsSettings/components/ExtensionActionButton/InstallButton";
 import { UninstallButton } from "@lichtblick/suite-base/components/ExtensionsSettings/components/ExtensionActionButton/UninstallButton";
@@ -44,21 +44,16 @@ export function ExtensionDetails({
   const { classes } = useStylesExtensionDetails();
   const [isInstalled, setIsInstalled] = useState(installed);
   const [activeTab, setActiveTab] = useState<number>(0);
-  const isMounted = useMountedState();
   const marketplace = useExtensionMarketplace();
   const readme = extension.readme;
   const changelog = extension.changelog;
 
   const { handleInstall, handleUninstall, operationStatus } = useExtensionOperations({
     onInstallSuccess: () => {
-      if (isMounted()) {
-        setIsInstalled(true);
-      }
+      setIsInstalled(true);
     },
     onUninstallSuccess: () => {
-      if (isMounted()) {
-        setIsInstalled(false);
-      }
+      setIsInstalled(false);
     },
   });
 
