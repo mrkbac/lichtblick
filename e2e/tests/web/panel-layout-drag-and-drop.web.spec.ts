@@ -273,8 +273,9 @@ test.describe("panel layout drag and drop", { tag: "@smoke" }, () => {
     await outer.getByTitle("Exit fullscreen", { exact: true }).first().click();
     await expect.poll(async () => (await panel.boundingBox())!.width).toBeCloseTo(before.width, 0);
     expect(await canvas.evaluate((element) => element.isConnected)).toBe(true);
-    expect(await canvas.evaluate((element) => element.getContext("webgl2")?.isContextLost())).toBe(
-      false,
+    // The 3D panel draws with WebGPU; its canvas keeps that context
+    expect(await canvas.evaluate((element) => element.getContext("webgpu") != undefined)).toBe(
+      true,
     );
     await canvas.dispose();
   });

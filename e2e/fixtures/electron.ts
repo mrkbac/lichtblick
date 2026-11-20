@@ -34,15 +34,22 @@ export const test = base.extend<ElectronFixtures & { electronArgs: string[] }>({
         WEBPACK_PATH,
         `--user-data-dir=${userDataDir}`,
         `--home-dir=${homeDir}`,
-        // Force ANGLE's SwiftShader backend so GPU-heavy panels (3D/WebGL, Image)
-        // render reliably under headless CI. Newer Chromium (Electron 42) changed
-        // its SwiftShader fallback, which slowed panel initialization past the
-        // Playwright per-test timeout. The macOS Electron build has no SwiftShader
-        // WebGL2, so local macOS runs use Metal.
+        // Force ANGLE's SwiftShader backend so WebGL panels (Image, maps) render reliably
+        // under headless CI, and SwiftShader's Vulkan for WebGPU (the 3D panel), which Linux
+        // CI has no GPU for. Newer Chromium (Electron 42) changed its SwiftShader fallback,
+        // which slowed panel initialization past the Playwright per-test timeout. The macOS
+        // Electron build has no SwiftShader WebGL2, so local macOS runs use Metal.
         "--use-gl=angle",
+        "--enable-unsafe-webgpu",
         ...(process.platform === "darwin"
           ? ["--use-angle=metal"]
-          : ["--use-angle=swiftshader", "--enable-unsafe-swiftshader"]),
+          : [
+              "--use-angle=swiftshader",
+              "--enable-unsafe-swiftshader",
+              "--enable-features=Vulkan",
+              "--use-vulkan=swiftshader",
+              "--use-webgpu-adapter=swiftshader",
+            ]),
         ...electronArgs,
       ],
       executablePath: electronPath as unknown as string,

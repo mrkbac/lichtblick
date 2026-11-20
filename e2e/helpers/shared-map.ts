@@ -5,50 +5,61 @@ import { expect, Locator, Page } from "@playwright/test";
 
 import { loadFiles } from "../fixtures/load-files";
 
+/**
+ * Color counts of what the panel shows over the map canvas: the map (WebGL) and the 3D scene
+ * (WebGPU, its own canvas stacked above) composite only on screen, so read a screenshot.
+ */
 async function pixels(canvas: Locator) {
-  return await canvas.evaluate((element: HTMLCanvasElement) => {
-    const gl = element.getContext("webgl2")!;
-    const { width, height } = element;
-    const data = new Uint8Array(width * height * 4);
-    gl.readPixels(0, 0, width, height, gl.RGBA, gl.UNSIGNED_BYTE, data);
-    let blue = 0;
-    let red = 0;
-    let green = 0;
-    let redX = 0;
-    let redY = 0;
-    let lineWidth = 0;
-    const column = Math.floor(width * 0.75);
-    for (let y = 0; y < height; y++) {
-      for (let x = 0; x < width; x++) {
-        const i = (y * width + x) * 4;
-        if (data[i] > 150 && data[i + 1] < 80 && data[i + 2] < 80) {
-          red++;
-          redX += x;
-          redY += y;
-        }
-        if (data[i + 2] > data[i] * 2 && data[i + 2] > data[i + 1] * 2) {
-          blue++;
-        }
-        if (data[i + 1] > data[i] * 2 && data[i + 1] > data[i + 2] * 2) {
-          green++;
-          if (x === column) {
-            lineWidth++;
+  const rect = (await canvas.boundingBox())!;
+  const png = (await canvas.screenshot()).toString("base64");
+  return await canvas.page().evaluate(
+    async ({ data, rect: box }) => {
+      const image = new Image();
+      image.src = `data:image/png;base64,${data}`;
+      await image.decode();
+      const { width, height } = image;
+      const context = new OffscreenCanvas(width, height).getContext("2d")!;
+      context.drawImage(image, 0, 0);
+      const pixel = context.getImageData(0, 0, width, height).data;
+      let blue = 0;
+      let red = 0;
+      let green = 0;
+      let redX = 0;
+      let redY = 0;
+      let lineWidth = 0;
+      const column = Math.floor(width * 0.75);
+      for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+          const i = (y * width + x) * 4;
+          if (pixel[i] > 150 && pixel[i + 1] < 80 && pixel[i + 2] < 80) {
+            red++;
+            redX += x;
+            redY += y;
+          }
+          if (pixel[i + 2] > pixel[i] * 2 && pixel[i + 2] > pixel[i + 1] * 2) {
+            blue++;
+          }
+          if (pixel[i + 1] > pixel[i] * 2 && pixel[i + 1] > pixel[i + 2] * 2) {
+            green++;
+            if (x === column) {
+              lineWidth++;
+            }
           }
         }
       }
-    }
-    const rect = element.getBoundingClientRect();
-    return {
-      blue,
-      red,
-      green,
-      lineWidth: (lineWidth * rect.height) / height,
-      x: rect.x + ((redX / Math.max(1, red)) * rect.width) / width,
-      y: rect.y + ((height - redY / Math.max(1, red)) * rect.height) / height,
-      width,
-      height,
-    };
-  });
+      return {
+        blue,
+        red,
+        green,
+        lineWidth: (lineWidth * box.height) / height,
+        x: box.x + ((redX / Math.max(1, red)) * box.width) / width,
+        y: box.y + ((redY / Math.max(1, red)) * box.height) / height,
+        width,
+        height,
+      };
+    },
+    { data: png, rect },
+  );
 }
 
 /** Offline fixture: a red 3D cube at the GPS fix on a green vector road. */

@@ -24,11 +24,15 @@ export const test = base.extend<BenchmarkElectronFixtures>({
     const app = await electron.launch({
       args: [
         WEBPACK_PATH,
-        // Force ANGLE's SwiftShader backend so GPU-heavy scenarios (pointcloud/transform 3D
-        // panels) render reliably under headless CI, mirroring `e2e/fixtures/electron.ts`.
+        // SwiftShader for WebGL (ANGLE) and WebGPU (Vulkan, the 3D panel) so GPU-heavy
+        // scenarios render under headless CI, mirroring `e2e/fixtures/electron.ts`.
         "--use-gl=angle",
         "--use-angle=swiftshader",
         "--enable-unsafe-swiftshader",
+        "--enable-unsafe-webgpu",
+        "--enable-features=Vulkan",
+        "--use-vulkan=swiftshader",
+        "--use-webgpu-adapter=swiftshader",
       ],
       executablePath: electronPath as unknown as string,
     });
