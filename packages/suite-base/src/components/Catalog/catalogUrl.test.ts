@@ -80,6 +80,13 @@ describe("parseCatalog", () => {
       { version: 1, recordings: [{ id: "a", source: { type: "local-file", path: "a" } }] },
       /source/,
     ],
+    [
+      {
+        version: 1,
+        recordings: [{ id: "a", source: { type: "remote-file", url: "http://[bad" } }],
+      },
+      /Invalid URL/,
+    ],
   ])("rejects %j", (json, error) => {
     expect(() => parseCatalog(json, CATALOG_URL)).toThrow(error);
   });

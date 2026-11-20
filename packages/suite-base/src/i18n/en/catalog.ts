@@ -39,6 +39,7 @@ export const catalog = {
   openFolder: "Open folder…",
   openRecording: "Open recording",
   catalogHttpError: "Could not load the catalog (HTTP {{status}})",
+  catalogBadUrl: 'Not a valid catalog: "{{url}}" is not a URL.',
   catalogLoadError: "Could not load the catalog: {{reason}}",
   catalogNeedsId: "Not a valid catalog: recording {{number}} needs a unique id.",
   catalogNeedsSource:

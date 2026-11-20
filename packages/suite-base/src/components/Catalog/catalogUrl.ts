@@ -35,7 +35,7 @@ const SOURCE_TYPES = new Set(["remote-file", "foxglove-websocket"]);
 export class CatalogError extends Error {
   public constructor(
     message: string,
-    public readonly key: "catalogNotV1" | "catalogNeedsId" | "catalogNeedsSource",
+    public readonly key: "catalogNotV1" | "catalogNeedsId" | "catalogNeedsSource" | "catalogBadUrl",
     public readonly params: Record<string, string | number> = {},
   ) {
     super(message);
@@ -90,8 +90,16 @@ export function parseCatalog(json: unknown, catalogUrl: string): ServedCatalog {
       "catalogNotV1",
     );
   }
-  const resolve = (url: unknown) =>
-    typeof url === "string" && url !== "" ? new URL(url, catalogUrl).href : undefined;
+  const resolve = (url: unknown) => {
+    if (typeof url !== "string" || url === "") {
+      return undefined;
+    }
+    try {
+      return new URL(url, catalogUrl).href;
+    } catch {
+      throw new CatalogError(`Invalid URL "${url}"`, "catalogBadUrl", { url });
+    }
+  };
   const ids = new Set<string>();
   const recordings = json.recordings.map((entry: unknown, index): CatalogRecording => {
     if (!isRecord(entry) || typeof entry.id !== "string" || entry.id === "" || ids.has(entry.id)) {
