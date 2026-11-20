@@ -3,7 +3,10 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import { clampLeftSidebarPercentage } from "@lichtblick/suite-base/components/Sidebars/utils";
+import {
+  availableKey,
+  clampLeftSidebarPercentage,
+} from "@lichtblick/suite-base/components/Sidebars/utils";
 
 describe("clampLeftSidebarPercentage", () => {
   beforeEach(() => {
@@ -23,5 +26,17 @@ describe("clampLeftSidebarPercentage", () => {
     const percentage = 1;
     const result = clampLeftSidebarPercentage(percentage);
     expect(result).toBeGreaterThan(percentage);
+  });
+});
+
+describe("availableKey", () => {
+  const items = new Map([
+    ["panel", 1],
+    ["topics", 2],
+  ]);
+  it("keeps an available or closed selection and falls back to the first tab otherwise", () => {
+    expect(availableKey("topics", items)).toBe("topics");
+    expect(availableKey(undefined, items)).toBeUndefined();
+    expect(availableKey("attachments", items)).toBe("panel");
   });
 });
