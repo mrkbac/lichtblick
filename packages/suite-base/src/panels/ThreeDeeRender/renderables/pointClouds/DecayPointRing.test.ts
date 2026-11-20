@@ -42,6 +42,8 @@ function makeRing(limits = { maxEntries: 100, maxPoints: 1000 }) {
     geometry,
     slots: () => Array.from(geometry.attributes.scanSlot!.array),
     positions: () => Array.from(geometry.attributes.position!.array),
+    /** Buffer size in points, without copying the (possibly huge) array */
+    capacity: () => geometry.attributes.position!.array.length / 3,
     poseRow: (slot: number) =>
       Array.from((poses.image.data as Float32Array).slice(slot * 12, slot * 12 + 12)),
   };
@@ -279,28 +281,28 @@ describe("DecayPointRing", () => {
   });
 
   it("grows the buffers by at most 1.5x what the scans need", () => {
-    const { ring, positions } = makeRing({ maxEntries: 100, maxPoints: 1_000_000 });
+    const { ring, capacity } = makeRing({ maxEntries: 100, maxPoints: 1_000_000 });
     for (let i = 1; i <= 10; i++) {
       push(ring, BigInt(i), 100);
     }
 
     expect(ring.pointCount()).toBe(1000);
-    expect(positions().length / 3).toBeLessThanOrEqual(1500);
+    expect(capacity()).toBeLessThanOrEqual(1500);
   });
 
   it("shrinks the buffers once the history needs far less, keeping the live scans", () => {
-    const { ring, positions } = makeRing({ maxEntries: 100, maxPoints: 5_000_000 });
+    const { ring, geometry, capacity } = makeRing({ maxEntries: 100, maxPoints: 5_000_000 });
     push(ring, 1n, 1_000_000);
     push(ring, 2n, 1_000_000);
     push(ring, 3n, 1_000_000);
     push(ring, 4n, 10_000);
-    expect(positions().length / 3).toBeGreaterThanOrEqual(3_010_000);
+    expect(capacity()).toBeGreaterThanOrEqual(3_010_000);
 
     ring.expire(4n); // e.g. the decay time was lowered
 
     expect(ring.pointCount()).toBe(10_000);
-    expect(positions().length / 3).toBe(15_000);
-    expect(positions().slice(0, 3)).toEqual([4, 0, 0]);
+    expect(capacity()).toBe(15_000);
+    expect(Array.from(geometry.attributes.position!.array.subarray(0, 3))).toEqual([4, 0, 0]);
     ring.updatePoses(transformTree, 0n, "map", "map");
     expect(ring.drawSpans()).toEqual([{ start: 0, count: 10_000 }]);
   });
