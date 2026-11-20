@@ -53,7 +53,7 @@ import { localResourceFolders } from "@lichtblick/suite-base/util/localResourceF
 import type { ImageModeConfig, RendererConfig, RendererSubscription } from "./IRenderer";
 import type { Path } from "./LayerErrors";
 import type { PickedRenderable } from "./Picker";
-import { Renderer } from "./Renderer";
+import { NO_FRAME_SELECTED, Renderer } from "./Renderer";
 import { RendererContext, useRendererEvent, useRendererProperty } from "./RendererContext";
 import { RendererOverlay } from "./RendererOverlay";
 import { onlyLastByTopicMessage } from "./SceneExtension";
@@ -402,8 +402,9 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
 
   // Log LayerErrors to PanelLogs
   const handleLayerErrorUpdate = useCallback(
-    (path: Path, _errorId: string, errorMessage: string) => {
-      if (logError != undefined) {
+    (path: Path, errorId: string, errorMessage: string) => {
+      // Every panel starts without frames; logging that floods the log after each seek
+      if (logError != undefined && errorId !== NO_FRAME_SELECTED) {
         const pathString = path.join(" > ");
         const fullMessage = `[${pathString}] ${errorMessage}`;
         logError(fullMessage);

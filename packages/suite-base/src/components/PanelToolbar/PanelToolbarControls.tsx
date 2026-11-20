@@ -35,7 +35,14 @@ function PanelToolbarControlsComponent(
   const { additionalIcons, isUnknownPanel, ref } = props;
   const { classes } = useStyles();
   const panelContext = useContext(PanelContext);
-  const { id: panelId, type: panelType, showLogs, setShowLogs, logCount } = panelContext ?? {};
+  const {
+    id: panelId,
+    type: panelType,
+    showLogs,
+    setShowLogs,
+    logCount,
+    logSeverity,
+  } = panelContext ?? {};
   const toggleLogs = () => {
     if (setShowLogs) {
       setShowLogs({ show: !(showLogs ?? false) });
@@ -75,7 +82,7 @@ function PanelToolbarControlsComponent(
       <CompareSidePicker />
       {additionalIcons}
       <Badge
-        color="error"
+        color={logSeverity === "error" ? "error" : logSeverity === "warn" ? "warning" : "info"}
         variant="dot"
         invisible={(logCount ?? 0) === 0}
         className={classes.logsBadge}

@@ -129,7 +129,8 @@ const LAYER_DEFAULT = 0;
 const LAYER_SELECTED = 1;
 
 const FOLLOW_TF_PATH = ["general", "followTf"];
-const NO_FRAME_SELECTED = "NO_FRAME_SELECTED";
+/** Expected until the first transform arrives, so it is not reported in the panel log. */
+export const NO_FRAME_SELECTED = "NO_FRAME_SELECTED";
 const TF_OVERFLOW = "TF_OVERFLOW";
 const CYCLE_DETECTED = "CYCLE_DETECTED";
 const FOLLOW_FRAME_NOT_FOUND = "FOLLOW_FRAME_NOT_FOUND";
