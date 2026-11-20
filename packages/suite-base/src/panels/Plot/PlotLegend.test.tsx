@@ -4,15 +4,17 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import "@testing-library/jest-dom/vitest";
-import { render, screen } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { useMemo } from "react";
+import EventEmitter from "eventemitter3";
+import { Profiler, useMemo } from "react";
 import type { Mock } from "vitest";
 
 import PanelContext from "@lichtblick/suite-base/components/PanelContext";
 import { useSelectedPanels } from "@lichtblick/suite-base/context/CurrentLayoutContext";
 import { BasicBuilder } from "@lichtblick/test-builders";
 
+import type { PlotCoordinator } from "./PlotCoordinator";
 import { PlotLegend } from "./PlotLegend";
 
 const defaultProps = {
@@ -125,5 +127,36 @@ describe("PlotLegend", () => {
     await userEvent.setup().click(screen.getByText(path));
 
     expect(mockOnClickPath).toHaveBeenCalledWith(0);
+  });
+
+  it("does not re-render when the mismatched-length paths are re-emitted unchanged", () => {
+    const coordinator = new EventEmitter();
+    const onRender = vi.fn();
+    render(
+      <TestWrapper>
+        <Profiler id="legend" onRender={onRender}>
+          <PlotLegend
+            {...defaultProps}
+            coordinator={coordinator as unknown as PlotCoordinator}
+            legendDisplay="floating"
+            onClickPath={vi.fn()}
+            paths={[{ value: path, enabled: true, timestampMethod: "receiveTime" }]}
+            showValues={false}
+          />
+        </Profiler>
+      </TestWrapper>,
+    );
+    const renders = onRender.mock.calls.length;
+
+    act(() => {
+      coordinator.emit("pathsWithMismatchedDataLengthsChanged", []);
+      coordinator.emit("pathsWithMismatchedDataLengthsChanged", []);
+    });
+    expect(onRender).toHaveBeenCalledTimes(renders);
+
+    act(() => {
+      coordinator.emit("pathsWithMismatchedDataLengthsChanged", [path]);
+    });
+    expect(onRender.mock.calls.length).toBeGreaterThan(renders);
   });
 });
