@@ -328,7 +328,9 @@ export function useAppCommands(): {
               title: layout.name,
               detail: layout.id === selectedLayout?.id ? t("currentLayout") : undefined,
               run: () => {
-                setSelectedLayoutId(layout.id);
+                if (layout.id !== selectedLayout?.id) {
+                  setSelectedLayoutId(layout.id);
+                }
               },
             })),
       },

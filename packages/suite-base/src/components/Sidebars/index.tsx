@@ -10,7 +10,10 @@ import { useCallback, useRef, useState } from "react";
 import ErrorBoundary from "@lichtblick/suite-base/components/ErrorBoundary";
 import { useStyles } from "@lichtblick/suite-base/components/Sidebars/index.style";
 import { SidebarProps } from "@lichtblick/suite-base/components/Sidebars/types";
-import { clampLeftSidebarPercentage } from "@lichtblick/suite-base/components/Sidebars/utils";
+import {
+  availableKey,
+  clampLeftSidebarPercentage,
+} from "@lichtblick/suite-base/components/Sidebars/utils";
 import Stack from "@lichtblick/suite-base/components/Stack";
 
 import { NewSidebar } from "./NewSidebar";
@@ -60,20 +63,24 @@ export default function Sidebars<
   const {
     children,
     leftItems,
-    selectedLeftKey,
+    selectedLeftKey: requestedLeftKey,
     onSelectLeftKey,
     leftSidebarSize,
     setLeftSidebarSize,
     rightItems,
-    selectedRightKey,
+    selectedRightKey: requestedRightKey,
     onSelectRightKey,
     rightSidebarSize,
     setRightSidebarSize,
   } = props;
   const { classes } = useStyles();
 
-  const leftSidebarOpen = selectedLeftKey != undefined && leftItems.has(selectedLeftKey);
-  const rightSidebarOpen = selectedRightKey != undefined && rightItems.has(selectedRightKey);
+  // A selected tab can disappear (e.g. Attachments when the next recording has none). The
+  // sidebar then shows its first tab instead of closing in a state the toggle can't reopen.
+  const selectedLeftKey = availableKey(requestedLeftKey, leftItems);
+  const selectedRightKey = availableKey(requestedRightKey, rightItems);
+  const leftSidebarOpen = selectedLeftKey != undefined;
+  const rightSidebarOpen = selectedRightKey != undefined;
 
   // Sizes while dragging a handle; saved when the drag ends.
   const [dragLeft, setDragLeft] = useState<number | undefined>();
