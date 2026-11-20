@@ -3,8 +3,8 @@
 import { Time } from "@foxglove/rostime";
 
 /**
- * How to open a catalog entry. A local folder scan produces "local-file" entries; served catalogs
- * will produce the remote types.
+ * How to open a catalog entry. A local folder scan produces "local-file" entries; a catalog URL
+ * produces the remote types.
  */
 export type CatalogSource =
   | { type: "local-file"; path: string }
@@ -52,4 +52,8 @@ export type CatalogRecording = CatalogSummary & {
   size?: number;
   /** The machine a live recording came from ("robot.local:8765"). */
   machine?: string;
+  /** Credits or a short description, e.g. a dataset's attribution and license. */
+  description?: string;
+  /** Layout to apply when the recording opens. */
+  layoutUrl?: string;
 };

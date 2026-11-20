@@ -38,6 +38,13 @@ export const catalog = {
     "This file has no summary section, so its contents are unknown until it is opened.",
   openFolder: "Open folder…",
   openRecording: "Open recording",
+  catalogHttpError: "Could not load the catalog (HTTP {{status}})",
+  catalogBadUrl: 'Not a valid catalog: "{{url}}" is not a URL.',
+  catalogLoadError: "Could not load the catalog: {{reason}}",
+  catalogNeedsId: "Not a valid catalog: recording {{number}} needs a unique id.",
+  catalogNeedsSource:
+    'Not a valid catalog: recording "{{id}}" needs a remote-file or foxglove-websocket source.',
+  catalogNotV1: "Not a catalog: expected version 1 and a list of recordings.",
   pausePreview: "Pause preview",
   playPreview: "Play preview",
   previewFailed: "Preview failed: {{error}}",

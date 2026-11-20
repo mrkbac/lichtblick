@@ -28,7 +28,8 @@ export type CatalogFolder = {
   recordings: CatalogRecording[];
   progress?: { done: number; total: number };
   error?: string;
-  pickFolder: () => Promise<void>;
+  /** Undefined for a catalog that is not a folder, e.g. one from a URL. */
+  pickFolder?: () => Promise<void>;
   reopenLastFolder: () => Promise<void>;
   /** Look for new files and retry failed ones; undefined while no folder is open. */
   rescan?: () => Promise<void>;
