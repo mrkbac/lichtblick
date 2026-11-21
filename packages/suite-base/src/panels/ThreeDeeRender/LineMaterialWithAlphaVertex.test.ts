@@ -6,9 +6,14 @@ import * as THREE from "three/webgpu";
 import { LineMaterialWithAlphaVertex } from "./LineMaterialWithAlphaVertex";
 
 describe("LineMaterialWithAlphaVertex", () => {
-  it.each([true, false])(
-    "never builds as opaque, keeping its opacity (transparent=%s)",
-    (transparent) => {
+  it.each([
+    [true, 0.25],
+    [true, 1],
+    [false, 0.25],
+    [false, 1],
+  ])(
+    "never builds as opaque, keeping its opacity (transparent=%s, opacity=%s)",
+    (transparent, opacity) => {
       let opaque: boolean | undefined;
       let composited: boolean | undefined;
       const spy = vi
@@ -22,7 +27,7 @@ describe("LineMaterialWithAlphaVertex", () => {
           ).isOpaque.call({ material: this });
           composited = this.transparent;
         });
-      const material = new LineMaterialWithAlphaVertex({ transparent, opacity: 0.25 });
+      const material = new LineMaterialWithAlphaVertex({ transparent, opacity });
       const builder = { geometry: new THREE.BufferGeometry() } as unknown as THREE.NodeBuilder;
 
       material.setupDiffuseColor(builder);
@@ -31,6 +36,7 @@ describe("LineMaterialWithAlphaVertex", () => {
       expect(composited).toBe(false);
       expect(material.transparent).toBe(transparent);
       expect(material.blending).toBe(THREE.NormalBlending);
+      expect(material.opacity).toBe(opacity);
       expect(material.alphaToCoverage).toBe(!transparent);
       spy.mockRestore();
     },
