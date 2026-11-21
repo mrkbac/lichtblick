@@ -138,7 +138,7 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
   const configRef = useLatest(config);
   const lastSavedConfig = useRef<Immutable<RendererConfig> | undefined>(undefined);
 
-  // Save panel settings whenever they change
+  // Save panel settings whenever they change. flushOnExit saves a pending change on unmount.
   const throttledSave = useDebouncedCallback(
     (newConfig: Immutable<RendererConfig>) => {
       // Immediate converter saves already persist this config.
@@ -148,7 +148,7 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
       }
     },
     100,
-    { leading: false, trailing: true, maxWait: 1000 },
+    { leading: false, trailing: true, maxWait: 1000, flushOnExit: true },
   );
 
   // Disposing a renderer can write a camera move that was waiting for the camera to rest (see

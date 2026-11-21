@@ -431,6 +431,27 @@ describe("ThreeDeeRender", () => {
     expect(props.context.saveState).toHaveBeenCalledWith(movedConfig);
   });
 
+  it("saves a camera move still waiting for the debounced save when the panel unmounts", () => {
+    // Given: a settled camera move whose debounced save has not fired yet
+    const props = setup();
+    const { unmount } = render(<ThreeDeeRender {...props} />);
+    const renderer = mockedRenderer.mock.results.at(-1)!.value as ReturnType<
+      typeof createMockRenderer
+    >;
+    const movedConfig = { ...renderer.config, cameraState: { distance: 30 } };
+    act(() => {
+      renderer.config = movedConfig;
+      renderer.emit("configChange", renderer);
+    });
+    vi.mocked(props.context.saveState).mockClear();
+
+    // When: the panel unmounts before the debounce timer fires
+    unmount();
+
+    // Then: the pending save runs
+    expect(props.context.saveState).toHaveBeenCalledWith(movedConfig);
+  });
+
   it("does not save when a renderer is replaced without writing a camera move", () => {
     const props = setup();
     render(<ThreeDeeRender {...props} />);
