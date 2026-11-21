@@ -1093,14 +1093,18 @@ export class MeasurementTool extends SceneExtension<Renderable, MeasurementToolE
       });
       event.preventDefault();
     } else if (isThreeDeeShortcut("3d.deleteMeasurement", event)) {
-      if ((this.#draft?.points.length ?? 0) > 1) {
-        // Remove the last placed point, keeping the one under the cursor
-        this.#draft!.points.splice(-2, 1);
-        this.#draft!.dirty = true;
-        this.renderer.queueAnimationFrame();
-      } else if (this.selectedId != undefined) {
-        this.removeMeasurement(this.selectedId);
-      }
+      // Decide once the clicks so far have landed, so a just-clicked point is what gets removed
+      this.#afterClicks(() => {
+        const draft = this.#draft;
+        if (draft && draft.points.length > 1) {
+          // Remove the last placed point, keeping the one under the cursor
+          draft.points.splice(-2, 1);
+          draft.dirty = true;
+          this.renderer.queueAnimationFrame();
+        } else if (this.selectedId != undefined) {
+          this.removeMeasurement(this.selectedId);
+        }
+      });
       event.preventDefault();
     }
   };

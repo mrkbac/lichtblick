@@ -55,11 +55,11 @@ function createTool() {
     tool.startFrame(0n, "base", "map");
   };
   frame();
-  return { tool, transformTree, addBase, frame, listeners, picks };
+  return { tool, transformTree, addBase, frame, listeners, picks, canvas };
 }
 
 async function setup(kind: "distance" | "profile" = "distance") {
-  const { tool, transformTree, addBase, frame, listeners, picks } = createTool();
+  const { tool, transformTree, addBase, frame, listeners, picks, canvas } = createTool();
   tool.startMeasuring(kind);
   picks.push(new THREE.Vector3(0, 0, 0), new THREE.Vector3(3, 4, 0));
   listeners.get("click")!(new THREE.Vector2(10, 10));
@@ -74,7 +74,7 @@ async function setup(kind: "distance" | "profile" = "distance") {
   tool.stopMeasuring();
   await flushPicks();
   frame();
-  return { tool, transformTree, addBase, frame };
+  return { tool, transformTree, addBase, frame, listeners, picks, canvas };
 }
 
 describe("MeasurementTool", () => {
@@ -112,6 +112,20 @@ describe("MeasurementTool", () => {
     frame();
     expect(tool.measurements).toHaveLength(1);
     expect(tool.measurements[0]!.summary.label).toBe("5.00 m");
+  });
+
+  it("deletes a point whose pick is still pending instead of the selected measurement", async () => {
+    const { tool, listeners, picks, canvas } = await setup();
+    tool.selectedId = tool.measurements[0]!.id;
+    tool.startMeasuring("distance");
+    picks.push(new THREE.Vector3(1, 1, 0));
+    listeners.get("click")!(new THREE.Vector2(10, 10));
+    // Delete from inside the panel while that click's pick is pending
+    document.body.appendChild(canvas.parentElement!);
+    canvas.dispatchEvent(new KeyboardEvent("keydown", { key: "Delete", bubbles: true }));
+    await flushPicks();
+    canvas.parentElement!.remove();
+    expect(tool.measurements).toHaveLength(1);
   });
 
   it("marks a measurement unavailable while its transform is missing and recovers", async () => {
