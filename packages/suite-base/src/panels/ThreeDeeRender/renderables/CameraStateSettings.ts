@@ -6,6 +6,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { t } from "i18next";
+import * as _ from "lodash-es";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 
@@ -43,6 +44,8 @@ const tempVec3 = new THREE.Vector3();
 const tempSpherical = new THREE.Spherical();
 const tempEuler = new THREE.Euler();
 const FOLLOW_TF_PATH = ["general", "followTf"];
+/** How long the camera must rest before its state is written to the config and settings tree */
+const CAMERA_COMMIT_DELAY_MS = 150;
 export class CameraStateSettings extends SceneExtension implements ICameraHandler {
   // The frameId's of the fixed and render frames used to create the current unfollowPoseSnapshot
   #unfollowSnapshotFrameIds:
@@ -143,6 +146,7 @@ export class CameraStateSettings extends SceneExtension implements ICameraHandle
 
   public override dispose(): void {
     this.#controls.dispose();
+    this.#commitCameraState.cancel();
     // for camera settings
     this.renderer.off("cameraMove", this.#handleCameraMove);
 
@@ -199,10 +203,13 @@ export class CameraStateSettings extends SceneExtension implements ICameraHandle
     return { path: ["general"], node: { ...node, handler } };
   }
   public override handleSettingsAction = (action: SettingsTreeAction): void => {
+    // Write a pending camera move first, so the edit applies on top of the camera the user sees
+    this.#commitCameraState.flush();
     if (action.action === "perform-node-action" && action.payload.id === "reset-camera") {
       this.renderer.updateConfig((draft) => {
         draft.cameraState = structuredClone(DEFAULT_CAMERA_STATE);
       });
+      this.#applyConfigCamera();
       this.updateSettingsTree();
       return;
     }
@@ -246,6 +253,7 @@ export class CameraStateSettings extends SceneExtension implements ICameraHandle
             ];
           }
         });
+        this.#applyConfigCamera();
       }
 
       this.updateSettingsTree();
@@ -360,9 +368,31 @@ export class CameraStateSettings extends SceneExtension implements ICameraHandle
     }
   }
 
+  // Camera moves draw straight to the canvas. Writing them to the config re-renders the panel
+  // and rebuilds the settings tree, so that only happens once the camera comes to rest.
   #handleCameraMove = (): void => {
-    this.updateSettingsTree();
+    // Also moves the orthographic camera, which the orbit controls don't drive
+    this.setCameraState(this.getCameraState());
+    this.renderer.queueAnimationFrame();
+    this.#commitCameraState();
   };
+
+  // Apply a camera edit here instead of relying on the panel noticing the config change: the
+  // config can equal the live camera exactly (e.g. switching to 2D), which skips that update.
+  #applyConfigCamera(): void {
+    this.setCameraState(this.renderer.config.cameraState);
+    this.renderer.queueAnimationFrame();
+  }
+
+  #commitCameraState = _.debounce((): void => {
+    const cameraState = this.getCameraState();
+    if (!_.isEqual(cameraState, this.renderer.config.cameraState)) {
+      this.renderer.updateConfig((draft) => {
+        draft.cameraState = cameraState;
+      });
+    }
+    this.updateSettingsTree();
+  }, CAMERA_COMMIT_DELAY_MS);
 
   #handleTransformTreeUpdated = (): void => {
     this.#updateFollowFrameId();
@@ -444,6 +474,8 @@ export class CameraStateSettings extends SceneExtension implements ICameraHandle
 
   public handleResize(width: number, height: number, _pixelRatio: number): void {
     this.#aspect = width / height;
+    // Write a pending camera move first, or this would put the camera back where it last rested
+    this.#commitCameraState.flush();
     this.setCameraState(this.renderer.config.cameraState);
   }
 
@@ -461,6 +493,14 @@ export class CameraStateSettings extends SceneExtension implements ICameraHandle
       near: config.cameraState.near,
       far: config.cameraState.far,
     };
+  }
+
+  public commitPendingCameraState(): void {
+    this.#commitCameraState.flush();
+  }
+
+  public getCameraDistance(): number {
+    return this.#controls.getDistance();
   }
 
   public setCameraState(cameraState: CameraState): void {

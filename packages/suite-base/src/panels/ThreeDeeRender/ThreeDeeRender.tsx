@@ -137,6 +137,39 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
   });
   const configRef = useLatest(config);
   const lastSavedConfig = useRef<Immutable<RendererConfig> | undefined>(undefined);
+
+  // Save panel settings whenever they change. flushOnExit saves a pending change on unmount.
+  const throttledSave = useDebouncedCallback(
+    (newConfig: Immutable<RendererConfig>) => {
+      // Immediate converter saves already persist this config.
+      if (newConfig !== lastSavedConfig.current) {
+        saveState(newConfig);
+        lastSavedConfig.current = newConfig;
+      }
+    },
+    100,
+    { leading: false, trailing: true, maxWait: 1000, flushOnExit: true },
+  );
+
+  // Disposing a renderer can write a camera move that was waiting for the camera to rest (see
+  // Renderer.dispose). An unmounting panel never re-renders to run the debounced save, so when
+  // disposing changed the config, save it right away.
+  const latestDisposeRenderer = useLatest((disposedRenderer: Renderer) => {
+    const configBefore = disposedRenderer.config;
+    disposedRenderer.dispose();
+    const configAfter = disposedRenderer.config;
+    if (configAfter !== configBefore && configAfter !== lastSavedConfig.current) {
+      throttledSave.cancel();
+      saveState(configAfter);
+      lastSavedConfig.current = configAfter;
+    }
+  });
+  const disposeRenderer = useCallback(
+    (disposedRenderer: Renderer) => {
+      latestDisposeRenderer.current(disposedRenderer);
+    },
+    [latestDisposeRenderer],
+  );
   const { cameraState } = config;
   const backgroundColor = config.scene.backgroundColor;
 
@@ -204,12 +237,15 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
       });
     return () => {
       disposed = true;
-      rendererRef.current?.dispose();
+      const disposedRenderer = rendererRef.current;
       rendererRef.current = undefined;
+      if (disposedRenderer) {
+        disposeRenderer(disposedRenderer);
+      }
       instance?.dispose();
       setSharedMap(undefined);
     };
-  }, [mapContainer, sharedMapLayerId, canvasKey, displayTemporaryError]);
+  }, [mapContainer, sharedMapLayerId, canvasKey, displayTemporaryError, disposeRenderer]);
 
   useEffect(() => {
     const newRenderer =
@@ -229,8 +265,11 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
     setRenderer(newRenderer);
     rendererRef.current = newRenderer;
     return () => {
-      rendererRef.current?.dispose();
+      const disposedRenderer = rendererRef.current;
       rendererRef.current = undefined;
+      if (disposedRenderer) {
+        disposeRenderer(disposedRenderer);
+      }
     };
   }, [
     canvas,
@@ -247,6 +286,7 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
     resourceRevision,
     testOptions,
     displayTemporaryError,
+    disposeRenderer,
   ]);
 
   useEffect(() => {
@@ -308,30 +348,24 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
     renderer,
   );
 
-  // Config cameraState
+  // Share camera moves with synced panels. The renderer draws them itself and writes them to the
+  // config once the camera rests (see CameraStateSettings), so no React update runs per move.
   useEffect(() => {
+    if (!renderer || config.scene.syncCamera !== true) {
+      return;
+    }
     const listener = () => {
-      if (renderer) {
-        const newCameraState = renderer.getCameraState();
-        if (!newCameraState) {
-          return;
-        }
-        // This needs to be before `setConfig` otherwise flickering will occur during
-        // non-follow mode playback
-        renderer.setCameraState(newCameraState);
-        setConfig((prevConfig) => ({ ...prevConfig, cameraState: newCameraState }));
-
-        if (config.scene.syncCamera === true) {
-          context.setSharedPanelState({
-            cameraState: newCameraState,
-            followMode: config.followMode,
-            followTf: renderer.followFrameId,
-          });
-        }
+      const newCameraState = renderer.getCameraState();
+      if (newCameraState) {
+        context.setSharedPanelState({
+          cameraState: newCameraState,
+          followMode: config.followMode,
+          followTf: renderer.followFrameId,
+        });
       }
     };
-    renderer?.addListener("cameraMove", listener);
-    return () => void renderer?.removeListener("cameraMove", listener);
+    renderer.addListener("cameraMove", listener);
+    return () => void renderer.removeListener("cameraMove", listener);
   }, [config.scene.syncCamera, config.followMode, context, renderer?.followFrameId, renderer]);
 
   // Handle user changes in the settings sidebar
@@ -362,9 +396,15 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
   useRendererEvent("settingsTreeChange", updateSettingsTree, renderer);
 
   // Save the panel configuration when it changes
-  const updateConfig = useCallback((curRenderer: Renderer) => {
-    setConfig(curRenderer.config);
-  }, []);
+  const updateConfig = useCallback(
+    (curRenderer: Renderer) => {
+      // A renderer created before the next render (e.g. replacing a disposed one) must start from
+      // this config, not the one from the last render
+      configRef.current = curRenderer.config;
+      setConfig(curRenderer.config);
+    },
+    [configRef],
+  );
   useRendererEvent("configChange", updateConfig, renderer);
 
   // Write to a global variable when the current selection changes
@@ -431,19 +471,6 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
   const onShowTopicSettings = useCallback((topic: string) => {
     setFocusedSettingsPath(["topics", topic]);
   }, []);
-
-  // Save panel settings whenever they change
-  const throttledSave = useDebouncedCallback(
-    (newConfig: Immutable<RendererConfig>) => {
-      // Immediate converter saves already persist this config.
-      if (newConfig !== lastSavedConfig.current) {
-        saveState(newConfig);
-        lastSavedConfig.current = newConfig;
-      }
-    },
-    100,
-    { leading: false, trailing: true, maxWait: 1000 },
-  );
 
   // Rebuild the settings sidebar tree as needed
   useEffect(() => {

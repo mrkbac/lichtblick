@@ -13,12 +13,14 @@ import ThemeProvider from "@lichtblick/suite-base/theme/ThemeProvider";
 import { RendererOverlay } from "./RendererOverlay";
 
 let mockLastHoverTooltipProps: any = undefined;
+let mockHoverTooltipRenders = 0;
 
 vi.mock("./Interactions/HoverTooltip", () => {
   return {
     __esModule: true,
     HoverTooltip: (props: any) => {
       mockLastHoverTooltipProps = props;
+      mockHoverTooltipRenders++;
       return undefined;
     },
   };
@@ -294,6 +296,43 @@ describe("<RendererOverlay /> hover wiring", () => {
     await waitFor(() => {
       expect(mockLastHoverTooltipProps.entities).toEqual([]);
     });
+  });
+
+  it("renders nothing for cursor moves until an object is hovered, then follows the cursor", () => {
+    const canvas = document.createElement("canvas");
+    canvas.getBoundingClientRect = vi.fn(() => ({ left: 100, top: 200 }) as DOMRect);
+    renderOverlay(canvas);
+    const hoverMoved = mockRendererEventCallbacks.get("hoverMoved")!;
+    const hovered = mockRendererEventCallbacks.get("renderableHovered")!;
+    const rendersBefore = mockHoverTooltipRenders;
+
+    // When: the cursor moves over empty space, and the throttled pick finds nothing
+    act(() => {
+      hoverMoved({ x: 1, y: 1 });
+      hoverMoved({ x: 2, y: 2 });
+      hovered([], { x: 2, y: 2 });
+    });
+    // Then: nothing re-renders
+    expect(mockHoverTooltipRenders).toBe(rendersBefore);
+
+    // When: an object is picked, then the cursor keeps moving
+    const renderable = {
+      topic: "/t",
+      name: "n",
+      userData: {},
+      details: () => ({ id: 1 }),
+      instanceDetails: vi.fn(),
+    };
+    act(() => {
+      hoverMoved({ x: 3, y: 3 });
+      hovered([{ renderable, instanceIndex: undefined }], { x: 3, y: 3 });
+    });
+    expect(mockLastHoverTooltipProps.position).toEqual({ clientX: 103, clientY: 203 });
+    act(() => {
+      mockRendererEventCallbacks.get("hoverMoved")!({ x: 4, y: 5 });
+    });
+    // Then: the tooltip gets the latest cursor position
+    expect(mockLastHoverTooltipProps.position).toEqual({ clientX: 104, clientY: 205 });
   });
 
   it("does not create tooltip entries for selections with no topic and no metadata", async () => {

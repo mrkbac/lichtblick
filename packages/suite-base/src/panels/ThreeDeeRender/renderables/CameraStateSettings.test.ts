@@ -207,6 +207,98 @@ describe("CameraStateSettings", () => {
     handler.dispose();
   });
 
+  it("draws camera moves at once but writes them to the config only when the camera rests", () => {
+    vi.useFakeTimers();
+    try {
+      const handler = new CameraStateSettings(renderer, canvas, 1);
+      const onConfigChange = vi.fn();
+      renderer.on("configChange", onConfigChange);
+      const queueFrame = vi.spyOn(renderer, "queueAnimationFrame");
+      const change = mockOrbitControls.addEventListener.mock.calls.findLast(
+        ([type]) => type === "change",
+      )![1] as () => void;
+
+      // When: the user drags the camera over several pointer moves
+      for (const distance of [30, 31, 32]) {
+        mockOrbitControls.getDistance.mockReturnValue(distance);
+        change();
+        vi.advanceTimersByTime(16);
+      }
+
+      // Then: every move draws a frame, but nothing reaches React yet
+      expect(queueFrame).toHaveBeenCalled();
+      expect(onConfigChange).not.toHaveBeenCalled();
+
+      // When: the camera rests
+      vi.advanceTimersByTime(150);
+
+      // Then: the final camera state is written once
+      expect(onConfigChange).toHaveBeenCalledTimes(1);
+      expect(renderer.config.cameraState.distance).toBe(32);
+      handler.dispose();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("writes a pending camera move before applying a settings edit", () => {
+    vi.useFakeTimers();
+    try {
+      const handler = renderer.cameraHandler as CameraStateSettings;
+      // When: the camera moves and the 2D/3D toggle follows before the camera rests
+      mockOrbitControls.getDistance.mockReturnValue(30);
+      renderer.emit("cameraMove", renderer);
+      handler.handleSettingsAction({
+        action: "update",
+        payload: { path: ["cameraState", "perspective"], input: "boolean", value: false },
+      });
+
+      // Then: the edit applies on top of the moved camera instead of the old one, at once
+      expect(renderer.config.cameraState).toMatchObject({ distance: 30, perspective: false });
+      const camera = handler.getActiveCamera() as THREE.OrthographicCamera;
+      expect(camera.type).toBe("OrthographicCamera");
+      expect(camera.top).toBe(15); // half the distance
+      vi.advanceTimersByTime(500);
+      expect(renderer.config.cameraState).toMatchObject({ distance: 30, perspective: false });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("keeps a camera move that is followed by a resize before the camera rests", () => {
+    vi.useFakeTimers();
+    try {
+      const handler = renderer.cameraHandler as CameraStateSettings;
+      mockOrbitControls.getDistance.mockReturnValue(30);
+      renderer.emit("cameraMove", renderer);
+
+      handler.handleResize(200, 100, 1);
+
+      expect(renderer.config.cameraState.distance).toBe(30);
+      expect(handler.getActiveCamera().position.length()).toBeCloseTo(30);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("saves a camera move that is still pending when the renderer is disposed", () => {
+    vi.useFakeTimers();
+    try {
+      const onConfigChange = vi.fn();
+      renderer.on("configChange", onConfigChange);
+      mockOrbitControls.getDistance.mockReturnValue(30);
+      renderer.emit("cameraMove", renderer);
+
+      renderer.dispose();
+
+      // The panel hears about the move before the renderer drops its listeners
+      expect(onConfigChange).toHaveBeenCalledTimes(1);
+      expect(renderer.config.cameraState.distance).toBe(30);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   describe("screen space panning", () => {
     const aspect = 16 / 9;
 

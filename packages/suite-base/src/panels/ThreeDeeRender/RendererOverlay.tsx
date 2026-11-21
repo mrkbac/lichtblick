@@ -160,6 +160,88 @@ function extractHoverMetadata(
   return metadata;
 }
 
+function hoverEntityId(pickedRenderable: PickedRenderable): string {
+  const entityId = (pickedRenderable.renderable.userData as { entityId?: string }).entityId;
+  if (entityId != undefined) {
+    return entityId;
+  }
+  const name = pickedRenderable.renderable.name;
+  if (name.length === 0) {
+    return `object-${pickedRenderable.instanceIndex ?? 0}`;
+  }
+  return name;
+}
+
+const NO_ENTITIES: HoverEntityInfo[] = [];
+
+/**
+ * Owns the hover state, so pointer moves re-render only the tooltip and not the whole overlay.
+ * While nothing is hovered, the cursor position is kept in a ref without rendering at all.
+ */
+function RendererHoverTooltip({ canvas }: { canvas: HTMLCanvasElement | null }): React.JSX.Element {
+  const renderer = useRenderer();
+  const [entities, setEntities] = useState(NO_ENTITIES);
+  const [position, setPosition] = useState({ clientX: 0, clientY: 0 });
+  const latestPosition = useRef(position);
+  const hasEntities = entities.length > 0;
+
+  useEffect(() => {
+    // Hovered objects belong to the previous renderer
+    setEntities(NO_ENTITIES);
+  }, [renderer]);
+
+  // Follow the cursor at full frame rate, but only while there is a tooltip to move
+  useRendererEvent(
+    "hoverMoved",
+    useCallback(
+      (cursorCoords) => {
+        const rect = canvas?.getBoundingClientRect();
+        if (rect) {
+          latestPosition.current = {
+            clientX: rect.left + cursorCoords.x,
+            clientY: rect.top + cursorCoords.y,
+          };
+          if (hasEntities) {
+            setPosition(latestPosition.current);
+          }
+        }
+      },
+      [canvas, hasEntities],
+    ),
+  );
+
+  useRendererEvent(
+    "renderableHovered",
+    useCallback((selections) => {
+      const infos: HoverEntityInfo[] = [];
+      for (const pickedRenderable of selections) {
+        const topic = pickedRenderable.renderable.topic;
+        const details: Record<string, unknown> | undefined =
+          pickedRenderable.instanceIndex == undefined
+            ? pickedRenderable.renderable.details()
+            : pickedRenderable.renderable.instanceDetails(pickedRenderable.instanceIndex);
+
+        const metadata = extractHoverMetadata(details);
+
+        // Avoid showing tooltips for non-user-facing objects when hovering empty space.
+        // If a renderable has no associated topic and no metadata, it doesn't provide useful info.
+        if (topic == undefined && metadata.length === 0) {
+          continue;
+        }
+
+        infos.push({ topic, entityId: hoverEntityId(pickedRenderable), metadata });
+      }
+      // Hovering empty space repeats an empty pick; keep the same array so nothing re-renders
+      setEntities((previous) => (infos.length === 0 && previous.length === 0 ? previous : infos));
+      if (infos.length > 0) {
+        setPosition(latestPosition.current);
+      }
+    }, []),
+  );
+
+  return <HoverTooltip entities={entities} position={position} canvas={canvas} />;
+}
+
 /**
  * Provides DOM overlay elements on top of the 3D scene (e.g. stats, debug GUI).
  */
@@ -178,34 +260,13 @@ export function RendererOverlay(props: Readonly<Props>): React.JSX.Element {
     undefined,
   );
   const [interactionsTabType, setInteractionsTabType] = useState<TabType | undefined>(undefined);
-  const [hoveredEntities, setHoveredEntities] = useState<HoverEntityInfo[]>([]);
-  const [hoverPosition, setHoverPosition] = useState<{
-    clientX: number;
-    clientY: number;
-  }>({
-    clientX: 0,
-    clientY: 0,
-  });
   const renderer = useRenderer();
 
   useEffect(() => {
     // Selections refer to objects owned by the previous renderer.
     setSelectedRenderables([]);
     setSelectedRenderable(undefined);
-    setHoveredEntities([]);
   }, [renderer]);
-
-  const getHoverEntityId = useCallback((pickedRenderable: PickedRenderable): string => {
-    const entityId = (pickedRenderable.renderable.userData as { entityId?: string }).entityId;
-    if (entityId != undefined) {
-      return entityId;
-    }
-    const name = pickedRenderable.renderable.name;
-    if (name.length === 0) {
-      return `object-${pickedRenderable.instanceIndex ?? 0}`;
-    }
-    return name;
-  }, []);
 
   // Toggle object selection mode on/off in the renderer
   useEffect(() => {
@@ -229,55 +290,6 @@ export function RendererOverlay(props: Readonly<Props>): React.JSX.Element {
         setSelectedRenderable(selections.length === 1 ? selections[0] : undefined);
       },
       [props.canvas],
-    ),
-  );
-
-  // Track mouse position at full framerate for smooth tooltip following.
-  useRendererEvent(
-    "hoverMoved",
-    useCallback(
-      (cursorCoords) => {
-        const rect = props.canvas?.getBoundingClientRect();
-        if (rect) {
-          setHoverPosition({
-            clientX: rect.left + cursorCoords.x,
-            clientY: rect.top + cursorCoords.y,
-          });
-        }
-      },
-      [props.canvas],
-    ),
-  );
-
-  useRendererEvent(
-    "renderableHovered",
-    useCallback(
-      (selections) => {
-        const infos: HoverEntityInfo[] = [];
-        for (const pickedRenderable of selections) {
-          const topic = pickedRenderable.renderable.topic;
-          const details: Record<string, unknown> | undefined =
-            pickedRenderable.instanceIndex == undefined
-              ? pickedRenderable.renderable.details()
-              : pickedRenderable.renderable.instanceDetails(pickedRenderable.instanceIndex);
-
-          const metadata = extractHoverMetadata(details);
-
-          // Avoid showing tooltips for non-user-facing objects when hovering empty space.
-          // If a renderable has no associated topic and no metadata, it doesn't provide useful info.
-          if (topic == undefined && metadata.length === 0) {
-            continue;
-          }
-
-          infos.push({
-            topic,
-            entityId: getHoverEntityId(pickedRenderable),
-            metadata,
-          });
-        }
-        setHoveredEntities(infos);
-      },
-      [getHoverEntityId],
     ),
   );
 
@@ -633,9 +645,7 @@ export function RendererOverlay(props: Readonly<Props>): React.JSX.Element {
         </div>
       )}
       <HUD renderer={renderer} />
-      {props.hoverInspector && (
-        <HoverTooltip entities={hoveredEntities} position={hoverPosition} canvas={props.canvas} />
-      )}
+      {props.hoverInspector && <RendererHoverTooltip canvas={props.canvas} />}
       {stats}
       {resetViewButton}
     </>
