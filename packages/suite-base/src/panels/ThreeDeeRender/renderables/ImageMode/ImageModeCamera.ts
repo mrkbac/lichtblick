@@ -103,13 +103,21 @@ export class ImageModeCamera extends THREE.PerspectiveCamera {
 
   #updateProjection(): void {
     this.#updateAspectZoom();
+    this.updateProjectionMatrix();
+  }
 
-    if (this.#model) {
-      this.#getProjection(this.projectionMatrix, this.#model);
-      this.projectionMatrixInverse.copy(this.projectionMatrix).invert();
-    } else {
-      this.updateProjectionMatrix();
+  /**
+   * Also called by the renderer when it sets `coordinateSystem` (WebGPU clips z to [0, 1], not
+   * [-1, 1]), so the model's projection must be rebuilt here rather than replaced by the default.
+   */
+  public override updateProjectionMatrix(): void {
+    // The base constructor calls this before this class's fields exist
+    if (!(#model in this) || !this.#model) {
+      super.updateProjectionMatrix();
+      return;
     }
+    this.#getProjection(this.projectionMatrix, this.#model);
+    this.projectionMatrixInverse.copy(this.projectionMatrix).invert();
   }
 
   /**
@@ -204,7 +212,16 @@ export class ImageModeCamera extends THREE.PerspectiveCamera {
       bottom = temp;
     }
 
-    out.makePerspective(left, right, top, bottom, near, far);
+    out.makePerspective(
+      left,
+      right,
+      top,
+      bottom,
+      near,
+      far,
+      this.coordinateSystem,
+      this.reversedDepth,
+    );
   }
 
   /** Set canvas size in CSS pixels */

@@ -6,6 +6,8 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import * as THREE from "three";
+import { positionLocal, referenceAttribute, vec4 } from "three/tsl";
+import { LineBasicNodeMaterial, type Node } from "three/webgpu";
 
 import type { Immutable, MessageEvent, ParameterValue, VariableValue } from "@lichtblick/suite";
 import type { ColorModeSettings } from "@lichtblick/suite-base/panels/ThreeDeeRender/settingsNodes/colorMode";
@@ -53,6 +55,10 @@ export type RendererEvents = {
   resetAllFramesCursor: (renderer: Renderer) => void;
   hudItemsChanged: (renderer: Renderer) => void;
   clearPreloadBuffer: (renderer: Renderer) => void;
+  /** The WebGPU device was lost; the panel recreates the renderer */
+  gpuLost: (renderer: Renderer) => void;
+  /** WebGPU is unavailable, so nothing can be drawn */
+  gpuUnsupported: (error: Error, renderer: Renderer) => void;
 };
 
 export type FollowMode = "follow-pose" | "follow-position" | "follow-none";
@@ -216,11 +222,18 @@ export type AnyRendererSubscription = Immutable<
     }
 >;
 
-export class InstancedLineMaterial extends THREE.LineBasicMaterial {
-  public constructor(...args: ConstructorParameters<typeof THREE.LineBasicMaterial>) {
-    super(...args);
-    this.defines ??= {};
-    this.defines.USE_INSTANCING = true;
+/**
+ * Lines drawn once per instance of an `InstancedMesh`: the line geometry carries the mesh's
+ * `instanceMatrix` attribute (only `InstancedMesh` objects are instanced automatically).
+ */
+export class InstancedLineMaterial extends LineBasicNodeMaterial {
+  public constructor(parameters?: THREE.LineBasicMaterialParameters) {
+    super(parameters);
+    const instanceMatrix = referenceAttribute(
+      "geometry.attributes.instanceMatrix",
+      "mat4",
+    ) as unknown as Node<"mat4">; // @types/three types reference nodes untyped
+    this.positionNode = instanceMatrix.mul(vec4(positionLocal, 1)).xyz;
   }
 }
 

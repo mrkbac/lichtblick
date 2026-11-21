@@ -6,9 +6,24 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 import i18next from "i18next";
 import * as THREE from "three";
-import { LineMaterial } from "three/examples/jsm/lines/LineMaterial.js";
-import { LineSegments2 } from "three/examples/jsm/lines/LineSegments2.js";
 import { LineSegmentsGeometry } from "three/examples/jsm/lines/LineSegmentsGeometry.js";
+import { LineSegments2 } from "three/examples/jsm/lines/webgpu/LineSegments2.js";
+import {
+  cameraProjectionMatrix,
+  length as lengthNode,
+  modelViewMatrix,
+  modelWorldMatrix,
+  positionGeometry,
+  screenDPR,
+  screenSize,
+  vec2,
+  vec4,
+} from "three/tsl";
+import {
+  Line2NodeMaterial,
+  MeshBasicNodeMaterial,
+  type MeshBasicNodeMaterialParameters,
+} from "three/webgpu";
 
 import { Renderable } from "../Renderable";
 import type { Renderer } from "../Renderer";
@@ -80,41 +95,20 @@ const tempRaycaster = new THREE.Raycaster();
  * A material that interprets the input mesh coordinates in pixel space, regardless of the camera
  * perspective/zoom level.
  */
-class FixedSizeMeshMaterial extends THREE.ShaderMaterial {
-  public constructor({
-    color,
-    ...params
-  }: { color: THREE.ColorRepresentation } & THREE.MaterialParameters) {
-    super({
-      ...params,
-      vertexShader: /* glsl */ `
-        #include <common>
-        uniform vec2 canvasSize;
-        void main() {
-          vec4 mvPosition = modelViewMatrix * vec4(0., 0., 0., 1.);
-
-          // Adapted from THREE.ShaderLib.sprite
-          vec2 scale;
-          scale.x = length(vec3(modelMatrix[0].xyz));
-          scale.y = length(vec3(modelMatrix[1].xyz));
-
-          gl_Position = projectionMatrix * mvPosition;
-
-          // Add position after projection to maintain constant pixel size
-          gl_Position.xy += position.xy / canvasSize * scale * gl_Position.w;
-        }
-      `,
-      fragmentShader: /* glsl */ `
-        uniform vec3 color;
-        void main() {
-          gl_FragColor = vec4(color, 1.0);
-        }
-      `,
-      uniforms: {
-        canvasSize: { value: [0, 0] },
-        color: { value: new THREE.Color(color).convertSRGBToLinear() },
-      },
-    });
+class FixedSizeMeshMaterial extends MeshBasicNodeMaterial {
+  public constructor(params: MeshBasicNodeMaterialParameters) {
+    super(params);
+    // The object's origin projected as usual, then the vertex offset added in clip space, so
+    // geometry units are CSS pixels (scaled by the object's x/y scale). screenSize is the render
+    // target's size in device pixels, which NDC spans twice; it also keeps the size right in the
+    // 1x1 picking pass.
+    const clip = cameraProjectionMatrix.mul(modelViewMatrix).mul(vec4(0, 0, 0, 1));
+    const scale = vec2(
+      lengthNode(modelWorldMatrix.mul(vec4(1, 0, 0, 0)).xyz),
+      lengthNode(modelWorldMatrix.mul(vec4(0, 1, 0, 0)).xyz),
+    );
+    const offset = positionGeometry.xy.mul(screenDPR).mul(2).div(screenSize).mul(scale).mul(clip.w);
+    this.vertexNode = vec4(clip.xy.add(offset), clip.zw);
   }
 }
 
@@ -129,6 +123,8 @@ type Measurement = {
   /** Profile samples in `frameId`: the point on the line and the surface hit below it */
   profileLine: THREE.Vector3[];
   profileHit: THREE.Vector3[];
+  /** Latest profile sampling run; older runs, and all runs once the item is removed, publish nothing */
+  profileRun: number;
   /** Positioned at the pose of `frameId` in the render frame */
   group: THREE.Group;
   lines: LineSegments2;
@@ -168,7 +164,7 @@ export class MeasurementTool extends SceneExtension<Renderable, MeasurementToolE
   public selectedId: number | undefined;
   public measurements: readonly MeasurementInfo[] = [];
 
-  #circleGeometry = new THREE.CircleGeometry(5, 16);
+  #circleGeometry = new THREE.CircleGeometry(2.5, 16);
   #circleMaterial = new FixedSizeMeshMaterial({
     color: COLOR,
     depthTest: false,
@@ -179,13 +175,13 @@ export class MeasurementTool extends SceneExtension<Renderable, MeasurementToolE
     depthTest: false,
     depthWrite: false,
   });
-  #lineMaterial = new LineMaterial({
+  #lineMaterial = new Line2NodeMaterial({
     color: COLOR,
     linewidth: 2,
     depthTest: false,
     depthWrite: false,
   });
-  #selectedLineMaterial = new LineMaterial({
+  #selectedLineMaterial = new Line2NodeMaterial({
     color: SELECTED_COLOR,
     linewidth: 2,
     depthTest: false,
@@ -204,9 +200,20 @@ export class MeasurementTool extends SceneExtension<Renderable, MeasurementToolE
   #drag?: { item: Measurement; index: number };
   #dragCursor = new THREE.Vector2();
   #dragPending = false;
+  /** The last drag snap; the profile is resampled once it has landed */
+  #dragSnap: Promise<boolean> = Promise.resolve(false);
+  /** Snap request counter */
+  #snapRequest = 0;
+  /** Newest snap request per target point; older picks that resolve later are dropped */
+  #latestSnap = new WeakMap<THREE.Vector3, number>();
+  /** Placement of clicked points, in click order */
+  #clicks: Promise<void> = Promise.resolve();
+  /** Bumped when measuring stops, so shortcuts still waiting on clicks don't outlive it */
+  #session = 0;
+  /** Cursor point of a new draft; it joins the draft's points once it first snaps somewhere */
+  #firstPreview = new THREE.Vector3();
   #suppressClick = false;
   #rightDown = new THREE.Vector2(NaN, NaN);
-  #profileCamera = new THREE.OrthographicCamera();
   #labelContainer?: HTMLDivElement;
 
   public constructor(renderer: Renderer, name: string = MeasurementTool.extensionId) {
@@ -263,6 +270,7 @@ export class MeasurementTool extends SceneExtension<Renderable, MeasurementToolE
     if (this.state === "idle") {
       return;
     }
+    this.#session++;
     this.#finishDraft();
     this.#discardDraft();
     this.state = "idle";
@@ -349,13 +357,6 @@ export class MeasurementTool extends SceneExtension<Renderable, MeasurementToolE
     super.startFrame(currentTime, renderFrameId, fixedFrameId);
     this.#renderFrameId = renderFrameId;
     this.#fixedFrameId = fixedFrameId;
-    const { canvasSize } = this.renderer.input;
-    for (const material of [this.#circleMaterial, this.#selectedCircleMaterial]) {
-      material.uniforms.canvasSize!.value[0] = canvasSize.x;
-      material.uniforms.canvasSize!.value[1] = canvasSize.y;
-    }
-    this.#lineMaterial.resolution.copy(canvasSize);
-    this.#selectedLineMaterial.resolution.copy(canvasSize);
 
     for (const item of this.#items) {
       this.#updateItem(item, currentTime);
@@ -372,12 +373,17 @@ export class MeasurementTool extends SceneExtension<Renderable, MeasurementToolE
     if (this.#cursorDirty && this.state === "active" && !this.#drag) {
       this.#cursorDirty = false;
       this.#draft ??= this.#createItem(this.kind);
-      if (this.#draft.points.length === 0) {
-        this.#draft.points.push(new THREE.Vector3());
-      }
-      this.#snapToLocal(this.#cursor, this.#draft, this.#draft.points.at(-1)!);
-      this.#draft.dirty = true;
-      this.#updateItem(this.#draft, currentTime);
+      const draft = this.#draft;
+      this.#updateItem(draft, currentTime);
+      // An existing preview keeps its last snapped position while the pick is pending; a new
+      // draft shows nothing until its first snap lands
+      const preview = draft.points.at(-1) ?? this.#firstPreview;
+      void this.#snapLatest(this.#cursor, draft, preview).then((ok) => {
+        if (ok && this.#draft === draft && draft.points.length === 0) {
+          draft.points.push(preview);
+          this.#firstPreview = new THREE.Vector3();
+        }
+      });
     }
 
     if (this.#changed) {
@@ -657,6 +663,7 @@ export class MeasurementTool extends SceneExtension<Renderable, MeasurementToolE
       complete: false,
       profileLine: [],
       profileHit: [],
+      profileRun: 0,
       group,
       lines,
       lineCapacity: 4,
@@ -671,6 +678,7 @@ export class MeasurementTool extends SceneExtension<Renderable, MeasurementToolE
   }
 
   #disposeItem(item: Measurement): void {
+    item.profileRun++; // stop a pending profile run
     this.remove(item.group);
     item.lines.geometry.dispose();
     for (const label of item.labels) {
@@ -683,7 +691,11 @@ export class MeasurementTool extends SceneExtension<Renderable, MeasurementToolE
    * into `out` in the item's frame. Returns false if the cursor is off the canvas, its
    * ray misses everything, or the item's frame is currently unavailable.
    */
-  #snapToLocal(cursor: THREE.Vector2, item: Measurement, out: THREE.Vector3): boolean {
+  async #snapToLocal(
+    cursor: THREE.Vector2,
+    item: Measurement,
+    out: THREE.Vector3,
+  ): Promise<boolean> {
     // Hidden means the item's frame isn't in the tree right now (e.g. after a seek), so its matrix
     // is stale and converting into it would misplace the point
     const { width, height } = this.renderer.input.canvasSize;
@@ -692,17 +704,20 @@ export class MeasurementTool extends SceneExtension<Renderable, MeasurementToolE
     if (!item.group.visible || !onCanvas) {
       return false;
     }
-    if (!this.renderer.pickPoint(cursor, out)) {
-      tempRaycaster.setFromCamera(
-        tempVec2.set((cursor.x / width) * 2 - 1, -(cursor.y / height) * 2 + 1),
-        this.renderer.cameraHandler.getActiveCamera(),
-      );
-      if (!tempRaycaster.ray.intersectPlane(XY_PLANE, out)) {
-        return false;
-      }
-    }
+    // The item and the camera can move while the pick is read back, so convert the hit and compute
+    // the ground plane fallback with their poses at submission
     item.group.updateMatrixWorld();
-    item.group.worldToLocal(out);
+    const toLocal = new THREE.Matrix4().copy(item.group.matrixWorld).invert();
+    tempRaycaster.setFromCamera(
+      tempVec2.set((cursor.x / width) * 2 - 1, -(cursor.y / height) * 2 + 1),
+      this.renderer.cameraHandler.getActiveCamera(),
+    );
+    const fallback = tempRaycaster.ray.intersectPlane(XY_PLANE, new THREE.Vector3());
+    const hit = (await this.renderer.pickPoint(cursor, new THREE.Vector3())) ?? fallback;
+    if (!hit) {
+      return false;
+    }
+    out.copy(hit).applyMatrix4(toLocal);
     return true;
   }
 
@@ -737,56 +752,98 @@ export class MeasurementTool extends SceneExtension<Renderable, MeasurementToolE
     return best;
   }
 
-  #sampleProfile(item: Measurement): void {
+  /**
+   * Snaps like #snapToLocal, but only the newest of overlapping requests for `out` writes it (picks
+   * resolve asynchronously while the cursor keeps moving)
+   */
+  async #snapLatest(
+    cursor: THREE.Vector2,
+    item: Measurement,
+    out: THREE.Vector3,
+  ): Promise<boolean> {
+    const request = ++this.#snapRequest;
+    this.#latestSnap.set(out, request);
+    const point = new THREE.Vector3().copy(out);
+    // A failed pick leaves the point where it was, like a miss
+    const ok = await this.#snapToLocal(cursor.clone(), item, point).catch(() => false);
+    if (!ok || this.#latestSnap.get(out) !== request) {
+      return false;
+    }
+    out.copy(point);
+    item.dirty = true;
+    this.renderer.queueAnimationFrame();
+    return true;
+  }
+
+  async #sampleProfile(item: Measurement): Promise<void> {
+    const run = ++item.profileRun;
     item.profileLine = [];
     item.profileHit = [];
     if (item.kind !== "profile" || item.points.length < 2) {
       return;
     }
+    // Private to this run: pointer moves, drags and other runs must not change what a pending pick
+    // is converted with
+    const points = item.points.map((p) => p.clone());
+    const camera = new THREE.OrthographicCamera();
+    item.group.updateMatrixWorld();
+    const world = item.group.matrixWorld.clone();
+    const toLocal = world.clone().invert();
     let total = 0;
-    for (let i = 1; i < item.points.length; i++) {
-      total += item.points[i - 1]!.distanceTo(item.points[i]!);
+    for (let i = 1; i < points.length; i++) {
+      total += points[i - 1]!.distanceTo(points[i]!);
     }
     const step = total / PROFILE_SAMPLES;
+    const profileLine: THREE.Vector3[] = [];
+    const profileHit: THREE.Vector3[] = [];
     // Vertices were snapped when placed, so they are their own surface point
     const addVertex = (vertex: THREE.Vector3) => {
-      item.profileLine.push(vertex.clone());
-      item.profileHit.push(vertex.clone());
+      profileLine.push(vertex.clone());
+      profileHit.push(vertex.clone());
     };
-    item.group.updateMatrixWorld();
-    for (let i = 1; i < item.points.length; i++) {
-      const a = item.points[i - 1]!;
-      const b = item.points[i]!;
+    for (let i = 1; i < points.length; i++) {
+      const a = points[i - 1]!;
+      const b = points[i]!;
       addVertex(a);
       const length = a.distanceTo(b);
       for (let d = step; d < length; d += step) {
+        if (item.profileRun !== run) {
+          return;
+        }
         const linePoint = a.clone().lerp(b, d / length);
         const hit = new THREE.Vector3();
-        if (this.#pickBelow(item, linePoint, step, hit)) {
-          item.profileLine.push(linePoint);
-          item.profileHit.push(hit);
+        if (await this.#pickBelow(camera, world, linePoint, step, hit)) {
+          profileLine.push(linePoint);
+          profileHit.push(hit.applyMatrix4(toLocal));
         }
       }
     }
-    addVertex(item.points.at(-1)!);
+    if (item.profileRun !== run) {
+      return;
+    }
+    addVertex(points.at(-1)!);
+    item.profileLine = profileLine;
+    item.profileHit = profileHit;
+    item.dirty = true;
+    this.renderer.queueAnimationFrame();
   }
 
   /**
    * Find the topmost surface straight below `linePoint` (along the item frame's -z, i.e. gravity in
-   * the fixed frame), independent of where the view camera is. Both points are item-local.
+   * the fixed frame), independent of where the view camera is. `linePoint` is item-local, `world`
+   * the item's pose and `out` is in world coordinates; `camera` is moved to look down.
    */
-  #pickBelow(
-    item: Measurement,
+  async #pickBelow(
+    camera: THREE.OrthographicCamera,
+    world: THREE.Matrix4,
     linePoint: THREE.Vector3,
     step: number,
     out: THREE.Vector3,
-  ): boolean {
+  ): Promise<boolean> {
     const { width, height } = this.renderer.input.canvasSize;
     if (width <= 0 || height <= 0) {
       return false;
     }
-    const camera = this.#profileCamera;
-    const world = item.group.matrixWorld;
     // ponytail: one canvas pixel covers half a sample step, so a point a few pixels wide is caught
     // within about one step of the line; widen if sparse clouds leave gaps
     const perPixel = Math.max(step / 2, 0.005);
@@ -796,16 +853,17 @@ export class MeasurementTool extends SceneExtension<Renderable, MeasurementToolE
     camera.bottom = (-perPixel * height) / 2;
     camera.near = 0;
     camera.up.set(1, 0, 0).transformDirection(world);
-    const target = tempVec3b.copy(linePoint).applyMatrix4(world);
-    const center = tempScreen.set(width / 2, height / 2);
+    const target = new THREE.Vector3().copy(linePoint).applyMatrix4(world);
+    const center = new THREE.Vector2(width / 2, height / 2);
     for (const lift of PROFILE_LIFTS) {
       camera.far = lift + 1000;
       camera.position.set(linePoint.x, linePoint.y, linePoint.z + lift).applyMatrix4(world);
       camera.lookAt(target);
       camera.updateProjectionMatrix();
       camera.updateMatrixWorld();
-      if (this.renderer.pickPoint(center, out, camera)) {
-        item.group.worldToLocal(out);
+      // The camera is this run's own and its picks resolve one at a time, so it isn't moved under
+      // a pending one
+      if (await this.renderer.pickPoint(center, out, camera)) {
         return true;
       }
     }
@@ -826,12 +884,32 @@ export class MeasurementTool extends SceneExtension<Renderable, MeasurementToolE
       return;
     }
     draft.complete = true;
-    this.#sampleProfile(draft);
+    this.#startProfile(draft);
     draft.dirty = true;
     this.#items.push(draft);
     this.select(draft.id);
     this.#cursorDirty = true; // start the next measurement under the cursor
     this.renderer.queueAnimationFrame();
+  }
+
+  /** Sample a profile in the background; a failed pick leaves it without one */
+  #startProfile(item: Measurement): void {
+    void this.#sampleProfile(item).catch(() => undefined);
+  }
+
+  /**
+   * Run `fn` once the clicks placed so far have landed, unless the draft was replaced or discarded
+   * meanwhile or measuring stopped. A draft its last click completed still counts: it's then the
+   * selected measurement.
+   */
+  #afterClicks(fn: () => void): void {
+    const draft = this.#draft;
+    const session = this.#session;
+    this.#clicks = this.#clicks.then(() => {
+      if (session === this.#session && (this.#draft === draft || draft?.complete === true)) {
+        fn();
+      }
+    });
   }
 
   #discardDraft(): void {
@@ -897,20 +975,29 @@ export class MeasurementTool extends SceneExtension<Renderable, MeasurementToolE
     }
     this.#draft ??= this.#createItem(this.kind);
     const draft = this.#draft;
-    if (draft.points.length === 0) {
-      draft.points.push(new THREE.Vector3());
-    }
-    // Place the cursor point where it is now, then add a new point to follow the cursor
+    // Place the cursor point where it is now, then add a new point to follow the cursor. Picked
+    // now, placed in click order and only into the draft that was clicked.
     this.#updateItem(draft, this.renderer.currentTime);
-    if (!this.#snapToLocal(cursor, draft, draft.points.at(-1)!)) {
-      return;
-    }
-    draft.points.push(draft.points.at(-1)!.clone());
-    draft.dirty = true;
-    if (draft.points.length - 1 >= KIND_POINTS[draft.kind].max) {
-      this.#finishDraft();
-    }
-    this.renderer.queueAnimationFrame();
+    const point = new THREE.Vector3();
+    const snapped = this.#snapToLocal(cursor.clone(), draft, point).catch(() => false);
+    this.#clicks = this.#clicks.then(async () => {
+      if (!(await snapped) || this.#draft !== draft) {
+        return;
+      }
+      if (draft.points.length === 0) {
+        draft.points.push(new THREE.Vector3());
+      }
+      const placed = draft.points.at(-1)!;
+      // A cursor preview still in flight must not move the placed point
+      this.#latestSnap.delete(placed);
+      placed.copy(point);
+      draft.points.push(placed.clone());
+      draft.dirty = true;
+      this.renderer.queueAnimationFrame();
+      if (draft.points.length - 1 >= KIND_POINTS[draft.kind].max) {
+        this.#finishDraft();
+      }
+    });
   };
 
   #handleMouseDown = (cursor: THREE.Vector2, _world: unknown, event: MouseEvent): void => {
@@ -921,7 +1008,10 @@ export class MeasurementTool extends SceneExtension<Renderable, MeasurementToolE
 
   #handleMouseUp = (cursor: THREE.Vector2, _world: unknown, event: MouseEvent): void => {
     if (event.button === 2 && this.#rightDown.distanceTo(cursor) <= RIGHT_CLICK_SLOP) {
-      this.#finishDraft();
+      // Points clicked before finishing still count
+      this.#afterClicks(() => {
+        this.#finishDraft();
+      });
     }
   };
 
@@ -964,9 +1054,12 @@ export class MeasurementTool extends SceneExtension<Renderable, MeasurementToolE
       }
       this.#drag = undefined;
       canvas.style.cursor = "grab";
-      this.#sampleProfile(hit.item);
-      hit.item.dirty = true;
-      this.renderer.queueAnimationFrame();
+      // Sample the line where the vertex landed, after the last drag snap, unless it was deleted
+      void this.#dragSnap.then(() => {
+        if (this.#items.includes(hit.item)) {
+          this.#startProfile(hit.item);
+        }
+      });
     };
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp, { once: true });
@@ -975,9 +1068,8 @@ export class MeasurementTool extends SceneExtension<Renderable, MeasurementToolE
   #snapDrag(): void {
     this.#dragPending = false;
     const drag = this.#drag;
-    if (drag && this.#snapToLocal(this.#dragCursor, drag.item, drag.item.points[drag.index]!)) {
-      drag.item.dirty = true;
-      this.renderer.queueAnimationFrame();
+    if (drag) {
+      this.#dragSnap = this.#snapLatest(this.#dragCursor, drag.item, drag.item.points[drag.index]!);
     }
   }
 
@@ -998,23 +1090,29 @@ export class MeasurementTool extends SceneExtension<Renderable, MeasurementToolE
     ) {
       return;
     }
-    const placing = (this.#draft?.points.length ?? 0) > 1;
     if (isThreeDeeShortcut("3d.finishMeasurement", event)) {
-      if (placing) {
-        this.#finishDraft();
-      } else {
-        this.stopMeasuring();
-      }
+      // Decide once the clicks so far have landed, so click-then-finish finishes instead of exiting
+      this.#afterClicks(() => {
+        if ((this.#draft?.points.length ?? 0) > 1) {
+          this.#finishDraft();
+        } else {
+          this.stopMeasuring();
+        }
+      });
       event.preventDefault();
     } else if (isThreeDeeShortcut("3d.deleteMeasurement", event)) {
-      if (placing) {
-        // Remove the last placed point, keeping the one under the cursor
-        this.#draft!.points.splice(-2, 1);
-        this.#draft!.dirty = true;
-        this.renderer.queueAnimationFrame();
-      } else if (this.selectedId != undefined) {
-        this.removeMeasurement(this.selectedId);
-      }
+      // Decide once the clicks so far have landed, so a just-clicked point is what gets removed
+      this.#afterClicks(() => {
+        const draft = this.#draft;
+        if (draft && draft.points.length > 1) {
+          // Remove the last placed point, keeping the one under the cursor
+          draft.points.splice(-2, 1);
+          draft.dirty = true;
+          this.renderer.queueAnimationFrame();
+        } else if (this.selectedId != undefined) {
+          this.removeMeasurement(this.selectedId);
+        }
+      });
       event.preventDefault();
     }
   };

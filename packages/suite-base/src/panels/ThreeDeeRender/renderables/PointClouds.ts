@@ -8,19 +8,13 @@
 import { Time, toNanoSec } from "@foxglove/rostime";
 import { NumericType, PackedElementField, PointCloud } from "@foxglove/schemas";
 import i18next from "i18next";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 import { SettingsTreeAction, MessageEvent } from "@lichtblick/suite";
 import { DynamicBufferGeometry } from "@lichtblick/suite-base/panels/ThreeDeeRender/DynamicBufferGeometry";
 import {
-  createCubeMaterials,
   createGeometry,
-  CubeMaterials,
-  disposeCubeMaterials,
-  createInstancePickingMaterial,
-  createPickingMaterial,
-  pointCloudMaterial,
-  pointCloudColorEncoding,
+  pointStyle,
   DECAY_HISTORY_LIMITS,
   RenderObjectHistory,
   PointsRenderable,
@@ -105,9 +99,6 @@ type PointCloudHistoryUserData = BaseUserData & {
   topic: string;
   latestPointCloud: PointCloud | PointCloud2;
   latestOriginalMessage: Record<string, RosValue> | undefined;
-  material: THREE.PointsMaterial;
-  pickingMaterial: THREE.ShaderMaterial;
-  instancePickingMaterial: THREE.ShaderMaterial;
   stixelMaterial: THREE.LineBasicMaterial;
 };
 
@@ -179,7 +170,6 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
   public override pickable = false; // Picking happens on child renderables
   #pointsHistory: RenderObjectHistory<PointCloudRenderable>;
   #stixelsHistory: RenderObjectHistory<StixelsRenderable>;
-  #cubeMaterials: CubeMaterials;
   /**
    * With a decay time, scans older than the latest accumulate here. The latest stays a regular
    * PointCloudRenderable, so picking it still shows the message and per-point fields.
@@ -209,12 +199,8 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
         originalMessage: userData.latestOriginalMessage,
       },
       geometry,
-      userData.material,
-      userData.pickingMaterial,
-      userData.instancePickingMaterial,
     );
-    this.#cubeMaterials = createCubeMaterials(userData.settings);
-    this.#applyShape(points);
+    points.setStyle(pointStyle(userData.settings));
     this.#pointsHistory = new RenderObjectHistory({
       initial: {
         messageTime: userData.messageTime,
@@ -261,11 +247,7 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
 
   public override dispose(): void {
     this.userData.latestOriginalMessage = undefined;
-    this.userData.material.dispose();
-    this.userData.pickingMaterial.dispose();
-    this.userData.instancePickingMaterial.dispose();
     this.userData.stixelMaterial.dispose();
-    disposeCubeMaterials(this.#cubeMaterials);
     this.#pointsHistory.dispose();
     this.#stixelsHistory.dispose();
     this.#decayRing?.dispose();
@@ -291,40 +273,21 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
     const prevIsDecay = prevSettings.decayTime > 0;
     this.userData.settings = settings;
 
-    let material = this.userData.material;
     let stixelMaterial = this.userData.stixelMaterial;
-    const needsRebuild =
-      colorHasTransparency(settings) !== material.transparent ||
-      pointCloudColorEncoding(settings) !== pointCloudColorEncoding(prevSettings) ||
-      settings.pointShape !== prevSettings.pointShape ||
-      settings.showOutlines !== prevSettings.showOutlines;
-
     const pointsHistory = this.#pointsHistory;
     const stixelsHistory = this.#stixelsHistory;
-    if (needsRebuild) {
-      material.dispose();
-      material = pointCloudMaterial(settings);
-      this.userData.material = material;
-      disposeCubeMaterials(this.#cubeMaterials);
-      this.#cubeMaterials = createCubeMaterials(settings);
-      pointsHistory.forEach((entry) => {
-        entry.renderable.updateMaterial(material);
-        this.#applyShape(entry.renderable);
-      });
-
+    const style = pointStyle(settings);
+    pointsHistory.forEach((entry) => {
+      entry.renderable.setStyle(style);
+    });
+    this.#decayRing?.setStyle(style);
+    if (colorHasTransparency(settings) !== stixelMaterial.transparent) {
       stixelMaterial.dispose();
       stixelMaterial = createStixelMaterial(settings);
       this.userData.stixelMaterial = stixelMaterial;
       stixelsHistory.forEach((entry) => {
         entry.renderable.updateMaterial(stixelMaterial);
       });
-    } else {
-      material.size = settings.pointSize;
-      this.#cubeMaterials.cubeSize.value = settings.cubeSize;
-    }
-    this.#decayRing?.updateSettings(settings, { rebuild: needsRebuild });
-    if (needsRebuild) {
-      this.#applyRingShape();
     }
 
     if (settings.colorField === colorFieldComputedPrefix + "distance") {
@@ -416,7 +379,7 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
     posesResolved =
       this.#updateDecayRing(currentTime, renderFrameId, fixedFrameId) && posesResolved;
     this.#pointsHistory.forEach((entry) => {
-      entry.renderable.syncCubes();
+      entry.renderable.syncPoints();
     });
     if (this.userData.settings.stixelsEnabled) {
       this.#stixelsHistory.updateHistoryFromCurrentTime(currentTime);
@@ -446,11 +409,10 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
     const latestCount = latest.renderable.decoded ? latest.renderable.geometry.drawRange.count : 0;
     if (latestCount > 0) {
       if (!this.#decayRing) {
-        this.#decayRing = new DecayPointRing(topic, settings, {
+        this.#decayRing = new DecayPointRing(topic, pointStyle(settings), {
           maxEntries: DECAY_HISTORY_LIMITS.maxEntries,
           maxPoints: decayMaxPoints(settings),
         });
-        this.#applyRingShape();
         this.add(this.#decayRing);
       }
       const { position, color } = latest.renderable.geometry.attributes;
@@ -487,14 +449,6 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
       stixelsHistory.addHistoryEntry({ receiveTime, messageTime, renderable: stixels });
       this.add(stixels);
     }
-  }
-
-  #applyRingShape(): void {
-    const { pointShape, showOutlines } = this.userData.settings;
-    this.#decayRing?.setShape({
-      shape: pointShape === "cube" || pointShape === "sphere" ? pointShape : undefined,
-      showOutline: showOutlines === true,
-    });
   }
 
   /** Expires, poses and budget-checks the decay ring. Returns whether all its scans resolved. */
@@ -567,14 +521,6 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
       return false;
     }
     return true;
-  }
-
-  #applyShape(points: PointCloudRenderable): void {
-    const { pointShape, showOutlines } = this.userData.settings;
-    points.setCubeMaterials(
-      pointShape === "cube" || pointShape === "sphere" ? this.#cubeMaterials : undefined,
-      { shape: pointShape === "sphere" ? "sphere" : "cube", showOutline: showOutlines === true },
-    );
   }
 
   #invalidError(message: string): void {
@@ -1151,9 +1097,6 @@ export class PointClouds extends SceneExtension<PointCloudHistoryRenderable> {
         this.updateSettingsTree();
       }
 
-      const material = pointCloudMaterial(settings);
-      const pickingMaterial = createPickingMaterial(settings);
-      const instancePickingMaterial = createInstancePickingMaterial(settings);
       const stixelMaterial = createStixelMaterial(settings);
 
       renderable = new PointCloudHistoryRenderable(topic, this.renderer, {
@@ -1166,9 +1109,6 @@ export class PointClouds extends SceneExtension<PointCloudHistoryRenderable> {
         topic,
         latestPointCloud: pointCloud,
         latestOriginalMessage: originalMessage,
-        material,
-        pickingMaterial,
-        instancePickingMaterial,
         stixelMaterial,
       });
 

@@ -276,6 +276,8 @@ test("keeps typing shortcuts inside inherited editable fields", { tag: "@regress
 test("creates a blank monitor from the top bar and restores its contents with one click", {
   tag: "@smoke",
 }, async ({ page }) => {
+  // New 3D views compile their WebGPU pipelines in software (SwiftShader) on CI
+  test.setTimeout(60_000);
   // Given an ordinary browser without Window Management permission support.
   await page.addInitScript(() => {
     Object.defineProperty(window, "getScreenDetails", { configurable: true, value: undefined });

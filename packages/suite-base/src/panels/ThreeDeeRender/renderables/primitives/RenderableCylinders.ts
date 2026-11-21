@@ -7,7 +7,8 @@
 
 import { toNanoSec } from "@foxglove/rostime";
 import { CylinderPrimitive, SceneEntity } from "@foxglove/schemas";
-import * as THREE from "three";
+import { attribute, mat4, mix, positionGeometry, positionLocal, vec3, vec4 } from "three/tsl";
+import * as THREE from "three/webgpu";
 
 import { RenderablePrimitive } from "./RenderablePrimitive";
 import type { Renderer } from "../../Renderer";
@@ -34,7 +35,6 @@ export class RenderableCylinders extends RenderablePrimitive {
   #instanceBottomScale: THREE.InstancedBufferAttribute;
   #outlineMaterial = new CylinderOutlineMaterial();
   #material = new CylinderMaterial();
-  #pickingMaterial = new CylinderPickingMaterial();
 
   /**
    * The initial count passed to `mesh`'s constructor, i.e. the maximum number of instances it can
@@ -43,6 +43,7 @@ export class RenderableCylinders extends RenderablePrimitive {
   #maxInstances: number;
 
   #outlineGeometry: THREE.InstancedBufferGeometry;
+  #outlineMatrices: THREE.InstancedInterleavedBuffer;
   #outline: THREE.LineSegments;
 
   public constructor(renderer: Renderer) {
@@ -54,7 +55,6 @@ export class RenderableCylinders extends RenderablePrimitive {
     this.#maxInstances = 16;
     this.#mesh = new THREE.InstancedMesh(this.#geometry, this.#material, this.#maxInstances);
     this.#mesh.frustumCulled = false;
-    this.#mesh.userData.pickingMaterial = this.#pickingMaterial;
     this.#instanceOpacity = new THREE.InstancedBufferAttribute(
       new Float32Array(this.#maxInstances),
       1,
@@ -79,7 +79,7 @@ export class RenderableCylinders extends RenderablePrimitive {
     );
     this.#outlineGeometry = new THREE.InstancedBufferGeometry();
     (this.#outlineGeometry as THREE.BufferGeometry).copy(this.#sharedEdgesGeometry);
-    this.#outlineGeometry.setAttribute("instanceMatrix", this.#mesh.instanceMatrix);
+    this.#outlineMatrices = shareInstanceMatrix(this.#outlineGeometry, this.#mesh.instanceMatrix);
     this.#outlineGeometry.setAttribute("instanceBottomScale", this.#instanceBottomScale);
     this.#outlineGeometry.setAttribute("instanceTopScale", this.#instanceTopScale);
     this.#outline = new THREE.LineSegments(this.#outlineGeometry, this.#outlineMaterial);
@@ -118,7 +118,6 @@ export class RenderableCylinders extends RenderablePrimitive {
       this.#mesh.dispose();
       this.#mesh = new THREE.InstancedMesh(this.#geometry, this.#material, this.#maxInstances);
       this.#mesh.frustumCulled = false;
-      this.#mesh.userData.pickingMaterial = this.#pickingMaterial;
       this.add(this.#mesh);
 
       // THREE.js doesn't correctly recompute the new max instance count when dynamically
@@ -127,7 +126,7 @@ export class RenderableCylinders extends RenderablePrimitive {
       this.#outlineGeometry = new THREE.InstancedBufferGeometry();
       (this.#outlineGeometry as THREE.BufferGeometry).copy(this.#sharedEdgesGeometry);
       this.#outlineGeometry.instanceCount = newCapacity;
-      this.#outlineGeometry.setAttribute("instanceMatrix", this.#mesh.instanceMatrix);
+      this.#outlineMatrices = shareInstanceMatrix(this.#outlineGeometry, this.#mesh.instanceMatrix);
       this.#outlineGeometry.setAttribute("instanceBottomScale", this.#instanceBottomScale);
       this.#outlineGeometry.setAttribute("instanceTopScale", this.#instanceTopScale);
       this.#outline.geometry = this.#outlineGeometry;
@@ -186,6 +185,7 @@ export class RenderableCylinders extends RenderablePrimitive {
     this.#mesh.count = cylinders.length;
     this.#outlineGeometry.instanceCount = cylinders.length;
     this.#mesh.instanceMatrix.needsUpdate = true;
+    this.#outlineMatrices.needsUpdate = true;
     this.#instanceOpacity.needsUpdate = true;
     this.#instanceBottomScale.needsUpdate = true;
     this.#instanceTopScale.needsUpdate = true;
@@ -200,7 +200,6 @@ export class RenderableCylinders extends RenderablePrimitive {
     this.#mesh.dispose();
     this.#geometry.dispose();
     this.#material.dispose();
-    this.#pickingMaterial.dispose();
     this.#outlineMaterial.dispose();
     this.#outlineGeometry.dispose();
   }
@@ -237,68 +236,57 @@ function createEdgesGeometry(geometry: THREE.CylinderGeometry) {
   return cylinderEdgesGeometry;
 }
 
-/** Modify the given vertex shader so it transforms positions to support bottom_scale and top_scale. */
-function makeCylinderVertexShader(source: string): string {
-  return source
-    .replace(
-      "#include <color_pars_vertex>",
-      `
-  #include <color_pars_vertex>
-  attribute float instanceBottomScale, instanceTopScale;
-  `,
-    )
-    .replace(
-      "#include <begin_vertex>",
-      `
-  #include <begin_vertex>
-  transformed.xy *= mix(instanceBottomScale, instanceTopScale, transformed.z + 0.5);
-  `,
-    );
+/** Scales a unit cylinder's cross-section from bottom_scale (z = -0.5) to top_scale (z = 0.5) */
+function taper(position: THREE.Node<"vec3">): THREE.Node<"vec3"> {
+  const bottom = attribute("instanceBottomScale", "float");
+  const top = attribute("instanceTopScale", "float");
+  return vec3(position.xy.mul(mix(bottom, top, position.z.add(0.5))), position.z);
 }
 
 class CylinderMaterial extends MeshStandardMaterialWithInstanceOpacity {
+  // Node materials share compiled shaders by `type`; the override keeps the taper out of the plain
+  // material's cache entry. three.js defines `type` as a static getter.
+  // eslint-disable-next-line @lichtblick/no-getters-setters
+  public static override get type(): string {
+    return "CylinderMaterial";
+  }
+
   public constructor() {
     super({ metalness: 0, roughness: 1, dithering: true });
   }
 
-  public override onBeforeCompile(
-    shader: THREE.WebGLProgramParametersWithUniforms,
-    renderer: THREE.WebGLRenderer,
-  ): void {
-    super.onBeforeCompile(shader, renderer);
-    shader.vertexShader = makeCylinderVertexShader(shader.vertexShader);
+  // Taper before the InstancedMesh's instance transform, which runs in super.setupPosition
+  public override setupPosition(builder: THREE.NodeBuilder): THREE.Node {
+    positionLocal.assign(taper(positionLocal));
+    return super.setupPosition(builder);
   }
 }
 
-class CylinderOutlineMaterial extends THREE.LineBasicMaterial {
+/** Instanced outline: reads the cylinder instance matrices from the outline geometry's own attributes */
+class CylinderOutlineMaterial extends THREE.LineBasicNodeMaterial {
   public constructor() {
     super();
-    this.defines ??= {};
-    this.defines.USE_INSTANCING = true;
-  }
-
-  public override onBeforeCompile(
-    shader: THREE.WebGLProgramParametersWithUniforms,
-    renderer: THREE.WebGLRenderer,
-  ): void {
-    super.onBeforeCompile(shader, renderer);
-    shader.vertexShader = makeCylinderVertexShader(shader.vertexShader);
+    const matrix = mat4(
+      attribute("instanceMatrix0", "vec4"),
+      attribute("instanceMatrix1", "vec4"),
+      attribute("instanceMatrix2", "vec4"),
+      attribute("instanceMatrix3", "vec4"),
+    );
+    this.positionNode = matrix.mul(vec4(taper(positionGeometry), 1)).xyz;
   }
 }
 
-class CylinderPickingMaterial extends THREE.ShaderMaterial {
-  public constructor() {
-    super({
-      vertexShader: makeCylinderVertexShader(THREE.ShaderChunk.meshbasic_vert),
-      fragmentShader: `
-          uniform vec4 objectId;
-          void main() {
-            gl_FragColor = objectId;
-          }
-        `,
-      uniforms: {
-        objectId: { value: [NaN, NaN, NaN, NaN] },
-      },
-    });
+/** Exposes `matrices` (an InstancedMesh's instanceMatrix) to `geometry` as four vec4 columns */
+function shareInstanceMatrix(
+  geometry: THREE.BufferGeometry,
+  matrices: THREE.InstancedBufferAttribute,
+): THREE.InstancedInterleavedBuffer {
+  const buffer = new THREE.InstancedInterleavedBuffer(matrices.array, 16, 1);
+  for (let i = 0; i < 4; i++) {
+    geometry.setAttribute(
+      `instanceMatrix${i}`,
+      new THREE.InterleavedBufferAttribute(buffer, 4, i * 4),
+    );
   }
+  return buffer;
 }

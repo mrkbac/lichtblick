@@ -6,15 +6,19 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { useEffect, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import StatsMonitor from "stats.js";
-import type { WebGLInfo } from "three";
+import type { WebGPURenderer } from "three/webgpu";
 
 import type { Renderer } from "./Renderer";
 import { useRendererEvent } from "./RendererContext";
 
+type Info = WebGPURenderer["info"];
+
 export function Stats(): React.JSX.Element {
   const container = useRef<HTMLDivElement>(null);
   const update = useRef<((renderer: Renderer) => void) | undefined>(undefined);
+  const { t } = useTranslation("threeDee");
 
   useRendererEvent("endFrame", (_event, renderer) => update.current?.(renderer));
 
@@ -27,14 +31,16 @@ export function Stats(): React.JSX.Element {
     stats.dom.style.position = "relative";
     stats.dom.style.zIndex = "auto";
     const counters = [
-      ["draws", "red", (info: WebGLInfo) => info.render.calls],
-      ["tris", "cyan", (info: WebGLInfo) => info.render.triangles],
-      ["textures", "yellow", (info: WebGLInfo) => info.memory.textures],
-      ["geometries", "green", (info: WebGLInfo) => info.memory.geometries],
+      ["draws", "red", (info: Info) => info.render.calls],
+      ["tris", "cyan", (info: Info) => info.render.triangles],
+      ["textures", "yellow", (info: Info) => info.memory.textures],
+      ["geometries", "green", (info: Info) => info.memory.geometries],
     ] as const;
     const panels = counters.map(([name, color]) =>
       stats.addPanel(new StatsMonitor.Panel(name, color, "black")),
     );
+    const gpuPanel = stats.addPanel(new StatsMonitor.Panel(t("gpuMs"), "orange", "black"));
+    let gpuMax = 0;
     const maxima = counters.map(() => 0);
     element.appendChild(stats.dom);
     stats.showPanel(1);
@@ -44,13 +50,19 @@ export function Stats(): React.JSX.Element {
         maxima[index] = Math.max(maxima[index]!, current);
         panels[index]!.update(current, maxima[index]);
       });
+      if (renderer.gpuTimeMs != undefined) {
+        gpuMax = Math.max(gpuMax, renderer.gpuTimeMs);
+        gpuPanel.update(renderer.gpuTimeMs, gpuMax);
+        // Readable by scripts (benchmarks); the panels are drawn into a canvas
+        element.dataset.gpuMs = renderer.gpuTimeMs.toFixed(3);
+      }
       stats.update();
     };
     return () => {
       update.current = undefined;
       stats.dom.remove();
     };
-  }, []);
+  }, [t]);
 
   return <div ref={container} />;
 }

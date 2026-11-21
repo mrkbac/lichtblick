@@ -7,7 +7,21 @@
 
 import { toNanoSec } from "@foxglove/rostime";
 import * as _ from "lodash-es";
-import * as THREE from "three";
+import {
+  Fn,
+  If,
+  clamp,
+  length,
+  min,
+  positionGeometry,
+  select,
+  sRGBTransferEOTF,
+  texture as textureNode,
+  uniform,
+  uv,
+  vec4,
+} from "three/tsl";
+import * as THREE from "three/webgpu";
 import { assert } from "ts-essentials";
 
 import {
@@ -59,12 +73,7 @@ import {
   DEFAULT_PLANAR_PROJECTION_FACTOR,
   DEFAULT_PROJECTION_DISTANCE,
 } from "../../settingsNodes/topics";
-import {
-  DECODE_IMAGE_ERR_KEY,
-  FRAGMENT_SHADER,
-  IMAGE_TOPIC_PATH,
-  VERTEX_SHADER,
-} from "../ImageMode/constants";
+import { DECODE_IMAGE_ERR_KEY, IMAGE_TOPIC_PATH } from "../ImageMode/constants";
 
 const log = Logger.getLogger(__filename);
 export interface ImageRenderableSettings extends Partial<ColorModeSettings> {
@@ -90,25 +99,6 @@ export interface ImageRenderableSettings extends Partial<ColorModeSettings> {
   /** Depth mode: image topic that colors the points */
   rgbTopic?: string;
 }
-
-const PLANE_VERTEX_SHADER = /* glsl */ `
-  uniform mat4 camToPlane;
-  uniform float maxDistance;
-  varying vec2 vUv;
-  void main() {
-    vUv = uv;
-    // position is the pixel's ray in the camera frame, scaled to z = 1
-    float originZ = camToPlane[3].z;
-    // Slightly toward the camera so the image doesn't z-fight with a grid on the plane
-    float planeZ = originZ >= 0.0 ? 0.01 : -0.01;
-    vec3 dir = mat3(camToPlane) * position;
-    float t = maxDistance / length(position);
-    if ((planeZ - originZ) * dir.z > 0.0) {
-      t = min(t, (planeZ - originZ) / dir.z);
-    }
-    gl_Position = projectionMatrix * modelViewMatrix * vec4(position * t, 1.0);
-  }
-`;
 
 export const IMAGE_RENDERABLE_DEFAULT_SETTINGS: ImageRenderableSettings = {
   visible: false,
@@ -175,8 +165,7 @@ export type ImageUserData = BaseUserData & {
   cameraModel: ICameraModel | undefined;
   image: AnyImage | undefined;
   texture: THREE.Texture | undefined;
-  // The material should use ShaderMaterial so we can use custom shaders to apply effects like brightness and contrast
-  material: THREE.ShaderMaterial | undefined;
+  material: THREE.MeshBasicNodeMaterial | undefined;
   geometry: THREE.PlaneGeometry | undefined;
   mesh: THREE.Mesh | undefined;
 };
@@ -200,7 +189,16 @@ export class ImageRenderable extends Renderable<ImageUserData> {
   #depthCloud: DepthCloud | undefined;
   #colorImageReceivedSeq = 0;
   #colorImageDisplayedSeq = 0;
-  readonly #camToPlane = new THREE.Matrix4();
+  readonly #uniforms = {
+    map: textureNode(new THREE.Texture()),
+    /** sRGB tint */
+    color: uniform(new THREE.Color(1, 1, 1)),
+    brightness: uniform(0),
+    contrast: uniform(1),
+    /** Plane mode: camera frame -> projection frame */
+    camToPlane: uniform(new THREE.Matrix4()),
+    maxDistance: uniform(1),
+  };
 
   #isUpdating = false;
 
@@ -545,14 +543,11 @@ export class ImageRenderable extends Renderable<ImageUserData> {
     if (!camToPlane) {
       return;
     }
-    this.#camToPlane.copy(camToPlane);
-    const maxDistance = this.userData.material?.uniforms.maxDistance;
-    if (maxDistance) {
-      maxDistance.value = planeProjectionMaxDistance(
-        camToPlane.elements[14],
-        this.userData.settings.projectionDistance,
-      );
-    }
+    this.#uniforms.camToPlane.value.copy(camToPlane);
+    this.#uniforms.maxDistance.value = planeProjectionMaxDistance(
+      camToPlane.elements[14],
+      this.userData.settings.projectionDistance,
+    );
   }
 
   #cachedCanonicalCodec(format: string): VideoCodec | undefined {
@@ -1094,59 +1089,63 @@ export class ImageRenderable extends Renderable<ImageUserData> {
       this.#meshNeedsUpdate = true;
     }
     const material = this.userData.material!;
-
-    const texture = this.userData.texture;
-    if (texture) {
-      material.uniforms.map = { value: texture };
+    const uniforms = this.#uniforms;
+    if (this.userData.texture) {
+      uniforms.map.value = this.userData.texture;
     }
 
     tempColor = stringToRgba(tempColor, this.userData.settings.color);
-    const transparent = tempColor.a < 1;
-    const color = new THREE.Color(tempColor.r, tempColor.g, tempColor.b);
     const { brightness, contrast } = this.userData.settings;
-    material.uniforms.color = { value: color };
-    material.uniforms.brightness = { value: clampBrightness(brightness) };
-    material.uniforms.contrast = { value: clampContrast(contrast) };
-    material.uniforms.opacity = { value: tempColor.a };
+    uniforms.color.value.setRGB(tempColor.r, tempColor.g, tempColor.b, THREE.LinearSRGBColorSpace);
+    uniforms.brightness.value = clampBrightness(brightness);
+    uniforms.contrast.value = clampContrast(contrast);
     material.opacity = tempColor.a;
-    material.transparent = transparent;
-    material.depthWrite = !transparent;
 
-    if (this.#renderBehindScene) {
-      material.depthWrite = false;
-      material.depthTest = false;
-    } else {
-      material.depthTest = true;
+    const transparent = tempColor.a < 1;
+    const depthWrite = !transparent && !this.#renderBehindScene;
+    const depthTest = !this.#renderBehindScene;
+    if (
+      material.transparent !== transparent ||
+      material.depthWrite !== depthWrite ||
+      material.depthTest !== depthTest
+    ) {
+      material.transparent = transparent;
+      material.depthWrite = depthWrite;
+      material.depthTest = depthTest;
+      material.needsUpdate = true;
     }
-
-    material.needsUpdate = true;
   }
 
+  /**
+   * Brightness, contrast and tint apply to the image's sRGB values (as the user sees them), then the
+   * result is decoded to linear for the renderer's output conversion.
+   */
   #initMaterial(): void {
-    stringToRgba(tempColor, this.userData.settings.color);
-    const transparent = tempColor.a < 1;
-    const color = new THREE.Color(tempColor.r, tempColor.g, tempColor.b);
-    const { brightness, contrast } = this.userData.settings;
-    const uniforms = {
-      map: { value: this.userData.texture },
-      color: { value: color },
-      opacity: { value: tempColor.a },
-      brightness: { value: clampBrightness(brightness) },
-      contrast: { value: clampContrast(contrast) },
-      camToPlane: { value: this.#camToPlane },
-      maxDistance: { value: 1 },
-    };
-    this.userData.material = new THREE.ShaderMaterial({
+    const u = this.#uniforms;
+    const material = new THREE.MeshBasicNodeMaterial({
       name: `${this.userData.topic}:Material`,
-      uniforms,
       side: THREE.DoubleSide,
-      opacity: tempColor.a,
-      transparent,
-      depthWrite: !transparent,
-      vertexShader:
-        this.userData.settings.renderMode === "plane" ? PLANE_VERTEX_SHADER : VERTEX_SHADER,
-      fragmentShader: FRAGMENT_SHADER,
     });
+    const texel = u.map.sample(uv());
+    const rgb = texel.rgb.add(u.brightness).sub(0.5).mul(u.contrast).add(0.5).mul(u.color);
+    material.colorNode = vec4(sRGBTransferEOTF(clamp(rgb, 0, 1)) as THREE.Node<"vec3">, texel.a);
+    if (this.userData.settings.renderMode === "plane") {
+      // positionGeometry is the pixel's ray in the camera frame, scaled to z = 1; extend it to the
+      // projection plane, or to maxDistance
+      material.positionNode = Fn(() => {
+        const ray = positionGeometry;
+        const originZ = u.camToPlane.mul(vec4(0, 0, 0, 1)).z;
+        // Slightly toward the camera so the image doesn't z-fight with a grid on the plane
+        const planeZ = select(originZ.greaterThanEqual(0), 0.01, -0.01);
+        const dirZ = u.camToPlane.mul(vec4(ray, 0)).z;
+        const t = u.maxDistance.div(length(ray)).toVar();
+        If(planeZ.sub(originZ).mul(dirZ).greaterThan(0), () => {
+          t.assign(min(t, planeZ.sub(originZ).div(dirZ)));
+        });
+        return ray.mul(t);
+      })();
+    }
+    this.userData.material = material;
   }
 
   #updateMesh(): void {
@@ -1201,6 +1200,8 @@ function createCanvasTexture(bitmap: ImageBitmap): THREE.CanvasTexture<ImageBitm
     THREE.UnsignedByteType,
   );
   texture.generateMipmaps = false;
+  // Rows top-down, like DataTextures (WebGL ignored flipY for bitmaps; WebGPU applies it)
+  texture.flipY = false;
   // Color space needs to be set to LinearSRGBColorSpace for correct color rendering on custom Shader
   texture.colorSpace = THREE.LinearSRGBColorSpace;
   return texture;

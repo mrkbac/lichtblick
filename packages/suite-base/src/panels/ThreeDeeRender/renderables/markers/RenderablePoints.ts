@@ -5,17 +5,17 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import * as THREE from "three";
-
 import { RenderableMarker } from "./RenderableMarker";
-import { markerHasTransparency, makePointsMaterial } from "./materials";
-import { DynamicBufferGeometry } from "../../DynamicBufferGeometry";
+import { markerHasTransparency } from "./materials";
 import type { Renderer } from "../../Renderer";
 import { Marker } from "../../ros";
+import { PointSprites } from "../PointSprites";
 
+/** POINTS marker: squares of scale.x meters facing the camera */
 export class RenderablePoints extends RenderableMarker {
-  #geometry: DynamicBufferGeometry;
-  #points: THREE.Points<DynamicBufferGeometry, THREE.PointsMaterial>;
+  #points = new PointSprites({ worldSize: true, circle: false });
+  #positions = new Float32Array(0);
+  #colors = new Uint8Array(0);
 
   public constructor(
     topic: string,
@@ -24,63 +24,45 @@ export class RenderablePoints extends RenderableMarker {
     renderer: Renderer,
   ) {
     super(topic, marker, receiveTime, renderer);
-
-    this.#geometry = new DynamicBufferGeometry();
-    this.#geometry.createAttribute("position", Float32Array, 3);
-    this.#geometry.createAttribute("color", Uint8Array, 4, true);
-
-    this.#points = new THREE.Points(this.#geometry, makePointsMaterial(marker));
     this.add(this.#points);
-
     this.update(marker, receiveTime);
   }
 
   public override dispose(): void {
-    this.#points.material.dispose();
+    this.#points.dispose();
   }
 
   public override update(newMarker: Marker, receiveTime: bigint | undefined): void {
-    const prevMarker = this.userData.marker;
     super.update(newMarker, receiveTime);
     const marker = this.userData.marker;
-
+    const material = this.#points.material;
     const transparent = markerHasTransparency(marker);
-    if (transparent !== markerHasTransparency(prevMarker)) {
-      this.#points.material.transparent = transparent;
-      this.#points.material.depthWrite = !transparent;
-      this.#points.material.needsUpdate = true;
+    if (transparent !== material.transparent) {
+      material.transparent = transparent;
+      material.depthWrite = !transparent;
+      material.needsUpdate = true;
     }
+    this.#points.size.value = marker.scale.x;
 
-    this.#points.material.size = marker.scale.x;
-
-    const pointsLength = marker.points.length;
-    this.#geometry.resize(pointsLength);
-    this.#setPositions(marker, pointsLength);
-    this.#setColors(marker, pointsLength);
-  }
-
-  #setPositions(marker: Marker, pointsLength: number): void {
-    const attribute = this.#geometry.getAttribute("position") as THREE.BufferAttribute;
-    const positions = attribute.array as Float32Array;
-    for (let i = 0; i < pointsLength; i++) {
+    const count = marker.points.length;
+    if (this.#positions.length < count * 3) {
+      this.#positions = new Float32Array(count * 3);
+      this.#colors = new Uint8Array(count * 4);
+    }
+    const positions = this.#positions;
+    const colors = this.#colors;
+    for (let i = 0; i < count; i++) {
       const point = marker.points[i]!;
       positions[i * 3 + 0] = point.x;
       positions[i * 3 + 1] = point.y;
       positions[i * 3 + 2] = point.z;
     }
-    attribute.needsUpdate = true;
-  }
-
-  #setColors(marker: Marker, pointsLength: number): void {
-    // Converts color-per-point to a flattened typed array
-    const attribute = this.#geometry.getAttribute("color") as THREE.BufferAttribute;
-    const rgbaData = attribute.array as Uint8Array;
-    this._markerColorsToLinear(marker, pointsLength, (color, i) => {
-      rgbaData[4 * i + 0] = (color[0] * 255) | 0;
-      rgbaData[4 * i + 1] = (color[1] * 255) | 0;
-      rgbaData[4 * i + 2] = (color[2] * 255) | 0;
-      rgbaData[4 * i + 3] = (color[3] * 255) | 0;
+    this._markerColorsToLinear(marker, count, (color, i) => {
+      colors[4 * i + 0] = (color[0] * 255) | 0;
+      colors[4 * i + 1] = (color[1] * 255) | 0;
+      colors[4 * i + 2] = (color[2] * 255) | 0;
+      colors[4 * i + 3] = (color[3] * 255) | 0;
     });
-    attribute.needsUpdate = true;
+    this.#points.setPoints(positions, colors, count);
   }
 }

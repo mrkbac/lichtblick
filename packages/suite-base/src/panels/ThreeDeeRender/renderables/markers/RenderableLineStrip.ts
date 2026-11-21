@@ -6,8 +6,8 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import * as THREE from "three";
-import { Line2 } from "three/examples/jsm/lines/Line2.js";
 import { LineGeometry } from "three/examples/jsm/lines/LineGeometry.js";
+import { Line2 } from "three/examples/jsm/lines/webgpu/Line2.js";
 
 import { RenderableMarker } from "./RenderableMarker";
 import {
@@ -16,7 +16,6 @@ import {
   makeLinePickingMaterial,
   markerHasTransparency,
 } from "./materials";
-import { LineMaterialWithAlphaVertex } from "../../LineMaterialWithAlphaVertex";
 import type { Renderer } from "../../Renderer";
 import { Marker } from "../../ros";
 import { setLinePositions } from "../../setLinePositions";
@@ -40,7 +39,7 @@ export class RenderableLineStrip extends RenderableMarker {
 
     this.#geometry = new LineGeometry();
 
-    const options = { resolution: renderer.input.canvasSize, worldUnits: true };
+    const options = { worldUnits: true };
 
     // We alleviate corner artifacts using a two-pass render for lines. The
     // first pass writes to depth only, followed by a color pass with stencil
@@ -70,7 +69,7 @@ export class RenderableLineStrip extends RenderableMarker {
     this.#linePrepass.material.dispose();
     this.#line.material.dispose();
 
-    const pickingMaterial = this.#line.userData.pickingMaterial as THREE.ShaderMaterial;
+    const pickingMaterial = this.#line.userData.pickingMaterial as THREE.Material;
     pickingMaterial.dispose();
     this.#line.userData.pickingMaterial = undefined;
 
@@ -106,10 +105,8 @@ export class RenderableLineStrip extends RenderableMarker {
       this.#line.material.needsUpdate = true;
     }
 
-    const matLinePrepass = this.#linePrepass.material as LineMaterialWithAlphaVertex;
-    matLinePrepass.lineWidth = lineWidth;
-    const matLine = this.#line.material as LineMaterialWithAlphaVertex;
-    matLine.lineWidth = lineWidth;
+    this.#linePrepass.material.linewidth = lineWidth;
+    this.#line.material.linewidth = lineWidth;
 
     const prevPointsLength = this.#positionBuffer.length / 3;
     if (pointsLength > prevPointsLength) {

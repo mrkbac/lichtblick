@@ -8,18 +8,19 @@
 import { toNanoSec } from "@foxglove/rostime";
 import { LinePrimitive, LineType, SceneEntity } from "@foxglove/schemas";
 import * as THREE from "three";
-import { Line2 } from "three/examples/jsm/lines/Line2.js";
 import { LineGeometry } from "three/examples/jsm/lines/LineGeometry.js";
-import { LineSegments2 } from "three/examples/jsm/lines/LineSegments2.js";
 import { LineSegmentsGeometry } from "three/examples/jsm/lines/LineSegmentsGeometry.js";
+import { Line2 } from "three/examples/jsm/lines/webgpu/Line2.js";
+import { LineSegments2 } from "three/examples/jsm/lines/webgpu/LineSegments2.js";
 import { assert } from "ts-essentials";
 
 import { LineMaterialWithAlphaVertex } from "@lichtblick/suite-base/panels/ThreeDeeRender/LineMaterialWithAlphaVertex";
+import { makeLinePickingMaterial } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/markers/materials";
 
 import { RenderablePrimitive } from "./RenderablePrimitive";
 import type { Renderer } from "../../Renderer";
 import { makeRgba, rgbToThreeColor, SRGBToLinear, stringToRgba } from "../../color";
-import { setLinePositions } from "../../setLinePositions";
+import { setLineColors, setLinePositions } from "../../setLinePositions";
 import { LayerSettingsEntity } from "../../settings";
 
 const tempRgba = makeRgba();
@@ -41,7 +42,7 @@ export class RenderableLines extends RenderablePrimitive {
       }
       let lineRenderable = this.#lines[idx];
       if (lineRenderable == undefined) {
-        lineRenderable = new LinePrimitiveRenderable(primitive, this.renderer.input.canvasSize);
+        lineRenderable = new LinePrimitiveRenderable(primitive);
         this.#lines.push(lineRenderable);
       }
       lineRenderable.setPrimitive(primitive);
@@ -100,7 +101,7 @@ class LinePrimitiveRenderable extends THREE.Object3D {
   #colorBuffer: Float32Array | undefined;
 
   #material: LineMaterialWithAlphaVertex;
-  #pickingMaterial: PickingMaterial;
+  #pickingMaterial: LineMaterialWithAlphaVertex;
   #transparent: boolean = true;
   #line: LineSegments2 | Line2 | undefined;
 
@@ -113,7 +114,7 @@ class LinePrimitiveRenderable extends THREE.Object3D {
 
   #lineType: LineType | undefined;
 
-  public constructor(primitive: LinePrimitive, canvasSize: THREE.Vector2) {
+  public constructor(primitive: LinePrimitive) {
     super();
 
     this.#material = new LineMaterialWithAlphaVertex({
@@ -121,18 +122,11 @@ class LinePrimitiveRenderable extends THREE.Object3D {
       linewidth: primitive.thickness,
       transparent: this.#transparent,
       depthWrite: !this.#transparent,
-      resolution: canvasSize.clone(),
     });
-    this.#material.lineWidth = primitive.thickness; // Fix for THREE.js type annotations
-
-    this.#pickingMaterial = new PickingMaterial();
-    this.#pickingMaterial.resolution.set(canvasSize.x, canvasSize.y);
-    this.#pickingMaterial.worldUnits = !primitive.scale_invariant;
-    // make sure thin, scale_invariant lines are still pickable
-    this.#pickingMaterial.lineWidth = primitive.scale_invariant
-      ? Math.max(primitive.thickness, MIN_PICKING_LINE_WIDTH_PX)
-      : primitive.thickness;
-    this.#pickingMaterial.needsUpdate = true;
+    // Line widths are set in #updateMaterial()
+    this.#pickingMaterial = makeLinePickingMaterial(primitive.thickness, {
+      worldUnits: !primitive.scale_invariant,
+    });
   }
 
   public setSettings(settings: LayerSettingsEntity): void {
@@ -235,35 +229,20 @@ class LinePrimitiveRenderable extends THREE.Object3D {
           this.#material.vertexColors = true;
           this.#material.needsUpdate = true;
         }
-        (this.#material.color as THREE.Color).setRGB(1, 1, 1); // any non-white color will tint the vertex colors
         this.#material.opacity = 1;
-        this.#material.uniforms.opacity!.value = 1;
         if (useIndices) {
           serializeColorsWithIndices(this.#colorBuffer, this.#primitive);
         } else {
           serializeColors(this.#colorBuffer, this.#primitive);
         }
-        const instanceColorBuffer = new THREE.InstancedInterleavedBuffer(
-          this.#colorBuffer,
-          isSegments ? 8 : 4,
-          1,
-        );
-        this.#geometry.setAttribute(
-          "instanceColorStart",
-          new THREE.InterleavedBufferAttribute(instanceColorBuffer, 4, 0),
-        );
-        this.#geometry.setAttribute(
-          "instanceColorEnd",
-          new THREE.InterleavedBufferAttribute(instanceColorBuffer, 4, 4),
-        );
+        setLineColors(this.#geometry, this.#colorBuffer);
       } else {
         if (this.#material.vertexColors) {
           this.#material.vertexColors = false;
           this.#material.needsUpdate = true;
         }
-        const color = this.#material.color as THREE.Color;
-        rgbToThreeColor(color, singleColor);
-        this.#material.setOpacity(singleColor.a);
+        rgbToThreeColor(this.#material.color, singleColor);
+        this.#material.opacity = singleColor.a;
       }
 
       this.#updateMaterial();
@@ -277,17 +256,16 @@ class LinePrimitiveRenderable extends THREE.Object3D {
     if (this.#primitive == undefined) {
       return;
     }
-    this.#material.lineWidth = this.#primitive.thickness;
+    this.#material.linewidth = this.#primitive.thickness;
     this.#material.transparent = this.#transparent;
-    // worldUnits flags a shader rebuild itself when it changes; lineWidth is a uniform
+    // worldUnits flags a shader rebuild itself when it changes; linewidth is a uniform
     this.#material.worldUnits = !this.#primitive.scale_invariant;
 
     this.#pickingMaterial.worldUnits = !this.#primitive.scale_invariant;
     // make sure thin, scale invariant lines are still pickable
-    this.#pickingMaterial.lineWidth = this.#primitive.scale_invariant
+    this.#pickingMaterial.linewidth = this.#primitive.scale_invariant
       ? Math.max(this.#primitive.thickness, MIN_PICKING_LINE_WIDTH_PX)
       : this.#primitive.thickness;
-    this.#pickingMaterial.uniformsNeedUpdate = true;
   }
 
   public override dispose(): void {
@@ -376,30 +354,5 @@ function serializeColorsWithIndices(colorsOut: Float32Array, primitive: LinePrim
   const isLoop = primitive.type === LineType.LINE_LOOP;
   if (isLoop && colorsOut.length > 4) {
     colorsOut.copyWithin(i, 0, 4);
-  }
-}
-
-class PickingMaterial extends LineMaterialWithAlphaVertex {
-  public constructor() {
-    super({
-      worldUnits: false,
-      vertexColors: false,
-      linewidth: 0,
-      transparent: false,
-    });
-    this.uniforms.objectId = { value: [NaN, NaN, NaN, NaN] };
-  }
-
-  public override onBeforeCompile(
-    shader: THREE.WebGLProgramParametersWithUniforms,
-    renderer: THREE.WebGLRenderer,
-  ): void {
-    super.onBeforeCompile(shader, renderer);
-    shader.fragmentShader = /* glsl */ `
-      uniform vec4 objectId;
-      void main() {
-        gl_FragColor = objectId;
-      }
-    `;
   }
 }

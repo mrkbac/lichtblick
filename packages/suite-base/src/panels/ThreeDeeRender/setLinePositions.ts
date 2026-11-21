@@ -42,13 +42,55 @@ export function setLinePositions(geometry: LineSegmentsGeometry, positions: Floa
   geometry.computeBoundingSphere();
 }
 
-function writeStripSegments(segments: Float32Array, points: Float32Array): void {
-  for (let i = 0, j = 0; j < segments.length; i += 3, j += 6) {
-    segments[j + 0] = points[i + 0]!;
-    segments[j + 1] = points[i + 1]!;
-    segments[j + 2] = points[i + 2]!;
-    segments[j + 3] = points[i + 3]!;
-    segments[j + 4] = points[i + 4]!;
-    segments[j + 5] = points[i + 5]!;
+/**
+ * Per-point RGBA colors (`Uint8Array` is read normalized) as the `instanceColorStart`/`End`
+ * attributes, in the same pair layout as the positions. Reuses the GPU buffer when the size is
+ * unchanged.
+ */
+export function setLineColors(
+  geometry: LineSegmentsGeometry,
+  colors: Float32Array | Uint8Array,
+): void {
+  const isStrip = geometry instanceof LineGeometry;
+  const length = isStrip ? Math.max(colors.length - 4, 0) * 2 : colors.length;
+  const start = geometry.getAttribute("instanceColorStart");
+  let current =
+    start instanceof THREE.InterleavedBufferAttribute
+      ? (start.data.array as Float32Array | Uint8Array)
+      : undefined;
+
+  if (current?.length !== length || current.constructor !== colors.constructor) {
+    current = isStrip ? new (colors.constructor as Uint8ArrayConstructor)(length) : colors;
+    const normalized = current instanceof Uint8Array;
+    const buffer = new THREE.InstancedInterleavedBuffer(current, 8, 1);
+    geometry.setAttribute(
+      "instanceColorStart",
+      new THREE.InterleavedBufferAttribute(buffer, 4, 0, normalized),
+    );
+    geometry.setAttribute(
+      "instanceColorEnd",
+      new THREE.InterleavedBufferAttribute(buffer, 4, 4, normalized),
+    );
+  } else {
+    (start as THREE.InterleavedBufferAttribute).data.needsUpdate = true;
+  }
+
+  if (isStrip) {
+    writeStripSegments(current, colors, 4);
+  } else if (current !== colors) {
+    current.set(colors);
+  }
+}
+
+/** Expands a strip of points with `size` components into start/end pairs */
+function writeStripSegments(
+  segments: Float32Array | Uint8Array,
+  points: Float32Array | Uint8Array,
+  size = 3,
+): void {
+  for (let i = 0, j = 0; j < segments.length; i += size, j += 2 * size) {
+    for (let k = 0; k < 2 * size; k++) {
+      segments[j + k] = points[i + k]!;
+    }
   }
 }

@@ -11,7 +11,12 @@ import type { Renderer } from "../Renderer";
 import { Transform, TransformTree } from "../transforms";
 import { MeasurementTool } from "./MeasurementTool";
 
-function setup(kind: "distance" | "profile" = "distance") {
+/** Picks resolve asynchronously; a macrotask runs after every pending pick has */
+async function flushPicks(): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+function createTool() {
   const transformTree = new TransformTree(new ObjectPool(Transform.Empty));
   const addBase = () => transformTree.addTransform("base", "map", 0n, Transform.Identity());
   addBase();
@@ -29,19 +34,19 @@ function setup(kind: "distance" | "profile" = "distance") {
     setSelectedRenderable: vi.fn(),
     currentTime: 0n,
     gl: { domElement: canvas },
+    cameraHandler: { getActiveCamera: () => new THREE.PerspectiveCamera() },
     input: {
       canvasSize: new THREE.Vector2(100, 100),
       addListener: (event: string, fn: (cursor: THREE.Vector2) => void) => listeners.set(event, fn),
       removeListener: vi.fn(),
     },
-    pickPoint: (_cursor: THREE.Vector2, out: THREE.Vector3, camera?: THREE.Camera) => {
+    pickPoint: async (_cursor: THREE.Vector2, out: THREE.Vector3, camera?: THREE.Camera) => {
       if (camera) {
         // Profile samples look straight down onto a surface at z = 2
-        out.set(camera.position.x, camera.position.y, 2);
-        return true;
+        return out.set(camera.position.x, camera.position.y, 2);
       }
-      out.copy(picks.shift()!);
-      return true;
+      const pick = picks.shift();
+      return pick ? out.copy(pick) : undefined;
     },
   } as unknown as Renderer;
 
@@ -50,22 +55,117 @@ function setup(kind: "distance" | "profile" = "distance") {
     tool.startFrame(0n, "base", "map");
   };
   frame();
+  return { tool, transformTree, addBase, frame, listeners, picks, canvas };
+}
+
+async function setup(kind: "distance" | "profile" = "distance") {
+  const { tool, transformTree, addBase, frame, listeners, picks, canvas } = createTool();
   tool.startMeasuring(kind);
   picks.push(new THREE.Vector3(0, 0, 0), new THREE.Vector3(3, 4, 0));
   listeners.get("click")!(new THREE.Vector2(10, 10));
+  await flushPicks();
   listeners.get("click")!(new THREE.Vector2(20, 20));
+  await flushPicks();
   if (kind === "profile") {
     picks.push(new THREE.Vector3(3, 4, 0)); // the cursor point, dropped when finishing
     frame();
+    await flushPicks();
   }
   tool.stopMeasuring();
+  await flushPicks();
   frame();
-  return { tool, transformTree, addBase, frame };
+  return { tool, transformTree, addBase, frame, listeners, picks, canvas };
 }
 
 describe("MeasurementTool", () => {
-  it("marks a measurement unavailable while its transform is missing and recovers", () => {
-    const { tool, transformTree, addBase, frame } = setup();
+  it("places a clicked point even when a cursor preview starts while its pick is pending", async () => {
+    const { tool, frame, listeners, picks } = createTool();
+    tool.startMeasuring("distance");
+    const cursor = new THREE.Vector2(10, 10);
+    picks.push(new THREE.Vector3(0, 0, 0), new THREE.Vector3(9, 9, 9));
+    listeners.get("mousemove")!(cursor);
+    listeners.get("click")!(cursor);
+    frame(); // the preview for the moved cursor picks (9, 9, 9) after the click's pick
+    await flushPicks();
+    picks.push(new THREE.Vector3(3, 4, 0));
+    listeners.get("click")!(new THREE.Vector2(20, 20));
+    await flushPicks();
+    frame();
+    expect(tool.measurements).toHaveLength(1);
+    expect(tool.measurements[0]!.summary.details[0]).toBe("P1: 0.000, 0.000, 0.000");
+    expect(tool.measurements[0]!.summary.label).toBe("5.00 m");
+  });
+
+  it("finishes with a point whose pick is still pending at the right-click", async () => {
+    const { tool, frame, listeners, picks } = createTool();
+    tool.startMeasuring("distance");
+    picks.push(new THREE.Vector3(0, 0, 0), new THREE.Vector3(3, 4, 0));
+    listeners.get("click")!(new THREE.Vector2(10, 10));
+    await flushPicks();
+    listeners.get("click")!(new THREE.Vector2(20, 20));
+    const rightClick = new MouseEvent("mouseup", { button: 2 });
+    const cursor = new THREE.Vector2(20, 20);
+    const mouse = listeners as unknown as Map<string, (...args: unknown[]) => void>;
+    mouse.get("mousedown")!(cursor, undefined, rightClick);
+    mouse.get("mouseup")!(cursor, undefined, rightClick);
+    await flushPicks();
+    frame();
+    expect(tool.measurements).toHaveLength(1);
+    expect(tool.measurements[0]!.summary.label).toBe("5.00 m");
+  });
+
+  it("deletes a point whose pick is still pending instead of the selected measurement", async () => {
+    const { tool, listeners, picks, canvas } = await setup();
+    tool.selectedId = tool.measurements[0]!.id;
+    tool.startMeasuring("distance");
+    picks.push(new THREE.Vector3(1, 1, 0));
+    listeners.get("click")!(new THREE.Vector2(10, 10));
+    // Delete from inside the panel while that click's pick is pending
+    document.body.appendChild(canvas.parentElement!);
+    canvas.dispatchEvent(new KeyboardEvent("keydown", { key: "Delete", bubbles: true }));
+    await flushPicks();
+    canvas.parentElement!.remove();
+    expect(tool.measurements).toHaveLength(1);
+  });
+
+  it("deletes a measurement whose completing click is still pending", async () => {
+    const { tool, listeners, picks, canvas } = await setup();
+    tool.startMeasuring("distance");
+    picks.push(new THREE.Vector3(1, 1, 0));
+    listeners.get("click")!(new THREE.Vector2(10, 10));
+    await flushPicks();
+    picks.push(new THREE.Vector3(2, 1, 0));
+    listeners.get("click")!(new THREE.Vector2(20, 10));
+    // Delete while the second click, which completes the distance, is still being picked
+    document.body.appendChild(canvas.parentElement!);
+    canvas.dispatchEvent(new KeyboardEvent("keydown", { key: "Delete", bubbles: true }));
+    await flushPicks();
+    canvas.parentElement!.remove();
+    expect(tool.measurements).toHaveLength(1);
+  });
+
+  it("drops a pending Delete once measuring stops", async () => {
+    const { tool, listeners, picks, canvas } = await setup();
+    tool.startMeasuring("polyline");
+    picks.push(new THREE.Vector3(1, 1, 0), new THREE.Vector3(2, 1, 0));
+    listeners.get("click")!(new THREE.Vector2(10, 10));
+    await flushPicks();
+    listeners.get("click")!(new THREE.Vector2(20, 10));
+    await flushPicks();
+    picks.push(new THREE.Vector3(3, 1, 0));
+    listeners.get("click")!(new THREE.Vector2(30, 10));
+    // Delete while that click is pending, then stop (saving the polyline) and start a new draft
+    document.body.appendChild(canvas.parentElement!);
+    canvas.dispatchEvent(new KeyboardEvent("keydown", { key: "Delete", bubbles: true }));
+    canvas.parentElement!.remove();
+    tool.stopMeasuring();
+    tool.startMeasuring("distance");
+    await flushPicks();
+    expect(tool.measurements).toHaveLength(2);
+  });
+
+  it("marks a measurement unavailable while its transform is missing and recovers", async () => {
+    const { tool, transformTree, addBase, frame } = await setup();
     expect(tool.measurements).toHaveLength(1);
     expect(tool.measurements[0]!.unavailable).toBe(false);
     expect(tool.measurements[0]!.summary.label).toContain("5");
@@ -89,8 +189,8 @@ describe("MeasurementTool", () => {
     expect(tool.copyText()).toBe(copied);
   });
 
-  it("does not name a present frame when only the path between frames is missing", () => {
-    const { tool, transformTree, frame } = setup();
+  it("does not name a present frame when only the path between frames is missing", async () => {
+    const { tool, transformTree, frame } = await setup();
     // Every frame exists, but the result frame isn't connected to the measurement's frame
     transformTree.addTransform("other", "elsewhere", 0n, Transform.Identity());
     tool.setResultFrame("other");
@@ -100,8 +200,8 @@ describe("MeasurementTool", () => {
     expect(tool.copyText()).toBe("");
   });
 
-  it("stays fixed in the world when the display frame moves", () => {
-    const { tool, transformTree, frame } = setup();
+  it("stays fixed in the world when the display frame moves", async () => {
+    const { tool, transformTree, frame } = await setup();
     expect(tool.measurements[0]!.summary.details[0]).toBe("P1: 0.000, 0.000, 0.000");
     // The robot drives 1 m forward: the world point is now 1 m behind it
     transformTree.clear();
@@ -111,8 +211,8 @@ describe("MeasurementTool", () => {
     expect(tool.measurements[0]!.summary.label).toContain("5");
   });
 
-  it("samples the profile straight below the line", () => {
-    const { tool } = setup("profile");
+  it("samples the profile straight below the line", async () => {
+    const { tool } = await setup("profile");
     const profile = tool.measurements[0]!.summary.profile!;
     expect(profile.z.length).toBeGreaterThan(10);
     expect(profile.z[0]).toBe(0);

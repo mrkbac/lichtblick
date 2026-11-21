@@ -72,7 +72,7 @@ import { PublishClickEventMap } from "./renderables/PublishClickTool";
 import { DEFAULT_PUBLISH_SETTINGS } from "./renderables/PublishSettings";
 import { THREE_DEE_SHORTCUTS } from "./shortcuts";
 import { Shared3DPanelState, ThreeDeeRenderProps } from "./types";
-import { useWebGLContextRecovery } from "./useWebGLContextRecovery";
+import { useGpuRecovery } from "./useGpuRecovery";
 
 import "maplibre-gl/dist/maplibre-gl.css";
 
@@ -152,18 +152,15 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
       : undefined;
   const sharedMapLayerId =
     requestedSharedMapLayerId === failedSharedMapLayerId ? undefined : requestedSharedMapLayerId;
-  const canvas = sharedMapLayerId ? (sharedMap?.map.getCanvas() ?? null) : sceneCanvas;
+  // The scene always draws into its own canvas; a map shows through it from below
+  const canvas = sceneCanvas;
   const { revision: resourceRevision } = useSyncExternalStore(
     localResourceFolders.subscribe,
     localResourceFolders.getSnapshot,
   );
   const [renderer, setRenderer] = useState<Renderer | undefined>(undefined);
   const rendererRef = useRef<Renderer | undefined>(undefined);
-  const {
-    canvasKey,
-    status: contextStatus,
-    recreate,
-  } = useWebGLContextRecovery(canvas, renderer?.gl);
+  const { canvasKey, status: contextStatus, recreate } = useGpuRecovery(renderer);
 
   const displayTemporaryError = useCallback(
     (errorString: string) => {
@@ -242,6 +239,8 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
     configRef,
     config.scene.transforms?.enablePreloading,
     config.scene.logDepth,
+    // GPU timing is set up with the renderer
+    config.scene.enableStats,
     customCameraModels,
     interfaceMode,
     fetchAsset,
@@ -1184,6 +1183,12 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
       ownerDocument={context.panelElement.ownerDocument}
     >
       <div style={PANEL_STYLE} onKeyDown={onKeyDown}>
+        <div
+          key={`map-${canvasKey}`}
+          ref={setMapContainer}
+          className={classes.sharedMap}
+          style={{ display: sharedMapLayerId ? undefined : "none" }}
+        />
         <canvas
           key={`canvas-${sharedMapLayerId ?? "3d"}-${canvasKey}`}
           ref={setSceneCanvas}
@@ -1191,15 +1196,8 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
             position: "absolute",
             top: 0,
             left: 0,
-            display: sharedMapLayerId ? "none" : undefined,
             ...((measureActive || publishActive) && { cursor: "crosshair" }),
           }}
-        />
-        <div
-          key={`map-${canvasKey}`}
-          ref={setMapContainer}
-          className={classes.sharedMap}
-          style={{ display: sharedMapLayerId ? undefined : "none" }}
         />
         {isLoadingTransforms && config.scene.enableStats === true && (
           <div className={classes.loadingTransforms}>
@@ -1212,7 +1210,9 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
         )}
         {contextStatus !== "ok" && (
           <div className={classes.contextLost} role="status">
-            {contextStatus === "restoring" ? (
+            {contextStatus === "unsupported" ? (
+              (renderer?.gpuError?.message ?? t("webGpuRequired"))
+            ) : contextStatus === "restoring" ? (
               t("graphicsContextRestoring")
             ) : (
               <>

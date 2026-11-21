@@ -5,17 +5,10 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import type { WebGLCapabilities } from "three";
-
 export enum DetailLevel {
   Low,
   Medium,
   High,
-}
-
-/** Returns the number of samples used for Multi-Sample Anti-Aliasing (MSAA) */
-export function msaaSamples(capabilities: WebGLCapabilities): number {
-  return capabilities.maxSamples;
 }
 
 export function arrowShaftSubdivisions(lod: DetailLevel): number {

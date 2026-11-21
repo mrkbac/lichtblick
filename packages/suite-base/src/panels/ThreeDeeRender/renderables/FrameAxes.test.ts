@@ -30,32 +30,10 @@ import {
 
 vi.mock("three/examples/jsm/libs/draco/draco_decoder.wasm", () => ({ default: "" }));
 
-vi.mock("three", async () => {
-  const ActualTHREE = await vi.importActual("three");
-  return {
-    ...ActualTHREE,
-    WebGLRenderer: function WebGLRenderer() {
-      return {
-        capabilities: {
-          isWebGL2: true,
-        },
-        setPixelRatio: vi.fn(),
-        setSize: vi.fn(),
-        render: vi.fn(),
-        clear: vi.fn(),
-        setClearColor: vi.fn(),
-        readRenderTargetPixels: vi.fn(),
-        info: {
-          reset: vi.fn(),
-        },
-        shadowMap: {},
-        dispose: vi.fn(),
-        clearDepth: vi.fn(),
-        getDrawingBufferSize: () => ({ width: 100, height: 100 }),
-      };
-    },
-  };
-});
+vi.mock(
+  "three/webgpu",
+  async () => await (await import("../testing/fakeWebGPURenderer")).mockThreeWebGPU(),
+);
 
 beforeEach(() => {
   Object.defineProperty(window, "matchMedia", {

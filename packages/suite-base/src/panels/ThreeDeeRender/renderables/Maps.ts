@@ -45,6 +45,7 @@ import {
 import { topicIsConvertibleToSchema } from "../topicIsConvertibleToSchema";
 import { makePose } from "../transforms";
 
+const tempResolution = new THREE.Vector2();
 const log = Logger.getLogger(__filename);
 
 const LAYER_ID = MAP_LAYER_ID;
@@ -428,7 +429,8 @@ class MapRenderable extends Renderable<MapUserData> {
         tileset.tiles.setCamera(camera);
         tileset.camera = camera;
       }
-      tileset.tiles.setResolutionFromRenderer(camera, this.renderer.gl);
+      const size = this.renderer.gl.getDrawingBufferSize(tempResolution);
+      tileset.tiles.setResolution(camera, size.x, size.y);
       tileset.tiles.update();
       this.#measureGround(tileset);
     }

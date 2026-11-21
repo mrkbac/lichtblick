@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import { Grid, NumericType } from "@foxglove/schemas";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 import type { Mock } from "vitest";
 import { setupVitestCanvasMock } from "vitest-canvas-mock";
 
@@ -25,28 +25,10 @@ import { getReader } from "./pointClouds/fieldReaders";
 
 vi.mock("three/examples/jsm/libs/draco/draco_decoder.wasm", () => ({ default: "" }));
 
-vi.mock("three", async () => {
-  const ActualTHREE = await vi.importActual("three");
-  return {
-    ...ActualTHREE,
-    WebGLRenderer: function WebGLRenderer() {
-      return {
-        capabilities: { isWebGL2: true },
-        setPixelRatio: vi.fn(),
-        setSize: vi.fn(),
-        render: vi.fn(),
-        clear: vi.fn(),
-        setClearColor: vi.fn(),
-        readRenderTargetPixels: vi.fn(),
-        info: { reset: vi.fn() },
-        shadowMap: {},
-        dispose: vi.fn(),
-        clearDepth: vi.fn(),
-        getDrawingBufferSize: () => ({ width: 100, height: 100 }),
-      };
-    },
-  };
-});
+vi.mock(
+  "three/webgpu",
+  async () => await (await import("../testing/fakeWebGPURenderer")).mockThreeWebGPU(),
+);
 
 const TOPIC = "/grid";
 
@@ -183,7 +165,7 @@ describe("FoxgloveGrid", () => {
 
   afterEach(() => {
     renderer.dispose();
-    // The mocked WebGL renderer makes Renderer warn; that is not what these tests check.
+    // The config follows no frame, which the renderer warns about; errors stay visible
     (console.warn as Mock).mockClear();
   });
 
@@ -209,40 +191,51 @@ describe("FoxgloveGrid", () => {
   it("switches between the flat quad and a GPU-displaced surface", () => {
     receive(makeGrid([0, 1, 2, 3, NaN, 5]));
     const renderable = extension.renderables.get(TOPIC)!;
-    const { mesh, material } = renderable.userData;
+    const { mesh, uniforms } = renderable.userData;
     expect(mesh.geometry).toBe(renderable.userData.planeGeometry);
-    expect(material.uniforms.elevationEnabled.value).toBe(false);
 
     update("elevationField", "height");
     expect(mesh.geometry).toBe(renderable.userData.elevationGeometry);
-    expect(mesh.geometry.drawRange.count).toBe(6 * 6);
+    expect((mesh.geometry as THREE.InstancedBufferGeometry).instanceCount).toBe(6);
     expect(mesh.frustumCulled).toBe(false);
-    expect(material.uniforms.elevationEnabled.value).toBe(true);
-    expect(material.uniforms.gridSize.value.toArray()).toEqual([3, 2]);
-    const elevations = material.uniforms.elevationMap.value.image.data as unknown as Float32Array;
+    expect(uniforms.gridSize.value.toArray()).toEqual([3, 2]);
+    const elevations = (uniforms.elevationMap.value as THREE.DataTexture).image
+      .data as unknown as Float32Array;
     expect(elevations[4]).toBe(Math.fround(NO_ELEVATION));
     expect(elevations[5]).toBe(5);
 
     update("elevationField", undefined);
     expect(mesh.geometry).toBe(renderable.userData.planeGeometry);
-    expect(material.uniforms.elevationEnabled.value).toBe(false);
+  });
+
+  it("picks the shader's color source from the color mode and map", () => {
+    receive(makeGrid([0, 1, 2, 3, 4, 5]));
+    const { uniforms } = extension.renderables.get(TOPIC)!.userData;
+    expect(uniforms.colorSource.value).toBe(2); // turbo
+    update("colorMap", "rainbow");
+    expect(uniforms.colorSource.value).toBe(3);
+    update("colorMode", "gradient");
+    expect(uniforms.colorSource.value).toBe(1);
+    update("colorMode", "flat");
+    expect(uniforms.colorSource.value).toBe(0); // texture
   });
 
   it("applies interpolation, lines and draw behind", () => {
     receive(makeGrid([0, 1, 2, 3, 4, 5]));
     const renderable = extension.renderables.get(TOPIC)!;
-    const { mesh, material } = renderable.userData;
+    const { mesh, material, uniforms } = renderable.userData;
     expect(renderable.userData.texture.magFilter).toBe(THREE.NearestFilter);
     expect(material.depthTest).toBe(true);
 
     update("interpolation", "linear");
     expect(renderable.userData.texture.magFilter).toBe(THREE.LinearFilter);
 
-    update("showLines", true);
     update("lineColor", "#ff000080");
-    expect(material.uniforms.showLines.value).toBe(true);
-    expect(material.uniforms.lineColorLinear.value.x).toBeCloseTo(1);
-    expect(material.uniforms.lineColorLinear.value.w).toBeCloseTo(128 / 255);
+    // Lines off: transparent line color
+    expect(uniforms.lineColor.value.w).toBe(0);
+    update("showLines", true);
+    expect(uniforms.lineColor.value.x).toBeCloseTo(1);
+    expect(uniforms.lineColor.value.w).toBeCloseTo(128 / 255);
 
     update("drawBehind", true);
     expect(mesh.renderOrder).toBe(-Number.MAX_SAFE_INTEGER);

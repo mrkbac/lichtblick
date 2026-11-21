@@ -8,8 +8,8 @@
 import { Color } from "@foxglove/schemas";
 import * as THREE from "three";
 import { LineGeometry } from "three/examples/jsm/lines/LineGeometry.js";
-import { LineSegments2 } from "three/examples/jsm/lines/LineSegments2.js";
 import { LineSegmentsGeometry } from "three/examples/jsm/lines/LineSegmentsGeometry.js";
+import { LineSegments2 } from "three/examples/jsm/lines/webgpu/LineSegments2.js";
 
 import { ICameraModel } from "@lichtblick/suite";
 import { RosObject, RosValue } from "@lichtblick/suite-base/players/types";
@@ -26,34 +26,9 @@ import {
 import { LineMaterialWithAlphaVertex } from "../../../LineMaterialWithAlphaVertex";
 import { BaseUserData, Renderable } from "../../../Renderable";
 import { SRGBToLinear } from "../../../color";
-import { setLinePositions } from "../../../setLinePositions";
+import { setLineColors, setLinePositions } from "../../../setLinePositions";
 
 const tempVec3 = new THREE.Vector3();
-
-class PickingMaterial extends LineMaterialWithAlphaVertex {
-  public constructor() {
-    super({
-      worldUnits: false,
-      vertexColors: false,
-      linewidth: 0,
-      ...annotationRenderOrderMaterialProps,
-    });
-    this.uniforms.objectId = { value: [NaN, NaN, NaN, NaN] };
-  }
-
-  public override onBeforeCompile(
-    shader: THREE.WebGLProgramParametersWithUniforms,
-    renderer: THREE.WebGLRenderer,
-  ): void {
-    super.onBeforeCompile(shader, renderer);
-    shader.fragmentShader = /* glsl */ `
-      uniform vec4 objectId;
-      void main() {
-        gl_FragColor = objectId;
-      }
-    `;
-  }
-}
 
 /** subset of {@link NormalizedPointsAnnotation.style} */
 type LineStyle = "polygon" | "line_strip" | "line_list";
@@ -69,7 +44,6 @@ export class RenderableLineAnnotation extends Renderable<BaseUserData, /*TRender
   readonly #linePrepassMaterial: LineMaterialWithAlphaVertex;
   readonly #line: LineSegments2;
   readonly #lineMaterial: LineMaterialWithAlphaVertex;
-  readonly #linePickingMaterial: PickingMaterial;
   /** Style that was last used for configuring geometry */
   #style?: LineStyle;
   /** Number of points that was last used for configuring geometry */
@@ -141,7 +115,6 @@ export class RenderableLineAnnotation extends Renderable<BaseUserData, /*TRender
     this.add(this.#linePrepass);
     this.#line = new LineSegments2(this.#geometry, this.#lineMaterial);
     this.#line.renderOrder = ANNOTATION_RENDER_ORDER.LINE;
-    this.#line.userData.pickingMaterial = this.#linePickingMaterial = new PickingMaterial();
     this.add(this.#line);
   }
 
@@ -149,7 +122,6 @@ export class RenderableLineAnnotation extends Renderable<BaseUserData, /*TRender
     this.#geometry?.dispose();
     this.#linePrepassMaterial.dispose();
     this.#lineMaterial.dispose();
-    this.#linePickingMaterial.dispose();
     this.#fillGeometry?.dispose();
     this.#fillMaterial?.dispose();
     super.dispose();
@@ -225,12 +197,8 @@ export class RenderableLineAnnotation extends Renderable<BaseUserData, /*TRender
 
     // Update line width if thickness or scale has changed. Both are uniforms, so no shader rebuild.
     if (this.#annotationNeedsUpdate || this.#scaleNeedsUpdate) {
-      this.#lineMaterial.resolution.set(this.#canvasWidth, this.#canvasHeight);
-      this.#lineMaterial.lineWidth = thickness * this.#scale;
-      this.#linePrepassMaterial.resolution.set(this.#canvasWidth, this.#canvasHeight);
-      this.#linePrepassMaterial.lineWidth = thickness * this.#scale;
-      this.#linePickingMaterial.resolution.set(this.#canvasWidth, this.#canvasHeight);
-      this.#linePickingMaterial.lineWidth = thickness * this.#scale;
+      this.#lineMaterial.linewidth = thickness * this.#scale;
+      this.#linePrepassMaterial.linewidth = thickness * this.#scale;
       this.#scaleNeedsUpdate = false;
     }
 
@@ -255,26 +223,7 @@ export class RenderableLineAnnotation extends Renderable<BaseUserData, /*TRender
         this.#geometry = isLineList ? new LineSegmentsGeometry() : new LineGeometry();
 
         if (useVertexColors) {
-          this.#colorBuffer = new Uint8Array(pointsLength * 8);
-          // [rgba, rgba]
-          const instanceColorBuffer = new THREE.InstancedInterleavedBuffer(
-            this.#colorBuffer,
-            isLineList ? 8 : 4 /* stride */,
-            1,
-          );
-          this.#geometry.setAttribute(
-            "instanceColorStart",
-            new THREE.InterleavedBufferAttribute(instanceColorBuffer, 4, 0, true),
-          );
-          this.#geometry.setAttribute(
-            "instanceColorEnd",
-            new THREE.InterleavedBufferAttribute(
-              instanceColorBuffer,
-              4,
-              isLineList ? 4 : 0 /* offset */,
-              true,
-            ),
-          );
+          this.#colorBuffer = new Uint8Array((positionBufferSize / 3) * 4);
         }
         this.#linePrepass.geometry = this.#geometry;
         this.#line.geometry = this.#geometry;
@@ -370,15 +319,14 @@ export class RenderableLineAnnotation extends Renderable<BaseUserData, /*TRender
         this.#linePrepassMaterial.vertexColors = true;
         this.#lineMaterial.vertexColors = true;
         this.#lineMaterial.color.setRGB(1, 1, 1); // any non-white color will tint the vertex colors
-        this.#lineMaterial.setOpacity(1);
-        this.#geometry.getAttribute("instanceColorStart").needsUpdate = true;
-        this.#geometry.getAttribute("instanceColorEnd").needsUpdate = true;
+        this.#lineMaterial.opacity = 1;
+        setLineColors(this.#geometry, colors);
       } else {
         const color = outlineColor ?? FALLBACK_COLOR;
         this.#linePrepassMaterial.vertexColors = false;
         this.#lineMaterial.vertexColors = false;
         this.#lineMaterial.color.setRGB(color.r, color.g, color.b).convertSRGBToLinear();
-        this.#lineMaterial.setOpacity(color.a);
+        this.#lineMaterial.opacity = color.a;
       }
 
       setLinePositions(this.#geometry, positions);

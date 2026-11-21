@@ -29,11 +29,6 @@ import {
 import { VelodyneScan } from "@lichtblick/suite-base/types/Messages";
 
 import { autoSelectColorSettings } from "./colorMode";
-import {
-  createInstancePickingMaterial,
-  createPickingMaterial,
-  pointCloudMaterial,
-} from "./pointExtensionUtils";
 import type { AnyRendererSubscription } from "../IRenderer";
 import type { Renderer } from "../Renderer";
 import { SceneExtension } from "../SceneExtension";
@@ -272,9 +267,6 @@ export class VelodyneScans extends SceneExtension<PointCloudHistoryRenderable> {
         });
       }
 
-      const material = pointCloudMaterial(settings);
-      const pickingMaterial = createPickingMaterial(settings);
-      const instancePickingMaterial = createInstancePickingMaterial(settings);
       const stixelMaterial = createStixelMaterial(settings);
 
       const messageTime = toNanoSec(pointCloud.timestamp);
@@ -288,9 +280,6 @@ export class VelodyneScans extends SceneExtension<PointCloudHistoryRenderable> {
         topic,
         latestPointCloud: pointCloud,
         latestOriginalMessage: messageEvent.message,
-        material,
-        pickingMaterial,
-        instancePickingMaterial,
         stixelMaterial,
       });
 

@@ -7,7 +7,7 @@
 
 import { toNanoSec } from "@foxglove/rostime";
 import { SceneEntity, TextPrimitive } from "@foxglove/schemas";
-import { Label, LabelPool } from "@foxglove/three-text";
+import { Label, LabelPool } from "@foxglove/three-text/webgpu";
 
 import { RenderablePrimitive } from "./RenderablePrimitive";
 import type { Renderer } from "../../Renderer";

@@ -1,58 +1,91 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import { expect, Locator, Page } from "@playwright/test";
+import { expect as baseExpect, Locator, Page } from "@playwright/test";
 
 import { loadFiles } from "../fixtures/load-files";
 
+// Software rendering on CI (SwiftShader WebGPU for the scene, WebGL for the map) is slow per frame
+const expect = baseExpect.configure({ timeout: 20_000 });
+
+/**
+ * Color counts of what the panel shows over the map canvas: the map (WebGL) and the 3D scene
+ * (WebGPU, its own canvas stacked above) composite only on screen, so read a screenshot.
+ */
+/** PNG of what the window shows in `rect` (CSS pixels) */
+export type CaptureRect = (rect: {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}) => Promise<Buffer>;
+
+let capture: CaptureRect | undefined;
+
 async function pixels(canvas: Locator) {
-  return await canvas.evaluate((element: HTMLCanvasElement) => {
-    const gl = element.getContext("webgl2")!;
-    const { width, height } = element;
-    const data = new Uint8Array(width * height * 4);
-    gl.readPixels(0, 0, width, height, gl.RGBA, gl.UNSIGNED_BYTE, data);
-    let blue = 0;
-    let red = 0;
-    let green = 0;
-    let redX = 0;
-    let redY = 0;
-    let lineWidth = 0;
-    const column = Math.floor(width * 0.75);
-    for (let y = 0; y < height; y++) {
-      for (let x = 0; x < width; x++) {
-        const i = (y * width + x) * 4;
-        if (data[i] > 150 && data[i + 1] < 80 && data[i + 2] < 80) {
-          red++;
-          redX += x;
-          redY += y;
-        }
-        if (data[i + 2] > data[i] * 2 && data[i + 2] > data[i + 1] * 2) {
-          blue++;
-        }
-        if (data[i + 1] > data[i] * 2 && data[i + 1] > data[i + 2] * 2) {
-          green++;
-          if (x === column) {
-            lineWidth++;
+  const rect = (await canvas.boundingBox())!;
+  // A page screenshot clipped to the canvas (both stacked canvases). It waits for a frame, which
+  // software WebGPU can take long for.
+  const png = (
+    capture ? await capture(rect) : await canvas.page().screenshot({ clip: rect, timeout: 90_000 })
+  ).toString("base64");
+  return await canvas.page().evaluate(
+    async ({ data, rect: box }) => {
+      const image = new Image();
+      image.src = `data:image/png;base64,${data}`;
+      await image.decode();
+      const { width, height } = image;
+      const context = new OffscreenCanvas(width, height).getContext("2d")!;
+      context.drawImage(image, 0, 0);
+      const pixel = context.getImageData(0, 0, width, height).data;
+      let blue = 0;
+      let red = 0;
+      let green = 0;
+      let redX = 0;
+      let redY = 0;
+      let lineWidth = 0;
+      const column = Math.floor(width * 0.75);
+      for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+          const i = (y * width + x) * 4;
+          if (pixel[i] > 150 && pixel[i + 1] < 80 && pixel[i + 2] < 80) {
+            red++;
+            redX += x;
+            redY += y;
+          }
+          if (pixel[i + 2] > pixel[i] * 2 && pixel[i + 2] > pixel[i + 1] * 2) {
+            blue++;
+          }
+          if (pixel[i + 1] > pixel[i] * 2 && pixel[i + 1] > pixel[i + 2] * 2) {
+            green++;
+            if (x === column) {
+              lineWidth++;
+            }
           }
         }
       }
-    }
-    const rect = element.getBoundingClientRect();
-    return {
-      blue,
-      red,
-      green,
-      lineWidth: (lineWidth * rect.height) / height,
-      x: rect.x + ((redX / Math.max(1, red)) * rect.width) / width,
-      y: rect.y + ((height - redY / Math.max(1, red)) * rect.height) / height,
-      width,
-      height,
-    };
-  });
+      return {
+        blue,
+        red,
+        green,
+        lineWidth: (lineWidth * box.height) / height,
+        x: box.x + ((redX / Math.max(1, red)) * box.width) / width,
+        y: box.y + ((redY / Math.max(1, red)) * box.height) / height,
+        width,
+        height,
+      };
+    },
+    { data: png, rect },
+  );
 }
 
 /** Offline fixture: a red 3D cube at the GPS fix on a green vector road. */
-export async function exerciseSharedMap(page: Page): Promise<void> {
+/**
+ * `captureRect` replaces Playwright's screenshot (Electron: its own window capture, which includes
+ * the WebGPU canvas above the map that Playwright's capture can miss there)
+ */
+export async function exerciseSharedMap(page: Page, captureRect?: CaptureRect): Promise<void> {
+  capture = captureRect;
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
   await page.route("https://shared-map.test/style.json", async (route) => {
@@ -115,7 +148,11 @@ export async function exerciseSharedMap(page: Page): Promise<void> {
   await expect(canvas).toBeVisible();
   await expect(page.getByText("Map rendering", { exact: true })).toHaveCount(0);
   await loadFiles({ mainWindow: page, filenames: "shared-map.mcap" });
-  await expect.poll(async () => (await pixels(canvas)).red).toBeGreaterThan(100);
+  // Software WebGPU on CI compiles every pipeline on the CPU before the first frame: over 30 s on
+  // the slower desktop runners
+  await expect
+    .poll(async () => (await pixels(canvas)).red, { timeout: 90_000 })
+    .toBeGreaterThan(100);
   await expect.poll(async () => (await pixels(canvas)).green).toBeGreaterThan(500);
   const before = await pixels(canvas);
   expect(before.lineWidth).toBeGreaterThan(5);

@@ -1,33 +1,51 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import * as THREE from "three";
+import {
+  float,
+  int,
+  ivec2,
+  normalize,
+  select,
+  storage,
+  texture as sampleTexture,
+  textureLoad,
+  uint,
+  uniform,
+  vec2,
+  vec3,
+} from "three/tsl";
+import * as THREE from "three/webgpu";
 
 import type { ICameraModel } from "@lichtblick/suite";
 
 import type { DecodedDepth, DepthDistanceType } from "./imageRenderModeSettings";
 import { computeDepthRays } from "./imageRenderModes";
+import { RasterPoints } from "../pointClouds/RasterPoints";
 
 /**
- * A depth image drawn as a point cloud. Each vertex holds its pixel's ray (computed once per
- * calibration and image size); the vertex shader reads the pixel's depth from a texture and moves
+ * A depth image drawn as a point cloud by the point raster. Each pixel's ray is computed once per
+ * calibration and image size; the raster reads the pixel's depth (and color) from textures and moves
  * the point along the ray, so a new depth image only costs a texture upload.
  */
-export class DepthCloud extends THREE.Points<THREE.BufferGeometry, DepthCloudMaterial> {
+export class DepthCloud extends RasterPoints {
   #depthTexture: THREE.DataTexture | undefined;
   #depthColorTexture: THREE.DataTexture | undefined;
   #imageColorTexture: THREE.Texture | undefined;
   #useImageColors = false;
   #raysFor: { cameraModel: ICameraModel; width: number; height: number } | undefined;
+  #rays: THREE.StorageBufferAttribute | undefined;
   /** Color until a color texture exists */
   readonly #white = new THREE.DataTexture(new Uint8Array([255, 255, 255, 255]), 1, 1);
+  /** Textures the source was built with; replacing a texture rebuilds it */
+  #sourceTextures: [THREE.Texture, THREE.Texture] | undefined;
+  readonly #width = uniform(1, "uint");
+  /** 1 / depth image size: texture coordinates of depth pixels */
+  readonly #depthTexel = uniform(new THREE.Vector2(1, 1));
+  readonly #euclidean = uniform(0, "uint");
 
   public constructor(name: string) {
-    super(new THREE.BufferGeometry(), new DepthCloudMaterial());
-    this.name = name;
-    // Points move in the vertex shader, so the bounding sphere of the rays means nothing
-    this.frustumCulled = false;
-    // ponytail: no picking; add a picking material like LaserScanMaterial if selecting points is needed
+    super(name);
     this.userData.picking = false;
     this.#white.needsUpdate = true;
     this.#bindTextures();
@@ -80,8 +98,8 @@ export class DepthCloud extends THREE.Points<THREE.BufferGeometry, DepthCloudMat
           : new THREE.DataTexture(image.data, image.width, image.height, THREE.RGBAFormat);
       texture.flipY = false;
       texture.generateMipmaps = false;
-      texture.minFilter = THREE.LinearFilter;
-      texture.colorSpace = THREE.LinearSRGBColorSpace;
+      texture.minFilter = texture.magFilter = THREE.LinearFilter;
+      texture.colorSpace = THREE.NoColorSpace;
       texture.needsUpdate = true;
       this.#imageColorTexture = texture;
     }
@@ -102,9 +120,10 @@ export class DepthCloud extends THREE.Points<THREE.BufferGeometry, DepthCloudMat
     this.#raysFor = { cameraModel, width, height };
     const rays = new Float32Array(width * height * 3);
     computeDepthRays(cameraModel, width, height, rays);
-    this.geometry.dispose();
-    this.geometry = new THREE.BufferGeometry();
-    this.geometry.setAttribute("position", new THREE.BufferAttribute(rays, 3));
+    this.#rays = new THREE.StorageBufferAttribute(rays, 1);
+    this.#width.value = width;
+    this.drawCount = width * height;
+    this.#buildSource();
   }
 
   public updateSettings(settings: {
@@ -112,27 +131,57 @@ export class DepthCloud extends THREE.Points<THREE.BufferGeometry, DepthCloudMat
     distanceType: DepthDistanceType;
     transparent: boolean;
   }): void {
-    const { uniforms } = this.material;
-    uniforms.pointSize!.value = settings.pointSize;
-    uniforms.euclidean!.value = settings.distanceType === "euclidean";
-    if (this.material.transparent !== settings.transparent) {
-      this.material.transparent = settings.transparent;
-      this.material.depthWrite = !settings.transparent;
-      this.material.needsUpdate = true;
-    }
+    this.pointSize = settings.pointSize;
+    this.#euclidean.value = settings.distanceType === "euclidean" ? 1 : 0;
   }
 
-  public setPixelRatio(pixelRatio: number): void {
-    this.material.uniforms.pixelRatio!.value = pixelRatio;
-  }
+  /** Point sizes are scaled by the raster */
+  public setPixelRatio(_pixelRatio: number): void {}
 
   public override dispose(): void {
     this.#depthTexture?.dispose();
     this.#depthColorTexture?.dispose();
     this.#disposeImageColorTexture();
     this.#white.dispose();
-    this.geometry.dispose();
-    this.material.dispose();
+    super.dispose();
+  }
+
+  /** Point i = pixel (i % width, i / width): its ray times its depth, colored by the color map */
+  #buildSource(): void {
+    const rays = this.#rays;
+    if (!rays) {
+      return;
+    }
+    const depthTexture = this.#depthTexture ?? this.#white;
+    const colorTexture =
+      (this.#useImageColors ? this.#imageColorTexture : this.#depthColorTexture) ?? this.#white;
+    this.#sourceTextures = [depthTexture, colorTexture];
+    const rayNode = storage(rays, "float", rays.count).toReadOnly();
+    const width = this.#width;
+    const depthTexel = this.#depthTexel;
+    const euclidean = this.#euclidean;
+    this.setSource((i) => {
+      const pixel = ivec2(int(i.mod(width)), int(i.div(width)));
+      const b = i.mul(3);
+      const ray = vec3(
+        float(rayNode.element(b)),
+        float(rayNode.element(b.add(1))),
+        float(rayNode.element(b.add(2))),
+      );
+      const depth = float(textureLoad(depthTexture, pixel).x);
+      // Invalid depths (0, negative, NaN, infinite) are skipped
+      const valid = depth.greaterThan(0).and(depth.lessThan(float(3.4e38)));
+      const direction = select(euclidean.equal(1), normalize(ray), ray);
+      const position = direction.mul(depth);
+      // Sampled (bilinear) at the depth pixel's center: the color image may have another size
+      const uv = vec2(pixel).add(0.5).mul(depthTexel);
+      const c = sampleTexture(colorTexture, uv).level(float(0)).mul(255).add(0.5);
+      const color = uint(c.x)
+        .bitOr(uint(c.y).shiftLeft(8))
+        .bitOr(uint(c.z).shiftLeft(16))
+        .bitOr(uint(c.w).shiftLeft(24));
+      return { position, color, valid };
+    });
   }
 
   #disposeImageColorTexture(): void {
@@ -142,12 +191,16 @@ export class DepthCloud extends THREE.Points<THREE.BufferGeometry, DepthCloudMat
   }
 
   #bindTextures(): void {
-    const { uniforms } = this.material;
     const colorTexture = this.#useImageColors ? this.#imageColorTexture : this.#depthColorTexture;
-    uniforms.depthMap!.value = this.#depthTexture ?? this.#white;
-    uniforms.colorMap!.value = colorTexture ?? this.#white;
-    // Camera images are sRGB bytes; depth colors are linear
-    uniforms.colorIsSrgb!.value = this.#useImageColors;
+    const depth = this.#depthTexture ?? this.#white;
+    const color = colorTexture ?? this.#white;
+    if (this.#sourceTextures?.[0] !== depth || this.#sourceTextures[1] !== color) {
+      this.#buildSource();
+    }
+    const depthImage = depth.image as { width: number; height: number };
+    this.#depthTexel.value.set(1 / depthImage.width, 1 / depthImage.height);
+    // Image colors are sRGB bytes; depth colors are linear
+    this.encoding = this.#useImageColors ? "srgb" : "linear";
     this.visible = this.#depthTexture != undefined;
   }
 }
@@ -181,58 +234,4 @@ function updateDataTexture(
   next.colorSpace = THREE.LinearSRGBColorSpace;
   next.needsUpdate = true;
   return next;
-}
-
-export class DepthCloudMaterial extends THREE.RawShaderMaterial {
-  public constructor() {
-    super({
-      glslVersion: THREE.GLSL3,
-      vertexShader: /* glsl */ `
-        precision highp float;
-        precision highp int;
-        uniform mat4 projectionMatrix, modelViewMatrix;
-        uniform highp sampler2D depthMap;
-        uniform sampler2D colorMap;
-        uniform float pointSize;
-        uniform float pixelRatio;
-        uniform bool euclidean;
-        // The pixel's ray scaled to z = 1; must be named position for three.js to draw anything
-        in vec3 position;
-        out mediump vec4 vColor;
-        void main() {
-          ivec2 size = textureSize(depthMap, 0);
-          ivec2 pixel = ivec2(gl_VertexID % size.x, gl_VertexID / size.x);
-          float depth = texelFetch(depthMap, pixel, 0).r;
-          // Rejects 0, negative, NaN and infinite depths
-          if (!(depth > 0.0) || isinf(depth)) {
-            gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
-            gl_PointSize = 0.0;
-            return;
-          }
-          vec3 point = euclidean ? normalize(position) * depth : position * depth;
-          vColor = texture(colorMap, (vec2(pixel) + 0.5) / vec2(size));
-          gl_Position = projectionMatrix * modelViewMatrix * vec4(point, 1.0);
-          gl_PointSize = pixelRatio * pointSize;
-        }
-      `,
-      fragmentShader: /* glsl */ `
-        precision highp float;
-        uniform bool colorIsSrgb;
-        in mediump vec4 vColor;
-        out vec4 outColor;
-        ${THREE.ShaderChunk.colorspace_pars_fragment /* for sRGBTransferOETF() */}
-        void main() {
-          outColor = colorIsSrgb ? vColor : sRGBTransferOETF(vColor);
-        }
-      `,
-    });
-    this.uniforms = {
-      depthMap: { value: null },
-      colorMap: { value: null },
-      colorIsSrgb: { value: false },
-      pointSize: { value: 2 },
-      pixelRatio: { value: 1 },
-      euclidean: { value: false },
-    };
-  }
 }

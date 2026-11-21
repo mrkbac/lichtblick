@@ -8,10 +8,10 @@
 import * as THREE from "three";
 
 import { LineMaterialWithAlphaVertex } from "../../LineMaterialWithAlphaVertex";
+import { pickObjectId, pickOutput } from "../../Picker";
 import { ColorRGBA, Marker, MarkerType } from "../../ros";
 
 export type LineOptions = {
-  resolution: THREE.Vector2;
   worldUnits?: boolean;
 };
 
@@ -78,41 +78,39 @@ export function makeStandardInstancedMaterial(marker: Marker): THREE.MeshStandar
   });
 }
 
+// Transparent lines draw in two passes so overlapping segments don't blend twice: a depth and
+// stencil prepass, then a color pass that only draws where the stencil is set and clears it.
+// <https://github.com/mrdoob/three.js/issues/23680#issuecomment-1063294691>
+
 export function makeLinePrepassMaterial(
   marker: Marker,
   options: LineOptions,
 ): LineMaterialWithAlphaVertex {
-  const lineWidth = marker.scale.x;
   const transparent = markerHasTransparency(marker);
-  const material = new LineMaterialWithAlphaVertex({
+  return new LineMaterialWithAlphaVertex({
     worldUnits: options.worldUnits ?? true,
     colorWrite: false,
     transparent,
     depthWrite: !transparent,
-    linewidth: lineWidth,
-    resolution: options.resolution.clone(),
+    linewidth: marker.scale.x,
 
     stencilWrite: true,
     stencilRef: 1,
     stencilZPass: THREE.ReplaceStencilOp,
   });
-  material.lineWidth = lineWidth;
-  return material;
 }
 
 export function makeLineMaterial(
   marker: Marker,
   options: LineOptions,
 ): LineMaterialWithAlphaVertex {
-  const lineWidth = marker.scale.x;
   const transparent = markerHasTransparency(marker);
-  const material = new LineMaterialWithAlphaVertex({
+  return new LineMaterialWithAlphaVertex({
     worldUnits: options.worldUnits ?? true,
     vertexColors: true,
-    linewidth: lineWidth,
+    linewidth: marker.scale.x,
     transparent,
     depthWrite: !transparent,
-    resolution: options.resolution.clone(),
 
     stencilWrite: true,
     stencilRef: 0,
@@ -120,43 +118,17 @@ export function makeLineMaterial(
     stencilFail: THREE.ReplaceStencilOp,
     stencilZPass: THREE.ReplaceStencilOp,
   });
-  material.lineWidth = lineWidth;
-  return material;
 }
 
+/** Picking material for lines drawn wider than they look, so thin lines are easy to hit */
 export function makeLinePickingMaterial(
   lineWidth: number,
   options: LineOptions,
-): THREE.ShaderMaterial {
-  return new THREE.ShaderMaterial({
-    vertexShader: THREE.ShaderLib["foxglove.line"]!.vertexShader,
-    fragmentShader: /* glsl */ `
-      uniform vec4 objectId;
-      void main() {
-        gl_FragColor = objectId;
-      }
-    `,
-    clipping: true,
-    uniforms: {
-      objectId: { value: [NaN, NaN, NaN, NaN] },
-      linewidth: { value: lineWidth },
-      resolution: { value: options.resolution.clone() },
-      dashOffset: { value: 0 },
-      dashScale: { value: 1 },
-      dashSize: { value: 1 },
-      gapSize: { value: 1 },
-    },
-    defines: (options.worldUnits ?? true) ? { WORLD_UNITS: "" } : {},
+): LineMaterialWithAlphaVertex {
+  const material = new LineMaterialWithAlphaVertex({
+    worldUnits: options.worldUnits ?? true,
+    linewidth: lineWidth,
   });
-}
-
-export function makePointsMaterial(marker: Marker): THREE.PointsMaterial {
-  const transparent = markerHasTransparency(marker);
-  return new THREE.PointsMaterial({
-    vertexColors: true,
-    size: marker.scale.x,
-    sizeAttenuation: true,
-    transparent,
-    depthWrite: !transparent,
-  });
+  material.outputNode = pickOutput(pickObjectId);
+  return material;
 }

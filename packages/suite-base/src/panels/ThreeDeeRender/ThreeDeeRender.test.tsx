@@ -53,6 +53,7 @@ vi.mock("@lichtblick/suite-base/context/AnalyticsContext", () => ({
 const createMockRenderer = (overrides?: Record<string, any>) => {
   const listeners = new Map<string, Set<(...args: any[]) => void>>();
   const defaultRenderer = {
+    ready: Promise.resolve(),
     dispose: vi.fn(),
     config: {},
     setTopics: vi.fn(),
@@ -1547,31 +1548,34 @@ describe("ThreeDeeRender", () => {
       }).not.toThrow();
     });
   });
-  describe("WebGL context loss", () => {
-    it("shows an overlay and remounts the canvas with a new renderer", () => {
-      vi.useFakeTimers();
-      try {
-        const { container, getByRole } = render(<ThreeDeeRender {...setup()} />);
-        const canvas = container.querySelector("canvas")!;
-        expect(mockedRenderer).toHaveBeenCalledTimes(1);
+  describe("GPU loss", () => {
+    it("remounts the canvas with a new renderer when the device is lost", () => {
+      const { container } = render(<ThreeDeeRender {...setup()} />);
+      const canvas = container.querySelector("canvas")!;
+      expect(mockedRenderer).toHaveBeenCalledTimes(1);
+      const renderer = mockedRenderer.mock.results[0]!.value as Renderer;
 
-        act(() => {
-          canvas.dispatchEvent(new Event("webglcontextlost", { cancelable: true }));
-        });
-        expect(getByRole("status")).toHaveTextContent("Graphics context lost — restoring…");
+      act(() => {
+        renderer.emit("gpuLost", renderer);
+      });
 
-        act(() => {
-          canvas.dispatchEvent(new Event("webglcontextrestored"));
-        });
+      const newCanvas = container.querySelector("canvas");
+      expect(newCanvas).not.toBe(canvas);
+      expect(mockedRenderer).toHaveBeenCalledTimes(2);
+      expect(mockedRenderer.mock.calls[1]![0].canvas).toBe(newCanvas);
+    });
 
-        const newCanvas = container.querySelector("canvas");
-        expect(newCanvas).not.toBe(canvas);
-        expect(mockedRenderer).toHaveBeenCalledTimes(2);
-        expect(mockedRenderer.mock.calls[1]![0].canvas).toBe(newCanvas);
-        expect(container.querySelector('[role="status"]')).toBeNull();
-      } finally {
-        vi.useRealTimers();
-      }
+    it("says WebGPU is required when it is unavailable", async () => {
+      const { getByRole } = render(<ThreeDeeRender {...setup()} />);
+      const renderer = mockedRenderer.mock.results[0]!.value as Renderer;
+      // Startup settles first
+      await act(async () => {});
+
+      act(() => {
+        renderer.emit("gpuUnsupported", new Error("no WebGPU"), renderer);
+      });
+
+      expect(getByRole("status")).toHaveTextContent("needs WebGPU");
     });
   });
 });

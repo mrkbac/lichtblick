@@ -65,7 +65,6 @@ describe("SharedMap", () => {
     camera.position.set(0, 0, 20);
     const transformTree = new TransformTree(new ObjectPool(Transform.Empty));
     transformTree.addTransform("base", "map", 0n, Transform.Identity().setPosition([10, 20, 0]));
-    const resetState = vi.fn();
     const setCameraState = vi.fn();
     const queueAnimationFrame = vi.fn();
     const renderer = {
@@ -77,7 +76,6 @@ describe("SharedMap", () => {
       setCameraState,
       emit: vi.fn(),
       queueAnimationFrame,
-      gl: { resetState },
       hud: { displayIfTrue: vi.fn() },
     } as unknown as Renderer;
     const shared = new SharedMap(map as unknown as MapLibreMap, "map-layer");
@@ -130,10 +128,13 @@ describe("SharedMap", () => {
       } as unknown as Parameters<CustomLayerInterface["render"]>[1],
     );
     expect(draw).toHaveBeenCalledOnce();
-    expect(resetState).toHaveBeenCalledTimes(2);
     expect(camera.projectionMatrix.elements[11]).toBe(-1);
+    // MapLibre's WebGL clip space, with z remapped to WebGPU's [0, w]
+    // prettier-ignore
+    const toWebGpu = new THREE.Matrix4().set(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0.5, 0.5, 0, 0, 0, 1);
+    const expected = originalProjection.clone().premultiply(toWebGpu);
     camera.projectionMatrix.elements.forEach((value, index) => {
-      expect(value).toBeCloseTo(originalProjection.elements[index]!, 5);
+      expect(value).toBeCloseTo(expected.elements[index]!, 5);
     });
     const product = new THREE.Matrix4().multiplyMatrices(
       camera.projectionMatrix,
