@@ -3,14 +3,13 @@
 
 import * as THREE from "three";
 
-import { ObjectPool } from "@lichtblick/den/collection";
 import * as urdf from "@lichtblick/den/urdf";
 import { UrdfRobot } from "@lichtblick/den/urdf";
 
 import { createRenderable, jointPositions, Urdfs } from "./Urdfs";
 import { LoadedModel } from "../ModelCache";
 import type { Renderer } from "../Renderer";
-import { Transform, TransformTree } from "../transforms";
+import { TransformTree } from "../transforms";
 import { MESH_FETCH_FAILED, RenderableMeshResource } from "./markers/RenderableMeshResource";
 
 vi.mock("three/examples/jsm/libs/draco/draco_decoder.wasm", () => ({ default: "" }));
@@ -491,7 +490,7 @@ describe("URDF requests", () => {
 
     async function setup(layer: Record<string, unknown>) {
       const parse = vi.spyOn(urdf, "parseRobot").mockResolvedValue(armRobot);
-      const transformTree = new TransformTree(new ObjectPool(Transform.Empty));
+      const transformTree = new TransformTree();
       transformTree.getOrCreateFrame("base");
       const config = {
         topics: {},

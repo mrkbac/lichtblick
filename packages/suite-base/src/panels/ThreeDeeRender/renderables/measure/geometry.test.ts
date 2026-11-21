@@ -2,8 +2,6 @@
 
 import * as THREE from "three";
 
-import { ObjectPool } from "@lichtblick/den/collection";
-
 import {
   angleAt,
   formatArea,
@@ -76,7 +74,7 @@ describe("measure geometry", () => {
   });
 
   it("transforms points between frames", () => {
-    const tree = new TransformTree(new ObjectPool(Transform.Empty));
+    const tree = new TransformTree();
     // child sits 1m up and is rotated 90° about z relative to parent
     const q = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), Math.PI / 2);
     tree.addTransform("child", "parent", 0n, new Transform([0, 0, 1], [q.x, q.y, q.z, q.w]));

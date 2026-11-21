@@ -5,7 +5,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { Time, fromNanoSec, isLessThan, toNanoSec } from "@foxglove/rostime";
+import { toNanoSec } from "@foxglove/rostime";
 import type { FrameTransform, FrameTransforms, SceneUpdate } from "@foxglove/schemas";
 import EventEmitter from "eventemitter3";
 import { quat, vec3 } from "gl-matrix";
@@ -15,7 +15,6 @@ import { LineSegmentsGeometry } from "three/examples/jsm/lines/LineSegmentsGeome
 import * as THREE from "three/webgpu";
 import { DeepPartial, assert } from "ts-essentials";
 
-import { ObjectPool } from "@lichtblick/den/collection";
 import { CameraModelsMap } from "@lichtblick/den/image/types";
 import Logger from "@lichtblick/log";
 import {
@@ -72,7 +71,7 @@ import type { SharedMap } from "./SharedMap";
 import { TimestampSynchronizer } from "./TimestampSynchronizer";
 import { CameraState } from "./camera";
 import { DARK_OUTLINE, LIGHT_OUTLINE, stringToRgb } from "./color";
-import { HOVER_PICK_THROTTLE_MS, isTransformPreloadEnabled } from "./constants";
+import { HOVER_PICK_THROTTLE_MS } from "./constants";
 import { FRAME_TRANSFORMS_DATATYPES, FRAME_TRANSFORM_DATATYPES } from "./foxglove";
 import { getGpuDevice } from "./gpuDevice";
 import { DetailLevel } from "./lod";
@@ -101,13 +100,7 @@ import {
 } from "./ros";
 import { SelectEntry } from "./settings";
 import { customLayersRootNode, topicsRootNode } from "./settingsNodes/global";
-import {
-  AddTransformResult,
-  CoordinateFrame,
-  DEFAULT_MAX_CAPACITY_PER_FRAME,
-  TransformTree,
-  Transform,
-} from "./transforms";
+import { AddTransformResult, CoordinateFrame, TransformTree, Transform } from "./transforms";
 import { InterfaceMode } from "./types";
 
 const log = Logger.getLogger(__filename);
@@ -165,6 +158,7 @@ const tempVec2 = new THREE.Vector2();
 // for transforms
 const tempVec3: vec3 = [0, 0, 0];
 const tempQuat: quat = [0, 0, 0, 1];
+const tempTransform = Transform.Identity();
 
 type StaticTransform = {
   parentFrameId: string;
@@ -267,16 +261,7 @@ export class Renderer extends EventEmitter<RendererEvents> {
   public colorScheme: "dark" | "light" = "light";
   public modelCache: ModelCache;
 
-  /**
-   * Max capacity should be chosen to be at least several multiples of
-   * the CoordinateFrame transform max capacity. So that it can store
-   * several coordinate frames being emptied.
-   * It's mostly important to not let this grow unbounded.
-   */
-  #transformPool = new ObjectPool(Transform.Empty, {
-    maxCapacity: 5 * DEFAULT_MAX_CAPACITY_PER_FRAME,
-  });
-  public transformTree = new TransformTree(this.#transformPool);
+  public transformTree = new TransformTree();
   readonly #staticTransformCache = new Map<string, StaticTransform>();
 
   public coordinateFrameList: SelectEntry[] = [];
@@ -646,7 +631,6 @@ export class Renderer extends EventEmitter<RendererEvents> {
     this.#headLight.dispose();
     this.labelPool.dispose();
     this.markerPool.dispose();
-    this.#transformPool.clear();
     this.#picker.dispose();
     this.pointRaster.dispose();
     this.input.dispose();
@@ -681,6 +665,7 @@ export class Renderer extends EventEmitter<RendererEvents> {
    */
   public setCurrentTime(newTimeNs: bigint): void {
     this.currentTime = newTimeNs;
+    this.transformTree.setReceivedUntil(newTimeNs);
   }
 
   /**
@@ -689,16 +674,31 @@ export class Renderer extends EventEmitter<RendererEvents> {
    * @param oldTime used to determine if seeked backwards
    */
   public handleSeek(oldTimeNs: bigint): void {
-    const movedBack = this.currentTime < oldTimeNs;
+    // A complete tree holds the whole history, so it is right at any time. Otherwise transforms
+    // from the future of the new time must go.
+    const movedBack = this.currentTime < oldTimeNs && !this.transformTree.isComplete();
 
-    this.clear({
-      clearTransforms: movedBack,
-      resetAllFramesCursor: movedBack,
-      preserveStaticTransforms: movedBack,
-    });
+    this.clear({ clearTransforms: movedBack, preserveStaticTransforms: movedBack });
     if (movedBack) {
       this.#reapplyStaticTransforms();
     }
+  }
+
+  /**
+   * Feed the transform history of a recording (range reads, see ThreeDeeRender) straight into the
+   * transform tree. Samples already in the tree are replaced, so overlapping reads are harmless.
+   */
+  public addTransformMessages(messageEvents: readonly MessageEvent[]): void {
+    this.#batchTransformTreeUpdates(() => {
+      for (const messageEvent of messageEvents) {
+        for (const subscription of this.schemaSubscriptions.get(messageEvent.schemaName) ?? []) {
+          if (subscription.preload === true) {
+            subscription.handler(messageEvent);
+          }
+        }
+      }
+    });
+    this.queueAnimationFrame();
   }
 
   #reapplyStaticTransforms(): void {
@@ -720,11 +720,9 @@ export class Renderer extends EventEmitter<RendererEvents> {
    *  - Rendered objects (a backfill is performed to ensure that they are regenerated with new messages from current frame)
    *  - Errors in settings. Messages that caused errors in the past are cleared, but will be re-added if they are still causing errors when read in.
    *  - [Optional] Transform tree. This should be set to true when a seek to a previous time is performed in order to flush potential future state to the newly set time.
-   *  - [Optional] allFramesCursor. This is the cursor that iterates through allFrames up to currentTime. It should be reset when seeking backwards to avoid keeping future state.
    * @param {Object} params - modifiers to the clear operation
    * @param {boolean} params.clearTransforms - whether to clear the transform tree. This should be set to true when a seek to a previous time is performed in order
    * order to flush potential future state to the newly set time.
-   * @param {boolean} params.resetAllFramesCursor - whether to reset the cursor for the allFrames array.
    * Order to clear ImageMode renderables or not. Defaults to true. Not relevant in 3D panel.
    * @param {boolean} params.clearImageModeExtension - whether to reset ImageMode renderables in clear.
    * @param {boolean} params.preserveStaticTransforms - whether to preserve the static transform cache during a transform tree clear.
@@ -732,26 +730,20 @@ export class Renderer extends EventEmitter<RendererEvents> {
   public clear(
     {
       clearTransforms,
-      resetAllFramesCursor,
       clearImageModeExtension = true,
       preserveStaticTransforms = false,
     }: {
       clearTransforms?: boolean;
-      resetAllFramesCursor?: boolean;
       clearImageModeExtension?: boolean;
       preserveStaticTransforms?: boolean;
     } = {
       clearTransforms: false,
-      resetAllFramesCursor: false,
       preserveStaticTransforms: false,
     },
   ): void {
     this.#clearSubscriptionQueues();
     if (clearTransforms === true) {
       this.#clearTransformTree(preserveStaticTransforms);
-    }
-    if (resetAllFramesCursor === true) {
-      this.#resetAllFramesCursor();
     }
     this.settings.errors.clear();
     if (this.#labelAtlasError != undefined) {
@@ -769,17 +761,6 @@ export class Renderer extends EventEmitter<RendererEvents> {
     this.queueAnimationFrame();
   }
 
-  #allFramesCursor: {
-    // index represents where the last read message is in allFrames
-    index: number;
-    lastReadMessage: MessageEvent | undefined;
-    cursorTimeReached?: Time;
-  } = {
-    index: -1,
-    lastReadMessage: undefined,
-    cursorTimeReached: undefined,
-  };
-
   #clearSubscriptionQueues(): void {
     for (const subscriptions of this.topicSubscriptions.values()) {
       for (const subscription of subscriptions) {
@@ -791,91 +772,6 @@ export class Renderer extends EventEmitter<RendererEvents> {
         subscription.queue = undefined;
       }
     }
-  }
-
-  #resetAllFramesCursor() {
-    this.#allFramesCursor = {
-      index: -1,
-      lastReadMessage: undefined,
-      cursorTimeReached: undefined,
-    };
-    this.emit("resetAllFramesCursor", this);
-  }
-
-  /**
-   * Iterates through allFrames and handles messages with a receiveTime <= currentTime
-   * @param allFrames - sorted array of all preloaded messages
-   * @returns {boolean} - whether the allFramesCursor has been updated and new messages were read in
-   */
-  public handleAllFramesMessages(allFrames?: readonly MessageEvent[]): boolean {
-    if (!allFrames || allFrames.length === 0) {
-      return false;
-    }
-
-    const currentTime = fromNanoSec(this.currentTime);
-
-    /**
-     * Assumptions about allFrames needed by allFramesCursor:
-     *  - always sorted by receiveTime
-     *  - allFrame chunks are only ever loaded from beginning to end and does not have any eviction
-     */
-
-    const messageAtCursor = allFrames[this.#allFramesCursor.index];
-
-    // reset cursor if lastReadMessage no longer is the same as the message at the cursor
-    // This means that messages were added or removed from the array and need to be re-read
-    if (
-      this.#allFramesCursor.lastReadMessage != undefined &&
-      messageAtCursor != undefined &&
-      this.#allFramesCursor.lastReadMessage !== messageAtCursor
-    ) {
-      this.#resetAllFramesCursor();
-    }
-
-    let cursor = this.#allFramesCursor.index;
-    let cursorTimeReached = this.#allFramesCursor.cursorTimeReached;
-    let lastReadMessage = this.#allFramesCursor.lastReadMessage;
-
-    // cursor should never be over allFramesLength, if it some how is, it means the cursor was at the end of `allFrames` prior to eviction and eviction shortened allframes
-    // in this case we should set the cursor to the end of allFrames
-    cursor = Math.min(cursor, allFrames.length - 1);
-
-    // Collect messages to process in batch
-    const messagesToProcess: MessageEvent[] = [];
-    let message;
-
-    // load preloaded messages up to current time
-    while (cursor < allFrames.length - 1) {
-      cursor++;
-      message = allFrames[cursor]!;
-      // read messages until we reach the current time
-      if (isLessThan(currentTime, message.receiveTime)) {
-        cursorTimeReached = currentTime;
-        // reset cursor to last read message index
-        cursor--;
-        break;
-      }
-
-      messagesToProcess.push(message);
-      lastReadMessage = message;
-      if (cursor === allFrames.length - 1) {
-        cursorTimeReached = message.receiveTime;
-      }
-    }
-
-    // Process all collected messages in batch if any were found
-    const hasAddedMessageEvents = messagesToProcess.length > 0;
-    if (hasAddedMessageEvents) {
-      this.addMessageEventBatch(messagesToProcess);
-    }
-
-    // want to avoid setting anything if nothing has changed
-    if (!hasAddedMessageEvents) {
-      return false;
-    }
-
-    this.#allFramesCursor = { index: cursor, cursorTimeReached, lastReadMessage };
-    return true;
   }
 
   #addSceneExtension(extension: SceneExtension): void {
@@ -892,33 +788,27 @@ export class Renderer extends EventEmitter<RendererEvents> {
   }
 
   #addTransformSubscriptions(): void {
-    const config = this.config;
-    const preloadTransforms = isTransformPreloadEnabled(config);
     // Internal handlers for TF messages to update the transform tree
     this.#addSchemaSubscriptions(FRAME_TRANSFORM_DATATYPES, {
       handler: this.#handleFrameTransform,
       shouldSubscribe: () => true,
-      preload: preloadTransforms,
+      preload: true,
     });
     this.#addSchemaSubscriptions(FRAME_TRANSFORMS_DATATYPES, {
       handler: this.#handleFrameTransforms,
       shouldSubscribe: () => true,
-      preload: preloadTransforms,
+      preload: true,
     });
     this.#addSchemaSubscriptions(TF_DATATYPES, {
       handler: this.#handleTFMessage,
       shouldSubscribe: () => true,
-      preload: preloadTransforms,
+      preload: true,
     });
     this.#addSchemaSubscriptions(TRANSFORM_STAMPED_DATATYPES, {
       handler: this.#handleTransformStamped,
       shouldSubscribe: () => true,
-      preload: preloadTransforms,
+      preload: true,
     });
-    this.off("resetAllFramesCursor", this.#onResetAllFramesCursor);
-    if (preloadTransforms) {
-      this.on("resetAllFramesCursor", this.#onResetAllFramesCursor);
-    }
   }
 
   // eslint-disable-next-line @lichtblick/no-boolean-parameters
@@ -927,16 +817,6 @@ export class Renderer extends EventEmitter<RendererEvents> {
     if (preserveStaticTransforms !== true) {
       this.#staticTransformCache.clear();
     }
-  };
-
-  /**
-   * `resetAllFramesCursor` event handler: clears the transform tree so preloaded transforms are
-   * re-read from the start of `allFrames`, but keeps the static transform cache. The cache exists
-   * precisely to survive seek-driven tree clears, and this event is emitted during a seek. It is
-   * only dropped on a genuine data source reset, via `clear()` without `preserveStaticTransforms`.
-   */
-  readonly #onResetAllFramesCursor = (): void => {
-    this.#clearTransformTree(true);
   };
 
   // Call on scene extensions to add subscriptions to the renderer
@@ -1010,7 +890,6 @@ export class Renderer extends EventEmitter<RendererEvents> {
     );
     this.clear({
       clearTransforms: true,
-      resetAllFramesCursor: true,
       clearImageModeExtension: false,
     });
     this.#clearSubscriptions();
@@ -1025,7 +904,6 @@ export class Renderer extends EventEmitter<RendererEvents> {
     this.settings.removeNodeValidator(this.#imageOnlyModeTopicSettingsValidator);
     this.clear({
       clearTransforms: true,
-      resetAllFramesCursor: true,
       clearImageModeExtension: false,
     });
     this.#clearSubscriptions();
@@ -1621,7 +1499,10 @@ export class Renderer extends EventEmitter<RendererEvents> {
     }
   }
 
-  #addFrameTransform(transform: FrameTransform, options?: { isStatic?: boolean }): void {
+  #addFrameTransform(
+    transform: FrameTransform,
+    options?: { isStatic?: boolean; receiveTime?: bigint },
+  ): void {
     const parentId = transform.parent_frame_id;
     const childId = transform.child_frame_id;
     try {
@@ -1629,7 +1510,15 @@ export class Renderer extends EventEmitter<RendererEvents> {
       const t = transform.translation;
       const q = transform.rotation;
 
-      const result = this.addTransform(parentId, childId, stamp, t, q);
+      const result = this.addTransform(
+        parentId,
+        childId,
+        stamp,
+        t,
+        q,
+        undefined,
+        options?.receiveTime,
+      );
 
       if (options?.isStatic === true && result !== AddTransformResult.CYCLE_DETECTED) {
         this.#staticTransformCache.set(childId, {
@@ -1650,7 +1539,10 @@ export class Renderer extends EventEmitter<RendererEvents> {
     }
   }
 
-  #addTransformMessage(tf: TransformStamped, options?: { isStatic?: boolean }): void {
+  #addTransformMessage(
+    tf: TransformStamped,
+    options?: { isStatic?: boolean; receiveTime?: bigint },
+  ): void {
     const normalizedParentId = this.normalizeFrameId(tf.header.frame_id);
     const normalizedChildId = this.normalizeFrameId(tf.child_frame_id);
     try {
@@ -1658,7 +1550,15 @@ export class Renderer extends EventEmitter<RendererEvents> {
       const t = tf.transform.translation;
       const q = tf.transform.rotation;
 
-      const result = this.addTransform(normalizedParentId, normalizedChildId, stamp, t, q);
+      const result = this.addTransform(
+        normalizedParentId,
+        normalizedChildId,
+        stamp,
+        t,
+        q,
+        undefined,
+        options?.receiveTime,
+      );
 
       if (options?.isStatic === true && result !== AddTransformResult.CYCLE_DETECTED) {
         this.#staticTransformCache.set(normalizedChildId, {
@@ -1687,6 +1587,8 @@ export class Renderer extends EventEmitter<RendererEvents> {
     translation: Vector3,
     rotation: Quaternion,
     errorSettingsPath?: string[],
+    /** Playback time the transform was received at, if it came from a message */
+    receiveTime?: bigint,
   ): AddTransformResult {
     const t = translation;
     const q = rotation;
@@ -1700,9 +1602,14 @@ export class Renderer extends EventEmitter<RendererEvents> {
     tempQuat[2] = q.z;
     tempQuat[3] = q.w;
 
-    const transform = this.#transformPool.acquire();
-    transform.setPositionRotation(tempVec3, tempQuat);
-    const status = this.transformTree.addTransform(childFrameId, parentFrameId, stamp, transform);
+    tempTransform.setPositionRotation(tempVec3, tempQuat);
+    const status = this.transformTree.addTransform(
+      childFrameId,
+      parentFrameId,
+      stamp,
+      tempTransform,
+      receiveTime,
+    );
 
     if (status === AddTransformResult.UPDATED) {
       this.#transformTreeUpdated();
@@ -1795,7 +1702,7 @@ export class Renderer extends EventEmitter<RendererEvents> {
 
   #frameHandler = (currentTime: bigint): void => {
     this.#rendering = true;
-    this.currentTime = currentTime;
+    this.setCurrentTime(currentTime);
     this.#batchTransformTreeUpdates(() => {
       this.#handleSubscriptionQueues();
     });
@@ -2010,42 +1917,55 @@ export class Renderer extends EventEmitter<RendererEvents> {
   readonly #handleFrameTransform = ({
     message,
     topic,
+    receiveTime,
   }: MessageEvent<DeepPartial<FrameTransform>>): void => {
     // foxglove.FrameTransform - Ingest this single transform into our TF tree
     const transform = normalizeFrameTransform(message);
     const isStatic = isStaticTransformTopic(topic);
-    this.#addFrameTransform(transform, { isStatic });
+    this.#addFrameTransform(transform, { isStatic, receiveTime: toNanoSec(receiveTime) });
   };
 
   readonly #handleFrameTransforms = ({
     message,
     topic,
+    receiveTime,
   }: MessageEvent<DeepPartial<FrameTransforms>>): void => {
     // foxglove.FrameTransforms - Ingest the list of transforms into our TF tree
     const frameTransforms = normalizeFrameTransforms(message);
-    const isStatic = isStaticTransformTopic(topic);
+    const options = {
+      isStatic: isStaticTransformTopic(topic),
+      receiveTime: toNanoSec(receiveTime),
+    };
     for (const transform of frameTransforms.transforms) {
-      this.#addFrameTransform(transform, { isStatic });
+      this.#addFrameTransform(transform, options);
     }
   };
 
-  readonly #handleTFMessage = ({ message, topic }: MessageEvent<DeepPartial<TFMessage>>): void => {
+  readonly #handleTFMessage = ({
+    message,
+    topic,
+    receiveTime,
+  }: MessageEvent<DeepPartial<TFMessage>>): void => {
     // tf2_msgs/TFMessage - Ingest the list of transforms into our TF tree
     const tfMessage = normalizeTFMessage(message);
-    const isStatic = isStaticTransformTopic(topic);
+    const options = {
+      isStatic: isStaticTransformTopic(topic),
+      receiveTime: toNanoSec(receiveTime),
+    };
     for (const tf of tfMessage.transforms) {
-      this.#addTransformMessage(tf, { isStatic });
+      this.#addTransformMessage(tf, options);
     }
   };
 
   readonly #handleTransformStamped = ({
     message,
     topic,
+    receiveTime,
   }: MessageEvent<DeepPartial<TransformStamped>>): void => {
     // geometry_msgs/TransformStamped - Ingest this single transform into our TF tree
     const tf = normalizeTransformStamped(message);
     const isStatic = isStaticTransformTopic(topic);
-    this.#addTransformMessage(tf, { isStatic });
+    this.#addTransformMessage(tf, { isStatic, receiveTime: toNanoSec(receiveTime) });
   };
 
   #handleTopicsAction = (action: SettingsTreeAction): void => {

@@ -15,7 +15,7 @@ import type {
 import { topicListNode } from "@lichtblick/suite-base/panels/shared/topicList";
 
 import type { RendererConfig } from "../IRenderer";
-import { isTransformPreloadEnabled, MAX_TRANSFORM_MESSAGES } from "../constants";
+import { isTransformPreloadEnabled } from "../constants";
 import {
   DEFAULT_CAMERA_STATE,
   DEFAULT_LABEL_SCALE_FACTOR,
@@ -470,28 +470,7 @@ export function transformSettingsNode(
         input: "boolean",
         value: preloading,
       },
-      maxPreloadMessages: {
-        label: t("threeDee:maxPreloadMessages"),
-        help: t("threeDee:maxPreloadMessagesTooltip"),
-        tooltip: t("threeDee:maxPreloadMessagesTooltip"),
-        input: "number",
-        min: 1000,
-        max: 50000,
-        step: 1000,
-        value: transforms?.maxPreloadMessages ?? MAX_TRANSFORM_MESSAGES,
-        disabled: !preloading,
-      },
     },
-    actions: preloading
-      ? [
-          {
-            id: "clear-preload-buffer",
-            type: "action",
-            label: t("threeDee:clearPreloadBuffer"),
-            display: "menu",
-          },
-        ]
-      : undefined,
   };
 }
 

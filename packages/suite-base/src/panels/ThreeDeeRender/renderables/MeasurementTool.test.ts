@@ -5,8 +5,6 @@
 
 import * as THREE from "three";
 
-import { ObjectPool } from "@lichtblick/den/collection";
-
 import type { Renderer } from "../Renderer";
 import { Transform, TransformTree } from "../transforms";
 import { MeasurementTool } from "./MeasurementTool";
@@ -17,7 +15,7 @@ async function flushPicks(): Promise<void> {
 }
 
 function createTool() {
-  const transformTree = new TransformTree(new ObjectPool(Transform.Empty));
+  const transformTree = new TransformTree();
   const addBase = () => transformTree.addTransform("base", "map", 0n, Transform.Identity());
   addBase();
 

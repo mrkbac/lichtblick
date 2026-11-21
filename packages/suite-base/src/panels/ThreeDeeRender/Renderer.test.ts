@@ -6,7 +6,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { fromNanoSec, toNanoSec } from "@foxglove/rostime";
+import { fromNanoSec } from "@foxglove/rostime";
 import { FrameTransform, FrameTransforms } from "@foxglove/schemas";
 import * as THREE from "three";
 import { LineSegments2 } from "three/examples/jsm/lines/LineSegments2.js";
@@ -24,7 +24,7 @@ import { HOVER_PICK_THROTTLE_MS } from "@lichtblick/suite-base/panels/ThreeDeeRe
 import { CameraStateSettings } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/CameraStateSettings";
 import { DEFAULT_PUBLISH_SETTINGS } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/PublishSettings";
 import { TFMessage, TransformStamped } from "@lichtblick/suite-base/panels/ThreeDeeRender/ros";
-import { makePose } from "@lichtblick/suite-base/panels/ThreeDeeRender/transforms";
+import { makePose, Transform } from "@lichtblick/suite-base/panels/ThreeDeeRender/transforms";
 import IAnalytics from "@lichtblick/suite-base/services/IAnalytics";
 import { BasicBuilder } from "@lichtblick/test-builders";
 
@@ -2117,7 +2117,7 @@ describe("3D Renderer", () => {
     expect(renderer.transformTree.frame("after")).not.toBeUndefined();
     expect(renderer.transformTree.frame("seekOn")).not.toBeUndefined();
   });
-  it("tfPreloading on:  when seeking to before currentTime, clears transform tree and repopulates it up to receiveTime from allFrames", () => {
+  it("tfPreloading on: keeps the complete history across seeks and shows what was received by then", () => {
     const renderer = new Renderer({
       ...defaultRendererProps,
       canvas,
@@ -2126,357 +2126,93 @@ describe("3D Renderer", () => {
         scene: { transforms: { enablePreloading: true } },
       },
     });
-    const allFrames = [
+    const history = [
       createTFMessageEvent("root", "before4", 5n, [1n]),
       createTFMessageEvent("root", "before2", 6n, [4n]),
       createTFMessageEvent("root", "on", 7n, [7n]),
       createTFMessageEvent("root", "after2", 8n, [10n]),
       createTFMessageEvent("root", "after4", 9n, [13n]),
     ];
+    const placed = (frameId: string) =>
+      renderer.transformTree.apply(
+        makePose(),
+        makePose(),
+        "root",
+        undefined,
+        frameId,
+        renderer.currentTime,
+        renderer.currentTime,
+      ) != undefined;
 
-    // initialize renderer with transforms
-    let currentTime = 8n;
-    renderer.setCurrentTime(currentTime);
-    renderer.handleAllFramesMessages(allFrames);
-    // messages processed by renderer on animation frame
+    renderer.transformTree.setComplete(true);
+    renderer.addTransformMessages(history);
+    renderer.setCurrentTime(8n);
     renderer.animationFrame();
-    expect(renderer.transformTree.frame("before4")).not.toBeUndefined();
-    expect(renderer.transformTree.frame("before2")).not.toBeUndefined();
-    expect(renderer.transformTree.frame("on")).not.toBeUndefined();
-    expect(renderer.transformTree.frame("after2")).not.toBeUndefined();
-    expect(renderer.transformTree.frame("after4")).toBeUndefined();
+    expect(["before4", "before2", "on", "after2", "after4"].map(placed)).toEqual([
+      true,
+      true,
+      true,
+      true,
+      false,
+    ]);
 
-    //seek to 6n (backwards)
+    // Seeking back keeps the history but hides what was received later
+    renderer.setCurrentTime(6n);
+    renderer.handleSeek(8n);
+    expect(renderer.transformTree.frame("after4")?.transformsSize()).toBe(1);
+    expect(["before4", "before2", "on", "after2", "after4"].map(placed)).toEqual([
+      true,
+      true,
+      false,
+      false,
+      false,
+    ]);
 
-    const oldTime = currentTime;
-    currentTime = 6n;
-    renderer.setCurrentTime(currentTime);
-    renderer.handleSeek(oldTime);
-    // should have cleared transforms so that no future-to-the-currentTime transforms are in the tree
-    expect(renderer.transformTree.frame("before4")).toBeUndefined();
-    expect(renderer.transformTree.frame("before2")).toBeUndefined();
-    expect(renderer.transformTree.frame("on")).toBeUndefined();
-    expect(renderer.transformTree.frame("after2")).toBeUndefined();
-    expect(renderer.transformTree.frame("after4")).toBeUndefined();
-
-    // repopulate up to current receiveTime from allFrames
-    renderer.handleAllFramesMessages(allFrames);
-    // messages processed by renderer on animation frame
-    renderer.animationFrame();
-    expect(renderer.transformTree.frame("before4")).not.toBeUndefined();
-    expect(renderer.transformTree.frame("before2")).not.toBeUndefined();
-    expect(renderer.transformTree.frame("on")).toBeUndefined();
-    expect(renderer.transformTree.frame("after2")).toBeUndefined();
-    expect(renderer.transformTree.frame("after4")).toBeUndefined();
-  });
-  it("tfPreloading on: does not clear transform tree when seeking to after", () => {
-    const renderer = new Renderer({
-      ...defaultRendererProps,
-      canvas,
-      config: {
-        ...defaultRendererConfig,
-        scene: { transforms: { enablePreloading: true } },
-      },
-    });
-    const allFrames = [
-      createTFMessageEvent("root", "before4", 5n, [1n]),
-      createTFMessageEvent("root", "before2", 6n, [4n]),
-      createTFMessageEvent("root", "on", 7n, [7n]),
-      createTFMessageEvent("root", "after2", 8n, [10n]),
-      createTFMessageEvent("root", "after4", 9n, [13n]),
-    ];
-
-    // initialize renderer with normal transforms
-    let currentTime = 7n;
-    renderer.setCurrentTime(currentTime);
-    renderer.handleAllFramesMessages(allFrames);
-    // messages processed by renderer on animation frame
-    renderer.animationFrame();
-    expect(renderer.transformTree.frame("before4")).not.toBeUndefined();
-    expect(renderer.transformTree.frame("before2")).not.toBeUndefined();
-    expect(renderer.transformTree.frame("on")).not.toBeUndefined();
-    expect(renderer.transformTree.frame("after2")).toBeUndefined();
-    expect(renderer.transformTree.frame("after4")).toBeUndefined();
-
-    //seek to 9n (forwards)
-
-    const oldTime = currentTime;
-    currentTime = 9n;
-    renderer.setCurrentTime(currentTime);
-    renderer.handleSeek(oldTime);
-    // should not have cleared tree, so should be same as before
-    expect(renderer.transformTree.frame("before4")).not.toBeUndefined();
-    expect(renderer.transformTree.frame("before2")).not.toBeUndefined();
-    expect(renderer.transformTree.frame("on")).not.toBeUndefined();
-    expect(renderer.transformTree.frame("after2")).toBeUndefined();
-    expect(renderer.transformTree.frame("after4")).toBeUndefined();
-
-    // repopulate up to current receiveTime from allFrames
-    renderer.handleAllFramesMessages(allFrames);
-    // messages processed by renderer on animation frame
-    renderer.animationFrame();
-    expect(renderer.transformTree.frame("before4")).not.toBeUndefined();
-    expect(renderer.transformTree.frame("before2")).not.toBeUndefined();
-    expect(renderer.transformTree.frame("on")).not.toBeUndefined();
-    expect(renderer.transformTree.frame("after2")).not.toBeUndefined();
-    expect(renderer.transformTree.frame("after4")).not.toBeUndefined();
+    // Seeking forward shows everything received by then without reading anything again
+    renderer.setCurrentTime(9n);
+    renderer.handleSeek(6n);
+    expect(["before4", "before2", "on", "after2", "after4"].map(placed)).toEqual([
+      true,
+      true,
+      true,
+      true,
+      true,
+    ]);
   });
 });
 
-describe("Renderer.handleAllFramesMessages behavior", () => {
+describe("Renderer.addTransformMessages", () => {
   let canvas = document.createElement("canvas");
-  let parent = document.createElement("div");
-  let rendererArgs: ConstructorParameters<typeof Renderer>[0] = {
-    ...defaultRendererProps,
-    canvas,
-  };
   beforeEach(() => {
     vi.clearAllMocks();
     setupVitestCanvasMock();
-    parent = document.createElement("div");
+    const parent = document.createElement("div");
     canvas = document.createElement("canvas");
     parent.appendChild(canvas);
-    rendererArgs = { ...rendererArgs, canvas };
   });
   afterEach(() => {
     (console.warn as Mock).mockClear();
   });
 
-  it("constructs a renderer without error", () => {
-    expect(() => new Renderer(rendererArgs)).not.toThrow();
+  it("adds every transform straight to the tree, announcing the tree change once", () => {
+    const renderer = new Renderer({ ...defaultRendererProps, canvas });
+    const updates = vi.fn();
+    renderer.on("transformTreeUpdated", updates);
+    renderer.addTransformMessages([
+      createTFMessageEvent("root", "a", 1n, [1n, 2n]),
+      createTFMessageEvent("root", "b", 2n, [2n]),
+    ]);
+    expect(renderer.transformTree.frame("a")?.transformsSize()).toBe(2);
+    expect(renderer.transformTree.frame("b")?.transformsSize()).toBe(1);
+    expect(updates).toHaveBeenCalledTimes(1);
   });
-  it("does not add in allFramesMessages if no messages are before currentTime", () => {
-    const renderer = new Renderer(rendererArgs);
 
-    const msgs = [];
-    for (let i = 0; i < 10; i++) {
-      msgs.push(createTFMessageEvent("a", "b", BigInt(10 + i), [BigInt(i)]));
-    }
-    const addMessageEventMock = vi.spyOn(renderer, "addMessageEvent");
-    const currentTime = 5n;
-    renderer.setCurrentTime(currentTime);
-    renderer.handleAllFramesMessages(msgs);
-    expect(addMessageEventMock).not.toHaveBeenCalled();
-  });
-  it("adds messages with receiveTime up to currentTime", () => {
-    // Given: A renderer with 10 messages
-    const renderer = new Renderer(rendererArgs);
-    const msgs = [];
-    for (let i = 0; i < 10; i++) {
-      msgs.push(createTFMessageEvent("a", "b", BigInt(i), [BigInt(i)]));
-    }
-    const currentTime = 4n;
-    const addMessageEventBatchMock = vi.spyOn(renderer, "addMessageEventBatch");
-
-    // When: Processing messages up to currentTime
-    renderer.setCurrentTime(currentTime);
-    renderer.handleAllFramesMessages(msgs);
-
-    // Then: Only messages up to time 4 should be processed
-    expect(addMessageEventBatchMock).toHaveBeenCalledTimes(1);
-    const processedMessages = addMessageEventBatchMock.mock.calls[0]?.[0];
-    expect(processedMessages).toHaveLength(5);
-  });
-  it("adds later messages after currentTime is updated", () => {
-    // Given: A renderer with 10 messages
-    const renderer = new Renderer(rendererArgs);
-    const msgs = [];
-    for (let i = 0; i < 10; i++) {
-      msgs.push(createTFMessageEvent("a", "b", BigInt(i), [BigInt(i)]));
-    }
-    const addMessageEventBatchMock = vi.spyOn(renderer, "addMessageEventBatch");
-
-    // When: Processing messages up to time 4
-    renderer.setCurrentTime(4n);
-    renderer.handleAllFramesMessages(msgs);
-    expect(addMessageEventBatchMock).toHaveBeenCalledTimes(1);
-    const firstBatch = addMessageEventBatchMock.mock.calls[0]?.[0];
-    expect(firstBatch).toHaveLength(5);
-
-    // When: Updating time to 5
-    addMessageEventBatchMock.mockClear();
-    renderer.setCurrentTime(5n);
-    renderer.handleAllFramesMessages(msgs);
-
-    // Then: Only the additional message should be processed
-    expect(addMessageEventBatchMock).toHaveBeenCalledTimes(1);
-    const secondBatch = addMessageEventBatchMock.mock.calls[0]?.[0];
-    expect(secondBatch).toHaveLength(1);
-  });
-  it("reads all messages when last message receiveTime is before currentTime", () => {
-    // Given: A renderer with 10 messages all before current time
-    const renderer = new Renderer(rendererArgs);
-    const msgs = [];
-    for (let i = 0; i < 10; i++) {
-      msgs.push(createTFMessageEvent("a", "b", BigInt(i), [BigInt(i)]));
-    }
-    const currentTime = 11n;
-    const addMessageEventBatchMock = vi.spyOn(renderer, "addMessageEventBatch");
-
-    // When: Setting current time and handling messages
-    renderer.setCurrentTime(currentTime);
-    renderer.handleAllFramesMessages(msgs);
-
-    // Then: All messages should be processed in batch
-    expect(addMessageEventBatchMock).toHaveBeenCalledTimes(1);
-    expect(addMessageEventBatchMock).toHaveBeenCalledWith(msgs);
-  });
-  it("reads reads new messages when allFrames array is added to", () => {
-    // Given: A renderer with initial 10 messages
-    const renderer = new Renderer(rendererArgs);
-    const msgs = [];
-    let i = 0;
-    for (i; i < 10; i++) {
-      msgs.push(createTFMessageEvent("a", "b", BigInt(i), [BigInt(i)]));
-    }
-    const currentTime = 11n;
-    const addMessageEventBatchMock = vi.spyOn(renderer, "addMessageEventBatch");
-
-    // When: Processing first batch
-    renderer.setCurrentTime(currentTime);
-    renderer.handleAllFramesMessages(msgs);
-    expect(addMessageEventBatchMock).toHaveBeenCalledTimes(1);
-
-    // When: Adding more messages and processing again
-    addMessageEventBatchMock.mockClear();
-    for (i; i < 20; i++) {
-      msgs.push(createTFMessageEvent("a", "b", BigInt(i), [BigInt(i)]));
-    }
-    renderer.handleAllFramesMessages(msgs);
-
-    // Then: Only the two additional messages before currentTime should be processed
-    expect(addMessageEventBatchMock).toHaveBeenCalledTimes(1);
-    const newMessages = addMessageEventBatchMock.mock.calls[0]?.[0];
-    expect(newMessages).toHaveLength(2);
-  });
-  it("doesn't read messages when currentTime is updated but no more receiveTimes are past it", () => {
-    // Given: A renderer with messages all before current time
-    const renderer = new Renderer(rendererArgs);
-    const msgs = [];
-    for (let i = 0; i < 10; i++) {
-      msgs.push(createTFMessageEvent("a", "b", BigInt(i), [BigInt(i)]));
-    }
-    const addMessageEventBatchMock = vi.spyOn(renderer, "addMessageEventBatch");
-
-    // When: Processing all messages
-    renderer.setCurrentTime(11n);
-    renderer.handleAllFramesMessages(msgs);
-    expect(addMessageEventBatchMock).toHaveBeenCalledTimes(1);
-
-    // When: Updating time without new messages to process
-    addMessageEventBatchMock.mockClear();
-    renderer.setCurrentTime(12n);
-    const newMessagesHandled = renderer.handleAllFramesMessages(msgs);
-
-    // Then: No new messages should be handled
-    expect(newMessagesHandled).toBeFalsy();
-    expect(addMessageEventBatchMock).not.toHaveBeenCalled();
-  });
-  it("adds all messages again after cursor is cleared", () => {
-    // Given: A renderer with processed messages
-    const renderer = new Renderer(rendererArgs);
-    const msgs = [];
-    for (let i = 0; i < 10; i++) {
-      msgs.push(createTFMessageEvent("a", "b", BigInt(i), [BigInt(i)]));
-    }
-    const addMessageEventBatchMock = vi.spyOn(renderer, "addMessageEventBatch");
-
-    // When: Processing messages initially
-    renderer.setCurrentTime(11n);
-    renderer.handleAllFramesMessages(msgs);
-    expect(addMessageEventBatchMock).toHaveBeenCalledTimes(1);
-
-    // When: Clearing cursor and processing again
-    addMessageEventBatchMock.mockClear();
-    renderer.clear({ resetAllFramesCursor: true });
-    const newMessagesHandled = renderer.handleAllFramesMessages(msgs);
-
-    // Then: All messages should be processed again
-    expect(newMessagesHandled).toBeTruthy();
-    expect(addMessageEventBatchMock).toHaveBeenCalledTimes(1);
-    expect(addMessageEventBatchMock).toHaveBeenCalledWith(msgs);
-  });
-  it("resets cursor if messages were added before the cursor index", () => {
-    // Given: A renderer with messages starting at index 2
-    const renderer = new Renderer(rendererArgs);
-    const msgs = [];
-    for (let i = 2; i < 10; i++) {
-      msgs.push(createTFMessageEvent("a", "b", BigInt(i), [BigInt(i)]));
-    }
-    const addMessageEventBatchMock = vi.spyOn(renderer, "addMessageEventBatch");
-
-    // When: Processing initial messages
-    renderer.setCurrentTime(5n);
-    renderer.handleAllFramesMessages(msgs);
-    const numMessagesBeforeTime = msgs.filter(
-      (msg) => toNanoSec(msg.message.transforms[0]!.header.stamp) <= 5n,
-    ).length;
-    expect(addMessageEventBatchMock).toHaveBeenCalledTimes(1);
-    const initialBatch = addMessageEventBatchMock.mock.calls[0]?.[0];
-    expect(initialBatch).toHaveLength(numMessagesBeforeTime);
-
-    // When: Adding message to beginning (before cursor)
-    addMessageEventBatchMock.mockClear();
-    msgs.unshift(createTFMessageEvent("a", "b", 1n, [1n]));
-    const newMessagesHandled = renderer.handleAllFramesMessages(msgs);
-
-    // Then: Should reprocess from beginning due to cursor reset
-    expect(newMessagesHandled).toBeTruthy();
-    expect(addMessageEventBatchMock).toHaveBeenCalledTimes(1);
-    const reprocessedBatch = addMessageEventBatchMock.mock.calls[0]?.[0];
-    expect(reprocessedBatch).toHaveLength(numMessagesBeforeTime + 1);
-  });
-  it("resets cursor if messages were removed before the cursor index", () => {
-    // Given: A renderer with messages starting at index 2
-    const renderer = new Renderer(rendererArgs);
-    const msgs = [];
-    for (let i = 2; i < 10; i++) {
-      msgs.push(createTFMessageEvent("a", "b", BigInt(i), [BigInt(i)]));
-    }
-    const addMessageEventBatchMock = vi.spyOn(renderer, "addMessageEventBatch");
-
-    // When: Processing initial messages
-    renderer.setCurrentTime(5n);
-    renderer.handleAllFramesMessages(msgs);
-    const numMessagesBeforeTime = msgs.filter(
-      (msg) => toNanoSec(msg.message.transforms[0]!.header.stamp) <= 5n,
-    ).length;
-    expect(addMessageEventBatchMock).toHaveBeenCalledTimes(1);
-
-    // When: Removing message from beginning (before cursor)
-    addMessageEventBatchMock.mockClear();
-    msgs.shift();
-    const newMessagesHandled = renderer.handleAllFramesMessages(msgs);
-
-    // Then: Should reprocess from beginning due to cursor reset
-    expect(newMessagesHandled).toBeTruthy();
-    expect(addMessageEventBatchMock).toHaveBeenCalledTimes(1);
-    const reprocessedBatch = addMessageEventBatchMock.mock.calls[0]?.[0];
-    expect(reprocessedBatch).toHaveLength(numMessagesBeforeTime - 1);
-  });
-  it.fails("(does not) reset the cursor if number of messages added **and** removed before cursor are equal in a single update", () => {
-    // Given: A renderer with messages starting at index 2
-    const renderer = new Renderer(rendererArgs);
-    const msgs = [];
-    for (let i = 2; i < 10; i++) {
-      msgs.push(createTFMessageEvent("a", "b", BigInt(i), [BigInt(i)]));
-    }
-    const addMessageEventBatchMock = vi.spyOn(renderer, "addMessageEventBatch");
-
-    // When: Processing initial messages
-    renderer.setCurrentTime(5n);
-    renderer.handleAllFramesMessages(msgs);
-    expect(addMessageEventBatchMock).toHaveBeenCalledTimes(1);
-
-    // When: Removing and adding message at beginning (before cursor)
-    addMessageEventBatchMock.mockClear();
-    msgs.shift();
-    msgs.unshift(createTFMessageEvent("a", "b", 1n, [1n]));
-    const newMessagesHandled = renderer.handleAllFramesMessages(msgs);
-
-    // Then: Should still reprocess because cursor was reset
-    expect(newMessagesHandled).toBeTruthy();
-    expect(addMessageEventBatchMock).toHaveBeenCalledTimes(1);
+  it("is idempotent for transforms read twice", () => {
+    const renderer = new Renderer({ ...defaultRendererProps, canvas });
+    const batch = [createTFMessageEvent("root", "a", 1n, [1n, 2n])];
+    renderer.addTransformMessages(batch);
+    renderer.addTransformMessages(batch);
+    expect(renderer.transformTree.frame("a")?.transformsSize()).toBe(2);
   });
 });
 
@@ -2648,19 +2384,29 @@ describe("Renderer backward seek behavior", () => {
         },
       });
 
-    const playTo = (renderer: Renderer, allFrames: readonly MessageEvent[], timeNs: bigint) => {
+    // Mirrors ThreeDeeRender: the whole history is preloaded into a complete tree
+    const playTo = (renderer: Renderer, history: readonly MessageEvent[], timeNs: bigint) => {
+      renderer.transformTree.setComplete(true);
+      renderer.addTransformMessages(history);
       renderer.setCurrentTime(timeNs);
-      renderer.handleAllFramesMessages(allFrames);
       renderer.animationFrame();
     };
 
-    // Mirrors the seek flow in ThreeDeeRender: handleSeek first, then the preloaded frames effect
-    const seekBackTo = (renderer: Renderer, allFrames: readonly MessageEvent[], timeNs: bigint) => {
+    const seekBackTo = (renderer: Renderer, timeNs: bigint) => {
       const oldTimeNs = renderer.currentTime;
       renderer.setCurrentTime(timeNs);
       renderer.handleSeek(oldTimeNs);
-      renderer.handleAllFramesMessages(allFrames);
       renderer.animationFrame();
+    };
+
+    // Header stamp of the newest transform the "ego" frame shows
+    const latestVisibleStamp = (renderer: Renderer): bigint | undefined => {
+      const lower: [bigint, Transform] = [0n, Transform.Identity()];
+      const upper: [bigint, Transform] = [0n, Transform.Identity()];
+      const found = renderer.transformTree
+        .frame("ego")
+        ?.findClosestTransforms(lower, upper, 2n ** 62n, 2n ** 62n);
+      return found === true ? upper[0] : undefined;
     };
 
     const egoPositionX = (renderer: Renderer): number | undefined =>
@@ -2675,7 +2421,7 @@ describe("Renderer backward seek behavior", () => {
       )?.position.x;
 
     it.each(clockScenarios)(
-      "keeps only the transforms received up to the seek time when $name",
+      "shows only the transforms received up to the seek time when $name",
       (scenario) => {
         // Given: Preloaded transforms played to the end
         const allFrames = createEgoTransformEvents(scenario);
@@ -2683,10 +2429,12 @@ describe("Renderer backward seek behavior", () => {
         playTo(renderer, allFrames, lastReceiveTime(scenario));
 
         // When: Seeking backward to the receive time of the 4th message
-        seekBackTo(renderer, allFrames, seekReceiveTime(scenario));
+        seekBackTo(renderer, seekReceiveTime(scenario));
 
-        // Then: Exactly the first four messages are in the history
-        expect(renderer.transformTree.frame("ego")?.transformsSize()).toBe(SEEK_INDEX + 1);
+        // Then: The newest transform shown is the fourth message's
+        expect(latestVisibleStamp(renderer)).toBe(
+          scenario.stampBase + BigInt(SEEK_INDEX) * SPACING_NS,
+        );
       },
     );
 
@@ -2699,24 +2447,25 @@ describe("Renderer backward seek behavior", () => {
         playTo(renderer, allFrames, lastReceiveTime(scenario));
 
         // When: Seeking backward to the receive time of the 4th message
-        seekBackTo(renderer, allFrames, seekReceiveTime(scenario));
+        seekBackTo(renderer, seekReceiveTime(scenario));
 
         // Then: The frame is at the 4th message's pose, not the latest one
         expect(egoPositionX(renderer)).toBeCloseTo(SEEK_INDEX);
       },
     );
 
-    it("removes every dynamic transform when seeking before the first message and stamps are boot-relative", () => {
+    it("hides every dynamic transform when seeking before the first message and stamps are boot-relative", () => {
       // Given: Preloaded transforms played to the end
       const allFrames = createEgoTransformEvents(bootRelativeStamps);
       const renderer = createPreloadingRenderer();
       playTo(renderer, allFrames, lastReceiveTime(bootRelativeStamps));
 
       // When: Seeking backward to before the first message was received
-      seekBackTo(renderer, allFrames, bootRelativeStamps.receiveBase - 1n);
+      seekBackTo(renderer, bootRelativeStamps.receiveBase - 1n);
 
-      // Then: No history from the future is left in the tree
-      expect(renderer.transformTree.frame("ego")).toBeUndefined();
+      // Then: No transform from the future is shown
+      expect(latestVisibleStamp(renderer)).toBeUndefined();
+      expect(egoPositionX(renderer)).toBeUndefined();
     });
   });
 });
@@ -2973,126 +2722,5 @@ describe("Renderer batch message processing", () => {
     expect(renderer.transformTree.frame("child1")).toBeDefined();
     expect(renderer.transformTree.frame("child2")).toBeDefined();
     expect(renderer.transformTree.frame("child3")).toBeDefined();
-  });
-});
-
-describe("Renderer maxPreloadMessages configuration", () => {
-  let canvas = document.createElement("canvas");
-  let parent = document.createElement("div");
-  let rendererArgs: ConstructorParameters<typeof Renderer>[0] = {
-    ...defaultRendererProps,
-    canvas,
-  };
-
-  beforeEach(() => {
-    vi.clearAllMocks();
-    setupVitestCanvasMock();
-    parent = document.createElement("div");
-    canvas = document.createElement("canvas");
-    parent.appendChild(canvas);
-    rendererArgs = { ...defaultRendererProps, canvas };
-  });
-
-  afterEach(() => {
-    (console.warn as Mock).mockClear();
-  });
-
-  it("uses default MAX_TRANSFORM_MESSAGES when not configured", () => {
-    // Given: Renderer without maxPreloadMessages setting
-    const renderer = new Renderer({
-      ...rendererArgs,
-      config: {
-        ...defaultRendererConfig,
-        scene: { transforms: { enablePreloading: true } },
-      },
-    });
-
-    // When: Config is accessed
-    const maxMessages = renderer.config.scene.transforms?.maxPreloadMessages;
-
-    // Then: Should be undefined (uses default)
-    expect(maxMessages).toBeUndefined();
-  });
-
-  it("respects custom maxPreloadMessages configuration", () => {
-    // Given: Renderer with custom maxPreloadMessages
-    const customMax = 5000;
-    const renderer = new Renderer({
-      ...rendererArgs,
-      config: {
-        ...defaultRendererConfig,
-        scene: { transforms: { enablePreloading: true, maxPreloadMessages: customMax } },
-      },
-    });
-
-    // When: Config is accessed
-    const maxMessages = renderer.config.scene.transforms?.maxPreloadMessages;
-
-    // Then: Should use custom value
-    expect(maxMessages).toBe(customMax);
-  });
-});
-
-describe("Renderer resetAllFramesCursor event handling", () => {
-  let canvas = document.createElement("canvas");
-  let parent = document.createElement("div");
-  let rendererArgs: ConstructorParameters<typeof Renderer>[0] = {
-    ...defaultRendererProps,
-    canvas,
-  };
-
-  beforeEach(() => {
-    vi.clearAllMocks();
-    setupVitestCanvasMock();
-    parent = document.createElement("div");
-    canvas = document.createElement("canvas");
-    parent.appendChild(canvas);
-    rendererArgs = { ...defaultRendererProps, canvas };
-  });
-
-  afterEach(() => {
-    (console.warn as Mock).mockClear();
-  });
-
-  it("emits resetAllFramesCursor when seeking backward", () => {
-    // Given: Renderer with preload enabled
-    const renderer = new Renderer({
-      ...rendererArgs,
-      config: {
-        ...defaultRendererConfig,
-        scene: { transforms: { enablePreloading: true } },
-      },
-    });
-    const resetListener = vi.fn();
-    renderer.addListener("resetAllFramesCursor", resetListener);
-
-    // When: Seeking backward
-    renderer.setCurrentTime(50n);
-    renderer.setCurrentTime(5n);
-    renderer.handleSeek(50n);
-
-    // Then: Event should be emitted so preloaded transforms are re-read from the start
-    expect(resetListener).toHaveBeenCalled();
-  });
-
-  it("does not emit resetAllFramesCursor when seeking forward", () => {
-    // Given: Renderer with preload enabled
-    const renderer = new Renderer({
-      ...rendererArgs,
-      config: {
-        ...defaultRendererConfig,
-        scene: { transforms: { enablePreloading: true } },
-      },
-    });
-    const resetListener = vi.fn();
-    renderer.addListener("resetAllFramesCursor", resetListener);
-
-    // When: Seeking forward (calls clear with resetAllFramesCursor=false)
-    renderer.setCurrentTime(5n);
-    renderer.setCurrentTime(50n);
-    renderer.handleSeek(5n);
-
-    // Then: Event should not be emitted for forward seek
-    expect(resetListener).not.toHaveBeenCalled();
   });
 });

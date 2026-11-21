@@ -7,7 +7,6 @@ import { act, fireEvent, render, screen } from "@testing-library/react";
 import EventEmitter from "eventemitter3";
 import * as THREE from "three";
 
-import { ObjectPool } from "@lichtblick/den/collection";
 import ThemeProvider from "@lichtblick/suite-base/theme/ThemeProvider";
 
 import { FrameMeasureOverlay } from "./FrameMeasureOverlay";
@@ -20,7 +19,7 @@ import { FRAME_MEASUREMENT_VARIABLE, FrameMeasurement } from "./transforms/frame
  * variable and every panel (here: this one) gets "variablesChange".
  */
 function setup(initial: FrameMeasurement | undefined, { picking = false } = {}) {
-  const transformTree = new TransformTree(new ObjectPool(Transform.Empty));
+  const transformTree = new TransformTree();
   transformTree.addTransform("base", "map", 0n, new Transform([1, 0, 0], [0, 0, 0, 1]));
   transformTree.addTransform("lidar", "base", 0n, new Transform([3, 4, 0], [0, 0, 0, 1]));
   transformTree.addTransform("imu", "rig", 0n, Transform.Identity());

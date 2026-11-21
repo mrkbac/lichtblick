@@ -4,8 +4,6 @@ import type { CustomLayerInterface, Map as MapLibreMap, StyleSpecification } fro
 import { MercatorCoordinate } from "maplibre-gl";
 import * as THREE from "three";
 
-import { ObjectPool } from "@lichtblick/den/collection";
-
 import type { Renderer } from "./Renderer";
 import { SharedMap, mapCameraAngles } from "./SharedMap";
 import { Transform, TransformTree } from "./transforms";
@@ -63,7 +61,7 @@ describe("SharedMap", () => {
     };
     const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 1000);
     camera.position.set(0, 0, 20);
-    const transformTree = new TransformTree(new ObjectPool(Transform.Empty));
+    const transformTree = new TransformTree();
     transformTree.addTransform("base", "map", 0n, Transform.Identity().setPosition([10, 20, 0]));
     const setCameraState = vi.fn();
     const getCameraState = vi.fn(() => ({ distance: 20 }));
@@ -188,7 +186,7 @@ describe("SharedMap ground height", () => {
     };
     const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 1000);
     camera.position.set(0, 0, 20);
-    const transformTree = new TransformTree(new ObjectPool(Transform.Empty));
+    const transformTree = new TransformTree();
     transformTree.addTransform("base", "map", 0n, Transform.Identity().setPosition([10, 20, 5]));
     const renderer = {
       currentTime: 0n,

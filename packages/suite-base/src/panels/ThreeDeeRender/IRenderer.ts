@@ -52,9 +52,7 @@ export type RendererEvents = {
   topicSubscriptionsChanged: (renderer: Renderer) => void;
   topicsChanged: (renderer: Renderer) => void;
   resetViewChanged: (renderer: Renderer) => void;
-  resetAllFramesCursor: (renderer: Renderer) => void;
   hudItemsChanged: (renderer: Renderer) => void;
-  clearPreloadBuffer: (renderer: Renderer) => void;
   /** The WebGPU device was lost; the panel recreates the renderer */
   gpuLost: (renderer: Renderer) => void;
   /** WebGPU is unavailable, so nothing can be drawn */
@@ -138,8 +136,6 @@ export type RendererConfig = {
       lineColor?: string;
       /** Enable transform preloading */
       enablePreloading?: boolean;
-      /** Maximum number of transform messages to keep when preloading (default: 10000) */
-      maxPreloadMessages?: number;
       /** Step size for offset inputs and keyboard nudging */
       adjustStep?: AdjustStep;
       /** How roll/pitch/yaw are shown and typed (offsets are stored as intrinsic XYZ) */
@@ -182,7 +178,10 @@ export type RendererConfig = {
 };
 
 export type RendererSubscription<T = unknown> = {
-  /** Preload the full history of topic messages as a best effort */
+  /**
+   * The topic's history is read through range reads and passed to `Renderer.addTransformMessages`
+   * (see ThreeDeeRender), not preloaded by the player. Only transform topics use this.
+   */
   preload?: boolean;
   /**
    * By default, topic subscriptions are only created when the topic visibility

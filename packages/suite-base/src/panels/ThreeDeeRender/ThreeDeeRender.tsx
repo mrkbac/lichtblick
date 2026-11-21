@@ -5,7 +5,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { Time, toNanoSec, compare } from "@foxglove/rostime";
+import { Time, toNanoSec } from "@foxglove/rostime";
 import { Button } from "@mui/material";
 import * as _ from "lodash-es";
 import React, {
@@ -42,7 +42,6 @@ import { DEFAULT_SCENE_EXTENSION_CONFIG } from "@lichtblick/suite-base/panels/Th
 import {
   DEFAULT_FOLLOW_MODE,
   PANEL_STYLE,
-  MAX_TRANSFORM_MESSAGES,
   isTransformPreloadEnabled,
 } from "@lichtblick/suite-base/panels/ThreeDeeRender/constants";
 import { SELECTED_ID_VARIABLE } from "@lichtblick/suite-base/panels/ThreeDeeRender/settings";
@@ -71,6 +70,7 @@ import type { LayerSettingsTransform } from "./renderables/FrameAxes";
 import { PublishClickEventMap } from "./renderables/PublishClickTool";
 import { DEFAULT_PUBLISH_SETTINGS } from "./renderables/PublishSettings";
 import { THREE_DEE_SHORTCUTS } from "./shortcuts";
+import { readTransformRange, readTransformsBefore, TransformTopic } from "./transformHistoryReads";
 import { Shared3DPanelState, ThreeDeeRenderProps } from "./types";
 import { useGpuRecovery } from "./useGpuRecovery";
 
@@ -323,10 +323,11 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
   const [currentTime, setCurrentTime] = useState<Time | undefined>();
   const [didSeek, setDidSeek] = useState<boolean>(false);
   const [sharedPanelState, setSharedPanelState] = useState<undefined | Shared3DPanelState>();
-  const [allFrames, setAllFrames] = useState<readonly MessageEvent[] | undefined>(undefined);
   const [isLoadingTransforms, setIsLoadingTransforms] = useState<boolean>(false);
   const [loadedTransformCount, setLoadedTransformCount] = useState<number>(0);
-  const [reloadPreloadTrigger, setReloadPreloadTrigger] = useState<number>(0);
+  // Times of the transform history the tree holds completely, in ns; -1n when none
+  const transformsCompleteUntilRef = useRef(-1n);
+  const seekReadRef = useRef<AbortController | undefined>(undefined);
 
   const renderRef = useRef({ needsRender: false });
   // Marks that the frame currently being processed resulted from a seek. On such frames the panel
@@ -429,16 +430,6 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
   );
   useRendererEvent("setVariable", setVariable, renderer);
 
-  // Clear preloaded buffer when action button is clicked
-  const handleClearPreloadBuffer = useCallback(() => {
-    setAllFrames([]);
-    setLoadedTransformCount(0);
-    setIsLoadingTransforms(false);
-    // Trigger reload by incrementing the trigger
-    setReloadPreloadTrigger((prev) => prev + 1);
-  }, []);
-  useRendererEvent("clearPreloadBuffer", handleClearPreloadBuffer, renderer);
-
   // Log LayerErrors to PanelLogs
   const handleLayerErrorUpdate = useCallback(
     (path: Path, errorId: string, errorMessage: string) => {
@@ -532,20 +523,20 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
   }, [topics, renderer]);
 
   const isPreloadingEnabled = isTransformPreloadEnabled(config);
-  // Number of transform messages dropped because the preload buffer is full
-  const [droppedTransformCount, setDroppedTransformCount] = useState(0);
+  // How many times the preloaded transform history was halved to fit the sample budget
+  const [transformDecimations, setTransformDecimations] = useState(0);
   useEffect(() => {
     setPanelAlert?.(
       "transform-preload",
-      droppedTransformCount > 0
+      transformDecimations > 0
         ? {
-            severity: "warn",
-            message: t("transformPreloadTruncatedAlert", { count: droppedTransformCount }),
-            tip: t("transformPreloadTruncatedAlertTip"),
+            severity: "info",
+            message: t("transformHistoryThinnedAlert"),
+            tip: t("transformHistoryThinnedAlertTip", { factor: 2 ** transformDecimations }),
           }
         : undefined,
     );
-  }, [droppedTransformCount, setPanelAlert, t]);
+  }, [transformDecimations, setPanelAlert, t]);
 
   // Tell the renderer if we are connected to a ROS data source
   useEffect(() => {
@@ -568,154 +559,116 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
   // Build a list of topics to subscribe to
   const [topicsToSubscribe, setTopicsToSubscribe] = useState<Subscription[] | undefined>(undefined);
 
-  const prevFilteredTopics = useRef<Subscription[]>([]);
+  // Transform topics, whose history is read with range reads instead of player preloading
+  const [transformTopics, setTransformTopics] = useState<readonly TransformTopic[]>([]);
 
-  // Only update when the list of topics to preload changes
-  // Reduce amount of calls to useLayoutEffect below
-  const transformTopicsToPreload = useMemo(() => {
-    if (!topicsToSubscribe) {
-      return [];
-    }
-
-    const filteredTopics = topicsToSubscribe.filter((sub) => sub.preload === true);
-
-    // Manual comparison for better performance than lodash.isEqual
-    const areTopicsEqual = (current: Subscription[], filtered: Subscription[]): boolean => {
-      if (current.length !== filtered.length) {
-        return false;
+  // After a seek past the preloaded history (or with preloading off), read the transforms just
+  // before the new time, so every frame is placed right without waiting for preloading.
+  const readTransformsAfterSeek = useCallback(
+    (time: bigint, knownFrameIds: readonly string[]) => {
+      seekReadRef.current?.abort();
+      const floor = transformsCompleteUntilRef.current;
+      if (!renderer || transformTopics.length === 0 || time <= floor) {
+        return;
       }
-      for (let i = 0; i < current.length; i++) {
-        const currentSub = current[i];
-        const filteredSub = filtered[i];
-        if (!currentSub || !filteredSub) {
-          continue;
-        }
-        if (currentSub.topic !== filteredSub.topic) {
-          return false;
-        }
-        if (currentSub.convertTo !== filteredSub.convertTo) {
-          return false;
-        }
-      }
-      return true;
-    };
+      const abort = new AbortController();
+      seekReadRef.current = abort;
+      void readTransformsBefore({
+        subscribeRange: context.unstable_subscribeMessageRange,
+        topics: transformTopics,
+        time,
+        floor,
+        signal: abort.signal,
+        onBatch: (batch) => {
+          renderer.addTransformMessages(batch);
+        },
+        isMissing: (windowStart) =>
+          knownFrameIds.some(
+            (id) =>
+              (renderer.transformTree.frame(id)?.latestTimeAtOrBefore(time) ?? -1n) < windowStart,
+          ),
+      });
+    },
+    // context is static, we're just using it to subscribe
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [renderer, transformTopics],
+  );
+  useEffect(() => () => seekReadRef.current?.abort(), [readTransformsAfterSeek]);
 
-    if (areTopicsEqual(prevFilteredTopics.current, filteredTopics)) {
-      return prevFilteredTopics.current;
-    }
-
-    prevFilteredTopics.current = filteredTopics;
-    return filteredTopics;
-  }, [topicsToSubscribe]);
-
-  // Subscribe to eligible and enabled topics for range messages
+  // Preloading: read the whole transform history into the renderer's transform tree
   useLayoutEffect(() => {
-    const transformTopics = transformTopicsToPreload;
-    const maxMessages: number =
-      config.scene.transforms?.maxPreloadMessages ?? MAX_TRANSFORM_MESSAGES;
-
-    // Exit if preloading is disabled
+    if (!renderer) {
+      return;
+    }
+    transformsCompleteUntilRef.current = -1n;
     if (!isPreloadingEnabled || transformTopics.length === 0) {
-      setAllFrames([]);
+      if (renderer.transformTree.isComplete()) {
+        // Leaving the complete history clears the tree, so read the current transforms again
+        const knownFrameIds = [...renderer.transformTree.frames().keys()];
+        renderer.transformTree.setComplete(false);
+        readTransformsAfterSeek(renderer.currentTime, knownFrameIds);
+      }
       setIsLoadingTransforms(false);
       setLoadedTransformCount(0);
-      setDroppedTransformCount(0);
+      setTransformDecimations(0);
       return;
     }
 
-    setIsLoadingTransforms(true);
-    setLoadedTransformCount(0);
-    setDroppedTransformCount(0);
-
-    const messageBuffer: MessageEvent[] = [];
-    const unsubscriptions: (() => void)[] = [];
-    const subscriptionPromises: Promise<void>[] = [];
-
-    // Use ref to avoid closure issues in async loop
-    const lastUpdateTimeRef = { current: 0 };
-    const UPDATE_DEBOUNCE_MS = 50; // Update UI every 50ms during loading
-
-    // Set to false on cleanup so a stale iterator can't overwrite the next preload's state
-    const effectState = { active: true };
-    // Topics whose source has a range; live sources never call back, so there's nothing to preload
-    const topicsWithRange = new Set<string>();
-
-    const updateAllFrames = (options?: { isComplete?: boolean }) => {
-      if (!effectState.active) {
-        return;
+    const abort = new AbortController();
+    // Newest time read per topic; the tree is complete up to the oldest of them
+    const readUntil = new Map(transformTopics.map(({ topic }) => [topic, -1n]));
+    const updateCompleteUntil = () => {
+      let until: bigint | undefined;
+      for (const time of readUntil.values()) {
+        until = until == undefined || time < until ? time : until;
       }
-      if (messageBuffer.length === 0) {
-        setIsLoadingTransforms(false);
-        return;
-      }
-
-      // Sort and trim messages
-      messageBuffer.sort((a, b) => compare(a.receiveTime, b.receiveTime));
-      const trimmedMessages =
-        messageBuffer.length > maxMessages ? messageBuffer.slice(0, maxMessages) : messageBuffer;
-
-      setAllFrames([...trimmedMessages]);
-      setLoadedTransformCount(trimmedMessages.length);
-      setDroppedTransformCount(messageBuffer.length - trimmedMessages.length);
-      setIsLoadingTransforms(options?.isComplete !== true);
+      transformsCompleteUntilRef.current = until ?? -1n;
+    };
+    let count = 0;
+    let lastUiUpdate = 0;
+    const updateUi = () => {
+      setLoadedTransformCount(count);
+      setTransformDecimations(renderer.transformTree.decimations);
     };
 
-    for (const topic of transformTopics) {
-      const promise = new Promise<void>((resolve) => {
-        const unsubscribe = context.unstable_subscribeMessageRange({
-          topic: topic.topic,
-          convertTo: topic.convertTo,
-          onNewRangeIterator: async (batchIterator) => {
-            topicsWithRange.add(topic.topic);
-            for await (const batch of batchIterator) {
-              if (!effectState.active) {
-                break;
-              }
-              if (batch.length > 0) {
-                messageBuffer.push(...batch);
-
-                // Progressive update: update UI periodically during loading
-                const now = Date.now();
-                if (now - lastUpdateTimeRef.current > UPDATE_DEBOUNCE_MS) {
-                  updateAllFrames();
-                  lastUpdateTimeRef.current = now;
-                }
-              }
-            }
-            resolve();
-          },
-        });
-        if (!topicsWithRange.has(topic.topic)) {
-          resolve();
+    setLoadedTransformCount(0);
+    void readTransformRange({
+      subscribeRange: context.unstable_subscribeMessageRange,
+      topics: transformTopics,
+      signal: abort.signal,
+      onBatch: (batch, topic) => {
+        // Only a source with ranges (a recording) has a complete history; live sources never get here
+        if (count === 0) {
+          renderer.transformTree.setComplete(true);
+          setIsLoadingTransforms(true);
         }
-        unsubscriptions.push(unsubscribe);
-      });
-      subscriptionPromises.push(promise);
-    }
-
-    if (topicsWithRange.size === 0) {
-      setIsLoadingTransforms(false);
-    } else {
-      // Final update after all topics complete
-      void Promise.all(subscriptionPromises).then(() => {
-        updateAllFrames({ isComplete: true });
-      });
-    }
+        renderer.addTransformMessages(batch);
+        readUntil.set(topic, toNanoSec(batch[batch.length - 1]!.receiveTime));
+        updateCompleteUntil();
+        count += batch.length;
+        const now = Date.now();
+        if (now - lastUiUpdate > 100) {
+          lastUiUpdate = now;
+          updateUi();
+        }
+      },
+      onTopicDone: (topic) => {
+        readUntil.set(topic, BigInt(Number.MAX_SAFE_INTEGER) * 1_000_000_000n);
+        updateCompleteUntil();
+      },
+    }).then(() => {
+      if (!abort.signal.aborted && count > 0) {
+        updateUi();
+        setIsLoadingTransforms(false);
+      }
+    });
 
     return () => {
-      effectState.active = false;
-      for (const unsubscribe of unsubscriptions) {
-        unsubscribe();
-      }
+      abort.abort();
     };
     // in this case context is static, we're just using it to subscribe
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    isPreloadingEnabled,
-    config.scene.transforms?.maxPreloadMessages,
-    transformTopicsToPreload,
-    reloadPreloadTrigger,
-  ]);
+  }, [renderer, isPreloadingEnabled, transformTopics, readTransformsAfterSeek]);
 
   // Establish a connection to the message pipeline with context.watch and context.onRender
   useLayoutEffect(() => {
@@ -778,6 +731,7 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
     }
 
     const newSubscriptions: Subscription[] = [];
+    const newTransformTopics: TransformTopic[] = [];
 
     const addSubscription = (
       topic: Topic,
@@ -806,12 +760,10 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
           rendererSubscription.preload !== true && latestOnly
             ? { mode: "latest-per-render-tick" as const }
             : undefined;
-        newSubscriptions.push({
-          topic: topic.name,
-          preload: rendererSubscription.preload,
-          convertTo,
-          sampling,
-        });
+        newSubscriptions.push({ topic: topic.name, convertTo, sampling });
+        if (rendererSubscription.preload === true) {
+          newTransformTopics.push({ topic: topic.name, convertTo });
+        }
       }
     };
 
@@ -832,6 +784,8 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
     // Sort the list to make comparisons stable
     newSubscriptions.sort((a, b) => a.topic.localeCompare(b.topic));
     setTopicsToSubscribe((prev) => (_.isEqual(prev, newSubscriptions) ? prev : newSubscriptions));
+    newTransformTopics.sort((a, b) => a.topic.localeCompare(b.topic));
+    setTransformTopics((prev) => (_.isEqual(prev, newTransformTopics) ? prev : newTransformTopics));
   }, [
     topics,
     config.topics,
@@ -900,10 +854,18 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
 
     renderer.setCurrentTime(newTimeNs);
     if (didSeek) {
+      // Frames placed before the seek, collected before handleSeek may clear them
+      const knownFrameIds: string[] = [];
+      for (const frame of renderer.transformTree.frames().values()) {
+        if (frame.parent()) {
+          knownFrameIds.push(frame.id);
+        }
+      }
       renderer.handleSeek(oldTimeNs);
+      readTransformsAfterSeek(newTimeNs, knownFrameIds);
       setDidSeek(false);
     }
-  }, [currentTime, renderer, didSeek]);
+  }, [currentTime, renderer, didSeek, readTransformsAfterSeek]);
 
   // Keep the renderer colorScheme and backgroundColor up to date
   useEffect(() => {
@@ -912,19 +874,6 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
       renderRef.current.needsRender = true;
     }
   }, [backgroundColor, colorScheme, renderer]);
-
-  // Handle preloaded messages and render a frame if new messages are available
-  // Should be called before `messages` is handled
-  useEffect(() => {
-    // we want didseek to be handled by the renderer first so that transforms aren't cleared after the cursor has been brought up
-    if (!renderer || !currentTime) {
-      return;
-    }
-    const newMessagesHandled = renderer.handleAllFramesMessages(allFrames);
-    if (newMessagesHandled) {
-      renderRef.current.needsRender = true;
-    }
-  }, [renderer, currentTime, allFrames]);
 
   // Handle messages and render a frame if new messages are available
   useEffect(() => {
@@ -1228,11 +1177,7 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
         />
         {isLoadingTransforms && config.scene.enableStats === true && (
           <div className={classes.loadingTransforms}>
-            Loading transforms: {loadedTransformCount.toLocaleString()}{" "}
-            {loadedTransformCount >=
-            (config.scene.transforms?.maxPreloadMessages ?? MAX_TRANSFORM_MESSAGES)
-              ? `(max ${(config.scene.transforms?.maxPreloadMessages ?? MAX_TRANSFORM_MESSAGES).toLocaleString()})`
-              : "messages"}
+            Loading transforms: {loadedTransformCount.toLocaleString()} messages
           </div>
         )}
         {contextStatus !== "ok" && (

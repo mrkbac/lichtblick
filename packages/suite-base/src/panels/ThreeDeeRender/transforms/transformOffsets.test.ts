@@ -3,8 +3,6 @@
 import { mat4 } from "gl-matrix";
 import * as THREE from "three";
 
-import { ObjectPool } from "@lichtblick/den/collection";
-
 import { CoordinateFrame } from "./CoordinateFrame";
 import { Transform } from "./Transform";
 import { TransformTree } from "./TransformTree";
@@ -38,7 +36,7 @@ function expectVecClose(actual: readonly number[], expected: readonly number[]) 
 describe("transformOffsets", () => {
   it("applyOffset matches what CoordinateFrame renders", () => {
     const offset = { xyz: [0.1, -0.2, 0.3] as Vec3, rpy: [1, 2, 3] as Vec3 };
-    const tree = new TransformTree(new ObjectPool(Transform.Empty));
+    const tree = new TransformTree();
     tree.addTransform("child", "parent", 0n, new Transform(recordedPos, recordedRot));
     const child = tree.frame("child")!;
     child.offsetPosition = offset.xyz;
