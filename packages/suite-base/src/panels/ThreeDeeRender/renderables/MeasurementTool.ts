@@ -208,6 +208,8 @@ export class MeasurementTool extends SceneExtension<Renderable, MeasurementToolE
   #latestSnap = new WeakMap<THREE.Vector3, number>();
   /** Placement of clicked points, in click order */
   #clicks: Promise<void> = Promise.resolve();
+  /** Bumped when measuring stops, so shortcuts still waiting on clicks don't outlive it */
+  #session = 0;
   /** Cursor point of a new draft; it joins the draft's points once it first snaps somewhere */
   #firstPreview = new THREE.Vector3();
   #suppressClick = false;
@@ -268,6 +270,7 @@ export class MeasurementTool extends SceneExtension<Renderable, MeasurementToolE
     if (this.state === "idle") {
       return;
     }
+    this.#session++;
     this.#finishDraft();
     this.#discardDraft();
     this.state = "idle";
@@ -896,12 +899,14 @@ export class MeasurementTool extends SceneExtension<Renderable, MeasurementToolE
 
   /**
    * Run `fn` once the clicks placed so far have landed, unless the draft was replaced or discarded
-   * meanwhile. A draft its last click completed still counts: it's then the selected measurement.
+   * meanwhile or measuring stopped. A draft its last click completed still counts: it's then the
+   * selected measurement.
    */
   #afterClicks(fn: () => void): void {
     const draft = this.#draft;
+    const session = this.#session;
     this.#clicks = this.#clicks.then(() => {
-      if (this.#draft === draft || draft?.complete === true) {
+      if (session === this.#session && (this.#draft === draft || draft?.complete === true)) {
         fn();
       }
     });

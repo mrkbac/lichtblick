@@ -144,6 +144,26 @@ describe("MeasurementTool", () => {
     expect(tool.measurements).toHaveLength(1);
   });
 
+  it("drops a pending Delete once measuring stops", async () => {
+    const { tool, listeners, picks, canvas } = await setup();
+    tool.startMeasuring("polyline");
+    picks.push(new THREE.Vector3(1, 1, 0), new THREE.Vector3(2, 1, 0));
+    listeners.get("click")!(new THREE.Vector2(10, 10));
+    await flushPicks();
+    listeners.get("click")!(new THREE.Vector2(20, 10));
+    await flushPicks();
+    picks.push(new THREE.Vector3(3, 1, 0));
+    listeners.get("click")!(new THREE.Vector2(30, 10));
+    // Delete while that click is pending, then stop (saving the polyline) and start a new draft
+    document.body.appendChild(canvas.parentElement!);
+    canvas.dispatchEvent(new KeyboardEvent("keydown", { key: "Delete", bubbles: true }));
+    canvas.parentElement!.remove();
+    tool.stopMeasuring();
+    tool.startMeasuring("distance");
+    await flushPicks();
+    expect(tool.measurements).toHaveLength(2);
+  });
+
   it("marks a measurement unavailable while its transform is missing and recovers", async () => {
     const { tool, transformTree, addBase, frame } = await setup();
     expect(tool.measurements).toHaveLength(1);
