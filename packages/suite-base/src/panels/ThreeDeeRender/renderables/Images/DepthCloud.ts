@@ -8,6 +8,7 @@ import {
   normalize,
   select,
   storage,
+  texture as sampleTexture,
   textureLoad,
   uint,
   uniform,
@@ -39,7 +40,8 @@ export class DepthCloud extends RasterPoints {
   /** Textures the source was built with; replacing a texture rebuilds it */
   #sourceTextures: [THREE.Texture, THREE.Texture] | undefined;
   readonly #width = uniform(1, "uint");
-  readonly #colorScale = uniform(new THREE.Vector2(1, 1));
+  /** 1 / depth image size: texture coordinates of depth pixels */
+  readonly #depthTexel = uniform(new THREE.Vector2(1, 1));
   readonly #euclidean = uniform(0, "uint");
 
   public constructor(name: string) {
@@ -96,6 +98,7 @@ export class DepthCloud extends RasterPoints {
           : new THREE.DataTexture(image.data, image.width, image.height, THREE.RGBAFormat);
       texture.flipY = false;
       texture.generateMipmaps = false;
+      texture.minFilter = texture.magFilter = THREE.LinearFilter;
       texture.colorSpace = THREE.NoColorSpace;
       texture.needsUpdate = true;
       this.#imageColorTexture = texture;
@@ -155,7 +158,7 @@ export class DepthCloud extends RasterPoints {
     this.#sourceTextures = [depthTexture, colorTexture];
     const rayNode = storage(rays, "float", rays.count).toReadOnly();
     const width = this.#width;
-    const colorScale = this.#colorScale;
+    const depthTexel = this.#depthTexel;
     const euclidean = this.#euclidean;
     this.setSource((i) => {
       const pixel = ivec2(int(i.mod(width)), int(i.div(width)));
@@ -170,9 +173,9 @@ export class DepthCloud extends RasterPoints {
       const valid = depth.greaterThan(0).and(depth.lessThan(float(3.4e38)));
       const direction = select(euclidean.equal(1), normalize(ray), ray);
       const position = direction.mul(depth);
-      // The color image may have another size than the depth image
-      const colorPixel = ivec2(vec2(pixel).mul(colorScale));
-      const c = textureLoad(colorTexture, colorPixel).mul(255);
+      // Sampled (bilinear) at the depth pixel's center: the color image may have another size
+      const uv = vec2(pixel).add(0.5).mul(depthTexel);
+      const c = sampleTexture(colorTexture, uv).level(float(0)).mul(255).add(0.5);
       const color = uint(c.x)
         .bitOr(uint(c.y).shiftLeft(8))
         .bitOr(uint(c.z).shiftLeft(16))
@@ -195,11 +198,7 @@ export class DepthCloud extends RasterPoints {
       this.#buildSource();
     }
     const depthImage = depth.image as { width: number; height: number };
-    const colorImage = color.image as { width: number; height: number };
-    this.#colorScale.value.set(
-      colorImage.width / depthImage.width,
-      colorImage.height / depthImage.height,
-    );
+    this.#depthTexel.value.set(1 / depthImage.width, 1 / depthImage.height);
     // Image colors are sRGB bytes; depth colors are linear
     this.encoding = this.#useImageColors ? "srgb" : "linear";
     this.visible = this.#depthTexture != undefined;

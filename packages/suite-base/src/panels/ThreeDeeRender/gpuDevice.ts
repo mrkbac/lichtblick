@@ -13,7 +13,11 @@ let sharedDevice: Promise<GPUDevice | undefined> | undefined;
  * positions alone). A lost device is replaced on the next request.
  */
 export async function getGpuDevice(): Promise<GPUDevice | undefined> {
-  sharedDevice ??= requestDevice();
+  // A failed request isn't cached, so a reopened panel tries again
+  sharedDevice ??= requestDevice().catch((error: unknown) => {
+    sharedDevice = undefined;
+    throw error;
+  });
   return await sharedDevice;
 }
 

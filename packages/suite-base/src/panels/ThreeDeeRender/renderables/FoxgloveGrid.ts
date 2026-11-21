@@ -28,6 +28,7 @@ import {
   normalize,
   positionGeometry,
   select,
+  step,
   texture as textureNode,
   transformNormalToView,
   uniform,
@@ -243,6 +244,7 @@ export class FoxgloveGridRenderable extends Renderable<FoxgloveGridUserData> {
       texture.magFilter = filter;
       texture.needsUpdate = true;
     }
+    this.userData.uniforms.linear.value = settings.interpolation === "linear" ? 1 : 0;
 
     // Same approach as images drawn behind the scene: drawn first, without depth, so every
     // other object ends up on top.
@@ -771,6 +773,8 @@ function createUniforms(map: THREE.DataTexture) {
     lighting: uniform(1),
     /** Linear RGBA; alpha 0 hides the cell borders */
     lineColor: uniform(new THREE.Vector4()),
+    /** 1 for Linear interpolation, 0 for Nearest; only read where the shader filters itself */
+    linear: uniform(1),
   };
 }
 
@@ -848,12 +852,28 @@ function createMaterial(u: GridUniforms, topic: string): THREE.MeshBasicNodeMate
     return vec3(cornerUv, cornerHeight(corner));
   })();
 
+  // Without float32-filterable, three reads a float texture as a single texel whatever its filter,
+  // which would ignore Linear interpolation for scalar grids, so filter in the shader there
+  const sampleMap = (builder: THREE.NodeBuilder): THREE.Node<"vec4"> => {
+    if (builder.renderer.hasFeature("float32-filterable")) {
+      return u.map.sample(vUv);
+    }
+    const texel = vUv.mul(u.gridSize).sub(0.5);
+    const base = floor(texel);
+    const frac = fract(texel);
+    // Nearest takes the closest of the four texels
+    const f = mix(step(0.5, frac), frac, u.linear);
+    const load = (dx: number, dy: number) =>
+      u.map.load(ivec2(clamp(base.add(vec2(dx, dy)), vec2(0, 0), u.gridSize.sub(1))));
+    return mix(mix(load(0, 0), load(1, 0), f.x), mix(load(0, 1), load(1, 1), f.x), f.y);
+  };
+
   material.colorNode = Fn((builder: THREE.NodeBuilder) => {
     if (elevated(builder)) {
       const cell = ivec2(min(floor(vUv.mul(u.gridSize)), u.gridSize.sub(1)));
       Discard(cellHeight(cell).lessThanEqual(NO_ELEVATION_THRESHOLD));
     }
-    const color = u.map.sample(vUv);
+    const color = sampleMap(builder);
     const t = clamp(color.r.sub(u.minValue).div(max(u.maxValue.sub(u.minValue), 1e-5)), 0, 1);
     // Gradient with pre-multiplied alpha, like CSS linear gradients
     const minColor = vec4(u.minGradientColor.rgb.mul(u.minGradientColor.a), u.minGradientColor.a);

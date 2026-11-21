@@ -100,6 +100,11 @@ export class PointRaster {
   #screen: ScreenBuffers;
   #screenVersion = 0;
   #drawnSets = 0;
+  // Per-frame scratch, reused (prepare runs every frame, twice with a selection)
+  readonly #size = new THREE.Vector2();
+  readonly #infoFloats = new Float32Array(this.#setInfo.array.buffer);
+  readonly #drawn: RasterPoints[] = [];
+  readonly #passes: SetPasses[] = [];
   /** Camera layers the screen buffers were last rasterized for */
   public preparedLayers = -1;
 
@@ -138,15 +143,34 @@ export class PointRaster {
    * drawing the scene with the same camera.
    */
   public prepare(camera: THREE.Camera): void {
-    const renderer = this.#renderer;
+    this.#rasterize(camera, undefined);
     this.preparedLayers = camera.layers.mask;
-    const size = renderer.getDrawingBufferSize(new THREE.Vector2());
+  }
+
+  /**
+   * Rasterizes only the point sets a pick can hit with `camera`: pickable ones (not
+   * `userData.picking = false`) outside `hidden`. The depth pass keeps one point per pixel, so
+   * sets a pick must see through can't take part at all. Call right before picking; the next
+   * prepare() rasterizes for display again.
+   */
+  public preparePick(camera: THREE.Camera, hidden: ReadonlySet<THREE.Object3D>): void {
+    this.#rasterize(camera, hidden);
+    this.preparedLayers = -1;
+  }
+
+  /** `pickHidden`: rasterize for a pick that skips these objects (see preparePick) */
+  #rasterize(camera: THREE.Camera, pickHidden: ReadonlySet<THREE.Object3D> | undefined): void {
+    const renderer = this.#renderer;
+    const size = renderer.getDrawingBufferSize(this.#size);
     const width = Math.max(1, size.x);
     const height = Math.max(1, size.y);
     if (width * height > this.#screen.pixels) {
-      this.#screen = this.#allocateScreen(width * height);
-      this.#buildMaterials();
+      this.#replaceScreen(width * height);
     }
+    // WebGPU rejects a binding above the device limit, which would invalidate the whole frame
+    const maxBinding =
+      (renderer.backend as { device?: GPUDevice | null }).device?.limits
+        .maxStorageBufferBindingSize ?? Infinity;
     this.#width.value = width;
     this.#height.value = height;
     this.#projection.value.copy(camera.projectionMatrix);
@@ -155,8 +179,9 @@ export class PointRaster {
 
     const pixelRatio = renderer.getPixelRatio();
     const info = this.#setInfo.array as Uint32Array;
-    const infoFloats = new Float32Array(info.buffer);
-    const drawn: RasterPoints[] = [];
+    const infoFloats = this.#infoFloats;
+    const drawn = this.#drawn;
+    drawn.length = 0;
     let radius = 0;
     // Every visible point set in the scene; no registration, so nothing can leak
     this.#scene.traverseVisible((object) => {
@@ -169,7 +194,10 @@ export class PointRaster {
         points.drawCount === 0 ||
         (points.capacity() === 0 && !points.source()) ||
         !points.layers.test(camera.layers) ||
-        drawn.length >= MAX_POINT_SETS
+        drawn.length >= MAX_POINT_SETS ||
+        points.positionAttribute().array.byteLength > maxBinding ||
+        (pickHidden != undefined &&
+          (points.userData.picking === false || isInside(points, pickHidden)))
       ) {
         return;
       }
@@ -191,13 +219,15 @@ export class PointRaster {
     }
 
     void renderer.compute(this.#screen.clear, width * height);
-    const passes = drawn.map((points, index) => {
+    const passes = this.#passes;
+    passes.length = 0;
+    for (const [index, points] of drawn.entries()) {
       const set = this.#passesFor(points);
       set.setBits.value = index << SET_SHIFT;
       set.count.value = points.drawCount;
       set.modelView.value.multiplyMatrices(camera.matrixWorldInverse, points.matrixWorld);
-      return set;
-    });
+      passes.push(set);
+    }
     for (const [index, set] of passes.entries()) {
       void renderer.compute(set.depth, drawn[index]!.drawCount);
     }
@@ -206,11 +236,32 @@ export class PointRaster {
     }
   }
 
+  /** Grows the screen buffers, freeing the old ones and every set's passes that bind them */
+  #replaceScreen(pixels: number): void {
+    const old = this.#screen;
+    this.#screen = this.#allocateScreen(pixels);
+    this.#buildMaterials();
+    // All sets, not just visible ones: a hidden set's passes would keep the old buffers alive
+    this.#scene.traverse((object) => {
+      if ((object as Partial<RasterPoints>).isRasterPoints === true) {
+        releaseRasterData(object as RasterPoints);
+      }
+    });
+    old.clear.dispose();
+    for (const buffer of [old.keys, old.colors, old.ids]) {
+      buffer.value.dispose();
+    }
+  }
+
   #allocateScreen(pixels: number): ScreenBuffers {
     this.#screenVersion++;
     const keys = instancedArray(pixels, "uint").toAtomic();
+    const active = this.#width.mul(this.#height);
     const clear = Fn(() => {
-      atomicStore(keys.element(instanceIndex), uint(EMPTY));
+      // The dispatch is rounded up to whole workgroups
+      If(instanceIndex.lessThan(active), () => {
+        atomicStore(keys.element(instanceIndex), uint(EMPTY));
+      });
     })().computeKernel();
     return {
       pixels,
@@ -228,27 +279,31 @@ export class PointRaster {
     this.#quad.material.dispose();
 
     const vertexNode = vec4(positionGeometry.xy, 0, 1);
+    // Like three's own depth: orthographic views are never logarithmic
+    const depthOf = (viewDistance: THREE.Node<"float">) => {
+      const viewZ = viewDistance.negate();
+      return select(
+        this.#isOrthographic.equal(1),
+        viewZToOrthographicDepth(viewZ, cameraNear, cameraFar),
+        this.#logDepth
+          ? viewZToLogarithmicDepth(viewZ, cameraNear, cameraFar)
+          : viewZToPerspectiveDepth(viewZ, cameraNear, cameraFar),
+      );
+    };
     const resolved = this.#resolve(ivec2(screenCoordinate.xy));
-    const viewZ = resolved.viewDistance.negate();
-    const depthNode = this.#logDepth
-      ? viewZToLogarithmicDepth(viewZ, cameraNear, cameraFar)
-      : select(
-          this.#isOrthographic.equal(1),
-          viewZToOrthographicDepth(viewZ, cameraNear, cameraFar),
-          viewZToPerspectiveDepth(viewZ, cameraNear, cameraFar),
-        );
 
     const material = new THREE.MeshBasicNodeMaterial();
     material.vertexNode = vertexNode;
     material.colorNode = resolved.color;
-    material.depthNode = depthNode;
+    material.depthNode = depthOf(resolved.viewDistance);
     this.#quad.material = material;
 
-    // Reports the point set and point under the cursor, not the quad
+    // Reports the point set and point under the cursor, not the quad. The pick target is 1x1, so
+    // its screen coordinate is not the cursor's pixel
     const picked = this.#resolve(ivec2(pickPixel));
     const pick = new THREE.MeshBasicNodeMaterial();
     pick.vertexNode = vertexNode;
-    pick.depthNode = depthNode;
+    pick.depthNode = depthOf(picked.viewDistance);
     pick.outputNode = pickOutput(picked.objectId, picked.index, picked.viewDistance);
     this.#quad.userData.pickingMaterial = pick;
   }
@@ -258,8 +313,7 @@ export class PointRaster {
     if (passes?.version === points.version() && passes.screenVersion === this.#screenVersion) {
       return passes;
     }
-    passes?.depth.dispose();
-    passes?.color.dispose();
+    releaseRasterData(points);
     const modelView = passes?.modelView ?? uniform(new THREE.Matrix4());
     const count = passes?.count ?? uniform(0, "uint");
     const setBits = passes?.setBits ?? uniform(0, "uint");
@@ -452,6 +506,23 @@ export class PointRaster {
       index: id.bitAnd(MAX_SET_POINTS - 1),
     };
   }
+}
+
+/** Frees the raster's passes for `points` (they bind its buffers); they are rebuilt on use */
+export function releaseRasterData(points: RasterPoints): void {
+  const passes = points.rasterData as SetPasses | undefined;
+  passes?.depth.dispose();
+  passes?.color.dispose();
+  points.rasterData = undefined;
+}
+
+function isInside(object: THREE.Object3D, ancestors: ReadonlySet<THREE.Object3D>): boolean {
+  for (let o: THREE.Object3D | null = object; o; o = o.parent) {
+    if (ancestors.has(o)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 // three's TSL types don't type bitcasts

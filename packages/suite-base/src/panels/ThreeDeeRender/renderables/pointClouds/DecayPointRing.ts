@@ -5,6 +5,7 @@ import * as THREE from "three/webgpu";
 
 import type { RosValue } from "@lichtblick/suite-base/players/types";
 
+import { MAX_SET_POINTS } from "./PointRaster";
 import { POSE_FLOATS, PointColorEncoding, PointShape, RasterPoints } from "./RasterPoints";
 import { BaseUserData, Renderable } from "../../Renderable";
 import type { Renderer } from "../../Renderer";
@@ -182,7 +183,8 @@ export class DecayPointRing extends Renderable<BaseUserData, /*TRenderer=*/ unde
    */
   public push(info: RingScanInfo, positions: Float32Array, colors: Uint8Array): void {
     const count = positions.length / 3;
-    if (count === 0) {
+    // One point set can't address more; such a scan is only ever drawn as the latest
+    if (count === 0 || count > MAX_SET_POINTS) {
       return;
     }
     if (this.#freeSlots.length === 0) {
@@ -356,7 +358,7 @@ export class DecayPointRing extends Renderable<BaseUserData, /*TRenderer=*/ unde
       return gap;
     }
     // A single scan bigger than the budget still fits; the budget only limits accumulation
-    const maxCapacity = Math.max(this.#maxPoints, count);
+    const maxCapacity = Math.min(MAX_SET_POINTS, Math.max(this.#maxPoints, count));
     if (this.#capacity < maxCapacity) {
       // Resizing packs live scans from 0, so the new scan goes right after them
       this.#resize(

@@ -16,7 +16,7 @@ async function flushPicks(): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, 0));
 }
 
-async function setup(kind: "distance" | "profile" = "distance") {
+function createTool() {
   const transformTree = new TransformTree(new ObjectPool(Transform.Empty));
   const addBase = () => transformTree.addTransform("base", "map", 0n, Transform.Identity());
   addBase();
@@ -34,6 +34,7 @@ async function setup(kind: "distance" | "profile" = "distance") {
     setSelectedRenderable: vi.fn(),
     currentTime: 0n,
     gl: { domElement: canvas },
+    cameraHandler: { getActiveCamera: () => new THREE.PerspectiveCamera() },
     input: {
       canvasSize: new THREE.Vector2(100, 100),
       addListener: (event: string, fn: (cursor: THREE.Vector2) => void) => listeners.set(event, fn),
@@ -44,7 +45,8 @@ async function setup(kind: "distance" | "profile" = "distance") {
         // Profile samples look straight down onto a surface at z = 2
         return out.set(camera.position.x, camera.position.y, 2);
       }
-      return out.copy(picks.shift()!);
+      const pick = picks.shift();
+      return pick ? out.copy(pick) : undefined;
     },
   } as unknown as Renderer;
 
@@ -53,6 +55,11 @@ async function setup(kind: "distance" | "profile" = "distance") {
     tool.startFrame(0n, "base", "map");
   };
   frame();
+  return { tool, transformTree, addBase, frame, listeners, picks };
+}
+
+async function setup(kind: "distance" | "profile" = "distance") {
+  const { tool, transformTree, addBase, frame, listeners, picks } = createTool();
   tool.startMeasuring(kind);
   picks.push(new THREE.Vector3(0, 0, 0), new THREE.Vector3(3, 4, 0));
   listeners.get("click")!(new THREE.Vector2(10, 10));
@@ -71,6 +78,24 @@ async function setup(kind: "distance" | "profile" = "distance") {
 }
 
 describe("MeasurementTool", () => {
+  it("places a clicked point even when a cursor preview starts while its pick is pending", async () => {
+    const { tool, frame, listeners, picks } = createTool();
+    tool.startMeasuring("distance");
+    const cursor = new THREE.Vector2(10, 10);
+    picks.push(new THREE.Vector3(0, 0, 0), new THREE.Vector3(9, 9, 9));
+    listeners.get("mousemove")!(cursor);
+    listeners.get("click")!(cursor);
+    frame(); // the preview for the moved cursor picks (9, 9, 9) after the click's pick
+    await flushPicks();
+    picks.push(new THREE.Vector3(3, 4, 0));
+    listeners.get("click")!(new THREE.Vector2(20, 20));
+    await flushPicks();
+    frame();
+    expect(tool.measurements).toHaveLength(1);
+    expect(tool.measurements[0]!.summary.details[0]).toBe("P1: 0.000, 0.000, 0.000");
+    expect(tool.measurements[0]!.summary.label).toContain("5");
+  });
+
   it("marks a measurement unavailable while its transform is missing and recovers", async () => {
     const { tool, transformTree, addBase, frame } = await setup();
     expect(tool.measurements).toHaveLength(1);

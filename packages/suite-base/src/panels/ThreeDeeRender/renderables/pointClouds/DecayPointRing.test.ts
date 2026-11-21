@@ -10,6 +10,12 @@ import { makePose, Pose } from "@lichtblick/suite-base/panels/ThreeDeeRender/tra
 import { DecayPointRing } from "./DecayPointRing";
 import { pointStyle } from "../pointExtensionUtils";
 
+// Small enough to test the per-set point limit without huge arrays
+vi.mock("./PointRaster", async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  MAX_SET_POINTS: 4_000_000,
+}));
+
 const style = pointStyle({ ...DEFAULT_POINT_SETTINGS, visible: true });
 
 /** Places each scan at x = its message time, so pose rows are easy to check */
@@ -210,11 +216,17 @@ describe("DecayPointRing", () => {
     expect(position.updateRanges).toHaveLength(1);
 
     // e.g. while nothing is drawn (a hidden tab)
-    for (let i = 2; i <= 100; i++) {
+    for (let i = 2; i <= 66; i++) {
+      push(ring, BigInt(i), 1);
+    }
+    // The full upload stays queued ahead of later edits instead of being replaced by them
+    expect(position.updateRanges[0]).toEqual({ start: 0, count: position.array.length });
+    expect(position.updateRanges).toHaveLength(2);
+    for (let i = 67; i <= 100; i++) {
       push(ring, BigInt(i), 1);
     }
     expect(points.positionAttribute()).toBe(position); // no regrow
-    expect(position.updateRanges.length).toBeLessThan(64);
+    expect(position.updateRanges.length).toBeLessThanOrEqual(64);
     expect(position.version).toBeGreaterThan(0);
   });
 
@@ -229,20 +241,38 @@ describe("DecayPointRing", () => {
   });
 
   it("shrinks the buffers once the history needs far less, keeping the live scans", () => {
-    const { ring, positions } = makeRing({ maxEntries: 100, maxPoints: 5_000_000 });
+    const { ring, points } = makeRing({ maxEntries: 100, maxPoints: 5_000_000 });
     push(ring, 1n, 1_000_000);
     push(ring, 2n, 1_000_000);
     push(ring, 3n, 1_000_000);
     push(ring, 4n, 10_000);
-    expect(positions().length / 3).toBeGreaterThanOrEqual(3_010_000);
+    expect(ring.capacity()).toBeGreaterThanOrEqual(3_010_000);
 
     ring.expire(4n); // e.g. the decay time was lowered
 
     expect(ring.pointCount()).toBe(10_000);
-    expect(positions().length / 3).toBe(15_000);
-    expect(positions().slice(0, 3)).toEqual([4, 0, 0]);
+    expect(ring.capacity()).toBe(15_000);
+    expect(points.positionAttribute().array.length).toBe(45_000);
+    expect(Array.from(points.positionAttribute().array.subarray(0, 3))).toEqual([4, 0, 0]);
     ring.updatePoses(transformTree, 0n, "map", "map");
     expect(ring.drawCount()).toBe(10_000);
+  });
+
+  it("grows no larger than one point set can hold, and skips scans that can't fit at all", () => {
+    const { ring } = makeRing({ maxEntries: 100, maxPoints: 70_000_000 });
+    const pushZeros = (time: bigint, count: number) => {
+      ring.push(
+        { receiveTime: time, messageTime: time, frameId: "lidar", pose: makePose() },
+        new Float32Array(count * 3),
+        new Uint8Array(count * 4),
+      );
+    };
+
+    pushZeros(1n, 3_000_000); // growth would ask for 6M points
+    pushZeros(2n, 5_000_000);
+
+    expect(ring.capacity()).toBe(4_000_000);
+    expect(ring.scanCount()).toBe(1);
   });
 
   it("applies a lowered point budget at runtime", () => {

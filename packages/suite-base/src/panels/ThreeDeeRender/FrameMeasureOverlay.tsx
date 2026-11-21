@@ -124,11 +124,18 @@ export function FrameMeasureOverlay({
       return;
     }
     renderer.framePicking = true;
+    // Picks resolve asynchronously: results from after this session ended, or from a hover that a
+    // newer one replaced, are dropped, and a failed pick changes nothing
+    let active = true;
     const frameAt = async (cursor: THREE.Vector2) =>
-      frameAxes.frameIdOf(await renderer.pickObject(cursor));
+      frameAxes.frameIdOf(await renderer.pickObject(cursor.clone()).catch(() => undefined));
+    // Clicks are applied in click order, so From and To can't swap when readbacks finish out of order
+    let clicks = Promise.resolve();
     const onClick = (cursor: THREE.Vector2) => {
-      void frameAt(cursor).then((frame) => {
-        if (frame == undefined) {
+      const picked = frameAt(cursor);
+      clicks = clicks.then(async () => {
+        const frame = await picked;
+        if (!active || frame == undefined) {
           return;
         }
         const current = latest.current;
@@ -137,12 +144,19 @@ export function FrameMeasureOverlay({
         const next = pickFrame(base, frame);
         setMeasurement(next);
         if (next.from != undefined && next.to != undefined) {
+          active = false;
           onStopPicking();
         }
       });
     };
+    let hoverRequest = 0;
     const onMove = _.throttle((cursor: THREE.Vector2) => {
-      void frameAt(cursor).then(setHovered);
+      const request = ++hoverRequest;
+      void frameAt(cursor).then((frame) => {
+        if (active && request === hoverRequest) {
+          setHovered(frame);
+        }
+      });
     }, HOVER_PICK_INTERVAL_MS);
     const onKeyDown = (event: KeyboardEvent) => {
       if (isThreeDeeShortcut("3d.finishMeasurement", event)) {
@@ -153,6 +167,7 @@ export function FrameMeasureOverlay({
     renderer.input.on("mousemove", onMove);
     window.addEventListener("keydown", onKeyDown);
     return () => {
+      active = false;
       renderer.framePicking = false;
       renderer.input.off("click", onClick);
       renderer.input.off("mousemove", onMove);

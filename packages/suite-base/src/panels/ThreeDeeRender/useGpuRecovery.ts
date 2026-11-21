@@ -48,13 +48,26 @@ export function useGpuRecovery(renderer: Renderer | undefined): {
     const onUnsupported = () => {
       setStatus("unsupported");
     };
-    // Initialization may have failed before this effect subscribed
-    if (renderer.gpuError) {
-      onUnsupported();
-    }
+    // Startup settles here, even when it failed or lost the device before this effect subscribed.
+    // A renderer that started fine clears the status left by the one it replaced (e.g. "paused"
+    // when the stats setting rebuilt the renderer without `recreate`).
+    let current = true;
+    void renderer.ready.then(() => {
+      if (!current) {
+        return;
+      }
+      if (renderer.gpuError) {
+        onUnsupported();
+      } else if (renderer.gpuLost) {
+        onLost();
+      } else {
+        setStatus("ok");
+      }
+    });
     renderer.addListener("gpuLost", onLost);
     renderer.addListener("gpuUnsupported", onUnsupported);
     return () => {
+      current = false;
       renderer.removeListener("gpuLost", onLost);
       renderer.removeListener("gpuUnsupported", onUnsupported);
     };

@@ -206,6 +206,8 @@ export class OccupancyGrids extends SceneExtension<OccupancyGridRenderable> {
       texture = createTexture(occupancyGrid);
       renderable.userData.texture = texture;
       renderable.userData.material.map = texture;
+      // Picking variants are clones of this material; bump its version so they pick up the new map
+      renderable.userData.material.needsUpdate = true;
     }
 
     // Update the occupancy grid texture

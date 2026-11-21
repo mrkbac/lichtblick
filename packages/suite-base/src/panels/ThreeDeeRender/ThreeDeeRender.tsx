@@ -1211,7 +1211,7 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
         {contextStatus !== "ok" && (
           <div className={classes.contextLost} role="status">
             {contextStatus === "unsupported" ? (
-              t("webGpuRequired")
+              (renderer?.gpuError?.message ?? t("webGpuRequired"))
             ) : contextStatus === "restoring" ? (
               t("graphicsContextRestoring")
             ) : (

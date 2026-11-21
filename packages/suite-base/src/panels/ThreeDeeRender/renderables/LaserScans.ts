@@ -118,7 +118,7 @@ class LaserScanHistoryRenderable extends Renderable<LaserScanHistoryUserData> {
       {
         receiveTime: -1n, // unused
         messageTime: -1n, // unused
-        frameId: "", //unused
+        frameId: "", // the scan's frame, set with each scan for the decay history
         pose: userData.latestLaserScan.pose,
         settingsPath: [], //unused
         settings: { visible: true }, //unused
@@ -185,9 +185,10 @@ class LaserScanHistoryRenderable extends Renderable<LaserScanHistoryUserData> {
     latest.setStyle(style);
     this.#decayRing?.setStyle(style);
 
-    // With a decay time, the previous scan moves into the ring before it is overwritten
+    // With a decay time, the previous scan moves into the ring before it is overwritten. A settings
+    // change redraws the same scan, which must not add it to the history
     const previousCount = latest.geometry.drawRange.count;
-    if (settings.decayTime > 0 && previousCount > 0 && latestEntry.receiveTime !== receiveTime) {
+    if (settings.decayTime > 0 && previousCount > 0 && laserScan !== latest.userData.laserScan) {
       if (!this.#decayRing) {
         this.#decayRing = new DecayPointRing(topic, style, DECAY_HISTORY_LIMITS);
         this.add(this.#decayRing);
@@ -197,7 +198,7 @@ class LaserScanHistoryRenderable extends Renderable<LaserScanHistoryUserData> {
         {
           receiveTime: latestEntry.receiveTime,
           messageTime: latestEntry.messageTime,
-          frameId: this.userData.frameId,
+          frameId: latest.userData.frameId,
           pose: latest.userData.pose,
         },
         (position!.array as Float32Array).subarray(0, previousCount * 3),
@@ -207,6 +208,7 @@ class LaserScanHistoryRenderable extends Renderable<LaserScanHistoryUserData> {
 
     latestEntry.receiveTime = receiveTime;
     latestEntry.messageTime = messageTime;
+    latest.userData.frameId = this.userData.frameId;
     latest.userData.pose = laserScan.pose;
     latest.userData.laserScan = laserScan;
     latest.userData.originalMessage = originalMessage;
@@ -243,7 +245,9 @@ class LaserScanHistoryRenderable extends Renderable<LaserScanHistoryUserData> {
 
     // Ranges to points in the scan plane; out-of-range returns are NaN, which is never drawn
     const { start_angle: angleMin, range_min: rangeMin, range_max: rangeMax } = laserScan;
-    const angleIncrement = (laserScan.end_angle - angleMin) / (ranges.length - 1);
+    // A single beam is at the start angle (and would divide 0 by 0)
+    const angleIncrement =
+      ranges.length > 1 ? (laserScan.end_angle - angleMin) / (ranges.length - 1) : 0;
     for (let i = 0; i < ranges.length; i++) {
       const range = ranges[i]!;
       const inRange = range >= rangeMin && range <= rangeMax;

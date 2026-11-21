@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import { attribute, diffuseColor, positionGeometry } from "three/tsl";
+import { attribute, diffuseColor, positionGeometry, varying } from "three/tsl";
 import * as THREE from "three/webgpu";
 
 /**
@@ -18,6 +18,9 @@ export class LineMaterialWithAlphaVertex extends THREE.Line2NodeMaterial {
 
   public override setupDiffuseColor(builder: THREE.NodeBuilder): void {
     const { transparent, vertexColors } = this;
+    // Blending already applies a transparent line's alpha; alpha to coverage would apply it again.
+    // Set while building, so it follows `transparent` (a change to it rebuilds the material).
+    this.alphaToCoverage = !transparent;
     this.transparent = false;
     this.vertexColors = false;
     super.setupDiffuseColor(builder);
@@ -25,9 +28,11 @@ export class LineMaterialWithAlphaVertex extends THREE.Line2NodeMaterial {
     this.vertexColors = vertexColors;
 
     if (vertexColors && builder.geometry.hasAttribute("instanceColorStart")) {
+      // Picked per vertex and interpolated, so colors blend along the segment instead of switching
+      // halfway
       const isStart = positionGeometry.y.lessThan(0.5);
       diffuseColor.mulAssign(
-        isStart.select(attribute("instanceColorStart"), attribute("instanceColorEnd")),
+        varying(isStart.select(attribute("instanceColorStart"), attribute("instanceColorEnd"))),
       );
     }
   }

@@ -6,14 +6,26 @@ import {
   Fn,
   attribute,
   cameraProjectionMatrix,
+  float,
+  instanceIndex,
   modelViewMatrix,
   positionGeometry,
-  screenSize,
   uniform,
   uv,
   vec4,
+  vertexStage,
 } from "three/tsl";
 import * as THREE from "three/webgpu";
+
+import { pickObjectId, pickOutput } from "../Picker";
+
+/**
+ * The canvas size in CSS pixels, read from the renderer every render. Not `screenSize`: that is the
+ * render target's size, which is 1x1 while picking (sprites would cover the whole canvas there).
+ */
+const canvasSize = uniform(new THREE.Vector2()).onRenderUpdate(({ renderer }, self) => {
+  renderer?.getSize(self.value);
+});
 
 /**
  * A few points drawn as camera-facing squares or circles, one instanced draw: marker POINTS (sized
@@ -26,8 +38,6 @@ export class PointSprites extends THREE.Mesh<
 > {
   /** Diameter: meters when `worldSize`, else CSS pixels */
   public readonly size = uniform(1);
-  /** CSS to device pixels, for pixel sizes */
-  public readonly pixelRatio = uniform(1);
   #capacity = 0;
 
   public constructor({
@@ -56,7 +66,7 @@ export class PointSprites extends THREE.Mesh<
       material.vertexNode = cameraProjectionMatrix.mul(vec4(view.xy.add(corner), view.zw));
     } else {
       const clip = cameraProjectionMatrix.mul(modelViewMatrix.mul(center));
-      const offset = corner.mul(this.pixelRatio).mul(2).div(screenSize).mul(clip.w);
+      const offset = corner.mul(2).div(canvasSize).mul(clip.w);
       material.vertexNode = vec4(clip.xy.add(offset), clip.zw);
     }
     const color = attribute("instanceColor", "vec4");
@@ -66,7 +76,18 @@ export class PointSprites extends THREE.Mesh<
           return color;
         })()
       : color;
-    material.opacityNode = color.a;
+    // Picks report the instance and its center's depth (the default pick output would use the
+    // unit quad's position, not where the sprite is drawn)
+    const pick = material.clone();
+    pick.transparent = false;
+    pick.blending = THREE.NoBlending;
+    pick.depthWrite = true;
+    pick.outputNode = pickOutput(
+      pickObjectId,
+      vertexStage(instanceIndex),
+      vertexStage(float(modelViewMatrix.mul(center).z)).negate(),
+    );
+    this.userData.pickingMaterial = pick;
     this.setPoints(new Float32Array(0), new Uint8Array(0), 0);
   }
 
@@ -95,5 +116,6 @@ export class PointSprites extends THREE.Mesh<
   public override dispose(): void {
     this.geometry.dispose();
     this.material.dispose();
+    (this.userData.pickingMaterial as THREE.Material).dispose();
   }
 }

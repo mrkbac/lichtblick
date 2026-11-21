@@ -18,7 +18,7 @@ import {
 } from "three/tsl";
 import * as THREE from "three/webgpu";
 
-import { MAX_SET_POINTS } from "./PointRaster";
+import { MAX_SET_POINTS, releaseRasterData } from "./PointRaster";
 
 /** How a set's color bytes are encoded */
 export type PointColorEncoding = "srgb" | "linear";
@@ -151,14 +151,20 @@ export class RasterPoints extends THREE.Object3D {
     if (capacity > MAX_SET_POINTS) {
       throw new Error(`A point set holds at most ${MAX_SET_POINTS} points`);
     }
+    const slotWords = slots ? Math.ceil(slots.length / 2) : 0;
+    const oldSlots = this.#slots?.array as Uint32Array | undefined;
     if (
       positions === this.#positions.array &&
+      capacity === this.#capacity &&
       colors.buffer === (this.#colors.array as Uint32Array).buffer &&
       colors.byteOffset === (this.#colors.array as Uint32Array).byteOffset &&
-      slots?.buffer === (this.#slots?.array as Uint32Array | undefined)?.buffer
+      slots?.buffer === oldSlots?.buffer &&
+      slots?.byteOffset === oldSlots?.byteOffset &&
+      slotWords === (oldSlots?.length ?? 0)
     ) {
       return;
     }
+    this.#disposeBuffers();
     this.#positions = new THREE.StorageBufferAttribute(positions, 1);
     this.#colors = new THREE.StorageBufferAttribute(
       new Uint32Array(colors.buffer, colors.byteOffset, capacity),
@@ -166,7 +172,7 @@ export class RasterPoints extends THREE.Object3D {
     );
     this.#slots = slots
       ? new THREE.StorageBufferAttribute(
-          new Uint32Array(slots.buffer, slots.byteOffset, Math.ceil(slots.length / 2)),
+          new Uint32Array(slots.buffer, slots.byteOffset, slotWords),
           1,
         )
       : undefined;
@@ -185,8 +191,7 @@ export class RasterPoints extends THREE.Object3D {
   public markAll(): void {
     for (const attribute of [this.#positions, this.#colors, this.#slots]) {
       if (attribute) {
-        attribute.clearUpdateRanges();
-        attribute.needsUpdate = true;
+        markWhole(attribute);
       }
     }
   }
@@ -239,10 +244,8 @@ export class RasterPoints extends THREE.Object3D {
       const { position, color, hidden } = this.#shapeNodes();
       const material = new THREE.MeshLambertNodeMaterial({ transparent: this.#transparent });
       material.positionNode = position;
+      // colorNode's alpha is the opacity (an opacityNode would apply it twice)
       material.colorNode = color;
-      if (this.#transparent) {
-        material.opacityNode = color.a;
-      }
       this.#mesh = new THREE.Mesh(instancedCopy(UNIT_GEOMETRY[shape]), material);
       this.#mesh.name = `${this.name}:${shape}s`;
       this.#mesh.frustumCulled = false;
@@ -270,11 +273,20 @@ export class RasterPoints extends THREE.Object3D {
 
   public override dispose(): void {
     this.#disposeShapes();
+    releaseRasterData(this);
+    this.#disposeBuffers();
     this.#capacity = 0;
     this.#positions = new THREE.StorageBufferAttribute(new Float32Array(0), 1);
     this.#colors = new THREE.StorageBufferAttribute(new Uint32Array(0), 1);
     this.#slots = undefined;
     this.#version++;
+  }
+
+  /** Frees the GPU copies of the point buffers now, rather than whenever they are collected */
+  #disposeBuffers(): void {
+    this.#positions.dispose();
+    this.#colors.dispose();
+    this.#slots?.dispose();
   }
 
   #disposeShapes(): void {
@@ -352,10 +364,20 @@ function addRange(attribute: THREE.BufferAttribute, start: number, count: number
   }
   if (attribute.updateRanges.length >= MAX_UPDATE_RANGES) {
     // Not drawn for a while (hidden): upload it whole
-    attribute.clearUpdateRanges();
+    markWhole(attribute);
   } else {
     attribute.addUpdateRange(start, count);
+    attribute.needsUpdate = true;
   }
+}
+
+/**
+ * Queues a full upload as one range over the whole buffer, not as an empty range list: three
+ * uploads only the listed ranges once there are any, so a later partial range would drop it.
+ */
+function markWhole(attribute: THREE.BufferAttribute): void {
+  attribute.clearUpdateRanges();
+  attribute.addUpdateRange(0, attribute.array.length);
   attribute.needsUpdate = true;
 }
 

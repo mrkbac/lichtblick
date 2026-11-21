@@ -106,6 +106,12 @@ export class Picker {
       return undefined;
     }
 
+    // A camera's first render switches it to WebGPU clip space and rebuilds its projection, which
+    // would drop the crop: switch it first
+    if (camera.coordinateSystem !== renderer.coordinateSystem) {
+      camera.coordinateSystem = renderer.coordinateSystem;
+      camera.updateProjectionMatrix();
+    }
     // Crop the projection to the cursor's pixel. Works for any projection, including custom ones
     // (image mode, map cameras)
     this.#projectionBeforePick.copy(camera.projectionMatrix);
@@ -174,6 +180,14 @@ export class Picker {
     if (!variants) {
       variants = new Map();
       this.#pickMaterials.set(material, variants);
+      // Picking variants live in the renderer's caches until disposed; a closed renderable's
+      // material takes them along
+      material.addEventListener("dispose", () => {
+        for (const variant of this.#pickMaterials.get(material)?.values() ?? []) {
+          variant.dispose();
+        }
+        this.#pickMaterials.delete(material);
+      });
     }
     let pickMaterial = variants.get(instanced);
     if (pickMaterial?.userData.sourceVersion !== material.version) {
@@ -233,7 +247,8 @@ function derivePickMaterial(
   const pick = source.isNodeMaterial ? source.clone() : new THREE.MeshBasicNodeMaterial();
   pick.side = material.side;
   pick.depthTest = material.depthTest;
-  pick.depthWrite = material.depthWrite;
+  // Opaque: the nearest surface must win even where the source is translucent (no depth write)
+  pick.depthWrite = true;
   pick.transparent = false;
   pick.blending = THREE.NoBlending;
   pick.outputNode = pickOutput(pickObjectId, instanced ? vertexStage(instanceIndex) : undefined);

@@ -32,7 +32,6 @@ export class RenderablePointsAnnotation extends Renderable<BaseUserData, /*TRend
   #colors = new Uint8Array(0);
 
   #scale = 0;
-  #pixelRatio = 0;
   #scaleNeedsUpdate = false;
 
   #originalMessage?: RosObject;
@@ -73,15 +72,15 @@ export class RenderablePointsAnnotation extends Renderable<BaseUserData, /*TRend
     return {};
   }
 
+  /** Sizes are in CSS pixels, which the sprites convert with the renderer's current pixel ratio */
   public setScale(
     scale: number,
     _canvasWidth: number,
     _canvasHeight: number,
-    pixelRatio: number,
+    _pixelRatio: number,
   ): void {
-    this.#scaleNeedsUpdate ||= scale !== this.#scale || pixelRatio !== this.#pixelRatio;
+    this.#scaleNeedsUpdate ||= scale !== this.#scale;
     this.#scale = scale;
-    this.#pixelRatio = pixelRatio;
   }
 
   public setCameraModel(cameraModel: ICameraModel | undefined): void {
@@ -110,7 +109,6 @@ export class RenderablePointsAnnotation extends Renderable<BaseUserData, /*TRend
       const { thickness } = this.#annotation;
       // thickness is a radius, the sprite size a diameter; both are uniforms (no shader rebuild)
       this.#points.size.value = thickness * 2 * this.#scale;
-      this.#points.pixelRatio.value = this.#pixelRatio;
     }
 
     if (this.#annotationNeedsUpdate || this.#cameraModelNeedsUpdate) {

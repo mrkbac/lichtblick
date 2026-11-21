@@ -246,15 +246,41 @@ test.describe("panel layout drag and drop", { tag: "@smoke" }, () => {
     await stackImageOn3D(page);
   });
 
+  /** Pixels of the default layout's blue grid in the 3D canvas, so frames are being drawn */
+  async function gridPixels(canvas: Locator): Promise<number> {
+    const screenshot = await canvas.screenshot();
+    return await canvas.page().evaluate(async (base64) => {
+      const image = new Image();
+      image.src = `data:image/png;base64,${base64}`;
+      await image.decode();
+      const output = document.createElement("canvas");
+      output.width = image.width;
+      output.height = image.height;
+      const context = output.getContext("2d")!;
+      context.drawImage(image, 0, 0);
+      const { data } = context.getImageData(0, 0, output.width, output.height);
+      let blue = 0;
+      for (let i = 0; i < data.length; i += 4) {
+        if (data[i + 2] > 120 && data[i + 2] > data[i] + 60) {
+          blue++;
+        }
+      }
+      return blue;
+    }, screenshot.toString("base64"));
+  }
+
   test("keeps the 3D canvas across tab switches and maximize", async ({ page }) => {
+    test.setTimeout(60_000);
     await stackImageOn3D(page);
     await selectTab(page, "3D");
     const panel = page.locator('[data-testid^="panel-mouseenter-container 3D!"]');
-    const canvas = await panel
-      .locator("canvas")
-      .first()
-      .evaluateHandle((element: HTMLCanvasElement) => element);
+    const canvasLocator = panel.locator("canvas").first();
+    const canvas = await canvasLocator.evaluateHandle((element: HTMLCanvasElement) => element);
     await expect(page.locator(".dv-render-overlay")).toHaveCount(0);
+    // Software WebGPU on CI takes a while for its first frames
+    await expect
+      .poll(async () => await gridPixels(canvasLocator), { timeout: 20_000 })
+      .toBeGreaterThan(50);
 
     for (let i = 0; i < 3; i++) {
       await selectTab(page, "3D");
@@ -273,10 +299,13 @@ test.describe("panel layout drag and drop", { tag: "@smoke" }, () => {
     await outer.getByTitle("Exit fullscreen", { exact: true }).first().click();
     await expect.poll(async () => (await panel.boundingBox())!.width).toBeCloseTo(before.width, 0);
     expect(await canvas.evaluate((element) => element.isConnected)).toBe(true);
-    // The 3D panel draws with WebGPU; its canvas keeps that context
-    expect(await canvas.evaluate((element) => element.getContext("webgpu") != undefined)).toBe(
+    // Still the same canvas, and it still draws the scene
+    expect(await canvasLocator.evaluate((element, retained) => element === retained, canvas)).toBe(
       true,
     );
+    await expect
+      .poll(async () => await gridPixels(canvasLocator), { timeout: 20_000 })
+      .toBeGreaterThan(50);
     await canvas.dispose();
   });
 

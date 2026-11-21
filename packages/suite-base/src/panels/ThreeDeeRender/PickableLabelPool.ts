@@ -2,13 +2,15 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import { type Label, type LabelNodeMaterial, LabelPool } from "@foxglove/three-text/webgpu";
+import { varyingProperty } from "three/tsl";
 
 import { pickObjectId, pickOutput } from "./Picker";
 
 /**
  * LabelPool whose labels work with WebGPURenderer and the Picker:
  * - Labels keep their own picking material (it has the label's vertex transform), but write the
- *   Picker's output with the object only, not the character instance.
+ *   Picker's output with the object only, not the character instance, and the depth the label is
+ *   drawn at (the material's `vViewZ`), not the untransformed quad's.
  * - A label's mesh is an InstancedMesh with a 1-matrix `instanceMatrix` but one instance per
  *   character. WebGPURenderer binds `instanceMatrix` for every InstancedMesh, so a text longer than
  *   one character fails validation. Its geometry is an InstancedBufferGeometry that already carries
@@ -21,7 +23,11 @@ export class PickableLabelPool extends LabelPool {
     Object.assign(label.mesh, { isInstancedMesh: false });
     const picking = label.pickingMaterial as LabelNodeMaterial;
     picking.fragmentNode = null;
-    picking.outputNode = pickOutput(pickObjectId);
+    picking.outputNode = pickOutput(
+      pickObjectId,
+      undefined,
+      varyingProperty("float", "vViewZ").negate(),
+    );
     return label;
   }
 }

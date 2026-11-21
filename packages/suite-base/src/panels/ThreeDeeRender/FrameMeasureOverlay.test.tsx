@@ -30,6 +30,9 @@ function setup(initial: FrameMeasurement | undefined, { picking = false } = {}) 
     variables.set(FRAME_MEASUREMENT_VARIABLE, initial);
   }
   const frameUnderCursor = { id: undefined as string | undefined };
+  const pickObject = vi.fn(
+    async (_cursor: THREE.Vector2): Promise<THREE.Object3D | undefined> => new THREE.Object3D(),
+  );
   const frameAxes = {
     frameIdOf: vi.fn(() => frameUnderCursor.id),
     setLabelHighlights: vi.fn(),
@@ -42,7 +45,7 @@ function setup(initial: FrameMeasurement | undefined, { picking = false } = {}) 
     currentTime: 0n,
     framePicking: false,
     input: new EventEmitter(),
-    pickObject: vi.fn(async () => new THREE.Object3D()),
+    pickObject,
     sceneExtensions: new Map([["foxglove.FrameAxes", frameAxes]]),
   }) as unknown as Renderer;
   const written: unknown[] = [];
@@ -69,7 +72,17 @@ function setup(initial: FrameMeasurement | undefined, { picking = false } = {}) 
       );
     });
   };
-  return { renderer, emitter, variables, written, frameAxes, onStopPicking, click, result };
+  return {
+    renderer,
+    emitter,
+    variables,
+    written,
+    frameAxes,
+    pickObject,
+    onStopPicking,
+    click,
+    result,
+  };
 }
 
 describe("FrameMeasureOverlay", () => {
@@ -107,6 +120,58 @@ describe("FrameMeasureOverlay", () => {
     await click("lidar");
     expect(written).toEqual([{ from: "base" }, { from: "base", to: "lidar" }]);
     expect(onStopPicking).toHaveBeenCalled();
+  });
+
+  it("applies clicks in click order when their picks resolve out of order", async () => {
+    const { renderer, written, frameAxes, pickObject } = setup(undefined, { picking: true });
+    const resolvers: ((object: THREE.Object3D) => void)[] = [];
+    pickObject.mockImplementation(
+      async () => await new Promise((resolve) => resolvers.push(resolve)),
+    );
+    frameAxes.frameIdOf.mockImplementation((object?: THREE.Object3D) => object?.name);
+    const base = Object.assign(new THREE.Object3D(), { name: "base" });
+    const lidar = Object.assign(new THREE.Object3D(), { name: "lidar" });
+    const emitClick = () => {
+      renderer.input.emit(
+        "click",
+        new THREE.Vector2(),
+        new THREE.Vector3(),
+        new MouseEvent("click"),
+      );
+    };
+    await act(async () => {
+      emitClick();
+      emitClick();
+      resolvers[1]!(lidar);
+      resolvers[0]!(base);
+    });
+    expect(written).toEqual([{ from: "base" }, { from: "base", to: "lidar" }]);
+  });
+
+  it("ignores failed picks and picks that resolve after picking stopped", async () => {
+    const { renderer, written, frameAxes, pickObject, click, result, onStopPicking } = setup(
+      undefined,
+      {
+        picking: true,
+      },
+    );
+    frameAxes.frameIdOf.mockImplementation((object?: THREE.Object3D) => object?.name);
+    pickObject.mockRejectedValueOnce(new Error("device lost"));
+    await click(undefined);
+    expect(written).toEqual([]);
+
+    let resolve: (object: THREE.Object3D) => void = () => {};
+    pickObject.mockImplementationOnce(async () => await new Promise((r) => (resolve = r)));
+    await click(undefined);
+    result.rerender(
+      <ThemeProvider isDark>
+        <FrameMeasureOverlay renderer={renderer} picking={false} onStopPicking={onStopPicking} />
+      </ThemeProvider>,
+    );
+    await act(async () => {
+      resolve(Object.assign(new THREE.Object3D(), { name: "base" }));
+    });
+    expect(written).toEqual([]);
   });
 
   it("starts a new pair when picking again after both ends are set", async () => {

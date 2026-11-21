@@ -6,6 +6,8 @@
  * `vi.mock("three/webgpu", async () => await (await import("./testing/fakeWebGPURenderer")).mockThreeWebGPU());`
  * The fake initializes immediately and records nothing; tests check scene state, not pixels.
  */
+import { WebGPUCoordinateSystem } from "three";
+
 export async function mockThreeWebGPU(): Promise<Record<string, unknown>> {
   const actual = await vi.importActual<Record<string, unknown>>("three/webgpu");
   // The renderer refuses to start without WebGPU
@@ -28,6 +30,7 @@ export async function mockThreeWebGPU(): Promise<Record<string, unknown>> {
 class FakeWebGPURenderer {
   public domElement: HTMLCanvasElement;
   public backend = { isWebGPUBackend: true, parameters: {} };
+  public coordinateSystem = WebGPUCoordinateSystem;
   public info = {
     reset: vi.fn(),
     render: { calls: 0, triangles: 0 },

@@ -6,6 +6,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { useEffect, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import StatsMonitor from "stats.js";
 import type { WebGPURenderer } from "three/webgpu";
 
@@ -17,6 +18,7 @@ type Info = WebGPURenderer["info"];
 export function Stats(): React.JSX.Element {
   const container = useRef<HTMLDivElement>(null);
   const update = useRef<((renderer: Renderer) => void) | undefined>(undefined);
+  const { t } = useTranslation("threeDee");
 
   useRendererEvent("endFrame", (_event, renderer) => update.current?.(renderer));
 
@@ -37,7 +39,7 @@ export function Stats(): React.JSX.Element {
     const panels = counters.map(([name, color]) =>
       stats.addPanel(new StatsMonitor.Panel(name, color, "black")),
     );
-    const gpuPanel = stats.addPanel(new StatsMonitor.Panel("GPU ms", "orange", "black"));
+    const gpuPanel = stats.addPanel(new StatsMonitor.Panel(t("gpuMs"), "orange", "black"));
     let gpuMax = 0;
     const maxima = counters.map(() => 0);
     element.appendChild(stats.dom);
@@ -60,7 +62,7 @@ export function Stats(): React.JSX.Element {
       update.current = undefined;
       stats.dom.remove();
     };
-  }, []);
+  }, [t]);
 
   return <div ref={container} />;
 }

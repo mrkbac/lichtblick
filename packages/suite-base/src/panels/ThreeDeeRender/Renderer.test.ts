@@ -30,6 +30,7 @@ import { BasicBuilder } from "@lichtblick/test-builders";
 
 import { DynamicBufferGeometry } from "./DynamicBufferGeometry";
 import { RendererConfig } from "./IRenderer";
+import { Picker } from "./Picker";
 import { Renderable } from "./Renderable";
 import { SceneExtension } from "./SceneExtension";
 
@@ -598,6 +599,7 @@ describe("3D Renderer", () => {
 
       hoverCanvas.dispatchEvent(new MouseEvent("pointerdown", { clientX: 10, clientY: 10 }));
       hoverCanvas.dispatchEvent(new MouseEvent("pointermove", { clientX: 11, clientY: 11 }));
+      await flushPicks();
       expect(hoveredSpy).toHaveBeenCalledTimes(0);
 
       hoverCanvas.dispatchEvent(new MouseEvent("pointerup", { clientX: 11, clientY: 11 }));
@@ -626,6 +628,119 @@ describe("3D Renderer", () => {
 
       expect(hoveredSpy).toHaveBeenCalledTimes(0);
 
+      renderer.dispose();
+    });
+  });
+
+  describe("click picking", () => {
+    async function flushPicks(): Promise<void> {
+      for (let i = 0; i < 20; i++) {
+        await Promise.resolve();
+      }
+    }
+
+    async function clickWithPendingPick(): Promise<{
+      renderer: Renderer;
+      clicked: Mock;
+      settle: { resolve: (value: undefined) => void; reject: (error: Error) => void };
+    }> {
+      const renderer = new Renderer({ ...defaultRendererProps, canvas });
+      await renderer.ready;
+      renderer.setPickingEnabled(true);
+      const picker = vi.mocked(Picker).mock.results.at(-1)!.value as { pick: Mock };
+      const settle = {} as {
+        resolve: (value: undefined) => void;
+        reject: (error: Error) => void;
+      };
+      picker.pick.mockReturnValueOnce(
+        new Promise((resolve, reject) => Object.assign(settle, { resolve, reject })),
+      );
+      const clicked = vi.fn();
+      renderer.addListener("renderablesClicked", clicked);
+      const cursor = new THREE.Vector2(5, 5);
+      renderer.input.emit("click", cursor, undefined, new MouseEvent("click"));
+      // Input reuses its vector
+      cursor.set(50, 50);
+      return { renderer, clicked, settle };
+    }
+
+    it("reports the cursor the click was at", async () => {
+      const { renderer, clicked, settle } = await clickWithPendingPick();
+      settle.resolve(undefined);
+      await flushPicks();
+      expect(clicked).toHaveBeenCalledWith([], new THREE.Vector2(5, 5), renderer);
+      renderer.dispose();
+    });
+
+    it("drops a pick that completes after picking was disabled", async () => {
+      const { renderer, clicked, settle } = await clickWithPendingPick();
+      renderer.setPickingEnabled(false);
+      renderer.setPickingEnabled(true);
+      settle.resolve(undefined);
+      await flushPicks();
+      expect(clicked).not.toHaveBeenCalled();
+      renderer.dispose();
+    });
+
+    it("treats a readback cancelled by device loss as no result", async () => {
+      const { renderer, clicked, settle } = await clickWithPendingPick();
+      renderer.gl.onDeviceLost({ api: "WebGPU", message: "", reason: null, originalEvent: {} });
+      settle.reject(new Error("mapAsync aborted"));
+      await flushPicks();
+      expect(clicked).not.toHaveBeenCalled();
+      renderer.dispose();
+    });
+  });
+
+  it("resolves pickPoint to nothing when the device is lost during its readback", async () => {
+    const renderer = new Renderer({ ...defaultRendererProps, canvas });
+    await renderer.ready;
+    const picker = vi.mocked(Picker).mock.results.at(-1)!.value as { pick: Mock };
+    let reject!: (error: Error) => void;
+    picker.pick.mockReturnValueOnce(new Promise((_resolve, rejectPick) => (reject = rejectPick)));
+    const point = renderer.pickPoint(new THREE.Vector2(5, 5), new THREE.Vector3());
+    renderer.gl.onDeviceLost({ api: "WebGPU", message: "", reason: null, originalEvent: {} });
+    reject(new Error("mapAsync aborted"));
+    await expect(point).resolves.toBeUndefined();
+    renderer.dispose();
+  });
+
+  describe("GPU startup", () => {
+    it("does not start a renderer disposed while waiting for the device", async () => {
+      const renderer = new Renderer({ ...defaultRendererProps, canvas });
+      const init = vi.spyOn(renderer.gl, "init");
+      renderer.dispose();
+      await renderer.ready;
+      expect(init).not.toHaveBeenCalled();
+    });
+
+    it("keeps a device loss during startup for the panel instead of drawing", async () => {
+      const renderer = new Renderer({ ...defaultRendererProps, canvas });
+      const lost = vi.fn();
+      renderer.addListener("gpuLost", lost);
+      vi.spyOn(renderer.gl, "init").mockImplementationOnce(async () => {
+        renderer.gl.onDeviceLost({ api: "WebGPU", message: "", reason: null, originalEvent: {} });
+        return renderer.gl;
+      });
+      await renderer.ready;
+      expect(renderer.gpuLost).toBe(true);
+      expect(lost).not.toHaveBeenCalled();
+      const render = vi.spyOn(renderer.gl, "render");
+      renderer.animationFrame();
+      expect(render).not.toHaveBeenCalled();
+      renderer.dispose();
+    });
+
+    it("reports a loss after startup and stops drawing", async () => {
+      const renderer = new Renderer({ ...defaultRendererProps, canvas });
+      await renderer.ready;
+      const lost = vi.fn();
+      renderer.addListener("gpuLost", lost);
+      renderer.gl.onDeviceLost({ api: "WebGPU", message: "", reason: null, originalEvent: {} });
+      expect(lost).toHaveBeenCalledTimes(1);
+      const render = vi.spyOn(renderer.gl, "render");
+      renderer.animationFrame();
+      expect(render).not.toHaveBeenCalled();
       renderer.dispose();
     });
   });

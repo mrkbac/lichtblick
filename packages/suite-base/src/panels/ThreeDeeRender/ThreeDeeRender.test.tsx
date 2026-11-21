@@ -53,6 +53,7 @@ vi.mock("@lichtblick/suite-base/context/AnalyticsContext", () => ({
 const createMockRenderer = (overrides?: Record<string, any>) => {
   const listeners = new Map<string, Set<(...args: any[]) => void>>();
   const defaultRenderer = {
+    ready: Promise.resolve(),
     dispose: vi.fn(),
     config: {},
     setTopics: vi.fn(),
@@ -1564,9 +1565,11 @@ describe("ThreeDeeRender", () => {
       expect(mockedRenderer.mock.calls[1]![0].canvas).toBe(newCanvas);
     });
 
-    it("says WebGPU is required when it is unavailable", () => {
+    it("says WebGPU is required when it is unavailable", async () => {
       const { getByRole } = render(<ThreeDeeRender {...setup()} />);
       const renderer = mockedRenderer.mock.results[0]!.value as Renderer;
+      // Startup settles first
+      await act(async () => {});
 
       act(() => {
         renderer.emit("gpuUnsupported", new Error("no WebGPU"), renderer);

@@ -25,6 +25,11 @@ import { getReader } from "./pointClouds/fieldReaders";
 
 vi.mock("three/examples/jsm/libs/draco/draco_decoder.wasm", () => ({ default: "" }));
 
+vi.mock(
+  "three/webgpu",
+  async () => await (await import("../testing/fakeWebGPURenderer")).mockThreeWebGPU(),
+);
+
 const TOPIC = "/grid";
 
 /** 3x2 grid of float32 cells, fields "value" (offset 0) and "height" (offset 4). */
@@ -160,9 +165,8 @@ describe("FoxgloveGrid", () => {
 
   afterEach(() => {
     renderer.dispose();
-    // jsdom has no WebGPU, so Renderer reports that; not what these tests check.
+    // The config follows no frame, which the renderer warns about; errors stay visible
     (console.warn as Mock).mockClear();
-    (console.error as Mock).mockClear();
   });
 
   function receive(grid: Grid): void {

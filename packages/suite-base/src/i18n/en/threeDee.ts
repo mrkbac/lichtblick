@@ -34,6 +34,8 @@ export const threeDee = {
   restoreGraphics: "Restore",
   webGpuRequired:
     "The 3D panel needs WebGPU, which this browser doesn't provide. Use a current Chrome, Edge or Safari, or enable WebGPU in your browser settings.",
+  gpuMs: "GPU ms",
+  webGpuStartFailed: "The 3D panel couldn't start WebGPU: {{error}}",
 
   // Frame
   age: "Age",
