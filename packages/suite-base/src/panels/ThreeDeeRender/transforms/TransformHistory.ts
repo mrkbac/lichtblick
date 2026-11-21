@@ -21,9 +21,17 @@ export class TransformHistory {
   #receiveBase: Time | undefined;
   #data = new Float64Array(STRIDE * INITIAL_CAPACITY);
   #size = 0;
+  /** Keep one appended sample per this many; the newest one is always kept */
+  #keepEvery = 1;
+  /** Appended samples merged into the newest one since it was appended */
+  #headInputs = 0;
 
   public size(): number {
     return this.#size;
+  }
+
+  public setKeepEvery(keepEvery: number): void {
+    this.#keepEvery = keepEvery;
   }
 
   public timeAt(index: number): Time {
@@ -113,13 +121,17 @@ export class TransformHistory {
         : this.binarySearch(time);
     if (index < 0) {
       index = ~index;
-      if (index === this.#size && this.#extendsRun(transform)) {
-        // The last two samples and this one are equal: move the last sample's time forward
-        // instead of storing a third copy. Interpolation over the run gives the same result.
-        this.#data[lastIndex * STRIDE] = Number(time - this.#base);
-        this.#data[lastIndex * STRIDE + 1] = receive;
-        return;
+      if (index === this.#size && this.#size >= 2) {
+        // Overwrite the newest sample instead of appending when the last two samples and this one
+        // are equal (interpolation over the run gives the same result), or to keep only one in
+        // #keepEvery samples. The first sample and the newest one always stay.
+        if (this.#extendsRun(transform) || this.#headInputs < this.#keepEvery) {
+          this.#headInputs++;
+          this.#write(lastIndex, time, receive, transform);
+          return;
+        }
       }
+      this.#headInputs = 1;
       this.#insertGap(index);
     }
     this.#write(index, time, receive, transform);

@@ -178,6 +178,28 @@ describe("TransformTree", () => {
       expect(frame.latestTimeAtOrBefore(1000n * sec)).toBe(100n * sec);
     });
 
+    it("keeps the thinned density for transforms added after thinning", () => {
+      const tfTree = new TransformTree(undefined, undefined, 100);
+      tfTree.setComplete(true);
+      for (let i = 0; i <= 300; i++) {
+        tfTree.addTransform("b", "a", BigInt(i) * sec, at(i));
+      }
+      const frame = tfTree.frame("b")!;
+      const times: bigint[] = [];
+      for (let t: bigint | undefined = 300n * sec; t != undefined; ) {
+        times.push(t);
+        t = t > 0n ? frame.latestTimeAtOrBefore(t - 1n) : undefined;
+      }
+      const gaps = times.slice(1).map((t, i) => Number((times[i]! - t) / sec));
+      // Spaced by the final thinning step all through the recording (twice that where a halving
+      // dropped a sample at the seam), and the newest transform is kept
+      const step = 2 ** tfTree.decimations;
+      expect(times[0]).toBe(300n * sec);
+      expect(Math.max(...gaps.slice(1))).toBeLessThanOrEqual(2 * step);
+      expect(Math.min(...gaps.slice(1, -1))).toBeGreaterThanOrEqual(step / 2);
+      expect(frame.transformsSize()).toBeLessThanOrEqual(100);
+    });
+
     it("clears the tree when leaving complete mode", () => {
       const tfTree = new TransformTree();
       tfTree.setComplete(true);

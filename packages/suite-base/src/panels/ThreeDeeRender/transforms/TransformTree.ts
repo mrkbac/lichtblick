@@ -258,15 +258,16 @@ export class TransformTree {
   #applyLimits(frame: CoordinateFrame): void {
     frame.maxCapacity = this.#complete ? Infinity : this.#maxCapacityPerFrame;
     frame.maxStorageTime = this.#complete ? MAX_DURATION : this.#maxStorageTime;
+    frame.setKeepEvery(2 ** this.decimations);
   }
 
   #decimate(): void {
     // ponytail: halves every frame, also sparse ones; per-frame budgets if a dense frame starves
     // slow ones of resolution.
-    for (const frame of this.#frames.values()) {
-      this.#sampleCount -= frame.decimate();
-    }
     this.decimations++;
+    for (const frame of this.#frames.values()) {
+      this.#sampleCount -= frame.decimate(2 ** this.decimations);
+    }
   }
 
   public hasFrame(id: AnyFrameId): boolean {

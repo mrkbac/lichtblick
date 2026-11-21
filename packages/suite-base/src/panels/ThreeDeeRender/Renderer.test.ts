@@ -2624,8 +2624,8 @@ describe("Renderer static transform caching across message types", () => {
   });
 
   it("preserves static transforms when preloading is enabled and seeking backward", () => {
-    // Given: A renderer with preloading enabled, which subscribes #onResetAllFramesCursor to
-    // the resetAllFramesCursor event, and which has received a static transform
+    // Given: A renderer with preloading enabled that has received a static transform, while the
+    // tree is not complete yet (no history read), so a backward seek clears it
     const renderer = new Renderer({
       ...rendererArgs,
       config: {
@@ -2640,12 +2640,11 @@ describe("Renderer static transform caching across message types", () => {
     renderer.animationFrame();
     expect(renderer.transformTree.frame("child_static")?.transformsSize()).toBe(1);
 
-    // When: Seeking backward, which clears the tree and emits resetAllFramesCursor
+    // When: Seeking backward, which clears the tree
     renderer.setCurrentTime(20n);
     renderer.handleSeek(100n);
 
-    // Then: The static transform is still restored. The resetAllFramesCursor handler must not
-    // wipe the static cache, otherwise #reapplyStaticTransforms has nothing left to reapply.
+    // Then: The static transform is restored from the static cache
     expect(renderer.transformTree.frame("child_static")?.transformsSize()).toBe(1);
 
     renderer.dispose();

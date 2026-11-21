@@ -582,10 +582,9 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
         onBatch: (batch) => {
           renderer.addTransformMessages(batch);
         },
-        isMissing: (windowStart) =>
+        isMissing: () =>
           knownFrameIds.some(
-            (id) =>
-              (renderer.transformTree.frame(id)?.latestTimeAtOrBefore(time) ?? -1n) < windowStart,
+            (id) => renderer.transformTree.frame(id)?.latestTimeAtOrBefore(time) == undefined,
           ),
       });
     },

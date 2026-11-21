@@ -126,6 +126,9 @@ export class CoordinateFrame<ID extends AnyFrameId = UserFrameId> {
    */
   public setParent(parent: CoordinateFrame): void {
     if (this.#parent && this.#parent !== parent) {
+      // ponytail: a complete (preloaded) history keeps only the transforms after the frame's last
+      // reparenting; keep one history per parent if recordings that reparent frames need the
+      // earlier ones.
       this.#transforms.clear();
     }
     this.#parent = parent;
@@ -159,6 +162,10 @@ export class CoordinateFrame<ID extends AnyFrameId = UserFrameId> {
   public addTransform(time: Time, transform: Transform, receiveTime?: Time): void {
     const history = this.#transforms;
     history.set(time, transform, receiveTime);
+    if (this.maxStorageTime === MAX_DURATION && this.maxCapacity === Infinity) {
+      // Complete history: nothing to prune
+      return;
+    }
 
     // Prune by time on insert. Wait until the oldest entry is a quarter of maxStorageTime past the
     // window so the O(n) removal runs once per quarter window, not on every insert.
@@ -180,9 +187,18 @@ export class CoordinateFrame<ID extends AnyFrameId = UserFrameId> {
     }
   }
 
-  /** Halves this frame's history, keeping its first and last transform. Returns the count removed. */
-  public decimate(): number {
+  /**
+   * Halves this frame's history, keeping its first and last transform, and keeps one in
+   * `keepEvery` transforms added later. Returns the count removed.
+   */
+  public decimate(keepEvery: number): number {
+    this.#transforms.setKeepEvery(keepEvery);
     return this.#transforms.decimate();
+  }
+
+  /** Keep one in `keepEvery` transforms added from now on */
+  public setKeepEvery(keepEvery: number): void {
+    this.#transforms.setKeepEvery(keepEvery);
   }
 
   /** Time of the newest transform at or before `time`, if any */
