@@ -75,6 +75,9 @@ export class Picker {
   });
   /** Picking variants per source material and instancing, rebuilt when the source changes */
   #pickMaterials = new WeakMap<THREE.Material, Map<boolean, THREE.NodeMaterial>>();
+  /** Sources with a dispose listener, so dispose() can remove it without keeping them alive */
+  #sources = new Set<WeakRef<THREE.Material>>();
+  #sourceRefs = new WeakMap<THREE.Material, WeakRef<THREE.Material>>();
   #projectionBeforePick = new THREE.Matrix4();
   #clearColor = new THREE.Color();
 
@@ -84,6 +87,13 @@ export class Picker {
   }
 
   public dispose(): void {
+    for (const ref of this.#sources) {
+      const material = ref.deref();
+      if (material) {
+        this.#retire(material);
+      }
+    }
+    this.#sources.clear();
     this.#target.dispose();
   }
 
@@ -182,12 +192,10 @@ export class Picker {
       this.#pickMaterials.set(material, variants);
       // Picking variants live in the renderer's caches until disposed; a closed renderable's
       // material takes them along
-      material.addEventListener("dispose", () => {
-        for (const variant of this.#pickMaterials.get(material)?.values() ?? []) {
-          variant.dispose();
-        }
-        this.#pickMaterials.delete(material);
-      });
+      material.addEventListener("dispose", this.#onSourceDispose);
+      const ref = new WeakRef(material);
+      this.#sources.add(ref);
+      this.#sourceRefs.set(material, ref);
     }
     let pickMaterial = variants.get(instanced);
     if (pickMaterial?.userData.sourceVersion !== material.version) {
@@ -197,6 +205,24 @@ export class Picker {
       variants.set(instanced, pickMaterial);
     }
     return pickMaterial;
+  }
+
+  #onSourceDispose = ({ target }: { target: THREE.Material }): void => {
+    this.#retire(target);
+  };
+
+  /** Disposes a source's picking variants and stops listening to it */
+  #retire(material: THREE.Material): void {
+    material.removeEventListener("dispose", this.#onSourceDispose);
+    for (const variant of this.#pickMaterials.get(material)?.values() ?? []) {
+      variant.dispose();
+    }
+    this.#pickMaterials.delete(material);
+    const ref = this.#sourceRefs.get(material);
+    if (ref) {
+      this.#sources.delete(ref);
+      this.#sourceRefs.delete(material);
+    }
   }
 }
 
@@ -237,9 +263,9 @@ function isHidden(object: THREE.Object3D, hidden: ReadonlySet<THREE.Object3D>): 
 
 /**
  * A picking variant of `material`: same class and vertex nodes, opaque, writing the pick output.
- * Instanced objects report their instance index.
+ * Instanced objects report their instance index. Exported for tests.
  */
-function derivePickMaterial(
+export function derivePickMaterial(
   material: THREE.Material,
   { instanced }: { instanced: boolean },
 ): THREE.NodeMaterial {
@@ -247,8 +273,9 @@ function derivePickMaterial(
   const pick = source.isNodeMaterial ? source.clone() : new THREE.MeshBasicNodeMaterial();
   pick.side = material.side;
   pick.depthTest = material.depthTest;
-  // Opaque: the nearest surface must win even where the source is translucent (no depth write)
-  pick.depthWrite = true;
+  // Opaque: the nearest surface must win even where the source is translucent (no depth write).
+  // Sources without depth test (drawn behind, e.g. grids, or on top) must not hide later objects.
+  pick.depthWrite = material.depthTest;
   pick.transparent = false;
   pick.blending = THREE.NoBlending;
   pick.outputNode = pickOutput(pickObjectId, instanced ? vertexStage(instanceIndex) : undefined);

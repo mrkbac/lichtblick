@@ -127,6 +127,8 @@ export class PointRaster {
   }
 
   public dispose(): void {
+    this.#drawn.length = 0;
+    this.#passes.length = 0;
     this.#quad.removeFromParent();
     this.#quad.geometry.dispose();
     this.#quad.material.dispose();
@@ -214,13 +216,14 @@ export class PointRaster {
     this.#radius.value = radius;
     this.#drawnSets = drawn.length;
     this.#quad.visible = drawn.length > 0;
+    // Before the empty return: cached passes retain their sets' storage arrays
+    const passes = this.#passes;
+    passes.length = 0;
     if (drawn.length === 0) {
       return;
     }
 
     void renderer.compute(this.#screen.clear, width * height);
-    const passes = this.#passes;
-    passes.length = 0;
     for (const [index, points] of drawn.entries()) {
       const set = this.#passesFor(points);
       set.setBits.value = index << SET_SHIFT;

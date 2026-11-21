@@ -93,7 +93,25 @@ describe("MeasurementTool", () => {
     frame();
     expect(tool.measurements).toHaveLength(1);
     expect(tool.measurements[0]!.summary.details[0]).toBe("P1: 0.000, 0.000, 0.000");
-    expect(tool.measurements[0]!.summary.label).toContain("5");
+    expect(tool.measurements[0]!.summary.label).toBe("5.00 m");
+  });
+
+  it("finishes with a point whose pick is still pending at the right-click", async () => {
+    const { tool, frame, listeners, picks } = createTool();
+    tool.startMeasuring("distance");
+    picks.push(new THREE.Vector3(0, 0, 0), new THREE.Vector3(3, 4, 0));
+    listeners.get("click")!(new THREE.Vector2(10, 10));
+    await flushPicks();
+    listeners.get("click")!(new THREE.Vector2(20, 20));
+    const rightClick = new MouseEvent("mouseup", { button: 2 });
+    const cursor = new THREE.Vector2(20, 20);
+    const mouse = listeners as unknown as Map<string, (...args: unknown[]) => void>;
+    mouse.get("mousedown")!(cursor, undefined, rightClick);
+    mouse.get("mouseup")!(cursor, undefined, rightClick);
+    await flushPicks();
+    frame();
+    expect(tool.measurements).toHaveLength(1);
+    expect(tool.measurements[0]!.summary.label).toBe("5.00 m");
   });
 
   it("marks a measurement unavailable while its transform is missing and recovers", async () => {

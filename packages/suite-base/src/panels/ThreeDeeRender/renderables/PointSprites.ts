@@ -10,6 +10,8 @@ import {
   instanceIndex,
   modelViewMatrix,
   positionGeometry,
+  screenDPR,
+  screenSize,
   uniform,
   uv,
   vec4,
@@ -18,14 +20,6 @@ import {
 import * as THREE from "three/webgpu";
 
 import { pickObjectId, pickOutput } from "../Picker";
-
-/**
- * The canvas size in CSS pixels, read from the renderer every render. Not `screenSize`: that is the
- * render target's size, which is 1x1 while picking (sprites would cover the whole canvas there).
- */
-const canvasSize = uniform(new THREE.Vector2()).onRenderUpdate(({ renderer }, self) => {
-  renderer?.getSize(self.value);
-});
 
 /**
  * A few points drawn as camera-facing squares or circles, one instanced draw: marker POINTS (sized
@@ -66,7 +60,9 @@ export class PointSprites extends THREE.Mesh<
       material.vertexNode = cameraProjectionMatrix.mul(vec4(view.xy.add(corner), view.zw));
     } else {
       const clip = cameraProjectionMatrix.mul(modelViewMatrix.mul(center));
-      const offset = corner.mul(2).div(canvasSize).mul(clip.w);
+      // Device pixels of the render target: the picking target is the one device pixel the pick
+      // crops the projection to, so sprites keep their size there too
+      const offset = corner.mul(screenDPR.mul(2)).div(screenSize).mul(clip.w);
       material.vertexNode = vec4(clip.xy.add(offset), clip.zw);
     }
     const color = attribute("instanceColor", "vec4");

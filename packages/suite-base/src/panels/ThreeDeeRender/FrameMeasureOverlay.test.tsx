@@ -160,16 +160,18 @@ describe("FrameMeasureOverlay", () => {
     await click(undefined);
     expect(written).toEqual([]);
 
-    let resolve: (object: THREE.Object3D) => void = () => {};
+    let resolve: ((object: THREE.Object3D) => void) | undefined;
     pickObject.mockImplementationOnce(async () => await new Promise((r) => (resolve = r)));
     await click(undefined);
+    // The late pick must have started, or the assertion below would pass without testing it
+    expect(resolve).toBeDefined();
     result.rerender(
       <ThemeProvider isDark>
         <FrameMeasureOverlay renderer={renderer} picking={false} onStopPicking={onStopPicking} />
       </ThemeProvider>,
     );
     await act(async () => {
-      resolve(Object.assign(new THREE.Object3D(), { name: "base" }));
+      resolve!(Object.assign(new THREE.Object3D(), { name: "base" }));
     });
     expect(written).toEqual([]);
   });

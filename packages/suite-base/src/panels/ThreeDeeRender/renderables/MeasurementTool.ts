@@ -208,6 +208,8 @@ export class MeasurementTool extends SceneExtension<Renderable, MeasurementToolE
   #latestSnap = new WeakMap<THREE.Vector3, number>();
   /** Placement of clicked points, in click order */
   #clicks: Promise<void> = Promise.resolve();
+  /** Cursor point of a new draft; it joins the draft's points once it first snaps somewhere */
+  #firstPreview = new THREE.Vector3();
   #suppressClick = false;
   #rightDown = new THREE.Vector2(NaN, NaN);
   #labelContainer?: HTMLDivElement;
@@ -368,13 +370,17 @@ export class MeasurementTool extends SceneExtension<Renderable, MeasurementToolE
     if (this.#cursorDirty && this.state === "active" && !this.#drag) {
       this.#cursorDirty = false;
       this.#draft ??= this.#createItem(this.kind);
-      if (this.#draft.points.length === 0) {
-        this.#draft.points.push(new THREE.Vector3());
-      }
       const draft = this.#draft;
-      void this.#snapLatest(this.#cursor, draft, draft.points.at(-1)!);
-      draft.dirty = true;
       this.#updateItem(draft, currentTime);
+      // An existing preview keeps its last snapped position while the pick is pending; a new
+      // draft shows nothing until its first snap lands
+      const preview = draft.points.at(-1) ?? this.#firstPreview;
+      void this.#snapLatest(this.#cursor, draft, preview).then((ok) => {
+        if (ok && this.#draft === draft && draft.points.length === 0) {
+          draft.points.push(preview);
+          this.#firstPreview = new THREE.Vector3();
+        }
+      });
     }
 
     if (this.#changed) {
@@ -755,7 +761,8 @@ export class MeasurementTool extends SceneExtension<Renderable, MeasurementToolE
     const request = ++this.#snapRequest;
     this.#latestSnap.set(out, request);
     const point = new THREE.Vector3().copy(out);
-    const ok = await this.#snapToLocal(cursor.clone(), item, point);
+    // A failed pick leaves the point where it was, like a miss
+    const ok = await this.#snapToLocal(cursor.clone(), item, point).catch(() => false);
     if (!ok || this.#latestSnap.get(out) !== request) {
       return false;
     }
@@ -874,12 +881,27 @@ export class MeasurementTool extends SceneExtension<Renderable, MeasurementToolE
       return;
     }
     draft.complete = true;
-    void this.#sampleProfile(draft);
+    this.#startProfile(draft);
     draft.dirty = true;
     this.#items.push(draft);
     this.select(draft.id);
     this.#cursorDirty = true; // start the next measurement under the cursor
     this.renderer.queueAnimationFrame();
+  }
+
+  /** Sample a profile in the background; a failed pick leaves it without one */
+  #startProfile(item: Measurement): void {
+    void this.#sampleProfile(item).catch(() => undefined);
+  }
+
+  /** Run `fn` once the clicks placed so far have landed, unless the draft was replaced meanwhile */
+  #afterClicks(fn: () => void): void {
+    const draft = this.#draft;
+    this.#clicks = this.#clicks.then(() => {
+      if (this.#draft === draft) {
+        fn();
+      }
+    });
   }
 
   #discardDraft(): void {
@@ -945,9 +967,6 @@ export class MeasurementTool extends SceneExtension<Renderable, MeasurementToolE
     }
     this.#draft ??= this.#createItem(this.kind);
     const draft = this.#draft;
-    if (draft.points.length === 0) {
-      draft.points.push(new THREE.Vector3());
-    }
     // Place the cursor point where it is now, then add a new point to follow the cursor. Picked
     // now, placed in click order and only into the draft that was clicked.
     this.#updateItem(draft, this.renderer.currentTime);
@@ -956,6 +975,9 @@ export class MeasurementTool extends SceneExtension<Renderable, MeasurementToolE
     this.#clicks = this.#clicks.then(async () => {
       if (!(await snapped) || this.#draft !== draft) {
         return;
+      }
+      if (draft.points.length === 0) {
+        draft.points.push(new THREE.Vector3());
       }
       const placed = draft.points.at(-1)!;
       // A cursor preview still in flight must not move the placed point
@@ -978,7 +1000,10 @@ export class MeasurementTool extends SceneExtension<Renderable, MeasurementToolE
 
   #handleMouseUp = (cursor: THREE.Vector2, _world: unknown, event: MouseEvent): void => {
     if (event.button === 2 && this.#rightDown.distanceTo(cursor) <= RIGHT_CLICK_SLOP) {
-      this.#finishDraft();
+      // Points clicked before finishing still count
+      this.#afterClicks(() => {
+        this.#finishDraft();
+      });
     }
   };
 
@@ -1021,11 +1046,12 @@ export class MeasurementTool extends SceneExtension<Renderable, MeasurementToolE
       }
       this.#drag = undefined;
       canvas.style.cursor = "grab";
-      // Sample the line where the vertex landed, after the last drag snap
-      const sample = async () => {
-        await this.#sampleProfile(hit.item);
-      };
-      void this.#dragSnap.then(sample, sample);
+      // Sample the line where the vertex landed, after the last drag snap, unless it was deleted
+      void this.#dragSnap.then(() => {
+        if (this.#items.includes(hit.item)) {
+          this.#startProfile(hit.item);
+        }
+      });
     };
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp, { once: true });
@@ -1056,16 +1082,18 @@ export class MeasurementTool extends SceneExtension<Renderable, MeasurementToolE
     ) {
       return;
     }
-    const placing = (this.#draft?.points.length ?? 0) > 1;
     if (isThreeDeeShortcut("3d.finishMeasurement", event)) {
-      if (placing) {
-        this.#finishDraft();
-      } else {
-        this.stopMeasuring();
-      }
+      // Decide once the clicks so far have landed, so click-then-finish finishes instead of exiting
+      this.#afterClicks(() => {
+        if ((this.#draft?.points.length ?? 0) > 1) {
+          this.#finishDraft();
+        } else {
+          this.stopMeasuring();
+        }
+      });
       event.preventDefault();
     } else if (isThreeDeeShortcut("3d.deleteMeasurement", event)) {
-      if (placing) {
+      if ((this.#draft?.points.length ?? 0) > 1) {
         // Remove the last placed point, keeping the one under the cursor
         this.#draft!.points.splice(-2, 1);
         this.#draft!.dirty = true;

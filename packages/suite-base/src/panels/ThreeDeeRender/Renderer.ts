@@ -2155,13 +2155,22 @@ export class Renderer extends EventEmitter<RendererEvents> {
       return undefined;
     }
     camera.layers.set(LAYER_DEFAULT);
-    // Points are picked from the raster's screen buffers, rasterized for this camera with only the
-    // pickable, non-hidden sets (the next frame redraws them for display)
-    this.pointRaster.preparePick(camera, hidden ?? new Set());
-    // The pick is drawn synchronously; only its readback is awaited
-    const result = this.#picker.pick(cursorCoords.x, cursorCoords.y, camera, hidden);
     try {
-      return await result;
+      // The raster reads world matrices and the projection before render() would refresh them
+      // (same as #drawScene); a camera's first render also switches it to WebGPU clip space
+      this.#scene.updateMatrixWorld();
+      if (camera.parent == undefined) {
+        camera.updateMatrixWorld();
+      }
+      if (camera.coordinateSystem !== this.gl.coordinateSystem) {
+        camera.coordinateSystem = this.gl.coordinateSystem;
+        camera.updateProjectionMatrix();
+      }
+      // Points are picked from the raster's screen buffers, rasterized for this camera with only
+      // the pickable, non-hidden sets (the next frame redraws them for display)
+      this.pointRaster.preparePick(camera, hidden ?? new Set());
+      // The pick is drawn synchronously; only its readback is awaited
+      return await this.#picker.pick(cursorCoords.x, cursorCoords.y, camera, hidden);
     } catch (error) {
       // A readback cancelled by device loss or disposal is no result; anything else is a bug
       // oxlint-disable-next-line typescript/no-unnecessary-condition -- changes while awaiting

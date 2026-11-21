@@ -17,14 +17,18 @@ export class LineMaterialWithAlphaVertex extends THREE.Line2NodeMaterial {
   }
 
   public override setupDiffuseColor(builder: THREE.NodeBuilder): void {
-    const { transparent, vertexColors } = this;
+    const { transparent, vertexColors, blending } = this;
     // Blending already applies a transparent line's alpha; alpha to coverage would apply it again.
     // Set while building, so it follows `transparent` (a change to it rebuilds the material).
     this.alphaToCoverage = !transparent;
+    // Not transparent skips the superclass's compositing over the opaque scene; not normal blending
+    // keeps the builder from treating the line as opaque, which would drop its opacity
     this.transparent = false;
+    this.blending = THREE.NoBlending;
     this.vertexColors = false;
     super.setupDiffuseColor(builder);
     this.transparent = transparent;
+    this.blending = blending;
     this.vertexColors = vertexColors;
 
     if (vertexColors && builder.geometry.hasAttribute("instanceColorStart")) {
