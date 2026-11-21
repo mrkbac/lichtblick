@@ -128,6 +128,22 @@ describe("MeasurementTool", () => {
     expect(tool.measurements).toHaveLength(1);
   });
 
+  it("deletes a measurement whose completing click is still pending", async () => {
+    const { tool, listeners, picks, canvas } = await setup();
+    tool.startMeasuring("distance");
+    picks.push(new THREE.Vector3(1, 1, 0));
+    listeners.get("click")!(new THREE.Vector2(10, 10));
+    await flushPicks();
+    picks.push(new THREE.Vector3(2, 1, 0));
+    listeners.get("click")!(new THREE.Vector2(20, 10));
+    // Delete while the second click, which completes the distance, is still being picked
+    document.body.appendChild(canvas.parentElement!);
+    canvas.dispatchEvent(new KeyboardEvent("keydown", { key: "Delete", bubbles: true }));
+    await flushPicks();
+    canvas.parentElement!.remove();
+    expect(tool.measurements).toHaveLength(1);
+  });
+
   it("marks a measurement unavailable while its transform is missing and recovers", async () => {
     const { tool, transformTree, addBase, frame } = await setup();
     expect(tool.measurements).toHaveLength(1);

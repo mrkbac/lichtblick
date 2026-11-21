@@ -894,11 +894,14 @@ export class MeasurementTool extends SceneExtension<Renderable, MeasurementToolE
     void this.#sampleProfile(item).catch(() => undefined);
   }
 
-  /** Run `fn` once the clicks placed so far have landed, unless the draft was replaced meanwhile */
+  /**
+   * Run `fn` once the clicks placed so far have landed, unless the draft was replaced or discarded
+   * meanwhile. A draft its last click completed still counts: it's then the selected measurement.
+   */
   #afterClicks(fn: () => void): void {
     const draft = this.#draft;
     this.#clicks = this.#clicks.then(() => {
-      if (this.#draft === draft) {
+      if (this.#draft === draft || draft?.complete === true) {
         fn();
       }
     });
