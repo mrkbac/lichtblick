@@ -455,12 +455,18 @@ describe("ThreeDeeRender", () => {
   it("does not save when a renderer is replaced without writing a camera move", () => {
     const props = setup();
     render(<ThreeDeeRender {...props} />);
+    const previous = mockedRenderer.mock.results.at(-1)!.value as ReturnType<
+      typeof createMockRenderer
+    >;
+    const initialCalls = mockedRenderer.mock.calls.length;
     vi.mocked(props.context.saveState).mockClear();
 
     act(() => {
       localResourceFolders.remove("unchanged-folder");
     });
 
+    expect(previous.dispose).toHaveBeenCalled();
+    expect(mockedRenderer.mock.calls.length).toBe(initialCalls + 1);
     expect(props.context.saveState).not.toHaveBeenCalled();
   });
 
