@@ -65,16 +65,20 @@ export class LiveMessageQueue {
   }
 
   #dropOldest(): void {
-    // The newest message of each topic (each child frame for transforms) is never dropped, so a
-    // one-shot static transform or map isn't lost for good while the tab is in the background.
+    // The newest message of each topic (each child frame for transforms) is kept, so a one-shot
+    // static transform or map isn't lost for good while the tab is in the background.
     const latest = new Set<MessageEvent>();
-    const seen = new Set<string>();
+    const seen = new Map<string, Set<string>>();
     for (let i = this.#messages.length - 1; i >= 0; i--) {
       const msg = this.#messages[i]!;
+      let keys = seen.get(msg.topic);
+      if (!keys) {
+        keys = new Set();
+        seen.set(msg.topic, keys);
+      }
       for (const key of seedKeys(msg)) {
-        const id = `${msg.topic}\0${key}`;
-        if (!seen.has(id)) {
-          seen.add(id);
+        if (!keys.has(key)) {
+          keys.add(key);
           latest.add(msg);
         }
       }
@@ -91,8 +95,8 @@ export class LiveMessageQueue {
         bytes -= msg.sizeInBytes;
       }
     }
-    if (bytes > this.#maxBytes) {
-      // The latest message per key alone exceeds the cap: drop the oldest regardless.
+    if (bytes > 0.9 * this.#maxBytes) {
+      // The kept messages leave too little headroom, so every push would rescan: drop them too.
       kept.length = 0;
       bytes = this.#bytes;
       for (count = 0; count < this.#messages.length && bytes > target; count++) {

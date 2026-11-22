@@ -6,6 +6,7 @@ import { MessageEvent } from "@lichtblick/suite-base/players/types";
 
 /** Seed key for topics whose messages replace each other as a whole. */
 const WHOLE_MESSAGE = "";
+const WHOLE_MESSAGE_KEYS: readonly string[] = [WHOLE_MESSAGE];
 
 /**
  * Child frame ids of a transform message (tf2 TFMessage, foxglove FrameTransform(s)), detected by
@@ -296,7 +297,7 @@ function upperBound(messages: readonly MessageEvent[], from: number, time: Time)
 }
 
 export function seedKeys(msg: MessageEvent): readonly string[] {
-  return transformChildFrames(msg.message) ?? [WHOLE_MESSAGE];
+  return transformChildFrames(msg.message) ?? WHOLE_MESSAGE_KEYS;
 }
 
 /** Browser JS heap use (fraction of its limit) above which the history gives memory back. */

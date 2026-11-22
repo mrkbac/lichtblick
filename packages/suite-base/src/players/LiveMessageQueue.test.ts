@@ -56,7 +56,7 @@ describe("LiveMessageQueue", () => {
   });
 
   it("keeps the newest message per topic and per transform child frame when dropping", () => {
-    const queue = new LiveMessageQueue(100, new PlayerAlertManager());
+    const queue = new LiveMessageQueue(1000, new PlayerAlertManager());
     const tf = (i: number, ...children: string[]) =>
       msg(i, 10, "/transforms", {
         transforms: children.map((child_frame_id) => ({ child_frame_id })),
@@ -65,13 +65,13 @@ describe("LiveMessageQueue", () => {
     const staticFrame = tf(1, "static", "moving");
     queue.push(latched);
     queue.push(staticFrame);
-    for (let i = 2; i < 1000; i++) {
+    for (let i = 2; i < 5000; i++) {
       queue.push(i % 2 === 0 ? tf(i, "moving") : msg(i, 10));
-      expect(queue.sizeInBytes()).toBeLessThanOrEqual(100);
+      expect(queue.sizeInBytes()).toBeLessThanOrEqual(1000);
     }
     const kept = queue.drain();
     expect(kept.slice(0, 2)).toEqual([latched, staticFrame]);
-    expect(kept.at(-1)!.receiveTime.sec).toBe(999);
+    expect(kept.at(-1)!.receiveTime.sec).toBe(4999);
     expect(kept.map((m) => m.receiveTime.sec)).toEqual(
       kept.map((m) => m.receiveTime.sec).sort((a, b) => a - b),
     );
