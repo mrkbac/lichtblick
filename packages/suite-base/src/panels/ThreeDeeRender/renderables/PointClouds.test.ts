@@ -295,5 +295,9 @@ describe("PointCloudHistoryRenderable decay", () => {
     expect(renderable.children.some((child) => child instanceof DecayPointRing)).toBe(true);
     expect(errors.hasError(path, DECAY_LIMITED)).toBe(true);
     vi.mocked(console.warn).mockClear(); // the limit notice is logged once
+
+    // Long after: the history is empty because its window passed, not because of the budget
+    renderable.startFrame(100_000_000_000n, "map", "map");
+    expect(errors.hasError(path, DECAY_LIMITED)).toBe(false);
   });
 });

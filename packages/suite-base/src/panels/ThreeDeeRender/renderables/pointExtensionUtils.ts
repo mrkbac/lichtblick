@@ -193,13 +193,16 @@ export function updateDecayNotice({
 }): string | undefined {
   const errors = renderer.settings.errors;
   const evictedUntil = ring.budgetEvictedUntil();
-  // No history fits next to the latest scan: it alone fills the budget, or one more scan its size
-  // wouldn't fit (the ring then stays empty)
+  const droppedInWindow = evictedUntil != undefined && evictedUntil >= windowStart;
+  // No history fits next to the latest scan: it alone fills the budget, or the budget just dropped
+  // the last history scan because one more scan its size doesn't fit (not merely an empty ring
+  // whose scans expired)
   const noRoom =
-    latestPoints >= maxPoints || (ring.scanCount() === 0 && latestPoints * 2 > maxPoints);
+    latestPoints >= maxPoints ||
+    (ring.scanCount() === 0 && latestPoints * 2 > maxPoints && droppedInWindow);
   const state = noRoom
     ? "threeDee:decayHistoryLimited"
-    : evictedUntil != undefined && evictedUntil >= windowStart
+    : droppedInWindow
       ? "threeDee:decayHistoryDropped"
       : ring.stride() > 1
         ? "threeDee:decayHistoryThinned"
