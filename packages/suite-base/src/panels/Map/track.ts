@@ -323,29 +323,43 @@ export function thinTrack(
   }
 }
 
-/** At most `budget` of `indices`, evenly spaced, with each sample in its original run. */
+/**
+ * At most `budget` of `indices` that still draw every run as a line: each run keeps its two ends
+ * and the rest of the budget goes to points inside runs, evenly. With more runs than that, an
+ * even selection of whole runs (as their two ends) is drawn, so no crossing line becomes a dot.
+ */
 function sampleEvenly(
   indices: readonly number[],
   runs: readonly number[],
   budget: number,
 ): { indices: Uint32Array; runs: number[] } {
-  const stride = Math.ceil(indices.length / budget);
-  const sampled = new Uint32Array(Math.ceil(indices.length / stride));
+  const runEnd = (r: number) => (runs[r + 1] ?? indices.length) - 1;
+  const sampled: number[] = [];
   const sampledRuns: number[] = [];
-  let run = 0;
-  let previousRun = -1;
-  for (let j = 0, k = 0; j < indices.length; j += stride, k++) {
-    while (run + 1 < runs.length && runs[run + 1]! <= j) {
-      run++;
+  const endsOnly = runs.length * 2 > budget;
+  const runStride = endsOnly ? Math.ceil((runs.length * 2) / budget) : 1;
+  // Points inside runs, and how many of them fit after the run ends.
+  const inner =
+    indices.length - runs.reduce((n, start, r) => n + Math.min(2, runEnd(r) - start + 1), 0);
+  const innerStride = endsOnly
+    ? Infinity
+    : Math.max(1, Math.ceil(inner / Math.max(1, budget - runs.length * 2)));
+  let innerSeen = 0;
+  for (let r = 0; r < runs.length; r += runStride) {
+    const start = runs[r]!;
+    const end = runEnd(r);
+    sampledRuns.push(sampled.length);
+    sampled.push(indices[start]!);
+    for (let j = start + 1; j < end; j++) {
+      if (innerSeen++ % innerStride === 0) {
+        sampled.push(indices[j]!);
+      }
     }
-    // Samples from different runs must not be joined by a line.
-    if (run !== previousRun) {
-      sampledRuns.push(k);
+    if (end > start) {
+      sampled.push(indices[end]!);
     }
-    previousRun = run;
-    sampled[k] = indices[j]!;
   }
-  return { indices: sampled, runs: sampledRuns };
+  return { indices: Uint32Array.from(sampled), runs: sampledRuns };
 }
 
 /**
@@ -373,7 +387,9 @@ export function nearestFix(
   let best = Math.min(kept[k]!, store.length - 1);
   let bestDistance = Infinity;
   for (let i = from; i <= to; i++) {
-    const d = Math.hypot(mercatorX(lon[i]!) - x, mercatorY(lat[i]!) - y);
+    // Periodic in longitude: the cursor can be on another copy of the world (lng beyond ±180).
+    const dx = mercatorX(lon[i]!) - x;
+    const d = Math.hypot(dx - Math.round(dx), mercatorY(lat[i]!) - y);
     if (d < bestDistance) {
       bestDistance = d;
       best = i;

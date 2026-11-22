@@ -6,6 +6,7 @@ import {
   headingFromTrack,
   resolveTrackFix,
   trackFeatures,
+  trackFixKey,
   trackFlushDelayMs,
 } from "./features";
 import { TrackStore } from "./track";
@@ -206,6 +207,37 @@ describe("resolveTrackFix", () => {
       });
     }
     expect(resolveTrackFix(tracks, 0, 2, [2, 0])).toBeUndefined();
+  });
+});
+
+describe("trackFixKey", () => {
+  it("changes when the newest row is replaced by a later fix", () => {
+    const store = new TrackStore("/fix", 4);
+    const push = (sec: number) => {
+      store.push({
+        topic: "/fix",
+        schemaName: "sensor_msgs/NavSatFix",
+        receiveTime: { sec, nsec: 0 },
+        sizeInBytes: 0,
+        message: { longitude: sec, latitude: 0 },
+      });
+    };
+    // Each replacement of the newest row: [row before, row after, key before, key after].
+    const replacements: [number, number, string, string][] = [];
+    for (let sec = 0; sec < 20; sec++) {
+      const last = store.length - 1;
+      const before = last >= 0 ? trackFixKey(store, last) : "";
+      const count = store.tailReplacements;
+      push(sec);
+      if (store.tailReplacements > count) {
+        replacements.push([last, store.length - 1, before, trackFixKey(store, last)]);
+      }
+    }
+    expect(replacements.length).toBeGreaterThan(0);
+    for (const [rowBefore, rowAfter, keyBefore, keyAfter] of replacements) {
+      expect(rowAfter).toBe(rowBefore);
+      expect(keyAfter).not.toBe(keyBefore);
+    }
   });
 });
 

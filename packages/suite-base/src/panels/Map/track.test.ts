@@ -156,9 +156,37 @@ describe("thinTrack with sparse or zigzagging tracks", () => {
       viewport,
     });
     expect(indices.length).toBeLessThanOrEqual(50_000);
-    expect(indices.length).toBeGreaterThan(40_000);
+    expect(indices.length).toBeGreaterThan(25_000);
     expect(runs[0]).toBe(0);
     expect(runs.every((run, i) => i === 0 || run > runs[i - 1]!)).toBe(true);
+  });
+});
+
+describe("thinTrack over budget with many short runs", () => {
+  it("keeps each crossing line as a line, not a dot", () => {
+    // Groups of A(-1,0) → B(1,0) crossing the viewport, then a detour around it via C and D.
+    const corners: [number, number][] = [
+      [-1, 0],
+      [1, 0],
+      [1, 50],
+      [-1, 50],
+    ];
+    const store = storeOf(160_000, (i) => corners[i % 4]!);
+    const viewport = { west: -0.1, east: 0.1, south: -0.1, north: 0.1 };
+    const { indices, runs } = thinTrack(store, {
+      zoom: 18,
+      minPixels: 1,
+      budget: 50_000,
+      viewport,
+    });
+    expect(indices.length).toBeLessThanOrEqual(50_000);
+    expect(runs.length).toBeGreaterThanOrEqual(20_000);
+    runs.forEach((start, r) => {
+      const end = runs[r + 1] ?? indices.length;
+      expect(end - start).toBe(2);
+      expect(store.lngLat(indices[start]!)).toEqual([-1, 0]);
+      expect(store.lngLat(indices[start + 1]!)).toEqual([1, 0]);
+    });
   });
 });
 
@@ -185,5 +213,13 @@ describe("nearestFix", () => {
     expect(nearestFix(store, kept, 1, [0.0303, 0])).toBe(30);
     // Not past the kept neighbors.
     expect(nearestFix(store, kept, 0, [0.07, 0])).toBe(49);
+  });
+
+  it("finds the fix from another copy of the world", () => {
+    const store = storeOf(3, (i) => [170 + i * 5, 0]);
+    const kept = Uint32Array.of(0, 2);
+    // 177 + 360 and 177 - 360 are 177 on the next and previous copy.
+    expect(nearestFix(store, kept, 1, [537, 0])).toBe(1);
+    expect(nearestFix(store, kept, 1, [-183, 0])).toBe(1);
   });
 });

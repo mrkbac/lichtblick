@@ -69,6 +69,7 @@ import {
   OverlaySource,
   overlayStyle,
   resolveTrackFix,
+  trackFixKey,
   trackFeatures,
   trackFlushDelayMs,
 } from "./features";
@@ -1379,7 +1380,7 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
         return {
           kind: "nav",
           // The fix, not the overlay: the popup and preview time stay put across redraws.
-          id: `${track.store.topic}\0${track.version}\0${fix}`,
+          id: trackFixKey(track.store, fix),
           message: track.store.message(fix),
           value:
             colored && value != undefined && isFinite(value)

@@ -527,3 +527,11 @@ export function resolveTrackFix(
   const fix = nearestFix(track.store, track.indices, position, at, usable);
   return fix < usable ? { track, fix } : undefined;
 }
+
+/**
+ * Identity of a track fix for hover state: its topic, index and receive time. An index alone can
+ * stand for another fix after the newest row is replaced in place or the store is thinned.
+ */
+export function trackFixKey(store: TrackStore, fix: number): string {
+  return `${store.topic}\0${fix}\0${store.columns.sec[fix]}\0${store.columns.nsec[fix]}`;
+}
