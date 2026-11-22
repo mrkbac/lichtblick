@@ -59,3 +59,17 @@ it("totals namespace descendants and distinguishes partial scans from complete p
   expect(full.buckets[0]).toBe(6);
   expect(namespaceTotals(topics, new Map(), () => undefined).count).toBeUndefined();
 });
+
+it("counts an aliased topic's payload once", () => {
+  const topics = [
+    { name: "/camera", schemaName: undefined },
+    { name: "/front", schemaName: undefined, aliasedFromName: "/camera" },
+  ];
+  const data = { count: 2, bytes: 12, estimatedBytes: false, buckets: [2], largestIntervals: [] };
+  const totals = namespaceTotals(
+    topics,
+    new Map(topics.map((topic) => [topic.name, data])),
+    () => 2,
+  );
+  expect(totals).toMatchObject({ count: 2, bytes: 12, scanned: 1, complete: true });
+});

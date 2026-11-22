@@ -114,12 +114,13 @@ function GapList({
   onSeek?: (time: Time) => void;
 }): React.JSX.Element | undefined {
   const { classes } = useStyles();
-  const medianHz = data.timing?.medianHz;
-  if (medianHz == undefined || data.largestIntervals.length === 0) {
+  const medianNs = data.timing?.medianIntervalNs;
+  if (medianNs == undefined || data.largestIntervals.length === 0) {
     return undefined;
   }
-  const thresholdNs = 2e9 / medianHz;
-  const gaps = data.largestIntervals.filter(({ nanoseconds }) => Number(nanoseconds) > thresholdNs);
+  const gaps = data.largestIntervals.filter(
+    ({ nanoseconds }) => Number(nanoseconds) > 2 * medianNs,
+  );
   return (
     <>
       <Typography
@@ -128,11 +129,11 @@ function GapList({
         className={classes.subheading}
         component="div"
       >
-        Largest gaps (over 2× the median interval of {(1e3 / medianHz).toFixed(1)} ms)
+        Largest gaps (over 2× the median interval of {(medianNs / 1e6).toFixed(1)} ms)
       </Typography>
       {gaps.length === 0 ? (
         <Typography variant="body2" color="textSecondary">
-          None: the topic arrives at a steady rate.
+          None: no interval exceeded the threshold.
         </Typography>
       ) : (
         <div className={classes.gaps}>
@@ -314,16 +315,21 @@ export function RecordingInspector(): React.JSX.Element {
   );
   const total = knownCounts.reduce<number>((sum, count) => sum + (count ?? 0), 0);
   const allCountsKnown = knownCounts.every((count) => count != undefined);
-  const byteTotal = topics.reduce(
-    (sum, topic) => sum + (inspections.get(topic.name)?.bytes ?? 0),
+  // Aliases share their recorded topic's payload: count each recorded topic once.
+  const recorded = new Map(
+    topics.map((topic) => [topic.aliasedFromName ?? topic.name, topic.name]),
+  );
+  const byteTotal = [...recorded.values()].reduce(
+    (sum, recordedName) => sum + (inspections.get(recordedName)?.bytes ?? 0),
     0,
   );
+  const allScanned = topics.every((topic) => inspections.has(topic.name));
   const byteShare = (bytes: number) =>
     byteTotal > 0 ? (
       <div
         className={cx(classes.share, classes.byteShare)}
         title={`${((100 * bytes) / byteTotal).toFixed(1)}% of ${
-          topics.every((topic) => inspections.has(topic.name)) ? "all" : "scanned"
+          allScanned ? "all" : "scanned"
         } message bytes`}
       >
         <div style={{ width: `${(100 * bytes) / byteTotal}%` }} />

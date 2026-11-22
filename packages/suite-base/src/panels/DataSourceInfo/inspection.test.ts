@@ -181,6 +181,7 @@ it("measures interleaved topics in one pass with independent timing statistics",
     minimumHz: 0.5,
     maximumHz: 1,
     medianHz: 0.75,
+    medianIntervalNs: 1_500_000_000,
     medianEstimated: false,
     jitterNs: Math.sqrt(2 / 3) * 1e9,
     duplicateTimestamps: 1,
@@ -204,6 +205,7 @@ it("bounds median samples while keeping exact jitter and extrema for long record
     minimumHz: 1000,
     maximumHz: 1000,
     medianHz: 1000,
+    medianIntervalNs: 1_000_000,
     medianEstimated: true,
     jitterNs: 0,
     duplicateTimestamps: 0,
@@ -247,4 +249,16 @@ it("keeps the longest intervals, longest first", async () => {
     2n,
   ]);
   expect(result.largestIntervals[0]!.start).toEqual(fromNanoSec(base + 5_000_000n));
+});
+
+it("takes the median interval from intervals, not from the median rate", async () => {
+  const result = await inspectTopic(
+    messages([0n, 1n, 4n].map((offsetNs) => base + offsetNs * 1_000_000n)),
+    start,
+    end,
+    new AbortController().signal,
+    vi.fn(),
+  );
+  // Intervals 1 ms and 3 ms: median 2 ms, while 1 / median(1000 Hz, 333 Hz) is 1.5 ms.
+  expect(result.timing?.medianIntervalNs).toBe(2_000_000);
 });

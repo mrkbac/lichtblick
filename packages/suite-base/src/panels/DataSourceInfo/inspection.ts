@@ -24,6 +24,8 @@ export type TopicInspection = {
     minimumHz?: number;
     maximumHz?: number;
     medianHz?: number;
+    /** Median of the positive intervals (not 1 / medianHz, which differs for even counts) */
+    medianIntervalNs?: number;
     medianEstimated: boolean;
     jitterNs: number;
     duplicateTimestamps: number;
@@ -164,6 +166,13 @@ export function finishInspection(state: InspectionState): TopicInspection {
       : rates.length % 2 === 0
         ? (rates[middle - 1]! + rates[middle]!) / 2
         : rates[middle];
+  const intervals = [...state.sample].sort((a, b) => a - b);
+  const medianIntervalNs =
+    intervals.length === 0
+      ? undefined
+      : intervals.length % 2 === 0
+        ? (intervals[middle - 1]! + intervals[middle]!) / 2
+        : intervals[middle];
   return {
     ...state.result,
     largestIntervals: [...state.result.largestIntervals],
@@ -171,6 +180,7 @@ export function finishInspection(state: InspectionState): TopicInspection {
       minimumHz: state.positiveIntervals > 0 ? 1e9 / state.maximum : undefined,
       maximumHz: state.positiveIntervals > 0 ? 1e9 / state.minimum : undefined,
       medianHz,
+      medianIntervalNs,
       medianEstimated: state.positiveIntervals > INTERVAL_SAMPLE_SIZE,
       jitterNs: Math.sqrt(Math.max(0, state.m2 / state.intervals)),
       duplicateTimestamps: state.duplicates,
