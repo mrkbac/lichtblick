@@ -5,7 +5,13 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { McapRecordBuilder, McapTypes, McapWriter, TempBuffer } from "@lichtblick/mcap-core";
+import {
+  McapRecordBuilder,
+  McapTypes,
+  McapWriter,
+  Opcode,
+  TempBuffer,
+} from "@lichtblick/mcap-core";
 import { McapUnindexedIterableSource } from "@lichtblick/suite-base/players/IterablePlayer/Mcap/McapUnindexedIterableSource";
 
 /** A readable over `bytes` that counts its reads */
@@ -327,5 +333,108 @@ describe("McapUnindexedIterableSource", () => {
     expect(init.alerts.map((alert) => alert.message)).toContain(
       "This file ends in the middle of a record",
     );
+  });
+  it("ignores the definitions in a chunk that fails halfway", async () => {
+    // Given a chunk (no CRC) that defines channel 1 as "broken", then ends mid-record
+    const inner = new McapRecordBuilder();
+    inner.writeChannel({
+      id: 1,
+      schemaId: 0,
+      topic: "broken",
+      messageEncoding: "json",
+      metadata: new Map(),
+    });
+    const records = new Uint8Array([...inner.buffer, Opcode.MESSAGE, 0xff, 0, 0, 0, 0, 0, 0, 0]);
+    const builder = new McapRecordBuilder();
+    builder.writeMagic();
+    builder.writeHeader({ library: "", profile: "" });
+    builder.writeChunk({
+      messageStartTime: 0n,
+      messageEndTime: 0n,
+      uncompressedSize: BigInt(records.byteLength),
+      uncompressedCrc: 0,
+      compression: "",
+      records,
+    });
+    // And a valid definition of channel 1 after it
+    builder.writeChannel({
+      id: 1,
+      schemaId: 0,
+      topic: "a",
+      messageEncoding: "json",
+      metadata: new Map(),
+    });
+    builder.writeMessage({
+      channelId: 1,
+      sequence: 0,
+      logTime: 1n,
+      publishTime: 1n,
+      data: json(1),
+    });
+    const source = new McapUnindexedIterableSource({
+      readable: readableOf(builder.buffer.slice()),
+    });
+
+    const init = await source.initialize();
+
+    // Then the valid definition names the channel
+    expect(init.topics.map((topic) => topic.name)).toEqual(["a"]);
+    expect(init.alerts.map((alert) => alert.message)).toContain(
+      "Some records in this file are corrupt and were skipped",
+    );
+  });
+
+  it("fails on a failed read instead of opening part of the file", async () => {
+    // Given a chunk larger than the scan's read window, so it is fetched on its own
+    const buffer = new TempBuffer();
+    const writer = new McapWriter({ writable: buffer });
+    await writer.start({ library: "", profile: "" });
+    const channelId = await writer.registerChannel({
+      messageEncoding: "json",
+      schemaId: 0,
+      metadata: new Map(),
+      topic: "a",
+    });
+    await writer.addMessage({
+      channelId,
+      data: new Uint8Array(9 * 1024 * 1024),
+      logTime: 1n,
+      publishTime: 1n,
+      sequence: 0,
+    });
+    await writer.end();
+    const file = readableOf(buffer.get().slice());
+    // And that fetch fails
+    const readable: McapTypes.IReadable = {
+      size: async () => await file.size(),
+      read: async (offset, size) => {
+        if (size > 8n * 1024n * 1024n) {
+          throw new Error("network error");
+        }
+        return await file.read(offset, size);
+      },
+    };
+    const source = new McapUnindexedIterableSource({ readable });
+
+    await expect(source.initialize()).rejects.toThrow("network error");
+  });
+
+  it("reads a chunk once for concurrent readers", async () => {
+    const bytes = await unchunked(
+      [
+        { channelId: 1, logTime: 1n },
+        { channelId: 2, logTime: 2n },
+      ],
+      { useChunks: true },
+    );
+    const readable = readableOf(bytes);
+    const source = new McapUnindexedIterableSource({ readable });
+    await source.initialize();
+    readable.reads = 0;
+
+    const [a, b] = await Promise.all([readAll(source, ["a"]), readAll(source, ["b"])]);
+
+    expect([a.length, b.length]).toEqual([1, 1]);
+    expect(readable.reads).toBe(1);
   });
 });

@@ -83,6 +83,7 @@ export class McapUnindexedIterableSource implements ISerializedIterableSource {
   #chunkOffsets: number[] = [];
   #chunkLengths: number[] = [];
   #chunkCache = new Map<number, Uint8Array>();
+  #chunkLoads = new Map<number, Promise<Uint8Array>>();
   #chunkCacheBytes = 0;
   #decompressHandlers?: McapTypes.DecompressHandlers;
   #size = 0;
@@ -104,6 +105,7 @@ export class McapUnindexedIterableSource implements ISerializedIterableSource {
     this.#chunkOffsets = [];
     this.#chunkLengths = [];
     this.#chunkCache.clear();
+    this.#chunkLoads.clear();
     this.#chunkCacheBytes = 0;
 
     const alerts: PlayerAlert[] = [];
@@ -194,6 +196,9 @@ export class McapUnindexedIterableSource implements ISerializedIterableSource {
       const chunkIndex = this.#chunkOffsets.length;
       const view = new DataView(records.buffer, records.byteOffset, records.byteLength);
       const countBefore = columns.count;
+      // Definitions take effect only once the whole chunk reads, so a broken chunk can't claim
+      // channel ids that a later valid definition should get
+      const definitions: McapTypes.TypedMcapRecord[] = [];
       try {
         for (let at = 0; at < records.byteLength; ) {
           const end = recordEnd(view, at);
@@ -203,7 +208,7 @@ export class McapUnindexedIterableSource implements ISerializedIterableSource {
           } else if (opcode === Opcode.SCHEMA || opcode === Opcode.CHANNEL) {
             const record = parseRecord(byteReader(records.subarray(at, end)), true);
             if (record) {
-              processRecord(record);
+              definitions.push(record);
             }
           }
           at = end;
@@ -212,6 +217,7 @@ export class McapUnindexedIterableSource implements ISerializedIterableSource {
         columns.count = countBefore; // a chunk that fails halfway adds no messages
         throw error;
       }
+      definitions.forEach(processRecord);
       this.#chunkOffsets.push(offset);
       this.#chunkLengths.push(bytes.byteLength);
     };
@@ -248,36 +254,42 @@ export class McapUnindexedIterableSource implements ISerializedIterableSource {
         });
         break;
       }
-      try {
-        switch (opcode) {
-          case Opcode.MESSAGE: {
-            const head =
-              reader.peek(offset, MESSAGE_DATA_AT) ?? (await reader.read(offset, MESSAGE_DATA_AT));
-            columns.add(new DataView(head.buffer, head.byteOffset), 0, length, -1, offset);
-            break;
-          }
-          case Opcode.CHUNK:
-            try {
-              processChunk(await reader.read(offset, length), offset);
-            } catch {
-              corruptChunks++;
-            }
-            break;
-          case Opcode.HEADER:
-          case Opcode.SCHEMA:
-          case Opcode.CHANNEL:
-          case Opcode.METADATA: {
-            const record = parseRecord(byteReader(await reader.read(offset, length)), true);
-            if (record) {
-              processRecord(record);
-            }
-            break;
-          }
-          default:
-            break; // attachments, indexes: not needed, and not read
+      // Reads stay outside the try blocks: a failed read fails the scan instead of quietly
+      // opening part of the file. Only records that don't parse are skipped as corrupt.
+      switch (opcode) {
+        case Opcode.MESSAGE: {
+          const head =
+            reader.peek(offset, MESSAGE_DATA_AT) ?? (await reader.read(offset, MESSAGE_DATA_AT));
+          columns.add(new DataView(head.buffer, head.byteOffset), 0, length, -1, offset);
+          break;
         }
-      } catch {
-        corruptRecords++;
+        case Opcode.CHUNK: {
+          const bytes = await reader.read(offset, length);
+          try {
+            processChunk(bytes, offset);
+          } catch {
+            corruptChunks++;
+          }
+          break;
+        }
+        case Opcode.HEADER:
+        case Opcode.SCHEMA:
+        case Opcode.CHANNEL:
+        case Opcode.METADATA: {
+          const bytes = await reader.read(offset, length);
+          let record: McapTypes.TypedMcapRecord | undefined;
+          try {
+            record = parseRecord(byteReader(bytes), true);
+          } catch {
+            corruptRecords++;
+          }
+          if (record) {
+            processRecord(record);
+          }
+          break;
+        }
+        default:
+          break; // attachments, indexes: not needed, and not read
       }
       offset += length;
     }
@@ -528,6 +540,16 @@ export class McapUnindexedIterableSource implements ISerializedIterableSource {
       this.#chunkCache.set(i, cached);
       return cached;
     }
+    // Concurrent readers (playback, backfill) share one load, so a chunk is read and counted once
+    let load = this.#chunkLoads.get(i);
+    if (!load) {
+      load = this.#loadChunk(i).finally(() => this.#chunkLoads.delete(i));
+      this.#chunkLoads.set(i, load);
+    }
+    return await load;
+  }
+
+  async #loadChunk(i: number): Promise<Uint8Array> {
     const bytes = await this.#options.readable.read(
       BigInt(this.#chunkOffsets[i]!),
       BigInt(this.#chunkLengths[i]!),
