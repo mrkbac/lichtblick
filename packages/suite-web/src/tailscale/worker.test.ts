@@ -3,6 +3,7 @@
 import { gzipSync } from "node:zlib";
 
 import { attachStream } from "./stream";
+import type { SessionStatus } from "./worker";
 
 vi.mock("@ai-ecoverse/wasm-tailscale/wasm_exec.js", () => ({}));
 vi.mock("./stream", () => ({ attachStream: vi.fn() }));
@@ -16,7 +17,19 @@ it("releases only the closing tab's live streams and retires the node after the 
     onconnect: vi.fn(),
     close: vi.fn(),
   };
-  const run = vi.fn();
+  const run =
+    vi.fn<
+      (callbacks: { notifyNetMap(json: string): void; notifyState(state: string): void }) => void
+    >();
+  const status = vi.fn(() =>
+    JSON.stringify({
+      peers: [
+        { name: "device", dnsName: "device.example.", addresses: [], online: false },
+        { name: "Example workshop", addresses: ["192.0.2.1"], online: true },
+        { name: "No address" },
+      ],
+    }),
+  );
   vi.stubGlobal("self", scope);
   vi.stubGlobal("TAILSCALE_WASM_ASSET", "client.gz");
   vi.stubGlobal(
@@ -25,7 +38,7 @@ it("releases only the closing tab's live streams and retires the node after the 
       public run = async () => {};
     },
   );
-  vi.stubGlobal("newIPN", () => ({ run }));
+  vi.stubGlobal("newIPN", () => ({ run, status }));
   // A valid empty WebAssembly module exercises decompression and instantiation.
   vi.stubGlobal(
     "fetch",
@@ -43,6 +56,38 @@ it("releases only the closing tab's live streams and retires the node after the 
     }
     await vi.waitFor(() => {
       expect(run).toHaveBeenCalledOnce();
+    });
+    const updates: SessionStatus[] = [];
+    first.port2.onmessage = (event: MessageEvent<SessionStatus>) => {
+      updates.push(event.data);
+    };
+    const callbacks = run.mock.calls[0]![0];
+    callbacks.notifyNetMap(
+      JSON.stringify({
+        peers: [
+          { name: "device.example.", addresses: [], online: true },
+          { name: "", addresses: ["example"], online: false },
+          { name: "unknown.example.", addresses: [] },
+        ],
+      })!,
+    );
+    await vi.waitFor(() => {
+      expect(updates.at(-1)?.peers).toEqual([
+        { name: "device.example", online: true },
+        { name: "example", online: false },
+        { name: "unknown.example", online: undefined },
+      ]);
+    });
+    callbacks.notifyState("Running");
+    await vi.waitFor(() => {
+      expect(updates.at(-1)?.state).toBe("Running");
+    });
+    first.port2.postMessage("refreshPeers");
+    await vi.waitFor(() => {
+      expect(updates.at(-1)?.peers).toEqual([
+        { name: "device.example", online: false },
+        { name: "192.0.2.1", label: "Example workshop", online: true },
+      ]);
     });
     first.port2.postMessage({ port: streamA.port2 }, [streamA.port2]);
     second.port2.postMessage({ port: streamB.port2 }, [streamB.port2]);

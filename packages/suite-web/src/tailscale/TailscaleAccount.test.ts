@@ -1,15 +1,20 @@
 // SPDX-License-Identifier: MPL-2.0
+// @vitest-environment jsdom
 
-import { prepareTailscaleTransport } from "./TailscaleAccount";
+import { act, renderHook } from "@testing-library/react";
+
+import { prepareTailscaleTransport, useTailscaleAccount } from "./TailscaleAccount";
 import type { SessionStatus } from "./worker";
 
-const { dispose, callbacks } = vi.hoisted(() => ({
+const { dispose, refreshPeers, callbacks } = vi.hoisted(() => ({
   dispose: vi.fn(),
+  refreshPeers: vi.fn(),
   callbacks: [] as ((status: SessionStatus) => void)[],
 }));
 vi.mock("./TailscaleBackend", () => ({
   TailscaleBackend: class {
     public dispose = dispose;
+    public refreshPeers = refreshPeers;
     public constructor(notify: (status: SessionStatus) => void) {
       callbacks.push(notify);
     }
@@ -45,4 +50,33 @@ it("directs a signed-out recent connection to the profile menu", async () => {
   callbacks[0]!({ state: "NeedsLogin", peers: [] });
   await expect(pending).rejects.toThrow("tailscaleProfileLogin");
   expect(dispose).toHaveBeenCalledOnce();
+});
+
+it("refreshes presence only while the device list is visible", () => {
+  vi.useFakeTimers();
+  const hidden = vi.spyOn(document, "hidden", "get").mockReturnValue(false);
+  const { result, unmount } = renderHook(() => useTailscaleAccount({ watchPeers: true }));
+  try {
+    act(() => {
+      result.current.start();
+    });
+    act(() => {
+      callbacks[0]!({ state: "Running", peers: [] });
+    });
+    expect(refreshPeers).toHaveBeenCalledTimes(1);
+    hidden.mockReturnValue(true);
+    vi.advanceTimersByTime(15000);
+    expect(refreshPeers).toHaveBeenCalledTimes(1);
+    hidden.mockReturnValue(false);
+    document.dispatchEvent(new Event("visibilitychange"));
+    vi.advanceTimersByTime(15000);
+    expect(refreshPeers).toHaveBeenCalledTimes(3);
+    unmount();
+    vi.advanceTimersByTime(15000);
+    document.dispatchEvent(new Event("visibilitychange"));
+    expect(refreshPeers).toHaveBeenCalledTimes(3);
+  } finally {
+    hidden.mockRestore();
+    vi.useRealTimers();
+  }
 });

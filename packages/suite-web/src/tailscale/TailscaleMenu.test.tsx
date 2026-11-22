@@ -11,7 +11,6 @@ import type { SessionStatus } from "./worker";
 
 const start = vi.fn();
 const logout = vi.fn();
-const selectSource = vi.fn();
 const close = vi.fn();
 let status: SessionStatus;
 
@@ -20,9 +19,6 @@ vi.mock("react-i18next", () => ({
 }));
 vi.mock("./TailscaleAccount", () => ({
   useTailscaleAccount: () => ({ status, start, logout }),
-}));
-vi.mock("@lichtblick/suite-base/context/PlayerSelectionContext", () => ({
-  usePlayerSelection: () => ({ selectSource }),
 }));
 
 function showMenu() {
@@ -47,63 +43,14 @@ describe("Tailscale profile menu", () => {
     const link = screen.getByRole("menuitem", { name: "Sign in to Tailscale" });
     expect(link.getAttribute("href")).toBe(status.login);
     expect(link.getAttribute("rel")).toContain("noopener");
-    expect(selectSource).not.toHaveBeenCalled();
   });
 
-  it.each([
-    ["one.example.ts.net", "one", "ws://one.example.ts.net:8765"],
-    ["2001:db8::1", "2001:db8::1", "ws://[2001:db8::1]:8765"],
-  ])("connects to %s in one click", (peer, label, url) => {
-    status = { state: "Running", peers: [peer] };
+  it("shows sign-out without putting device connections in the account menu", () => {
+    status = { state: "Running", peers: [{ name: "device.example.ts.net", online: true }] };
     showMenu();
-    fireEvent.click(screen.getByRole("menuitem", { name: label }));
-    expect(selectSource).toHaveBeenCalledExactlyOnceWith("tailscale", {
-      type: "connection",
-      params: { url },
-    });
-    expect(close).toHaveBeenCalledOnce();
-  });
-
-  it("filters long tailnets, orders device names and opens a unique match with Enter", () => {
-    status = {
-      state: "Running",
-      peers: Array.from({ length: 10 }, (_, i) => `device-${10 - i}.example.ts.net`),
-    };
-    showMenu();
-    expect(
-      screen
-        .getAllByRole("menuitem")
-        .slice(0, 3)
-        .map((item) => item.textContent),
-    ).toEqual(["device-1", "device-2", "device-3"]);
-    const filter = screen.getByRole("textbox", { name: "Filter devices" });
-    filter.focus();
-    fireEvent.keyDown(filter, { key: "d" });
-    expect(document.activeElement).toBe(filter);
-    fireEvent.change(filter, { target: { value: "ICE-10" } });
-    expect(screen.queryByRole("menuitem", { name: "device-1" })).toBeNull();
-    fireEvent.keyDown(filter, { key: "Enter" });
-    expect(selectSource).toHaveBeenCalledExactlyOnceWith("tailscale", {
-      type: "connection",
-      params: { url: "ws://device-10.example.ts.net:8765" },
-    });
-  });
-
-  it("keeps custom addresses editable, validates the URL and connects on Enter", () => {
-    showMenu();
-    fireEvent.click(screen.getByRole("menuitem", { name: "Custom bridge address…" }));
-    const input = screen.getByRole("textbox", { name: "Foxglove bridge URL" });
-    fireEvent.change(input, { target: { value: "https://example.test" } });
-    fireEvent.keyDown(input, { key: "Enter" });
-    expect(close).not.toHaveBeenCalled();
-    const url = "wss://example.test:9000/custom";
-    fireEvent.change(input, { target: { value: url } });
-    fireEvent.keyDown(input, { key: "Enter" });
-    expect(selectSource).toHaveBeenCalledExactlyOnceWith("tailscale", {
-      type: "connection",
-      params: { url },
-    });
-    expect(close).toHaveBeenCalledOnce();
+    expect(screen.getAllByRole("menuitem")).toHaveLength(1);
+    fireEvent.click(screen.getByRole("menuitem", { name: "Sign out of Tailscale" }));
+    expect(logout).toHaveBeenCalledOnce();
   });
 
   it("offers retry on failure and allows clearing a failed stored identity", () => {

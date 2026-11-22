@@ -32,6 +32,7 @@ import { sharedI18nObject } from "@lichtblick/suite-base/i18n";
 
 import LocalStorageAppConfiguration from "./services/LocalStorageAppConfiguration";
 
+const TailscaleDevices = lazy(async () => await import("./tailscale/TailscaleDevices"));
 const TailscaleMenu = lazy(async () => await import("./tailscale/TailscaleMenu"));
 
 const isDevelopment = process.env.NODE_ENV === "development";
@@ -88,6 +89,11 @@ export function WebRoot(props: {
           const { prepareTailscaleTransport } = await import("./tailscale/TailscaleAccount");
           return await prepareTailscaleTransport(signal);
         },
+        LiveDevices: (deviceProps) => (
+          <Suspense fallback={null}>
+            <TailscaleDevices {...deviceProps} />
+          </Suspense>
+        ),
         AccountMenuItems: (menuProps) => (
           <Suspense fallback={null}>
             <TailscaleMenu {...menuProps} />

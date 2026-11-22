@@ -54,6 +54,9 @@ export class TailscaleBackend implements LiveConnectionBackend {
     this.#streams.add(socket);
     return socket;
   }
+  public refreshPeers(): void {
+    this.#worker.port.postMessage("refreshPeers");
+  }
   public logout(): void {
     this.#worker.port.postMessage("logout");
   }

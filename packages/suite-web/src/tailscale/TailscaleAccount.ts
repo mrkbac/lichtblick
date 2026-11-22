@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MPL-2.0
 
-import { useSyncExternalStore } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 
 import { sharedI18nObject } from "@lichtblick/suite-base/i18n";
 
@@ -48,12 +48,31 @@ function subscribe(listener: () => void) {
 }
 const getSnapshot = () => status;
 
-export function useTailscaleAccount(): {
+export function useTailscaleAccount({ watchPeers = false } = {}): {
   status: SessionStatus | undefined;
   start: () => void;
   logout: () => void;
 } {
-  return { status: useSyncExternalStore(subscribe, getSnapshot), start, logout };
+  const current = useSyncExternalStore(subscribe, getSnapshot);
+  useEffect(() => {
+    if (!watchPeers || current?.state !== "Running") {
+      return;
+    }
+    // Peer-only presence changes can arrive between net-map notifications.
+    const refresh = () => {
+      if (!document.hidden) {
+        account?.refreshPeers();
+      }
+    };
+    refresh();
+    const timer = setInterval(refresh, 15000);
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", refresh);
+    };
+  }, [watchPeers, current?.state]);
+  return { status: current, start, logout };
 }
 
 /** A player owns its port. Closing a source leaves the profile menu signed in. */

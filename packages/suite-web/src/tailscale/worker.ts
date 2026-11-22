@@ -10,11 +10,12 @@ declare const TAILSCALE_WASM_ASSET: string;
 
 export type SessionStatus = {
   state: string;
-  peers: string[];
+  // name is a dialable DNS name or IP; label is the optional display-only hostname.
+  peers: { name: string; label?: string; online?: boolean }[];
   login?: string;
   error?: "tailscaleFailed" | "tailscaleStorageError";
 };
-type Command = "start" | { port: MessagePort } | "release" | "logout";
+type Command = "refreshPeers" | "start" | { port: MessagePort } | "release" | "logout";
 const scope = self as unknown as SharedWorkerGlobalScope;
 const clients = new Map<MessagePort, Set<AbortController>>();
 let status: SessionStatus = { state: "Starting", peers: [] };
@@ -28,6 +29,20 @@ function update(change: Partial<SessionStatus>) {
   for (const client of clients.keys()) {
     client.postMessage(status);
   }
+}
+
+function updatePeers(json: string, source: "netmap" | "status") {
+  const map = JSON.parse(json) as {
+    peers?: { name?: string; dnsName?: string; addresses?: string[]; online?: boolean }[];
+  };
+  const peers = (map.peers ?? []).flatMap((peer) => {
+    // Net maps use name for DNS. In a status snapshot name is only the OS hostname.
+    const dnsName = ((source === "netmap" ? peer.name : peer.dnsName) ?? "").replace(/\.$/, "");
+    const name = dnsName || peer.addresses?.[0];
+    const label = source === "status" && !dnsName ? peer.name : undefined;
+    return name ? [{ name, label, online: peer.online }] : [];
+  });
+  update({ peers });
 }
 
 async function start() {
@@ -88,12 +103,7 @@ async function start() {
       if (signedOut) {
         return;
       }
-      const map = JSON.parse(json) as { peers?: { name: string; addresses: string[] }[] };
-      update({
-        peers: (map.peers ?? [])
-          .map((peer) => peer.name.replace(/\.$/, "") || (peer.addresses[0] ?? ""))
-          .filter(Boolean),
-      });
+      updatePeers(json, "netmap");
     },
     notifyBrowseToURL: (login) => {
       if (signedOut) {
@@ -160,6 +170,13 @@ scope.onconnect = ({ ports }) => {
         void logout().catch(() => {
           update({ error: "tailscaleStorageError" });
         });
+      }
+    } else if (data === "refreshPeers") {
+      if (status.state === "Running" && !signedOut) {
+        const snapshot = node?.status();
+        if (typeof snapshot === "string") {
+          updatePeers(snapshot, "status");
+        }
       }
     } else if (data === "start") {
       client.postMessage(status);
