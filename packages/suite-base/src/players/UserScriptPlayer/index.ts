@@ -41,6 +41,7 @@ import {
   UserScriptLog,
 } from "@lichtblick/suite-base/players/UserScriptPlayer/types";
 import { hasTransformerErrors } from "@lichtblick/suite-base/players/UserScriptPlayer/utils";
+import { isRecordingSource } from "@lichtblick/suite-base/players/constants";
 import {
   AdvertiseOptions,
   BlockCache,
@@ -288,8 +289,20 @@ export default class UserScriptPlayer implements Player {
   // a script may set its own alert or clear its alert
   #alertStore = new Map<string, PlayerAlert>();
 
-  // keep track of last message on all topics to recompute output topic messages when user scripts change
+  // Last message per delivered topic, to rerun an edited user script (the first one too) on its
+  // possibly new inputs. These are the messages panels and the message pipeline hold anyway, so it
+  // costs little; pruned like the pipeline's own cache (see #pruneLastMessages).
   #lastMessageByInputTopic = new Map<string, MessageEvent>();
+  // Aliased topic name -> the topic it is aliased from. An alias and its source carry the same
+  // events, so pruning treats them as one topic.
+  #aliasSources = memoizeWeak(
+    (topics: readonly Topic[]) =>
+      new Map(
+        filterMap(topics, ({ name, aliasedFromName }) =>
+          aliasedFromName != undefined ? ([name, aliasedFromName] as const) : undefined,
+        ),
+      ),
+  );
   #userScriptIdsNeedUpdate = new Set<string>();
 
   #protectedState = new MutexLocked<ProtectedState>({
@@ -457,7 +470,7 @@ export default class UserScriptPlayer implements Player {
       // which specific topics had their preloaded data invalidated via reference comparison.
       this.#memoizedScriptTopics = this.#memoizedScriptTopics.map((t) => ({ ...t }));
       await this.#resetWorkersUnlocked(state);
-      this.#setSubscriptionsUnlocked(this.#subscriptions, state);
+      this.#pruneLastMessages(state, this.#setSubscriptionsUnlocked(this.#subscriptions, state));
 
       return this.#pausedStateToReemit(state);
     });
@@ -1314,7 +1327,7 @@ export default class UserScriptPlayer implements Player {
     this.#subscriptions = subscriptions;
     this.#protectedState
       .runExclusive(async (state) => {
-        this.#setSubscriptionsUnlocked(subscriptions, state);
+        this.#pruneLastMessages(state, this.#setSubscriptionsUnlocked(subscriptions, state));
       })
       .catch((err: unknown) => {
         log.error(err);
@@ -1322,11 +1335,34 @@ export default class UserScriptPlayer implements Player {
       });
   }
 
-  #setSubscriptionsUnlocked(subscriptions: SubscribePayload[], state: ProtectedState): void {
+  /**
+   * On a recording, drop the last messages of topics nobody subscribes to any more (they can be
+   * large, e.g. an image), counting an alias and its source as one topic: subscribing again
+   * backfills them. Like the message pipeline, a live source keeps them, since it never sends a
+   * latched message again.
+   */
+  #pruneLastMessages(state: ProtectedState, subscriptions: Immutable<SubscribePayload[]>): void {
+    if (!isRecordingSource(this.#playerState?.capabilities ?? [])) {
+      return;
+    }
+    const aliasSources = this.#aliasSources(state.lastPlayerStateActiveData?.topics ?? []);
+    const sourceTopic = (topic: string) => aliasSources.get(topic) ?? topic;
+    const subscribed = new Set(subscriptions.map(({ topic }) => sourceTopic(topic)));
+    for (const topic of this.#lastMessageByInputTopic.keys()) {
+      if (!subscribed.has(sourceTopic(topic))) {
+        this.#lastMessageByInputTopic.delete(topic);
+      }
+    }
+  }
+
+  #setSubscriptionsUnlocked(
+    subscriptions: SubscribePayload[],
+    state: ProtectedState,
+  ): Immutable<SubscribePayload[]> {
     this.#scriptSubscriptions = getPreloadTypes(subscriptions);
-    this.#player.setSubscriptions(
-      remapVirtualSubscriptions(subscriptions, state.inputsByOutputTopic),
-    );
+    const remapped = remapVirtualSubscriptions(subscriptions, state.inputsByOutputTopic);
+    this.#player.setSubscriptions(remapped);
+    return remapped;
   }
 
   public close = (): void => {
