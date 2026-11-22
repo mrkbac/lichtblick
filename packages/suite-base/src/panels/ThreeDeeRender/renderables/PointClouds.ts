@@ -498,7 +498,14 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
       this.renderer.settings.errors.add(
         settingsPath,
         MISSING_TRANSFORM,
-        missingTransformMessage(renderFrameId, fixedFrameId, missingFrame),
+        missingTransformMessage(
+          this.renderer.transformTree,
+          renderFrameId,
+          fixedFrameId,
+          missingFrame.frameId,
+          currentTime,
+          missingFrame.messageTime,
+        ),
       );
       return false;
     }
