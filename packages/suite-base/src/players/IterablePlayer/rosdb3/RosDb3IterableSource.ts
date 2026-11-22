@@ -208,6 +208,7 @@ export class RosDb3IterableSource implements ISerializedIterableSource {
         topics: missing,
         rawMessages: true,
       })) {
+        abortSignal?.throwIfAborted();
         const prev = latest.get(msg.topic.name);
         if (!prev || compare(msg.timestamp, prev.receiveTime) >= 0) {
           latest.set(msg.topic.name, {
