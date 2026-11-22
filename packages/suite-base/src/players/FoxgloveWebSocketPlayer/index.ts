@@ -638,7 +638,8 @@ export default class FoxgloveWebSocketPlayer implements Player {
           if (channel.id === id) {
             this.#resolvedSubscriptionsById.delete(subId);
             this.#resolvedSubscriptionsByTopic.delete(channel.topic);
-            this.#client?.unsubscribe(subId);
+            // No unsubscribe: unadvertising a channel ends its subscriptions on the server, which
+            // answers an unsubscribe for one with a "did not exist" warning.
             this.#unresolvedSubscriptions.add(channel.topic);
           }
         }
