@@ -93,9 +93,12 @@ function useTopicCountsByPanelType(
       }
       const newCounts = new Map<string, number>();
       for (const [type, schemas] of schemasByType) {
-        const count = topics.filter(
-          (topic) => topic.schemaName != undefined && schemas.has(topic.schemaName),
-        ).length;
+        let count = 0;
+        for (const topic of topics) {
+          if (topic.schemaName != undefined && schemas.has(topic.schemaName)) {
+            count++;
+          }
+        }
         if (count > 0) {
           newCounts.set(type, count);
         }
