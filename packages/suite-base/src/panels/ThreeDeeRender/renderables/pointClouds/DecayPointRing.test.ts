@@ -146,6 +146,24 @@ describe("DecayPointRing", () => {
     expect(bytes()).toEqual([20, 20, 20, 100, 20, 20, 20, 200, 2, 2, 2, 2]);
   });
 
+  it("preserves the appearance and backup colors when the ring color encoding changes", () => {
+    const { ring, points } = makeRing();
+    ring.push(
+      { receiveTime: 1n, messageTime: 1n, frameId: "lidar", pose: makePose() },
+      Float32Array.of(1, 2, 3),
+      Uint8Array.of(55, 0, 0, 180),
+      Uint8Array.of(0, 55, 0, 180),
+    );
+    const bytes = () => {
+      const rgba = points.colorAttribute().array as Uint32Array;
+      return Array.from(new Uint8Array(rgba.buffer, rgba.byteOffset, 4));
+    };
+    ring.setStyle({ ...style, encoding: "srgb" }, { preserveColors: true });
+    expect(bytes()).toEqual([128, 0, 0, 180]);
+    ring.recolor();
+    expect(bytes()).toEqual([0, 128, 0, 180]);
+  });
+
   it("keeps distinct records with the same times apart by their content", () => {
     const { ring } = makeRing();
     const info = { receiveTime: 1n, messageTime: 1n, frameId: "lidar", pose: makePose() };

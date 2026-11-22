@@ -405,10 +405,17 @@ export class Images extends SceneExtension<ImageRenderable> {
 
   #pointCloudCalibrationTopic(imageTopic: string): string | undefined {
     const config: Partial<LayerSettingsImage> | undefined = this.renderer.config.topics[imageTopic];
+    const topics = [...this.#cameraInfoTopics].sort();
+    const namespace = getTopicMatchPrefix(imageTopic);
+    const parent = namespace == undefined ? undefined : getTopicMatchPrefix(namespace.slice(0, -1));
     return (
       config?.cameraInfoTopic ??
-      [...this.#cameraInfoTopics].sort().find((topic) => topic.startsWith(imageTopic + "/")) ??
-      this.#matchingCalibrationTopic(imageTopic)
+      topics.find((topic) => topic.startsWith(imageTopic + "/")) ??
+      this.#matchingCalibrationTopic(imageTopic) ??
+      // ROS image transports add a topic segment under the base image topic.
+      (parent == undefined
+        ? undefined
+        : topics.find((topic) => getTopicMatchPrefix(topic) === parent))
     );
   }
 

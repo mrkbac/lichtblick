@@ -87,6 +87,13 @@ describe("pointCloudSettingsNode camera color mode", () => {
   const cloud = { name: "/points", schemaName: "sensor_msgs/msg/PointCloud2" };
   const sources = { cameraTopics: ["/camera/color"] };
 
+  it("leaves Camera out for layers without camera support", () => {
+    const field = pointCloudSettingsNode(cloud, ["intensity"], {}).fields?.colorMode;
+    expect(field).toMatchObject({
+      options: expect.not.arrayContaining([expect.objectContaining({ value: "camera" })]),
+    });
+  });
+
   it("offers Camera as a color mode and displays the camera and fallback settings when active", () => {
     const inactive = pointCloudSettingsNode(cloud, ["intensity"], {}, sources).fields!;
     expect(inactive.colorMode).toMatchObject({

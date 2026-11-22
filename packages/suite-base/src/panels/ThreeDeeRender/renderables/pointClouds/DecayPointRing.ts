@@ -7,7 +7,7 @@ import type { RosValue } from "@lichtblick/suite-base/players/types";
 
 import { MAX_SET_POINTS } from "./PointRaster";
 import { POSE_FLOATS, PointColorEncoding, PointShape, RasterPoints } from "./RasterPoints";
-import { applyCameraFallback } from "./cameraColor";
+import { applyCameraFallback, convertPointColorEncoding } from "./cameraColor";
 import { BaseUserData, Renderable } from "../../Renderable";
 import type { Renderer } from "../../Renderer";
 import { makePose, Pose } from "../../transforms";
@@ -291,8 +291,24 @@ export class DecayPointRing extends Renderable<BaseUserData, /*TRenderer=*/ unde
     return this.#budgetEvictedUntil;
   }
 
-  public setStyle(style: RingStyle): void {
+  public setStyle(
+    style: RingStyle,
+    { preserveColors = false }: { preserveColors?: boolean } = {},
+  ): void {
     const points = this.#points;
+    if (preserveColors && points.encoding !== style.encoding) {
+      for (const scan of this.#scans) {
+        convertPointColorEncoding(
+          this.#colors.subarray(scan.start * 4, (scan.start + scan.count) * 4),
+          style.encoding,
+        );
+        if (scan.unpaintedColors) {
+          scan.unpaintedColors = scan.unpaintedColors.slice();
+          convertPointColorEncoding(scan.unpaintedColors, style.encoding);
+        }
+      }
+      points.markAllColors();
+    }
     points.pointSize = style.pointSize;
     points.square = style.square;
     points.encoding = style.encoding;

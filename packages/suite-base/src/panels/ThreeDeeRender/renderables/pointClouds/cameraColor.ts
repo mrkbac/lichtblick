@@ -47,6 +47,20 @@ const srgbToLinearByte = Uint8Array.from({ length: 256 }, (_, i) => {
   return Math.round(255 * (s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4));
 });
 
+const linearToSrgbByte = Uint8Array.from({ length: 256 }, (_, i) => {
+  const x = i / 255;
+  return Math.round(255 * (x <= 0.0031308 ? x * 12.92 : 1.055 * x ** (1 / 2.4) - 0.055));
+});
+
+export function convertPointColorEncoding(colors: Uint8Array, target: "srgb" | "linear"): void {
+  const table = target === "srgb" ? linearToSrgbByte : srgbToLinearByte;
+  for (let i = 0; i < colors.length; i += 4) {
+    colors[i] = table[colors[i]!]!;
+    colors[i + 1] = table[colors[i + 1]!]!;
+    colors[i + 2] = table[colors[i + 2]!]!;
+  }
+}
+
 /** Overwrite only the RGB channels of points that project into the camera image. */
 export function paintPointColors(
   positions: Float32Array,

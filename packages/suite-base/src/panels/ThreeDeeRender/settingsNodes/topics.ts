@@ -1037,7 +1037,7 @@ export function pointCloudSettingsNode(
         decayMaxPoints: number;
       }
   >,
-  { decayLimit = false, cameraTopics = [] }: { decayLimit?: boolean; cameraTopics?: string[] } = {},
+  { decayLimit = false, cameraTopics }: { decayLimit?: boolean; cameraTopics?: string[] } = {},
 ): DocumentedNode {
   const node = pointSettingsNode(topic, messageFields, config);
   if (decayLimit && (config.decayTime ?? 0) > 0) {
@@ -1065,7 +1065,7 @@ export function pointCloudSettingsNode(
     );
   }
   const fallbackMode = node.fields.colorMode;
-  if (fallbackMode?.input === "select") {
+  if (cameraTopics != undefined && fallbackMode?.input === "select") {
     const cameraMode = config.colorFromCamera ?? config.colorCameraTopic != undefined;
     node.fields = Object.fromEntries(
       Object.entries(node.fields).flatMap(
