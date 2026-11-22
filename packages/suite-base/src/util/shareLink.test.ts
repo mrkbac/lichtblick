@@ -9,8 +9,8 @@ import {
   sharedLayoutFromHash,
 } from "./shareLink";
 
-const BASE =
-  "https://app.example/?ds=remote-file&ds.url=https://data.example/run.mcap&time=2024-01-01T00:00:00.000000000Z";
+const PAGE = "https://app.example/?time=2024-01-01T00:00:00.000000000Z";
+const SOURCE = { ds: "remote-file", dsParams: { url: "https://data.example/run.mcap" } };
 
 describe("shareLink", () => {
   it("round-trips a layout through a link fragment", async () => {
@@ -18,7 +18,11 @@ describe("shareLink", () => {
     const encoded = await encodeSharedLayout(layout);
     expect(encoded).toMatch(/^[A-Za-z0-9_-]+$/);
 
-    const { link, layoutIncluded } = buildShareLink(BASE, { sec: 1700000000, nsec: 5 }, encoded);
+    const { link, layoutIncluded } = buildShareLink(
+      PAGE,
+      { ...SOURCE, time: { sec: 1700000000, nsec: 5 } },
+      encoded,
+    );
     expect(layoutIncluded).toBe(true);
     const url = new URL(link);
     expect(url.searchParams.get("time")).toBe("2023-11-14T22:13:20.000000005Z");
@@ -31,8 +35,8 @@ describe("shareLink", () => {
 
   it("leaves out a layout that is too large and drops time for live sources", () => {
     const { link, layoutIncluded } = buildShareLink(
-      `${BASE}#layout=old`,
-      undefined,
+      `${PAGE}#layout=old`,
+      SOURCE,
       "x".repeat(MAX_SHARED_LAYOUT_LENGTH + 1),
     );
     expect(layoutIncluded).toBe(false);
@@ -41,9 +45,15 @@ describe("shareLink", () => {
     expect(url.searchParams.has("time")).toBe(false);
   });
 
-  it("replaces a layoutUrl with the embedded layout", () => {
-    const { link } = buildShareLink(`${BASE}&layoutUrl=https://x.example/l.json`, undefined, "abc");
-    expect(new URL(link).searchParams.has("layoutUrl")).toBe(false);
+  it("links the active source, not stale params in the address bar", () => {
+    const { link } = buildShareLink(
+      "https://app.example/?mcap-bundle=old&ds=remote-file&ds.url=https://data.example/old.mcap&layoutUrl=https://x.example/l.json",
+      SOURCE,
+      "abc",
+    );
+    const params = new URL(link).searchParams;
+    expect([...params.keys()].sort()).toEqual(["ds", "ds.url"]);
+    expect(params.get("ds.url")).toBe("https://data.example/run.mcap");
   });
 
   it("ignores other or oversized fragments", () => {

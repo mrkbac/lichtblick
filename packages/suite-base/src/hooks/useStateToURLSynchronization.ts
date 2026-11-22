@@ -21,6 +21,7 @@ import {
   usePlayerSelection,
 } from "@lichtblick/suite-base/context/PlayerSelectionContext";
 import { isRecordingSource } from "@lichtblick/suite-base/players/constants";
+import { PlayerURLState } from "@lichtblick/suite-base/players/types";
 import {
   AppURLState,
   readableHref,
@@ -46,6 +47,18 @@ export function isLocalFileSource(
     (candidate) => candidate.id === sourceId || candidate.legacyIds?.includes(sourceId) === true,
   );
   return source?.type === "file";
+}
+
+/** The URL params that reopen a player's source, with the selected event if any. */
+export function sourceURLState(
+  urlState: PlayerURLState,
+  selectedEventId: string | undefined,
+): AppURLState {
+  return {
+    ds: urlState.sourceId,
+    dsParams: _.pickBy({ ...urlState.parameters, eventId: selectedEventId }, _.isString),
+    dsParamsArray: _.pickBy(urlState.parameters, _.isArray),
+  };
 }
 
 /**
@@ -94,20 +107,6 @@ export function useStateToURLSynchronization(): void {
       return;
     }
 
-    updateUrl({
-      ds: stablePlayerUrlState.sourceId,
-      dsParams: _.pickBy(
-        {
-          ...stablePlayerUrlState.parameters,
-          eventId: selectedEventId,
-        },
-        _.isString,
-      ),
-      dsParamsArray: _.pickBy(
-        stablePlayerUrlState.parameters,
-
-        _.isArray,
-      ),
-    });
+    updateUrl(sourceURLState(stablePlayerUrlState, selectedEventId));
   }, [availableSources, selectedEventId, stablePlayerUrlState]);
 }

@@ -39,6 +39,11 @@ export type Layout = {
   name: string;
   from?: string;
   permission: LayoutPermission;
+  /**
+   * Installed from a link (a share link or `layoutUrl`) rather than made or imported by the user:
+   * like a shared layout's, its user scripts only run after the user allows them.
+   */
+  untrusted?: true;
 
   /** @deprecated old field name, migrated to working/baseline */
   data?: LayoutData;

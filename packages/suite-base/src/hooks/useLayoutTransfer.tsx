@@ -26,11 +26,15 @@ import { AppEvent } from "../services/IAnalytics";
 type UseLayoutTransfer = {
   importLayout: () => Promise<void>;
   exportLayout: () => Promise<void>;
-  /** Saves and selects a layout; rejects with AbortError if the optional signal is cancelled. */
+  /**
+   * Saves and selects a layout; rejects with AbortError if the optional signal is cancelled.
+   * `untrusted` marks a layout from a link, whose user scripts then need approval.
+   */
   parseAndInstallLayout: (
     file: File,
     namespace: Namespace,
     signal?: AbortSignal,
+    options?: { untrusted?: boolean },
   ) => Promise<Layout | undefined>;
 };
 
@@ -43,7 +47,12 @@ export function useLayoutTransfer(): UseLayoutTransfer {
   const { getCurrentLayoutState } = useCurrentLayoutActions();
 
   const parseAndInstallLayout = useCallback(
-    async (file: File, namespace: Namespace = "local", signal?: AbortSignal) => {
+    async (
+      file: File,
+      namespace: Namespace = "local",
+      signal?: AbortSignal,
+      options?: { untrusted?: boolean },
+    ) => {
       const layoutName = basename(file.name, extname(file.name));
       const content = await file.text();
 
@@ -82,6 +91,7 @@ export function useLayoutTransfer(): UseLayoutTransfer {
         name: layoutName,
         data,
         permission: namespace === "org" ? "ORG_WRITE" : "CREATOR_WRITE",
+        untrusted: options?.untrusted,
       });
 
       signal?.throwIfAborted();

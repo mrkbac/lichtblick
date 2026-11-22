@@ -54,6 +54,8 @@ export function useLayoutActions({ state, dispatch }: LayoutSetupOptions): UseLa
         name: `${item.name} copy`,
         data: item.working?.data ?? item.baseline.data,
         permission: "CREATOR_WRITE",
+        // A copy doesn't make a linked layout's scripts any more trusted.
+        ...(item.untrusted && { untrusted: true }),
       });
       await onSelectLayout(newLayout);
       analytics.logEvent(AppEvent.LAYOUT_DUPLICATE, { permission: item.permission });

@@ -29,6 +29,9 @@ vi.mock("@lichtblick/suite-base/context/CurrentLayoutContext");
 vi.mock("@lichtblick/suite-base/context/LayoutManagerContext");
 vi.mock("@lichtblick/suite-base/context/PanelCatalogContext");
 vi.mock("@lichtblick/suite-base/context/PlayerSelectionContext");
+vi.mock("@lichtblick/suite-base/hooks/useShareLink", () => ({
+  useShareLink: () => ({ availability: "none", copyLink: async () => {} }),
+}));
 vi.mock("@lichtblick/suite-base/context/Workspace/WorkspaceContext");
 vi.mock("@lichtblick/suite-base/context/Workspace/useWorkspaceActions");
 vi.mock("@lichtblick/suite-base/hooks/useAddPanel");

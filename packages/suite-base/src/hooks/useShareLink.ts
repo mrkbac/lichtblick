@@ -12,8 +12,12 @@ import {
   useMessagePipelineGetter,
 } from "@lichtblick/suite-base/components/MessagePipeline";
 import { useCurrentLayoutActions } from "@lichtblick/suite-base/context/CurrentLayoutContext";
+import { EventsStore, useEvents } from "@lichtblick/suite-base/context/EventsContext";
 import { usePlayerSelection } from "@lichtblick/suite-base/context/PlayerSelectionContext";
-import { isLocalFileSource } from "@lichtblick/suite-base/hooks/useStateToURLSynchronization";
+import {
+  isLocalFileSource,
+  sourceURLState,
+} from "@lichtblick/suite-base/hooks/useStateToURLSynchronization";
 import { isRecordingSource } from "@lichtblick/suite-base/players/constants";
 import clipboard from "@lichtblick/suite-base/util/clipboard";
 import { buildShareLink, encodeSharedLayout } from "@lichtblick/suite-base/util/shareLink";
@@ -21,6 +25,7 @@ import { buildShareLink, encodeSharedLayout } from "@lichtblick/suite-base/util/
 const log = Log.getLogger(__filename);
 
 const selectSourceId = (ctx: MessagePipelineContext) => ctx.playerState.urlState?.sourceId;
+const selectSelectedEventId = (store: EventsStore) => store.selectedEventId;
 
 /**
  * - `none`: nothing to share (no source, or the app isn't served over http, e.g. desktop)
@@ -39,6 +44,7 @@ export function useShareLink(): {
   const { availableSources } = usePlayerSelection();
   const getPipeline = useMessagePipelineGetter();
   const { getCurrentLayoutState } = useCurrentLayoutActions();
+  const selectedEventId = useEvents(selectSelectedEventId);
 
   const availability: ShareLinkAvailability =
     sourceId == undefined || !/^https?:$/.test(window.location.protocol)
@@ -56,6 +62,9 @@ export function useShareLink(): {
       return;
     }
     const { playerState } = getPipeline();
+    if (playerState.urlState == undefined) {
+      return;
+    }
     // The address bar's time lags playback; take the time right now. Live sources have none.
     const time = isRecordingSource(playerState.capabilities)
       ? playerState.activeData?.currentTime
@@ -67,7 +76,11 @@ export function useShareLink(): {
     } catch (err: unknown) {
       log.warn("Could not encode the layout for a share link", err);
     }
-    const { link, layoutIncluded } = buildShareLink(window.location.href, time, encodedLayout);
+    const { link, layoutIncluded } = buildShareLink(
+      window.location.href,
+      { ...sourceURLState(playerState.urlState, selectedEventId), time },
+      encodedLayout,
+    );
     try {
       await clipboard.copy(link);
     } catch (err: unknown) {
@@ -79,7 +92,7 @@ export function useShareLink(): {
       layoutIncluded || !layoutData ? t("shareLinkCopied") : t("shareLinkCopiedWithoutLayout"),
       { variant: layoutIncluded || !layoutData ? "success" : "warning" },
     );
-  }, [availability, getCurrentLayoutState, getPipeline, t]);
+  }, [availability, getCurrentLayoutState, getPipeline, selectedEventId, t]);
 
   return { availability, copyLink };
 }

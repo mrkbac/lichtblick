@@ -451,6 +451,14 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
   );
 
   const deepLink = props.deepLinks?.[0];
+  // The layout a share link carries in its fragment (see util/shareLink), read once at launch.
+  const [sharedLinkLayout] = useState(() => {
+    try {
+      return deepLink == undefined ? undefined : sharedLayoutFromHash(new URL(deepLink).hash);
+    } catch {
+      return undefined;
+    }
+  });
   const targetUrlState = useMemo(() => {
     if (launchedURL) {
       return parseAppURLState(launchedURL);
@@ -557,7 +565,8 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
 
   /**
    * Saves and selects a layout opened from a link, replacing earlier copies with the same name so
-   * reopening links doesn't pile up layouts.
+   * reopening links doesn't pile up layouts. Anyone can make such a link, so the layout is marked
+   * untrusted: its user scripts wait for the user's approval.
    */
   const installLayoutText = useCallback(
     async (text: string, filename: string, signal: AbortSignal) => {
@@ -570,7 +579,7 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
 
       // Delegate JSON parsing, saving, and selection to parseAndInstallLayout
       const file = new File([text], filename, { type: "application/json" });
-      const newLayout = await parseAndInstallLayout(file, "local", signal);
+      const newLayout = await parseAndInstallLayout(file, "local", signal, { untrusted: true });
 
       // Only delete old layouts after successful save to avoid data loss
       if (newLayout) {
@@ -585,14 +594,18 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
 
   // A share link carries its layout in the fragment (see util/shareLink). Install it once, then
   // drop the fragment so a reload or a newly copied link doesn't reinstall a stale copy.
+  // The fragment comes with the launch link: the page URL on the web, the `lichtblick://` link
+  // on desktop.
   useEffect(() => {
-    const encoded = sharedLayoutFromHash(window.location.hash);
+    const encoded = sharedLinkLayout;
     if (encoded == undefined) {
       return;
     }
-    const url = new URL(window.location.href);
-    url.hash = "";
-    window.history.replaceState(undefined, "", url.href);
+    if (sharedLayoutFromHash(window.location.hash) != undefined) {
+      const url = new URL(window.location.href);
+      url.hash = "";
+      window.history.replaceState(undefined, "", url.href);
+    }
 
     layoutRequest.current?.abort();
     const controller = new AbortController();
@@ -602,7 +615,8 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
         const text = await decodeSharedLayout(encoded);
         controller.signal.throwIfAborted();
         const file = new File([text], "Shared layout.json", { type: "application/json" });
-        await parseAndInstallLayout(file, "local", controller.signal);
+        // Anyone can make a link: its user scripts wait for the user's approval.
+        await parseAndInstallLayout(file, "local", controller.signal, { untrusted: true });
       } catch (error) {
         if (controller.signal.aborted) {
           return;
@@ -685,6 +699,10 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
         type: "connection",
         params: unappliedSourceArgs.dsParams,
         sourceMetadata: unappliedSourceArgs.sourceMetadata,
+        // A layout in the link is what the sender wants shown, not the sample's own.
+        ...((unappliedSourceArgs.layoutUrl != undefined || sharedLinkLayout != undefined) && {
+          keepLayout: true,
+        }),
       });
       selectEvent(unappliedSourceArgs.dsParams?.eventId);
       shouldUpdate = true;
@@ -699,7 +717,14 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
     if (shouldUpdate) {
       setUnappliedSourceArgs({ ds: undefined, dsParams: undefined, layoutUrl: undefined });
     }
-  }, [fetchLayoutFromUrl, selectEvent, selectSource, unappliedSourceArgs, setUnappliedSourceArgs]);
+  }, [
+    fetchLayoutFromUrl,
+    selectEvent,
+    selectSource,
+    sharedLinkLayout,
+    unappliedSourceArgs,
+    setUnappliedSourceArgs,
+  ]);
 
   // Seek to time in URL.
   useEffect(() => {
