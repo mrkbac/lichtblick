@@ -325,7 +325,11 @@ export default class UserScriptPlayer implements Player {
   } = { needed: [], topics: "", variables: [] };
   // What the key above was computed from; when none of it changed, neither did the key.
   #convertedBlocksInputs: unknown[] = [];
-  #lastMessageCache?: { source: BlockCache; converted: BlockCache };
+  // `failed`: some block's conversion reported an error and was left out of #convertedBlocks, so
+  // it is retried (and its alert raised again) the next time the inputs or the blocks change.
+  #lastMessageCache?: { source: BlockCache; converted: BlockCache; failed: boolean };
+  // Counts topic converter errors, so a block conversion can tell whether it hit one.
+  #topicConverterFailures = 0;
 
   // exposed as a static to allow testing to mock/replace
   public static CreateTransformWorker = (): SharedWorker => {
@@ -947,6 +951,7 @@ export default class UserScriptPlayer implements Player {
       let registration = this.#topicConverterRegistrationCache.get(installed);
       if (!registration) {
         registration = buildTopicConverterRegistration(installed, (error) => {
+          this.#topicConverterFailures++;
           this.#alertStore.set(alertKey, {
             severity: "error",
             message: `Topic converter for "${topic}" from extension ${installed.extensionId} failed.`,
@@ -1014,8 +1019,9 @@ export default class UserScriptPlayer implements Player {
     const globalVariables = this.#globalVariables;
     const key = {
       needed,
-      topics: [[...outputTopics].sort().join("\n"), sourceTopics.join("\n")].join("\n\n"),
+      topics: [...[...outputTopics].sort(), "", ...sourceTopics].join("\n"),
       // Converters are recreated when a variable they watch changes, so their outputs change too.
+      // Per the topic converter contract, outputs depend only on watched variables.
       variables: needed.flatMap(({ scriptData }) =>
         scriptData.globalVariables.map((name) => globalVariables[name]),
       ),
@@ -1030,9 +1036,10 @@ export default class UserScriptPlayer implements Player {
       this.#convertedBlocks = new WeakMap();
       this.#lastMessageCache = undefined;
     }
-    if (this.#lastMessageCache?.source === source) {
+    if (this.#lastMessageCache?.source === source && !this.#lastMessageCache.failed) {
       return { ...progress, messageCache: this.#lastMessageCache.converted };
     }
+    let failed = false;
 
     const convertBlock = async (block: MessageBlock): Promise<MessageBlock> => {
       const cached = this.#convertedBlocks.get(block);
@@ -1051,6 +1058,7 @@ export default class UserScriptPlayer implements Player {
         .sort(byReceiveTime);
       // ponytail: fresh converter instances per block, so converter state does not carry across
       // block boundaries; carry it over in time order if a stateful converter needs it.
+      const failuresBefore = this.#topicConverterFailures;
       const outputs = await runFresh(inputs, needed, globalVariables);
       const messagesByTopic: Record<string, MessageEvent[]> = { ...block.messagesByTopic };
       let sizeInBytes = block.sizeInBytes;
@@ -1064,13 +1072,20 @@ export default class UserScriptPlayer implements Player {
         }
       }
       const converted: MessageBlock = { ...block, messagesByTopic, sizeInBytes };
-      this.#convertedBlocks.set(block, converted);
+      if (this.#topicConverterFailures === failuresBefore) {
+        this.#convertedBlocks.set(block, converted);
+      } else {
+        failed = true;
+      }
       return converted;
     };
 
-    const blocks = await Promise.all(
-      source.blocks.map(async (block) => (block ? await convertBlock(block) : undefined)),
-    );
+    // One block at a time (converters run on this thread anyway), so an error is counted against
+    // the block that hit it.
+    const blocks: (MessageBlock | undefined)[] = [];
+    for (const block of source.blocks) {
+      blocks.push(block ? await convertBlock(block) : undefined);
+    }
     const previous = this.#lastMessageCache?.converted;
     // Keep the previous array when no block changed, so panels don't re-process allFrames.
     const converted: BlockCache =
@@ -1080,7 +1095,7 @@ export default class UserScriptPlayer implements Player {
       previous.blocks.every((block, i) => block === blocks[i])
         ? previous
         : { ...source, blocks };
-    this.#lastMessageCache = { source, converted };
+    this.#lastMessageCache = { source, converted, failed };
     return { ...progress, messageCache: converted };
   }
 
