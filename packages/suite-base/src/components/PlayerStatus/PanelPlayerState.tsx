@@ -93,7 +93,7 @@ export function PanelPlayerState(): React.ReactNode {
         <>
           <CircularProgress size={20} />
           <Typography variant="body2" color="text.secondary" className={classes.detail}>
-            {t(status.kind, { name: status.name })}
+            {t(status.kind)}
           </Typography>
         </>
       );
@@ -116,15 +116,6 @@ export function PanelPlayerState(): React.ReactNode {
           <Typography variant="body2">
             {t(status.kind === "failed" ? "failed" : "cannotConnect")}
           </Typography>
-          {status.name != undefined && (
-            <Typography
-              variant="caption"
-              color="text.secondary"
-              className={cx(classes.detail, classes.tinyHidden)}
-            >
-              {status.name}
-            </Typography>
-          )}
           {status.error != undefined && (
             <Typography
               variant="caption"

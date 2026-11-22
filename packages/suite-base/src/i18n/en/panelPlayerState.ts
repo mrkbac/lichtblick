@@ -4,8 +4,9 @@
 export const panelPlayerState = {
   noSource: "No data source",
   openSource: "Open data…",
-  connecting: "Connecting to {{name}}…",
-  opening: "Opening {{name}}…",
+  // The app bar names the source; panels repeating it would only add noise
+  connecting: "Connecting…",
+  opening: "Opening…",
   loading: "Loading the first data…",
   cannotConnect: "Can't connect",
   failed: "Couldn't open the data source",

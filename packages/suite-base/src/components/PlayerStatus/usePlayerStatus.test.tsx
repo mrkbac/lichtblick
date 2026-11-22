@@ -8,7 +8,7 @@ import MockMessagePipelineProvider from "@lichtblick/suite-base/components/Messa
 import { PLAYER_CAPABILITIES } from "@lichtblick/suite-base/players/constants";
 import { PlayerAlert, PlayerPresence } from "@lichtblick/suite-base/players/types";
 
-import { PlayerStatusKind, shortSourceName, usePlayerStatus } from "./usePlayerStatus";
+import { PlayerStatusKind, usePlayerStatus } from "./usePlayerStatus";
 
 const failed: PlayerAlert = { severity: "error", message: "Connection failed" };
 
@@ -68,16 +68,5 @@ describe("usePlayerStatus", () => {
       alerts: [failed],
     });
     expect(status.error).toEqual(failed);
-  });
-});
-
-describe("shortSourceName", () => {
-  it.each([
-    ["https://example.com/data/run%201.mcap", "run 1.mcap"],
-    ["ws://robot.example:8765\nserver", "robot.example:8765"],
-    ["example.mcap", "example.mcap"],
-    [undefined, undefined],
-  ])("%s → %s", (name, expected) => {
-    expect(shortSourceName(name)).toBe(expected);
   });
 });

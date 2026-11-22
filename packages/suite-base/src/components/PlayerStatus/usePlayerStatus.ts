@@ -32,8 +32,6 @@ export type PlayerStatusKind =
 
 export type PlayerStatus = {
   kind: PlayerStatusKind;
-  /** Short source name: a file name, or the host and port of a connection. */
-  name?: string;
   /** The first error alert, which explains a failed or reconnecting source. */
   error?: PlayerAlert;
   /** False until the source has a current time: still loading, or never connected. */
@@ -41,7 +39,6 @@ export type PlayerStatus = {
 };
 
 const selectPresence = (ctx: MessagePipelineContext) => ctx.playerState.presence;
-const selectName = (ctx: MessagePipelineContext) => ctx.playerState.name;
 // Live sources can't be played back, or keep a rolling history whose newest data is live
 const selectIsLive = (ctx: MessagePipelineContext) =>
   !ctx.playerState.capabilities.includes(PLAYER_CAPABILITIES.playbackControl) ||
@@ -50,47 +47,30 @@ const selectHasData = (ctx: MessagePipelineContext) => ctx.playerState.activeDat
 const selectError = (ctx: MessagePipelineContext) =>
   ctx.playerState.alerts?.find((alert) => alert.severity === "error");
 
-/** "https://host/dir/run%201.mcap" → "run 1.mcap", "ws://robot:8765" → "robot:8765". */
-export function shortSourceName(playerName: string | undefined): string | undefined {
-  const firstLine = playerName?.split("\n")[0];
-  if (firstLine == undefined) {
-    return undefined;
-  }
-  try {
-    const url = new URL(firstLine);
-    const lastSegment = url.pathname.split("/").filter(Boolean).at(-1);
-    return lastSegment != undefined ? decodeURIComponent(lastSegment) : url.host || firstLine;
-  } catch {
-    return firstLine;
-  }
-}
-
 export function usePlayerStatus(): PlayerStatus {
   const presence = useMessagePipeline(selectPresence);
-  const fullName = useMessagePipeline(selectName);
   const isLive = useMessagePipeline(selectIsLive);
   const hasData = useMessagePipeline(selectHasData);
   const error = useMessagePipeline(selectError);
 
-  const name = shortSourceName(fullName);
   switch (presence) {
     case PlayerPresence.NOT_PRESENT:
       return { kind: "none", hasData };
     case PlayerPresence.INITIALIZING:
-      return { kind: isLive ? "connecting" : "opening", name, hasData };
+      return { kind: isLive ? "connecting" : "opening", hasData };
     case PlayerPresence.RECONNECTING:
-      return { kind: "reconnecting", name, error, hasData };
+      return { kind: "reconnecting", error, hasData };
     case PlayerPresence.ERROR:
-      return { kind: "failed", name, error, hasData };
+      return { kind: "failed", error, hasData };
     case PlayerPresence.BUFFERING:
     case PlayerPresence.PRESENT:
       // A recording has no current time until its first read is done
       if (!isLive && !hasData) {
-        return { kind: "loading", name, hasData };
+        return { kind: "loading", hasData };
       }
       break;
   }
-  return { kind: isLive ? "live" : "ready", name, error, hasData };
+  return { kind: isLive ? "live" : "ready", error, hasData };
 }
 
 /** Reopens the current data source; undefined when there is none to reopen. */
