@@ -3,7 +3,14 @@
 
 import { SettingsTreeAction } from "@lichtblick/suite";
 
-import { applySettingsAction, buildSettingsTree, Config, normalizeConfig } from "./config";
+import {
+  applySettingsAction,
+  buildSettingsTree,
+  Config,
+  FOLLOW_MOVE_EVENT,
+  normalizeConfig,
+  shouldSaveView,
+} from "./config";
 
 const update = (path: string[], value: unknown): SettingsTreeAction =>
   ({
@@ -192,5 +199,16 @@ describe("buildSettingsTree", () => {
     const follow = tree.general?.fields?.followTopic;
     expect(follow?.input === "select" && follow.options.map((o) => o.value)).toEqual(["", "/gps"]);
     expect(tree.topics?.children?.["/fence"]?.fields?.history).toBeUndefined();
+  });
+});
+
+describe("shouldSaveView", () => {
+  it("saves user moves and skips follow moves while following", () => {
+    expect(shouldSaveView({}, { followTopic: "/gps" })).toBe(true);
+    expect(shouldSaveView({ ...FOLLOW_MOVE_EVENT }, { followTopic: "/gps" })).toBe(false);
+  });
+
+  it("saves a follow move that ends after Follow was turned off", () => {
+    expect(shouldSaveView({ ...FOLLOW_MOVE_EVENT }, { followTopic: "" })).toBe(true);
   });
 });
