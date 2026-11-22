@@ -142,9 +142,13 @@ export class MarkerBatches extends THREE.Object3D {
     const { mesh, outline } = marker;
     // Transparent markers must be sorted, and reflected ones (negative scale) need flipped
     // winding: both draw on their own, as do markers too far from the batch origin for float32
+    // and markers at a non-finite position
     const { color } = marker.userData.marker;
     const { x, y, z } = marker.scale;
-    let batch = color.a >= 1 && x * y * z > 0 ? this.#batchFor(mesh, outline) : undefined;
+    // A non-finite position would make a bad origin and corrupt every later instance
+    const { position: p } = marker;
+    const finite = Number.isFinite(p.x) && Number.isFinite(p.y) && Number.isFinite(p.z);
+    let batch = finite && color.a >= 1 && x * y * z > 0 ? this.#batchFor(mesh, outline) : undefined;
     if (
       batch &&
       batch.meshCount > 0 &&

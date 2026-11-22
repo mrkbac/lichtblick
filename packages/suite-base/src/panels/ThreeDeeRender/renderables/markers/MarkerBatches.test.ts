@@ -211,6 +211,26 @@ describe("MarkerBatches", () => {
     expect(cubes.count).toBe(1);
   });
 
+  it("keeps a marker at a non-finite position out of the batch", () => {
+    topic.addMarkerMessage(
+      {
+        ...marker(1, MarkerType.CUBE),
+        pose: { position: { x: NaN, y: 0, z: 0 }, orientation: { x: 0, y: 0, z: 0, w: 1 } },
+      },
+      0n,
+    );
+    topic.addMarkerMessage(marker(2, MarkerType.CUBE), 0n);
+    topic.startFrame(0n, "map", "map");
+
+    expect((byId(1) as RenderableCube).mesh.layers.mask).toBe(1 << LAYER_DEFAULT);
+    const cubes = instanced().find((object) => object instanceof THREE.Mesh) as THREE.InstancedMesh;
+    expect(cubes.count).toBe(1);
+    expect(cubes.position.x).toBe(2);
+    const matrix = new THREE.Matrix4();
+    cubes.getMatrixAt(0, matrix);
+    expect(matrix.toArray().every(Number.isFinite)).toBe(true);
+  });
+
   it("restores a deleted marker's own draw before the pool hands it out", () => {
     topic.addMarkerMessage(marker(1, MarkerType.CUBE), 0n);
     topic.startFrame(0n, "map", "map");
