@@ -315,7 +315,7 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
       // The histogram can't grow backwards: rebuild it from all chunks when the start moved
       // earlier (rare: live indexing found an earlier chunk), else add only the new chunks
       let density = index.density;
-      let chunks = newChunks;
+      let chunks: readonly McapTypes.ChunkIndex[] = newChunks;
       if (!density || index.startTime !== previousStart) {
         density = new GrowingHistogram(
           Number(index.startTime),
