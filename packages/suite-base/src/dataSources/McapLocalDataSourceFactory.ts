@@ -11,6 +11,7 @@ import {
   DataSourceFactoryInitializeArgs,
 } from "@lichtblick/suite-base/context/PlayerSelectionContext";
 import { IterablePlayer } from "@lichtblick/suite-base/players/IterablePlayer";
+import { createMcapSourceWorker } from "@lichtblick/suite-base/players/IterablePlayer/Mcap/createMcapSourceWorker";
 import { WorkerSerializedIterableSource } from "@lichtblick/suite-base/players/IterablePlayer/WorkerIterableSource";
 import {
   MultiFileHydrationOverrides,
@@ -47,14 +48,7 @@ class McapLocalDataSourceFactory implements IDataSourceFactory {
     }
 
     const source = new WorkerSerializedIterableSource({
-      initWorker: () => {
-        return new Worker(
-          new URL(
-            "@lichtblick/suite-base/players/IterablePlayer/Mcap/McapIterableSourceWorker.worker",
-            import.meta.url,
-          ),
-        );
-      },
+      initWorker: createMcapSourceWorker,
       // A single file is opened on its own, so it can follow the file while it grows
       initArgs:
         files.length === 1

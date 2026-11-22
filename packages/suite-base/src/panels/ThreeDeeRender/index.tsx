@@ -10,6 +10,7 @@ import React, { useMemo } from "react";
 
 import { CameraModelsMap } from "@lichtblick/den/image/types";
 import { useCrash } from "@lichtblick/hooks";
+import { Time } from "@lichtblick/suite";
 import { CaptureErrorBoundary } from "@lichtblick/suite-base/components/CaptureErrorBoundary";
 import {
   ForwardAnalyticsContextProvider,
@@ -77,8 +78,8 @@ function ThreeDeeRenderAdapter(interfaceMode: InterfaceMode, props: Props) {
   const logError = useMemo(
     () =>
       panelLog
-        ? (message: string, error?: Error) => {
-            panelLog("error", message, error);
+        ? (message: string, error?: Error, time?: Time) => {
+            panelLog("error", message, error, time);
           }
         : undefined,
     [panelLog],

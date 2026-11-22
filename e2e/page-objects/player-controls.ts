@@ -28,7 +28,10 @@ export class PlayerControls {
 
   public async setSpeed(speed: string): Promise<void> {
     await this.page.getByTestId("PlaybackSpeedControls-Dropdown").click();
-    await this.page.getByRole("menuitem", { name: speed, exact: true }).click();
+    const popover = this.page.getByRole("dialog", { name: "Playback speed" });
+    await popover.getByRole("button", { name: speed, exact: true }).click();
+    await this.page.keyboard.press("Escape");
+    await expect(popover).toBeHidden();
   }
 
   public async switchToEpochFormat(initialTimestamp: string): Promise<void> {

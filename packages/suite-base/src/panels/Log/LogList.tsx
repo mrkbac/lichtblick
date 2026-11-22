@@ -71,6 +71,10 @@ function LogList({ items, currentTime, onSeek, onCopy, apiRef }: LogListProps): 
     };
   }, []);
 
+  // A new function makes the virtualizer re-measure every row, so only change it with the items:
+  // the playhead re-renders this list every frame.
+  const getItemKey = useCallback((index: number) => keyOf(items[index]!), [items, keyOf]);
+
   // scrollTop set by our own scrolling, so the resulting scroll event isn't taken as user input
   const programmaticScrollTop = useRef<number | undefined>(undefined);
 
@@ -79,7 +83,7 @@ function LogList({ items, currentTime, onSeek, onCopy, apiRef }: LogListProps): 
     getScrollElement: () => scrollRef.current,
     estimateSize: () => DEFAULT_ROW_HEIGHT,
     overscan: 3,
-    getItemKey: (index) => keyOf(items[index]!),
+    getItemKey,
     measureElement: (element) => element.getBoundingClientRect().height,
     // Avoids "ResizeObserver loop" errors while the list scrolls
     useAnimationFrameWithResizeObserver: true,

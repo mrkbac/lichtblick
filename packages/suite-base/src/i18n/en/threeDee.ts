@@ -51,7 +51,7 @@ export const threeDee = {
   loadingTransforms_other: "Loading transforms: {{formattedCount}} messages",
   transformHistoryThinnedAlert: "Transform history thinned to fit in memory",
   transformHistoryThinnedAlertTip:
-    "This recording has more transforms than fit in memory, so each frame keeps about 1 in {{factor}} of them. Frames between kept transforms are interpolated.",
+    "There are more transforms than fit in memory, so each frame keeps about 1 in {{factor}} of them. Frames between kept transforms are interpolated.",
   fixed: "Fixed",
   followMode: "Follow mode",
   followModeHelp: "Change the camera behavior during playback to follow the display frame or not.",
@@ -63,7 +63,11 @@ export const threeDee = {
   lineColor: "Line color",
   noCoordinateFramesFound: "No coordinate frames found",
   decayHistoryLimited:
-    "Decay history limit reached ({{maxPoints}} points or {{maxScans}} scans): showing the last {{shownSeconds}} s of {{decaySeconds}} s",
+    "The decay limit of {{maxPoints}} points leaves no room next to the latest scan: no decay history is shown",
+  decayHistoryDropped:
+    "Decay history limit reached ({{maxPoints}} points): scans too large to thin around were dropped",
+  decayHistoryThinned:
+    "Decay history limit reached ({{maxPoints}} points or {{maxScans}} scans): keeping 1 in {{stride}} incoming scans",
   parent: "Parent",
   pose: "Pose",
   rotationOffset: "Rotation offset",

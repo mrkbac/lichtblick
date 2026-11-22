@@ -108,9 +108,10 @@ function initRenderStateBuilder(): BuildRenderStateFn {
   let prevCurrentFrame: Immutable<RenderState["currentFrame"]>;
   let prevCollatedConversions: undefined | TopicSchemaConversions;
   let prevConfigTopics: RenderStateConfig["topics"] | undefined;
-  // Processed allFrames output per block. Blocks are replaced (not mutated) when their messages
-  // change, so only new blocks are processed while preloading.
-  let allFramesByBlock = new WeakMap<Immutable<MessageBlock>, MessageEvent[]>();
+  // Processed allFrames output per block index, with the panel's topic arrays it came from. A block
+  // is replaced when any of its topics loads, but the arrays of the other topics stay the same, so a
+  // block whose arrays for this panel's topics are unchanged keeps its frames.
+  let allFramesByBlock: ({ sources: unknown[]; frames: MessageEvent[] } | undefined)[] = [];
   const lastMessageByTopic = new Map<string, MessageEvent>();
 
   // Pull these memoized versions into the closure so they are scoped to the lifetime of
@@ -338,14 +339,15 @@ function initRenderStateBuilder(): BuildRenderStateFn {
     if (watchedFields.has("allFrames")) {
       // Rebuild allFrames if we have new blocks or if our conversions have changed.
       const newBlocks = playerState?.progress.messageCache?.blocks;
-      if (conversionsChanged || config?.topics !== prevConfigTopics) {
-        allFramesByBlock = new WeakMap();
+      const framesChanged = conversionsChanged || config?.topics !== prevConfigTopics;
+      if (framesChanged) {
+        allFramesByBlock = [];
         prevConfigTopics = config?.topics;
       }
-      if ((newBlocks != undefined && prevBlocks !== newBlocks) || conversionsChanged) {
-        shouldRender.value = true;
+      if ((newBlocks != undefined && prevBlocks !== newBlocks) || framesChanged) {
         const blocksToProcess = newBlocks ?? prevBlocks ?? [];
-        const framesByBlock: MessageEvent[][] = [];
+        const prevFramesByBlock = allFramesByBlock;
+        allFramesByBlock = [];
         // only populate allFrames with topics that the panel wants to preload
         const topicsToPreloadForPanel = Array.from(
           new Set<string>(
@@ -353,18 +355,25 @@ function initRenderStateBuilder(): BuildRenderStateFn {
           ),
         );
 
-        for (const block of blocksToProcess) {
+        let unchanged = true;
+        for (const [index, block] of blocksToProcess.entries()) {
           if (!block) {
             continue;
           }
-          let blockFrames = allFramesByBlock.get(block);
+          const sources = topicsToPreloadForPanel.map((topic) => block.messagesByTopic[topic]);
+          const prev = prevFramesByBlock[index];
+          let blockFrames =
+            prev && sources.every((source, i) => source === prev.sources[i])
+              ? prev.frames
+              : undefined;
           if (!blockFrames) {
+            unchanged = false;
             const newBlockFrames: MessageEvent[] = [];
 
             // Given that messagesByTopic should be in order by receiveTime, we need to
             // combine all of the messages into a single array and sorted by receive time.
             forEachSortedArrays(
-              topicsToPreloadForPanel.map((topic) => block.messagesByTopic[topic] ?? []),
+              sources.map((source) => source ?? []),
               (a, b) => compare(a.receiveTime, b.receiveTime),
               (messageEvent) => {
                 // Message blocks may contain topics that we are not subscribed to so we
@@ -379,16 +388,26 @@ function initRenderStateBuilder(): BuildRenderStateFn {
                 convert(messageEvent, topicSchemaConverters, newBlockFrames, undefined);
               },
             );
-            allFramesByBlock.set(block, newBlockFrames);
             blockFrames = newBlockFrames;
           }
-          framesByBlock.push(blockFrames);
+          allFramesByBlock[index] = { sources, frames: blockFrames };
         }
-        // This runs on every preload progress update: one native concat is several times faster
-        // than pushing every message.
+        unchanged &&= prevFramesByBlock.every(
+          (entry, i) => entry == undefined || allFramesByBlock[i] != undefined,
+        );
+        // When only other panels' topics loaded, keep the array and skip the render.
         // Deprecated in Foxglove's API only; still part of Lichtblick's.
         // eslint-disable-next-line @typescript-eslint/no-deprecated
-        renderState.allFrames = ([] as MessageEvent[]).concat(...framesByBlock);
+        if (!unchanged || framesChanged || renderState.allFrames == undefined) {
+          shouldRender.value = true;
+          // One native concat is several times faster than pushing every message. One spread
+          // argument per block is fine: players keep at most 100 blocks (MAX_BLOCKS in
+          // IterablePlayer).
+          // eslint-disable-next-line @typescript-eslint/no-deprecated
+          renderState.allFrames = ([] as MessageEvent[]).concat(
+            ...filterMap(allFramesByBlock, (entry) => entry?.frames),
+          );
+        }
       }
       prevBlocks = newBlocks;
     }

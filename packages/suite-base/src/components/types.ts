@@ -3,7 +3,7 @@
 
 import { ErrorInfo } from "react";
 
-import { Immutable } from "@lichtblick/suite";
+import { Immutable, Time } from "@lichtblick/suite";
 import { MessagePathDropConfig } from "@lichtblick/suite-base/components/PanelExtensionAdapter";
 import { ExtensionMarketplaceDetail } from "@lichtblick/suite-base/context/ExtensionMarketplaceContext";
 import { OpenSiblingPanel, PanelConfig, SaveConfig } from "@lichtblick/suite-base/types/panels";
@@ -27,7 +27,8 @@ export type PanelContextType<T> = {
   showLogs?: boolean;
   setShowLogs?: (options: SetVisibleLogs) => void;
   /** Add an entry to the panel's log, shown in the toolbar's logs drawer. */
-  log?: (level: PanelLogLevel, message: string, error?: Error) => void;
+  /** `time` is the recording time the entry is about; defaults to the current playback time. */
+  log?: (level: PanelLogLevel, message: string, error?: Error, time?: Time) => void;
   logCount?: number;
   /** Most severe level among the current log entries. */
   logSeverity?: PanelLogLevel;
