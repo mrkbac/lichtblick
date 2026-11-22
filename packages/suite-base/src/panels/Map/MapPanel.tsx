@@ -99,6 +99,10 @@ type Hit =
 
 type View = Pick<Config, "center" | "zoomLevel" | "bearing" | "pitch">;
 
+/** MapLibre copies this onto the move events of the camera moves made to follow a topic. */
+const FOLLOW_MOVE = "lichtblickFollowMove";
+const FOLLOW_MOVE_EVENT = { [FOLLOW_MOVE]: true };
+
 function eventTimeSec(event: MessageEvent): number {
   return toSec(event.receiveTime);
 }
@@ -857,7 +861,7 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
         didInitialFitRef.current = true;
       }
     });
-    instance.on("moveend", () => {
+    instance.on("moveend", (event) => {
       userMovingRef.current = false;
       const center = instance.getCenter();
       viewRef.current = {
@@ -866,7 +870,12 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
         bearing: instance.getBearing(),
         pitch: instance.getPitch(),
       };
-      context.saveState(viewRef.current);
+      // Following moves the map on every frame; saving each move would rewrite the layout (and
+      // its undo history) many times a second and mark it edited. The view is saved with the
+      // next config change or user move.
+      if (!(FOLLOW_MOVE in event)) {
+        context.saveState(viewRef.current);
+      }
     });
 
     // Resizing clears the WebGL canvas; redraw in the same frame or the cleared (black)
@@ -1240,14 +1249,17 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
     };
     // Jump on seeks and big moves, glide during normal playback.
     if (map.getBounds().contains(center)) {
-      map.easeTo({
-        ...options,
-        duration: 200,
-        easing: (t) => t,
-        essential: true,
-      });
+      map.easeTo(
+        {
+          ...options,
+          duration: 200,
+          easing: (t) => t,
+          essential: true,
+        },
+        FOLLOW_MOVE_EVENT,
+      );
     } else {
-      map.jumpTo(options);
+      map.jumpTo(options, FOLLOW_MOVE_EVENT);
     }
   }, [config.followMode, config.followTopic, currentNav, headings, map]);
 
