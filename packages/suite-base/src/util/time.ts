@@ -46,22 +46,35 @@ export function getTimestampForMessageEvent(
     : messageEvent.receiveTime;
 }
 
+/**
+ * Reads a stamp from a message field. ROS 1 and Foxglove stamps are `{ sec, nsec }`; the ROS 2
+ * decoders give `builtin_interfaces/Time` as `{ sec, nanosec }`. Read every stamp that comes from a
+ * message through this, never `.nsec` directly. Undefined when the value is not a stamp.
+ */
+export function stampToTime(stamp: unknown): Time | undefined {
+  if (stamp == undefined || typeof stamp !== "object") {
+    return undefined;
+  }
+  const { sec, nsec, nanosec } = stamp as { sec?: unknown; nsec?: unknown; nanosec?: unknown };
+  if (typeof sec !== "number") {
+    return undefined;
+  }
+  if (typeof nsec === "number") {
+    return { sec, nsec };
+  }
+  return typeof nanosec === "number" ? { sec, nsec: nanosec } : undefined;
+}
+
 export function getTimestampForMessage(message: unknown): Time | undefined {
   if (message == undefined) {
     return undefined;
   }
   if ((message as Partial<StampedMessage>).header != undefined) {
     // This message has a "header" field
-    const stamp = (message as Partial<StampedMessage>).header?.stamp;
-    if (stamp != undefined && typeof stamp === "object" && "sec" in stamp && "nsec" in stamp) {
-      return stamp;
-    }
+    return stampToTime((message as Partial<StampedMessage>).header?.stamp);
   } else if ((message as Partial<MarkerArray>).markers?.[0]?.header != undefined) {
     // This is a marker array message with a "markers" array and at least one entry
-    const stamp = (message as MarkerArray).markers[0]?.header.stamp;
-    if (stamp != undefined && typeof stamp === "object" && "sec" in stamp && "nsec" in stamp) {
-      return stamp;
-    }
+    return stampToTime((message as MarkerArray).markers[0]?.header.stamp);
   }
 
   return undefined;

@@ -8,6 +8,7 @@
 import { fromNanoSec } from "@foxglove/rostime";
 
 import { MessageEvent, Time } from "@lichtblick/suite";
+import { stampToTime } from "@lichtblick/suite-base/util/time";
 
 import { LogLevel, NormalizedLogMessage } from "./types";
 
@@ -56,7 +57,7 @@ function toTime(value: unknown): Time | undefined {
     nanos?: number;
   };
   if (t.sec != undefined) {
-    return { sec: t.sec, nsec: t.nsec ?? t.nanosec ?? 0 };
+    return stampToTime(t) ?? { sec: t.sec, nsec: 0 };
   }
   if (t.seconds != undefined) {
     return { sec: Number(t.seconds), nsec: t.nanos ?? 0 };

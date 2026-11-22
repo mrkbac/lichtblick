@@ -89,6 +89,30 @@ describe("time.getTimestampForMessage", () => {
   it("returns undefined for a null message", () => {
     expect(time.getTimestampForMessage(null)).toBeUndefined();
   });
+
+  it("reads ROS 2 header stamps", () => {
+    expect(time.getTimestampForMessage({ header: { stamp: { sec: 3, nanosec: 7 } } })).toEqual({
+      sec: 3,
+      nsec: 7,
+    });
+    expect(
+      time.getTimestampForMessage({ markers: [{ header: { stamp: { sec: 4, nanosec: 8 } } }] }),
+    ).toEqual({ sec: 4, nsec: 8 });
+  });
+});
+
+describe("time.stampToTime", () => {
+  it("reads ROS 1 / Foxglove and ROS 2 stamps", () => {
+    expect(time.stampToTime({ sec: 1, nsec: 2 })).toEqual({ sec: 1, nsec: 2 });
+    expect(time.stampToTime({ sec: 1, nanosec: 2 })).toEqual({ sec: 1, nsec: 2 });
+  });
+
+  it("returns undefined for values that are not stamps", () => {
+    expect(time.stampToTime(undefined)).toBeUndefined();
+    expect(time.stampToTime(5)).toBeUndefined();
+    expect(time.stampToTime({ sec: 1 })).toBeUndefined();
+    expect(time.stampToTime({ sec: "1", nsec: 2 })).toBeUndefined();
+  });
 });
 
 describe("time.parseTimeUrlString", () => {
