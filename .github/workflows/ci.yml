@@ -78,6 +78,42 @@ jobs:
           ${{ matrix.config.command }}
           exit $failed
 
+  # Compares speed, memory, bytes read and startup bundle size with the PR's merge base
+  # (ci/perf-budget.ts). Required on licht, so the job id stays `perf-budget`. It waits for the
+  # cheap checks so a broken push doesn't hold a runner, and doesn't run on licht pushes (they
+  # could only report). Its table is in the job summary.
+  perf-budget:
+    if: github.event_name == 'pull_request'
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      # Reads the PR's labels when the budget is exceeded
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # The merge base must be in the clone
+          fetch-depth: 0
+
+      - uses: ./.github/actions/setup
+
+      - name: Run perf budget
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+        # A deliberate trade-off passes with the `perf-budget-accepted` label. The label is read
+        # now, not from the event, so a re-run after labelling (perf-budget-label.yml) sees it.
+        run: |
+          pnpm perf:budget --base "$(git merge-base HEAD "$BASE")" && exit 0
+          if gh pr view "$PR" -R "$GITHUB_REPOSITORY" --json labels --jq '.labels[].name' | grep -qx perf-budget-accepted; then
+            echo "::notice::Over budget, accepted with the perf-budget-accepted label"
+            exit 0
+          fi
+          exit 1
+
   e2e-desktop:
     runs-on: ubuntu-latest
 

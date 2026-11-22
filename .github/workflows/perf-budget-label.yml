@@ -1,0 +1,35 @@
+name: Perf budget label
+
+# Adding or removing the `perf-budget-accepted` label re-runs the PR's perf-budget job (ci.yml),
+# which reads the label when it finishes. This is a separate workflow so that label events never
+# create a `perf-budget` check run: a skipped run on the same commit would count as passing for the
+# required check and hide a failed one.
+
+on:
+  pull_request:
+    types: [labeled, unlabeled]
+
+permissions:
+  contents: read
+
+jobs:
+  rerun:
+    if: github.event.label.name == 'perf-budget-accepted'
+    runs-on: ubuntu-latest
+    permissions:
+      # Re-runs the perf-budget job
+      actions: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      SHA: ${{ github.event.pull_request.head.sha }}
+    steps:
+      - name: Re-run perf-budget
+        run: |
+          run=$(gh run list --workflow ci.yml --event pull_request --commit "$SHA" --limit 1 --json databaseId --jq '.[0].databaseId')
+          job=$(gh run view "$run" --json jobs --jq '.jobs[] | select(.name == "perf-budget" and .status == "completed") | .databaseId')
+          if [ -z "$job" ]; then
+            echo "perf-budget hasn't finished; it reads the label when it does"
+            exit 0
+          fi
+          gh run rerun "$run" --job "$job"

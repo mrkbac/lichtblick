@@ -324,9 +324,8 @@ async function main(): Promise<void> {
   if (process.env.GITHUB_STEP_SUMMARY) {
     fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, report);
   }
-  // Set by the workflow when the PR has the perf-budget-accepted label
-  process.exitCode =
-    failed + problems.length > 0 && process.env.PERF_BUDGET_ACCEPTED !== "true" ? 1 : 0;
+  // The perf-budget-accepted label is checked by the workflow (ci.yml), live, after this exits
+  process.exitCode = failed + problems.length > 0 ? 1 : 0;
 }
 
 if (process.argv[2] === "--child") {
