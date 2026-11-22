@@ -76,12 +76,12 @@ describe("PlayerManager", () => {
       selection!.selectSource("ok", { type: "file", files });
     });
     expect(selection!.selectedSource).toBe(ok);
-    expect(selection!.selectedFiles).toBe(files);
+    expect(selection!.selectedRecordings).toBe(files);
 
     await act(async () => {
       selection!.selectSource("failing", { type: "connection", params: { url: "x" } });
     });
     expect(selection!.selectedSource).toBe(ok);
-    expect(selection!.selectedFiles).toBe(files);
+    expect(selection!.selectedRecordings).toBe(files);
   });
 });

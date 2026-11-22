@@ -15,7 +15,10 @@ import { formatByteSize } from "@lichtblick/den/format";
 import { TempBuffer } from "@lichtblick/mcap-core";
 import { Immutable } from "@lichtblick/suite";
 import { useCompare } from "@lichtblick/suite-base/components/Compare/CompareContext";
-import { useShowCompareDialog } from "@lichtblick/suite-base/components/Compare/CompareDialog";
+import {
+  compareSourceFor,
+  useShowCompareDialog,
+} from "@lichtblick/suite-base/components/Compare/CompareDialog";
 import { CompareSidesEditor } from "@lichtblick/suite-base/components/Compare/CompareSidesEditor";
 import CopyButton from "@lichtblick/suite-base/components/CopyButton";
 import {
@@ -36,6 +39,7 @@ import Timestamp from "@lichtblick/suite-base/components/Timestamp";
 import { usePlayerSelection } from "@lichtblick/suite-base/context/PlayerSelectionContext";
 import { useAppTimeFormat } from "@lichtblick/suite-base/hooks";
 import { PlayerPresence, RecordingFileInfo } from "@lichtblick/suite-base/players/types";
+import { mergeArgs } from "@lichtblick/suite-base/util/compareSides";
 import { downloadFiles } from "@lichtblick/suite-base/util/download";
 import { formatDuration, formatHms } from "@lichtblick/suite-base/util/formatTime";
 import { formatTimeAgo } from "@lichtblick/suite-base/util/recentSources";
@@ -304,7 +308,13 @@ function CompareField(): React.JSX.Element | undefined {
 function FilesField({ startTime }: { startTime?: Time }): React.JSX.Element | null {
   const { t } = useTranslation("dataSourceInfo");
   const files = useMessagePipeline(selectRecordingFiles);
-  const { selectSource, selectedSource, selectedFiles } = usePlayerSelection();
+  const {
+    selectSource,
+    selectedSource,
+    selectedRecordings,
+    selectedWithCookies,
+    availableSources,
+  } = usePlayerSelection();
   const showCompare = useShowCompareDialog();
 
   const sortedFiles = useMemo(
@@ -318,7 +328,10 @@ function FilesField({ startTime }: { startTime?: Time }): React.JSX.Element | nu
   // With a single file the range would only repeat start, end and duration.
   const recordingStart = sortedFiles.length > 1 ? startTime : undefined;
   const comparing = sortedFiles.some((file) => file.topicPrefix != undefined);
-  const canCompare = selectedSource?.supportsCompare === true && selectedFiles != undefined;
+  const canCompare =
+    selectedSource != undefined &&
+    selectedRecordings != undefined &&
+    compareSourceFor(selectedRecordings, availableSources) != undefined;
   return (
     <Field label={t("files")}>
       <Stack gap={0.75}>
@@ -342,10 +355,12 @@ function FilesField({ startTime }: { startTime?: Time }): React.JSX.Element | nu
                 variant="text"
                 title={t("mergeFilesHint")}
                 onClick={() => {
-                  selectSource(selectedSource.id, {
-                    type: "file",
-                    files: [...new Set(selectedFiles)],
-                  });
+                  selectSource(
+                    selectedSource.id,
+                    mergeArgs(selectedSource, selectedRecordings, {
+                      withCookies: selectedWithCookies === true,
+                    }),
+                  );
                 }}
               >
                 {t("mergeFiles")}

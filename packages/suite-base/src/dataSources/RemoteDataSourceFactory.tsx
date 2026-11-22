@@ -19,7 +19,7 @@ import {
 } from "@lichtblick/suite-base/players/IterablePlayer/shared/multiFileHydrationOptions";
 import { expandVideoSeekBackfill } from "@lichtblick/suite-base/players/IterablePlayer/videoSeekBackfill";
 import { Player } from "@lichtblick/suite-base/players/types";
-import { uniqueNames } from "@lichtblick/suite-base/util/compareSides";
+import { compareNamesOf, uniqueNames } from "@lichtblick/suite-base/util/compareSides";
 import { basename, extname } from "@lichtblick/suite-base/util/path";
 
 const initWorkers: Record<string, () => Worker> = {
@@ -102,14 +102,17 @@ class RemoteDataSourceFactory implements IDataSourceFactory {
     }
 
     // `ds.compare=true` compares the files side by side, one side per file; a comma list names the
-    // side of each file instead (files with the same name are merged into that side)
-    const compareParam = args.params.compare;
+    // side of each file instead (files with the same name are merged into that side).
+    // `ds.compareNames` is that list with commas in names escaped (see encodeCompareNames).
+    const { compare: compareParam, compareNames } = args.params;
+    // `compareNames` wins over `compare`, as everywhere that reads them (see compareNamesOf)
     const compare =
-      urls.length < 2 || compareParam == undefined || compareParam === ""
+      urls.length < 2
         ? undefined
-        : compareParam === "true"
-          ? uniqueNames(urls.map((url) => basename(new URL(url).pathname)))
-          : compareParam.split(",");
+        : (compareNamesOf(args.params) ??
+          (compareParam === "true"
+            ? uniqueNames(urls.map((url) => basename(new URL(url).pathname)))
+            : undefined));
     const validCompare = compare?.length === urls.length ? compare : undefined;
 
     const initArgs =
@@ -130,7 +133,8 @@ class RemoteDataSourceFactory implements IDataSourceFactory {
         urls,
         ...(includeCredentials && { includeCredentials: "true" }),
         ...(args.params.name != undefined && { name: args.params.name }),
-        ...(validCompare && { compare: compareParam! }),
+        ...(validCompare &&
+          (compareNames != undefined ? { compareNames } : { compare: compareParam! })),
       },
       sourceId: this.id,
       readAheadDuration: { sec: 10, nsec: 0 },

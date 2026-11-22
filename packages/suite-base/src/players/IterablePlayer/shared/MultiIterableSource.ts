@@ -128,52 +128,52 @@ export class MultiIterableSource<T extends ISerializedIterableSource, P>
       maxCount: maxHydratedCount,
     });
 
-    let sources: IIterableSource<Uint8Array>[];
-    if (type === "files") {
-      sources = this.dataSource.files.map(
-        (file) => new this.SourceConstructor({ type: "file", file, pool: this.#pool } as P),
+    // Local files and remote URLs; a comparison of files may add URLs to them
+    const entries: (Blob | string)[] =
+      this.dataSource.type === "files" ? this.dataSource.files : this.dataSource.urls;
+    const remote = this.dataSource.type === "urls" ? this.dataSource : undefined;
+    const numSources = entries.filter((entry) => typeof entry === "string").length;
+
+    // Split remote cache budget across sources, but keep a floor so large fan-out sessions do
+    // not drop below a single MCAP metadata read and crash CachedFilelike.
+    const totalCache: number = remote?.totalCacheSizeInBytes ?? DEFAULT_CACHE_TOTAL_BYTES;
+    const minPerSource: number = remote?.minCachePerSourceBytes ?? MIN_CACHE_PER_SOURCE_BYTES;
+    const perSourceCache: number = Math.max(
+      minPerSource,
+      Math.floor(totalCache / Math.max(1, numSources)),
+    );
+
+    if (perSourceCache * numSources > totalCache) {
+      log.warn(
+        `Cache budget (${totalCache} bytes) is less than minimum per-source cache ` +
+          `(${minPerSource} bytes) × ${numSources} sources. ` +
+          `Each source will use ${perSourceCache} bytes; total may exceed budget.`,
       );
-    } else {
-      // Split remote cache budget across sources, but keep a floor so large fan-out sessions do
-      // not drop below a single MCAP metadata read and crash CachedFilelike.
-      const totalCache: number = this.dataSource.totalCacheSizeInBytes ?? DEFAULT_CACHE_TOTAL_BYTES;
-      const minPerSource: number =
-        this.dataSource.minCachePerSourceBytes ?? MIN_CACHE_PER_SOURCE_BYTES;
-      const numSources: number = this.dataSource.urls.length;
-      const perSourceCache: number = Math.max(minPerSource, Math.floor(totalCache / numSources));
+    }
 
-      if (perSourceCache * numSources > totalCache) {
-        log.warn(
-          `Cache budget (${totalCache} bytes) is less than minimum per-source cache ` +
-            `(${minPerSource} bytes) × ${numSources} sources. ` +
-            `Each source will use ${perSourceCache} bytes; total may exceed budget.`,
-        );
-      }
+    // Keep read-ahead enabled by default so sequential remote reads still coalesce into fewer
+    // requests, but pair it with a small bounded buffer to stay within the per-source cache.
+    // Callers can still opt out with readAheadEnabled: false.
+    const readAheadEnabled: boolean = remote?.readAheadEnabled ?? true;
+    const readAheadBufferBytes: number | undefined =
+      remote?.readAheadBufferBytes ??
+      (numSources > 1
+        ? Math.min(DEFAULT_READ_AHEAD_BUFFER_BYTES, Math.floor(perSourceCache / 4))
+        : undefined);
 
-      // Keep read-ahead enabled by default so sequential remote reads still coalesce into fewer
-      // requests, but pair it with a small bounded buffer to stay within the per-source cache.
-      // Callers can still opt out with readAheadEnabled: false.
-      const readAheadEnabled: boolean = this.dataSource.readAheadEnabled ?? true;
-      const readAheadBufferBytes: number | undefined =
-        this.dataSource.readAheadBufferBytes ??
-        (numSources > 1
-          ? Math.min(DEFAULT_READ_AHEAD_BUFFER_BYTES, Math.floor(perSourceCache / 4))
-          : undefined);
-
-      const credentials = this.dataSource.credentials;
-      sources = this.dataSource.urls.map(
-        (url) =>
-          new this.SourceConstructor({
+    const sources: IIterableSource<Uint8Array>[] = entries.map((entry) =>
+      typeof entry === "string"
+        ? new this.SourceConstructor({
             type: "url",
-            url,
-            credentials,
+            url: entry,
+            credentials: remote?.credentials,
             cacheSizeInBytes: perSourceCache,
             readAheadEnabled,
             readAheadBufferBytes,
             pool: this.#pool,
-          } as P),
-      );
-    }
+          } as P)
+        : new this.SourceConstructor({ type: "file", file: entry, pool: this.#pool } as P),
+    );
 
     // Bound local and remote initialization (`concurrency`): concurrent MCAP summary parsing can
     // spike worker memory in large multi-file sessions.

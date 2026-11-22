@@ -250,7 +250,10 @@ export type IterableSourceInitializeArgs = {
   url?: string;
   files?: File[];
   urls?: string[];
-  // Compare `files`/`urls` side by side instead of merging them: the side name of each, in order.
+  // Local files and remote URLs (strings) together, for a comparison that mixes them. Only read by
+  // sources whose factory sets supportsCompare.
+  recordings?: (File | string)[];
+  // Compare `files`/`urls`/`recordings` side by side instead of merging them: the side name of each, in order.
   // Entries with the same name are merged into one side (see MultiSource).
   compare?: readonly string[];
   // Fetch credentials for `url`/`urls`, e.g. "include" to send cookies (`ds.includeCredentials`)
