@@ -198,6 +198,8 @@ export default function Panel<
     const parentPanelContext = useContext(PanelContext);
 
     const type = PanelComponent.panelType;
+    const needsPlayer = !isContainerPanel(childId) &&
+      !["Notes", "GlobalVariableSliderPanel", "UserScriptEditor", "3D"].includes(type);
     const title = useMemo(
       () => panelCatalog.getPanelByType(type)?.title ?? "",
       [panelCatalog, type],
@@ -709,7 +711,7 @@ export default function Panel<
                   {panelBody}
                 </PanelErrorBoundary>
                 {/* Containers hold panels that show it themselves */}
-                {!isContainerPanel(childId) && <PanelPlayerState />}
+                {needsPlayer && <PanelPlayerState />}
                 {process.env.NODE_ENV !== "production" && (
                   <div className={classes.perfInfo} ref={perfInfo} />
                 )}
