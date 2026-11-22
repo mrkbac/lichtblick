@@ -64,6 +64,10 @@ function addToGroup(groups: Map<string, GroupedAlert>, alert: ListAlert): void {
     if (alert.tag != undefined) {
       existing.tags.push(alert.tag);
     }
+    // A session alert grouped first has no guide; keep the player alert's
+    if (existing.guide == undefined && alert.guide != undefined) {
+      existing.guide = alert.guide;
+    }
     if (
       alert.playerAlertKey != undefined &&
       !existing.playerAlertKeys.includes(alert.playerAlertKey)

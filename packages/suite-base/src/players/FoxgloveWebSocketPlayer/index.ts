@@ -112,6 +112,9 @@ import {
   ResolvedService,
 } from "./types";
 
+// FoxgloveClient emits this for an error event that carries no error
+const OPAQUE_SOCKET_ERROR = "WebSocket error";
+
 const log = Log.getLogger(__dirname);
 const textEncoder = new TextEncoder();
 /** Message encodings whose schema, if any, is a JSON schema. */
@@ -348,8 +351,9 @@ export default class FoxgloveWebSocketPlayer implements Player {
         return;
       }
       const message = (err as unknown as undefined | { message?: unknown })?.message;
+      // FoxgloveClient turns an error event without payload into Error("WebSocket error")
       blockedAsMixedContent =
-        typeof message === "string"
+        typeof message === "string" && message !== OPAQUE_SOCKET_ERROR
           ? /insecure/i.test(message)
           : !/\b(Chrome|Chromium|Firefox)\//.test(navigator.userAgent);
     });

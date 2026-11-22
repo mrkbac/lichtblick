@@ -3,6 +3,7 @@
 
 import { ArrowClockwise16Regular, ArrowDownload16Regular } from "@fluentui/react-icons";
 import { Button, Link, Typography } from "@mui/material";
+import { Trans, useTranslation } from "react-i18next";
 import { makeStyles } from "tss-react/mui";
 
 import CopyButton from "@lichtblick/suite-base/components/CopyButton";
@@ -58,6 +59,7 @@ function detectBrowser(): Browser {
 
 function Code({ text, copy = false }: { text: string; copy?: boolean }): React.JSX.Element {
   const { classes } = useStyles();
+  const { t } = useTranslation("wsMixedContent");
   return (
     <>
       <code className={classes.code}>{text}</code>
@@ -66,7 +68,7 @@ function Code({ text, copy = false }: { text: string; copy?: boolean }): React.J
           size="small"
           iconSize="small"
           color="inherit"
-          title={`Copy ${text}`}
+          title={t("copy", { text })}
           getText={() => text}
         />
       )}
@@ -80,23 +82,28 @@ function Code({ text, copy = false }: { text: string; copy?: boolean }): React.J
  */
 export function WsMixedContentHelp({ url }: { url: string }): React.JSX.Element {
   const { classes } = useStyles();
+  const { t } = useTranslation("wsMixedContent");
   const browser = detectBrowser();
   const origin = window.location.origin;
   const chromiumBased = browser === "chromium" || browser === "edge";
   const extensionRunsHere = PROXY_ORIGINS.has(origin);
   const settingsScheme = browser === "edge" ? "edge" : "chrome";
+  const extensionSite = [...PROXY_ORIGINS][0]!;
 
   return (
     <Stack gap={1.5} className={classes.root}>
       <Typography variant="inherit">
-        Browsers only allow unencrypted <Code text="ws://" /> connections from an https page to
-        localhost, so <Code text={url} /> was blocked. Use one of these, then reload the page.
+        <Trans
+          t={t}
+          i18nKey="intro"
+          components={{ ws: <Code text="ws://" />, url: <Code text={url} /> }}
+        />
       </Typography>
 
       {chromiumBased && extensionRunsHere && (
         <Stack gap={0.5}>
           <Typography variant="inherit" className={classes.heading}>
-            Recommended: install the Licht WebSocket proxy extension
+            {t("extensionHeading")}
           </Typography>
           <ol className={classes.steps}>
             <li>
@@ -108,67 +115,90 @@ export function WsMixedContentHelp({ url }: { url: string }): React.JSX.Element 
                 target="_self"
                 download
               >
-                Download the extension
+                {t("downloadExtension")}
               </Button>{" "}
-              and unzip it.
+              {t("unzip")}
             </li>
             <li>
-              Open <Code text={`${settingsScheme}://extensions`} copy /> and turn on{" "}
-              <b>Developer mode</b>.
+              <Trans
+                t={t}
+                i18nKey="openExtensions"
+                components={{
+                  page: <Code text={`${settingsScheme}://extensions`} copy />,
+                  b: <b />,
+                }}
+              />
             </li>
             <li>
-              Click <b>Load unpacked</b> and pick the unzipped <Code text="licht-ws-proxy" />{" "}
-              folder.
+              <Trans
+                t={t}
+                i18nKey="loadUnpacked"
+                components={{ folder: <Code text="licht-ws-proxy" />, b: <b /> }}
+              />
             </li>
           </ol>
           <Typography variant="inherit" color="text.secondary">
-            Needs Chrome, Edge or another Chromium browser, version 140 or newer. It runs only on
-            this site, asks for no permissions and relays only ws:// connections.
+            {t("extensionNote")}
           </Typography>
         </Stack>
       )}
       {chromiumBased && !extensionRunsHere && (
         <Typography variant="inherit">
-          The Licht WebSocket proxy extension runs on{" "}
-          <Link href={[...PROXY_ORIGINS][0]} target="_blank" rel="noreferrer">
-            {[...PROXY_ORIGINS][0]}
-          </Link>{" "}
-          only. Open this connection there to use it.
+          <Trans
+            t={t}
+            i18nKey="extensionElsewhere"
+            components={{
+              site: (
+                <Link href={extensionSite} target="_blank" rel="noreferrer">
+                  {extensionSite}
+                </Link>
+              ),
+            }}
+          />
         </Typography>
       )}
 
       <Stack gap={0.5}>
         <Typography variant="inherit" className={classes.heading}>
-          {chromiumBased && extensionRunsHere ? "Or allow" : "Allow"} insecure content for this site
+          {t(chromiumBased && extensionRunsHere ? "orAllowHeading" : "allowHeading")}
         </Typography>
         {chromiumBased && (
           <Typography variant="inherit">
-            Open{" "}
-            <Code
-              text={`${settingsScheme}://settings/content/siteDetails?site=${encodeURIComponent(origin)}`}
-              copy
-            />{" "}
-            and set <b>Insecure content</b> to <b>Allow</b>. The browser then marks this site as
-            &ldquo;Not secure&rdquo;.
+            <Trans
+              t={t}
+              i18nKey="chromiumSetting"
+              components={{
+                page: (
+                  <Code
+                    text={`${settingsScheme}://settings/content/siteDetails?site=${encodeURIComponent(origin)}`}
+                    copy
+                  />
+                ),
+                b: <b />,
+              }}
+            />
           </Typography>
         )}
         {browser === "firefox" && (
           <Typography variant="inherit">
-            Open <Code text="about:config" copy /> and set{" "}
-            <Code text="network.websocket.allowInsecureFromHTTPS" copy /> to <b>true</b>. This
-            applies to every site.
+            <Trans
+              t={t}
+              i18nKey="firefoxSetting"
+              components={{
+                page: <Code text="about:config" copy />,
+                pref: <Code text="network.websocket.allowInsecureFromHTTPS" copy />,
+                b: <b />,
+              }}
+            />
           </Typography>
         )}
         {(browser === "safari" || browser === "other") && (
-          <Typography variant="inherit">
-            This browser has no setting for it. Use Chrome or Edge with the extension, or wss://.
-          </Typography>
+          <Typography variant="inherit">{t("noSetting")}</Typography>
         )}
       </Stack>
 
       <Typography variant="inherit">
-        Or serve the connection over <Code text="wss://" /> (TLS), for example behind a reverse
-        proxy.
+        <Trans t={t} i18nKey="wss" components={{ wss: <Code text="wss://" /> }} />
       </Typography>
 
       <div>
@@ -180,7 +210,7 @@ export function WsMixedContentHelp({ url }: { url: string }): React.JSX.Element 
             window.location.reload();
           }}
         >
-          Reload and retry
+          {t("reload")}
         </Button>
       </div>
     </Stack>

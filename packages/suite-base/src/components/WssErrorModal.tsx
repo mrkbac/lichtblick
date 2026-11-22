@@ -8,6 +8,7 @@
 import CloseIcon from "@mui/icons-material/Close";
 import { Dialog, DialogContent, DialogTitle, IconButton } from "@mui/material";
 import { lazy, Suspense, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { makeStyles } from "tss-react/mui";
 
 import { Immutable } from "@lichtblick/suite";
@@ -33,6 +34,7 @@ export default function WssErrorModal(
 ): React.JSX.Element {
   const { playerAlerts } = props;
   const { classes } = useStyles();
+  const { t } = useTranslation("wsMixedContent");
   const [dismissed, setDismissed] = useState(false);
 
   const guide = playerAlerts?.find((alert) => alert.guide?.type === "wsMixedContent")?.guide;
@@ -46,8 +48,8 @@ export default function WssErrorModal(
   return (
     <Dialog open onClose={close} maxWidth="sm">
       <DialogTitle className={classes.dialogTitle}>
-        Your browser blocked the connection
-        <IconButton aria-label="Close" onClick={close} edge="end">
+        {t("dialogTitle")}
+        <IconButton aria-label={t("close")} onClick={close} edge="end">
           <CloseIcon />
         </IconButton>
       </DialogTitle>
