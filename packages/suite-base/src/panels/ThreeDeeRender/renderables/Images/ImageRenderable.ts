@@ -58,6 +58,8 @@ import {
   decodeCompressedImageToBitmap,
   decodeCompressedVideoToBitmap,
   emptyVideoFrame,
+  latestVideoBitmap,
+  paintVideoBitmap,
   prepareVideoFrame,
 } from "./decodeImage";
 import {
@@ -618,6 +620,8 @@ export class ImageRenderable extends Renderable<ImageUserData> {
     this.#waitingForVideoKeyframe = true;
     this.#canReplayVideoGop = true;
     this.#pendingVideoDecodeQueue.length = 0;
+    // Nothing is queued any more, so no frame is newer than one still decoding
+    this.#lastQueuedVideoSeq = 0;
     this.#lastQueuedVideoMessageTime = undefined;
   }
 
@@ -875,10 +879,7 @@ export class ImageRenderable extends Renderable<ImageUserData> {
     }
 
     try {
-      const imageBitmap = await globalThis.createImageBitmap(result.frame, { resizeWidth });
-      this.videoPlayer.lastImageBitmap?.close();
-      this.videoPlayer.lastImageBitmap = imageBitmap;
-      this.videoPlayer.lastImageBitmapTimestampMicros = result.frame.timestamp;
+      const imageBitmap = await paintVideoBitmap(this.videoPlayer, result.frame, resizeWidth);
       this.#waitingForVideoKeyframe = false;
       this.#canReplayVideoGop = false;
       return imageBitmap;
@@ -913,12 +914,10 @@ export class ImageRenderable extends Renderable<ImageUserData> {
         if (frameMsg.data.byteLength === 0) {
           const error = "Empty video frame";
           log.error(error);
-          // show last frame instead of error image if available
-          if (this.videoPlayer?.lastImageBitmap) {
-            return this.videoPlayer.lastImageBitmap;
-          }
-          // show black image instead of error image
-          return await emptyVideoFrame(this.videoPlayer, resizeWidth);
+          // Show the last frame (black before the first one) instead of an error image
+          return this.videoPlayer
+            ? await latestVideoBitmap(this.videoPlayer, resizeWidth)
+            : await emptyVideoFrame(undefined, resizeWidth);
         }
 
         if (!this.videoPlayer) {
@@ -938,7 +937,7 @@ export class ImageRenderable extends Renderable<ImageUserData> {
         const { preparedFrame } = this.#prepareIncomingVideoFrame(frameMsg);
 
         if (preparedFrame.status === PreparedVideoFrameStatus.UnsupportedBFrame) {
-          return videoPlayer.lastImageBitmap ?? (await emptyVideoFrame(videoPlayer, resizeWidth));
+          return await latestVideoBitmap(videoPlayer, resizeWidth);
         }
         if (this.#waitingForVideoKeyframe && preparedFrame.type !== "key") {
           const replayBitmap = this.#canReplayVideoGop

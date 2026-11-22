@@ -147,27 +147,45 @@ export async function decodeCompressedVideoToBitmap(
     if (skipBitmap) {
       return undefined;
     }
-    const frameToRender = videoFrame ?? videoPlayer.lastVideoFrame;
-    if (!frameToRender) {
-      return videoPlayer.lastImageBitmap ?? (await emptyVideoFrame(videoPlayer, resizeWidth));
-    }
-    // Skip re-encoding the same frame when the decoder produced nothing new. Frames decoded with
-    // `skipBitmap` move `lastVideoFrame` ahead of `lastImageBitmap`, so check they match.
-    if (
-      !videoFrame &&
-      videoPlayer.lastImageBitmap &&
-      videoPlayer.lastImageBitmapTimestampMicros === frameToRender.timestamp
-    ) {
-      return videoPlayer.lastImageBitmap;
-    }
-    const imageBitmap = await globalThis.createImageBitmap(frameToRender, { resizeWidth });
-    videoPlayer.lastImageBitmap?.close();
-    videoPlayer.lastImageBitmap = imageBitmap;
-    videoPlayer.lastImageBitmapTimestampMicros = frameToRender.timestamp;
-    return imageBitmap;
+    return videoFrame
+      ? await paintVideoBitmap(videoPlayer, videoFrame, resizeWidth)
+      : await latestVideoBitmap(videoPlayer, resizeWidth);
   } finally {
     videoFrame?.close();
   }
+}
+
+/** Makes `frame` the player's `lastImageBitmap`, closing the previous one. */
+export async function paintVideoBitmap(
+  videoPlayer: VideoPlayer,
+  frame: VideoFrame,
+  resizeWidth?: number,
+): Promise<ImageBitmap> {
+  const imageBitmap = await globalThis.createImageBitmap(frame, { resizeWidth });
+  videoPlayer.lastImageBitmap?.close();
+  videoPlayer.lastImageBitmap = imageBitmap;
+  videoPlayer.lastImageBitmapTimestampMicros = frame.timestamp;
+  return imageBitmap;
+}
+
+/**
+ * The newest decoded picture, for frames that bring none of their own (decode timeout, B-frames,
+ * empty frames). Frames decoded with `skipBitmap` move `lastVideoFrame` ahead of
+ * `lastImageBitmap`, so the bitmap is reused only while it still shows `lastVideoFrame`.
+ */
+export async function latestVideoBitmap(
+  videoPlayer: VideoPlayer,
+  resizeWidth?: number,
+): Promise<ImageBitmap> {
+  const frame = videoPlayer.lastVideoFrame;
+  if (
+    frame &&
+    (videoPlayer.lastImageBitmap == undefined ||
+      videoPlayer.lastImageBitmapTimestampMicros !== frame.timestamp)
+  ) {
+    return await paintVideoBitmap(videoPlayer, frame, resizeWidth);
+  }
+  return videoPlayer.lastImageBitmap ?? (await emptyVideoFrame(videoPlayer, resizeWidth));
 }
 
 const MIN_MAX_8_BIT = { minValue: 0, maxValue: 255 };

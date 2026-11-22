@@ -1014,6 +1014,42 @@ describe("ImageRenderable error handling", () => {
     self.createImageBitmap = originalCreateImageBitmap;
   });
 
+  it("paints the newest decoded frame when a burst ends on an unsupported h265 B frame", async () => {
+    const renderable = new ImageRenderable(mockUserData.topic, mockRenderer, { ...mockUserData });
+    const staleBitmap = new ImageBitmap(); // painted before the seek
+    const player = {
+      isInitialized: vi.fn().mockReturnValue(true),
+      init: vi.fn().mockResolvedValue(undefined),
+      codedSize: vi.fn(),
+      resetForSeek: vi.fn(),
+      lastImageBitmap: staleBitmap,
+      lastImageBitmapTimestampMicros: 999_000 as number | undefined,
+      lastVideoFrame: undefined as VideoFrame | undefined,
+      decode: vi.fn(async (_data: Uint8Array, timestampMicros: number) => {
+        const frame = createDecodedVideoFrame(timestampMicros);
+        player.lastVideoFrame = frame;
+        return frame;
+      }),
+    };
+    renderable.videoPlayer = player as unknown as ImageRenderable["videoPlayer"];
+    const originalCreateImageBitmap = self.createImageBitmap;
+    const shown = new ImageBitmap();
+    const createImageBitmapSpy = vi.fn().mockResolvedValue(shown);
+    self.createImageBitmap = createImageBitmapSpy;
+
+    renderable.setImage(createH265Frame(h265Keyframe, { sec: 0, nsec: 0 }));
+    renderable.setImage(createH265Frame(h265DeltaFrame, { sec: 0, nsec: 16666666 }));
+    renderable.setImage(createH265Frame(h265BFrame, { sec: 0, nsec: 33333333 }));
+    renderable.flushPendingDecodes();
+    await renderable.settleVideoDecodes();
+
+    // B frames are not decoded; the newest picture is the delta frame decoded without a bitmap.
+    expect(createImageBitmapSpy).toHaveBeenCalledTimes(1);
+    expect((createImageBitmapSpy.mock.calls[0]![0] as VideoFrame).timestamp).toBe(16666);
+    expect(renderable.getDecodedImage()).toBe(shown);
+    self.createImageBitmap = originalCreateImageBitmap;
+  });
+
   it("shows the target when a seek backfill resends the target frame", async () => {
     const renderable = new ImageRenderable(mockUserData.topic, mockRenderer, { ...mockUserData });
     const decode = vi.fn(async (_data: Uint8Array, timestampMicros: number) =>
