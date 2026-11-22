@@ -1,6 +1,9 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
+import { setFlagsFromString } from "node:v8";
+import { runInNewContext } from "node:vm";
+
 import { MessageEvent } from "@lichtblick/suite";
 import { TopicSelection } from "@lichtblick/suite-base/players/types";
 
@@ -230,5 +233,46 @@ describe("SharedRangeReads", () => {
         (result) => (result.value as { msgEvent: MessageEvent }).msgEvent.receiveTime.sec,
       ),
     ).toEqual([0, 1, 2]);
+  });
+
+  it("keeps no delivered message alive on a reader with its own read", async () => {
+    setFlagsFromString("--expose_gc");
+    const gc = runInNewContext("gc") as () => void;
+    const recording = Array.from({ length: 5000 }, (_, i) => message("dense", i));
+    let delivered: WeakRef<object> | undefined;
+    const tracked = () => {
+      const payload = { data: new Uint8Array(1024) };
+      delivered = new WeakRef(payload);
+      return payload;
+    };
+    const shared = new SharedRangeReads((topics) =>
+      topics.has("dense")
+        ? (async function* () {
+            for (const msgEvent of recording) {
+              yield { type: "message-event" as const, msgEvent };
+            }
+          })()
+        : (async function* () {
+            yield {
+              type: "message-event" as const,
+              msgEvent: { ...message("sparse", 6000), message: tracked() },
+            };
+            await new Promise<never>(() => {});
+          })(),
+    );
+    const dense = shared.read("dense", {});
+    const sparse = shared.read("sparse", {});
+    void dense.next();
+    // Gets its message from its own read: the shared one waits for "dense" to be read
+    expect((await sparse.next()).done).toBe(false);
+    const stillPulling = sparse.next();
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    gc();
+    expect(delivered?.deref()).toBeUndefined();
+
+    await sparse.return?.();
+    await stillPulling;
+    await dense.return?.();
   });
 });

@@ -131,8 +131,8 @@ class Reader implements AsyncIterableIterator<Readonly<ReadResult>> {
     this.#ready = undefined;
   }
 
-  /** Settles when the reader is closed, so a pull waiting on its own read ends right away */
-  readonly #closed = Promise.withResolvers<IteratorResult<Readonly<ReadResult>>>();
+  /** Ends the pull waiting on its own read; set only while one waits */
+  #cancelPull?: () => void;
   /** The last pull: pulls run one after another, so overlapping ones keep the read's order */
   #lastPull: Promise<unknown> = Promise.resolve();
 
@@ -153,7 +153,15 @@ class Reader implements AsyncIterableIterator<Readonly<ReadResult>> {
     }
     if (this.#own && this.#queue.size() === 0 && !this.#ended) {
       for (;;) {
-        const own = await Promise.race([this.#own.next(), this.#closed.promise]);
+        const ownRead = this.#own;
+        const own = await new Promise<IteratorResult<Readonly<ReadResult>>>((resolve, reject) => {
+          this.#cancelPull = () => {
+            resolve({ done: true, value: undefined });
+          };
+          ownRead.next().then(resolve, reject);
+        }).finally(() => {
+          this.#cancelPull = undefined;
+        });
         if (own.done === true || own.value.type !== "message-event" || this.#skip === 0) {
           return own;
         }
@@ -176,7 +184,7 @@ class Reader implements AsyncIterableIterator<Readonly<ReadResult>> {
 
   public async return(): Promise<IteratorResult<Readonly<ReadResult>>> {
     this.#ended = true;
-    this.#closed.resolve({ done: true, value: undefined });
+    this.#cancelPull?.();
     // Not awaited: an async generator returns only after a pending read (e.g. remote I/O) ends,
     // and it stops at its next message then
     void Promise.resolve(this.#own?.return?.()).catch(() => {});
