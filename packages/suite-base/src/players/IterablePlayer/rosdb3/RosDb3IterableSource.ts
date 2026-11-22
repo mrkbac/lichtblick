@@ -8,7 +8,7 @@
 import { MessageDefinition } from "@foxglove/message-definition";
 import { ROS2_TO_DEFINITIONS, Rosbag2, SqliteSqljs } from "@foxglove/rosbag2-web";
 import { stringify } from "@foxglove/rosmsg";
-import { Time, add as addTime, compare } from "@foxglove/rostime";
+import { Time, add as addTime, compare, toNanoSec } from "@foxglove/rostime";
 
 import { MessageEvent } from "@lichtblick/suite";
 import { APP_CONFIG } from "@lichtblick/suite-base/constants/config";
@@ -45,10 +45,10 @@ function dataTypeToFullName(dataType: string): string {
 export class RosDb3IterableSource implements ISerializedIterableSource {
   #files: File[];
   #bag?: Rosbag2;
-  #dbs: SqliteSqljs[] = [];
+  /** Each file with its message count per topic */
+  #dbs: { db: SqliteSqljs; counts: Map<string, number> }[] = [];
   #start: Time = { sec: 0, nsec: 0 };
   #end: Time = { sec: 0, nsec: 0 };
-  #messageCounts = new Map<string, number>();
   #textEncoder = new TextEncoder();
 
   public readonly sourceType = "serialized";
@@ -65,15 +65,22 @@ export class RosDb3IterableSource implements ISerializedIterableSource {
     await SqliteSqljs.Initialize({ wasmBinary: sqlWasm });
 
     const dbs = this.#files.map((file) => new SqliteSqljs(new BlockCachedFile(file)));
-    this.#dbs = dbs;
     const bag = new Rosbag2(dbs);
     await bag.open();
     this.#bag = bag;
 
     const [start, end] = await this.#bag.timeRange();
     const topicDefs = await this.#bag.readTopics();
-    const messageCounts = await this.#bag.messageCounts();
-    this.#messageCounts = messageCounts;
+    // Per file, so a backfill skips files without the topics it looks for
+    const messageCounts = new Map<string, number>();
+    this.#dbs = [];
+    for (const db of dbs) {
+      const counts = await db.messageCounts();
+      this.#dbs.push({ db, counts });
+      for (const [topic, count] of counts) {
+        messageCounts.set(topic, (messageCounts.get(topic) ?? 0) + count);
+      }
+    }
     let hasAnyMessages = false;
     for (const count of messageCounts.values()) {
       if (count > 0) {
@@ -206,14 +213,14 @@ export class RosDb3IterableSource implements ISerializedIterableSource {
     // .db3 files only index time: read back from `time` in pages of rows until every topic has a
     // message or the file's start is reached, yielding between pages even when none matched
     const latest = new Map<string, MessageEvent<Uint8Array>>();
-    for (const db of this.#dbs) {
+    for (const { db, counts } of this.#dbs) {
       // Per file: a split recording's files may overlap in time
       const found = new Set<string>();
-      let next: Time | undefined = time;
+      let next: { timestamp: bigint; id?: number } | undefined = { timestamp: toNanoSec(time) };
       while (next != undefined) {
-        // Topics without messages would only make the scan read to the start
+        // A topic this file has no messages for would only make the scan read to its start
         const missing = [...topics.keys()].filter(
-          (topic) => !found.has(topic) && (this.#messageCounts.get(topic) ?? 0) > 0,
+          (topic) => !found.has(topic) && (counts.get(topic) ?? 0) > 0,
         );
         if (missing.length === 0) {
           break;

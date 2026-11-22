@@ -13,7 +13,7 @@ overrides:
 
 patchedDependencies:
   '@foxglove/rosbag2-web@5.0.0':
-    hash: 21a4e61c686935db3c66668a8a34abd0e30167b6d339a56f2bc09b760f655f3c
+    hash: 1751474afd65ea6adb445201585759bc15a8c61b522196057aae6bc7a14f2f91
     path: patches/@foxglove__rosbag2-web@5.0.0.patch
   '@foxglove/rosbag2@6.0.0':
     hash: a05249625d5e99f9147be96e9ef6c877d8f88dfe4780fb0bb87b304070346ca9
@@ -471,7 +471,7 @@ importers:
         version: 0.4.2
       '@foxglove/rosbag2-web':
         specifier: 5.0.0
-        version: 5.0.0(patch_hash=21a4e61c686935db3c66668a8a34abd0e30167b6d339a56f2bc09b760f655f3c)
+        version: 5.0.0(patch_hash=1751474afd65ea6adb445201585759bc15a8c61b522196057aae6bc7a14f2f91)
       '@foxglove/roslibjs':
         specifier: 0.0.4
         version: 0.0.4
@@ -9428,7 +9428,7 @@ snapshots:
       '@foxglove/omgidl-parser': 1.2.2
       md5-typescript: 1.0.5
 
-  '@foxglove/rosbag2-web@5.0.0(patch_hash=21a4e61c686935db3c66668a8a34abd0e30167b6d339a56f2bc09b760f655f3c)':
+  '@foxglove/rosbag2-web@5.0.0(patch_hash=1751474afd65ea6adb445201585759bc15a8c61b522196057aae6bc7a14f2f91)':
     dependencies:
       '@foxglove/rosbag2': 6.0.0(patch_hash=a05249625d5e99f9147be96e9ef6c877d8f88dfe4780fb0bb87b304070346ca9)
       '@foxglove/sql.js': 0.0.4
