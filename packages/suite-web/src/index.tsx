@@ -157,6 +157,7 @@ export async function main(getParams: () => Promise<MainParams> = async () => ({
     navigator.serviceWorker.register("sw.js").catch((err: unknown) => {
       log.error("Service worker registration failed", err);
     });
+    // a window left on an older build switches when a file it needs is gone from the host
     recoverFromMissingAssets();
     if (!navigator.serviceWorker.controller) {
       cacheLoadedAssets();
