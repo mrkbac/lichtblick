@@ -188,4 +188,47 @@ describe("SharedRangeReads", () => {
     await expect(sparse.next()).rejects.toThrow("can't open");
     await dense.return?.();
   });
+
+  it("ends a waiting pull right away when a reader on its own read is closed", async () => {
+    const recording = Array.from({ length: 5000 }, (_, i) => message("dense", i));
+    // Its own read never delivers, like a remote read that hangs
+    const hanging: AsyncIterableIterator<Readonly<IteratorResult>> = {
+      next: async () => await new Promise<never>(() => {}),
+      return: async () => await new Promise<never>(() => {}),
+      [Symbol.asyncIterator]() {
+        return this;
+      },
+    };
+    const shared = new SharedRangeReads((topics) =>
+      topics.has("dense")
+        ? (async function* () {
+            for (const msgEvent of recording) {
+              yield { type: "message-event" as const, msgEvent };
+            }
+          })()
+        : hanging,
+    );
+    const dense = shared.read("dense", {});
+    const sparse = shared.read("sparse", {});
+    void dense.next();
+    const pending = sparse.next();
+    // Let the shared read fill up and hand "sparse" its own read
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    await sparse.return?.();
+    expect(await pending).toEqual({ done: true, value: undefined });
+    await dense.return?.();
+  });
+
+  it("answers overlapping pulls in order", async () => {
+    const { shared } = setup();
+    const reader = shared.read("a", {});
+
+    const results = await Promise.all([reader.next(), reader.next(), reader.next()]);
+    expect(
+      results.map(
+        (result) => (result.value as { msgEvent: MessageEvent }).msgEvent.receiveTime.sec,
+      ),
+    ).toEqual([0, 1, 2]);
+  });
 });
