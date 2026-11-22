@@ -322,6 +322,16 @@ export class TransformTree {
     }
     const rootFrame =
       (rootFrameId != undefined ? this.frame(rootFrameId) : frame.root()) ?? frame.root();
+    // TEMP REGRESSION to test the perf-budget label flow: an extra lookup into a scratch pose
+    frame.apply(
+      { position: { x: 0, y: 0, z: 0 }, orientation: { x: 0, y: 0, z: 0, w: 1 } },
+      { position: { ...input.position }, orientation: { ...input.orientation } },
+      rootFrame,
+      srcFrame,
+      dstTime,
+      srcTime,
+      maxDelta,
+    );
     return frame.apply(output, input, rootFrame, srcFrame, dstTime, srcTime, maxDelta);
   }
 
