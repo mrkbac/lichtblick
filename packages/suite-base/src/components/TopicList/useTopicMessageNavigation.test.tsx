@@ -672,6 +672,7 @@ describe("useTopicMessageNavigation", () => {
           currentTime,
           topicStats: new Map([[topicName, { numMessages: 2, firstMessageTime: older }]]),
           indexedBackfill: true,
+          supportsInspection: true,
           messages: [older, newest],
         },
       });
@@ -699,17 +700,19 @@ describe("useTopicMessageNavigation", () => {
       const currentTime: Time = { sec: 100, nsec: 0 };
       const topicName = `/${BasicBuilder.string()}`;
 
-      const { result, seekPlayback, getMessageAtTime, getBatchIterator } = setup({
-        topicName,
-        selected: true,
-        pipelineData: {
-          startTime: { sec: 0, nsec: 0 },
-          currentTime,
-          topicStats: new Map([[topicName, { numMessages: 3, firstMessageTime: t1 }]]),
-          indexedBackfill: true,
-          messages: [t1, previous, currentTime],
-        },
-      });
+      const { result, seekPlayback, getMessageAtTime, getBatchIterator, getInspectionIterator } =
+        setup({
+          topicName,
+          selected: true,
+          pipelineData: {
+            startTime: { sec: 0, nsec: 0 },
+            currentTime,
+            topicStats: new Map([[topicName, { numMessages: 3, firstMessageTime: t1 }]]),
+            indexedBackfill: true,
+            supportsInspection: true,
+            messages: [t1, previous, currentTime],
+          },
+        });
       getMessageAtTime.mockResolvedValue({
         topic: topicName,
         receiveTime: previous,
@@ -723,13 +726,51 @@ describe("useTopicMessageNavigation", () => {
         await result.current.handlePreviousMessage();
       });
 
-      // Then - one read, of the gap between the answer and the current time
+      // Then - a nearby 500 ms window, then the lookup, then the gap from its answer up to that
+      // window; nothing in between is scanned
       expect(seekPlayback).toHaveBeenCalledWith(previous);
-      expect(getBatchIterator).toHaveBeenCalledTimes(1);
-      expect(getBatchIterator).toHaveBeenCalledWith(topicName, {
-        start: { sec: 40, nsec: 1 },
-        end: { sec: 99, nsec: 999_999_999 },
+      expect(getBatchIterator).not.toHaveBeenCalled();
+      const reads = getInspectionIterator!.mock.calls.map(([, opts]) => opts).filter(Boolean);
+      expect(reads).toEqual([
+        { start: { sec: 99, nsec: 499_999_999 }, end: { sec: 99, nsec: 999_999_999 } },
+        { start: { sec: 40, nsec: 1 }, end: { sec: 99, nsec: 499_999_999 } },
+      ]);
+    });
+
+    it("does not trust backfill for virtual topics, whose converter may name a time with no output", async () => {
+      // Given - a virtual topic: the player can't inspect it, and its backfill would name a
+      // time where the real (stateful) output has no message
+      const t1: Time = { sec: 1, nsec: 0 };
+      const phantom: Time = { sec: 50, nsec: 0 };
+      const t2: Time = { sec: 20, nsec: 0 };
+      const currentTime: Time = { sec: 100, nsec: 0 };
+      const topicName = `/${BasicBuilder.string()}`;
+      const { result, seekPlayback, getMessageAtTime } = setup({
+        topicName,
+        selected: true,
+        pipelineData: {
+          currentTime,
+          topicStats: new Map([[topicName, { numMessages: 3, firstMessageTime: t1 }]]),
+          indexedBackfill: true,
+          messages: [t1, t2, currentTime],
+        },
       });
+      getMessageAtTime.mockResolvedValue({
+        topic: topicName,
+        receiveTime: phantom,
+        schemaName: "test",
+        message: {},
+        sizeInBytes: 0,
+      });
+
+      // When
+      await act(async () => {
+        await result.current.handlePreviousMessage();
+      });
+
+      // Then
+      expect(getMessageAtTime).not.toHaveBeenCalled();
+      expect(seekPlayback).toHaveBeenCalledWith(t2);
     });
 
     it("does not call getMessageAtTime on sources without an indexed lookup", async () => {
@@ -769,6 +810,7 @@ describe("useTopicMessageNavigation", () => {
           currentTime: t2,
           topicStats: new Map([[topicName, { numMessages: 2, firstMessageTime: t1 }]]),
           indexedBackfill: true,
+          supportsInspection: true,
           messages: [t1, t2],
         },
       });

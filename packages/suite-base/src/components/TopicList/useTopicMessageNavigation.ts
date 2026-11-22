@@ -17,11 +17,10 @@
  *    - All time-only reads use the payload-free inspection iterator when the player has one
  *    - Next message: Direct seek from currentTime; stops at the first message after it once the
  *      topic's last message time is known
- *    - Previous message: getMessageAtTime (indexed backward lookup) gives a candidate, then the
- *      range between it and the current time is read to confirm nothing newer exists. Backfill is
- *      approximate for some sources (overlapping files, unindexed reads, converters), so it is only
- *      ever a lower bound. Without a candidate, backward windows grow geometrically from the
- *      current time, so the read is proportional to the distance, never the whole prefix.
+ *    - Previous message: a nearby window sized to a message or two, then (indexed sources,
+ *      recorded topics) getMessageAtTime as a lower bound plus a read of the gap after it, else
+ *      backward windows that grow geometrically, so the read is proportional to the distance,
+ *      never the whole prefix. See findMessageAtOrBefore.
  *
  * 3. Boundaries Cache
  *    - Per-topic first/last times come from topicStats when the source reports them
@@ -127,6 +126,13 @@ export function useTopicMessageNavigation({
 
   // Navigation only needs receive times. The inspection iterator skips decoding payloads (a
   // camera frame costs nothing to step over); sources without it get decoded batches.
+  // Recorded topics can be inspected; virtual ones (user-script or converter outputs) can't.
+  // Creating the iterator reads nothing.
+  const isRecorded = useCallback(
+    (topic: string) => getInspectionIterator?.([topic]) != undefined,
+    [getInspectionIterator],
+  );
+
   const iterateTimes = useCallback(
     (topic: string, options?: { start?: Time; end?: Time }) =>
       getInspectionIterator?.([topic], options) ?? getBatchIterator(topic, options),
@@ -210,33 +216,12 @@ export function useTopicMessageNavigation({
       floor: Time = ZERO_TIME,
       initialWindowMs: number = DEFAULT_WINDOW_MS,
     ): Promise<Time | undefined> => {
-      // Only on sources whose backfill uses an index: elsewhere it may decode everything up to
-      // `time`. Even indexed backfill is approximate for some sources (overlapping files,
-      // converters), so its answer is a lower bound: read only the gap after it, which picks up
-      // anything newer it missed.
-      if (hasIndexedBackfill) {
-        let candidate: Time | undefined;
-        try {
-          candidate = (await getMessageAtTime(topic, time, signal))?.receiveTime;
-        } catch (error) {
-          if (signal.aborted) {
-            return undefined;
-          }
-          const message = error instanceof Error ? error.message : String(error);
-          log.warn(`Indexed lookup failed, scanning instead: ${message}`);
-        }
-        if (candidate && compare(candidate, time) <= 0) {
-          const gap = await lastMessageIn(signal, topic, addTime(candidate, ONE_NANOSECOND), time);
-          return gap.aborted && signal.aborted ? undefined : (gap.found ?? candidate);
-        }
-      }
-
       if (compare(time, floor) < 0) {
         return undefined;
       }
-      // No candidate: backward windows that grow geometrically and don't overlap, so the bytes
-      // read scale with the distance to the message instead of the length of the recording
-      // before it.
+      // Backward windows that grow geometrically and don't overlap, so the bytes read scale with
+      // the distance to the message instead of the length of the recording before it. The first
+      // one is sized to hold a message or two, which settles most lookups in one small read.
       let end = time;
       // Terminates: windows grow geometrically until one reaches the floor.
       for (let windowMs = initialWindowMs; ; windowMs *= WINDOW_GROWTH_FACTOR) {
@@ -253,9 +238,33 @@ export function useTopicMessageNavigation({
           return scan.found;
         }
         end = start;
+
+        // The nearby window was empty: the message is further back. An indexed lookup jumps
+        // there without scanning the distance, but only where it is cheap and real:
+        // - indexed sources only; elsewhere backfill may decode everything up to `time`
+        // - recorded topics only (they can be inspected); a converter's backfill runs a fresh
+        //   converter on its latest input and may name a time with no real output
+        // It can still miss newer messages (e.g. overlapping files), so its answer is a lower
+        // bound: read the gap from it up to the empty window.
+        if (windowMs === initialWindowMs && hasIndexedBackfill && isRecorded(topic)) {
+          let candidate: Time | undefined;
+          try {
+            candidate = (await getMessageAtTime(topic, end, signal))?.receiveTime;
+          } catch (error) {
+            if (signal.aborted) {
+              return undefined;
+            }
+            const message = error instanceof Error ? error.message : String(error);
+            log.warn(`Indexed lookup failed, scanning instead: ${message}`);
+          }
+          if (candidate && compare(candidate, end) <= 0) {
+            const gap = await lastMessageIn(signal, topic, addTime(candidate, ONE_NANOSECOND), end);
+            return gap.aborted && signal.aborted ? undefined : (gap.found ?? candidate);
+          }
+        }
       }
     },
-    [hasIndexedBackfill, getMessageAtTime, lastMessageIn],
+    [hasIndexedBackfill, isRecorded, getMessageAtTime, lastMessageIn],
   );
 
   // Read through a ref so discovery doesn't restart on every tick of a growing source, where
