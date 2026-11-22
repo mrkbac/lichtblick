@@ -50,6 +50,8 @@ export type SaveNewLayout = {
   data: LayoutData;
   permission: LayoutPermission;
   from?: string;
+  /** See Layout.untrusted */
+  untrusted?: boolean;
   /** Organization to save a shared layout in (organization API only). */
   organizationId?: string;
 };
@@ -248,6 +250,7 @@ export default class LayoutManager implements ILayoutManager {
     data: unmigratedData,
     permission,
     from,
+    untrusted,
     organizationId,
   }: SaveNewLayout): Promise<Layout> {
     const data = migratePanelsState(unmigratedData);
@@ -290,6 +293,7 @@ export default class LayoutManager implements ILayoutManager {
           name,
           from,
           permission,
+          ...(untrusted === true && { untrusted: true }),
           baseline: { data, savedAt: new Date().toISOString() as ISO8601Timestamp },
           working: undefined,
           syncInfo: undefined, // Personal layouts should NEVER have syncInfo
@@ -500,6 +504,7 @@ export default class LayoutManager implements ILayoutManager {
         id: randomUUID() as LayoutID,
         name,
         permission: "CREATOR_WRITE",
+        ...(layout.untrusted && { untrusted: true }),
         baseline: { data: layout.working?.data ?? layout.baseline.data, savedAt: now },
         working: undefined,
         syncInfo: { status: "new", lastRemoteSavedAt: now },

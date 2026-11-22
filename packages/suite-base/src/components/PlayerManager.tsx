@@ -298,7 +298,8 @@ export default function PlayerManager(
 
         // Show the sample in the layout made for it. Its id is remembered per source, so an
         // edited or renamed copy is reopened and same-named layouts are never picked up.
-        if (foundSource.sampleLayout) {
+        const keepLayout = args?.type === "connection" && args.keepLayout === true;
+        if (foundSource.sampleLayout && !keepLayout) {
           const storageKey = `lichtblick.sampleLayoutId.${foundSource.id}`;
           const versionKey = `${storageKey}.version`;
           const version = String(foundSource.sampleLayoutVersion ?? 1);

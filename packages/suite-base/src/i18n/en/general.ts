@@ -13,4 +13,10 @@ export const general = {
   closeSidebar: "Close sidebar",
   noDefaultLayoutParameter:
     "The layout '{{layoutName}}' specified in the app parameters does not exist.",
+  shareLinkCopied: "Link copied",
+  shareLinkCopiedWithoutLayout:
+    "Link copied without the layout: it's too large for a link. Export the layout to share it.",
+  shareLinkCopyFailed: "Could not copy the link",
+  shareLinkLocalFiles:
+    "Local files can't be opened from a link. Open the recording from a URL to share it.",
 };

@@ -27,6 +27,7 @@ import { useLayoutTransfer } from "@lichtblick/suite-base/hooks/useLayoutTransfe
 import { rememberPlaybackForReload } from "@lichtblick/suite-base/hooks/useServiceWorkerUpdate";
 import { PlayerPresence } from "@lichtblick/suite-base/players/types";
 import { parseAppURLState } from "@lichtblick/suite-base/util/appURLState";
+import { encodeSharedLayout } from "@lichtblick/suite-base/util/shareLink";
 
 import Workspace from "./Workspace";
 
@@ -850,6 +851,8 @@ describe("Workspace - fetchLayoutFromUrl", () => {
         expect.objectContaining({ name: "my-layout.json" }),
         "local",
         expect.any(AbortSignal),
+        // Anyone can make a link: its user scripts need approval.
+        { untrusted: true },
       );
     });
   });
@@ -968,6 +971,67 @@ describe("Workspace - fetchLayoutFromUrl", () => {
         variant: "error",
       });
     });
+  });
+
+  it("installs a share link's layout as untrusted and keeps it over a sample's", async () => {
+    const selectSource = vi.fn();
+    (usePlayerSelection as Mock).mockReturnValue({ availableSources: [], selectSource });
+    (parseAppURLState as Mock).mockReturnValue({ ds: "sample-demo" });
+    const encoded = await encodeSharedLayout({ configById: {}, layout: "Plot!1" });
+
+    // A desktop deep link: the fragment comes with the launch link, not the page URL.
+    render(<Workspace deepLinks={[`lichtblick://open?ds=sample-demo#layout=${encoded}`]} />);
+
+    await waitFor(() => {
+      expect(mockParseAndInstallLayout).toHaveBeenCalledWith(
+        expect.objectContaining({ name: "Shared layout.json" }),
+        "local",
+        expect.any(AbortSignal),
+        { untrusted: true },
+      );
+    });
+    await waitFor(() => {
+      expect(selectSource).toHaveBeenCalledWith(
+        "sample-demo",
+        expect.objectContaining({ keepLayout: true }),
+      );
+    });
+  });
+
+  it("only keeps the link's layout for the launch that installed it", async () => {
+    const selectSource = vi.fn();
+    (usePlayerSelection as Mock).mockReturnValue({ availableSources: [], selectSource });
+    const setConsumer = vi.fn();
+    window.launchQueue = { setConsumer };
+    (parseAppURLState as Mock).mockReturnValue({ ds: "sample-demo" });
+    // The linked layout is invalid, so the import fails.
+    mockParseAndInstallLayout.mockResolvedValue(undefined);
+    const encoded = await encodeSharedLayout({ configById: {} });
+
+    const view = render(
+      <Workspace deepLinks={[`lichtblick://open?ds=sample-demo#layout=${encoded}`]} />,
+    );
+    await waitFor(() => {
+      expect(selectSource).toHaveBeenCalledTimes(1);
+    });
+    expect(selectSource.mock.calls[0]![1]).not.toHaveProperty("keepLayout");
+
+    // A later, unrelated launch shows the sample's own layout.
+    mockParseAndInstallLayout.mockResolvedValue({ id: "new-layout-id" });
+    const consume = setConsumer.mock.calls[0]![0] as (params: LaunchParams) => Promise<void>;
+    (parseAppURLState as Mock).mockReturnValue({ ds: "sample-other" });
+    await act(async () => {
+      await consume({
+        files: [],
+        targetURL: `http://localhost/?protocol=${encodeURIComponent("web+lichtblick://open?ds=sample-other")}`,
+      });
+    });
+    await waitFor(() => {
+      expect(selectSource).toHaveBeenCalledTimes(2);
+    });
+    expect(selectSource.mock.calls[1]![1]).not.toHaveProperty("keepLayout");
+    view.unmount();
+    delete window.launchQueue;
   });
 
   it("should not fetch layout when layoutUrl is absent from URL state", () => {

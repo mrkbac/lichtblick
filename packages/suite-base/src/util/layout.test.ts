@@ -108,6 +108,16 @@ describe("layout", () => {
       expect(() => validateLayoutData(data)).toThrow('invalid "userNodes"');
     });
 
+    it("throws when a script entry is null or malformed", () => {
+      // A linked layout is saved before its scripts are approved; a bad entry must not get in.
+      for (const script of [null, "code", { name: "a" }, { name: 1, sourceCode: "" }]) {
+        const data = { ...validData(), userNodes: { a: script } };
+        expect(() => validateLayoutData(data)).toThrow('invalid "userNodes"');
+      }
+      const ok = { ...validData(), userNodes: { a: { name: "a", sourceCode: "" } } };
+      expect(() => validateLayoutData(ok)).not.toThrow();
+    });
+
     it("throws when userNodes is null", () => {
       // Given a layout whose userNodes field is explicitly null
       const data = { ...validData(), userNodes: null };

@@ -16,9 +16,17 @@ import {
 } from "@lichtblick/suite-base/components/MessagePipeline";
 import { selectCurrentTime } from "@lichtblick/suite-base/components/MessagePipeline/selectors";
 import { EventsStore, useEvents } from "@lichtblick/suite-base/context/EventsContext";
-import { usePlayerSelection } from "@lichtblick/suite-base/context/PlayerSelectionContext";
+import {
+  IDataSourceFactory,
+  usePlayerSelection,
+} from "@lichtblick/suite-base/context/PlayerSelectionContext";
 import { isRecordingSource } from "@lichtblick/suite-base/players/constants";
-import { AppURLState, updateAppURLState } from "@lichtblick/suite-base/util/appURLState";
+import { PlayerURLState } from "@lichtblick/suite-base/players/types";
+import {
+  AppURLState,
+  readableHref,
+  updateAppURLState,
+} from "@lichtblick/suite-base/util/appURLState";
 
 const selectCanSeek = (ctx: MessagePipelineContext) =>
   isRecordingSource(ctx.playerState.capabilities);
@@ -28,11 +36,30 @@ const selectSelectedEventId = (store: EventsStore) => store.selectedEventId;
 /** Writes app state into the address bar without adding a history entry. */
 export function updateUrl(newState: AppURLState): void {
   const newStateUrl = updateAppURLState(new URL(window.location.href), newState);
-  // Never decodeURIComponent the whole href: a data-source URL with its own query string
-  // (e.g. a presigned URL) would spill its `&…` params into ours and break on reload.
-  // Only unescape `:`, `/` and `,`, which are literal in a query and keep times/URLs readable.
-  newStateUrl.search = newStateUrl.search.replace(/%(3A|2F|2C)/gi, (m) => decodeURIComponent(m));
-  window.history.replaceState(undefined, "", newStateUrl.href);
+  window.history.replaceState(undefined, "", readableHref(newStateUrl));
+}
+
+/** Whether the source opens local files, which a URL can't reopen. */
+export function isLocalFileSource(
+  sourceId: string,
+  availableSources: readonly IDataSourceFactory[],
+): boolean {
+  const source = availableSources.find(
+    (candidate) => candidate.id === sourceId || candidate.legacyIds?.includes(sourceId) === true,
+  );
+  return source?.type === "file";
+}
+
+/** The URL params that reopen a player's source, with the selected event if any. */
+export function sourceURLState(
+  urlState: PlayerURLState,
+  selectedEventId: string | undefined,
+): AppURLState {
+  return {
+    ds: urlState.sourceId,
+    dsParams: _.pickBy({ ...urlState.parameters, eventId: selectedEventId }, _.isString),
+    dsParamsArray: _.pickBy(urlState.parameters, _.isArray),
+  };
 }
 
 /**
@@ -76,29 +103,11 @@ export function useStateToURLSynchronization(): void {
 
     // Local files can't be reopened from the URL; a `ds` for them would only make a reload fail and
     // skip reopening the file from recents (see PlayerManager).
-    const sourceId = stablePlayerUrlState.sourceId;
-    const source = availableSources.find(
-      (candidate) => candidate.id === sourceId || candidate.legacyIds?.includes(sourceId) === true,
-    );
-    if (source?.type === "file") {
+    if (isLocalFileSource(stablePlayerUrlState.sourceId, availableSources)) {
       updateUrl({ ds: undefined, dsParams: {} });
       return;
     }
 
-    updateUrl({
-      ds: stablePlayerUrlState.sourceId,
-      dsParams: _.pickBy(
-        {
-          ...stablePlayerUrlState.parameters,
-          eventId: selectedEventId,
-        },
-        _.isString,
-      ),
-      dsParamsArray: _.pickBy(
-        stablePlayerUrlState.parameters,
-
-        _.isArray,
-      ),
-    });
+    updateUrl(sourceURLState(stablePlayerUrlState, selectedEventId));
   }, [availableSources, selectedEventId, stablePlayerUrlState]);
 }

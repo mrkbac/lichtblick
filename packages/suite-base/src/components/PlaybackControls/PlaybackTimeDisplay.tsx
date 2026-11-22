@@ -16,6 +16,7 @@
 
 import { subtract, Time, toSec } from "@foxglove/rostime";
 import { Typography } from "@mui/material";
+import { useMemo } from "react";
 import { makeStyles } from "tss-react/mui";
 
 import { AppSetting } from "@lichtblick/suite-base/AppSetting";
@@ -28,6 +29,7 @@ import {
 } from "@lichtblick/suite-base/components/MessagePipeline/selectors";
 import { useAppTimeFormat } from "@lichtblick/suite-base/hooks";
 import { useAppConfigurationValue } from "@lichtblick/suite-base/hooks/useAppConfigurationValue";
+import { useShareLink } from "@lichtblick/suite-base/hooks/useShareLink";
 import { formatHms } from "@lichtblick/suite-base/util/formatTime";
 
 import { UnconnectedPlaybackTimeDisplay } from "./UnconnectedPlaybackTimeDisplay";
@@ -58,6 +60,19 @@ export default function PlaybackTimeDisplay(props: Props): React.JSX.Element {
   const currentTime = useMessagePipeline(selectCurrentTime);
   const appTimeFormat = useAppTimeFormat();
   const { classes } = useStyles();
+  const { availability, copyLink } = useShareLink();
+  const shareLink = useMemo(
+    () =>
+      availability === "none"
+        ? undefined
+        : {
+            local: availability === "local",
+            copy: () => {
+              void copyLink();
+            },
+          },
+    [availability, copyLink],
+  );
 
   return (
     <>
@@ -70,6 +85,7 @@ export default function PlaybackTimeDisplay(props: Props): React.JSX.Element {
         onPause={props.onPause}
         isPlaying={isPlaying}
         timezone={timezone}
+        shareLink={shareLink}
       />
       {startTime && endTime && currentTime && (
         <Typography variant="body2" className={classes.elapsed} data-testid="PlaybackTime-elapsed">

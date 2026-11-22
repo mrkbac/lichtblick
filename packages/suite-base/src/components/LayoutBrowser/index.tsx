@@ -56,7 +56,11 @@ import { usePrompt } from "@lichtblick/suite-base/hooks/usePrompt";
 import { defaultPlaybackConfig } from "@lichtblick/suite-base/providers/CurrentLayoutProvider/reducers";
 import { AppEvent } from "@lichtblick/suite-base/services/IAnalytics";
 import { layoutIsFavorite } from "@lichtblick/suite-base/services/ILayoutManager";
-import { Layout, layoutIsShared } from "@lichtblick/suite-base/services/ILayoutStorage";
+import {
+  Layout,
+  layoutIsShared,
+  personalLayoutCopy,
+} from "@lichtblick/suite-base/services/ILayoutStorage";
 import { toError } from "@lichtblick/suite-base/util/toError";
 
 import LayoutSection from "./LayoutSection";
@@ -177,11 +181,7 @@ export default function LayoutBrowser({
           case "duplicate": {
             const layout = await layoutManager.getLayout(id as LayoutID);
             if (layout) {
-              await layoutManager.saveNewLayout({
-                name: `${layout.name} copy`,
-                data: layout.working?.data ?? layout.baseline.data,
-                permission: "CREATOR_WRITE",
-              });
+              await layoutManager.saveNewLayout(personalLayoutCopy(layout, `${layout.name} copy`));
             }
             break;
           }
