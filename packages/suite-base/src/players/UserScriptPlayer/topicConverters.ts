@@ -55,6 +55,22 @@ export function schemaDescriptionToDatatypes(
   return datatypes;
 }
 
+/**
+ * Whether the converter's input topics and watched variables are lists of names. Extension input:
+ * anything else would throw later, outside the converter's error handling.
+ */
+export function topicConverterNamesValid(
+  converter: Immutable<Foxglove.RegisterMessageConverterArgsTopic>,
+): boolean {
+  const { inputTopics, watchVariables } = converter as {
+    inputTopics?: unknown;
+    watchVariables?: unknown;
+  };
+  const isNameList = (value: unknown) =>
+    Array.isArray(value) && value.every((item) => typeof item === "string");
+  return isNameList(inputTopics) && (watchVariables == undefined || isNameList(watchVariables));
+}
+
 /** Output topic of a topic converter; empty when the extension did not give a usable one. */
 export function topicConverterOutput(
   converter: Immutable<Foxglove.RegisterMessageConverterArgsTopic>,
@@ -93,6 +109,7 @@ export function buildTopicConverterRegistration(
   const buildMessageProcessor = () => {
     let convert: ReturnType<typeof converter.create> | undefined;
     let createdWith: unknown[] = [];
+    let failed = false;
 
     const processMessages: ProcessMessages = async (msgEvents, globalVariables) => {
       const outputs: MessageEvent[] = [];
@@ -119,6 +136,7 @@ export function buildTopicConverterRegistration(
           }
         }
       } catch (err: unknown) {
+        failed = true;
         onError(err);
       }
       return outputs;
@@ -129,6 +147,7 @@ export function buildTopicConverterRegistration(
       terminate: () => {
         convert = undefined;
       },
+      failed: () => failed,
     };
   };
 

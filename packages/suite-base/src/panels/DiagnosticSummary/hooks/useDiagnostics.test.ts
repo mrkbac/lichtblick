@@ -59,6 +59,44 @@ describe("addMessages", () => {
     });
   });
 
+  it("reads ROS 2 { sec, nanosec } header stamps", () => {
+    const status = DiagnosticsBuilder.statusMessage({ level: LEVELS.OK });
+    const ros2 = MessageEventBuilder.messageEvent<DiagnosticStatusArrayMsg>({
+      topic: "/diagnostics",
+      receiveTime: { sec: 1, nsec: 0 },
+      message: DiagnosticsBuilder.statusArrayMsg({
+        header: DiagnosticsBuilder.header({
+          stamp: { sec: 7, nanosec: 9 } as unknown as { sec: number; nsec: number },
+        }),
+        status: [status],
+      }),
+    });
+    const result = addMessages(empty(), [ros2], 5);
+    expect(result.latest.get(getDiagnosticId(status.hardware_id, status.name))?.stamp).toEqual({
+      sec: 7,
+      nsec: 9,
+    });
+  });
+
+  it("uses the receive time when the header has no valid stamp", () => {
+    const status = DiagnosticsBuilder.statusMessage({ level: LEVELS.OK });
+    const noStamp = MessageEventBuilder.messageEvent<DiagnosticStatusArrayMsg>({
+      topic: "/diagnostics",
+      receiveTime: { sec: 4, nsec: 1 },
+      message: DiagnosticsBuilder.statusArrayMsg({
+        header: DiagnosticsBuilder.header({
+          stamp: {} as unknown as { sec: number; nsec: number },
+        }),
+        status: [status],
+      }),
+    });
+    const result = addMessages(empty(), [noStamp], 5);
+    expect(result.latest.get(getDiagnosticId(status.hardware_id, status.name))?.stamp).toEqual({
+      sec: 4,
+      nsec: 1,
+    });
+  });
+
   it("merges statuses from several topics", () => {
     const a = DiagnosticsBuilder.statusMessage();
     const b = DiagnosticsBuilder.statusMessage();
