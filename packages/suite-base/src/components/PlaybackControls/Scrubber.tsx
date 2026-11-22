@@ -38,6 +38,7 @@ import { PlayerPresence } from "@lichtblick/suite-base/players/types";
 import BroadcastManager from "@lichtblick/suite-base/util/broadcast/BroadcastManager";
 import { randomUUID } from "@lichtblick/suite-base/util/randomUUID";
 
+import { DensityStrip } from "./DensityStrip";
 import { EventsOverlay } from "./EventsOverlay";
 import PlaybackBarHoverTicks from "./PlaybackBarHoverTicks";
 import { PlaybackControlsTooltipContent } from "./PlaybackControlsTooltipContent";
@@ -234,6 +235,7 @@ export default function Scrubber(props: Props): React.JSX.Element {
         style={{ height: 32 }}
       >
         <div className={cx(classes.track, { [classes.trackDisabled]: !startTime })} />
+        <DensityStrip />
         <Stack position="absolute" flex="auto" fullWidth style={{ height: 6 }}>
           <ProgressPlot loading={loading} availableRanges={ranges} />
         </Stack>

@@ -36,6 +36,9 @@ const transformTree = {
     out.orientation = { ...input.orientation };
     return out;
   },
+  frames: () => new Map(),
+  isComplete: () => false,
+  version: 0,
 } as unknown as Renderer["transformTree"];
 
 function makeRing(limits = { maxEntries: 100, maxPoints: 1000 }) {
@@ -134,26 +137,391 @@ describe("DecayPointRing", () => {
     expect(positions()[8 * 3]).toBe(4);
   });
 
-  it("evicts the oldest scans at the point budget and reports it", () => {
-    const { ring } = makeRing({ maxEntries: 100, maxPoints: 10 });
+  it("thins every other scan at the point budget, keeping the newest, and packs the rest", () => {
+    const { ring, positions } = makeRing({ maxEntries: 100, maxPoints: 10 });
     push(ring, 1n, 4);
     push(ring, 2n, 4);
     push(ring, 3n, 4);
 
-    expect(ring.pointCount()).toBeLessThanOrEqual(10);
+    expect(ring.pointCount()).toBe(8);
     expect(ring.oldestReceiveTime()).toBe(2n);
-    expect(ring.budgetEvictedUntil()).toBe(1n);
+    expect(ring.stride()).toBe(2);
+    expect(ring.budgetEvictedUntil()).toBeUndefined();
+    expect(positions()[0]).toBe(2);
+    expect(positions()[4 * 3]).toBe(3);
   });
 
-  it("evicts the oldest scan when out of slots", () => {
-    const { ring } = makeRing({ maxEntries: 2, maxPoints: 1000 });
+  it("keeps the whole window at a lower density when out of slots", () => {
+    const { ring } = makeRing({ maxEntries: 4, maxPoints: 1000 });
+    for (let i = 1; i <= 16; i++) {
+      push(ring, BigInt(i), 1);
+    }
+
+    // Dropping the oldest would keep only 13-16
+    expect(ring.scanCount()).toBe(4);
+    expect(ring.oldestReceiveTime()).toBe(4n);
+    expect(ring.stride()).toBe(4);
+    expect(ring.budgetEvictedUntil()).toBeUndefined();
+  });
+
+  it("keeps 1 in `stride` new scans, and goes back to every scan once there is room", () => {
+    const { ring } = makeRing({ maxEntries: 100, maxPoints: 10 });
+    for (let i = 1; i <= 3; i++) {
+      push(ring, BigInt(i), 4);
+    }
+    expect(ring.stride()).toBe(2);
+    push(ring, 4n, 1); // skipped
+    push(ring, 5n, 1);
+    expect(ring.scanCount()).toBe(3);
+
+    ring.expire(5n); // e.g. the decay time was lowered: 1 point left
+    ring.enforceLimits({ maxPoints: 10, reservePoints: 0 });
+    expect(ring.stride()).toBe(1);
+    push(ring, 6n, 1);
+    push(ring, 7n, 1);
+    expect(ring.scanCount()).toBe(3);
+  });
+
+  it("keeps thinning that one point set's size forced, with a larger point budget", () => {
+    const { ring } = makeRing({ maxEntries: 100, maxPoints: 100_000_000 });
+    for (let i = 1; i <= 5; i++) {
+      push(ring, BigInt(i), 1_000_000); // the buffers stop at 4M points (mocked set size)
+    }
+    expect(ring.stride()).toBe(2);
+
+    ring.enforceLimits({ maxPoints: 100_000_000, reservePoints: 0 });
+
+    expect(ring.stride()).toBe(2);
+  });
+
+  it("empties without thinning when the latest scan alone exceeds the budget", () => {
+    const { ring } = makeRing({ maxEntries: 100, maxPoints: 10 });
+    for (let i = 1; i <= 4; i++) {
+      push(ring, BigInt(i), 1);
+    }
+
+    ring.enforceLimits({ maxPoints: 10, reservePoints: 50 });
+
+    expect(ring.scanCount()).toBe(0);
+    expect(ring.stride()).toBe(1);
+  });
+
+  it("recomputes no pose rows until the transforms change, then rechecks them", () => {
+    const { ring, points } = makeRing();
+    push(ring, 1n, 1);
+    push(ring, 2n, 1);
+    const tree = {
+      apply: (...args: Parameters<Renderer["transformTree"]["apply"]>) =>
+        transformTree.apply(...args),
+      frames: () => new Map(),
+      isComplete: () => false,
+      version: 1,
+    } as unknown as Renderer["transformTree"];
+    const apply = vi.spyOn(tree, "apply");
+    ring.updatePoses(tree, 0n, "map", "map");
+    points.poseAttribute()!.clearUpdateRanges();
+    apply.mockClear();
+
+    ring.updatePoses(tree, 0n, "map", "map");
+    expect(apply).toHaveBeenCalledTimes(1); // render <- fixed only
+    expect(points.poseAttribute()!.updateRanges).toEqual([]);
+
+    (tree as { version: number }).version = 2;
+    ring.updatePoses(tree, 0n, "map", "map");
+    expect(apply).toHaveBeenCalledTimes(1 + 2 + 1);
+    expect(points.poseAttribute()!.updateRanges).toEqual([{ start: 0, count: 2 * 12 }]);
+  });
+
+  it("places the whole ring by the render frame's transform", () => {
+    const { ring, poseRow } = makeRing();
+    push(ring, 10n, 1);
+    push(ring, 20n, 1);
+    ring.updatePoses(transformTree, 5n, "map", "odom"); // render <- fixed: x + 5
+
+    // Rows are relative to the first placed scan (the newest) in the fixed frame
+    expect(poseRow(1)).toEqual(rows(new THREE.Matrix4()));
+    expect(poseRow(0)).toEqual(rows(new THREE.Matrix4().makeTranslation(-10, 0, 0)));
+    expect(ring.position.x).toBe(25);
+  });
+
+  it("halves the stride at most once until the window was refilled at the new rate", () => {
+    const { ring } = makeRing({ maxEntries: 4, maxPoints: 1000 });
+    for (let i = 1; i <= 16; i++) {
+      push(ring, BigInt(i), 1);
+    }
+    expect(ring.stride()).toBe(4);
+    ring.expire(13n); // e.g. a shorter decay time: 1 scan left, taken at the current rate
+    ring.enforceLimits({ maxPoints: 1000, reservePoints: 0 });
+    expect(ring.stride()).toBe(2);
+
+    for (let i = 0; i < 10; i++) {
+      ring.enforceLimits({ maxPoints: 1000, reservePoints: 0 });
+    }
+    expect(ring.stride()).toBe(2); // the kept scan was taken at 1 in 4
+  });
+
+  it("drops a scan holding over half the points instead of thinning around it", () => {
+    const { ring } = makeRing({ maxEntries: 100, maxPoints: 20 });
     push(ring, 1n, 1);
     push(ring, 2n, 1);
     push(ring, 3n, 1);
+    push(ring, 4n, 12); // the newest, which thinning always keeps
 
-    expect(ring.scanCount()).toBe(2);
-    expect(ring.oldestReceiveTime()).toBe(2n);
-    expect(ring.budgetEvictedUntil()).toBe(1n);
+    ring.enforceLimits({ maxPoints: 20, reservePoints: 8 });
+
+    expect(ring.pointCount()).toBe(3);
+    expect(ring.stride()).toBe(1);
+    expect(ring.budgetEvictedUntil()).toBe(4n); // reported as history lost to the budget
+  });
+
+  it("recomputes rows when the tree changes or a complete tree's playback time moves", () => {
+    const { ring } = makeRing();
+    push(ring, 1n, 1);
+    let complete = false;
+    const apply = vi.fn((...args: Parameters<Renderer["transformTree"]["apply"]>) =>
+      transformTree.apply(...args),
+    );
+    const tree = {
+      apply,
+      isComplete: () => complete,
+      version: 1,
+    } as unknown as Renderer["transformTree"] & { version: number };
+    ring.updatePoses(tree, 0n, "map", "map");
+    const placements = () => apply.mock.calls.filter(([, , , , src]) => src === "lidar").length;
+    expect(placements()).toBe(1);
+    ring.updatePoses(tree, 0n, "map", "map");
+    expect(placements()).toBe(1);
+
+    tree.version++; // e.g. a new transform, or a frame offset edited in the settings
+    ring.updatePoses(tree, 0n, "map", "map");
+    expect(placements()).toBe(2);
+
+    ring.updatePoses(tree, 5n, "map", "map"); // time moves, but the tree shows everything
+    expect(placements()).toBe(2);
+    complete = true; // a preloaded tree shows only transforms received by the playback time
+    ring.updatePoses(tree, 6n, "map", "map");
+    expect(placements()).toBe(3);
+  });
+
+  it("places every scan over a few redraws, without scans missing a transform holding them back", () => {
+    const { ring, poseRow } = makeRing({ maxEntries: 1000, maxPoints: 10_000 });
+    ring.updatePoses(transformTree, 0n, "map", "map"); // a first frame places everything at once
+    for (let i = 1; i <= 60; i++) {
+      push(ring, BigInt(i), 1);
+    }
+    for (let i = 61; i <= 210; i++) {
+      push(ring, BigInt(i), 1, "missing"); // the newest, so they are tried first
+    }
+
+    expect(ring.updatePoses(transformTree, 0n, "map", "map")?.frameId).toBe("missing");
+    expect(ring.posesPending()).toBe(true); // the per-frame budget ran out
+    ring.updatePoses(transformTree, 0n, "map", "map");
+
+    expect(ring.posesPending()).toBe(false);
+    for (let slot = 0; slot < 60; slot++) {
+      expect(poseRow(slot)).not.toEqual(Array(12).fill(0));
+    }
+    expect(ring.updatePoses(transformTree, 0n, "map", "map")?.frameId).toBe("missing");
+  });
+
+  it("corrects the newest outdated rows first, and retries only a few scans missing a transform", () => {
+    const { ring } = makeRing({ maxEntries: 1000, maxPoints: 10_000 });
+    const apply = vi.fn((...args: Parameters<Renderer["transformTree"]["apply"]>) =>
+      transformTree.apply(...args),
+    );
+    const tree = {
+      apply,
+      isComplete: () => false,
+      version: 1,
+    } as unknown as Renderer["transformTree"] & {
+      version: number;
+    };
+    ring.updatePoses(tree, 0n, "map", "map");
+    for (let i = 1; i <= 300; i++) {
+      push(ring, BigInt(i), 1, i <= 200 ? "missing" : "lidar");
+    }
+    for (let frame = 0; frame < 3; frame++) {
+      ring.updatePoses(tree, 0n, "map", "map"); // every scan tried once
+    }
+    expect(ring.posesPending()).toBe(false);
+    apply.mockClear();
+
+    tree.version++; // every row outdated, every missing scan worth a retry
+    ring.updatePoses(tree, 0n, "map", "map");
+
+    const times = apply.mock.calls.slice(0, -1).map(([, , , , src, , time]) => [src, time]);
+    expect(times.filter(([src]) => src === "missing")).toHaveLength(16);
+    // The newest placed scan is rechecked in this frame
+    expect(times).toContainEqual(["lidar", 300n]);
+  });
+
+  it("rebases the rows once the scans are far from their origin", () => {
+    const { ring, poseRow } = makeRing();
+    push(ring, 1n, 1);
+    ring.updatePoses(transformTree, 0n, "map", "map");
+    push(ring, 5000n, 1); // placed at x = 5000, 5 km away
+
+    ring.updatePoses(transformTree, 0n, "map", "map");
+    ring.updatePoses(transformTree, 0n, "map", "map");
+
+    // Relative to the newest scan again, so float32 rows stay small
+    expect(ring.position.x).toBe(5000);
+    expect(poseRow(1)).toEqual(rows(new THREE.Matrix4()));
+
+    // The older scan, still 5 km from the new origin, doesn't trigger another rebase
+    const apply = vi.fn((...args: Parameters<Renderer["transformTree"]["apply"]>) =>
+      transformTree.apply(...args),
+    );
+    const tree = {
+      apply,
+      isComplete: () => false,
+      version: 0,
+    } as unknown as Renderer["transformTree"];
+    ring.updatePoses(tree, 0n, "map", "map");
+    expect(apply).toHaveBeenCalledTimes(1); // render <- fixed only
+  });
+
+  it("thins at most once per push, also when it already thinned for a slot", () => {
+    const { ring } = makeRing({ maxEntries: 4, maxPoints: 8 });
+    for (let i = 1; i <= 4; i++) {
+      push(ring, BigInt(i), 2); // every slot and point in use
+    }
+
+    push(ring, 5n, 4); // out of slots, and short of space after that thinning
+
+    expect(ring.stride()).toBe(2);
+  });
+
+  it("packs instead of dropping a scan when thinning wouldn't free enough", () => {
+    const { ring } = makeRing({ maxEntries: 100, maxPoints: 100 });
+    push(ring, 1n, 60); // [0, 60), buffers at the 100-point budget
+    push(ring, 2n, 30); // [60, 90)
+    ring.expire(2n); // frees [0, 60)
+    push(ring, 3n, 2); // [90, 92)
+    push(ring, 4n, 50); // [0, 50); free: [50, 60) and [92, 100)
+
+    push(ring, 5n, 12); // no free range fits, but 94 points fit once packed
+
+    expect(ring.pointCount()).toBe(94);
+    expect(ring.scanCount()).toBe(4);
+    expect(ring.budgetEvictedUntil()).toBeUndefined();
+  });
+
+  it("keeps reporting a scan still missing a transform while its retry waits its turn", () => {
+    const { ring } = makeRing({ maxEntries: 1000, maxPoints: 10_000 });
+    const tree = {
+      apply: (...args: Parameters<Renderer["transformTree"]["apply"]>) =>
+        transformTree.apply(...args),
+      isComplete: () => false,
+      version: 1,
+    } as unknown as Renderer["transformTree"] & { version: number };
+    ring.updatePoses(tree, 0n, "map", "map");
+    for (let i = 1; i <= 40; i++) {
+      push(ring, BigInt(i), 1, "missing");
+    }
+    ring.updatePoses(tree, 0n, "map", "map");
+
+    for (let frame = 0; frame < 5; frame++) {
+      tree.version++;
+      expect(ring.updatePoses(tree, 0n, "map", "map")?.frameId).toBe("missing");
+    }
+  });
+
+  it("remembers the newest scan dropped for the budget, whatever the order of drops", () => {
+    const { ring } = makeRing({ maxEntries: 100, maxPoints: 20 });
+    push(ring, 1n, 1);
+    push(ring, 2n, 1);
+    push(ring, 3n, 1);
+    push(ring, 4n, 12);
+    ring.enforceLimits({ maxPoints: 20, reservePoints: 8 }); // drops the 12-point scan (4n)
+    expect(ring.budgetEvictedUntil()).toBe(4n);
+
+    ring.enforceLimits({ maxPoints: 20, reservePoints: 30 }); // then the oldest ones
+
+    expect(ring.scanCount()).toBe(0);
+    expect(ring.budgetEvictedUntil()).toBe(4n);
+  });
+
+  it("retries scans missing a transform in turns", () => {
+    const { ring } = makeRing({ maxEntries: 1000, maxPoints: 10_000 });
+    const apply = vi.fn((...args: Parameters<Renderer["transformTree"]["apply"]>) =>
+      transformTree.apply(...args),
+    );
+    const tree = {
+      apply,
+      isComplete: () => false,
+      version: 1,
+    } as unknown as Renderer["transformTree"] & {
+      version: number;
+    };
+    ring.updatePoses(tree, 0n, "map", "map");
+    for (let i = 1; i <= 40; i++) {
+      push(ring, BigInt(i), 1, "missing");
+    }
+    ring.updatePoses(tree, 0n, "map", "map"); // all tried once
+    apply.mockClear();
+
+    for (let frame = 0; frame < 3; frame++) {
+      tree.version++; // e.g. live transforms keep arriving
+      ring.updatePoses(tree, 0n, "map", "map");
+    }
+
+    const retried = new Set(
+      apply.mock.calls.map(([, , , , src, , time]) => `${String(src)} ${time}`),
+    );
+    retried.delete("map 0"); // render <- fixed
+    expect(retried.size).toBe(40); // 3 x 16 retries reach every scan, not the 16 newest again
+  });
+
+  it("thins at most once while making room for one scan", () => {
+    const { ring } = makeRing({ maxEntries: 100, maxPoints: 16 });
+    for (let i = 1; i <= 8; i++) {
+      push(ring, BigInt(i), 2); // fills the 16-point buffers
+    }
+    expect(ring.stride()).toBe(1);
+
+    push(ring, 9n, 12); // needs far more than one thinning frees
+
+    expect(ring.stride()).toBe(2);
+  });
+
+  it("names the fixed frame when the render frame can't be placed in it", () => {
+    const { ring } = makeRing();
+    push(ring, 1n, 1);
+    const tree = {
+      apply: (out: Pose, input: Pose, _r: string, _f: string, src: string, ...rest: bigint[]) =>
+        src === "odom"
+          ? undefined
+          : transformTree.apply(out, input, _r, _f, src, rest[0]!, rest[1]!),
+      isComplete: () => false,
+      version: 0,
+    } as unknown as Renderer["transformTree"];
+
+    expect(ring.updatePoses(tree, 0n, "map", "odom")).toEqual({ frameId: "odom", messageTime: 0n });
+  });
+
+  it("frees only about as much as the budget needs", () => {
+    const { ring } = makeRing({ maxEntries: 100, maxPoints: 20 });
+    push(ring, 1n, 1);
+    push(ring, 2n, 1);
+    push(ring, 3n, 1);
+    push(ring, 4n, 10);
+
+    ring.enforceLimits({ maxPoints: 20, reservePoints: 8 }); // 1 point over
+
+    expect(ring.pointCount()).toBe(11); // two 1-point scans thinned, the 10-point scan kept
+    expect(ring.budgetEvictedUntil()).toBeUndefined();
+  });
+
+  it("uploads only the poses of slots in use", () => {
+    const { ring, points } = makeRing();
+    push(ring, 1n, 1);
+    push(ring, 2n, 1);
+    points.poseAttribute()!.clearUpdateRanges();
+
+    ring.updatePoses(transformTree, 0n, "map", "map");
+
+    expect(points.poseAttribute()!.updateRanges).toEqual([{ start: 0, count: 2 * 12 }]);
   });
 
   it("keeps a single scan larger than the budget", () => {
@@ -172,24 +540,22 @@ describe("DecayPointRing", () => {
     ring.enforceLimits({ maxPoints: 10, reservePoints: 0 });
 
     expect(ring.pointCount()).toBe(6);
-    expect(ring.budgetEvictedUntil()).toBe(2n);
+    expect(ring.oldestReceiveTime()).toBe(3n);
+    expect(ring.stride()).toBe(2);
   });
 
-  it("reserves room for the latest scan in both limits", () => {
+  it("reserves room for the latest scan, and empties when the latest alone fills the budget", () => {
     const { ring } = makeRing({ maxEntries: 3, maxPoints: 10 });
     push(ring, 1n, 3);
     push(ring, 2n, 3);
 
     ring.enforceLimits({ maxPoints: 10, reservePoints: 5 }); // 3 + 3 + 5 > 10
     expect(ring.oldestReceiveTime()).toBe(2n);
-
-    push(ring, 3n, 1);
-    push(ring, 4n, 1);
-    ring.enforceLimits({ maxPoints: 10, reservePoints: 0 }); // 3 history scans + the latest > 3 slots
-    expect(ring.scanCount()).toBe(2);
+    expect(ring.budgetEvictedUntil()).toBeUndefined();
 
     ring.enforceLimits({ maxPoints: 10, reservePoints: 50 }); // the latest alone exceeds the budget
     expect(ring.scanCount()).toBe(0);
+    expect(ring.budgetEvictedUntil()).toBe(2n);
   });
 
   it("walks one range covering every live scan, free gaps hidden by their slot", () => {
@@ -285,7 +651,7 @@ describe("DecayPointRing", () => {
 
     expect(ring.pointCount()).toBe(100);
     expect(ring.oldestReceiveTime()).toBe(3n);
-    expect(ring.budgetEvictedUntil()).toBe(2n);
+    expect(ring.stride()).toBe(4);
   });
 
   it("bounds live scans where the shader draws them", () => {
@@ -309,7 +675,10 @@ describe("DecayPointRing", () => {
     push(ring, 20n, 1, "missing");
     push(ring, 30n, 1);
 
-    expect(ring.updatePoses(transformTree, 0n, "map", "map")).toBe("missing");
+    expect(ring.updatePoses(transformTree, 0n, "map", "map")).toEqual({
+      frameId: "missing",
+      messageTime: 20n,
+    });
     // Origin is the newest resolved scan; its own matrix is the identity
     expect(ring.position.x).toBe(30);
     expect(poseRow(2)).toEqual(rows(new THREE.Matrix4()));

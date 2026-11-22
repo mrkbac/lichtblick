@@ -91,6 +91,8 @@ export interface IDataSourceFactory {
 export type RecentSource = {
   id: string;
   title: string;
+  /** Display name given when it was opened (e.g. a catalog recording's), shown instead of the title */
+  name?: string;
   label?: string;
   sourceId?: string;
   type?: "file" | "connection";

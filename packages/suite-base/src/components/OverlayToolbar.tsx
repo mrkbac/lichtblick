@@ -24,6 +24,8 @@ const useStyles = makeStyles()((theme) => ({
     display: "flex",
     flexDirection: "column",
     pointerEvents: "auto",
+    // A dark surface over a dark canvas has no shadow to tell it apart; outline it instead.
+    ...(theme.palette.mode === "dark" && { border: `1px solid ${theme.palette.divider}` }),
     [`& .${iconButtonClasses.root}`]: {
       width: OVERLAY_TOOLBAR_BUTTON_SIZE,
       height: OVERLAY_TOOLBAR_BUTTON_SIZE,

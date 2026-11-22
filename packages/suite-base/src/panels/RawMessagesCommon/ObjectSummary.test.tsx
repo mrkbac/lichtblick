@@ -47,6 +47,22 @@ describe("Given ObjectSummary", () => {
     });
   });
 
+  describe("When value is a typed array", () => {
+    it("Then counts items without listing its keys", () => {
+      // Given
+      const data = new Uint8Array(1_000);
+      const keys = vi.spyOn(Object, "keys");
+
+      // When
+      const { container } = renderComponent(data);
+
+      // Then
+      expect(container.textContent).toContain("1000 items");
+      expect(keys).not.toHaveBeenCalledWith(data);
+      keys.mockRestore();
+    });
+  });
+
   describe("When value is an object", () => {
     it("Then displays object summary with key count", () => {
       // Given

@@ -21,6 +21,8 @@ import { useStoreWithEqualityFn } from "zustand/traditional";
 import { useGuaranteedContext } from "@lichtblick/hooks";
 import { Immutable } from "@lichtblick/suite";
 import { AppSetting } from "@lichtblick/suite-base/AppSetting";
+import { PanelVisibleContext } from "@lichtblick/suite-base/components/DockPanelContext";
+import { HIDDEN_RENDER_INTERVAL_MS } from "@lichtblick/suite-base/components/PanelExtensionAdapter/hiddenFrames";
 import { AlertsContext } from "@lichtblick/suite-base/context/AlertsContext";
 import CurrentLayoutContext, {
   LayoutState,
@@ -69,6 +71,47 @@ export function useMessagePipeline<T>(selector: (arg0: MessagePipelineContext) =
   return useStoreWithEqualityFn(
     store,
     useCallback((state) => selector(state.public), [selector]),
+  );
+}
+
+/**
+ * Like `useMessagePipeline`, but a hidden panel (inactive tab, behind a maximized panel) gets a
+ * changed value at most once per HIDDEN_RENDER_INTERVAL_MS. The selector still runs for every
+ * pipeline update, so a selector that accumulates state stays current, and showing the panel
+ * hands out the latest value right away.
+ */
+export function useMessagePipelineBatchedWhenHidden<T>(
+  selector: (arg0: MessagePipelineContext) => T,
+  {
+    enabled = true,
+    flushKey,
+  }: {
+    enabled?: boolean;
+    /** A change of this value (e.g. the last seek time) hands out the new value right away. */
+    flushKey?: (ctx: MessagePipelineContext) => unknown;
+  } = {},
+): T {
+  const visible = useContext(PanelVisibleContext) || !enabled;
+  const handedOut = useRef<{ value: T; at: number; key: unknown } | undefined>(undefined);
+  return useMessagePipeline(
+    useCallback(
+      (ctx: MessagePipelineContext) => {
+        const value = selector(ctx);
+        const key = flushKey?.(ctx);
+        const now = performance.now();
+        if (
+          !visible &&
+          handedOut.current != undefined &&
+          handedOut.current.key === key &&
+          now - handedOut.current.at < HIDDEN_RENDER_INTERVAL_MS
+        ) {
+          return handedOut.current.value;
+        }
+        handedOut.current = { value, at: now, key };
+        return value;
+      },
+      [flushKey, selector, visible],
+    ),
   );
 }
 

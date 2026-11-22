@@ -267,6 +267,11 @@ export const useStyles = makeStyles()((theme) => ({
     overflow: "hidden",
     "& > div": { height: "100%", background: alpha(theme.palette.success.main, 0.6) },
   },
+  byteShare: {
+    background: alpha(theme.palette.info.main, 0.08),
+    "& > div": { height: "100%", background: alpha(theme.palette.info.main, 0.6) },
+  },
+  gaps: { display: "flex", flexWrap: "wrap", gap: 6 },
   unknown: {
     minWidth: 180,
     height: 36,

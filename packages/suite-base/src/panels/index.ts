@@ -95,10 +95,19 @@ import variableSliderThumbnail from "./VariableSlider/thumbnail.png";
 import { WATCH_SHORTCUTS } from "./Watch/shortcuts";
 import watchThumbnail from "./Watch/thumbnail.png";
 
+const visibleTopics = (topics: readonly string[]) =>
+  Object.fromEntries(topics.map((topic) => [topic, { visible: true }]));
+
 export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
   {
     title: t("3D"),
     type: "3D",
+    // The scene only knows which topics it can draw once it has subscribed, so not via a drop
+    openIn: {
+      kind: "topic",
+      multiple: true,
+      config: (topics) => ({ topics: visibleTopics(topics) }),
+    },
     icon: Cube20Regular,
     keywords: ["scene", "pointcloud", "lidar", "markers", "rviz"],
     description: t("3DPanelDescription"),
@@ -132,6 +141,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
   {
     title: t("image"),
     type: "Image",
+    openIn: { kind: "topic" },
     icon: Image20Regular,
     keywords: ["camera", "video", "picture"],
     description: t("imageDescription"),
@@ -143,6 +153,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
   {
     title: t("cameraGrid"),
     type: "CameraGrid",
+    openIn: { kind: "topic", multiple: true },
     icon: Grid20Regular,
     keywords: ["cameras", "images", "multi camera"],
     description: t("cameraGridDescription"),
@@ -154,6 +165,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
   {
     title: t("indicator"),
     type: "Indicator",
+    openIn: { kind: "field" },
     icon: Lightbulb20Regular,
     description: t("indicatorDescription"),
     thumbnail: indicatorThumbnail,
@@ -229,6 +241,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
   {
     title: t("plot"),
     type: "Plot",
+    openIn: { kind: "field", multiple: true },
     icon: DataLine20Regular,
     keywords: ["chart", "graph", "timeseries", "line"],
     description: t("plotDescription"),
@@ -272,6 +285,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
   {
     title: t("rawMessages"),
     type: "RawMessages",
+    openIn: { kind: "path" },
     icon: Braces20Regular,
     keywords: ["json", "inspect", "echo"],
     description: t("rawMessagesDescription"),
@@ -297,6 +311,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
   {
     title: t("audio"),
     type: "Audio",
+    openIn: { kind: "topic" },
     icon: Speaker220Regular,
     description: t("audioDescription"),
     thumbnail: audioThumbnail,
@@ -307,6 +322,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
   {
     title: t("log"),
     type: "RosOut",
+    openIn: { kind: "topic", config: ([topic]) => ({ topicToRender: topic }) },
     icon: TextBulletListLtr20Regular,
     keywords: ["rosout", "console", "logs"],
     description: t("logDescription"),
@@ -318,6 +334,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
   {
     title: t("stateTransitions"),
     type: "StateTransitions",
+    openIn: { kind: "field", multiple: true },
     icon: Timeline20Regular,
     keywords: ["enum", "states", "timeline"],
     description: t("stateTransitionsDescription"),
@@ -329,6 +346,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
   {
     title: t("table"),
     type: "Table",
+    openIn: { kind: "path" },
     icon: Table20Regular,
     description: t("tableDescription"),
     thumbnail: tableThumbnail,
@@ -421,10 +439,10 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
     shortcuts: USER_SCRIPTS_SHORTCUTS,
   },
   {
-    title: t("studioPlaybackPerformance"),
+    title: t("playbackPerformance"),
     type: "PlaybackPerformance",
     icon: TopSpeed20Regular,
-    description: t("studioPlaybackPerformanceDescription"),
+    description: t("playbackPerformanceDescription"),
     module: async () => await import("./PlaybackPerformance"),
     docs: async () => await import("./PlaybackPerformance/docs"),
   },

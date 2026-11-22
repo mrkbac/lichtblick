@@ -214,9 +214,10 @@ export class McapIterableSource implements ISerializedIterableSource {
     }
     if (result.status === "indexed") {
       const remote = readable;
+      remote.setChunks(result.reader.chunkIndexes);
       return {
         inner: new McapIndexedIterableSource(result.reader, {
-          prefetch: (ranges) => {
+          prefetch: (ranges, options) => {
             // A rebuilt index has its message indexes past the end of the real bytes
             const end = this.#recovery?.offset;
             remote.prefetch(
@@ -227,6 +228,7 @@ export class McapIterableSource implements ISerializedIterableSource {
                       ? [{ offset, length: offset + length > end ? end - offset : length }]
                       : [],
                   ),
+              options,
             );
           },
           ...this.#readErrorHandling(readable, decompressHandlers),

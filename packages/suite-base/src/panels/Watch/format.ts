@@ -1,7 +1,10 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
+import { Time, toNanoSec } from "@foxglove/rostime";
+
 import { isTypedArray } from "@lichtblick/suite-base/types/isTypedArray";
+import { stampToTime } from "@lichtblick/suite-base/util/time";
 
 export type EnumNames = Readonly<Record<string, string>>;
 
@@ -13,20 +16,27 @@ export function isExpandable(value: unknown): boolean {
   return (
     typeof value === "object" &&
     value != undefined &&
-    !isTime(value) &&
+    asTime(value) == undefined &&
     (!Array.isArray(value) || value.length > 0)
   );
 }
 
-function isTime(value: object): value is { sec: number; nsec: number } {
-  const keys = Object.keys(value);
-  return (
-    keys.length === 2 &&
-    "sec" in value &&
-    typeof value.sec === "number" &&
-    "nsec" in value &&
-    typeof value.nsec === "number"
-  );
+/** A stamp (ROS 1 / Foxglove `nsec` or ROS 2 `nanosec`) with no other fields. */
+function asTime(value: object): Time | undefined {
+  if (Array.isArray(value) || ArrayBuffer.isView(value)) {
+    return undefined; // Object.keys would list every element
+  }
+  const time = Object.keys(value).length === 2 ? stampToTime(value) : undefined;
+  // Only whole sec/nsec are a time; anything else (e.g. { sec: 1.5, nsec: 0 }) is a plain object
+  return time && Number.isInteger(time.sec) && Number.isInteger(time.nsec) ? time : undefined;
+}
+
+/** `sec.nsec` with the sign of the whole value: { sec: -1, nsec: 5e8 } is -0.5 s. */
+function formatTime(time: Time): string {
+  const ns = toNanoSec(time);
+  const abs = ns < 0n ? -ns : ns;
+  const frac = String(abs % 1_000_000_000n).padStart(9, "0");
+  return `${ns < 0n ? "-" : ""}${abs / 1_000_000_000n}.${frac}`;
 }
 
 export function formatNumber(value: number, precision: number | undefined): string {
@@ -98,8 +108,9 @@ export function formatValue(
   if (typeof value !== "object" || value == undefined) {
     return formatScalar(value, precision, enumNames);
   }
-  if (isTime(value)) {
-    return `${value.sec}.${String(value.nsec).padStart(9, "0")}`;
+  const time = asTime(value);
+  if (time) {
+    return formatTime(time);
   }
   if (Array.isArray(value) || isTypedArray(value)) {
     const arr: ArrayLike<unknown> = value;

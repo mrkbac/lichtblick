@@ -17,7 +17,7 @@
 import { add as addTimes, fromSec } from "@foxglove/rostime";
 import { Typography, alpha, useTheme } from "@mui/material";
 import { AnnotationOptions } from "chartjs-plugin-annotation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useDebounce } from "use-debounce";
 
@@ -27,6 +27,7 @@ import {
   configuredFocus,
   useComparedPaths,
 } from "@lichtblick/suite-base/components/Compare/comparedPaths";
+import { PanelVisibleContext } from "@lichtblick/suite-base/components/DockPanelContext";
 import KeyListener from "@lichtblick/suite-base/components/KeyListener";
 import { usePathSampleHistory } from "@lichtblick/suite-base/components/MessagePathSyntax/usePathSampleHistory";
 import {
@@ -229,6 +230,7 @@ function StateTransitions(props: StateTransitionPanelProps) {
     }
   }, [previousMatch, seekToSeconds]);
 
+  const panelVisible = useContext(PanelVisibleContext);
   const keyDownHandlers = useMemo(
     () =>
       shortcutKeyHandlers(STATE_TRANSITIONS_SHORTCUTS, {
@@ -412,7 +414,8 @@ function StateTransitions(props: StateTransitionPanelProps) {
           )}
         </div>
       </Stack>
-      <KeyListener global keyDownHandlers={keyDownHandlers} />
+      {/* A hidden panel may hold batched, outdated matches: only the visible one answers */}
+      {panelVisible && <KeyListener global keyDownHandlers={keyDownHandlers} />}
     </Stack>
   );
 }
