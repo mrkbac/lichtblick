@@ -96,7 +96,8 @@ const cache = new WeakMap<MessageEvent, NormalizedLogMessage>();
  * One shared copy of each repeated string. Decoders return a new string per message, so a node
  * name or file repeated in millions of log lines would otherwise be stored millions of times.
  * Bounded so a source with long or unique values can't make it pin much memory: values longer than
- * `maxLength` aren't shared, and it stops adding once it holds `maxChars` characters in total.
+ * `maxLength` aren't shared, and it stops adding once it holds `maxChars` characters in total
+ * (at most 2 bytes each, so ~2 MB by default). Cleared when the source changes.
  */
 export class StringPool {
   #strings = new Map<string, string>();

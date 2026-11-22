@@ -80,4 +80,12 @@ describe("StringPool", () => {
     pool.clear();
     expect(pool.charCount()).toBe(0);
   });
+
+  it("pins nothing for many distinct 64 KiB values", () => {
+    const pool = new StringPool();
+    for (let i = 0; i < 5_000; i++) {
+      pool.intern(`${i}`.padEnd(64 * 1024, "x"));
+    }
+    expect(pool.charCount()).toBe(0);
+  });
 });
