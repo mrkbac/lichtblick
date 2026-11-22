@@ -221,7 +221,10 @@ export const mainConfig =
                         // workbox copies this source into sw.js.
                         fetchDidSucceed: async ({ request, response, event }) => {
                           if (
-                            response.headers.get("content-type")?.startsWith("text/html") !== true
+                            response.headers.get("content-type")?.startsWith("text/html") !==
+                              true ||
+                            // the page's own prefetch (PREFETCH_HEADER), not a file it needs
+                            request.headers.has("x-lichtblick-prefetch")
                           ) {
                             return response;
                           }

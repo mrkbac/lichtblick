@@ -3,11 +3,12 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-// Own file: module state (whether this window asked for an update) must start fresh.
-
 import type { Mock } from "vitest";
 
-import { recoverFromMissingAssets } from "./useServiceWorkerUpdate";
+import {
+  recoverFromMissingAssets,
+  resetServiceWorkerUpdateStateForTests,
+} from "./useServiceWorkerUpdate";
 
 describe("recoverFromMissingAssets", () => {
   const reload = vi.fn();
@@ -39,6 +40,8 @@ describe("recoverFromMissingAssets", () => {
   });
   beforeEach(() => {
     reload.mockClear();
+    // the mocked reload never ends the page, so the last switch stays in flight
+    resetServiceWorkerUpdateStateForTests();
   });
   afterEach(() => {
     // it logs which file was missing

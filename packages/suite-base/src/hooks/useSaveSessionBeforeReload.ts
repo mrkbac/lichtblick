@@ -16,6 +16,8 @@ import delay from "@lichtblick/suite-base/util/delay";
 
 /** An update must never hang on a stuck save */
 const MAX_SAVE_WAIT_MS = 3000;
+/** A flushed edit that starts no write (e.g. the first one after a layout loads) can't hold it up */
+const MAX_WRITE_START_MS = 1000;
 
 /**
  * Before an update reloads this window, save what the reload would otherwise lose: the last layout
@@ -31,9 +33,13 @@ export function useSaveSessionBeforeReload(): void {
       setSaveSessionBeforeReload(async () => {
         const deadline = Date.now() + MAX_SAVE_WAIT_MS;
         // No fixed wait for the debounce: timers in a background tab run late
-        flushPendingLayoutSave();
-        // lets React render the flushed layout, which starts its write
-        await delay(50);
+        if (flushPendingLayoutSave()) {
+          // the flushed edit starts its write once React renders it
+          const startDeadline = Date.now() + MAX_WRITE_START_MS;
+          while (!layoutManager.isBusy() && Date.now() < startDeadline) {
+            await delay(20);
+          }
+        }
         while (layoutManager.isBusy() && Date.now() < deadline) {
           await delay(50);
         }

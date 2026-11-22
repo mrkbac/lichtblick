@@ -166,10 +166,11 @@ const STALE_RELOAD_COOLDOWN_MS = 30_000;
  */
 export async function reloadToLatestVersion(): Promise<boolean> {
   const lastAttempt = Number(sessionStorage.getItem(STALE_RELOAD_KEY) ?? 0);
-  if (Date.now() - lastAttempt < STALE_RELOAD_COOLDOWN_MS) {
+  if (updateInFlight || Date.now() - lastAttempt < STALE_RELOAD_COOLDOWN_MS) {
     return false;
   }
   sessionStorage.setItem(STALE_RELOAD_KEY, String(Date.now()));
+  updateInFlight = true;
   await saveSessionBeforeReload();
 
   const container = navigator.serviceWorker as ServiceWorkerContainer | undefined;
@@ -177,9 +178,16 @@ export async function reloadToLatestVersion(): Promise<boolean> {
     log.warn("Service worker update check failed", error);
     return false;
   });
-  const waiting = hasUpdate ? (await container?.getRegistration())?.waiting : undefined;
+  const waiting = hasUpdate
+    ? (await container?.getRegistration().catch(() => undefined))?.waiting
+    : undefined;
   if (container && waiting) {
-    container.addEventListener("controllerchange", reloadPage);
+    container.addEventListener("controllerchange", () => {
+      // not if the worker went redundant meanwhile and another window updated later
+      if (updateRequestedHere) {
+        reloadPage();
+      }
+    });
     applyServiceWorkerUpdate(waiting);
   } else {
     reloadPage();
@@ -333,20 +341,26 @@ export function useServiceWorkerUpdate(): ServiceWorkerUpdate | undefined {
             return;
           }
           updateInFlight = true;
-          void saveSessionBeforeReload().then(async () => {
-            let worker: ServiceWorker | null | undefined = waiting;
-            // A newer deploy may have replaced it during the save: update to that one instead
-            if (worker.state === "redundant") {
-              worker = (await navigator.serviceWorker.getRegistration())?.waiting;
-            }
-            // Another window may have activated it during the save: it no longer waits, and
-            // SKIP_WAITING would change nothing, so no controllerchange would reload this one
-            if (worker?.state === "installed") {
-              applyServiceWorkerUpdate(worker);
-            } else {
-              reloadPage();
-            }
-          });
+          void saveSessionBeforeReload()
+            .then(async () => {
+              let worker: ServiceWorker | null | undefined = waiting;
+              // A newer deploy may have replaced it during the save: update to that one instead
+              if (worker.state === "redundant") {
+                worker = (await navigator.serviceWorker.getRegistration())?.waiting;
+              }
+              // Another window may have activated it during the save: it no longer waits, and
+              // SKIP_WAITING would change nothing, so no controllerchange would reload this one
+              if (worker?.state === "installed") {
+                applyServiceWorkerUpdate(worker);
+              } else {
+                reloadPage();
+              }
+            })
+            .catch((error: unknown) => {
+              // e.g. the registration lookup failed: let the user try again
+              log.warn("Update failed", error);
+              updateInFlight = false;
+            });
         },
       }
     : undefined;

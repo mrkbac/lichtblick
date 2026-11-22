@@ -7,6 +7,8 @@ import type { Mock } from "vitest";
 
 import {
   checkForServiceWorkerUpdate,
+  resetServiceWorkerUpdateStateForTests,
+  setSaveSessionBeforeReload,
   reloadToLatestVersion,
   rememberPlaybackForReload,
   takeResumePlayback,
@@ -65,6 +67,7 @@ describe("checkForServiceWorkerUpdate", () => {
 describe("reloadToLatestVersion", () => {
   const reload = vi.fn();
   beforeEach(() => {
+    resetServiceWorkerUpdateStateForTests();
     sessionStorage.clear();
     reload.mockClear();
     Object.defineProperty(window, "location", {
@@ -79,6 +82,40 @@ describe("reloadToLatestVersion", () => {
     await expect(reloadToLatestVersion()).resolves.toBe(true);
     expect(registration.waiting?.postMessage).toHaveBeenCalledWith({ type: "SKIP_WAITING" });
     expect(reload).not.toHaveBeenCalled();
+  });
+
+  it("doesn't reload unasked when its worker went redundant and another window updated", async () => {
+    const registration = mockRegistration("installed");
+    const addEventListener = vi.fn();
+    Object.assign(navigator.serviceWorker, { addEventListener });
+    await reloadToLatestVersion();
+    const onControllerChange = addEventListener.mock.calls.find(
+      ([type]) => type === "controllerchange",
+    )![1] as () => void;
+    const worker = registration.waiting!;
+    worker.state = "redundant";
+    worker.dispatchEvent(new Event("statechange"));
+    onControllerChange();
+    expect(reload).not.toHaveBeenCalled();
+  });
+
+  it("waits for an update already in flight instead of starting a second save", async () => {
+    mockRegistration(undefined);
+    let finishSave = () => {};
+    const save = vi.fn(async () => {
+      await new Promise<void>((resolve) => {
+        finishSave = resolve;
+      });
+      return undefined;
+    });
+    const unregister = setSaveSessionBeforeReload(save);
+    const first = reloadToLatestVersion();
+    sessionStorage.clear(); // past the cooldown
+    await expect(reloadToLatestVersion()).resolves.toBe(false);
+    expect(save).toHaveBeenCalledTimes(1);
+    finishSave();
+    await first;
+    unregister();
   });
 
   it("reloads when there is no update", async () => {

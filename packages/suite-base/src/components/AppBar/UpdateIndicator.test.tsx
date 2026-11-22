@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import type { Mock } from "vitest";
 
 import {
   resetServiceWorkerUpdateStateForTests,
@@ -215,6 +216,33 @@ describe("UpdateIndicator", () => {
     fireEvent.click(button);
     fireEvent.click(button);
     expect(save).toHaveBeenCalledTimes(1);
+    unregister();
+  });
+
+  it("lets the user try again when the update fails", async () => {
+    const save = vi.fn(async () => undefined);
+    const unregister = setSaveSessionBeforeReload(save);
+    const waiting = fakeWorker();
+    mockRegistration({ active: fakeWorker(), waiting });
+    renderIndicator();
+    const button = await screen.findByTestId("update-indicator");
+    // a newer deploy replaced it, and looking up the newer one fails
+    waiting.state = "redundant";
+    Object.assign(navigator.serviceWorker, {
+      getRegistration: async () => await Promise.reject(new Error("lookup failed")),
+    });
+
+    fireEvent.click(button);
+    await waitFor(() => {
+      expect(console.warn).toHaveBeenCalled();
+    });
+    (console.warn as Mock).mockClear();
+    fireEvent.click(button);
+    expect(save).toHaveBeenCalledTimes(2);
+    await waitFor(() => {
+      expect(console.warn).toHaveBeenCalled(); // the retry fails the same way
+    });
+    (console.warn as Mock).mockClear();
     unregister();
   });
 

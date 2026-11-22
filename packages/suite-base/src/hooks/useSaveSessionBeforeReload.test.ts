@@ -19,13 +19,15 @@ vi.mock("@lichtblick/suite-base/hooks/useServiceWorkerUpdate", async (importOrig
     return () => {};
   },
 }));
+// an edit was pending; its write starts only once React renders it, later than any fixed delay
 const flushPendingLayoutSave = vi.fn(() => {
-  busy = true; // the flushed edit starts its write
+  setTimeout(() => {
+    busy = true;
+  }, 200);
+  return true;
 });
 vi.mock("@lichtblick/suite-base/components/CurrentLayoutLocalStorageSyncAdapter", () => ({
-  flushPendingLayoutSave: () => {
-    flushPendingLayoutSave();
-  },
+  flushPendingLayoutSave: () => flushPendingLayoutSave(),
 }));
 vi.mock("@lichtblick/suite-base/context/LayoutManagerContext", () => ({
   useLayoutManager: () => ({ isBusy: () => busy }),
@@ -55,6 +57,8 @@ describe("useSaveSessionBeforeReload", () => {
     });
 
     expect(flushPendingLayoutSave).toHaveBeenCalledOnce();
+    await vi.advanceTimersByTimeAsync(150);
+    expect(saved).toBe(false); // waiting for the flushed write to start
     await vi.advanceTimersByTimeAsync(1000);
     expect(saved).toBe(false); // the layout manager is still writing the flushed edit
     busy = false;

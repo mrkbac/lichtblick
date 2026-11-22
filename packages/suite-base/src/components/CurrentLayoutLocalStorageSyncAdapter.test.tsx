@@ -113,13 +113,16 @@ describe("CurrentLayoutLocalStorageSyncAdapter", () => {
       JSON.stringify(mockLayoutData),
     );
 
+    let pending = false;
     await act(async () => {
-      flushPendingLayoutSave();
+      pending = flushPendingLayoutSave();
     });
 
+    expect(pending).toBe(true);
     expect(localStorage.getItem(LOCAL_STORAGE_STUDIO_LAYOUT_KEY)).toBe(
       JSON.stringify(modifiedData),
     );
+    expect(flushPendingLayoutSave()).toBe(false); // nothing left
   });
 
   it("sends new layout data to layoutManager after initial load", async () => {
