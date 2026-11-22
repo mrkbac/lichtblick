@@ -163,4 +163,29 @@ describe("SharedRangeReads", () => {
     expect(await collect(read)).toHaveLength(5000);
     await neverRead.return?.();
   });
+
+  it("fails a waiting reader whose own read can't be opened", async () => {
+    const recording = [
+      ...Array.from({ length: 5000 }, (_, i) => message("dense", i)),
+      message("sparse", 5000),
+    ];
+    const shared = new SharedRangeReads((topics) => {
+      if (!topics.has("dense")) {
+        throw new Error("can't open");
+      }
+      return (async function* () {
+        for (const msgEvent of recording) {
+          if (topics.has(msgEvent.topic)) {
+            yield { type: "message-event" as const, msgEvent };
+          }
+        }
+      })();
+    });
+    const dense = shared.read("dense", {});
+    const sparse = shared.read("sparse", {});
+
+    void dense.next();
+    await expect(sparse.next()).rejects.toThrow("can't open");
+    await dense.return?.();
+  });
 });

@@ -259,12 +259,20 @@ class SharedRead {
 
   /** Continues `reader` with its own read from where the shared read is */
   #detach(reader: Reader): void {
-    this.#readers.delete(reader);
     const position = this.#position;
-    const own = this.#readRange(new Map([[reader.topic, { topic: reader.topic }]]), {
-      start: position ?? this.#range.start,
-      end: this.#range.end,
-    });
+    let own: AsyncIterator<Readonly<ReadResult>>;
+    try {
+      own = this.#readRange(new Map([[reader.topic, { topic: reader.topic }]]), {
+        start: position ?? this.#range.start,
+        end: this.#range.end,
+      });
+    } catch (error: unknown) {
+      // Its waiting pull gets the error instead of waiting forever
+      this.#readers.delete(reader);
+      reader.end(error);
+      return;
+    }
+    this.#readers.delete(reader);
     reader.detach(own, position ? (this.#atPosition.get(reader.topic) ?? 0) : 0);
   }
 }
