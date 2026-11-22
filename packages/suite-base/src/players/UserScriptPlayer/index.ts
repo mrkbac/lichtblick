@@ -308,13 +308,23 @@ export default class UserScriptPlayer implements Player {
   // Foxglove topic converters from extensions; they run in this thread like user scripts.
   #topicConverters: Immutable<InstalledTopicConverter[]> = [];
 
+  // Registration per installed converter, kept across resets (e.g. seeks) like user script
+  // registrations, so the preloaded outputs below stay valid. terminate() still resets its state.
+  #topicConverterRegistrationCache = new WeakMap<
+    Immutable<InstalledTopicConverter>,
+    ScriptRegistration
+  >();
+
   // Preloaded blocks with topic converter outputs added, per source block. Replaced (dropping all
-  // entries) whenever the registrations or the preloaded converter outputs change.
+  // entries) whenever the converters producing them or their source topics change.
   #convertedBlocks = new WeakMap<MessageBlock, MessageBlock>();
-  #convertedBlocksKey: { registrations: readonly ScriptRegistration[]; outputs: string } = {
-    registrations: [],
-    outputs: "",
-  };
+  #convertedBlocksKey: {
+    needed: readonly ScriptRegistration[];
+    topics: string;
+    variables: unknown[];
+  } = { needed: [], topics: "", variables: [] };
+  // What the key above was computed from; when none of it changed, neither did the key.
+  #convertedBlocksInputs: unknown[] = [];
   #lastMessageCache?: { source: BlockCache; converted: BlockCache };
 
   // exposed as a static to allow testing to mock/replace
@@ -934,14 +944,18 @@ export default class UserScriptPlayer implements Player {
         continue;
       }
 
-      const registration = buildTopicConverterRegistration(installed, (error) => {
-        this.#alertStore.set(alertKey, {
-          severity: "error",
-          message: `Topic converter for "${topic}" from extension ${installed.extensionId} failed.`,
-          error: toError(error),
+      let registration = this.#topicConverterRegistrationCache.get(installed);
+      if (!registration) {
+        registration = buildTopicConverterRegistration(installed, (error) => {
+          this.#alertStore.set(alertKey, {
+            severity: "error",
+            message: `Topic converter for "${topic}" from extension ${installed.extensionId} failed.`,
+            error: toError(error),
+          });
+          void this.#queueEmitState();
         });
-        void this.#queueEmitState();
-      });
+        this.#topicConverterRegistrationCache.set(installed, registration);
+      }
       state.inputsByOutputTopic.set(topic, registration.inputs);
       registrations.push(registration);
     }
@@ -969,18 +983,48 @@ export default class UserScriptPlayer implements Player {
     registrations: readonly ScriptRegistration[],
   ): Promise<Progress> {
     const source = progress.messageCache;
+    if (!source) {
+      return progress;
+    }
+    const keyInputs = [registrations, this.#scriptSubscriptions, this.#globalVariables];
+    if (
+      this.#lastMessageCache?.source === source &&
+      keyInputs.every((input, i) => input === this.#convertedBlocksInputs[i])
+    ) {
+      return { ...progress, messageCache: this.#lastMessageCache.converted };
+    }
+    this.#convertedBlocksInputs = keyInputs;
     const converters = registrations.filter(isTopicConverter);
     const preloaded = converters.filter(
       ({ output }) => this.#scriptSubscriptions[output.name]?.preloadType === "full",
     );
-    if (!source || preloaded.length === 0) {
+    if (preloaded.length === 0) {
+      this.#lastMessageCache = undefined;
       return progress;
     }
     const outputTopics = new Set(preloaded.map(({ output }) => output.name));
-    const key = { registrations, outputs: [...outputTopics].sort().join("\n") };
+    // User script outputs are never in blocks, so converters reading them get no input there.
+    const needed = withDependencies(converters, outputTopics);
+    const virtualTopics = new Set(registrations.map(({ output }) => output.name));
+    const sourceTopics = _.uniq(
+      needed.flatMap(({ inputs }) => inputs.filter((input) => !virtualTopics.has(input))),
+    );
+    // Seeks rebuild the registrations array but reuse the converter registrations, so this key
+    // stays the same and the converted blocks survive them.
+    const globalVariables = this.#globalVariables;
+    const key = {
+      needed,
+      topics: [[...outputTopics].sort().join("\n"), sourceTopics.join("\n")].join("\n\n"),
+      // Converters are recreated when a variable they watch changes, so their outputs change too.
+      variables: needed.flatMap(({ scriptData }) =>
+        scriptData.globalVariables.map((name) => globalVariables[name]),
+      ),
+    };
     if (
-      key.registrations !== this.#convertedBlocksKey.registrations ||
-      key.outputs !== this.#convertedBlocksKey.outputs
+      key.topics !== this.#convertedBlocksKey.topics ||
+      !_.isEqual(key.variables, this.#convertedBlocksKey.variables) ||
+      key.needed.length !== this.#convertedBlocksKey.needed.length ||
+      key.needed.some((registration, i) => registration !== this.#convertedBlocksKey.needed[i])
     ) {
       this.#convertedBlocksKey = key;
       this.#convertedBlocks = new WeakMap();
@@ -989,14 +1033,6 @@ export default class UserScriptPlayer implements Player {
     if (this.#lastMessageCache?.source === source) {
       return { ...progress, messageCache: this.#lastMessageCache.converted };
     }
-
-    // User script outputs are never in blocks, so converters reading them get no input there.
-    const needed = withDependencies(converters, outputTopics);
-    const virtualTopics = new Set(registrations.map(({ output }) => output.name));
-    const sourceTopics = _.uniq(
-      needed.flatMap(({ inputs }) => inputs.filter((input) => !virtualTopics.has(input))),
-    );
-    const globalVariables = this.#globalVariables;
 
     const convertBlock = async (block: MessageBlock): Promise<MessageBlock> => {
       const cached = this.#convertedBlocks.get(block);

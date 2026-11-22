@@ -349,6 +349,48 @@ describe("UserScriptPlayer topic converter preloading", () => {
     expect(create).toHaveBeenCalledTimes(1);
   });
 
+  it("keeps converted blocks across seeks and reconverts when a watched variable changes", async () => {
+    const create = vi.fn(converterArgs().create);
+    const { fakePlayer, player, states } = await setup(
+      converterArgs({ create, watchVariables: ["scale"] }),
+      [{ topic: "/out", preloadType: "full" }],
+    );
+    const messageCache = { startTime: { sec: 0, nsec: 0 }, blocks: [block([input("one", 1)])] };
+
+    await fakePlayer.emit({ activeData: activeData([]), progress: { messageCache } });
+    const converted = states.at(-1)!.progress.messageCache;
+    await fakePlayer.emit({
+      activeData: { ...activeData([]), lastSeekTime: 1 },
+      progress: { messageCache },
+    });
+    expect(states.at(-1)!.progress.messageCache).toBe(converted);
+    expect(create).toHaveBeenCalledTimes(1);
+
+    player.setGlobalVariables({ scale: 2 });
+    await fakePlayer.emit({
+      activeData: { ...activeData([]), lastSeekTime: 1 },
+      progress: { messageCache },
+    });
+    expect(states.at(-1)!.progress.messageCache).not.toBe(converted);
+    expect(create).toHaveBeenCalledTimes(2);
+  });
+
+  it("stops adding converter outputs once the output is no longer preloaded", async () => {
+    const { fakePlayer, player, states } = await setup(converterArgs(), [
+      { topic: "/out", preloadType: "full" },
+    ]);
+    const messageCache = { startTime: { sec: 0, nsec: 0 }, blocks: [block([input("one", 1)])] };
+    await fakePlayer.emit({ activeData: activeData([]), progress: { messageCache } });
+    expect(states.at(-1)!.progress.messageCache).not.toBe(messageCache);
+
+    player.setSubscriptions([{ topic: "/out" }]);
+    await Promise.resolve();
+    await fakePlayer.emit({ activeData: activeData([]), progress: { messageCache } });
+    await fakePlayer.emit({ activeData: activeData([]), progress: { messageCache } });
+
+    expect(states.at(-1)!.progress.messageCache).toBe(messageCache);
+  });
+
   it("leaves blocks alone when the output is not preloaded", async () => {
     const { fakePlayer, states } = await setup(converterArgs());
     const messageCache = { startTime: { sec: 0, nsec: 0 }, blocks: [block([input("one", 1)])] };
