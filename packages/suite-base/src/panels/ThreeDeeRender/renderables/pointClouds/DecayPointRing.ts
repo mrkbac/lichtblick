@@ -361,14 +361,15 @@ export class DecayPointRing extends Renderable<BaseUserData, /*TRenderer=*/ unde
    * Places the scans for this frame. Each scan's row holds its pose in the fixed frame, which only
    * changes when transforms around its stamp do, so rows are (re)computed within a per-frame budget
    * instead of all every frame. Render ← fixed at the current time is this object's own transform.
-   * Returns the frame of a scan without a transform, or undefined when all resolved.
+   * Returns the frame and message time of a scan without a transform, or undefined when all
+   * resolved.
    */
   public updatePoses(
     transformTree: Renderer["transformTree"],
     currentTime: bigint,
     renderFrameId: string,
     fixedFrameId: string,
-  ): string | undefined {
+  ): { frameId: string; messageTime: bigint } | undefined {
     const scans = this.#scans;
     const data = this.#points.poses()!;
     const key = transformsKey(transformTree, currentTime);
@@ -480,12 +481,12 @@ export class DecayPointRing extends Renderable<BaseUserData, /*TRenderer=*/ unde
       this.#points.markPoses(firstSlot, lastSlot - firstSlot + 1);
     }
 
-    let missingFrame: string | undefined;
+    let missingFrame: { frameId: string; messageTime: bigint } | undefined;
     this.#posesPending = false;
     for (const scan of scans) {
       if (scan.posedAt == undefined && scan.failedAt != undefined) {
         // Still missing, whether or not this frame's retries reached it
-        missingFrame ??= scan.frameId;
+        missingFrame ??= { frameId: scan.frameId, messageTime: scan.messageTime };
       }
       if (scan.posedAt !== epoch && scan.failedAt !== epoch) {
         this.#posesPending = true;
@@ -512,7 +513,10 @@ export class DecayPointRing extends Renderable<BaseUserData, /*TRenderer=*/ unde
     const origin = this.#rowsOrigin;
     if (!renderFromFixed || !origin) {
       this.visible = false;
-      return missingFrame ?? (renderFromFixed ? undefined : fixedFrameId);
+      return (
+        missingFrame ??
+        (renderFromFixed ? undefined : { frameId: fixedFrameId, messageTime: currentTime })
+      );
     }
     const { position: p, orientation: q } = renderFromFixed;
     this.quaternion.set(q.x, q.y, q.z, q.w);

@@ -14,7 +14,9 @@
 //   found at http://www.apache.org/licenses/LICENSE-2.0
 //   You may not use this file except in compliance with the License.
 
-import { Time } from "@foxglove/rostime";
+import { subtract, Time, toSec } from "@foxglove/rostime";
+import { Typography } from "@mui/material";
+import { makeStyles } from "tss-react/mui";
 
 import { AppSetting } from "@lichtblick/suite-base/AppSetting";
 import { useMessagePipeline } from "@lichtblick/suite-base/components/MessagePipeline";
@@ -26,8 +28,21 @@ import {
 } from "@lichtblick/suite-base/components/MessagePipeline/selectors";
 import { useAppTimeFormat } from "@lichtblick/suite-base/hooks";
 import { useAppConfigurationValue } from "@lichtblick/suite-base/hooks/useAppConfigurationValue";
+import { formatHms } from "@lichtblick/suite-base/util/formatTime";
 
 import { UnconnectedPlaybackTimeDisplay } from "./UnconnectedPlaybackTimeDisplay";
+
+const useStyles = makeStyles()((theme) => ({
+  elapsed: {
+    color: theme.palette.text.secondary,
+    fontVariantNumeric: "tabular-nums",
+    whiteSpace: "nowrap",
+    [theme.breakpoints.down("md")]: { display: "none" },
+  },
+}));
+
+const elapsedText = (from: Time, to: Time) =>
+  formatHms(Math.floor(toSec(subtract(to, from)) * 1000), { withMillis: false });
 
 type Props = {
   onSeek: (seekTo: Time) => void;
@@ -42,17 +57,25 @@ export default function PlaybackTimeDisplay(props: Props): React.JSX.Element {
   const endTime = useMessagePipeline(selectEndTime);
   const currentTime = useMessagePipeline(selectCurrentTime);
   const appTimeFormat = useAppTimeFormat();
+  const { classes } = useStyles();
 
   return (
-    <UnconnectedPlaybackTimeDisplay
-      appTimeFormat={appTimeFormat}
-      currentTime={currentTime}
-      startTime={startTime}
-      endTime={endTime}
-      onSeek={props.onSeek}
-      onPause={props.onPause}
-      isPlaying={isPlaying}
-      timezone={timezone}
-    />
+    <>
+      <UnconnectedPlaybackTimeDisplay
+        appTimeFormat={appTimeFormat}
+        currentTime={currentTime}
+        startTime={startTime}
+        endTime={endTime}
+        onSeek={props.onSeek}
+        onPause={props.onPause}
+        isPlaying={isPlaying}
+        timezone={timezone}
+      />
+      {startTime && endTime && currentTime && (
+        <Typography variant="body2" className={classes.elapsed} data-testid="PlaybackTime-elapsed">
+          {elapsedText(startTime, currentTime)} / {elapsedText(startTime, endTime)}
+        </Typography>
+      )}
+    </>
   );
 }

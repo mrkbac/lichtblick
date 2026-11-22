@@ -8,6 +8,7 @@ import { MISSING_TRANSFORM } from "@lichtblick/suite-base/panels/ThreeDeeRender/
 import { PointCloud2, PointFieldType } from "@lichtblick/suite-base/panels/ThreeDeeRender/ros";
 import { ColorModeSettings } from "@lichtblick/suite-base/panels/ThreeDeeRender/settingsNodes/colorMode";
 import { DEFAULT_POINT_SETTINGS } from "@lichtblick/suite-base/panels/ThreeDeeRender/settingsNodes/topics";
+import { TransformTree } from "@lichtblick/suite-base/panels/ThreeDeeRender/transforms";
 import { updatePose } from "@lichtblick/suite-base/panels/ThreeDeeRender/updatePose";
 
 import { createStixelMaterial, PointCloudHistoryRenderable, PointClouds } from "./PointClouds";
@@ -205,7 +206,7 @@ describe("PointCloudHistoryRenderable missing transform error", () => {
     const path = ["topics", "/points"];
     const { renderable } = decode(makeCloud(), { stixelsEnabled: true }, {
       ...rendererMock,
-      transformTree: {},
+      transformTree: new TransformTree(),
       settings: { errors },
     } as unknown as Renderer);
 
