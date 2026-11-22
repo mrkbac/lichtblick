@@ -669,7 +669,6 @@ describe("DecayPointRing", () => {
           messageTime: time,
           frameId: "lidar",
           pose: makePose(),
-          fingerprint: 0,
         },
         new Float32Array(count * 3),
         new Uint8Array(count * 4),
