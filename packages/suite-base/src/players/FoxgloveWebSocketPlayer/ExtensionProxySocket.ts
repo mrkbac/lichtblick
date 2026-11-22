@@ -101,7 +101,6 @@ export default class ExtensionProxySocket implements IWebSocket {
     ]);
     // No content script answered: the extension isn't installed or doesn't run on this origin.
     this.#attachTimeout = setTimeout(() => {
-      extensionMissing = true;
       this.#finish({ code: 1006, reason: PROXY_MISSING_REASON, wasClean: false });
     }, ATTACH_TIMEOUT_MS);
   }
@@ -162,6 +161,10 @@ export default class ExtensionProxySocket implements IWebSocket {
     }
     this.#closed = true;
     clearTimeout(this.#attachTimeout);
+    // No content script answered, or it reported the extension gone (reloaded or removed)
+    if (event.reason === PROXY_MISSING_REASON) {
+      extensionMissing = true;
+    }
     this.#port.close();
     this.onclose?.(event);
   }

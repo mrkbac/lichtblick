@@ -57,4 +57,18 @@ describe("ExtensionProxySocket without the extension", () => {
     expect(onclose).toHaveBeenCalledWith(expect.objectContaining({ reason: PROXY_MISSING_REASON }));
     expect(needsExtensionProxy(url, "https://licht.marko.im")).toBe(false);
   });
+
+  it("falls back to direct sockets when the extension reports itself unavailable", async () => {
+    const postMessage = vi.spyOn(window, "postMessage");
+    const url = "ws://robot.example:8765";
+    const socket = new ExtensionProxySocket(url);
+    const closed = new Promise((resolve) => {
+      socket.onclose = resolve;
+    });
+    const port = (postMessage.mock.calls[0]![2] as MessagePort[])[0]!;
+    port.postMessage({ ev: "close", code: 1011, reason: PROXY_MISSING_REASON });
+    await closed;
+    expect(needsExtensionProxy(url, "https://licht.marko.im")).toBe(false);
+    postMessage.mockRestore();
+  });
 });

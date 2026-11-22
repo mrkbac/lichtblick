@@ -333,15 +333,25 @@ export default class FoxgloveWebSocketPlayer implements Player {
       this.#parameters = new Map();
     });
 
-    // Browsers reject a mixed-content socket with an error ("An insecure WebSocket connection may
-    // not be initiated…" in Chrome, "The operation is insecure." in Firefox) before closing it.
+    // Browsers reject a mixed-content socket with an error before closing it: Chrome and Firefox
+    // say "insecure" ("An insecure WebSocket connection may not be initiated…", "The operation is
+    // insecure."); Safari's error carries no message. Chrome and Firefox also fail unreachable
+    // servers without a message, so a bare error only means "blocked" in other browsers.
+    let opened = false;
     let blockedAsMixedContent = false;
+    this.#client.on("open", () => {
+      opened = true;
+    });
     this.#client.on("error", (err) => {
       log.error(err);
-      const message = (err as unknown as undefined | { message?: unknown })?.message;
-      if (typeof message === "string" && /insecure/i.test(message) && isMixedContentWs(this.#url)) {
-        blockedAsMixedContent = true;
+      if (opened || !isMixedContentWs(this.#url)) {
+        return;
       }
+      const message = (err as unknown as undefined | { message?: unknown })?.message;
+      blockedAsMixedContent =
+        typeof message === "string"
+          ? /insecure/i.test(message)
+          : !/\b(Chrome|Chromium|Firefox)\//.test(navigator.userAgent);
     });
 
     // Note: We've observed closed being called not only when an already open connection is closed
@@ -369,7 +379,15 @@ export default class FoxgloveWebSocketPlayer implements Player {
       this.#serverControlsPlayback = false;
 
       const reason = (event as { reason?: unknown } | undefined)?.reason;
-      if (blockedAsMixedContent || reason === PROXY_MISSING_REASON) {
+      if (reason === PROXY_MISSING_REASON) {
+        // No extension: try the browser's own connection first. It works when the site may load
+        // insecure content, and Chrome may first ask for local network access. Only explain the
+        // block if that fails too.
+        this.#emitState();
+        this.#openTimeout = setTimeout(this.#open, 0);
+        return;
+      }
+      if (blockedAsMixedContent) {
         this.#alerts.addAlert("ws:connection-failed", {
           severity: "error",
           message: "Your browser blocked ws:// from this https page",
