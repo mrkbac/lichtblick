@@ -20,6 +20,7 @@ import {
   getColor,
   createLabel,
   baseColors,
+  LiveDatasetCache,
   messagesToDataset,
 } from "./messagesToDataset";
 import { MessageDatasetArgs, StateTransitionPath } from "./types";
@@ -72,6 +73,78 @@ let queriedDataValue: number;
 let queriedDataName: string;
 let queriedDataPath: string;
 let constName: string | undefined;
+
+describe("incremental live datasets", () => {
+  it.each([false, true])("matches a full rebuild with showPoints=%s", (showPoints) => {
+    const active = new PathSampleColumns(16);
+    active.trackChanges();
+    const drawnCache: LiveDatasetCache = {};
+    const exactCache: LiveDatasetCache = {};
+    const args = {
+      startTime: { sec: 100, nsec: 0 },
+      pathIndex: 0,
+      path: { value: "/topic.state", condition: "== 1", timestampMethod: "headerStamp" as const },
+      y: -9,
+      showPoints,
+    };
+
+    for (let next = 0; next < 380; next += 3) {
+      for (let i = next; i < next + 3; i++) {
+        active.push({
+          receiveTime: { sec: 100 + i, nsec: 0 },
+          headerStamp: i % 5 === 0 ? undefined : { sec: 100 + i, nsec: 0 },
+          count: i % 11 === 0 ? 2 : 1,
+          value: i % 7 < 2 ? null : i % 3,
+          constantName: undefined,
+        });
+      }
+      for (const [block, cache] of [
+        [active, drawnCache],
+        [active.changes(), exactCache],
+      ] as const) {
+        const input = { ...args, blocks: [block] };
+        expect(messagesToDataset(input, cache)).toEqual(messagesToDataset(input));
+      }
+    }
+    expect(active.hasAllChanges()).toBe(false);
+  });
+
+  it("converts only new samples and the mutable tail on a dense live redraw", () => {
+    const active = new PathSampleColumns(100_000);
+    const append = (i: number) => {
+      active.push({
+        receiveTime: { sec: i, nsec: 0 },
+        headerStamp: undefined,
+        count: 1,
+        value: i % 2,
+        constantName: undefined,
+      });
+    };
+    for (let i = 0; i < 99_990; i++) {
+      append(i);
+    }
+    const args = {
+      startTime: { sec: 0, nsec: 0 },
+      pathIndex: 0,
+      path: { value: "/topic.state", timestampMethod: "receiveTime" as const },
+      y: -9,
+      blocks: [active],
+      showPoints: false,
+    };
+    const cache: LiveDatasetCache = {};
+    const first = messagesToDataset(args, cache);
+
+    const sampleValue = vi.spyOn(active, "sampleValue");
+    for (let i = 99_990; i < 99_995; i++) {
+      append(i);
+    }
+
+    const second = messagesToDataset(args, cache);
+    expect(sampleValue).toHaveBeenCalledTimes(7);
+    expect(first.data).toHaveLength(99_990);
+    expect(second.data).toHaveLength(99_995);
+  });
+});
 
 describe("messagesToDataset helper functions", () => {
   beforeEach(() => {

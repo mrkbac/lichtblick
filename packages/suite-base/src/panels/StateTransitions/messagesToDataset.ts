@@ -23,11 +23,36 @@ const baseColorsLength = Object.values(baseColors).length;
 // Muted so the "true" bands of a condition stand out.
 const CONDITION_FALSE_COLOR = "rgba(128, 128, 128, 0.35)";
 
+type Datum = ChartDataset["data"][0];
+
+type ConversionState = {
+  lastValue?: string | number | bigint | boolean;
+  lastDatum?: Datum;
+  lastIndex: number;
+  repeatBlock?: PathSampleColumns;
+  repeatIndex: number;
+  segment?: Datum;
+};
+
+export type LiveDatasetCache = {
+  checkpoint?: {
+    args: MessageDatasetArgs;
+    block: PathSampleColumns;
+    revision: number;
+    end: number;
+    data: ChartDataset["data"];
+    state: ConversionState;
+  };
+};
+
 /**
  * Processes messages into datasets. For performance reasons all values are condensed into a single
  * dataset with different labels and colors applied per-point.
  */
-export function messagesToDataset(args: MessageDatasetArgs): ChartDataset {
+export function messagesToDataset(
+  args: MessageDatasetArgs,
+  liveCache?: LiveDatasetCache,
+): ChartDataset {
   const { path, startTime, y, blocks, showPoints, darkenLabels = false } = args;
 
   const dataset: ChartDataset = {
@@ -50,42 +75,47 @@ export function messagesToDataset(args: MessageDatasetArgs): ChartDataset {
     return timestamp ? toSec(subtractTimes(timestamp, startTime)) : undefined;
   };
 
-  let lastValue: string | number | bigint | boolean | undefined = undefined;
-  let lastDatum: ChartDataset["data"][0] | undefined = undefined;
-  // With points hidden, a repeat of the last drawn sample's value only moves where its segment
-  // ends, so it is just remembered here (a typed-array compare) and drawn when the segment ends.
-  let lastIndex = -1;
-  let repeatBlock: PathSampleColumns | undefined;
-  let repeatIndex = 0;
-  let segment: ChartDataset["data"][0] | undefined;
+  const liveBlock = liveCache != undefined && blocks.length === 1 ? blocks[0] : undefined;
+  const cached = liveCache?.checkpoint;
+  const checkpoint =
+    liveBlock != undefined &&
+    cached?.block === liveBlock &&
+    cached.revision === liveBlock.prefixRevision() &&
+    cached.args.path === path &&
+    cached.args.startTime.sec === startTime.sec &&
+    cached.args.startTime.nsec === startTime.nsec &&
+    cached.args.y === y &&
+    cached.args.showPoints === showPoints &&
+    (cached.args.darkenLabels ?? false) === darkenLabels
+      ? cached
+      : undefined;
+  // A repeat with hidden points updates the segment end only, so hold it until the segment ends.
+  const state: ConversionState = checkpoint
+    ? { ...checkpoint.state }
+    : { lastIndex: -1, repeatIndex: 0 };
+  const data = checkpoint?.data ?? dataset.data;
   const takeRepeat = () => {
-    if (repeatBlock && segment) {
-      const { labelColor, value, constantName } = segment;
-      const x = xOf(repeatBlock, repeatIndex)!;
-      lastDatum = { x, y, label: undefined, labelColor, value, constantName };
+    if (state.repeatBlock && state.segment) {
+      const { labelColor, value, constantName } = state.segment;
+      const x = xOf(state.repeatBlock, state.repeatIndex)!;
+      state.lastDatum = { x, y, label: undefined, labelColor, value, constantName };
     }
-    repeatBlock = undefined;
+    state.repeatBlock = undefined;
   };
   const flush = () => {
     takeRepeat();
-    if (lastDatum != undefined) {
-      dataset.data.push(lastDatum);
+    if (state.lastDatum != undefined) {
+      data.push(state.lastDatum);
     }
-    lastDatum = undefined;
+    state.lastDatum = undefined;
   };
 
-  for (const messages of blocks) {
-    if (!messages) {
-      continue;
-    }
-    // Samples are only compared within a block.
-    lastIndex = -1;
-
-    for (let i = 0; i < messages.size(); i++) {
-      if (!showPoints && lastIndex !== -1 && messages.sameValue(lastIndex, i)) {
+  const append = (messages: PathSampleColumns, start: number, end: number) => {
+    for (let i = start; i < end; i++) {
+      if (!showPoints && state.lastIndex !== -1 && messages.sameValue(state.lastIndex, i)) {
         if (!useHeaderStamp || messages.hasHeaderStamp(i)) {
-          repeatBlock = messages;
-          repeatIndex = i;
+          state.repeatBlock = messages;
+          state.repeatIndex = i;
         }
         continue;
       }
@@ -104,10 +134,10 @@ export function messagesToDataset(args: MessageDatasetArgs): ChartDataset {
       // A thinned stretch that held several values: draw it as one, like the chart's own [...].
       if (messages.isMixed(i)) {
         flush();
-        dataset.data.push({ x, y, label: "[...]", labelColor: grey, value: undefined });
-        lastValue = undefined;
-        lastIndex = i;
-        segment = undefined;
+        data.push({ x, y, label: "[...]", labelColor: grey, value: undefined });
+        state.lastValue = undefined;
+        state.lastIndex = i;
+        state.segment = undefined;
         continue;
       }
 
@@ -117,9 +147,9 @@ export function messagesToDataset(args: MessageDatasetArgs): ChartDataset {
       // eslint-disable-next-line @lichtblick/strict-equality
       if (rawValue === null) {
         flush();
-        dataset.data.push({ x, y: Number.NaN });
-        lastValue = undefined;
-        lastIndex = -1;
+        data.push({ x, y: Number.NaN });
+        state.lastValue = undefined;
+        state.lastIndex = -1;
         continue;
       }
 
@@ -133,20 +163,20 @@ export function messagesToDataset(args: MessageDatasetArgs): ChartDataset {
 
       if (i === 0 && messages.startsWithContext()) {
         // Only the state before the first kept change: carry it, don't draw it as a change.
-        lastValue = value;
-        lastIndex = i;
+        state.lastValue = value;
+        state.lastIndex = i;
         continue;
       }
 
       const color = condition && value === false ? CONDITION_FALSE_COLOR : getColor(value);
       const label = createLabel(constantName, value);
 
-      const isNewSegment = lastValue !== value;
+      const isNewSegment = state.lastValue !== value;
 
       takeRepeat();
-      lastValue = value;
-      lastIndex = i;
-      lastDatum = {
+      state.lastValue = value;
+      state.lastIndex = i;
+      state.lastDatum = {
         x,
         y,
         label: isNewSegment ? label : undefined,
@@ -155,17 +185,45 @@ export function messagesToDataset(args: MessageDatasetArgs): ChartDataset {
         value,
         constantName,
       };
-      segment = lastDatum;
+      state.segment = state.lastDatum;
 
       if (isNewSegment || showPoints) {
-        dataset.data.push(lastDatum);
+        data.push(state.lastDatum);
 
         // after we add a datum we clear the last datum so we don't try to add it again at the end
-        lastDatum = undefined;
+        state.lastDatum = undefined;
       }
     }
+  };
+
+  if (liveCache && liveBlock) {
+    // Appends can overwrite the last two rows. Cache only the stable prefix and rewind the
+    // temporary tail once the chart has its own data array.
+    const stableEnd = Math.max(0, liveBlock.size() - 2);
+    append(liveBlock, checkpoint?.end ?? 0, stableEnd);
+    liveCache.checkpoint = {
+      args,
+      block: liveBlock,
+      revision: liveBlock.prefixRevision(),
+      end: stableEnd,
+      data,
+      state: { ...state },
+    };
+    const stableLength = data.length;
+    append(liveBlock, stableEnd, liveBlock.size());
+    flush();
+    dataset.data = data.slice();
+    data.length = stableLength;
+    return dataset;
   }
 
+  for (const messages of blocks) {
+    if (messages) {
+      // Samples are only compared within a block.
+      state.lastIndex = -1;
+      append(messages, 0, messages.size());
+    }
+  }
   // If we never added the last datum (maybe because it was the same state as before), we add
   // it to the data so the user sees the state going until this point.
   flush();
