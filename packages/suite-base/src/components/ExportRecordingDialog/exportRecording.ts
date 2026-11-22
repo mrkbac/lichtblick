@@ -20,7 +20,6 @@ import {
   useMessagePipeline,
 } from "@lichtblick/suite-base/components/MessagePipeline";
 import { usePlayerSelection } from "@lichtblick/suite-base/context/PlayerSelectionContext";
-import { RemoteFileReadable } from "@lichtblick/suite-base/players/IterablePlayer/Mcap/RemoteFileReadable";
 import { isRecoveryAlert } from "@lichtblick/suite-base/players/IterablePlayer/Mcap/recoveryAlerts";
 import { downloadFiles } from "@lichtblick/suite-base/util/download";
 
@@ -72,6 +71,10 @@ export function useExportSource(): ExportSource | undefined {
       open: async () => {
         // Its own reader: the player's cache and prefetching stay untouched by the export.
         // No read-ahead: opening reads only the summary and indexes, never the whole file.
+        // Loaded on demand: the HTTP reader stays out of the startup bundle.
+        const { RemoteFileReadable } = await import(
+          "@lichtblick/suite-base/players/IterablePlayer/Mcap/RemoteFileReadable"
+        );
         const readable = new RemoteFileReadable(url, { credentials, readAheadEnabled: false });
         try {
           await readable.open();
