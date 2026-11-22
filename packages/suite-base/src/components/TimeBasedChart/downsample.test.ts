@@ -292,6 +292,11 @@ describe("downsamplePathColumns", () => {
     expect(indices.at(-1)).toBe(n - 1);
   });
 
+  it("collapses consecutive gaps", () => {
+    const gaps = new Float64Array(10_000).fill(Number.NaN);
+    expect(downsamplePathColumns(gaps, gaps, 0, gaps.length, view, 100)).toEqual([0, 9999]);
+  });
+
   it("drops rows within a pixel of the last kept one and keeps gaps", () => {
     const indices = run([
       [1, 1],

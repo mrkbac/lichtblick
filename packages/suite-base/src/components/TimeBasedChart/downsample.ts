@@ -408,6 +408,9 @@ export function downsamplePathColumns(
     for (let i = start; i < end; i++) {
       const code = codes[i - start]!;
       const nextCode = i + 1 < end ? codes[i + 1 - start]! : -1;
+      if (code === -1 && prevCode === -1 && i > start && i < end - 1) {
+        continue; // One marker breaks the line across a run of missing values.
+      }
       let keep = code === -1 || i === start || i === end - 1 || nextCode === -1;
       if (!keep && code !== 0) {
         const shared = mask & code & nextCode;
