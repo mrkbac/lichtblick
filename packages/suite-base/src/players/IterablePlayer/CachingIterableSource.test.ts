@@ -1244,6 +1244,27 @@ describe("CachingIterableSource", () => {
       expect(totalBytes(reads)).toBe(0);
     });
 
+    it("drops unsubscribed topics before starving read-ahead", async () => {
+      // Given a full budget of a and b from the read head on (not evictable)
+      const { source } = recordingSource(["a", "b"], 10);
+      const cache = new CachingIterableSource(source, { maxTotalSize: 1000 });
+      await cache.initialize();
+      await readTopics(
+        cache.messageIterator({ topics: mockTopicSelection("a", "b"), end: { sec: 4, nsec: 0 } }),
+      );
+      cache.setCurrentReadHead({ sec: 0, nsec: 0 });
+      expect(cache.getCacheSize()).toBe(1000);
+
+      // When playback goes on with b only
+      const iterator = cache.messageIterator({ topics: mockTopicSelection("b") });
+
+      // Then a's bytes make room for reading b further
+      await iterator.next();
+      expect(cache.canReadMore()).toBe(true);
+      expect(await readTopics(iterator)).toEqual(Array(9).fill("b"));
+      expect(cache.getCacheSize()).toBe(1000);
+    });
+
     it("keeps the cache and budget consistent when a fill is stopped early", async () => {
       const { source, reads } = recordingSource(["a", "b"], 10);
       const cache = new CachingIterableSource(source, { maxTotalSize: TEST_CACHE_BYTES });

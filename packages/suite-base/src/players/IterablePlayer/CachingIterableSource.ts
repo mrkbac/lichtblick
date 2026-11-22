@@ -248,7 +248,7 @@ class CachingIterableSource<MessageType = unknown>
         continue;
       }
 
-      if (block && [...want].some((topic) => !block!.topics.has(topic))) {
+      if (block && CachingIterableSource.#Lacks(block.topics, want)) {
         const fillEnd = compare(block.end, maxEnd) < 0 ? block.end : maxEnd;
         yield* this.#fillBlock(block, readHead, fillEnd, want, args);
         readHead = add(fillEnd, { sec: 0, nsec: 1 });
@@ -630,7 +630,7 @@ class CachingIterableSource<MessageType = unknown>
       if (
         want &&
         (!CachingIterableSource.#SkimServes(block, want.skimInterval) ||
-          [...want.topics].some((topic) => !block.topics.has(topic)))
+          CachingIterableSource.#Lacks(block.topics, want.topics))
       ) {
         continue;
       }
@@ -687,7 +687,13 @@ class CachingIterableSource<MessageType = unknown>
       return true;
     }
 
-    return this.#evictableCandidates().length > 0;
+    // Results on topics no longer wanted are dropped before the next read stores anything
+    const want = this.#want?.topics;
+    return (
+      this.#evictableCandidates().length > 0 ||
+      (want != undefined &&
+        this.#cache.some((block) => CachingIterableSource.#Lacks(want, block.topics)))
+    );
   }
 
   /** The evictable block ids, most evictable first; recomputed only when blocks changed */
@@ -775,6 +781,9 @@ class CachingIterableSource<MessageType = unknown>
   #maybePurgeCache(opt: { activeBlock?: CacheBlock<MessageType>; sizeInBytes: number }): boolean {
     const { activeBlock, sizeInBytes } = opt;
 
+    if (!this.#budget.fits(sizeInBytes)) {
+      this.#trimUnwanted(activeBlock);
+    }
     let purged = false;
     while (!this.#budget.fits(sizeInBytes)) {
       const blockId = this.#evictableCandidates().shift();
@@ -791,6 +800,29 @@ class CachingIterableSource<MessageType = unknown>
       purged = true;
     }
     return purged;
+  }
+
+  /**
+   * Drops the results on topics the latest messageIterator() doesn't want. Kept while there's room,
+   * so re-subscribing is free; under budget pressure they go before any wanted block, including
+   * those from the read head on, which can't be evicted.
+   */
+  #trimUnwanted(activeBlock: CacheBlock<MessageType> | undefined): void {
+    const want = this.#want?.topics;
+    if (!want) {
+      return;
+    }
+    for (const block of this.#cache) {
+      // The active block's items are indexed by the read in progress
+      if (block === activeBlock || !CachingIterableSource.#Lacks(want, block.topics)) {
+        continue;
+      }
+      block.items = block.items.filter(([, result]) => CachingIterableSource.#Wanted(result, want));
+      const size = CachingIterableSource.#SumSizes(block.items);
+      this.#budget.release(block.size - size);
+      block.size = size;
+      block.topics = new Set([...block.topics].filter((topic) => want.has(topic)));
+    }
   }
 
   /**
@@ -845,6 +877,7 @@ class CachingIterableSource<MessageType = unknown>
       // Source results' bytes are in #budget already, block's moved along with them
       filled.size = size;
       filled.lastAccess = Date.now();
+      this.#markLoadedRangesDirty();
     };
 
     const filter = topics.size !== want.size;
@@ -895,7 +928,9 @@ class CachingIterableSource<MessageType = unknown>
         }
 
         const size = CachingIterableSource.#Size(result);
-        this.#maybePurgeCache({ activeBlock: block, sizeInBytes: size });
+        if (this.#maybePurgeCache({ activeBlock: block, sizeInBytes: size })) {
+          this.#markLoadedRangesDirty();
+        }
         this.#budget.add(size);
         pendingSize += size;
         merged.push([timeNs, result]);
@@ -905,12 +940,17 @@ class CachingIterableSource<MessageType = unknown>
       filledNs = endNs;
       pendingSize = 0;
     } finally {
-      await source.return?.();
       commit(filledNs);
       // Unfilled source results are dropped; block keeps its own results after filledNs
       this.#budget.release(pendingSize);
       this.#candidatesStale = true;
       this.#markLoadedRangesDirty();
+      try {
+        await source.return?.();
+      } catch (err: unknown) {
+        // Don't hide the error that ended the fill, if any
+        log.error("Failed to close the fill read", err);
+      }
     }
   }
 
@@ -944,6 +984,16 @@ class CachingIterableSource<MessageType = unknown>
       !block.skimInterval ||
       (skimInterval != undefined && compare(block.skimInterval, skimInterval) <= 0)
     );
+  }
+
+  /** Whether `have` lacks any of `want` */
+  static #Lacks(have: ReadonlySet<string>, want: Iterable<string>): boolean {
+    for (const topic of want) {
+      if (!have.has(topic)) {
+        return true;
+      }
+    }
+    return false;
   }
 
   static #Wanted(result: IteratorResult, want: ReadonlySet<string>): boolean {

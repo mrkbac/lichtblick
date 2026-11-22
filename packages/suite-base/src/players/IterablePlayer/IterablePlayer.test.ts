@@ -1271,8 +1271,7 @@ describe("IterablePlayer", () => {
     await store.done;
 
     // Call set subscriptions and add a new topic
-    // The cached range stays loaded until the new iterator finds it lacks the new topic
-    store.reset(3);
+    store.reset(2);
     player.setSubscriptions([{ topic }, { topic: secondTopic }]);
 
     await store.done;
