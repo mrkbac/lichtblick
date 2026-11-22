@@ -249,10 +249,7 @@ describe.skipIf(file == undefined)("Boreas showcase recording", () => {
                 decompressHandlers: await loadDecompressHandlers(),
               }),
             )
-          : new McapUnindexedIterableSource({
-              size: (await blob()).size,
-              stream: (await blob()).stream(),
-            });
+          : new McapUnindexedIterableSource({ readable: new BlobReadable(await blob()) });
       const { start, byTopic } = await readAll(source);
       // The first message's time, not 0 (an indexed empty chunk once started it in 1970).
       const counted = expectations.channels.filter((c) => c[countKey] > 0);

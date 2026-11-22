@@ -32,6 +32,15 @@ export function liveRecoveryAlerts(scanner: McapRecoveryScanner): PlayerAlert[] 
   return lost.length > 0 ? [damagedAlert(scanner, lost)] : [];
 }
 
+/** Ids the file defines twice with different content; the scan kept the first definition */
+export function conflictAlerts(scanner: McapRecoveryScanner): PlayerAlert[] {
+  return scanner.conflicts.map(({ kind, id }) => ({
+    severity: "warn",
+    message: `${kind} ${id} is defined twice with different content`,
+    tip: "The first definition is used; the later one is ignored.",
+  }));
+}
+
 function describeRecovered(scanner: McapRecoveryScanner): string {
   const chunks = scanner.recoveredChunkCount();
   return chunks > 0

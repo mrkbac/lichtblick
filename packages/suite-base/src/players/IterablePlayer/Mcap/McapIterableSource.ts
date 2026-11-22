@@ -38,7 +38,7 @@ import {
   estimateAddedWeightBytes,
   estimateReaderWeightBytes,
 } from "./readerWeight";
-import { liveRecoveryAlerts, recoveryAlert } from "./recoveryAlerts";
+import { conflictAlerts, liveRecoveryAlerts, recoveryAlert } from "./recoveryAlerts";
 import {
   IteratorResult,
   Initialization,
@@ -84,17 +84,16 @@ async function tryCreateIndexedReader(
 
 export class McapIterableSource implements ISerializedIterableSource {
   #source: McapSource;
-  // Eagerly-retained inner: used for local blobs, unindexed streams, and unpooled sources.
+  // Eagerly-retained inner: used for local blobs, unindexed files, and unpooled sources.
   #eagerInner: ISerializedIterableSource | undefined;
   // Set when this source is managed by a bounded LRU pool (re-hydrated on demand).
   #pool: HydratedSourcePool | undefined;
   #start?: Time;
   #end?: Time;
-  // Session-persistent remote connection + byte cache for `type: "url"` indexed sources.
+  // Session-persistent remote connection + byte cache for `type: "url"` sources.
   // Created once (on first hydration) and reused across every subsequent re-hydration, so pool
   // eviction only discards the heavyweight indexed-reader/parsed-channel state. Closed only in
-  // terminate(). Undefined for "file" sources and for remote sources that fail indexed init or
-  // fall back to eager unindexed streaming.
+  // terminate(). Undefined for "file" sources and for remote sources that fail to open.
   #persistentReadable: RemoteFileReadable | undefined;
   // Decompressed chunks, shared by every reader this source opens (all of them pass it), so
   // playback, preloading, plots and backfill don't each decompress the same chunks. Survives
@@ -180,9 +179,12 @@ export class McapIterableSource implements ISerializedIterableSource {
         live: result.live,
       };
     }
-    const file = result.length != undefined ? readable.file.slice(0, result.length) : readable.file;
     return {
-      inner: new McapUnindexedIterableSource({ size: file.size, stream: file.stream() }),
+      inner: new McapUnindexedIterableSource({
+        readable,
+        size: result.length,
+        chunkCache: this.#chunkCache,
+      }),
       indexed: false,
       weightBytes: READER_BASE_BYTES,
     };
@@ -202,8 +204,7 @@ export class McapIterableSource implements ISerializedIterableSource {
     try {
       result = await this.#openReader(readable, decompressHandlers);
     } catch (error) {
-      // A real failure (e.g. a network error) must not be masked by re-fetching the whole file via
-      // the eager, unbounded streaming fallback — surface the actual error.
+      // A real failure (e.g. a network error): surface it.
       if (!this.#eagerInner && !this.#scan) {
         // Keep it while a reader opened earlier (e.g. on a partial index, also a resident pooled
         // one) or the background scan still reads through it
@@ -239,18 +240,23 @@ export class McapIterableSource implements ISerializedIterableSource {
         live: result.live,
       };
     }
-    // Unindexed remote fallback: single-pass streaming read of the whole file. This path
-    // bypasses the pool entirely and never re-hydrates, so there is no benefit in keeping the
-    // indexed-init probe connection/cache alive.
-    readable.close();
-    this.#persistentReadable = undefined;
-    return await this.#openUnindexedUrlFallback(source, result.length);
+    // Unindexed: scanned once, then messages are read through the same connection and cache
+    return {
+      inner: new McapUnindexedIterableSource({
+        readable,
+        size: result.length,
+        chunkCache: this.#chunkCache,
+      }),
+      readable,
+      indexed: false,
+      weightBytes: READER_BASE_BYTES,
+    };
   }
 
   /**
    * An indexed reader for the file: from its own summary when that works, otherwise from an index
    * rebuilt by a forward scan (kept for re-hydration, and saved in OPFS for the next session).
-   * "unindexed" means stream it instead; `length` limits the stream to the readable records.
+   * "unindexed" means scan it instead; `length` limits the scan to the readable records.
    */
   async #openReader(
     readable: McapTypes.IReadable,
@@ -267,7 +273,7 @@ export class McapIterableSource implements ISerializedIterableSource {
       this.#recovery = await this.#scanForRecovery(readable, decompressHandlers, result.error);
     }
     if (this.#recovery.recoveredChunkCount() === 0) {
-      // Nothing chunked (e.g. messages written without chunks): stream the readable part.
+      // Nothing chunked (e.g. messages written without chunks): scan the readable part.
       return { status: "unindexed", length: Number(this.#recovery.offset) };
     }
     const live = await this.#recovery.openLiveReader(
@@ -593,29 +599,6 @@ export class McapIterableSource implements ISerializedIterableSource {
     };
   }
 
-  /** `length` limits the stream to the readable records of a damaged file */
-  async #openUnindexedUrlFallback(
-    { url, credentials }: Extract<McapSource, { type: "url" }>,
-    length?: number,
-  ): Promise<OpenedInner> {
-    const response = await fetch(url, { credentials });
-    if (!response.body) {
-      throw new Error(`Unable to stream remote file. <${url}>`);
-    }
-    const size = response.headers.get("content-length");
-    if (size == undefined) {
-      throw new Error(`Remote file is missing Content-Length header. <${url}>`);
-    }
-    return {
-      inner: new McapUnindexedIterableSource({
-        size: length ?? Number.parseInt(size, 10),
-        stream: length == undefined ? response.body : response.body.pipeThrough(firstBytes(length)),
-      }),
-      indexed: false,
-      weightBytes: READER_BASE_BYTES,
-    };
-  }
-
   // Pool hydrator: builds a ready-to-iterate indexed inner (channels parsed). The underlying
   // remote readable/connection is session-persistent and intentionally survives pool eviction.
   readonly #hydrator: SourceHydrator<HydratedInner> = {
@@ -659,8 +642,8 @@ export class McapIterableSource implements ISerializedIterableSource {
       await pool.admit(this, this.#hydrator, value);
     } else {
       // Unindexed (and unpooled) sources are retained eagerly for the whole session and are NOT
-      // bounded by the pool. A session of many large unindexed MCAPs can therefore grow unbounded;
-      // pooling them is non-trivial because re-hydration would re-stream the entire file.
+      // bounded by the pool. An unindexed one keeps only its message index (26 bytes per message);
+      // pooling it would mean re-scanning the whole file on re-hydration.
       this.#eagerInner = opened.inner;
     }
     this.#lastInit = init;
@@ -721,6 +704,7 @@ export class McapIterableSource implements ISerializedIterableSource {
           message: `Indexing ${name ?? "this file"}: ${percent}% read`,
           tip: "Its index is being rebuilt. Messages play from the part indexed so far; the time range grows as indexing continues.",
         },
+        ...conflictAlerts(this.#recovery),
         ...init.alerts,
       ];
     } else if (this.#recovery && this.#isBeingWritten() && !this.#source.pool) {
@@ -738,10 +722,15 @@ export class McapIterableSource implements ISerializedIterableSource {
               tip: "To follow it as it grows, open it with Open file or drag and drop in a Chromium-based browser or the desktop app.",
             },
         ...liveRecoveryAlerts(this.#recovery),
+        ...conflictAlerts(this.#recovery),
         ...init.alerts,
       ];
     } else if (this.#recovery) {
-      init.alerts = [recoveryAlert(this.#recovery), ...init.alerts];
+      init.alerts = [
+        recoveryAlert(this.#recovery),
+        ...conflictAlerts(this.#recovery),
+        ...init.alerts,
+      ];
     }
     if (this.#scanError) {
       init.alerts = withScanError(init, this.#scanError).alerts;
@@ -882,25 +871,6 @@ async function scanForRecovery(
   }
   log.info(`Recovered MCAP index after: ${originalError.message}`);
   return scanner;
-}
-
-/** Passes through the first `length` bytes of a stream, then ends it and cancels the source */
-function firstBytes(length: number): TransformStream<Uint8Array, Uint8Array> {
-  let remaining = length;
-  return new TransformStream({
-    start(controller) {
-      if (remaining <= 0) {
-        controller.terminate();
-      }
-    },
-    transform(chunk, controller) {
-      controller.enqueue(chunk.byteLength > remaining ? chunk.subarray(0, remaining) : chunk);
-      remaining -= chunk.byteLength;
-      if (remaining <= 0) {
-        controller.terminate();
-      }
-    },
-  });
 }
 
 function sourceName(source: McapSource): string | undefined {
