@@ -168,8 +168,9 @@ export const DECAY_HISTORY_LIMITS: HistoryLimits = { maxEntries: 1_000, maxPoint
 export const DECAY_LIMITED = "DECAY_LIMITED";
 
 /**
- * Shows the notice that the limits shape a decay history (the ring keeps only 1 in N incoming
- * scans, or the latest scan alone fills the point budget), or clears it. Takes and returns the key
+ * Shows the notice that the limits shape a decay history (the latest scan alone fills the point
+ * budget, scans in the window were dropped for it, or the ring keeps only 1 in N incoming scans), or
+ * clears it. Takes and returns the key
  * of the shown notice, so its text is only formatted again when it changes.
  */
 export function updateDecayNotice({
@@ -178,6 +179,7 @@ export function updateDecayNotice({
   ring,
   maxPoints,
   latestPoints,
+  windowStart,
   shownKey,
 }: {
   renderer: Renderer;
@@ -185,16 +187,26 @@ export function updateDecayNotice({
   ring: DecayPointRing;
   maxPoints: number;
   latestPoints: number;
+  /** Receive time where the decay window starts */
+  windowStart: bigint;
   shownKey: string | undefined;
 }): string | undefined {
   const errors = renderer.settings.errors;
-  const emptied = latestPoints >= maxPoints;
-  if (!emptied && ring.stride() <= 1) {
+  const evictedUntil = ring.budgetEvictedUntil();
+  const state =
+    latestPoints >= maxPoints
+      ? "threeDee:decayHistoryLimited"
+      : evictedUntil != undefined && evictedUntil >= windowStart
+        ? "threeDee:decayHistoryDropped"
+        : ring.stride() > 1
+          ? "threeDee:decayHistoryThinned"
+          : undefined;
+  if (state == undefined) {
     errors.remove(settingsPath, DECAY_LIMITED);
     return undefined;
   }
   const locale = i18next.language;
-  const key = `${locale} ${maxPoints} ${emptied ? 0 : ring.stride()}`;
+  const key = `${locale} ${maxPoints} ${state} ${ring.stride()}`;
   // (errors can also be cleared elsewhere, e.g. on a topic reset)
   if (key !== shownKey || !errors.hasError(settingsPath, DECAY_LIMITED)) {
     const values = {
@@ -202,13 +214,7 @@ export function updateDecayNotice({
       maxScans: DECAY_HISTORY_LIMITS.maxEntries.toLocaleString(locale),
       stride: ring.stride().toLocaleString(locale),
     };
-    errors.add(
-      settingsPath,
-      DECAY_LIMITED,
-      emptied
-        ? i18next.t("threeDee:decayHistoryLimited", values)
-        : i18next.t("threeDee:decayHistoryThinned", values),
-    );
+    errors.add(settingsPath, DECAY_LIMITED, i18next.t(state, values));
   }
   return key;
 }

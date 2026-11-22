@@ -64,6 +64,8 @@ export const threeDee = {
   noCoordinateFramesFound: "No coordinate frames found",
   decayHistoryLimited:
     "The latest scan alone fills the decay limit of {{maxPoints}} points: no decay history is shown",
+  decayHistoryDropped:
+    "Decay history limit reached ({{maxPoints}} points): scans too large to thin around were dropped",
   decayHistoryThinned:
     "Decay history limit reached ({{maxPoints}} points or {{maxScans}} scans): keeping 1 in {{stride}} incoming scans",
   parent: "Parent",

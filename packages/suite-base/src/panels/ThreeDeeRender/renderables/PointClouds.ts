@@ -537,6 +537,7 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
       ring,
       maxPoints: decayMaxPoints(settings),
       latestPoints: this.#pointsHistory.latest().renderable.geometry.drawRange.count,
+      windowStart: expireTime,
       shownKey: this.#decayNoticeKey,
     });
 
@@ -546,6 +547,10 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
       renderFrameId,
       fixedFrameId,
     );
+    if (ring.posesPending()) {
+      // Paused redraws stop on their own: draw again until every scan is placed
+      this.renderer.queueAnimationFrame();
+    }
     if (missingFrame != undefined) {
       this.renderer.settings.errors.add(
         settingsPath,

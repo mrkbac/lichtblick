@@ -282,7 +282,11 @@ describe("PointCloudHistoryRenderable decay", () => {
     // 4-point clouds and a 10-point budget: the history thins at the third scan
     const { renderable, settings } = decode(makeCloud(), { decayTime: 10, decayMaxPoints: 1e-5 }, {
       ...rendererMock,
-      transformTree: { apply: (out: unknown) => out },
+      transformTree: {
+        apply: (out: unknown) => out,
+        frames: () => new Map(),
+        isComplete: () => false,
+      },
       settings: { errors },
     } as unknown as Renderer);
     vi.mocked(updatePose).mockReturnValue(true);
@@ -307,7 +311,11 @@ describe("PointCloudHistoryRenderable decay", () => {
     // 3 points: the 4-point latest cloud alone is over the budget
     const { renderable, settings } = decode(makeCloud(), { decayTime: 10, decayMaxPoints: 3e-6 }, {
       ...rendererMock,
-      transformTree: { apply: (out: unknown) => out },
+      transformTree: {
+        apply: (out: unknown) => out,
+        frames: () => new Map(),
+        isComplete: () => false,
+      },
       settings: { errors },
     } as unknown as Renderer);
     vi.mocked(updatePose).mockReturnValue(true);

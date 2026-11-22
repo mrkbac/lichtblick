@@ -36,6 +36,9 @@ const transformTree = {
     out.orientation = { ...input.orientation };
     return out;
   },
+  frames: () => new Map(),
+  isComplete: () => false,
+  version: 0,
 } as unknown as Renderer["transformTree"];
 
 function makeRing(limits = { maxEntries: 100, maxPoints: 1000 }) {
@@ -224,6 +227,8 @@ describe("DecayPointRing", () => {
     const tree = {
       apply: (...args: Parameters<Renderer["transformTree"]["apply"]>) =>
         transformTree.apply(...args),
+      frames: () => new Map(),
+      isComplete: () => false,
       version: 1,
     } as unknown as Renderer["transformTree"];
     const apply = vi.spyOn(tree, "apply");
@@ -280,6 +285,70 @@ describe("DecayPointRing", () => {
 
     expect(ring.pointCount()).toBe(3);
     expect(ring.stride()).toBe(1);
+    expect(ring.budgetEvictedUntil()).toBe(4n); // reported as history lost to the budget
+  });
+
+  it("recomputes rows when a frame offset is edited or a complete tree's playback time moves", () => {
+    const { ring } = makeRing();
+    push(ring, 1n, 1);
+    const frame: { offsetPosition?: number[] } = {};
+    let complete = false;
+    const apply = vi.fn((...args: Parameters<Renderer["transformTree"]["apply"]>) =>
+      transformTree.apply(...args),
+    );
+    const tree = {
+      apply,
+      frames: () => new Map([["lidar", frame]]),
+      isComplete: () => complete,
+      version: 1,
+    } as unknown as Renderer["transformTree"];
+    ring.updatePoses(tree, 0n, "map", "map");
+    const placements = () => apply.mock.calls.filter(([, , , , src]) => src === "lidar").length;
+    expect(placements()).toBe(1);
+
+    frame.offsetPosition = [1, 0, 0]; // edited in the settings, no new transforms
+    ring.updatePoses(tree, 0n, "map", "map");
+    expect(placements()).toBe(2);
+
+    ring.updatePoses(tree, 5n, "map", "map"); // time moves, but the tree shows everything
+    expect(placements()).toBe(2);
+    complete = true; // a preloaded tree shows only transforms received by the playback time
+    ring.updatePoses(tree, 6n, "map", "map");
+    expect(placements()).toBe(3);
+  });
+
+  it("places every scan over a few redraws, without scans missing a transform holding them back", () => {
+    const { ring, poseRow } = makeRing({ maxEntries: 1000, maxPoints: 10_000 });
+    ring.updatePoses(transformTree, 0n, "map", "map"); // a first frame places everything at once
+    for (let i = 1; i <= 60; i++) {
+      push(ring, BigInt(i), 1);
+    }
+    for (let i = 61; i <= 210; i++) {
+      push(ring, BigInt(i), 1, "missing"); // the newest, so they are tried first
+    }
+
+    expect(ring.updatePoses(transformTree, 0n, "map", "map")).toBe("missing");
+    expect(ring.posesPending()).toBe(true); // the per-frame budget ran out
+    ring.updatePoses(transformTree, 0n, "map", "map");
+
+    expect(ring.posesPending()).toBe(false);
+    for (let slot = 0; slot < 60; slot++) {
+      expect(poseRow(slot)).not.toEqual(Array(12).fill(0));
+    }
+    expect(ring.updatePoses(transformTree, 0n, "map", "map")).toBe("missing");
+  });
+
+  it("frees only about as much as the budget needs", () => {
+    const { ring } = makeRing({ maxEntries: 100, maxPoints: 20 });
+    push(ring, 1n, 1);
+    push(ring, 2n, 1);
+    push(ring, 3n, 1);
+    push(ring, 4n, 10);
+
+    ring.enforceLimits({ maxPoints: 20, reservePoints: 8 }); // 1 point over
+
+    expect(ring.pointCount()).toBe(11); // two 1-point scans thinned, the 10-point scan kept
+    expect(ring.budgetEvictedUntil()).toBeUndefined();
   });
 
   it("uploads only the poses of slots in use", () => {
