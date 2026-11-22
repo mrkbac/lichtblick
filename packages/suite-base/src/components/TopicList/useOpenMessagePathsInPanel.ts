@@ -20,7 +20,7 @@ export type SchemasByPanelType = ReadonlyMap<string, ReadonlySet<string>>;
 
 const schemasByPanel = new WeakMap<PanelInfo, Promise<ReadonlySet<string>>>();
 
-function loadSchemas(panel: PanelInfo): Promise<ReadonlySet<string>> {
+async function loadSchemas(panel: PanelInfo): Promise<ReadonlySet<string>> {
   let schemas = schemasByPanel.get(panel);
   if (!schemas) {
     schemas = (panel.docs?.() ?? Promise.resolve(undefined)).then(
@@ -29,7 +29,7 @@ function loadSchemas(panel: PanelInfo): Promise<ReadonlySet<string>> {
     );
     schemasByPanel.set(panel, schemas);
   }
-  return schemas;
+  return await schemas;
 }
 
 /** Loads the schemas of every panel offered for topics. Cached, so cheap after the first call. */
