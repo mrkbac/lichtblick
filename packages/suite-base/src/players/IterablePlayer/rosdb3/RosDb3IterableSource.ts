@@ -9,6 +9,8 @@ import { MessageDefinition } from "@foxglove/message-definition";
 import { ROS2_TO_DEFINITIONS, Rosbag2, SqliteSqljs } from "@foxglove/rosbag2-web";
 import { stringify } from "@foxglove/rosmsg";
 import { Time, add as addTime, compare, toNanoSec } from "@foxglove/rostime";
+import { SqlJsStatic } from "@foxglove/sql.js";
+import { parse } from "yaml";
 
 import { MessageEvent } from "@lichtblick/suite";
 import { APP_CONFIG } from "@lichtblick/suite-base/constants/config";
@@ -42,11 +44,101 @@ function dataTypeToFullName(dataType: string): string {
   return dataType;
 }
 
+function asRecord(value: unknown): Record<string, unknown> | undefined {
+  return typeof value === "object" && value != undefined && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : undefined;
+}
+
+/** The embedded metadata is only per-file when the bag has one file. */
+async function embeddedCounts({
+  SQL,
+  file,
+  db,
+  names,
+}: {
+  SQL: SqlJsStatic;
+  file: BlockCachedFile;
+  db: SqliteSqljs;
+  names: ReadonlySet<string>;
+}): Promise<Map<string, number> | undefined> {
+  // Use the same SQLite engine and block cache as the playback connection.
+  const reader = new SQL.Database({ file });
+  let metadata: Record<string, unknown> | undefined;
+  let firstId: string | undefined;
+  let lastId: string | undefined;
+  try {
+    // rosbag2's writer appends consecutive IDs. Endpoint lookups detect a stale count even
+    // when an appended message was recorded at a time inside the file's existing time range.
+    const [text, first, last] =
+      reader.exec(`
+      select metadata, cast((select min(id) from messages) as text),
+        cast((select max(id) from messages) as text)
+      from metadata order by id desc limit 1
+    `)[0]?.values[0] ?? [];
+    firstId = typeof first === "string" ? first : undefined;
+    lastId = typeof last === "string" ? last : undefined;
+    if (typeof text !== "string") {
+      return undefined;
+    }
+    metadata = asRecord(parse(text, { intAsBigInt: true }));
+  } catch {
+    // Older files have no metadata table. Malformed or incomplete metadata also needs a scan.
+    return undefined;
+  } finally {
+    reader.close();
+  }
+  const paths = metadata?.relative_file_paths;
+  const entries = metadata?.topics_with_message_count;
+  const expected = metadata?.message_count;
+  if (
+    metadata?.storage_identifier !== "sqlite3" ||
+    !Array.isArray(paths) ||
+    paths.length !== 1 ||
+    typeof paths[0] !== "string" ||
+    !Array.isArray(entries) ||
+    typeof expected !== "bigint" ||
+    expected <= 0n ||
+    expected > BigInt(Number.MAX_SAFE_INTEGER) ||
+    firstId !== "1" ||
+    lastId !== expected.toString()
+  ) {
+    return undefined;
+  }
+  const [start, end] = await db.timeRange();
+  if (
+    asRecord(metadata.starting_time)?.nanoseconds_since_epoch !== toNanoSec(start) ||
+    asRecord(metadata.duration)?.nanoseconds !== toNanoSec(end) - toNanoSec(start)
+  ) {
+    return undefined;
+  }
+  const counts = new Map<string, number>();
+  let total = 0n;
+  for (const entry of entries as unknown[]) {
+    const item = asRecord(entry);
+    const name = asRecord(item?.topic_metadata)?.name;
+    const count = item?.message_count;
+    if (
+      typeof name !== "string" ||
+      !names.has(name) ||
+      counts.has(name) ||
+      typeof count !== "bigint" ||
+      count < 0n ||
+      count > expected
+    ) {
+      return undefined;
+    }
+    counts.set(name, Number(count));
+    total += count;
+  }
+  return total === expected ? counts : undefined;
+}
+
 export class RosDb3IterableSource implements ISerializedIterableSource {
   #files: File[];
   #bag?: Rosbag2;
-  /** Each file with its message count per topic */
-  #dbs: { db: SqliteSqljs; counts: Map<string, number> }[] = [];
+  /** Each file and its topics that might have messages. */
+  #dbs: { db: SqliteSqljs; topics: ReadonlySet<string> }[] = [];
   #start: Time = { sec: 0, nsec: 0 };
   #end: Time = { sec: 0, nsec: 0 };
   #textEncoder = new TextEncoder();
@@ -62,9 +154,10 @@ export class RosDb3IterableSource implements ISerializedIterableSource {
       new URL("@foxglove/sql.js/dist/sql-wasm.wasm", import.meta.url).toString(),
     );
     const sqlWasm = await (await res.blob()).arrayBuffer();
-    await SqliteSqljs.Initialize({ wasmBinary: sqlWasm });
+    const SQL = await SqliteSqljs.Initialize({ wasmBinary: sqlWasm });
 
-    const dbs = this.#files.map((file) => new SqliteSqljs(new BlockCachedFile(file)));
+    const files = this.#files.map((file) => new BlockCachedFile(file));
+    const dbs = files.map((file) => new SqliteSqljs(file));
     const bag = new Rosbag2(dbs);
     await bag.open();
     this.#bag = bag;
@@ -74,9 +167,13 @@ export class RosDb3IterableSource implements ISerializedIterableSource {
     // Per file, so a backfill skips files without the topics it looks for
     const messageCounts = new Map<string, number>();
     this.#dbs = [];
-    for (const db of dbs) {
-      const counts = await db.messageCounts();
-      this.#dbs.push({ db, counts });
+    for (const [i, db] of dbs.entries()) {
+      const names = new Set((await db.readTopics()).map((topic) => topic.name));
+      const metadataCounts = await embeddedCounts({ SQL, file: files[i]!, db, names });
+      const counts = metadataCounts ?? (await db.messageCounts());
+      // Only counts from the messages table prove a topic has no messages. Embedded metadata
+      // can be out of date even when its total and time range still look right.
+      this.#dbs.push({ db, topics: metadataCounts ? names : new Set(counts.keys()) });
       for (const [topic, count] of counts) {
         messageCounts.set(topic, (messageCounts.get(topic) ?? 0) + count);
       }
@@ -213,14 +310,14 @@ export class RosDb3IterableSource implements ISerializedIterableSource {
     // .db3 files only index time: read back from `time` in pages of rows until every topic has a
     // message or the file's start is reached, yielding between pages even when none matched
     const latest = new Map<string, MessageEvent<Uint8Array>>();
-    for (const { db, counts } of this.#dbs) {
+    for (const { db, topics: fileTopics } of this.#dbs) {
       // Per file: a split recording's files may overlap in time
       const found = new Set<string>();
       let next: { timestamp: bigint; id?: number } | undefined = { timestamp: toNanoSec(time) };
       while (next != undefined) {
         // A topic this file has no messages for would only make the scan read to its start
         const missing = [...topics.keys()].filter(
-          (topic) => !found.has(topic) && (counts.get(topic) ?? 0) > 0,
+          (topic) => !found.has(topic) && fileTopics.has(topic),
         );
         if (missing.length === 0) {
           break;

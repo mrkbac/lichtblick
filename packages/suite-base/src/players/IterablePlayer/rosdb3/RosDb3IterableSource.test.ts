@@ -42,7 +42,13 @@ function ns(sec: number): bigint {
 }
 
 /** A .db3 with a "fast" topic at 10 Hz for 100 s and a "rare" one at 1 s and 50 s */
-async function makeDb3(): Promise<Uint8Array<ArrayBuffer>> {
+async function makeDb3({
+  metadata,
+  lateMessage,
+}: {
+  metadata?: string;
+  lateMessage?: boolean;
+} = {}): Promise<Uint8Array<ArrayBuffer>> {
   const SQL = await initSqlJs({ wasmBinary: wasm });
   const db = new SQL.Database();
   db.run(`
@@ -72,9 +78,33 @@ async function makeDb3(): Promise<Uint8Array<ArrayBuffer>> {
   for (let i = 0; i < 4097; i++) {
     insert.run([3, ns(99).toString(), new Uint8Array([3])]);
   }
+  if (lateMessage === true) {
+    insert.run([2, ns(170).toString(), new Uint8Array([3])]);
+  }
   insert.free();
-  return db.export() as Uint8Array<ArrayBuffer>;
+  if (metadata != undefined) {
+    db.run(
+      "CREATE TABLE metadata(id INTEGER PRIMARY KEY, metadata_version INTEGER, metadata TEXT)",
+    );
+    db.run("INSERT INTO metadata VALUES (1, 9, 'unfinished'), (2, 9, ?)", [metadata]);
+  }
+  const exported = db.export() as Uint8Array<ArrayBuffer>;
+  db.close();
+  return exported;
 }
+
+const metadata = `
+storage_identifier: sqlite3
+relative_file_paths: [test.db3]
+starting_time: {nanoseconds_since_epoch: 99000000000}
+duration: {nanoseconds: 101000000000}
+message_count: 15101
+topics_with_message_count:
+  - {topic_metadata: {name: /fast}, message_count: 1001}
+  - {topic_metadata: {name: /rare}, message_count: 2}
+  - {topic_metadata: {name: /dense}, message_count: 14097}
+  - {topic_metadata: {name: /tied}, message_count: 1}
+`;
 
 describe("RosDb3IterableSource", () => {
   let db3: Uint8Array<ArrayBuffer>;
@@ -92,6 +122,60 @@ describe("RosDb3IterableSource", () => {
     const init = await source.initialize();
     return { source, init };
   }
+
+  it("uses the latest embedded topic counts without scanning messages", async () => {
+    const scan = vi.spyOn(SqliteSqljs.prototype, "messageCounts");
+    const source = new RosDb3IterableSource([new BytesFile(await makeDb3({ metadata }))]);
+    const init = await source.initialize();
+    expect(init.topicStats.get("/rare")).toEqual({ numMessages: 2 });
+    expect(scan).not.toHaveBeenCalled();
+
+    const backfill = await source.getBackfillMessages({
+      topics: new Map([["/rare", { topic: "/rare" }]]),
+      time: { sec: 180, nsec: 0 },
+    });
+    expect(backfill.map((message) => message.receiveTime)).toEqual([{ sec: 150, nsec: 0 }]);
+  });
+
+  it("rejects stale counts after an append within the existing time range", async () => {
+    const source = new RosDb3IterableSource([
+      new BytesFile(await makeDb3({ metadata, lateMessage: true })),
+    ]);
+    const scan = vi.spyOn(SqliteSqljs.prototype, "messageCounts");
+    const init = await source.initialize();
+    expect(scan).toHaveBeenCalledOnce();
+    expect(init.topicStats.get("/rare")).toEqual({ numMessages: 3 });
+  });
+
+  it("backfills real messages even if embedded counts say a topic is empty", async () => {
+    const inaccurate = metadata
+      .replace("{name: /rare}, message_count: 2", "{name: /rare}, message_count: 0")
+      .replace("{name: /dense}, message_count: 14097", "{name: /dense}, message_count: 14099");
+    const source = new RosDb3IterableSource([
+      new BytesFile(await makeDb3({ metadata: inaccurate })),
+    ]);
+    const scan = vi.spyOn(SqliteSqljs.prototype, "messageCounts");
+    await source.initialize();
+    expect(scan).not.toHaveBeenCalled();
+
+    const backfill = await source.getBackfillMessages({
+      topics: new Map([["/rare", { topic: "/rare" }]]),
+      time: { sec: 180, nsec: 0 },
+    });
+    expect(backfill.map((message) => message.receiveTime)).toEqual([{ sec: 150, nsec: 0 }]);
+  });
+
+  it.each([
+    ["malformed", "not [a valid yaml document"],
+    ["stale", metadata.replace("101000000000", "99000000000")],
+    ["split-wide", metadata.replace("[test.db3]", "[first.db3, test.db3]")],
+  ])("scans messages when embedded metadata is %s", async (_case, text) => {
+    const source = new RosDb3IterableSource([new BytesFile(await makeDb3({ metadata: text }))]);
+    const scan = vi.spyOn(SqliteSqljs.prototype, "messageCounts");
+    const init = await source.initialize();
+    expect(init.topicStats.get("/rare")).toEqual({ numMessages: 2 });
+    expect(scan).toHaveBeenCalledOnce();
+  });
 
   it("reads every message", async () => {
     const { source, init } = await open();
