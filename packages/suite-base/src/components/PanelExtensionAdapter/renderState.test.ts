@@ -370,7 +370,6 @@ describe("renderState", () => {
     };
 
     const first = buildRenderState(withBlocks([{ sizeInBytes: 0, messagesByTopic: { test1 } }]));
-    // eslint-disable-next-line @typescript-eslint/no-deprecated
     const allFrames = first?.allFrames;
     expect(allFrames).toEqual(test1);
 
@@ -390,9 +389,7 @@ describe("renderState", () => {
     const panelTopicLoaded = buildRenderState(
       withBlocks([{ sizeInBytes: 0, messagesByTopic: { test1: test1More } }]),
     );
-    // eslint-disable-next-line @typescript-eslint/no-deprecated
     expect(panelTopicLoaded?.allFrames).toEqual(test1More);
-    // eslint-disable-next-line @typescript-eslint/no-deprecated
     expect(panelTopicLoaded?.allFrames).not.toBe(allFrames);
   });
 
