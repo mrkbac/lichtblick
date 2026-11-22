@@ -222,6 +222,8 @@ export function thinTrack(
     v == undefined ||
     (lon[i]! >= v.west && lon[i]! <= v.east && lat[i]! >= v.south && lat[i]! <= v.north);
   // MapLibre's world is 512 px wide at zoom 0.
+  // ponytail: ignores pitch, so near the camera a tilted map shows the spacing; scale by the
+  // tilt if that matters.
   let minDistance = options.minPixels / (512 * 2 ** options.zoom);
   for (;;) {
     const indices: number[] = [];
