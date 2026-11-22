@@ -24,8 +24,10 @@ import { DraggedMessagePath } from "@lichtblick/suite-base/components/PanelExten
 import Stack from "@lichtblick/suite-base/components/Stack";
 import { Topic } from "@lichtblick/suite-base/players/types";
 import { useMessagePathDrag } from "@lichtblick/suite-base/services/messagePathDragging";
+import { shortcutLabel } from "@lichtblick/suite-base/util/keyboardShortcuts";
 
 import { TopicStatsChip } from "./TopicStatsChip";
+import { TOPIC_LIST_SHORTCUTS } from "./shortcuts";
 import { useTopicListStyles } from "./useTopicListStyles";
 import { useTopicMessageNavigation } from "./useTopicMessageNavigation";
 
@@ -167,7 +169,13 @@ export function TopicRow({
       <Stack direction="column" alignItems="flex-end" gap={0.5}>
         <TopicStatsChip selected={selected} topicName={topic.name} />
         <Stack direction="row" gap={0.5} alignItems="center">
-          <Tooltip title={isPreviousDisabled ? "" : "Previous message"}>
+          <Tooltip
+            title={
+              isPreviousDisabled
+                ? ""
+                : `Previous message (${shortcutLabel(TOPIC_LIST_SHORTCUTS, "topicList.previousMessage")})`
+            }
+          >
             <span>
               <IconButton
                 size="small"
@@ -182,7 +190,13 @@ export function TopicRow({
               </IconButton>
             </span>
           </Tooltip>
-          <Tooltip title={isNextDisabled ? "" : "Next message"}>
+          <Tooltip
+            title={
+              isNextDisabled
+                ? ""
+                : `Next message (${shortcutLabel(TOPIC_LIST_SHORTCUTS, "topicList.nextMessage")})`
+            }
+          >
             <span>
               <IconButton
                 size="small"
