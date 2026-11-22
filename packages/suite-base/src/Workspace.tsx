@@ -92,7 +92,9 @@ import { useDefaultWebLaunchPreference } from "@lichtblick/suite-base/hooks/useD
 import useElectronFilesToOpen from "@lichtblick/suite-base/hooks/useElectronFilesToOpen";
 import { useHandleFiles } from "@lichtblick/suite-base/hooks/useHandleFiles";
 import { useLayoutTransfer } from "@lichtblick/suite-base/hooks/useLayoutTransfer";
+import { useSaveSessionBeforeReload } from "@lichtblick/suite-base/hooks/useSaveSessionBeforeReload";
 import useSeekTimeFromCLI from "@lichtblick/suite-base/hooks/useSeekTimeFromCLI";
+import { takeResumePlayback } from "@lichtblick/suite-base/hooks/useServiceWorkerUpdate";
 import { useStructureItemsStoreManager } from "@lichtblick/suite-base/panels/Plot/hooks/useStructureItemsStoreManager";
 import { PlayerPresence } from "@lichtblick/suite-base/players/types";
 import { PanelStateContextProvider } from "@lichtblick/suite-base/providers/PanelStateContextProvider";
@@ -657,6 +659,10 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
     }
   }, [fetchLayoutFromUrl, selectEvent, selectSource, unappliedSourceArgs, setUnappliedSourceArgs]);
 
+  useSaveSessionBeforeReload();
+  // An update reload resumes playback once it is back at the URL time
+  const [resumePlayback, setResumePlayback] = useState(takeResumePlayback);
+
   // Seek to time in URL.
   useEffect(() => {
     if (unappliedTime.time == undefined || !seek) {
@@ -674,7 +680,11 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
     log.debug(`Seeking to url time:`, unappliedTime.time);
     seek(unappliedTime.time);
     setUnappliedTime({ time: undefined });
-  }, [playerId, playerPresence, seek, unappliedTime]);
+    if (resumePlayback) {
+      setResumePlayback(false);
+      play?.();
+    }
+  }, [play, playerId, playerPresence, resumePlayback, seek, unappliedTime]);
 
   useSeekTimeFromCLI();
 

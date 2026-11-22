@@ -30,6 +30,9 @@ export function selectLayoutId(state: LayoutState): LayoutID | undefined {
 
 const log = Log.getLogger(__filename);
 
+/** Layout edits reach storage at most this long after they happen. */
+export const LAYOUT_SAVE_MAX_WAIT_MS = 500;
+
 export function CurrentLayoutLocalStorageSyncAdapter(): React.JSX.Element {
   const { getCurrentLayoutState } = useCurrentLayoutActions();
   const currentLayoutData = useCurrentLayoutSelector(selectLayoutData);
@@ -37,7 +40,9 @@ export function CurrentLayoutLocalStorageSyncAdapter(): React.JSX.Element {
 
   const layoutManager = useLayoutManager();
 
-  const [debouncedLayoutData] = useDebounce(currentLayoutData, 250, { maxWait: 500 });
+  const [debouncedLayoutData] = useDebounce(currentLayoutData, 250, {
+    maxWait: LAYOUT_SAVE_MAX_WAIT_MS,
+  });
 
   // Track if this is the initial layout load to prevent false "edited" states
   const isInitialLayoutLoad = useRef(true);

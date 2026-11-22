@@ -2,8 +2,9 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 
+import { setSaveSessionBeforeReload } from "@lichtblick/suite-base/hooks/useServiceWorkerUpdate";
 import ThemeProvider from "@lichtblick/suite-base/theme/ThemeProvider";
 
 import { UpdateIndicator } from "./UpdateIndicator";
@@ -32,6 +33,29 @@ const renderIndicator = () =>
   );
 
 describe("UpdateIndicator", () => {
+  // first: once any window here applies an update, module state marks it as requested
+  it("does not reload when another window applied the update, and marks it stale", async () => {
+    const reload = vi.fn();
+    vi.spyOn(window, "location", "get").mockReturnValue({ reload } as unknown as Location);
+    const waiting = fakeWorker();
+    mockRegistration({ active: fakeWorker(), waiting });
+    renderIndicator();
+    expect((await screen.findByTestId("update-indicator")).dataset.updateKind).toBe("waiting");
+
+    act(() => {
+      navigator.serviceWorker.dispatchEvent(new Event("controllerchange"));
+    });
+    expect(reload).not.toHaveBeenCalled();
+    const button = screen.getByTestId("update-indicator");
+    expect(button.dataset.updateKind).toBe("activated");
+    fireEvent.click(button);
+    await waitFor(() => {
+      expect(reload).toHaveBeenCalledTimes(1);
+    });
+    expect(waiting.postMessage).not.toHaveBeenCalled();
+    vi.restoreAllMocks();
+  });
+
   it("applies the waiting update only when clicked", async () => {
     const waiting = fakeWorker();
     mockRegistration({ active: fakeWorker(), waiting });
@@ -40,7 +64,30 @@ describe("UpdateIndicator", () => {
     const button = await screen.findByTestId("update-indicator");
     expect(waiting.postMessage).not.toHaveBeenCalled();
     fireEvent.click(button);
-    expect(waiting.postMessage).toHaveBeenCalledWith({ type: "SKIP_WAITING" });
+    await waitFor(() => {
+      expect(waiting.postMessage).toHaveBeenCalledWith({ type: "SKIP_WAITING" });
+    });
+  });
+
+  it("saves the session before updating", async () => {
+    let finishSave = () => {};
+    const unregister = setSaveSessionBeforeReload(async () => {
+      await new Promise<void>((resolve) => {
+        finishSave = resolve;
+      });
+    });
+    const waiting = fakeWorker();
+    mockRegistration({ active: fakeWorker(), waiting });
+    renderIndicator();
+
+    fireEvent.click(await screen.findByTestId("update-indicator"));
+    await Promise.resolve();
+    expect(waiting.postMessage).not.toHaveBeenCalled();
+    finishSave();
+    await waitFor(() => {
+      expect(waiting.postMessage).toHaveBeenCalledWith({ type: "SKIP_WAITING" });
+    });
+    unregister();
   });
 
   it("stays hidden on the very first install", async () => {

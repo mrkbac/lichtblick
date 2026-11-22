@@ -41,11 +41,65 @@ export async function checkForServiceWorkerUpdate(): Promise<boolean> {
   return registration.waiting != undefined && registration.active != undefined;
 }
 
+/** Set when this window asked for the update; only then does controllerchange reload it. */
+let updateRequestedHere = false;
+
+let saveSession: (() => Promise<void>) | undefined;
+
 /**
- * Activate a waiting worker. Controlled windows reload on controllerchange (see below); a
+ * The workspace registers how to save what a reload would otherwise lose (see
+ * useSaveSessionBeforeReload). Every update reload awaits it first. Returns the unregister function.
+ */
+export function setSaveSessionBeforeReload(save: () => Promise<void>): () => void {
+  saveSession = save;
+  return () => {
+    if (saveSession === save) {
+      saveSession = undefined;
+    }
+  };
+}
+
+async function saveSessionBeforeReload(): Promise<void> {
+  try {
+    await saveSession?.();
+  } catch (error: unknown) {
+    log.warn("Saving the session before reload failed", error);
+  }
+}
+
+const RESUME_PLAYBACK_KEY = "lichtblick.resumePlaybackAfterReload";
+
+/** Per tab: the reload that follows resumes playback (see takeResumePlayback). */
+export function rememberPlaybackForReload({ playing }: { playing: boolean }): void {
+  try {
+    if (playing) {
+      sessionStorage.setItem(RESUME_PLAYBACK_KEY, "1");
+    } else {
+      sessionStorage.removeItem(RESUME_PLAYBACK_KEY);
+    }
+  } catch (error: unknown) {
+    log.warn("Unable to store playback state", error);
+  }
+}
+
+/** Whether the recording was playing when this tab reloaded for an update. Reads it only once. */
+export function takeResumePlayback(): boolean {
+  try {
+    const playing = sessionStorage.getItem(RESUME_PLAYBACK_KEY) != undefined;
+    sessionStorage.removeItem(RESUME_PLAYBACK_KEY);
+    return playing;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Activate a waiting worker. This window reloads on controllerchange (see below); a
  * force-refreshed window has no controller, so it reloads itself once the worker is active.
+ * Other open windows are not reloaded: they show the update button and reload when clicked.
  */
 export function applyServiceWorkerUpdate(worker: ServiceWorker): void {
+  updateRequestedHere = true;
   worker.addEventListener("statechange", () => {
     if (worker.state === "activated" && !navigator.serviceWorker.controller) {
       window.location.reload();
@@ -70,6 +124,7 @@ export async function reloadToLatestVersion(): Promise<boolean> {
     return false;
   }
   sessionStorage.setItem(STALE_RELOAD_KEY, String(Date.now()));
+  await saveSessionBeforeReload();
 
   const container = navigator.serviceWorker as ServiceWorkerContainer | undefined;
   const hasUpdate = await checkForServiceWorkerUpdate().catch((error: unknown) => {
@@ -88,16 +143,28 @@ export async function reloadToLatestVersion(): Promise<boolean> {
   return true;
 }
 
+export type ServiceWorkerUpdate = {
+  /**
+   * "waiting": a new version is downloaded; updating activates it and reloads this window.
+   * "activated": another window already switched to it; this one still runs the old build and
+   * updating just reloads it.
+   */
+  kind: "waiting" | "activated";
+  update: () => void;
+};
+
 /**
- * Returns the installed-and-waiting new service worker, if any. Never applies it on its own:
- * pass it to applyServiceWorkerUpdate to update. Once it takes over, every open window reloads
- * (on controllerchange) because the old precache is deleted and lazy chunks would fail to load.
- * The reload restores the session: layout (local storage), data source and time (URL), and the
- * open file (session storage, see PlayerManager).
+ * Returns the available update, or undefined while there is none. Never updates on its own, so the
+ * user is never interrupted: other windows keep running the old build until the user clicks there.
+ * (A lazy chunk the new deploy removed reloads a window earlier, see reloadToLatestVersion.)
+ * Before reloading it saves the session (setSaveSessionBeforeReload); the reload restores it:
+ * layout (local storage), data source and time (URL), the open file (session storage, see
+ * PlayerManager) and whether it was playing (takeResumePlayback).
  * No-op where no service worker is registered (desktop, dev server).
  */
-export function useServiceWorkerUpdate(): ServiceWorker | undefined {
+export function useServiceWorkerUpdate(): ServiceWorkerUpdate | undefined {
   const [waiting, setWaiting] = useState<ServiceWorker | undefined>();
+  const [activatedElsewhere, setActivatedElsewhere] = useState(false);
 
   useEffect(() => {
     const container = navigator.serviceWorker as ServiceWorkerContainer | undefined;
@@ -107,7 +174,10 @@ export function useServiceWorkerUpdate(): ServiceWorker | undefined {
 
     let reloading = false;
     const onControllerChange = () => {
-      if (!reloading) {
+      if (!updateRequestedHere) {
+        setWaiting(undefined);
+        setActivatedElsewhere(true);
+      } else if (!reloading) {
         reloading = true;
         window.location.reload();
       }
@@ -150,5 +220,24 @@ export function useServiceWorkerUpdate(): ServiceWorker | undefined {
     };
   }, []);
 
-  return waiting;
+  if (activatedElsewhere) {
+    return {
+      kind: "activated",
+      update: () => {
+        void saveSessionBeforeReload().then(() => {
+          window.location.reload();
+        });
+      },
+    };
+  }
+  return waiting
+    ? {
+        kind: "waiting",
+        update: () => {
+          void saveSessionBeforeReload().then(() => {
+            applyServiceWorkerUpdate(waiting);
+          });
+        },
+      }
+    : undefined;
 }

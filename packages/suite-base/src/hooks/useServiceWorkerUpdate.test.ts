@@ -5,7 +5,12 @@
 
 import type { Mock } from "vitest";
 
-import { checkForServiceWorkerUpdate, reloadToLatestVersion } from "./useServiceWorkerUpdate";
+import {
+  checkForServiceWorkerUpdate,
+  reloadToLatestVersion,
+  rememberPlaybackForReload,
+  takeResumePlayback,
+} from "./useServiceWorkerUpdate";
 
 type FakeWorker = EventTarget & { state: string; postMessage: Mock };
 
@@ -87,5 +92,15 @@ describe("reloadToLatestVersion", () => {
     await reloadToLatestVersion();
     await expect(reloadToLatestVersion()).resolves.toBe(false);
     expect(reload).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("takeResumePlayback", () => {
+  it("resumes only the reload right after a playing update", () => {
+    rememberPlaybackForReload({ playing: true });
+    expect(takeResumePlayback()).toBe(true);
+    expect(takeResumePlayback()).toBe(false);
+    rememberPlaybackForReload({ playing: false });
+    expect(takeResumePlayback()).toBe(false);
   });
 });

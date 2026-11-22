@@ -25,7 +25,8 @@ const selectCanSeek = (ctx: MessagePipelineContext) =>
 const selectUrlState = (ctx: MessagePipelineContext) => ctx.playerState.urlState;
 const selectSelectedEventId = (store: EventsStore) => store.selectedEventId;
 
-function updateUrl(newState: AppURLState) {
+/** Writes app state into the address bar without adding a history entry. */
+export function updateUrl(newState: AppURLState): void {
   const newStateUrl = updateAppURLState(new URL(window.location.href), newState);
   // Never decodeURIComponent the whole href: a data-source URL with its own query string
   // (e.g. a presigned URL) would spill its `&…` params into ours and break on reload.
