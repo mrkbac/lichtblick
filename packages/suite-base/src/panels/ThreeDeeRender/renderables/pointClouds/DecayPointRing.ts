@@ -473,9 +473,11 @@ export class DecayPointRing extends Renderable<BaseUserData, /*TRenderer=*/ unde
     let missingFrame: string | undefined;
     this.#posesPending = false;
     for (const scan of scans) {
-      if (scan.failedAt === epoch) {
+      if (scan.posedAt == undefined && scan.failedAt != undefined) {
+        // Still missing, whether or not this frame's retries reached it
         missingFrame ??= scan.frameId;
-      } else if (scan.posedAt !== epoch) {
+      }
+      if (scan.posedAt !== epoch && scan.failedAt !== epoch) {
         this.#posesPending = true;
       }
     }
@@ -602,11 +604,19 @@ export class DecayPointRing extends Renderable<BaseUserData, /*TRenderer=*/ unde
       }
     }
     // At the budget with no free range that fits: pack the live scans so the free space is one
-    // range. Packing re-uploads every point, so first thin (once: each thinning halves the intake)
-    // while the history fills over 3/4 of the buffers: the next pack is then far off instead of a
-    // few scans away. Whatever still doesn't fit is dropped.
-    if (mayThin && this.#scans.length > 1 && (this.#livePoints + count) * 4 > this.#capacity * 3) {
-      this.#makeRoom(this.#livePoints + count - Math.floor((this.#capacity * 3) / 4));
+    // range. Packing re-uploads every point, so first thin (once: each thinning halves the intake):
+    // - if the scan won't fit even packed, as #makeRoom decides (thin, or drop the least)
+    // - if it would, only when thinning brings the history under 3/4 of the buffers, so the next
+    //   pack is far off; nothing is dropped for that
+    // Whatever still doesn't fit is dropped below.
+    if (mayThin && this.#scans.length > 1) {
+      const over = this.#livePoints + count - this.#capacity;
+      const early = this.#livePoints + count - Math.floor((this.#capacity * 3) / 4);
+      if (over > 0) {
+        this.#makeRoom(over);
+      } else if (early > 0 && this.#thinnedPoints() >= early) {
+        this.#thin();
+      }
     }
     while (this.#scans.length > 0 && this.#livePoints + count > this.#capacity) {
       this.#makeRoom(this.#livePoints + count - this.#capacity, { thin: false });
@@ -666,11 +676,7 @@ export class DecayPointRing extends Renderable<BaseUserData, /*TRenderer=*/ unde
    * Such drops are reported (see budgetEvictedUntil).
    */
   #makeRoom(deficit: number, { thin = true }: { thin?: boolean } = {}): void {
-    const newest = this.#scans.length - 1;
-    let thinned = 0;
-    for (let i = newest - 1; i >= 0; i -= 2) {
-      thinned += this.#scans[i]!.count;
-    }
+    const thinned = this.#thinnedPoints();
     if (thin && (thinned >= deficit || thinned * 4 >= this.#livePoints)) {
       this.#thin();
       return;
@@ -686,11 +692,17 @@ export class DecayPointRing extends Renderable<BaseUserData, /*TRenderer=*/ unde
       }
     }
     this.#scans.splice(this.#scans.indexOf(drop), 1);
-    this.#budgetEvictedUntil =
-      this.#budgetEvictedUntil == undefined || drop.receiveTime > this.#budgetEvictedUntil
-        ? drop.receiveTime
-        : this.#budgetEvictedUntil;
+    this.#noteBudgetDrop(drop);
     this.#free(drop);
+  }
+
+  /** Points that #thin() would free */
+  #thinnedPoints(): number {
+    let points = 0;
+    for (let i = this.#scans.length - 2; i >= 0; i -= 2) {
+      points += this.#scans[i]!.count;
+    }
+    return points;
   }
 
   /** Drops every other scan, keeping the newest, and keeps 1 in twice as many pushed from now on */
@@ -714,9 +726,16 @@ export class DecayPointRing extends Renderable<BaseUserData, /*TRenderer=*/ unde
       return;
     }
     if (budget) {
-      this.#budgetEvictedUntil = scan.receiveTime;
+      this.#noteBudgetDrop(scan);
     }
     this.#free(scan);
+  }
+
+  /** Remembers the newest scan dropped for the budget (drops aren't always in age order) */
+  #noteBudgetDrop(scan: RingScan): void {
+    if (this.#budgetEvictedUntil == undefined || scan.receiveTime > this.#budgetEvictedUntil) {
+      this.#budgetEvictedUntil = scan.receiveTime;
+    }
   }
 
   #free(scan: RingScan): void {

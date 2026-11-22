@@ -414,6 +414,56 @@ describe("DecayPointRing", () => {
     expect(ring.stride()).toBe(2);
   });
 
+  it("packs instead of dropping a scan when thinning wouldn't free enough", () => {
+    const { ring } = makeRing({ maxEntries: 100, maxPoints: 100 });
+    push(ring, 1n, 60); // [0, 60), buffers at the 100-point budget
+    push(ring, 2n, 30); // [60, 90)
+    ring.expire(2n); // frees [0, 60)
+    push(ring, 3n, 2); // [90, 92)
+    push(ring, 4n, 50); // [0, 50); free: [50, 60) and [92, 100)
+
+    push(ring, 5n, 12); // no free range fits, but 94 points fit once packed
+
+    expect(ring.pointCount()).toBe(94);
+    expect(ring.scanCount()).toBe(4);
+    expect(ring.budgetEvictedUntil()).toBeUndefined();
+  });
+
+  it("keeps reporting a scan still missing a transform while its retry waits its turn", () => {
+    const { ring } = makeRing({ maxEntries: 1000, maxPoints: 10_000 });
+    const tree = {
+      apply: (...args: Parameters<Renderer["transformTree"]["apply"]>) =>
+        transformTree.apply(...args),
+      isComplete: () => false,
+      version: 1,
+    } as unknown as Renderer["transformTree"] & { version: number };
+    ring.updatePoses(tree, 0n, "map", "map");
+    for (let i = 1; i <= 40; i++) {
+      push(ring, BigInt(i), 1, "missing");
+    }
+    ring.updatePoses(tree, 0n, "map", "map");
+
+    for (let frame = 0; frame < 5; frame++) {
+      tree.version++;
+      expect(ring.updatePoses(tree, 0n, "map", "map")).toBe("missing");
+    }
+  });
+
+  it("remembers the newest scan dropped for the budget, whatever the order of drops", () => {
+    const { ring } = makeRing({ maxEntries: 100, maxPoints: 20 });
+    push(ring, 1n, 1);
+    push(ring, 2n, 1);
+    push(ring, 3n, 1);
+    push(ring, 4n, 12);
+    ring.enforceLimits({ maxPoints: 20, reservePoints: 8 }); // drops the 12-point scan (4n)
+    expect(ring.budgetEvictedUntil()).toBe(4n);
+
+    ring.enforceLimits({ maxPoints: 20, reservePoints: 30 }); // then the oldest ones
+
+    expect(ring.scanCount()).toBe(0);
+    expect(ring.budgetEvictedUntil()).toBe(4n);
+  });
+
   it("retries scans missing a transform in turns", () => {
     const { ring } = makeRing({ maxEntries: 1000, maxPoints: 10_000 });
     const apply = vi.fn((...args: Parameters<Renderer["transformTree"]["apply"]>) =>
