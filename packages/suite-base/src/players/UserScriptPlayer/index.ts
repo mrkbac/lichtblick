@@ -284,8 +284,8 @@ export default class UserScriptPlayer implements Player {
 
   // keep track of last message on all topics to recompute output topic messages when user scripts change
   #lastMessageByInputTopic = new Map<string, MessageEvent>();
-  // Topics the underlying player is subscribed to; only these are kept above.
-  #subscribedTopics = new Set<string>();
+  // Topics a user script or topic converter lists as an input; only these are kept above.
+  #scriptInputTopics = new Set<string>();
   #userScriptIdsNeedUpdate = new Set<string>();
 
   #protectedState = new MutexLocked<ProtectedState>({
@@ -846,6 +846,7 @@ export default class UserScriptPlayer implements Player {
 
     let changedTopicsRequireEmitState = false;
     state.scriptRegistrations = validScriptRegistrations;
+    this.#scriptInputTopics = new Set([...state.inputsByOutputTopic.values()].flat());
 
     // Atomically replace shadow registry for synchronous access in getBatchIterator.
     // We avoid clearing the old map earlier because getBatchIterator is synchronous and
@@ -1150,7 +1151,7 @@ export default class UserScriptPlayer implements Player {
         this.#userScriptIdsNeedUpdate.clear();
 
         for (const message of messages) {
-          if (this.#subscribedTopics.has(message.topic)) {
+          if (this.#scriptInputTopics.has(message.topic)) {
             this.#lastMessageByInputTopic.set(message.topic, message);
           }
         }
@@ -1253,7 +1254,16 @@ export default class UserScriptPlayer implements Player {
     this.#subscriptions = subscriptions;
     this.#protectedState
       .runExclusive(async (state) => {
-        this.#setSubscriptionsUnlocked(subscriptions, state);
+        const remapped = this.#setSubscriptionsUnlocked(subscriptions, state);
+        // Panels stopped reading these topics: don't keep their last message (it can be large, e.g.
+        // an image). Only here, not after a script save, so a save that briefly drops an input
+        // (a broken `inputs` export) keeps it.
+        const subscribedTopics = new Set(remapped.map(({ topic }) => topic));
+        for (const topic of this.#lastMessageByInputTopic.keys()) {
+          if (!subscribedTopics.has(topic)) {
+            this.#lastMessageByInputTopic.delete(topic);
+          }
+        }
       })
       .catch((err: unknown) => {
         log.error(err);
@@ -1261,17 +1271,14 @@ export default class UserScriptPlayer implements Player {
       });
   }
 
-  #setSubscriptionsUnlocked(subscriptions: SubscribePayload[], state: ProtectedState): void {
+  #setSubscriptionsUnlocked(
+    subscriptions: SubscribePayload[],
+    state: ProtectedState,
+  ): Immutable<SubscribePayload[]> {
     this.#scriptSubscriptions = getPreloadTypes(subscriptions);
     const remapped = remapVirtualSubscriptions(subscriptions, state.inputsByOutputTopic);
-    // Don't keep the last message of a topic nobody reads any more (it can be large, e.g. an image).
-    this.#subscribedTopics = new Set(remapped.map(({ topic }) => topic));
-    for (const topic of this.#lastMessageByInputTopic.keys()) {
-      if (!this.#subscribedTopics.has(topic)) {
-        this.#lastMessageByInputTopic.delete(topic);
-      }
-    }
     this.#player.setSubscriptions(remapped);
+    return remapped;
   }
 
   public close = (): void => {

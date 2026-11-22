@@ -15,8 +15,6 @@
 //   found at http://www.apache.org/licenses/LICENSE-2.0
 //   You may not use this file except in compliance with the License.
 
-import v8 from "node:v8";
-import vm from "node:vm";
 import type { Mock } from "vitest";
 
 import FakePlayer from "@lichtblick/suite-base/components/MessagePipeline/FakePlayer";
@@ -188,42 +186,6 @@ describe("UserScriptPlayer", () => {
         { topic: "/studio/test" },
         { topic: "/input/baz" },
       ]);
-    });
-
-    it("releases the last message of a topic once nobody subscribes to it", async () => {
-      v8.setFlagsFromString("--expose-gc");
-      const gc = vm.runInNewContext("gc") as () => void;
-      const fakePlayer = new FakePlayer();
-      const userScriptPlayer = new UserScriptPlayer(fakePlayer, defaultUserScriptActions);
-      userScriptPlayer.setListener(async () => {});
-      userScriptPlayer.setSubscriptions([{ topic: "/image" }]);
-      await Promise.resolve();
-
-      let message: object | undefined = { data: new Uint8Array(1024) };
-      const released = new WeakRef(message);
-      await fakePlayer.emit({
-        activeData: {
-          ...basicPlayerState,
-          messages: [
-            {
-              topic: "/image",
-              schemaName: "Image",
-              receiveTime: { sec: 0, nsec: 1 },
-              message,
-              sizeInBytes: 1024,
-            },
-          ],
-        },
-      });
-      message = undefined;
-      userScriptPlayer.setSubscriptions([]);
-      await Promise.resolve();
-      await fakePlayer.emit({ activeData: { ...basicPlayerState, messages: [] } });
-      // WeakRef targets are kept until the current job ends.
-      await delay(0);
-      gc();
-
-      expect(released.deref()).toBeUndefined();
     });
 
     it("delegates play and pause calls to underlying player", () => {
@@ -842,6 +804,64 @@ describe("UserScriptPlayer", () => {
           topic: "/studio_script/1",
         },
       ]);
+    });
+
+    describe("rerunning a saved script on its last input", () => {
+      const scriptCode = (value: string) => `
+        export const inputs = ["/np_input"];
+        export const output = "${DEFAULT_STUDIO_SCRIPT_PREFIX}1";
+        export default (message: { message: { payload: string } }): { value: string } => {
+          return { value: "${value}" };
+        };
+      `;
+      const save = async (player: UserScriptPlayer, sourceCode: string) => {
+        await player.setUserScripts({
+          nodeId: { name: `${DEFAULT_STUDIO_SCRIPT_PREFIX}1`, sourceCode },
+        });
+      };
+      const outputValues = (messages: readonly MessageEvent[]) =>
+        messages.map((m) => (m.message as { value: string }).value);
+
+      async function setupPaused() {
+        const fakePlayer = new FakePlayer();
+        const userScriptPlayer = new UserScriptPlayer(fakePlayer, defaultUserScriptActions);
+        const emitted: (readonly MessageEvent[])[] = [];
+        userScriptPlayer.setListener(async (state) => {
+          emitted.push(state.activeData?.messages ?? []);
+        });
+        userScriptPlayer.setSubscriptions([{ topic: `${DEFAULT_STUDIO_SCRIPT_PREFIX}1` }]);
+        await save(userScriptPlayer, scriptCode("v1"));
+        await fakePlayer.emit({
+          activeData: {
+            ...basicPlayerState,
+            isPlaying: false,
+            messages: [upstreamFirst],
+            topics: [{ name: "/np_input", schemaName: "foo" }],
+            datatypes: new Map(Object.entries({ foo: { definitions: [] } })),
+          },
+        });
+        const lastOutput = () =>
+          outputValues(emitted.at(-1)!.filter((m) => m.topic !== "/np_input"));
+        expect(lastOutput()).toEqual(["v1"]);
+        return { userScriptPlayer, lastOutput };
+      }
+
+      it("keeps the input across a save whose inputs are broken", async () => {
+        const { userScriptPlayer, lastOutput } = await setupPaused();
+        await save(userScriptPlayer, "export const inputs = 42;");
+        await save(userScriptPlayer, scriptCode("v2"));
+
+        expect(lastOutput()).toEqual(["v2"]);
+      });
+
+      it("drops the input once no panel reads the script output", async () => {
+        const { userScriptPlayer, lastOutput } = await setupPaused();
+        userScriptPlayer.setSubscriptions([]);
+        userScriptPlayer.setSubscriptions([{ topic: `${DEFAULT_STUDIO_SCRIPT_PREFIX}1` }]);
+        await save(userScriptPlayer, scriptCode("v2"));
+
+        expect(lastOutput()).toEqual([]);
+      });
     });
 
     it("subscribes to underlying topics when nodeInfo is added", async () => {
