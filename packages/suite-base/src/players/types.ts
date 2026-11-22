@@ -325,7 +325,8 @@ export type RecordingFileInfo = {
     compressedBytes: number;
     uncompressedBytes: number;
   }[];
-  attachments: { name: string; mediaType: string; sizeBytes: number }[];
+  /** `offset` is where the attachment record starts in the file, so its data can be sliced out. */
+  attachments: { name: string; mediaType: string; sizeBytes: number; offset: number }[];
 };
 
 export type TopicStats = {

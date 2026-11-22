@@ -15,34 +15,27 @@ import { useTranslation } from "react-i18next";
 
 import { formatByteSize } from "@lichtblick/den/format";
 import { useAsync } from "@lichtblick/hooks";
+import { RecordingFileInfo } from "@lichtblick/suite-base/players/types";
 import { downloadFiles } from "@lichtblick/suite-base/util/download";
 
 import { useStyles } from "./AttachmentDialog.style";
-import {
-  attachmentData,
-  formatText,
-  hexDump,
-  previewKind,
-  readAttachmentIndexes,
-} from "./attachments";
+import { attachmentData, formatText, hexDump, previewKind } from "./attachments";
 import { HEX_PREVIEW_BYTES, TEXT_PREVIEW_BYTES } from "./constants";
 import { AttachmentDialogProps, Preview, PreviewKind } from "./types";
 
-/** Undefined when the file no longer has an attachment at that index. */
-async function loadPreview(file: Blob, attachmentIndex: number): Promise<Preview | undefined> {
-  const index = (await readAttachmentIndexes(file))[attachmentIndex];
-  if (!index) {
-    return undefined;
-  }
-  const data = attachmentData(file, index);
+async function loadPreview(
+  file: Blob,
+  attachment: RecordingFileInfo["attachments"][number],
+): Promise<Preview> {
+  const data = attachmentData(file, attachment);
   const head = new Uint8Array(await data.slice(0, HEX_PREVIEW_BYTES).arrayBuffer());
-  const kind = previewKind(index.mediaType, head);
+  const kind = previewKind(attachment.mediaType, head);
   if (kind === "text") {
     const text = await data.slice(0, TEXT_PREVIEW_BYTES).text();
     return {
       kind,
       data,
-      text: formatText(text, index.mediaType),
+      text: formatText(text, attachment.mediaType),
       truncated: data.size > TEXT_PREVIEW_BYTES,
     };
   }
@@ -86,20 +79,19 @@ function ObjectUrlPreview({ kind, data }: { kind: PreviewKind; data: Blob }): Re
 
 export function AttachmentDialog({
   file,
-  attachmentIndex,
   name,
   mediaType,
   sizeBytes,
+  offset,
   onClose,
 }: AttachmentDialogProps): React.JSX.Element {
   const { classes } = useStyles();
   const { t } = useTranslation("attachments");
   const preview = useAsync(
-    async () => await loadPreview(file, attachmentIndex),
-    [file, attachmentIndex],
+    async () => await loadPreview(file, { name, mediaType, sizeBytes, offset }),
+    [file, name, mediaType, sizeBytes, offset],
   );
   const value = preview.value;
-  const missing = !preview.loading && !preview.error && !value;
 
   return (
     <Dialog open onClose={onClose} maxWidth="lg" fullWidth>
@@ -112,7 +104,6 @@ export function AttachmentDialog({
       <DialogContent className={classes.content}>
         {preview.loading && <CircularProgress size={24} />}
         {preview.error && <Typography color="error">{preview.error.message}</Typography>}
-        {missing && <Typography color="error">{t("missing")}</Typography>}
         {value?.text != undefined && (
           <pre className={classes.code} aria-label={t("attachmentContents")}>
             {value.text}

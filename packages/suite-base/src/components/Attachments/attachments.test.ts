@@ -2,20 +2,26 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import { McapWriter, TempBuffer } from "@lichtblick/mcap-core";
+import { McapIterableSource } from "@lichtblick/suite-base/players/IterablePlayer/Mcap/McapIterableSource";
 
-import {
-  attachmentData,
-  formatText,
-  hexDump,
-  previewKind,
-  readAttachmentIndexes,
-} from "./attachments";
+import { attachmentData, formatText, hexDump, previewKind } from "./attachments";
 
 describe("attachments", () => {
-  it("slices exactly each attachment's data out of the file", async () => {
+  it.each([
+    ["finished", true],
+    // Opened through the recovery scan: no summary, so nothing can re-read an attachment index.
+    ["cut-off", false],
+  ])("slices exactly each attachment's data out of a %s file", async (_, finished) => {
     const buffer = new TempBuffer();
-    const writer = new McapWriter({ writable: buffer });
+    // Each message gets its own chunk, so the cut-off file still has a complete one to recover.
+    const writer = new McapWriter({ writable: buffer, chunkSize: 1 });
     await writer.start({ profile: "", library: "test" });
+    const channelId = await writer.registerChannel({
+      schemaId: 0,
+      topic: "/example",
+      messageEncoding: "json",
+      metadata: new Map(),
+    });
     const attachments = [
       { name: "ünïcode.json", mediaType: "application/json", data: '{"a":1}' },
       { name: "b.bin", mediaType: "", data: "\u0000\u0001xyz" },
@@ -29,12 +35,22 @@ describe("attachments", () => {
         data: new TextEncoder().encode(attachment.data),
       });
     }
-    await writer.end();
+    await writer.addMessage({
+      channelId,
+      sequence: 0,
+      logTime: 1n,
+      publishTime: 1n,
+      data: new TextEncoder().encode("{}"),
+    });
+    if (finished) {
+      await writer.end();
+    }
     const file = new Blob([buffer.get().slice()]);
 
-    const indexes = await readAttachmentIndexes(file);
+    const { recordingFiles } = await new McapIterableSource({ type: "file", file }).initialize();
+    const listed = recordingFiles?.[0]?.attachments ?? [];
     const texts = await Promise.all(
-      indexes.map(async (index) => await attachmentData(file, index).text()),
+      listed.map(async (attachment) => await attachmentData(file, attachment).text()),
     );
     expect(texts).toEqual(attachments.map((attachment) => attachment.data));
   });

@@ -1,46 +1,32 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import {
-  BlobReadable,
-  ChunkCache,
-  type McapTypes,
-  openCachedMcapReader,
-} from "@lichtblick/mcap-core";
+import type { RecordingFileInfo } from "@lichtblick/suite-base/players/types";
 
 import { PreviewKind } from "./types";
-
-/** Reads only the file's summary; attachment data stays on disk until sliced. */
-export async function readAttachmentIndexes(
-  file: Blob,
-): Promise<readonly McapTypes.AttachmentIndex[]> {
-  // No chunks are read, so the cache stays empty.
-  const reader = await openCachedMcapReader({
-    readable: new BlobReadable(file),
-    chunkCache: new ChunkCache(),
-  });
-  return reader.attachmentIndexes;
-}
 
 /**
  * The attachment's data as a lazy slice of the file, so large attachments are never copied into
  * memory. Attachment record: opcode u8, length u64, log_time u64, create_time u64, name string,
  * media_type string, data_len u64, data, crc u32 (strings are a u32 byte length + UTF-8).
  */
-export function attachmentData(file: Blob, index: McapTypes.AttachmentIndex): Blob {
+export function attachmentData(
+  file: Blob,
+  attachment: RecordingFileInfo["attachments"][number],
+): Blob {
   const encoder = new TextEncoder();
   const start =
-    Number(index.offset) +
+    attachment.offset +
     1 +
     8 +
     8 +
     8 +
     4 +
-    encoder.encode(index.name).length +
+    encoder.encode(attachment.name).length +
     4 +
-    encoder.encode(index.mediaType).length +
+    encoder.encode(attachment.mediaType).length +
     8;
-  return file.slice(start, start + Number(index.dataSize), index.mediaType);
+  return file.slice(start, start + attachment.sizeBytes, attachment.mediaType);
 }
 
 const TEXT_TYPE = /^text\/|[/+](json|xml|yaml|x-yaml|toml|javascript|csv|x-sh|x-python)$/i;
