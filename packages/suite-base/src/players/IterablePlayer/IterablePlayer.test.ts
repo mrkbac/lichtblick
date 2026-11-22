@@ -1320,6 +1320,30 @@ describe("IterablePlayer", () => {
     await player.isClosed;
   });
 
+  it("preloads from the playhead, not from the start", async () => {
+    const source = new TestSource();
+    const topic = BasicBuilder.string();
+    const player = new IterablePlayer({ source, enablePreload: true, sourceId: "test" });
+    const messageIteratorSpy = vi.spyOn(source, "messageIterator");
+
+    player.setSubscriptions([{ topic, preloadType: "full" }]);
+    player.seekPlayback({ sec: 0, nsec: 800e6 });
+    player.setListener(async () => {});
+
+    await vi.waitFor(() => {
+      expect(messageIteratorSpy.mock.calls.some(([args]) => args.consumptionType === "full")).toBe(
+        true,
+      );
+    });
+    const firstPreload = messageIteratorSpy.mock.calls.find(
+      ([args]) => args.consumptionType === "full",
+    );
+    expect(firstPreload?.[0].start).toEqual({ sec: 0, nsec: 800e6 });
+
+    player.close();
+    await player.isClosed;
+  });
+
   it("strips unauthorized sampling requests from direct subscriptions", async () => {
     const source = new TestSource();
     const topic = BasicBuilder.string();

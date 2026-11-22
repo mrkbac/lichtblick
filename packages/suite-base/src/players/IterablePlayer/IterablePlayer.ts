@@ -1200,6 +1200,8 @@ export class IterablePlayer implements Player {
 
     let activeData: PlayerStateActiveData | undefined;
     if (this.#start && this.#end && this.#currentTime) {
+      // Preloading follows what is shown
+      this.#blockLoader?.setPlayhead(this.#currentTime);
       activeData = {
         messages,
         totalBytesReceived: this.#receivedBytes,
