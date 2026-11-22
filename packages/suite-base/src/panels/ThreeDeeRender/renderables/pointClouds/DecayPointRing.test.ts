@@ -416,7 +416,9 @@ describe("DecayPointRing", () => {
       ring.updatePoses(tree, 0n, "map", "map");
     }
 
-    const retried = new Set(apply.mock.calls.map(([, , , , src, , time]) => `${src} ${time}`));
+    const retried = new Set(
+      apply.mock.calls.map(([, , , , src, , time]) => `${String(src)} ${time}`),
+    );
     retried.delete("map 0"); // render <- fixed
     expect(retried.size).toBe(40); // 3 x 16 retries reach every scan, not the 16 newest again
   });
