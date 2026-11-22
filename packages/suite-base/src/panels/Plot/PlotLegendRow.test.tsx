@@ -54,6 +54,10 @@ describe("PlotLegendRow", () => {
           value={1700000000.123456}
           valueSource="current"
           savePaths={vi.fn()}
+          editing={false}
+          onStartEdit={vi.fn()}
+          onEndEdit={vi.fn()}
+          supportsStreamModifiers={false}
         />
       </PanelContext.Provider>,
     );
