@@ -16,12 +16,15 @@ import { useCallback, useMemo } from "react";
 
 import { quoteTopicNameIfNeeded } from "@lichtblick/message-path";
 import { HighlightChars } from "@lichtblick/suite-base/components/HighlightChars";
+import KeyListener from "@lichtblick/suite-base/components/KeyListener";
+import { PLAYBACK_SHORTCUTS } from "@lichtblick/suite-base/components/KeyboardShortcuts/appShortcuts";
 import { useMessagePipeline } from "@lichtblick/suite-base/components/MessagePipeline";
 import { MessagePipelineContext } from "@lichtblick/suite-base/components/MessagePipeline/types";
 import { DraggedMessagePath } from "@lichtblick/suite-base/components/PanelExtensionAdapter";
 import Stack from "@lichtblick/suite-base/components/Stack";
 import { Topic } from "@lichtblick/suite-base/players/types";
 import { useMessagePathDrag } from "@lichtblick/suite-base/services/messagePathDragging";
+import { shortcutKeyHandlers, shortcutLabel } from "@lichtblick/suite-base/util/keyboardShortcuts";
 
 import { TopicStatsChip } from "./TopicStatsChip";
 import { useTopicListStyles } from "./useTopicListStyles";
@@ -33,6 +36,7 @@ export function TopicRow({
   topicResult,
   style,
   selected,
+  soleSelected = false,
   onClick,
   onDoubleClick,
   onContextMenu,
@@ -40,6 +44,8 @@ export function TopicRow({
   topicResult: FzfResultItem<Topic>;
   style: React.CSSProperties;
   selected: boolean;
+  /** The only selected row: N / Shift+N step through this topic's messages. */
+  soleSelected?: boolean;
   onClick: React.MouseEventHandler<HTMLDivElement>;
   onDoubleClick?: React.MouseEventHandler<HTMLDivElement>;
   onContextMenu: React.MouseEventHandler<HTMLDivElement>;
@@ -113,6 +119,26 @@ export function TopicRow({
     [handlePreviousMessage],
   );
 
+  const navigationKeyHandlers = useMemo(
+    () =>
+      shortcutKeyHandlers(PLAYBACK_SHORTCUTS, {
+        // A focused panel that binds the same key (e.g. State Transitions' N) handled it already.
+        "playback.nextTopicMessage": (event) => {
+          if (event.defaultPrevented || isNextDisabled) {
+            return false;
+          }
+          void handleNextMessage();
+        },
+        "playback.previousTopicMessage": (event) => {
+          if (event.defaultPrevented || isPreviousDisabled) {
+            return false;
+          }
+          void handlePreviousMessage();
+        },
+      }),
+    [handleNextMessage, handlePreviousMessage, isNextDisabled, isPreviousDisabled],
+  );
+
   const handleButtonMouseDown = useCallback((event: React.MouseEvent) => {
     event.stopPropagation();
   }, []);
@@ -130,6 +156,7 @@ export function TopicRow({
       onContextMenu={onContextMenu}
       data-testid="topic-row"
     >
+      {soleSelected && <KeyListener global keyDownHandlers={navigationKeyHandlers} />}
       {draggedItemCount > 1 && (
         <Badge color="primary" className={classes.countBadge} badgeContent={draggedItemCount} />
       )}
@@ -161,7 +188,13 @@ export function TopicRow({
       <Stack direction="column" alignItems="flex-end" gap={0.5}>
         <TopicStatsChip selected={selected} topicName={topic.name} />
         <Stack direction="row" gap={0.5} alignItems="center">
-          <Tooltip title={isPreviousDisabled ? "" : "Previous message"}>
+          <Tooltip
+            title={
+              isPreviousDisabled
+                ? ""
+                : `Previous message (${shortcutLabel(PLAYBACK_SHORTCUTS, "playback.previousTopicMessage")})`
+            }
+          >
             <span>
               <IconButton
                 size="small"
@@ -176,7 +209,13 @@ export function TopicRow({
               </IconButton>
             </span>
           </Tooltip>
-          <Tooltip title={isNextDisabled ? "" : "Next message"}>
+          <Tooltip
+            title={
+              isNextDisabled
+                ? ""
+                : `Next message (${shortcutLabel(PLAYBACK_SHORTCUTS, "playback.nextTopicMessage")})`
+            }
+          >
             <span>
               <IconButton
                 size="small"

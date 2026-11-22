@@ -19,6 +19,7 @@ export const APP_SHORTCUTS = [
   { id: "app.toggleLeftSidebar", titleKey: "toggleLeftSidebar", keys: [{ key: "[" }] },
   { id: "app.toggleRightSidebar", titleKey: "toggleRightSidebar", keys: [{ key: "]" }] },
   { id: "app.togglePanelSettings", titleKey: "togglePanelSettings", keys: [{ key: "," }] },
+  { id: "app.toggleTheme", titleKey: "toggleTheme", keys: [{ key: "t", mod: false, shift: true }] },
   { id: "app.selectAllPanels", titleKey: "selectAllPanels", keys: [{ key: "a", mod: true }] },
   // Display only: hold-to-show, handled by key down/up pairs in Panel
   { id: "app.panelQuickActions", titleKey: "panelQuickActions", keys: [{ key: "`" }] },
@@ -48,6 +49,20 @@ export const PLAYBACK_SHORTCUTS = [
       { key: "ArrowLeft", alt: true },
       { key: "ArrowRight", alt: true },
     ],
+  },
+  // YouTube's keys: Shift+, and Shift+. on US layouts
+  { id: "playback.slower", titleKey: "playbackSlower", keys: [{ key: "<" }] },
+  { id: "playback.faster", titleKey: "playbackFaster", keys: [{ key: ">" }] },
+  // Bound by the Topics list row while it is the only selected row
+  {
+    id: "playback.nextTopicMessage",
+    titleKey: "nextTopicMessage",
+    keys: [{ key: "n", shift: false, alt: false }],
+  },
+  {
+    id: "playback.previousTopicMessage",
+    titleKey: "previousTopicMessage",
+    keys: [{ key: "n", shift: true, alt: false }],
   },
   { id: "playback.seekStart", titleKey: "seekStart", keys: [{ key: "Home" }] },
   { id: "playback.seekEnd", titleKey: "seekEnd", keys: [{ key: "End" }] },

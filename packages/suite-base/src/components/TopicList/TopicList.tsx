@@ -131,6 +131,7 @@ export function TopicList(): React.JSX.Element {
               style={style}
               topicResult={treeItem.item}
               selected={selected}
+              soleSelected={selected && selectedIndexes.size === 1}
               onClick={onClick}
               onDoubleClick={handleDoubleClick}
               onContextMenu={(event) => {

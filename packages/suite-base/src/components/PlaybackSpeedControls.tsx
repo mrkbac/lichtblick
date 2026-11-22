@@ -16,11 +16,13 @@ import {
   ToggleButtonGroup,
   Typography,
 } from "@mui/material";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { useLatest } from "@lichtblick/hooks";
 import HoverableIconButton from "@lichtblick/suite-base/components/HoverableIconButton";
+import KeyListener from "@lichtblick/suite-base/components/KeyListener";
+import { PLAYBACK_SHORTCUTS } from "@lichtblick/suite-base/components/KeyboardShortcuts/appShortcuts";
 import { useMessagePipeline } from "@lichtblick/suite-base/components/MessagePipeline";
 import { useStyles } from "@lichtblick/suite-base/components/PlaybackSpeedControls.style";
 import Stack from "@lichtblick/suite-base/components/Stack";
@@ -29,6 +31,7 @@ import {
   useCurrentLayoutActions,
   useCurrentLayoutSelector,
 } from "@lichtblick/suite-base/context/CurrentLayoutContext";
+import { shortcutKeyHandlers } from "@lichtblick/suite-base/util/keyboardShortcuts";
 
 export const PLAYBACK_SPEED_OPTIONS = [
   0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 0.8, 1, 2, 3, 5, 10, 20, 50, 100,
@@ -182,8 +185,24 @@ export default function PlaybackSpeedControls(): React.JSX.Element {
     [latestStep],
   );
 
+  const speedKeyHandlers = useMemo(
+    () =>
+      setPlaybackSpeed == undefined
+        ? {}
+        : shortcutKeyHandlers(PLAYBACK_SHORTCUTS, {
+            "playback.slower": () => {
+              step(-1);
+            },
+            "playback.faster": () => {
+              step(1);
+            },
+          }),
+    [setPlaybackSpeed, step],
+  );
+
   return (
     <>
+      <KeyListener global keyDownHandlers={speedKeyHandlers} />
       <HoverableIconButton
         ref={wheelRef}
         id="playback-speed-button"
