@@ -103,7 +103,9 @@ export class RemoteFileReadable {
   public async read(offset: bigint, size: bigint, options?: ReadOptions): Promise<Uint8Array> {
     const start = Number(offset);
     const end = start + Number(size);
-    const chunk = _.sortedIndexOf(this.#chunkEnds, start);
+    // Not for background reads (whole-file scans): fewer round trips would let them take more of
+    // the bandwidth that playback needs
+    const chunk = options?.background === true ? -1 : _.sortedIndexOf(this.#chunkEnds, start);
     const from = chunk === -1 ? start : this.#chunkStarts[chunk]!;
     const data = await this.#read(from, end, options);
     return from === start ? data : data.subarray(start - from);
@@ -112,7 +114,7 @@ export class RemoteFileReadable {
   async #read(start: number, end: number, options?: ReadOptions): Promise<Uint8Array> {
     let prefetched = this.#findPrefetched(start, end);
     if (!prefetched && Date.now() - this.#lastPrefetchMs < PREFETCH_ACTIVE_MS) {
-      this.prefetch([{ offset, length: size }]);
+      this.prefetch([{ offset: BigInt(start), length: BigInt(end - start) }]);
       prefetched = this.#findPrefetched(start, end);
     }
     const data = await prefetched?.data;

@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
+import type { McapTypes } from "@lichtblick/mcap-core";
 import CachedFilelike from "@lichtblick/suite-base/util/CachedFilelike";
 
 import { RemoteFileReadable } from "./RemoteFileReadable";
@@ -125,6 +126,62 @@ describe("RemoteFileReadable", () => {
     });
   });
 
+  describe("setChunks", () => {
+    // A chunk at 100..150 with its message indexes right after it, at 150..160
+    const chunk = (overrides: Partial<McapTypes.ChunkIndex> = {}): McapTypes.ChunkIndex => ({
+      messageStartTime: 0n,
+      messageEndTime: 1n,
+      chunkStartOffset: 100n,
+      chunkLength: 50n,
+      messageIndexOffsets: new Map([[1, 150n]]),
+      messageIndexLength: 10n,
+      compression: "",
+      compressedSize: 0n,
+      uncompressedSize: 0n,
+      ...overrides,
+    });
+
+    it("reads a chunk's message indexes together with the chunk before them", async () => {
+      mockRead.mockResolvedValueOnce(Uint8Array.from({ length: 60 }, (_, i) => 100 + i));
+      const reader = new RemoteFileReadable(testUrl);
+      reader.setChunks([chunk()]);
+
+      const data = await reader.read(150n, 10n);
+
+      expect(mockRead).toHaveBeenCalledWith(100, 60, { background: false });
+      expect([...data]).toEqual([150, 151, 152, 153, 154, 155, 156, 157, 158, 159]);
+    });
+
+    it("reads other ranges as asked", async () => {
+      const reader = new RemoteFileReadable(testUrl);
+      reader.setChunks([chunk()]);
+
+      await reader.read(151n, 9n);
+      await reader.read(100n, 50n);
+
+      expect(mockRead).toHaveBeenNthCalledWith(1, 151, 9, { background: false });
+      expect(mockRead).toHaveBeenNthCalledWith(2, 100, 50, { background: false });
+    });
+
+    it("leaves out chunks whose message indexes don't follow them", async () => {
+      const reader = new RemoteFileReadable(testUrl);
+      reader.setChunks([chunk({ messageIndexOffsets: new Map([[1, 9000n]]) })]);
+
+      await reader.read(150n, 10n);
+
+      expect(mockRead).toHaveBeenCalledWith(150, 10, { background: false });
+    });
+
+    it("leaves out chunks too big for a quarter of the cache", async () => {
+      const reader = new RemoteFileReadable(testUrl, { cacheSizeInBytes: 160 });
+      reader.setChunks([chunk()]);
+
+      await reader.read(150n, 10n);
+
+      expect(mockRead).toHaveBeenCalledWith(150, 10, { background: false });
+    });
+  });
+
   describe("close", () => {
     it("should delegate to CachedFilelike.close()", () => {
       // Given a RemoteFileReadable instance
@@ -161,6 +218,24 @@ describe("RemoteFileReadable", () => {
         expect.objectContaining({ headers: { range: "bytes=100-104" } }),
       );
       expect(mockRead).not.toHaveBeenCalled();
+    });
+
+    it("fetches misses exactly while skimming, and streams them after a one-off batch", async () => {
+      const fetchMock = vi
+        .fn()
+        .mockImplementation(async () => new Response(new Uint8Array(5), { status: 206 }));
+      globalThis.fetch = fetchMock;
+      const skimming = new RemoteFileReadable(testUrl);
+      const oneOff = new RemoteFileReadable(testUrl);
+
+      skimming.prefetch([{ offset: 100n, length: 5n }]);
+      oneOff.prefetch([{ offset: 100n, length: 5n }], { skim: false });
+      await skimming.read(500n, 5n);
+      await oneOff.read(500n, 5n);
+
+      expect(fetchMock).toHaveBeenCalledTimes(3);
+      expect(mockRead).toHaveBeenCalledTimes(1);
+      expect(mockRead).toHaveBeenCalledWith(500, 5, { background: false });
     });
 
     it("falls back to the cached reader when the server ignores the range", async () => {
