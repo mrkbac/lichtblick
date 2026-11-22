@@ -487,6 +487,31 @@ describe("UserScriptPlayer topic converter preloading", () => {
     expect(create).not.toHaveBeenCalled();
   });
 
+  it("rejects a converter with malformed names without breaking the others", async () => {
+    const malformed = converterArgs({
+      outputTopic: "/broken",
+      watchVariables: "scale" as unknown as string[],
+    });
+    const { fakePlayer, states } = await setup(
+      [converterArgs(), malformed],
+      [
+        { topic: "/out", preloadType: "full" },
+        { topic: "/broken", preloadType: "full" },
+      ],
+    );
+    const messageCache = { startTime: { sec: 0, nsec: 0 }, blocks: [block([input("one", 1)])] };
+
+    await fakePlayer.emit({ activeData: activeData([]), progress: { messageCache } });
+
+    const state = states.at(-1)!;
+    const converted = state.progress.messageCache!.blocks[0]!.messagesByTopic;
+    expect(values(converted["/out"]!, "/out")).toEqual(["one"]);
+    expect(converted["/broken"]).toBeUndefined();
+    expect(state.alerts?.map(({ message }) => message)).toContainEqual(
+      expect.stringContaining("needs inputTopics and watchVariables to be lists of names"),
+    );
+  });
+
   it("stops adding converter outputs once the output is no longer preloaded", async () => {
     const { fakePlayer, player, states } = await setup(converterArgs(), [
       { topic: "/out", preloadType: "full" },

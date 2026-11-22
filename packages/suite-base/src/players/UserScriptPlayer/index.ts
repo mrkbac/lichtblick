@@ -74,6 +74,7 @@ import { getPreloadTypes, remapVirtualSubscriptions } from "./subscriptions";
 import {
   buildTopicConverterRegistration,
   InstalledTopicConverter,
+  topicConverterNamesValid,
   topicConverterOutput,
 } from "./topicConverters";
 import type { TransformerWorkerApi } from "./transformerWorker";
@@ -943,11 +944,13 @@ export default class UserScriptPlayer implements Player {
       const problem =
         topic === "" || schemaName === "" || typeof installed.converter.create !== "function"
           ? "needs an output topic, an output schema name and a create function"
-          : playerTopics.has(topic)
-            ? "outputs to a topic that is already present in the data source"
-            : state.inputsByOutputTopic.has(topic)
-              ? "outputs to a topic that another user script or topic converter already produces"
-              : undefined;
+          : !topicConverterNamesValid(installed.converter)
+            ? "needs inputTopics and watchVariables to be lists of names"
+            : playerTopics.has(topic)
+              ? "outputs to a topic that is already present in the data source"
+              : state.inputsByOutputTopic.has(topic)
+                ? "outputs to a topic that another user script or topic converter already produces"
+                : undefined;
       if (problem) {
         this.#alertStore.set(alertKey, {
           severity: "error",

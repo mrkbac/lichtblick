@@ -55,6 +55,22 @@ export function schemaDescriptionToDatatypes(
   return datatypes;
 }
 
+/**
+ * Whether the converter's input topics and watched variables are lists of names. Extension input:
+ * anything else would throw later, outside the converter's error handling.
+ */
+export function topicConverterNamesValid(
+  converter: Immutable<Foxglove.RegisterMessageConverterArgsTopic>,
+): boolean {
+  const { inputTopics, watchVariables } = converter as {
+    inputTopics?: unknown;
+    watchVariables?: unknown;
+  };
+  const isNameList = (value: unknown) =>
+    Array.isArray(value) && value.every((item) => typeof item === "string");
+  return isNameList(inputTopics) && (watchVariables == undefined || isNameList(watchVariables));
+}
+
 /** Output topic of a topic converter; empty when the extension did not give a usable one. */
 export function topicConverterOutput(
   converter: Immutable<Foxglove.RegisterMessageConverterArgsTopic>,
