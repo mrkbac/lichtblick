@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import PlayerAlertManager from "@lichtblick/suite-base/players/PlayerAlertManager";
+import { seedKeys } from "@lichtblick/suite-base/players/liveHistory/LiveHistoryBuffer";
 import { MessageEvent } from "@lichtblick/suite-base/players/types";
 
 /**
@@ -15,8 +16,9 @@ export const LIVE_QUEUE_FULL_ALERT_ID = "liveQueue:full";
 
 /**
  * Messages a live player received but has not emitted yet. The byte cap is required: when it is
- * exceeded the oldest messages are dropped (down to 80% of the cap, so the cost is amortized) and
- * an alert is raised on the player's alert manager.
+ * exceeded the oldest messages are dropped (down to 80% of the cap, so the cost is amortized),
+ * except the latest one per topic and transform child frame, and an alert is raised on the
+ * player's alert manager.
  *
  * Every live player must buffer through this class instead of a bare array.
  */
@@ -63,13 +65,42 @@ export class LiveMessageQueue {
   }
 
   #dropOldest(): void {
-    const target = 0.8 * this.#maxBytes;
-    let count = 0;
-    while (this.#bytes > target && count < this.#messages.length) {
-      this.#bytes -= this.#messages[count]!.sizeInBytes;
-      count++;
+    // The newest message of each topic (each child frame for transforms) is never dropped, so a
+    // one-shot static transform or map isn't lost for good while the tab is in the background.
+    const latest = new Set<MessageEvent>();
+    const seen = new Set<string>();
+    for (let i = this.#messages.length - 1; i >= 0; i--) {
+      const msg = this.#messages[i]!;
+      for (const key of seedKeys(msg)) {
+        const id = `${msg.topic}\0${key}`;
+        if (!seen.has(id)) {
+          seen.add(id);
+          latest.add(msg);
+        }
+      }
     }
-    this.#messages.splice(0, count);
+    const target = 0.8 * this.#maxBytes;
+    const kept: MessageEvent[] = [];
+    let bytes = this.#bytes;
+    let count = 0;
+    for (; count < this.#messages.length && bytes > target; count++) {
+      const msg = this.#messages[count]!;
+      if (latest.has(msg)) {
+        kept.push(msg);
+      } else {
+        bytes -= msg.sizeInBytes;
+      }
+    }
+    if (bytes > this.#maxBytes) {
+      // The latest message per key alone exceeds the cap: drop the oldest regardless.
+      kept.length = 0;
+      bytes = this.#bytes;
+      for (count = 0; count < this.#messages.length && bytes > target; count++) {
+        bytes -= this.#messages[count]!.sizeInBytes;
+      }
+    }
+    this.#bytes = bytes;
+    this.#messages = kept.concat(this.#messages.slice(count));
     this.#alerts.addAlert(LIVE_QUEUE_FULL_ALERT_ID, {
       severity: "warn",
       message: `Dropped messages: more than ${(this.#maxBytes / 1_000_000).toFixed(0)} MB were waiting to be shown.`,

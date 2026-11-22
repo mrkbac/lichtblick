@@ -10,11 +10,11 @@ import {
 import PlayerAlertManager from "@lichtblick/suite-base/players/PlayerAlertManager";
 import { MessageEvent } from "@lichtblick/suite-base/players/types";
 
-function msg(i: number, sizeInBytes: number): MessageEvent {
+function msg(i: number, sizeInBytes: number, topic = "/a", message: unknown = i): MessageEvent {
   return {
-    topic: "/a",
+    topic,
     receiveTime: { sec: i, nsec: 0 },
-    message: i,
+    message,
     sizeInBytes,
     schemaName: "x",
   };
@@ -52,6 +52,38 @@ describe("LiveMessageQueue", () => {
     expect(alerts.hasAlert(LIVE_QUEUE_FULL_ALERT_ID)).toBe(true);
     // The alert is logged once, not once per drop.
     expect(console.warn).toHaveBeenCalledTimes(1);
+    (console.warn as Mock).mockClear();
+  });
+
+  it("keeps the newest message per topic and per transform child frame when dropping", () => {
+    const queue = new LiveMessageQueue(100, new PlayerAlertManager());
+    const tf = (i: number, ...children: string[]) =>
+      msg(i, 10, "/transforms", {
+        transforms: children.map((child_frame_id) => ({ child_frame_id })),
+      });
+    const latched = msg(0, 10, "/latched");
+    const staticFrame = tf(1, "static", "moving");
+    queue.push(latched);
+    queue.push(staticFrame);
+    for (let i = 2; i < 1000; i++) {
+      queue.push(i % 2 === 0 ? tf(i, "moving") : msg(i, 10));
+      expect(queue.sizeInBytes()).toBeLessThanOrEqual(100);
+    }
+    const kept = queue.drain();
+    expect(kept.slice(0, 2)).toEqual([latched, staticFrame]);
+    expect(kept.at(-1)!.receiveTime.sec).toBe(999);
+    expect(kept.map((m) => m.receiveTime.sec)).toEqual(
+      kept.map((m) => m.receiveTime.sec).sort((a, b) => a - b),
+    );
+    (console.warn as Mock).mockClear();
+  });
+
+  it("drops the oldest regardless once the newest per topic alone exceed the cap", () => {
+    const queue = new LiveMessageQueue(100, new PlayerAlertManager());
+    for (let i = 0; i < 20; i++) {
+      queue.push(msg(i, 10, `/t${i}`));
+      expect(queue.sizeInBytes()).toBeLessThanOrEqual(100);
+    }
     (console.warn as Mock).mockClear();
   });
 });

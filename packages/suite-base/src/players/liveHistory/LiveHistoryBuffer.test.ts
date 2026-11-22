@@ -192,6 +192,34 @@ describe("LiveHistoryBuffer", () => {
     expect(times(result)).toEqual([1, 2, 16]);
   });
 
+  it("seeks without walking the history of other topics or frames", () => {
+    const buffer = new LiveHistoryBuffer({ windowNs: 1000n * SEC, maxBytes: 1e9 });
+    let reads = 0;
+    const counted = (event: MessageEvent): MessageEvent => {
+      const { message } = event;
+      return Object.defineProperty({ ...event }, "message", {
+        get: () => {
+          reads++;
+          return message;
+        },
+      });
+    };
+    buffer.add(counted(tf(1, "static")));
+    for (let t = 2; t <= 500; t++) {
+      buffer.add(counted(tf(t, "base")));
+      buffer.add(counted(msg("/a", t)));
+    }
+    reads = 0;
+    // A subscribed topic with no messages and a transform topic used to walk the whole history.
+    const result = buffer.backfill(fromSec(400), new Set(["/tf", "/a", "/empty"]));
+    expect(result.map((e) => [e.topic, e.receiveTime.sec])).toEqual([
+      ["/tf", 1],
+      ["/tf", 400],
+      ["/a", 400],
+    ]);
+    expect(reads).toBe(0);
+  });
+
   it("clears everything, including seeds, e.g. on a clock reset", () => {
     const buffer = new LiveHistoryBuffer({ windowNs: 1n * SEC, maxBytes: 1e9 });
     buffer.add(msg("/a", 1));

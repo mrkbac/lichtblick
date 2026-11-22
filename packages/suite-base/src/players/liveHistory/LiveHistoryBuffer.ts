@@ -51,7 +51,12 @@ export class LiveHistoryBuffer {
   /** Index of the oldest retained message; dropped entries before it are compacted lazily. */
   #head = 0;
   #bytes = 0;
-  #seeds = new Map<string, Map<string, MessageEvent>>();
+  /**
+   * Per topic and seed key (child frame, or the whole message), the retained messages for that key
+   * plus the last one that fell out of the window as its seed. Lets a seek find each key's state
+   * with a binary search instead of walking the whole history.
+   */
+  #index = new Map<string, Map<string, KeyHistory>>();
   /**
    * The history holds every message received since this time: the first trim after `clear()`,
    * advanced by each age cutoff and memory-cap eviction. Enlarging the window can't move it back.
@@ -104,6 +109,19 @@ export class LiveHistoryBuffer {
   public add(msg: MessageEvent): void {
     this.#messages.push(msg);
     this.#bytes += msg.sizeInBytes;
+    let byKey = this.#index.get(msg.topic);
+    if (!byKey) {
+      byKey = new Map();
+      this.#index.set(msg.topic, byKey);
+    }
+    for (const key of seedKeys(msg)) {
+      let history = byKey.get(key);
+      if (!history) {
+        history = { messages: [], head: 0, seed: undefined };
+        byKey.set(key, history);
+      }
+      history.messages.push(msg);
+    }
     this.trim(msg.receiveTime);
   }
 
@@ -166,7 +184,10 @@ export class LiveHistoryBuffer {
 
   /** Messages received in (`after`, `upTo`], in order. */
   public range(after: Time, upTo: Time): MessageEvent[] {
-    return this.#messages.slice(this.#upperBound(after), this.#upperBound(upTo));
+    return this.#messages.slice(
+      upperBound(this.#messages, this.#head, after),
+      upperBound(this.#messages, this.#head, upTo),
+    );
   }
 
   /**
@@ -174,7 +195,7 @@ export class LiveHistoryBuffer {
    * received at the same time as `last` but added after it are included.
    */
   public rangeAfter(last: MessageEvent, upTo: Time): MessageEvent[] {
-    let start = this.#upperBound(last.receiveTime);
+    let start = upperBound(this.#messages, this.#head, last.receiveTime);
     for (let i = start - 1; i >= this.#head; i--) {
       const msg = this.#messages[i]!;
       if (msg === last) {
@@ -185,7 +206,7 @@ export class LiveHistoryBuffer {
       }
       start = i;
     }
-    return this.#messages.slice(start, this.#upperBound(upTo));
+    return this.#messages.slice(start, upperBound(this.#messages, this.#head, upTo));
   }
 
   /**
@@ -194,40 +215,13 @@ export class LiveHistoryBuffer {
    * Returned in receive-time order.
    */
   public backfill(at: Time, topics: ReadonlySet<string>): MessageEvent[] {
-    const found = new Map<string, Set<string>>();
-    const result = new Set<MessageEvent>();
-    // Topics whose whole-message state is found; transform topics never are, as frames vary.
-    let complete = 0;
-    const take = (msg: MessageEvent, keys: readonly string[]) => {
-      let seen = found.get(msg.topic);
-      if (!seen) {
-        seen = new Set();
-        found.set(msg.topic, seen);
-      }
-      let isNew = false;
-      for (const key of keys) {
-        if (!seen.has(key)) {
-          seen.add(key);
-          isNew = true;
-          if (key === WHOLE_MESSAGE) {
-            complete++;
-          }
-        }
-      }
-      if (isNew) {
-        result.add(msg);
-      }
-    };
-    for (let i = this.#upperBound(at) - 1; i >= this.#head && complete < topics.size; i--) {
-      const msg = this.#messages[i]!;
-      if (topics.has(msg.topic) && found.get(msg.topic)?.has(WHOLE_MESSAGE) !== true) {
-        take(msg, seedKeys(msg));
-      }
-    }
+    const result = new Set<MessageEvent>(); // one transform message can hold several frames
     for (const topic of topics) {
-      for (const [key, seed] of this.#seeds.get(topic) ?? []) {
-        if (found.get(topic)?.has(WHOLE_MESSAGE) !== true) {
-          take(seed, [key]);
+      for (const history of this.#index.get(topic)?.values() ?? []) {
+        const i = upperBound(history.messages, history.head, at);
+        const latest = i > history.head ? history.messages[i - 1] : history.seed;
+        if (latest) {
+          result.add(latest);
         }
       }
     }
@@ -240,9 +234,11 @@ export class LiveHistoryBuffer {
    */
   public snapshot(): MessageEvent[] {
     const seeds = new Set<MessageEvent>();
-    for (const byKey of this.#seeds.values()) {
-      for (const seed of byKey.values()) {
-        seeds.add(seed);
+    for (const byKey of this.#index.values()) {
+      for (const { seed } of byKey.values()) {
+        if (seed) {
+          seeds.add(seed);
+        }
       }
     }
     return [
@@ -255,7 +251,7 @@ export class LiveHistoryBuffer {
     this.#messages = [];
     this.#head = 0;
     this.#bytes = 0;
-    this.#seeds.clear();
+    this.#index.clear();
     this.#completeFromNs = undefined;
     this.#capLimited = false;
   }
@@ -265,33 +261,41 @@ export class LiveHistoryBuffer {
     this.#messages[this.#head] = undefined as unknown as MessageEvent; // release for GC
     this.#head++;
     this.#bytes -= msg.sizeInBytes;
-    let seeds = this.#seeds.get(msg.topic);
-    if (!seeds) {
-      seeds = new Map();
-      this.#seeds.set(msg.topic, seeds);
-    }
+    const byKey = this.#index.get(msg.topic)!;
     for (const key of seedKeys(msg)) {
-      seeds.set(key, msg);
-    }
-  }
-
-  /** Index of the first retained message received after `time`. */
-  #upperBound(time: Time): number {
-    let lo = this.#head;
-    let hi = this.#messages.length;
-    while (lo < hi) {
-      const mid = (lo + hi) >>> 1;
-      if (compare(this.#messages[mid]!.receiveTime, time) <= 0) {
-        lo = mid + 1;
-      } else {
-        hi = mid;
+      const history = byKey.get(key)!;
+      history.messages[history.head] = undefined as unknown as MessageEvent; // release for GC
+      history.head++;
+      history.seed = msg;
+      if (history.head === history.messages.length) {
+        history.messages = [];
+        history.head = 0;
+      } else if (history.head > 1024 && history.head * 2 > history.messages.length) {
+        history.messages = history.messages.slice(history.head);
+        history.head = 0;
       }
     }
-    return lo;
   }
 }
 
-function seedKeys(msg: MessageEvent): readonly string[] {
+type KeyHistory = { messages: MessageEvent[]; head: number; seed: MessageEvent | undefined };
+
+/** Index of the first message from `lo` on received after `time`. */
+function upperBound(messages: readonly MessageEvent[], from: number, time: Time): number {
+  let lo = from;
+  let hi = messages.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >>> 1;
+    if (compare(messages[mid]!.receiveTime, time) <= 0) {
+      lo = mid + 1;
+    } else {
+      hi = mid;
+    }
+  }
+  return lo;
+}
+
+export function seedKeys(msg: MessageEvent): readonly string[] {
   return transformChildFrames(msg.message) ?? [WHOLE_MESSAGE];
 }
 
