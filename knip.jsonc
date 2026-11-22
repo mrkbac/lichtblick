@@ -42,7 +42,7 @@
         "rspack.desktop.config.ts",
         // Bundled and run by ci/perf-budget.ts
         "rspack.perf.config.ts",
-        "src/perf/cases.ts",
+        "src/perf/{cases,wasmStub}.ts",
         "desktop/*/index.{ts,tsx}",
         "**/*.test.{ts,tsx}",
         "e2e/**/*.spec.ts",

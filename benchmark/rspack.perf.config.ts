@@ -21,7 +21,15 @@ export default (env: unknown, argv: RspackArgv): Configuration => {
   return {
     ...appConfig,
     // Node built-ins stay real; the browser fallbacks would stub them out
-    resolve: { ...appConfig.resolve, fallback: {} },
+    resolve: {
+      ...appConfig.resolve,
+      alias: {
+        ...appConfig.resolve?.alias,
+        "@foxglove/wasm-lz4$": path.resolve(import.meta.dirname, "src/perf/wasmStub.ts"),
+        "@foxglove/wasm-bz2$": path.resolve(import.meta.dirname, "src/perf/wasmStub.ts"),
+      },
+      fallback: {},
+    },
     target: "node",
     context: path.resolve(import.meta.dirname, "src/perf"),
     entry: { cases: "./cases.ts" },
