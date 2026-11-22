@@ -512,7 +512,6 @@ export class BlockLoader {
         }
 
         let sizeInBytes = 0;
-        let full = false;
         for (const iterResult of results) {
           if (iterResult.type === "alert") {
             this.#alertManager.addAlert(`connid-${iterResult.connectionId}`, iterResult.alert);
@@ -546,25 +545,23 @@ export class BlockLoader {
           arr.push(iterResult.msgEvent);
 
           sizeInBytes += messageSizeInBytes;
-
-          if (budget.fits(0)) {
-            continue;
-          }
-          // Over budget: drop topics no longer wanted, then what is farther from the playhead
-          budget.release(this.#removeUnusedBlockTopics());
-          if (!budget.fits(0)) {
-            this.#evict(
-              this.#distance(currentBlockId, this.#playheadBlock()),
-              messagesByTopic,
-              budget,
-              evicted,
-            );
-          }
-          if (!budget.fits(0)) {
-            full = true;
-            break;
-          }
         }
+
+        // Over budget with the whole block (already read): drop topics no longer wanted, then make
+        // room from other data, planned against the whole block so nothing is evicted for a block
+        // that doesn't fit after all
+        if (!budget.fits(0)) {
+          budget.release(this.#removeUnusedBlockTopics());
+        }
+        if (!budget.fits(0)) {
+          this.#evict(
+            this.#distance(currentBlockId, this.#playheadBlock()),
+            messagesByTopic,
+            budget,
+            evicted,
+          );
+        }
+        const full = !budget.fits(0);
 
         if (full) {
           // Drop this block's partial read. The topics holding at least their share of the budget
@@ -638,8 +635,8 @@ export class BlockLoader {
   /**
    * Frees loaded messages until `budget` fits, farthest from the playhead first, from topics holding
    * more than their fair share of the budget (counting `loading`, the block being read): of the
-   * topics being loaded only what is farther than `distance`, of the others anything, so a topic
-   * under its share takes room from one over it.
+   * topics being loaded only what is farther than `distance`, of the others anything but the
+   * playhead block, so a topic under its share takes room from one over it.
    */
   #evict(
     distance: number,
@@ -663,7 +660,8 @@ export class BlockLoader {
       for (const topic of Object.keys(block.messagesByTopic)) {
         if (
           (topicBytes.get(topic) ?? 0) > fairShare &&
-          (blockDistance > distance || !(topic in loading))
+          // Nearer data only of other topics, and never at the playhead
+          (blockDistance > distance || (!(topic in loading) && blockDistance > 0))
         ) {
           victims.push({ id, topic, distance: blockDistance });
         }
