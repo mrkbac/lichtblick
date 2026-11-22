@@ -14,16 +14,15 @@
 //   found at http://www.apache.org/licenses/LICENSE-2.0
 //   You may not use this file except in compliance with the License.
 
-import { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useShallowMemo } from "@lichtblick/hooks";
 import Log from "@lichtblick/log";
-import { PanelVisibleContext } from "@lichtblick/suite-base/components/DockPanelContext";
 import {
   MessagePipelineContext,
   useMessagePipeline,
+  useMessagePipelineBatchedWhenHidden,
 } from "@lichtblick/suite-base/components/MessagePipeline";
-import { HIDDEN_RENDER_INTERVAL_MS } from "@lichtblick/suite-base/components/PanelExtensionAdapter/hiddenFrames";
 import useShouldNotChangeOften from "@lichtblick/suite-base/hooks/useShouldNotChangeOften";
 import {
   MessageEvent,
@@ -140,12 +139,9 @@ export function useMessageReducer<T>(props: Params<T>): T {
     | undefined
   >(undefined);
 
-  // A hidden panel (inactive tab, behind a maximized panel) keeps reducing every message, so it is
-  // current the moment it is shown, but re-renders with the result at most once per interval.
-  const visible = useContext(PanelVisibleContext);
-  const published = useRef<{ value: T; at: number } | undefined>(undefined);
-
-  return useMessagePipeline(
+  // A hidden panel keeps reducing every message, so it is current the moment it is shown, but
+  // re-renders with the result at most once per interval.
+  return useMessagePipelineBatchedWhenHidden(
     useCallback(
       // To compute the reduced value from new messages:
       // - Call restore() to initialize state, if lastSeekTime has changed, or if reducers have changed
@@ -193,18 +189,9 @@ export function useMessageReducer<T>(props: Params<T>): T {
           addMessages,
         };
 
-        const now = performance.now();
-        if (
-          !visible &&
-          published.current != undefined &&
-          now - published.current.at < HIDDEN_RENDER_INTERVAL_MS
-        ) {
-          return published.current.value;
-        }
-        published.current = { value: newReducedValue, at: now };
-        return newReducedValue;
+        return state.current.reducedValue;
       },
-      [id, addMessage, addMessages, restore, visible],
+      [id, addMessage, addMessages, restore],
     ),
   );
 }

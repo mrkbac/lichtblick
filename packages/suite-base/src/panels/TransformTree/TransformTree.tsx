@@ -15,7 +15,7 @@ import {
   useMessageReducer,
 } from "@lichtblick/suite-base/PanelAPI";
 import EmptyState from "@lichtblick/suite-base/components/EmptyState";
-import { useMessagePipeline } from "@lichtblick/suite-base/components/MessagePipeline";
+import { useMessagePipelineBatchedWhenHidden } from "@lichtblick/suite-base/components/MessagePipeline";
 import { selectCurrentTime } from "@lichtblick/suite-base/components/MessagePipeline/selectors";
 import { usePanelButtonTitle } from "@lichtblick/suite-base/components/PanelButton";
 import { usePanelContext } from "@lichtblick/suite-base/components/PanelContext";
@@ -272,7 +272,8 @@ export function TransformTree({ config, saveConfig }: Props): React.JSX.Element 
     knownRef.current = { playerId, visibleTopics, entries: known };
   }, [known, playerId, visibleTopics]);
 
-  const currentTime = useMessagePipeline(selectCurrentTime);
+  // Ages follow playback while shown; a hidden panel catches up once per interval
+  const currentTime = useMessagePipelineBatchedWhenHidden(selectCurrentTime);
   const now = currentTime ? toSec(currentTime) : undefined;
 
   // Manual adjustments shared with every 3D and Image panel of the layout
