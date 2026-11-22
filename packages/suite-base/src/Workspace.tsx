@@ -43,7 +43,7 @@ import {
   DataSourceDialog,
   DataSourceDialogItem,
 } from "@lichtblick/suite-base/components/DataSourceDialog/DataSourceDialog";
-import { START_ADDRESS_INPUT_ID } from "@lichtblick/suite-base/components/DataSourceDialog/OpenUrlInput";
+import type { StartHandle } from "@lichtblick/suite-base/components/DataSourceDialog/Start";
 import DataSourceSidebar from "@lichtblick/suite-base/components/DataSourceSidebar/DataSourceSidebar";
 import DocumentDropListener from "@lichtblick/suite-base/components/DocumentDropListener";
 import { EventsList } from "@lichtblick/suite-base/components/EventsList";
@@ -149,6 +149,7 @@ const selectWorkspaceRightSidebarSize = (store: WorkspaceContextStore) => store.
 function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
   const { classes } = useStyles();
   const containerRef = useRef<HTMLDivElement>(null);
+  const startRef = useRef<StartHandle>(null);
   const { availableSources, selectSource } = usePlayerSelection();
   const playerPresence = useMessagePipeline(selectPlayerPresence);
   const { alertCount, highestSeverity } = useAlertCount();
@@ -452,10 +453,8 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
         },
         "app.openConnection": () => {
           dialogActions.dataSource.open("start");
-          // autoFocus only applies on mount, so focus the bar when the page is already open
-          requestAnimationFrame(() => {
-            document.getElementById(START_ADDRESS_INPUT_ID)?.focus();
-          });
+          // On a newly opened page the address field autofocuses.
+          startRef.current?.focusAddress();
         },
         "app.openFile": () => {
           void dialogActions.openFile.open().catch((err: unknown) => {
@@ -829,7 +828,7 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
 
   return (
     <PanelStateContextProvider>
-      {dataSourceDialog.open && <DataSourceDialog />}
+      {dataSourceDialog.open && <DataSourceDialog startRef={startRef} />}
       <DocumentDropListener onDrop={dropHandler} allowedExtensions={allowedDropExtensions} />
       <SyncAdapters />
       <KeyListener global keyDownHandlers={keyDownHandlers} />

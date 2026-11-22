@@ -43,13 +43,14 @@ export default class FoxgloveWebSocketDataSourceFactory implements IDataSourceFa
   };
 
   public hidden?: boolean;
+  public LiveDevices?: IDataSourceFactory["LiveDevices"];
   public prepareTransport?: IDataSourceFactory["prepareTransport"];
   public AccountMenuItems?: IDataSourceFactory["AccountMenuItems"];
 
   public constructor(
     options?: Pick<
       IDataSourceFactory,
-      "id" | "displayName" | "hidden" | "prepareTransport" | "AccountMenuItems"
+      "id" | "displayName" | "hidden" | "prepareTransport" | "AccountMenuItems" | "LiveDevices"
     >,
   ) {
     if (options) {

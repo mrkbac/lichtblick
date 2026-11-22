@@ -4,7 +4,8 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import "@testing-library/jest-dom/vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { act, render, screen, fireEvent } from "@testing-library/react";
+import { createRef } from "react";
 import { useTranslation } from "react-i18next";
 import type { Mock } from "vitest";
 
@@ -19,7 +20,7 @@ import {
 import { useWorkspaceActions } from "@lichtblick/suite-base/context/Workspace/useWorkspaceActions";
 import { useSourcePick } from "@lichtblick/suite-base/util/sourcePick";
 
-import Start from "./Start";
+import Start, { type StartHandle } from "./Start";
 
 vi.mock("react-i18next", () => ({
   useTranslation: vi.fn(),
@@ -108,7 +109,10 @@ describe("Start Component", () => {
     topics: [{ name: "/camera", schema: "sensor_msgs/Image" }],
   };
 
-  const setup = (recentSources: RecentSource[] = mockRecentSources) => {
+  const setup = (
+    recentSources: RecentSource[] = mockRecentSources,
+    additionalSources: IDataSourceFactory[] = [],
+  ) => {
     (useCatalogFolder as Mock).mockReturnValue({
       recordings: [catalogRecording, { ...catalogRecording, id: "drive.mcap", name: "drive.mcap" }],
       open: mockOpenRecording,
@@ -116,6 +120,7 @@ describe("Start Component", () => {
     (usePlayerSelection as Mock).mockReturnValue({
       recentSources,
       availableSources: [
+        ...additionalSources,
         wsSource,
         rosbridgeSource,
         udpSource,
@@ -132,7 +137,9 @@ describe("Start Component", () => {
       togglePinRecent: mockTogglePinRecent,
       clearRecents: mockClearRecents,
     });
-    render(<Start />);
+    const ref = createRef<StartHandle>();
+    render(<Start ref={ref} />);
+    return ref;
   };
 
   const typeUrl = (value: string) => {
@@ -208,6 +215,44 @@ describe("Start Component", () => {
       type: "connection",
       params: { port: "3000" },
     });
+  });
+
+  it("mounts each device section on Live and treats an address as a search", () => {
+    const section = vi.fn(({ query }: { query: string }) => <span>First: {query}</span>);
+    setup(mockRecentSources, [
+      { ...wsSource, id: "one", hidden: true, LiveDevices: section },
+      { ...wsSource, id: "two", LiveDevices: ({ query }) => <span>Second: {query}</span> },
+    ]);
+    expect(section).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "tabLive" }));
+    const search = screen.getByRole("searchbox", { name: "searchLiveDevices" });
+    const url = mockRecentSources[0]!.title;
+    fireEvent.change(search, { target: { value: url } });
+    fireEvent.keyDown(search, { key: "Enter" });
+    expect(screen.getByText(`First: ${url}`)).toBeInTheDocument();
+    expect(screen.getByText(`Second: ${url}`)).toBeInTheDocument();
+    expect(mockSelectRecent).not.toHaveBeenCalled();
+    expect(mockSelectSource).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "tabAll" }));
+    expect(screen.queryByText(`First: ${url}`)).not.toBeInTheDocument();
+  });
+
+  it("switches from Live device search to the focused address field for Open Connection", () => {
+    const start = setup();
+    fireEvent.click(screen.getByRole("button", { name: "tabLive" }));
+    const deviceSearch = screen.getByRole("searchbox", { name: "searchLiveDevices" });
+    deviceSearch.focus();
+    act(() => {
+      start.current!.focusAddress();
+    });
+    expect(screen.getByRole("button", { name: "tabAll" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByPlaceholderText("openUrlPlaceholder")).toHaveFocus();
+  });
+
+  it("shows an empty Live tab when no device source is available", () => {
+    setup();
+    fireEvent.click(screen.getByRole("button", { name: "tabLive" }));
+    expect(screen.getByText("noLiveDeviceSources")).toBeInTheDocument();
   });
 
   it("reopens a typed account-backed recent through its original transport", () => {

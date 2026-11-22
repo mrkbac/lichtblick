@@ -62,6 +62,8 @@ export interface IDataSourceFactory {
   hidden?: boolean;
   warning?: string | React.JSX.Element;
 
+  /** Device discovery section shown on the start page's Live tab. */
+  LiveDevices?: React.ComponentType<{ query: string }>;
   /** Account actions supplied by this source in the avatar menu. */
   AccountMenuItems?: React.ComponentType<{ onClose: () => void }>;
   /** Prepare an authenticated transport before initializing this source. */
