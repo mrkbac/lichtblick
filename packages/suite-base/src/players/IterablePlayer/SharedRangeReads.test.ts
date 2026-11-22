@@ -107,4 +107,60 @@ describe("SharedRangeReads", () => {
 
     await expect(collect(shared.read("a", {}))).rejects.toThrow("read failed");
   });
+
+  it("doesn't stall a consumer that merges its readers by time", async () => {
+    // 5000 dense messages (more than a reader queues) before the sparse topic's first one, which
+    // shares its receive time with two dense ones
+    const recording = [
+      ...Array.from({ length: 5000 }, (_, i) => message("dense", i)),
+      message("dense", 5000),
+      message("sparse", 5000),
+      message("dense", 5000),
+      message("sparse", 5001),
+    ];
+    const reads: string[][] = [];
+    const shared = new SharedRangeReads(async function* (topics, range) {
+      reads.push([...topics.keys()]);
+      for (const msgEvent of recording) {
+        if (
+          topics.has(msgEvent.topic) &&
+          (!range.start || msgEvent.receiveTime.sec >= range.start.sec)
+        ) {
+          yield { type: "message-event", msgEvent };
+        }
+      }
+    });
+    const dense = shared.read("dense", {});
+    const sparse = shared.read("sparse", {});
+
+    // Like a merge by time: the first message of every input before any further one
+    const firstDense = dense.next();
+    const firstSparse = await sparse.next();
+    expect((await firstDense).done).toBe(false);
+
+    expect(firstSparse.value).toMatchObject({ msgEvent: { topic: "sparse" } });
+    expect(await collect(sparse)).toEqual(["sparse5001"]);
+    expect(await collect(dense)).toHaveLength(5001);
+    expect(reads).toEqual([["dense", "sparse"], ["sparse"]]);
+  });
+
+  it("goes on without an iterator that is never read", async () => {
+    // More messages for the unread topic than a reader queues
+    const recording = Array.from({ length: 5000 }, (_, i) => [
+      message("a", i),
+      message("b", i),
+    ]).flat();
+    const shared = new SharedRangeReads(async function* (topics) {
+      for (const msgEvent of recording) {
+        if (topics.has(msgEvent.topic)) {
+          yield { type: "message-event", msgEvent };
+        }
+      }
+    });
+    const neverRead = shared.read("a", {});
+    const read = shared.read("b", {});
+
+    expect(await collect(read)).toHaveLength(5000);
+    await neverRead.return?.();
+  });
 });

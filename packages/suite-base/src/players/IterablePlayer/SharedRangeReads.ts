@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import { Time } from "@foxglove/rostime";
+import { compare, Time } from "@foxglove/rostime";
 
 import { VecQueue } from "@lichtblick/den/collection";
 import { TopicSelection } from "@lichtblick/suite-base/players/types";
@@ -43,17 +43,39 @@ export class SharedRangeReads {
     if (range.start || range.end) {
       return this.#readRange(new Map([[topic, { topic }]]), range);
     }
-    let shared = this.#gathering;
-    if (!shared) {
-      const newShared = new SharedRead(this.#readRange, range);
-      this.#gathering = newShared;
-      setTimeout(() => {
-        this.#gathering = undefined;
-        void newShared.run();
-      }, GATHER_MS);
-      shared = newShared;
-    }
-    return shared.join(topic);
+    // Joins a shared read on its first pull: an iterator that is never read can't hold up others
+    let reader: Reader | undefined;
+    let closed = false;
+    const join = () => {
+      let shared = this.#gathering;
+      if (!shared) {
+        const newShared = new SharedRead(this.#readRange, range);
+        this.#gathering = newShared;
+        setTimeout(() => {
+          this.#gathering = undefined;
+          void newShared.run();
+        }, GATHER_MS);
+        shared = newShared;
+      }
+      return shared.join(topic);
+    };
+    return {
+      next: async () => {
+        if (closed) {
+          return { done: true, value: undefined };
+        }
+        reader ??= join();
+        return await reader.next();
+      },
+      return: async () => {
+        closed = true;
+        await reader?.return();
+        return { done: true, value: undefined };
+      },
+      [Symbol.asyncIterator]() {
+        return this;
+      },
+    };
   }
 }
 
@@ -64,6 +86,12 @@ class Reader implements AsyncIterableIterator<Readonly<ReadResult>> {
   #ended = false;
   #error?: Error;
   #ready?: PromiseWithResolvers<void>;
+  /** Whether its consumer waits for a message */
+  public waiting = false;
+  /** Its own read, once detached from the shared one */
+  #own?: AsyncIterator<Readonly<ReadResult>>;
+  /** Messages of its own read to skip: the shared read delivered them already */
+  #skip = 0;
   readonly #onPull: () => void;
   readonly #onLeave: (reader: Reader) => void;
 
@@ -79,6 +107,7 @@ class Reader implements AsyncIterableIterator<Readonly<ReadResult>> {
   }
 
   public push(result: Readonly<ReadResult>): void {
+    this.waiting = false;
     this.#queue.enqueue(result);
     if (result.type === "message-event") {
       this.#queuedBytes += result.msgEvent.sizeInBytes;
@@ -94,10 +123,31 @@ class Reader implements AsyncIterableIterator<Readonly<ReadResult>> {
     this.#ready = undefined;
   }
 
+  /** Goes on with `own`, skipping its first `skip` messages; the queue is empty */
+  public detach(own: AsyncIterator<Readonly<ReadResult>>, skip: number): void {
+    this.#own = own;
+    this.#skip = skip;
+    this.#ready?.resolve();
+    this.#ready = undefined;
+  }
+
   public async next(): Promise<IteratorResult<Readonly<ReadResult>>> {
-    while (this.#queue.size() === 0 && !this.#ended) {
+    while (this.#queue.size() === 0 && !this.#ended && !this.#own) {
       this.#ready ??= Promise.withResolvers<void>();
+      this.waiting = true;
+      // The shared read may wait for room and must know this reader waits for it
+      this.#onPull();
       await this.#ready.promise;
+      this.waiting = false;
+    }
+    if (this.#own && this.#queue.size() === 0 && !this.#ended) {
+      for (;;) {
+        const own = await this.#own.next();
+        if (own.done === true || own.value.type !== "message-event" || this.#skip === 0) {
+          return own;
+        }
+        this.#skip--;
+      }
     }
     const result = this.#queue.dequeue();
     if (result) {
@@ -115,6 +165,7 @@ class Reader implements AsyncIterableIterator<Readonly<ReadResult>> {
 
   public async return(): Promise<IteratorResult<Readonly<ReadResult>>> {
     this.#ended = true;
+    await this.#own?.return?.();
     this.#queue.clear();
     this.#queuedBytes = 0;
     this.#onLeave(this);
@@ -133,6 +184,9 @@ class SharedRead {
   readonly #range: Range;
   readonly #readers = new Set<Reader>();
   #pulled?: () => void;
+  /** Receive time of the last message read, and per topic how many messages had that time */
+  #position?: Time;
+  readonly #atPosition = new Map<string, number>();
 
   public constructor(readRange: ReadRange, range: Range) {
     this.#readRange = readRange;
@@ -161,13 +215,29 @@ class SharedRead {
     );
     try {
       for await (const result of this.#readRange(topics, this.#range)) {
+        if (result.type === "message-event") {
+          const { topic, receiveTime } = result.msgEvent;
+          if (!this.#position || compare(receiveTime, this.#position) !== 0) {
+            this.#position = receiveTime;
+            this.#atPosition.clear();
+          }
+          this.#atPosition.set(topic, (this.#atPosition.get(topic) ?? 0) + 1);
+        }
         for (const reader of this.#readers) {
           if (result.type !== "message-event" || result.msgEvent.topic === reader.topic) {
             reader.push(result);
           }
         }
-        // The slowest reader sets the pace, so what waits for it stays bounded
+        // The slowest reader sets the pace, so what waits for it stays bounded. A consumer may wait
+        // on one reader before it empties another (e.g. merging inputs by time): readers waiting
+        // while the read waits for room go on with their own read instead of blocking each other.
         while (this.#readers.values().some((reader) => reader.isFull())) {
+          for (const reader of this.#readers) {
+            // Waiting with nothing queued: the shared read can't get it anything without room
+            if (reader.waiting) {
+              this.#detach(reader);
+            }
+          }
           await new Promise<void>((resolve) => {
             this.#pulled = resolve;
           });
@@ -185,5 +255,16 @@ class SharedRead {
         reader.end(error);
       }
     }
+  }
+
+  /** Continues `reader` with its own read from where the shared read is */
+  #detach(reader: Reader): void {
+    this.#readers.delete(reader);
+    const position = this.#position;
+    const own = this.#readRange(new Map([[reader.topic, { topic: reader.topic }]]), {
+      start: position ?? this.#range.start,
+      end: this.#range.end,
+    });
+    reader.detach(own, position ? (this.#atPosition.get(reader.topic) ?? 0) : 0);
   }
 }
