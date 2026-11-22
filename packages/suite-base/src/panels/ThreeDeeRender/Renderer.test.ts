@@ -17,7 +17,10 @@ import { setupVitestCanvasMock } from "vitest-canvas-mock";
 import { CameraModelsMap } from "@lichtblick/den/image/types";
 import { MessageEvent } from "@lichtblick/suite";
 import { Asset, DraggedMessagePath } from "@lichtblick/suite-base/components/PanelExtensionAdapter";
-import { Renderer } from "@lichtblick/suite-base/panels/ThreeDeeRender/Renderer";
+import {
+  Renderer,
+  stopThreeAnimationLoop,
+} from "@lichtblick/suite-base/panels/ThreeDeeRender/Renderer";
 import { DEFAULT_SCENE_EXTENSION_CONFIG } from "@lichtblick/suite-base/panels/ThreeDeeRender/SceneExtensionConfig";
 import { DEFAULT_CAMERA_STATE } from "@lichtblick/suite-base/panels/ThreeDeeRender/camera";
 import { HOVER_PICK_THROTTLE_MS } from "@lichtblick/suite-base/panels/ThreeDeeRender/constants";
@@ -428,6 +431,64 @@ describe("3D Renderer", () => {
     expect(cancelAnimationFrameSpy).toHaveBeenCalledWith(mockResult);
 
     renderer.dispose();
+  });
+
+  it("stops three's idle animation loop and advances the node frame once per drawn frame", async () => {
+    // Given
+    const visible = vi.spyOn(document, "visibilityState", "get").mockReturnValue("visible");
+    const renderer = new Renderer({ ...defaultRendererProps, canvas });
+    const gl = renderer.gl as unknown as {
+      _animation: { start(): void; stop: Mock };
+      _nodes: { nodeFrame: { update: Mock; frameId: number } };
+      info: { frame: number };
+    };
+    const { _animation: animation, _nodes: nodes } = gl;
+    const { nodeFrame } = nodes;
+    nodeFrame.update.mockImplementation(() => {
+      nodeFrame.frameId++;
+    });
+    await renderer.ready;
+    expect(animation.stop).toHaveBeenCalled();
+
+    // When: three calls start() from every render() and compute(), e.g. pick passes
+    animation.start();
+    animation.start();
+    // Then: they reuse the current frame
+    expect(nodeFrame.update).not.toHaveBeenCalled();
+
+    // When: a frame is drawn
+    renderer.animationFrame();
+    // Then: the node frame advances once, and GPU timings are keyed by it
+    expect(nodeFrame.update).toHaveBeenCalledTimes(1);
+    expect(gl.info.frame).toBe(nodeFrame.frameId);
+    renderer.dispose();
+    visible.mockRestore();
+  });
+
+  it("relies on three internals that still exist", async () => {
+    // Given
+    const actual = await vi.importActual<typeof import("three/webgpu")>("three/webgpu");
+    const proto = actual.WebGPURenderer.prototype;
+    // Then: render() and compute() advance frames only through _animation.start(), which
+    // stopThreeAnimationLoop replaces; init() creates the animation and the node frame
+    expect(proto.render.toString()).toContain("this._animation.start()");
+    expect(proto.compute.toString()).toContain("this._animation.start()");
+    expect(proto.init.toString()).toContain("new Animation(");
+    // And: the frame advance we call instead moves the frame id
+    const nodeFrame = new actual.NodeFrame();
+    const before = nodeFrame.frameId;
+    nodeFrame.update();
+    expect(nodeFrame.frameId).toBe(before + 1);
+  });
+
+  it("keeps rendering when three's animation internals are missing", () => {
+    // Given
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    // When / Then
+    expect(() => {
+      stopThreeAnimationLoop({} as Parameters<typeof stopThreeAnimationLoop>[0]);
+    }).not.toThrow();
+    warn.mockRestore();
   });
 
   it("draws when the panel document is visible while the opener is hidden", async () => {
