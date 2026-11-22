@@ -129,6 +129,22 @@ describe("Table", () => {
       expect(getColumnText(container, 0)).toEqual(["1.5", "2.5", "3.5"]);
     });
 
+    it("converts only the shown page of a long typed array", () => {
+      // Given
+      const value = new Uint8Array(100_000).map((_, i) => i % 256);
+      const from = vi.spyOn(Array, "from");
+
+      // When
+      const { container } = renderTable(value);
+
+      // Then
+      expect(getColumnText(container, 0)).toHaveLength(10);
+      expect(getColumnText(container, 0)[3]).toBe("3");
+      expect(screen.getByText("1 of 10000")).toBeInTheDocument();
+      expect(from).not.toHaveBeenCalledWith(value);
+      from.mockRestore();
+    });
+
     it("should prefix column ids and hide expander and pagination when nested", () => {
       // Given
       const accessorPath = "parent.child";
