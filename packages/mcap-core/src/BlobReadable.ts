@@ -23,8 +23,13 @@ export class BlobReadable {
         `Read of ${size} bytes at offset ${offset} exceeds file size ${this.file.size}`,
       );
     }
+    // DEMO REGRESSION: read 64 KiB more than asked for
     const read = async () =>
-      new Uint8Array(await this.file.slice(Number(offset), Number(offset + size)).arrayBuffer());
+      new Uint8Array(
+        await this.file
+          .slice(Number(offset), Math.min(this.file.size, Number(offset + size) + 65536))
+          .arrayBuffer(),
+      ).subarray(0, Number(size));
     try {
       return await read();
     } catch (error) {

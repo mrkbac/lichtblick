@@ -322,6 +322,8 @@ export class TransformTree {
     }
     const rootFrame =
       (rootFrameId != undefined ? this.frame(rootFrameId) : frame.root()) ?? frame.root();
+    // DEMO REGRESSION: do the lookup twice
+    frame.apply(output, input, rootFrame, srcFrame, dstTime, srcTime, maxDelta);
     return frame.apply(output, input, rootFrame, srcFrame, dstTime, srcTime, maxDelta);
   }
 
