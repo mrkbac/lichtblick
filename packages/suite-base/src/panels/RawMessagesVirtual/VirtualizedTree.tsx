@@ -140,6 +140,14 @@ export const VirtualizedTree = memo(function VirtualizedTree({
     [flatData, virtualizer],
   );
 
+  // A focused button inside the tree (after clicking it) keeps Space and Enter for its own click:
+  // they reach neither the tree's Enter (which would toggle twice) nor the playback shortcuts.
+  const keepActivationKeys = useCallback((event: React.KeyboardEvent) => {
+    if (event.key === " " || event.key === "Enter") {
+      event.stopPropagation();
+    }
+  }, []);
+
   // Keyboard tree navigation (WAI-ARIA tree pattern): the tree is a single tab stop. Left/Right and
   // Space stay with playback (stepping and play/pause while reading messages); Enter expands.
   const onKeyDown = useCallback(
@@ -206,6 +214,7 @@ export const VirtualizedTree = memo(function VirtualizedTree({
               <button
                 className={classes.spanButton}
                 tabIndex={-1}
+                onKeyDown={keepActivationKeys}
                 onClick={() => {
                   focusRow(flatData.findIndex((node) => node.key === key));
                 }}
@@ -270,6 +279,7 @@ export const VirtualizedTree = memo(function VirtualizedTree({
                         toggle(node.key, node.value);
                       }}
                       tabIndex={-1}
+                      onKeyDown={keepActivationKeys}
                       aria-label={`${expanded ? "Collapse" : "Expand"} ${node.label}`}
                       className={classes.spanButton}
                     >

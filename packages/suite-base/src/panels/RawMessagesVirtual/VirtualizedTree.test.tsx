@@ -237,6 +237,30 @@ describe("VirtualizedTree", () => {
       expect(mockOnToggleExpand).toHaveBeenCalledTimes(1);
     });
 
+    it("should leave Space and Enter to a focused expand button", () => {
+      // Given: the expand button got focus from a click
+      const data = { nested: { value: BasicBuilder.string() } };
+      useVirtualizer.mockReturnValue({
+        getVirtualItems: vi.fn(() => [{ index: 0, key: "0", size: 24, start: 0 }]),
+        getTotalSize: vi.fn(() => 24),
+        scrollToIndex: vi.fn(),
+        measureElement: vi.fn(),
+      });
+      const togglePlay = vi.fn();
+      render(<KeyListener global keyDownHandlers={{ " ": togglePlay }} />);
+      renderVirtualizedTree({ data, onToggleExpand: mockOnToggleExpand });
+      const button = screen.getByRole("button", { name: "Expand nested" });
+      button.focus();
+
+      // When
+      fireEvent.keyDown(button, { key: " " });
+      fireEvent.keyDown(button, { key: "Enter" });
+
+      // Then: the button's own (native) click is left to happen; playback and the tree stay out
+      expect(togglePlay).not.toHaveBeenCalled();
+      expect(mockOnToggleExpand).not.toHaveBeenCalled();
+    });
+
     it("should call onToggleExpand when expand button is clicked", () => {
       // Given
       const data = { nested: { value: BasicBuilder.string() } };
