@@ -65,7 +65,9 @@ describe("ExtensionProxySocket without the extension", () => {
     const closed = new Promise((resolve) => {
       socket.onclose = resolve;
     });
-    const port = (postMessage.mock.calls[0]![2] as MessagePort[])[0]!;
+    // postMessage(message, targetOrigin, transfer): the third-argument overload isn't in the mock's type
+    const [, , transfer] = postMessage.mock.calls[0] as unknown as [unknown, string, MessagePort[]];
+    const port = transfer[0]!;
     port.postMessage({ ev: "close", code: 1011, reason: PROXY_MISSING_REASON });
     await closed;
     expect(needsExtensionProxy(url, "https://licht.marko.im")).toBe(false);
