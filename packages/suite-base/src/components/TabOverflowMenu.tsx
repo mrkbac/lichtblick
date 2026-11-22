@@ -2,7 +2,7 @@
 
 import ChevronDownIcon from "@mui/icons-material/KeyboardArrowDown";
 import { IconButton, Menu, MenuItem } from "@mui/material";
-import { RefObject, useEffect, useState } from "react";
+import { RefObject, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 /** The `[role=tab]` elements in `strip` that are cut off by its visible area. */
@@ -19,8 +19,14 @@ export function tabLabel(tab: HTMLElement): string {
   return tab.getAttribute("aria-label") ?? tab.textContent;
 }
 
-const sameTabs = (a: readonly HTMLElement[], b: readonly HTMLElement[]) =>
-  a.length === b.length && a.every((tab, i) => tab === b[i]);
+/**
+ * Whether the tabs in the scrolling `strip` don't fit. `reservedPx` is the width the overflow
+ * button takes from the strip while shown: the tabs fit once they fit without it, so widening the
+ * window hides the button even though the button itself narrowed the strip.
+ */
+export function tabsOverflow(strip: HTMLElement, reservedPx: number): boolean {
+  return strip.scrollWidth - strip.clientWidth > reservedPx + 1;
+}
 
 /**
  * For a tab strip that scrolls sideways when its tabs don't fit: a button listing the tabs that are
@@ -32,13 +38,15 @@ export function TabOverflowMenu({
   stripRef,
   className,
 }: {
-  /** Element whose box is the visible area of the tabs; the scroller may be inside it. */
+  /** The element that scrolls the tabs sideways. */
   stripRef: RefObject<HTMLElement | null>;
   className?: string;
 }): React.JSX.Element | undefined {
   const { t } = useTranslation("general");
-  const [hidden, setHidden] = useState<HTMLElement[]>([]);
-  const [anchor, setAnchor] = useState<HTMLElement | undefined>(undefined);
+  const [overflowing, setOverflowing] = useState(false);
+  // The tabs out of view, taken when the menu opens
+  const [menu, setMenu] = useState<{ anchor: HTMLElement; tabs: HTMLElement[] } | undefined>();
+  const buttonRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     const strip = stripRef.current;
@@ -46,8 +54,12 @@ export function TabOverflowMenu({
       return undefined;
     }
     const update = () => {
-      const next = hiddenTabs(strip);
-      setHidden((prev) => (sameTabs(prev, next) ? prev : next));
+      const next = tabsOverflow(strip, buttonRef.current?.offsetWidth ?? 0);
+      setOverflowing(next);
+      if (!next) {
+        // The button unmounts; don't leave the menu anchored to it.
+        setMenu(undefined);
+      }
     };
     // Tabs change size with their titles and badges, so each tab is observed, not just the strip.
     const resizeObserver = new ResizeObserver(update);
@@ -72,49 +84,51 @@ export function TabOverflowMenu({
       }
       strip.scrollLeft += event.deltaY;
     };
-    strip.addEventListener("scroll", update, { capture: true, passive: true });
     strip.addEventListener("wheel", onWheel, { passive: true });
     return () => {
       resizeObserver.disconnect();
       mutationObserver.disconnect();
-      strip.removeEventListener("scroll", update, { capture: true });
       strip.removeEventListener("wheel", onWheel);
     };
   }, [stripRef]);
 
-  if (hidden.length === 0) {
+  if (!overflowing) {
     return undefined;
   }
   return (
     <>
       <IconButton
+        ref={buttonRef}
         size="small"
         className={className}
-        aria-label={t("moreTabs", { count: hidden.length })}
-        title={t("moreTabs", { count: hidden.length })}
+        aria-label={t("moreTabs")}
+        title={t("moreTabs")}
         aria-haspopup="menu"
-        aria-expanded={anchor != undefined}
+        aria-expanded={menu != undefined}
         onClick={(event) => {
-          setAnchor(event.currentTarget);
+          const strip = stripRef.current;
+          if (strip) {
+            setMenu({ anchor: event.currentTarget, tabs: hiddenTabs(strip) });
+          }
         }}
       >
         <ChevronDownIcon fontSize="inherit" />
       </IconButton>
       <Menu
-        anchorEl={anchor}
-        open={anchor != undefined}
+        anchorEl={menu?.anchor}
+        open={menu != undefined}
         onClose={() => {
-          setAnchor(undefined);
+          setMenu(undefined);
         }}
       >
-        {hidden.map((tab, index) => (
+        {menu?.tabs.map((tab, index) => (
           <MenuItem
-            // Tabs have no ids of their own; the order is stable while the menu is open.
+            // Tabs have no ids of their own; the list is fixed while the menu is open.
             key={index}
             dense
             selected={tab.getAttribute("aria-selected") === "true"}
             onClick={() => {
-              setAnchor(undefined);
+              setMenu(undefined);
               tab.scrollIntoView({ block: "nearest", inline: "nearest" });
               tab.click();
             }}
