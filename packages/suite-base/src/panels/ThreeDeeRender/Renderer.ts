@@ -370,6 +370,9 @@ export class Renderer extends EventEmitter<RendererEvents> {
     });
 
     this.#scene = new THREE.Scene();
+    // Every draw and pick of the scene updates its world matrices first (the point raster needs
+    // them before render()); render() would walk the whole graph a second time
+    this.#scene.matrixWorldAutoUpdate = false;
 
     this.#dirLight = new THREE.DirectionalLight(0xffffff, Math.PI);
     this.#dirLight.position.set(1, 1, 1);
