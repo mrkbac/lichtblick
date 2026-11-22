@@ -15,7 +15,7 @@ import type * as McapTypes from "./types.ts";
 
 const RECORD_PREFIX_LENGTH = 9n; // opcode + content length
 const READ_WINDOW_BYTES = 8n * 1024n * 1024n;
-const SNAPSHOT_VERSION = 2;
+const SNAPSHOT_VERSION = 3; // 3: keeps the first of conflicting definitions
 // Where the readers built from the index (see #readable) find the message indexes and the summary:
 // far past any real file offset, so neither moves as the file and its index grow. Chunk i's message
 // indexes are at LIVE_INDEX_AT + i * INDEX_STRIDE; they aren't stored but rebuilt from the chunk
