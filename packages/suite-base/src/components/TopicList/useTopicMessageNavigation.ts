@@ -141,20 +141,27 @@ export function useTopicMessageNavigation({
   );
 
   // Receive time of the latest message on `topic` at or before `time`, never earlier than `floor`.
-  // Prefers the player's indexed backward lookup. Sources without one get backward windows that
-  // grow geometrically and don't overlap, so the bytes read scale with the distance to the
-  // message instead of the length of the recording before it.
+  // `first` is the topic's first message time when known. Prefers the player's indexed backward
+  // lookup. Topics without one get backward windows that grow geometrically and don't overlap, so
+  // the bytes read scale with the distance to the message instead of the length of the recording
+  // before it.
   const findMessageAtOrBefore = useCallback(
     async (
       signal: AbortSignal,
       topic: string,
       time: Time,
-      floor: Time = ZERO_TIME,
+      first: Time | undefined,
+      floor: Time = first ?? ZERO_TIME,
       initialWindowMs: number = DEFAULT_WINDOW_MS,
     ): Promise<Time | undefined> => {
       const event = await getMessageAtTime(topic, time, signal);
       if (event) {
         return event.receiveTime;
+      }
+      // Before the first message there is nothing to find. At or after it, a message exists, so
+      // a miss means this topic has no indexed lookup (e.g. a user-script output topic): scan.
+      if (first && compare(time, first) < 0) {
+        return undefined;
       }
 
       let end = time;
@@ -197,11 +204,20 @@ export function useTopicMessageNavigation({
     [iterateTimes, getMessageAtTime],
   );
 
+  // Read through a ref so discovery doesn't restart on every tick of a growing source, where
+  // endTime and topicStats change constantly.
+  const latestRef = useRef({ topicStats, endTime });
+  useEffect(() => {
+    latestRef.current = { topicStats, endTime };
+  });
+  const hasEndTime = endTime != undefined;
+
   const discoverBoundaries = useCallback(
     async (signal: AbortSignal, topic: string) => {
-      const stats = topicStats?.get(topic);
-      let first = stats?.firstMessageTime;
-      let last = stats?.lastMessageTime;
+      const { topicStats: stats, endTime: end } = latestRef.current;
+      const topicStatsEntry = stats?.get(topic);
+      let first = topicStatsEntry?.firstMessageTime;
+      let last = topicStatsEntry?.lastMessageTime;
 
       if (!first) {
         const iterator = iterateTimes(topic);
@@ -219,33 +235,37 @@ export function useTopicMessageNavigation({
         }
       }
 
-      if (first && !last && endTime) {
-        last = await findMessageAtOrBefore(signal, topic, endTime, first);
+      if (first && !last && end) {
+        last = await findMessageAtOrBefore(signal, topic, end, first);
       }
 
-      if (signal.aborted) {
-        return;
-      }
-      if (first != undefined || last != undefined) {
+      // Cache complete results only; the effect retries once the end time is known.
+      if (!signal.aborted && first && last) {
         updateBoundariesCache(topic, { first, last });
       }
     },
-    [topicStats, endTime, iterateTimes, findMessageAtOrBefore, updateBoundariesCache],
+    [iterateTimes, findMessageAtOrBefore, updateBoundariesCache],
   );
 
   useEffect(() => {
-    const alreadyCached = boundariesCache.has(topicName);
-    if (!selected || !isTopicSubscribed || alreadyCached) {
+    // Navigation may cache one end on its own; only skip once both are known.
+    const cached = boundariesCache.get(topicName);
+    if (!selected || !isTopicSubscribed || (cached?.first && cached.last)) {
       return;
     }
 
     const abortController = new AbortController();
-    void discoverBoundaries(abortController.signal, topicName);
+    discoverBoundaries(abortController.signal, topicName).catch((error: unknown) => {
+      if (!abortController.signal.aborted) {
+        const message = error instanceof Error ? error.message : String(error);
+        log.warn(`Error discovering message boundaries: ${message}`);
+      }
+    });
 
     return () => {
       abortController.abort();
     };
-  }, [topicName, selected, discoverBoundaries, boundariesCache, isTopicSubscribed]);
+  }, [topicName, selected, discoverBoundaries, boundariesCache, isTopicSubscribed, hasEndTime]);
 
   const canNavigateNext = useMemo(() => {
     if (!currentTime) {
@@ -412,11 +432,15 @@ export function useTopicMessageNavigation({
         });
       }
 
+      // Per-topic first times from stats are exact: live players record the first one they see,
+      // CSV requires increasing times, and merged or shifted sources keep the earliest.
+      const first = firstMessageTime ?? stats?.firstMessageTime;
       const targetTime = await findMessageAtOrBefore(
         signal,
         topicName,
         subtractTime(currentTime, ONE_NANOSECOND),
-        firstMessageTime ?? stats?.firstMessageTime ?? startTime,
+        first,
+        first ?? startTime,
         initialWindowMs,
       );
 

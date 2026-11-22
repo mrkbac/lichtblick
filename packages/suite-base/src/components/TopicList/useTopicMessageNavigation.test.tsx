@@ -15,11 +15,12 @@ import { BasicBuilder } from "@lichtblick/test-builders";
 import { useTopicMessageNavigation } from "./useTopicMessageNavigation";
 
 vi.mock("@lichtblick/suite-base/components/MessagePipeline");
+const mockWarn = vi.hoisted(() => vi.fn());
 vi.mock("@lichtblick/log", () => ({
   __esModule: true,
   default: {
     getLogger: () => ({
-      warn: vi.fn(),
+      warn: mockWarn,
     }),
   },
 }));
@@ -37,6 +38,8 @@ type MessagePipelineMockData = {
   messages?: Time[];
   /** When true, getMessageAtTime answers from `messages`; otherwise it resolves undefined (unsupported). */
   supportsMessageAtTime?: boolean;
+  /** When set, getMessageAtTime rejects with this error. */
+  messageAtTimeError?: Error;
   /** When true, the player offers a payload-free inspection iterator over `messages`. */
   supportsInspection?: boolean;
   customIterator?: () => AsyncIterableIterator<Readonly<IteratorResult>>;
@@ -118,14 +121,15 @@ function setup(options: SetupOptions = {}) {
   const topicStats = hasTopicStats
     ? pipelineData.topicStats
     : new Map([[topicName, { numMessages: BasicBuilder.number() }]]);
+  const live = { endTime: pipelineData.endTime };
   const {
     startTime,
-    endTime,
     pausePlayback = vi.fn(),
     seekPlayback = vi.fn(),
     messages = [],
     supportsMessageAtTime = false,
     supportsInspection = false,
+    messageAtTimeError,
     customIterator,
   } = pipelineData;
 
@@ -146,6 +150,9 @@ function setup(options: SetupOptions = {}) {
       )
     : undefined;
   const getMessageAtTime = vi.fn(async (topic: string, time: Time) => {
+    if (messageAtTimeError) {
+      throw messageAtTimeError;
+    }
     if (!supportsMessageAtTime) {
       return undefined;
     }
@@ -161,7 +168,7 @@ function setup(options: SetupOptions = {}) {
         activeData: {
           currentTime,
           startTime,
-          endTime,
+          endTime: live.endTime,
           topicStats,
         },
       },
@@ -190,6 +197,7 @@ function setup(options: SetupOptions = {}) {
     getMessageAtTime,
     getInspectionIterator,
     consumption,
+    live,
   };
 }
 
@@ -411,6 +419,7 @@ describe("useTopicMessageNavigation", () => {
         selected: true,
         pipelineData: {
           currentTime: t2,
+          endTime: { sec: 5, nsec: 0 },
           topicStats: new Map([[topicName, { numMessages: 2 }]]),
           messages: [t1, t2],
         },
@@ -692,6 +701,33 @@ describe("useTopicMessageNavigation", () => {
       expect(getBatchIterator).not.toHaveBeenCalled();
     });
 
+    it("does not scan windows when the indexed lookup finds nothing before the first message", async () => {
+      // Given - "previous" from the topic's first message
+      const t1: Time = { sec: 100, nsec: 0 };
+      const topicName = `/${BasicBuilder.string()}`;
+      const { result, seekPlayback, getBatchIterator, getMessageAtTime } = setup({
+        topicName,
+        selected: true,
+        pipelineData: {
+          startTime: { sec: 0, nsec: 0 },
+          currentTime: t1,
+          topicStats: new Map([[topicName, { numMessages: 1, firstMessageTime: t1 }]]),
+          messages: [t1],
+          supportsMessageAtTime: true,
+        },
+      });
+
+      // When
+      await act(async () => {
+        await result.current.handlePreviousMessage();
+      });
+
+      // Then
+      expect(getMessageAtTime).toHaveBeenCalled();
+      expect(getBatchIterator).not.toHaveBeenCalled();
+      expect(seekPlayback).not.toHaveBeenCalled();
+    });
+
     it("widens windows geometrically without reading from the start when getMessageAtTime is unsupported", async () => {
       // Given
       const startTime: Time = { sec: 0, nsec: 0 };
@@ -752,7 +788,7 @@ describe("useTopicMessageNavigation", () => {
       const { result } = renderHook(() =>
         useTopicMessageNavigation({
           topicName,
-          selected: true,
+          selected: false,
           isTopicSubscribed: false,
         }),
       );
@@ -963,6 +999,100 @@ describe("useTopicMessageNavigation", () => {
       });
       expect(result.current.canNavigateNext).toBe(true);
       expect(consumption.yielded).toBe(2);
+    });
+
+    it("does not restart discovery when the end time advances", async () => {
+      // Given - a growing source: the end time changes on every tick
+      const messages: Time[] = [1, 2, 3].map((sec) => ({ sec, nsec: 0 }));
+      const topicName = `/${BasicBuilder.string()}`;
+      const { rerender, live, getBatchIterator, getMessageAtTime } = setup({
+        topicName,
+        selected: true,
+        pipelineData: {
+          currentTime: messages[0],
+          endTime: { sec: 3, nsec: 0 },
+          topicStats: new Map([[topicName, { numMessages: 3 }]]),
+          messages,
+          supportsMessageAtTime: true,
+        },
+      });
+
+      // When
+      for (let sec = 4; sec < 8; sec++) {
+        live.endTime = { sec, nsec: 0 };
+        rerender();
+      }
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+
+      // Then
+      expect(getBatchIterator).toHaveBeenCalledTimes(1);
+      expect(getMessageAtTime).toHaveBeenCalledTimes(1);
+    });
+
+    it("retries discovery once the end time becomes known", async () => {
+      // Given
+      const messages: Time[] = [1, 2, 3].map((sec) => ({ sec, nsec: 0 }));
+      const topicName = `/${BasicBuilder.string()}`;
+      const { result, rerender, live, getMessageAtTime } = setup({
+        topicName,
+        selected: true,
+        pipelineData: {
+          currentTime: messages[2],
+          topicStats: new Map([[topicName, { numMessages: 3 }]]),
+          messages,
+          supportsMessageAtTime: true,
+        },
+      });
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+      expect(getMessageAtTime).not.toHaveBeenCalled();
+
+      // When
+      live.endTime = { sec: 10, nsec: 0 };
+      rerender();
+
+      // Then - the last message (3) is found, so "next" turns off at it
+      await waitFor(() => {
+        expect(getMessageAtTime).toHaveBeenCalledWith(
+          topicName,
+          { sec: 10, nsec: 0 },
+          expect.any(AbortSignal),
+        );
+      });
+      await waitFor(() => {
+        expect(result.current.canNavigateNext).toBe(false);
+      });
+    });
+
+    it("logs a failed discovery instead of leaving an unhandled rejection", async () => {
+      // Given
+      const t1: Time = { sec: 1, nsec: 0 };
+      const topicName = `/${BasicBuilder.string()}`;
+
+      // When
+      const { getMessageAtTime } = setup({
+        topicName,
+        selected: true,
+        pipelineData: {
+          currentTime: t1,
+          endTime: { sec: 5, nsec: 0 },
+          topicStats: new Map([[topicName, { numMessages: 1 }]]),
+          messages: [t1],
+          messageAtTimeError: new Error("read failed"),
+        },
+      });
+
+      // Then
+      await waitFor(() => {
+        expect(getMessageAtTime).toHaveBeenCalled();
+      });
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+      expect(mockWarn).toHaveBeenCalledWith(expect.stringContaining("read failed"));
     });
 
     it("does not discover boundaries when topic is not subscribed", async () => {
