@@ -51,6 +51,7 @@ import PlayerSelectionContext, {
   IDataSourceFactory,
   PlayerSelection,
   RecentSource,
+  RemoteFileSelection,
 } from "@lichtblick/suite-base/context/PlayerSelectionContext";
 import {
   UserScriptStore,
@@ -242,6 +243,7 @@ export default function PlayerManager(
 
   const [selectedSource, setSelectedSource] = useState<IDataSourceFactory | undefined>();
   const [selectedFiles, setSelectedFiles] = useState<readonly File[] | undefined>();
+  const [selectedRemoteFile, setSelectedRemoteFile] = useState<RemoteFileSelection | undefined>();
   const [selectedCompare, setSelectedCompare] = useState<readonly string[] | undefined>();
 
   // Sample layout ids for this session, used when localStorage is unavailable.
@@ -276,6 +278,7 @@ export default function PlayerManager(
 
       setSelectedSource(foundSource);
       setSelectedFiles(undefined);
+      setSelectedRemoteFile(undefined);
       setSelectedCompare(undefined);
 
       // Sample sources don't need args or prompts to initialize
@@ -358,6 +361,15 @@ export default function PlayerManager(
             });
             setBasePlayer(newPlayer);
             writeLastFile(undefined);
+            const url = args.params?.url;
+            setSelectedRemoteFile(
+              foundSource.id === "remote-file" && url != undefined && !url.includes(",")
+                ? {
+                    url,
+                    credentials: args.params?.includeCredentials === "true" ? "include" : undefined,
+                  }
+                : undefined,
+            );
 
             if (args.params?.url) {
               const recentId = addRecent({
@@ -545,6 +557,7 @@ export default function PlayerManager(
     setBasePlayer(undefined);
     setSelectedSource(undefined);
     setSelectedFiles(undefined);
+    setSelectedRemoteFile(undefined);
     setSelectedCompare(undefined);
     setCurrentRecentId(undefined);
     // Forget the last opened file so a reload doesn't reopen it (the recent entry stays).
@@ -587,6 +600,7 @@ export default function PlayerManager(
       clearRecents,
       selectedSource,
       selectedFiles,
+      selectedRemoteFile,
       selectedCompare,
       availableSources: playerSources,
       recentSources,
@@ -600,6 +614,7 @@ export default function PlayerManager(
       clearRecents,
       selectedSource,
       selectedFiles,
+      selectedRemoteFile,
       selectedCompare,
       playerSources,
       recentSources,

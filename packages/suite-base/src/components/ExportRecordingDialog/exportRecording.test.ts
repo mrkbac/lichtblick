@@ -4,7 +4,12 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { exportFileName, findDuplicateOutputTopics, toExportTopics } from "./exportRecording";
+import {
+  exportFileName,
+  findDuplicateOutputTopics,
+  toExportTopics,
+  topicFilterPattern,
+} from "./exportRecording";
 
 describe("exportRecording", () => {
   it("keeps only selected topics and treats a blank rename as no rename", () => {
@@ -35,5 +40,20 @@ describe("exportRecording", () => {
 
   it("suggests an output file name", () => {
     expect(exportFileName("example.MCAP")).toBe("example-export.mcap");
+  });
+});
+
+describe("topicFilterPattern", () => {
+  it("matches topics by case-insensitive regex", () => {
+    const pattern = topicFilterPattern("^/camera/.*/compressed$");
+    expect(pattern.test("/camera/Front/compressed")).toBe(true);
+    expect(pattern.test("/lidar/points")).toBe(false);
+    expect(topicFilterPattern("IMU").test("/sensors/imu")).toBe(true);
+  });
+
+  it("matches invalid regex text literally", () => {
+    const pattern = topicFilterPattern("/a(");
+    expect(pattern.test("/a(b")).toBe(true);
+    expect(pattern.test("/ab")).toBe(false);
   });
 });

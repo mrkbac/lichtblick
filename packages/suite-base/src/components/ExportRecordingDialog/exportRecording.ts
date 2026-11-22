@@ -6,10 +6,17 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import * as Comlink from "@foxglove/comlink";
+import { useMemo } from "react";
 
-import { IWritable, type McapIndexedReader } from "@lichtblick/mcap-core";
+import {
+  BlobReadable,
+  IWritable,
+  type McapIndexedReader,
+  type McapTypes,
+} from "@lichtblick/mcap-core";
 import { ChunkJob, ExportMcapOptions, ExportTopicOptions } from "@lichtblick/mcap-support";
 import { usePlayerSelection } from "@lichtblick/suite-base/context/PlayerSelectionContext";
+import { RemoteFileReadable } from "@lichtblick/suite-base/players/IterablePlayer/Mcap/RemoteFileReadable";
 import { downloadFiles } from "@lichtblick/suite-base/util/download";
 
 import type { ExportChunkWorker } from "./exportChunk.worker";
@@ -20,6 +27,40 @@ export function useExportableFile(): File | undefined {
   // ponytail: single file only; merging several open files is a later step.
   const file = selectedFiles?.length === 1 ? selectedFiles[0] : undefined;
   return file && /\.mcap$/i.test(file.name) ? file : undefined;
+}
+
+/** An MCAP recording the export dialog can read: a local file or a remote URL. */
+export type ExportSource = {
+  name: string;
+  open: () => Promise<McapTypes.IReadable>;
+};
+
+/** The opened recording, if it can be exported: a single local or remote MCAP file. */
+export function useExportSource(): ExportSource | undefined {
+  const file = useExportableFile();
+  const { selectedRemoteFile } = usePlayerSelection();
+  return useMemo(() => {
+    if (file) {
+      return { name: file.name, open: async () => new BlobReadable(file) };
+    }
+    if (!selectedRemoteFile) {
+      return undefined;
+    }
+    const { url, credentials } = selectedRemoteFile;
+    const pathname = new URL(url).pathname;
+    if (!/\.mcap$/i.test(pathname)) {
+      return undefined;
+    }
+    return {
+      name: decodeURIComponent(pathname.slice(pathname.lastIndexOf("/") + 1)),
+      open: async () => {
+        // Its own reader: the player's cache and prefetching stay untouched by the export.
+        const readable = new RemoteFileReadable(url, { credentials, readAheadEnabled: true });
+        await readable.open();
+        return readable;
+      },
+    };
+  }, [file, selectedRemoteFile]);
 }
 
 /**
@@ -93,6 +134,15 @@ export function getTopicRows(reader: McapIndexedReader): TopicRow[] {
     rows.set(channel.topic, row);
   }
   return [...rows.values()].sort((a, b) => a.topic.localeCompare(b.topic));
+}
+
+/** A case-insensitive regex for the topic filter; text that isn't a valid regex matches literally */
+export function topicFilterPattern(filter: string): RegExp {
+  try {
+    return new RegExp(filter, "i");
+  } catch {
+    return new RegExp(filter.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
+  }
 }
 
 /** Topic options for `exportMcap`, containing only kept topics. */

@@ -36,7 +36,6 @@ import { useTranslation } from "react-i18next";
 
 import { useAsync } from "@lichtblick/hooks";
 import {
-  BlobReadable,
   ChunkCache,
   type McapIndexedReader,
   type McapTypes,
@@ -54,6 +53,8 @@ import { selectCurrentTime } from "@lichtblick/suite-base/components/MessagePipe
 
 import { useStyles } from "./ExportRecordingDialog.style";
 import {
+  ExportSource,
+  topicFilterPattern,
   TopicEdit,
   createChunkWorkerPool,
   exportFileName,
@@ -77,25 +78,25 @@ function toSecondsText(ns: bigint): string {
 }
 
 type Props = {
-  file: File;
+  source: ExportSource;
   onClose: () => void;
 };
 
-export function ExportRecordingDialog({ file, onClose }: Props): React.JSX.Element {
+export function ExportRecordingDialog({ source, onClose }: Props): React.JSX.Element {
   const { t } = useTranslation("exportRecording");
   const { classes } = useStyles();
 
-  const readable = useMemo(() => new BlobReadable(file), [file]);
   const opened = useAsync(async () => {
+    const readable = await source.open();
     const newReader = await openCachedMcapReader({
       readable,
       decompressHandlers: await loadDecompressHandlers(),
       chunkCache: new ChunkCache(),
     });
-    return { reader: newReader, readable };
-  }, [readable]);
+    return { reader: newReader, readable, source };
+  }, [source]);
   // useAsync keeps the previous value while the next file loads; only use a matching reader.
-  const reader = opened.value?.readable === readable ? opened.value.reader : undefined;
+  const value = opened.value?.source === source ? opened.value : undefined;
 
   return (
     <Dialog
@@ -108,7 +109,7 @@ export function ExportRecordingDialog({ file, onClose }: Props): React.JSX.Eleme
       <DialogTitle>
         {t("title")}
         <Typography variant="body2" noWrap color="textSecondary">
-          {file.name}
+          {source.name}
         </Typography>
       </DialogTitle>
       {opened.loading && (
@@ -122,8 +123,15 @@ export function ExportRecordingDialog({ file, onClose }: Props): React.JSX.Eleme
           <Alert severity="error">{opened.error.message}</Alert>
         </DialogContent>
       )}
-      {reader && <ExportForm file={file} reader={reader} readable={readable} onClose={onClose} />}
-      {!reader && (
+      {value && (
+        <ExportForm
+          source={source}
+          reader={value.reader}
+          readable={value.readable}
+          onClose={onClose}
+        />
+      )}
+      {!value && (
         <DialogActions>
           <Button onClick={onClose}>{t("close")}</Button>
         </DialogActions>
@@ -133,7 +141,7 @@ export function ExportRecordingDialog({ file, onClose }: Props): React.JSX.Eleme
 }
 
 function ExportForm({
-  file,
+  source,
   reader,
   readable,
   onClose,
@@ -234,7 +242,8 @@ function ExportForm({
 
   const topics = useMemo(() => toExportTopics(edits), [edits]);
   const duplicates = useMemo(() => findDuplicateOutputTopics(topics), [topics]);
-  const visibleRows = rows.filter((row) => row.topic.toLowerCase().includes(filter.toLowerCase()));
+  const filterPattern = useMemo(() => topicFilterPattern(filter), [filter]);
+  const visibleRows = rows.filter((row) => filterPattern.test(row.topic));
   const exporting = busy;
   // With exact counts, don't offer to write an empty file.
   const canExport =
@@ -260,7 +269,7 @@ function ExportForm({
     progressRef.current = undefined;
     let output;
     try {
-      output = await openExportOutput(exportFileName(file.name));
+      output = await openExportOutput(exportFileName(source.name));
     } catch (err) {
       setResult({ error: String(err) });
     }
