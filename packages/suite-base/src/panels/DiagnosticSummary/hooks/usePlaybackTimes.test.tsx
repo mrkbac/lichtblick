@@ -5,6 +5,7 @@ import { Time } from "@foxglove/rostime";
 import { act, renderHook } from "@testing-library/react";
 import type { Mock } from "vitest";
 
+import { PanelVisibleContext } from "@lichtblick/suite-base/components/DockPanelContext";
 import {
   useMessagePipeline,
   useMessagePipelineGetter,
@@ -92,6 +93,33 @@ describe("usePlaybackTimes", () => {
     unmount();
     expect(vi.getTimerCount()).toBe(0);
     expect(listeners).toHaveLength(0);
+  });
+
+  it("reads once a second while hidden and right away when shown", () => {
+    let visible = false;
+    const { result, rerender } = renderHook(() => usePlaybackTimes(100), {
+      wrapper: ({ children }: React.PropsWithChildren) => (
+        <PanelVisibleContext.Provider value={visible}>{children}</PanelVisibleContext.Provider>
+      ),
+    });
+
+    act(() => {
+      current = { sec: 11, nsec: 0 };
+      emit();
+      vi.advanceTimersByTime(500);
+    });
+    expect(result.current.current).toEqual({ sec: 10, nsec: 0 });
+    act(() => {
+      vi.advanceTimersByTime(500);
+    });
+    expect(result.current.current).toEqual({ sec: 11, nsec: 0 });
+
+    act(() => {
+      current = { sec: 12, nsec: 0 };
+      visible = true;
+    });
+    rerender();
+    expect(result.current.current).toEqual({ sec: 12, nsec: 0 });
   });
 
   it("handles a player without active data", () => {
