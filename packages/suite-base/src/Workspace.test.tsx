@@ -253,7 +253,6 @@ const mockWorkspaceActions = {
     left: { setOpen: vi.fn(), selectItem: vi.fn(), setSize: vi.fn() },
     right: { setOpen: vi.fn(), selectItem: vi.fn(), setSize: vi.fn() },
   },
-  openLayoutBrowser: vi.fn(),
 };
 
 describe("Workspace - alerts badge in leftSidebarItems", () => {

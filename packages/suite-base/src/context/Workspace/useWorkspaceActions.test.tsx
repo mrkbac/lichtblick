@@ -23,7 +23,6 @@ function makeInitialState(): WorkspaceContextStore {
       dataSource: { activeDataSource: undefined, item: undefined, open: false },
       preferences: { initialTab: undefined, open: false },
     },
-    featureTours: { active: undefined, shown: [] },
     layoutBrowser: { expandedSections: { personal: true, shared: true } },
     playbackControls: { repeat: false, syncInstances: false },
     sidebars: {
@@ -159,21 +158,6 @@ describe("useWorkspaceActions", () => {
     });
   });
 
-  describe("openLayoutBrowser", () => {
-    it("sets left sidebar item to layouts", () => {
-      // GIVEN
-      const { result, store } = renderUseWorkspaceActions();
-
-      // WHEN
-      act(() => {
-        result.current.openLayoutBrowser();
-      });
-
-      // THEN
-      expect(store.getState().sidebars.left.item).toBe("layouts");
-    });
-  });
-
   describe("playbackControlActions", () => {
     it("toggles repeat using function updater", () => {
       // GIVEN
@@ -199,38 +183,6 @@ describe("useWorkspaceActions", () => {
 
       // THEN
       expect(store.getState().playbackControls.syncInstances).toBe(true);
-    });
-  });
-
-  describe("featureTourActions", () => {
-    it("starts a tour", () => {
-      // GIVEN
-      const { result, store } = renderUseWorkspaceActions();
-
-      // WHEN
-      act(() => {
-        result.current.featureTourActions.startTour("welcome");
-      });
-
-      // THEN
-      expect(store.getState().featureTours.active).toBe("welcome");
-    });
-
-    it("finishes a tour and adds it to shown list", () => {
-      // GIVEN
-      const { result, store } = renderUseWorkspaceActions();
-      act(() => {
-        result.current.featureTourActions.startTour("welcome");
-      });
-
-      // WHEN
-      act(() => {
-        result.current.featureTourActions.finishTour("welcome");
-      });
-
-      // THEN
-      expect(store.getState().featureTours.active).toBeUndefined();
-      expect(store.getState().featureTours.shown).toContain("welcome");
     });
   });
 
