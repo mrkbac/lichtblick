@@ -388,16 +388,25 @@ export class BlockLoader {
     budget.add(this.#cacheSize());
     // Per topic, the distance from the playhead at which it ran out of budget in this pass
     const cappedAt = new Map<string, number>();
+    // Per block, the topics evicted in this pass: not loaded again before the playhead moves, so
+    // two topics can't take room from each other back and forth
+    const evicted = new Map<number, Set<string>>();
 
     for (;;) {
       const playhead = this.#playheadBlock();
       const fetchTopics = (id: number): Immutable<TopicSelection> => {
         const need = this.#blocks[id]?.needTopics ?? topics;
-        if (cappedAt.size === 0) {
+        const evictedHere = evicted.get(id);
+        if (cappedAt.size === 0 && !evictedHere) {
           return need;
         }
         const distance = this.#distance(id, playhead);
-        return new Map([...need].filter(([topic]) => distance < (cappedAt.get(topic) ?? Infinity)));
+        return new Map(
+          [...need].filter(
+            ([topic]) =>
+              distance < (cappedAt.get(topic) ?? Infinity) && evictedHere?.has(topic) !== true,
+          ),
+        );
       };
 
       // The nearest block that needs loading, and the nearest one on the other side of the playhead
@@ -527,7 +536,12 @@ export class BlockLoader {
           // Over budget: drop topics no longer wanted, then what is farther from the playhead
           budget.release(this.#removeUnusedBlockTopics());
           if (!budget.fits(0)) {
-            this.#evictFartherThan(this.#distance(currentBlockId, this.#playheadBlock()), budget);
+            this.#evict(
+              this.#distance(currentBlockId, this.#playheadBlock()),
+              messagesByTopic,
+              budget,
+              evicted,
+            );
           }
           if (!budget.fits(0)) {
             full = true;
@@ -605,21 +619,35 @@ export class BlockLoader {
   }
 
   /**
-   * Frees loaded messages farther than `distance` from the playhead until `budget` fits, farthest
-   * first, from topics holding at least their fair share of the budget.
+   * Frees loaded messages until `budget` fits, farthest from the playhead first, from topics holding
+   * more than their fair share of the budget (counting `loading`, the block being read): of the
+   * topics being loaded only what is farther than `distance`, of the others anything, so a topic
+   * under its share takes room from one over it.
    */
-  #evictFartherThan(distance: number, budget: ByteBudget): void {
+  #evict(
+    distance: number,
+    loading: Record<string, MessageEvent[]>,
+    budget: ByteBudget,
+    evicted: Map<number, Set<string>>,
+  ): void {
     const topicBytes = this.#topicBytes();
+    for (const [topic, messages] of Object.entries(loading)) {
+      const bytes = messages.reduce((sum, message) => sum + message.sizeInBytes, 0);
+      topicBytes.set(topic, (topicBytes.get(topic) ?? 0) + bytes);
+    }
     const fairShare = budget.capacity / Math.max(1, this.#topics.size);
     const playhead = this.#playheadBlock();
     const victims: { id: number; topic: string; distance: number }[] = [];
     for (const [id, block] of this.#blocks.entries()) {
       const blockDistance = this.#distance(id, playhead);
-      if (!block || blockDistance <= distance) {
+      if (!block) {
         continue;
       }
       for (const topic of Object.keys(block.messagesByTopic)) {
-        if ((topicBytes.get(topic) ?? 0) >= fairShare) {
+        if (
+          (topicBytes.get(topic) ?? 0) > fairShare &&
+          (blockDistance > distance || !(topic in loading))
+        ) {
           victims.push({ id, topic, distance: blockDistance });
         }
       }
@@ -631,10 +659,11 @@ export class BlockLoader {
       }
       const block = this.#blocks[id];
       const messages = block?.messagesByTopic[topic];
-      if (!block || !messages) {
+      if (!block || !messages || (topicBytes.get(topic) ?? 0) <= fairShare) {
         continue;
       }
       const bytes = this.#bytesOf(messages);
+      topicBytes.set(topic, (topicBytes.get(topic) ?? 0) - bytes);
       const { [topic]: _evicted, ...messagesByTopic } = block.messagesByTopic;
       const loaded = { ...this.#loadedSubscriptions[id] };
       delete loaded[topic];
@@ -645,6 +674,9 @@ export class BlockLoader {
         needTopics: this.#needTopics(this.#topics, loaded),
       };
       budget.release(bytes);
+      const evictedHere = evicted.get(id) ?? new Set();
+      evictedHere.add(topic);
+      evicted.set(id, evictedHere);
     }
   }
 

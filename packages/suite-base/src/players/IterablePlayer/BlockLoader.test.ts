@@ -822,7 +822,12 @@ describe("BlockLoader", () => {
           });
         }
       }
+      let reads = 0;
       source.messageIterator = async function* (args) {
+        // Loading that never settles spins on microtasks, which would hang the test: fail instead
+        if (++reads > 500) {
+          throw new Error("Loading does not settle");
+        }
         for (const msgEvent of messages) {
           if (
             args.topics.has(msgEvent.topic) &&
@@ -899,6 +904,22 @@ describe("BlockLoader", () => {
         "light",
       ]);
 
+      await loader.stopLoading();
+      await loading;
+      consoleWarnMock.mockClear();
+    });
+
+    it("settles when several topics each want more than their share", async () => {
+      const { loader, loading, settled } = setup({ a: 10, b: 10, c: 3 }, 100);
+      loader.setPlayhead({ sec: 5, nsec: 0 });
+
+      const blocks = await settled();
+      expect(blocks.filter((topics) => topics.includes("c"))).toHaveLength(10);
+
+      for (let sec = 0; sec < 10; sec++) {
+        loader.setPlayhead({ sec, nsec: 0 });
+        await settled();
+      }
       await loader.stopLoading();
       await loading;
       consoleWarnMock.mockClear();
