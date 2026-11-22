@@ -68,7 +68,7 @@ const TOPICS: [number, number][] = [
 ];
 
 /**
- * A synthetic zstd-chunked MCAP (~1.2 GB of messages, ~120 MB on disk). Payloads are repetitive with
+ * A synthetic zstd-chunked MCAP (~812 MB of messages, ~53 MB on disk). Payloads are repetitive with
  * random bytes mixed in so chunks compress like sensor data rather than to nothing.
  */
 export async function generateMcap(): Promise<Uint8Array> {

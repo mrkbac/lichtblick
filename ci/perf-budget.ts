@@ -124,6 +124,8 @@ function startupBytes(dir: string): Metrics {
 }
 
 async function prepareBase(baseDir: string, sha: string): Promise<void> {
+  // Forget worktrees whose directory was deleted (e.g. a purged $TMPDIR), or `add` refuses the path
+  execFileSync("git", ["worktree", "prune"], { cwd: ROOT, stdio: "ignore" });
   if (!fs.existsSync(baseDir)) {
     execFileSync("git", ["worktree", "add", "--detach", baseDir, sha], {
       cwd: ROOT,
@@ -186,10 +188,12 @@ async function main(): Promise<void> {
     await fs.promises.access(path.join(baseDir, "benchmark/.perf/cases.mjs"));
   })();
   await headBuild;
+  // A run that compared nothing must not pass; the label can still accept it
+  const problems: string[] = [];
   const baseOk = await baseBuild.then(
     () => true,
     (err: unknown) => {
-      console.error(`::warning::Base build failed, reporting this build only: ${String(err)}`);
+      problems.push(`Base build failed, nothing was compared: ${String(err)}`);
       return false;
     },
   );
@@ -207,10 +211,20 @@ async function main(): Promise<void> {
 
   // samples[metric][variant] = one value per round
   const samples: Record<string, Partial<Record<Variant, number[]>>> = {};
-  const record = (variant: Variant, metrics: Metrics) => {
+  const caseOf: Record<string, string> = {};
+  const record = (variant: Variant, name: string, metrics: Metrics) => {
     for (const [metric, value] of Object.entries(metrics)) {
       ((samples[metric] ??= {})[variant] ??= []).push(value);
+      caseOf[metric] = name;
     }
+  };
+
+  // A case that throws on either build (e.g. the PR changed an API the cases call, so they no
+  // longer fit the base) can't be compared: drop its samples and report it as a failure
+  const broken = new Set<string>();
+  const fail = (name: string, variant: Variant, err: unknown) => {
+    broken.add(name);
+    problems.push(`${name}: not comparable, throws on ${variant}: ${String(err)}`);
   };
 
   for (let round = 0; round <= ROUNDS; round++) {
@@ -220,24 +234,37 @@ async function main(): Promise<void> {
     );
     for (const [variant, name] of jobs) {
       const testCase = bundles[variant].cases[name];
-      if (!testCase) {
+      if (!testCase || broken.has(name)) {
         continue; // a case the base doesn't have
       }
       gc();
-      const metrics = await testCase({ mcap });
-      if (round > 0) {
-        record(variant, metrics);
+      try {
+        const metrics = await testCase({ mcap });
+        if (round > 0) {
+          record(variant, name, metrics);
+        }
+      } catch (err) {
+        fail(name, variant, err);
       }
     }
     console.error(`round ${round}/${ROUNDS} done`);
   }
-  for (let round = 0; round < HEAP_ROUNDS; round++) {
+  for (let round = 0; round < HEAP_ROUNDS && !broken.has(HEAP_CASE); round++) {
     for (const variant of shuffle([...variants])) {
-      record(variant, await measureHeap(dirs[variant], mcapPath));
+      try {
+        record(variant, HEAP_CASE, await measureHeap(dirs[variant], mcapPath));
+      } catch (err) {
+        fail(HEAP_CASE, variant, err);
+      }
+    }
+  }
+  for (const metric of Object.keys(samples)) {
+    if (broken.has(caseOf[metric]!)) {
+      delete samples[metric];
     }
   }
   for (const variant of variants) {
-    record(variant, startupBytes(dirs[variant]));
+    record(variant, "startup bundle", startupBytes(dirs[variant]));
   }
 
   const rows = [
@@ -250,10 +277,17 @@ async function main(): Promise<void> {
   )) {
     const unit = unitOf(metric);
     const budget = BUDGETS[unit];
-    const head = byVariant.head ?? [];
-    const base = byVariant.base;
-    if (!base || base.length !== head.length) {
-      rows.push(`| ${metric} | – | ${fmt(median(head), unit)} | | | new |`);
+    const { base, head } = byVariant;
+    if (!base) {
+      rows.push(`| ${metric} | – | ${fmt(median(head!), unit)} | | | new |`);
+      continue;
+    }
+    if (!head) {
+      rows.push(`| ${metric} | ${fmt(median(base), unit)} | – | | | removed |`);
+      continue;
+    }
+    if (base.length !== head.length) {
+      problems.push(`${metric}: not comparable, ${base.length} base vs ${head.length} PR samples`);
       continue;
     }
     const div = (h: number, b: number) => (b === 0 ? (h === 0 ? 1 : Infinity) : h / b);
@@ -279,8 +313,10 @@ async function main(): Promise<void> {
     "",
     ...rows,
     "",
-    failed > 0
-      ? `**${failed} metric(s) over budget.** A deliberate trade-off can be accepted with the \`perf-budget-accepted\` PR label.`
+    ...problems.map((problem) => `- ❌ ${problem}`),
+    "",
+    failed + problems.length > 0
+      ? `**${failed} metric(s) over budget, ${problems.length} problem(s).** A deliberate trade-off can be accepted with the \`perf-budget-accepted\` PR label.`
       : "All metrics within budget.",
     "",
   ].join("\n");
@@ -289,7 +325,8 @@ async function main(): Promise<void> {
     fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, report);
   }
   // Set by the workflow when the PR has the perf-budget-accepted label
-  process.exitCode = failed > 0 && process.env.PERF_BUDGET_ACCEPTED !== "true" ? 1 : 0;
+  process.exitCode =
+    failed + problems.length > 0 && process.env.PERF_BUDGET_ACCEPTED !== "true" ? 1 : 0;
 }
 
 if (process.argv[2] === "--child") {
