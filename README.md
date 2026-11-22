@@ -1,21 +1,21 @@
-<h1 align="center">Lichtblick</h1>
+<h1 align="center">Digitalis</h1>
 
 <p align="center">
 Visualization and diagnosis for robotics, in your browser or as a desktop app on Linux, Windows, and macOS.
 </p>
 
 <p align="center">
-  <img alt="Lichtblick screenshot" src="resources/screenshot.png">
+  <img alt="Digitalis screenshot" src="resources/screenshot.png">
 </p>
 
 ## :rocket: Try it
 
-**[Open Lichtblick in your browser](https://licht.marko.im/)**: no install. **[Open the sample](https://licht.marko.im/?ds=sample-boreas)** for a camera, LiDAR, radar, GPS and IMU recording with a layout that shows off the panels, or choose **Explore sample data** on the start screen for more robotics recordings.
+**[Open Digitalis in your browser](https://digitalis.marko.im/)**: no install. **[Open the sample](https://digitalis.marko.im/?ds=sample-boreas)** for a camera, LiDAR, radar, GPS and IMU recording with a layout that shows off the panels, or choose **Explore sample data** on the start screen for more robotics recordings. The same app is also available at [licht.marko.im](https://licht.marko.im/).
 
 ## :sparkles: Highlights
 
 <p align="center">
-  <img alt="Lichtblick playing the Boreas showcase recording" src="resources/demo.webp" width="100%">
+  <img alt="Digitalis playing the Boreas showcase recording" src="resources/demo.webp" width="100%">
 </p>
 
 - **Recordings**: MCAP (with ROS 1/2, Protobuf, CDR, JSON, CBOR, MessagePack, Cap'n Proto), ROS bags, ULog, CSV/TSV. Broken or still-growing MCAP files open while their index is rebuilt.

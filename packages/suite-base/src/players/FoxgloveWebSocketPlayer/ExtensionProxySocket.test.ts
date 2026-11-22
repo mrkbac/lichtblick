@@ -14,6 +14,11 @@ import ExtensionProxySocket, {
 
 describe("needsExtensionProxy", () => {
   it.each([
+    ["ws://robot.example:8765", "https://digitalis.marko.im", true],
+    ["wss://robot.example:8765", "https://digitalis.marko.im", false],
+    ["ws://localhost:8765", "https://digitalis.marko.im", false],
+    ["ws://robot.example:8765", "http://digitalis.marko.im", false],
+    ["ws://robot.example:8765", "https://digitalis.marko.im.example", false],
     ["ws://robot.example:8765", "https://licht.marko.im", true],
     ["ws://10.0.0.5:8765", "https://licht.marko.im", true],
     ["wss://robot.example:8765", "https://licht.marko.im", false],

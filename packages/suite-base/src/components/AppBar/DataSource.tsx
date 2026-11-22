@@ -10,6 +10,7 @@ import { IconButton, Tooltip } from "@mui/material";
 import { useTranslation } from "react-i18next";
 import { makeStyles } from "tss-react/mui";
 
+import LichtblickLogoText from "@lichtblick/suite-base/components/LichtblickLogoText";
 import {
   MessagePipelineContext,
   useMessagePipeline,
@@ -40,6 +41,11 @@ const useStyles = makeStyles()((theme) => ({
     whiteSpace: "nowrap",
     minWidth: 0,
   },
+  logo: {
+    display: "block",
+    width: 112,
+    height: 28,
+  },
   textTruncate: {
     maxWidth: "30vw",
     overflow: "hidden",
@@ -67,7 +73,7 @@ export function DataSource(): React.JSX.Element {
   const playerDisplayName = initializing && playerName == undefined ? "Initializing…" : playerName;
 
   if (playerPresence === PlayerPresence.NOT_PRESENT) {
-    return <div className={classes.sourceName}>{t("noDataSource")}</div>;
+    return <LichtblickLogoText titleAccess={t("noDataSource")} className={classes.logo} />;
   }
 
   return (

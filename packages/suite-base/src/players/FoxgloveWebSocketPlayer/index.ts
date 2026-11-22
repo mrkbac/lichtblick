@@ -931,7 +931,7 @@ export default class FoxgloveWebSocketPlayer implements Player {
               severity: "warn",
               message: `Service ${service.name}`,
               error: new Error(
-                "requestSchema and responseSchema are deprecated and will not be supported in future versions of Lichtblick",
+                `requestSchema and responseSchema are deprecated and will not be supported in future versions of ${APP_CONFIG.productName}`,
               ),
             });
           }

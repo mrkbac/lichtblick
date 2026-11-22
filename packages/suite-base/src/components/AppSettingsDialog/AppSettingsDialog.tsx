@@ -187,7 +187,7 @@ export function AppSettingsDialog(
           >
             <Stack gap={2} alignItems="flex-start">
               <header>
-                <LichtblickLogoText color="primary" className={classes.logo} />
+                <LichtblickLogoText color="inherit" className={classes.logo} />
               </header>
               <Stack direction="row" alignItems="center" gap={1}>
                 <Typography variant="body2">

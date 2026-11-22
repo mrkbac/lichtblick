@@ -28,7 +28,7 @@ export const APP_CONFIG = {
   /**
    * App name shown in the UI (root package.json `productName`)
    */
-  productName: LICHTBLICK_PRODUCT_NAME ?? "Lichtblick",
+  productName: LICHTBLICK_PRODUCT_NAME ?? "Digitalis",
 
   /**
    * Source repository web URL (root package.json `repository.url`), for source, license and releases
