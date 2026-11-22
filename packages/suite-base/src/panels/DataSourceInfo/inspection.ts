@@ -28,8 +28,13 @@ export type TopicInspection = {
     jitterNs: number;
     duplicateTimestamps: number;
   };
-  largestInterval?: { start: Time; end: Time; nanoseconds: bigint };
+  /** The longest intervals between consecutive messages, longest first */
+  largestIntervals: Interval[];
 };
+
+export type Interval = { start: Time; end: Time; nanoseconds: bigint };
+
+export const LARGEST_INTERVAL_COUNT = 5;
 
 export function bucketTime(start: Time, end: Time, index: number): Time {
   const startNs = toNanoSec(start);
@@ -61,6 +66,7 @@ export function createInspectionState(): InspectionState {
       bytes: 0,
       estimatedBytes: false,
       buckets: Array<number>(BUCKET_COUNT).fill(0),
+      largestIntervals: [],
     },
     intervals: 0,
     positiveIntervals: 0,
@@ -100,12 +106,22 @@ export function updateInspection(
     return;
   }
   const interval = timeNs - previousNs;
-  if (!result.largestInterval || interval > result.largestInterval.nanoseconds) {
-    result.largestInterval = {
+  const largest = result.largestIntervals;
+  if (
+    largest.length < LARGEST_INTERVAL_COUNT ||
+    interval > largest[LARGEST_INTERVAL_COUNT - 1]!.nanoseconds
+  ) {
+    // Rare after the first few messages: most intervals are shorter than the shortest kept one.
+    let index = Math.min(largest.length, LARGEST_INTERVAL_COUNT - 1);
+    while (index > 0 && largest[index - 1]!.nanoseconds < interval) {
+      index--;
+    }
+    largest.splice(index, 0, {
       start: fromNanoSec(previousNs),
       end: receiveTime,
       nanoseconds: interval,
-    };
+    });
+    largest.length = Math.min(largest.length, LARGEST_INTERVAL_COUNT);
   }
   const ns = Number(interval);
   state.intervals++;
@@ -133,7 +149,11 @@ export function updateInspection(
 /** Snapshot with timing statistics; the state stays usable for further updates. */
 export function finishInspection(state: InspectionState): TopicInspection {
   if (state.intervals === 0) {
-    return { ...state.result, timing: undefined };
+    return {
+      ...state.result,
+      largestIntervals: [...state.result.largestIntervals],
+      timing: undefined,
+    };
   }
   // Calculate median of instantaneous Hz, including the arithmetic middle pair.
   const rates = state.sample.map((ns) => 1e9 / ns).sort((a, b) => a - b);
@@ -146,6 +166,7 @@ export function finishInspection(state: InspectionState): TopicInspection {
         : rates[middle];
   return {
     ...state.result,
+    largestIntervals: [...state.result.largestIntervals],
     timing: {
       minimumHz: state.positiveIntervals > 0 ? 1e9 / state.maximum : undefined,
       maximumHz: state.positiveIntervals > 0 ? 1e9 / state.minimum : undefined,

@@ -51,7 +51,7 @@ it("counts inclusive boundaries and aggregates intervals across iterator batches
   expect(result.buckets[0]).toBe(2);
   expect(result.buckets[BUCKET_COUNT - 1]).toBe(1);
   expect(result.buckets.reduce((sum, count) => sum + count, 0)).toBe(3);
-  expect(result.largestInterval?.nanoseconds).toBe(9_999_999_999n);
+  expect(result.largestIntervals[0]?.nanoseconds).toBe(9_999_999_999n);
   expect(result.first).toEqual(start);
   expect(result.last).toEqual(end);
   expect(bucketTime(start, end, BUCKET_COUNT)).toEqual(end);
@@ -60,7 +60,7 @@ it("counts inclusive boundaries and aggregates intervals across iterator batches
 it("handles empty, single-time, and duplicate-time recordings without inventing a rate or gap", async () => {
   const empty = await inspectTopic(messages([]), start, end, new AbortController().signal, vi.fn());
   expect(empty.first).toBeUndefined();
-  expect(empty.largestInterval).toBeUndefined();
+  expect(empty.largestIntervals[0]).toBeUndefined();
   const sameTime = await inspectTopic(
     messages([base, base]),
     start,
@@ -70,7 +70,7 @@ it("handles empty, single-time, and duplicate-time recordings without inventing 
   );
   expect(sameTime.count).toBe(2);
   expect(sameTime.buckets[0]).toBe(2);
-  expect(sameTime.largestInterval?.nanoseconds).toBe(0n);
+  expect(sameTime.largestIntervals[0]?.nanoseconds).toBe(0n);
 });
 
 it("excludes messages outside the requested interval", async () => {
@@ -218,7 +218,7 @@ it("updates incrementally, counts reversals without failing, and keeps the state
   const snapshot = finishInspection(state);
   expect(state.reversals).toBe(1);
   expect(snapshot).toMatchObject({ count: 5, bytes: 20, estimatedBytes: true });
-  expect(snapshot.largestInterval?.nanoseconds).toBe(150_000_000n);
+  expect(snapshot.largestIntervals[0]?.nanoseconds).toBe(150_000_000n);
   expect(snapshot.timing?.medianHz).toBeCloseTo(10);
 
   updateInspection(state, {
@@ -228,4 +228,23 @@ it("updates incrementally, counts reversals without failing, and keeps the state
   });
   expect(finishInspection(state)).toMatchObject({ count: 6, bytes: 24 });
   expect(snapshot.count).toBe(5);
+});
+
+it("keeps the longest intervals, longest first", async () => {
+  const offsets = [0n, 1n, 4n, 5n, 15n, 16n, 18n, 25n, 26n, 35n];
+  const result = await inspectTopic(
+    messages(offsets.map((offsetNs) => base + offsetNs * 1_000_000n)),
+    start,
+    end,
+    new AbortController().signal,
+    vi.fn(),
+  );
+  expect(result.largestIntervals.map(({ nanoseconds }) => nanoseconds / 1_000_000n)).toEqual([
+    10n,
+    9n,
+    7n,
+    3n,
+    2n,
+  ]);
+  expect(result.largestIntervals[0]!.start).toEqual(fromNanoSec(base + 5_000_000n));
 });
