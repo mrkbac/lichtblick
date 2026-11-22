@@ -10,6 +10,8 @@ import * as THREE from "three";
 import { MarkerBatches, isBatchable, unbatch } from "./markers/MarkerBatches";
 import { RenderableMarker, getMarkerId } from "./markers/RenderableMarker";
 import { RenderableMeshResource } from "./markers/RenderableMeshResource";
+import { RenderableTextViewFacing } from "./markers/RenderableTextViewFacing";
+import { TextMarkerBatches } from "./markers/TextMarkerBatches";
 import { missingTransformMessage, MISSING_TRANSFORM } from "./transforms";
 import { BaseUserData, Renderable } from "../Renderable";
 import type { Renderer } from "../Renderer";
@@ -79,11 +81,19 @@ export class TopicMarkers extends Renderable<MarkerTopicUserData> {
   /** Inputs of the last pose update; cleared whenever a marker is added, changed or removed */
   #posedWith: PoseInputs | undefined;
   readonly #batches: MarkerBatches;
+  readonly #textBatches: TextMarkerBatches;
+
+  #invalidateText = (): void => {
+    this.#posedWith = undefined;
+  };
 
   public constructor(name: string, renderer: Renderer, userData: MarkerTopicUserData) {
     super(name, renderer, userData);
     this.#batches = new MarkerBatches(renderer.outlineMaterial);
-    this.add(this.#batches);
+    this.#textBatches = new TextMarkerBatches(renderer.labelPool);
+    this.add(this.#batches, this.#textBatches);
+    renderer.labelPool.addEventListener("atlasChange", this.#invalidateText);
+    renderer.labelPool.addEventListener("scaleFactorChange", this.#invalidateText);
   }
 
   public override dispose(): void {
@@ -93,7 +103,10 @@ export class TopicMarkers extends Renderable<MarkerTopicUserData> {
         this.renderer.markerPool.release(marker);
       }
     }
+    this.renderer.labelPool.removeEventListener("atlasChange", this.#invalidateText);
+    this.renderer.labelPool.removeEventListener("scaleFactorChange", this.#invalidateText);
     this.#batches.dispose();
+    this.#textBatches.dispose();
     this.children.length = 0;
     this.namespaces.clear();
   }
@@ -237,10 +250,13 @@ export class TopicMarkers extends Renderable<MarkerTopicUserData> {
         renderable.quaternion.set(o.x, o.y, o.z, o.w).premultiply(tempQuaternion).normalize();
         if (isBatchable(renderable)) {
           this.#batches.addMarker(renderable);
+        } else if (renderable instanceof RenderableTextViewFacing) {
+          this.#textBatches.addMarker(renderable);
         }
       }
     }
     this.#batches.end();
+    this.#textBatches.end();
     if (missingTransform != undefined) {
       this.renderer.settings.errors.addToTopic(this.topic, MISSING_TRANSFORM, missingTransform);
     } else if (anyUpdated) {

@@ -12,6 +12,7 @@ import { RenderableLineList } from "./RenderableLineList";
 import { RenderableLineStrip } from "./RenderableLineStrip";
 import type { RenderableMarker } from "./RenderableMarker";
 import { RenderableSphere } from "./RenderableSphere";
+import { RenderableTextViewFacing } from "./RenderableTextViewFacing";
 import { makeLineMaterial, makeLinePrepassMaterial } from "./materials";
 import { rgbToThreeColor } from "../../color";
 import { LAYER_DEFAULT, LAYER_PICK_ONLY, LAYER_SELECTED } from "../../layers";
@@ -55,6 +56,10 @@ export function setPickOnly(object: THREE.Object3D, { pickOnly }: { pickOnly: bo
 
 /** The marker's own mesh and outline draw again, e.g. before the pool hands it to someone else */
 export function unbatch(marker: RenderableMarker): void {
+  if (marker instanceof RenderableTextViewFacing) {
+    setPickOnly(marker.label.mesh, { pickOnly: false });
+    return;
+  }
   if (!isBatchable(marker)) {
     return;
   }

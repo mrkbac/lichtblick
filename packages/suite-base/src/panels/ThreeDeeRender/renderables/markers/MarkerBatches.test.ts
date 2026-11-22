@@ -19,6 +19,8 @@ import { RenderableCube } from "./RenderableCube";
 import { RenderableLineList } from "./RenderableLineList";
 import { RenderableLineStrip } from "./RenderableLineStrip";
 import { RenderableMarker } from "./RenderableMarker";
+import { RenderableTextViewFacing } from "./RenderableTextViewFacing";
+import { TextMarkerBatches } from "./TextMarkerBatches";
 import { RendererConfig } from "../../IRenderer";
 import { LAYER_DEFAULT, LAYER_PICK_ONLY } from "../../layers";
 import { Marker, MarkerAction, MarkerType } from "../../ros";
@@ -281,6 +283,36 @@ describe("MarkerBatches", () => {
     expect(topic.children.find((child) => child instanceof MarkerBatches)?.children).toHaveLength(
       0,
     );
+  });
+
+  it("batches matching opaque labels and keeps the original marker meshes for picking", () => {
+    topic.addMarkerMessage({ ...marker(1, MarkerType.TEXT_VIEW_FACING), text: "ABC" }, 0n);
+    topic.addMarkerMessage({ ...marker(2, MarkerType.TEXT_VIEW_FACING), text: "ABC" }, 0n);
+    topic.addMarkerMessage({ ...marker(3, MarkerType.TEXT_VIEW_FACING), text: "DEF" }, 0n);
+    topic.addMarkerMessage({ ...marker(4, MarkerType.TEXT_VIEW_FACING, 0.5), text: "ABC" }, 0n);
+    topic.startFrame(0n, "map", "map");
+
+    const glyphBatches = topic.children.find((child) => child instanceof TextMarkerBatches)!;
+    const batch = glyphBatches.children[0] as THREE.Mesh<THREE.InstancedBufferGeometry>;
+    expect(glyphBatches.children).toHaveLength(1);
+    expect(batch.geometry.instanceCount).toBe(6);
+    const offsets = batch.geometry.getAttribute("labelOrigin");
+    expect(offsets.getX(0)).toBe(0);
+    expect(offsets.getX(3)).toBe(1);
+    const mesh = (id: number) => (byId(id) as RenderableTextViewFacing).label.mesh;
+    expect(mesh(1).layers.mask).toBe(1 << LAYER_PICK_ONLY);
+    expect(mesh(2).layers.mask).toBe(1 << LAYER_PICK_ONLY);
+    expect(mesh(3).layers.mask).toBe(1 << LAYER_DEFAULT);
+    expect(mesh(4).layers.mask).toBe(1 << LAYER_DEFAULT);
+    expect(batch.userData.picking).toBe(false);
+
+    topic.addMarkerMessage(
+      { ...marker(1, MarkerType.TEXT_VIEW_FACING), action: MarkerAction.DELETE },
+      0n,
+    );
+    topic.startFrame(0n, "map", "map");
+    expect(glyphBatches.children).toHaveLength(0);
+    expect(mesh(2).layers.mask).toBe(1 << LAYER_DEFAULT);
   });
 
   it("stores instances relative to the batch origin, so map-scale coordinates keep precision", () => {
