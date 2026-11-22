@@ -193,13 +193,18 @@ export class DecayPointRing extends Renderable<BaseUserData, /*TRenderer=*/ unde
   }
 
   /**
-   * Copies a decoded scan into the ring, unless thinning skips it. Thins the history when the ring
-   * is out of slots, or out of space after growing up to the point budget.
+   * Copies a decoded scan into the ring, unless thinning skips it or the ring already has a scan
+   * received at that time. Thins the history when the ring is out of slots, or out of space after
+   * growing up to the point budget. A scan older than the newest (read back after a seek) is placed
+   * in age order.
    */
   public push(info: RingScanInfo, positions: Float32Array, colors: Uint8Array): void {
     const count = positions.length / 3;
     // One point set can't address more; such a scan is only ever drawn as the latest
     if (count === 0 || count > MAX_SET_POINTS) {
+      return;
+    }
+    if (this.#scans.some((scan) => scan.receiveTime === info.receiveTime)) {
       return;
     }
     if (++this.#sinceKept < this.#stride) {
@@ -212,7 +217,11 @@ export class DecayPointRing extends Renderable<BaseUserData, /*TRenderer=*/ unde
     const start = this.#allocate(count);
     const slot = this.#freeSlots.pop()!;
     this.#slotsUsed = Math.max(this.#slotsUsed, slot + 1);
-    this.#scans.push({ ...info, slot, start, count });
+    let at = this.#scans.length;
+    while (at > 0 && this.#scans[at - 1]!.receiveTime > info.receiveTime) {
+      at--;
+    }
+    this.#scans.splice(at, 0, { ...info, slot, start, count });
     this.#livePoints += count;
 
     this.#positions.set(positions, start * 3);

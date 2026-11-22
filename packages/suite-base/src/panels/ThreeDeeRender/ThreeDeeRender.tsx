@@ -328,6 +328,7 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
   // Times of the transform history the tree holds completely, in ns; -1n when none
   const transformsCompleteUntilRef = useRef(-1n);
   const seekReadRef = useRef<AbortController | undefined>(undefined);
+  const decayReadRef = useRef<AbortController | undefined>(undefined);
   // Transform topic names the transform tree was filled from
   const transformTopicNamesRef = useRef<string | undefined>(undefined);
 
@@ -564,8 +565,58 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
   // Transform topics, whose history is read with range reads instead of player preloading
   const [transformTopics, setTransformTopics] = useState<readonly TransformTopic[]>([]);
 
+  // Subscribed topics drawn with a decay time, and how far back their history reaches in ns
+  const decayTopics: (TransformTopic & { decayNs: bigint })[] = [];
+  for (const { topic, convertTo } of topicsToSubscribe ?? []) {
+    const decayTime = (config.topics[topic] as { decayTime?: number } | undefined)?.decayTime ?? 0;
+    if (decayTime > 0) {
+      decayTopics.push({ topic, convertTo, decayNs: BigInt(Math.round(decayTime * 1e9)) });
+    }
+  }
+  const decayTopicsRef = useLatest(decayTopics);
+  const decayKey = decayTopics.map((d) => `${d.topic} ${d.convertTo} ${d.decayNs}`).join("\n");
+
+  // A seek empties the decay histories: read each decayed topic's window before the new time again.
+  // The layers put messages older than their latest one straight into the history.
+  const readDecayHistory = useCallback(
+    (time: bigint) => {
+      decayReadRef.current?.abort();
+      if (!renderer || decayTopicsRef.current.length === 0) {
+        return;
+      }
+      const abort = new AbortController();
+      decayReadRef.current = abort;
+      for (const { decayNs, ...source } of decayTopicsRef.current) {
+        void readTransformRange({
+          subscribeRange: context.unstable_subscribeMessageRange,
+          topics: [source],
+          start: time - decayNs,
+          end: time,
+          signal: abort.signal,
+          onBatch: (batch) => {
+            for (const messageEvent of batch) {
+              renderer.addMessageEvent(messageEvent);
+            }
+            renderer.queueAnimationFrame();
+          },
+        });
+      }
+    },
+    // context is static, we're just using it to subscribe
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [renderer, decayTopicsRef],
+  );
+  useLayoutEffect(() => () => decayReadRef.current?.abort(), [readDecayHistory]);
+  // A new or longer decay time shows its window at once (scans already in the history are skipped)
+  useEffect(() => {
+    if (renderer && decayKey !== "") {
+      readDecayHistory(renderer.currentTime);
+    }
+  }, [renderer, decayKey, readDecayHistory]);
+
   // After a seek past the preloaded history (or with preloading off), read the transforms just
-  // before the new time, so every frame is placed right without waiting for preloading.
+  // before the new time, so every frame is placed right without waiting for preloading. The first
+  // window covers the longest decay time, so the decay histories read back are placed too.
   const readTransformsAfterSeek = useCallback(
     (time: bigint, knownFrameIds: readonly string[]) => {
       seekReadRef.current?.abort();
@@ -581,6 +632,10 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
         topics: transformTopics,
         time,
         floor,
+        minLookback: decayTopicsRef.current.reduce(
+          (max, d) => (d.decayNs > max ? d.decayNs : max),
+          0n,
+        ),
         signal: abort.signal,
         onBatch: (batch) => {
           renderer.addTransformMessages(batch, refreshed);
@@ -881,9 +936,10 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
       }
       renderer.handleSeek(oldTimeNs);
       readTransformsAfterSeek(newTimeNs, knownFrameIds);
+      readDecayHistory(newTimeNs);
       setDidSeek(false);
     }
-  }, [currentTime, renderer, didSeek, readTransformsAfterSeek]);
+  }, [currentTime, renderer, didSeek, readTransformsAfterSeek, readDecayHistory]);
 
   // Keep the renderer colorScheme and backgroundColor up to date
   useEffect(() => {

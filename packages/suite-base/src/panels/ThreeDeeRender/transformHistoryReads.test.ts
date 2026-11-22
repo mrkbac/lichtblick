@@ -171,6 +171,25 @@ describe("readTransformsBefore", () => {
     (console.error as ReturnType<typeof vi.fn>).mockClear();
   });
 
+  it("starts with a window as long as the longest decay time", async () => {
+    const { subscribeRange, reads } = fakeSource();
+    let windows = 0;
+    await readTransformsBefore({
+      subscribeRange,
+      topics: [{ topic: "/tf" }],
+      time: 500n * sec,
+      floor: -1n,
+      minLookback: 60n * sec,
+      isMissing: () => ++windows < 2,
+      onBatch: vi.fn(),
+      signal: new AbortController().signal,
+    });
+    expect(reads.map(({ start, end }) => [start, end])).toEqual([
+      [440n * sec, 500n * sec],
+      [372n * sec, 440n * sec - 1n],
+    ]);
+  });
+
   it("never reads before the complete history", async () => {
     const { subscribeRange, reads } = fakeSource();
     await readTransformsBefore({

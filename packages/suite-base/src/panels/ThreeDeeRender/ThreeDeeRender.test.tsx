@@ -12,7 +12,7 @@ import { act, render, waitFor } from "@testing-library/react";
 import { produce } from "immer";
 import type { Mock } from "vitest";
 
-import { SettingsTreeAction, Topic } from "@lichtblick/suite";
+import { SettingsTreeAction, SubscribeMessageRangeArgs, Topic } from "@lichtblick/suite";
 import MockPanelContextProvider from "@lichtblick/suite-base/components/MockPanelContextProvider";
 import {
   BuiltinPanelExtensionContext,
@@ -71,6 +71,7 @@ const createMockRenderer = (overrides?: Record<string, any>) => {
     setCameraState: vi.fn(),
     getCameraState: vi.fn().mockReturnValue(undefined),
     animationFrame: vi.fn(),
+    queueAnimationFrame: vi.fn(),
     addListener: vi.fn(function (event: string, listener: (...args: any[]) => void) {
       if (!listeners.has(event)) {
         listeners.set(event, new Set());
@@ -1395,6 +1396,61 @@ describe("ThreeDeeRender", () => {
           }),
         );
       });
+    });
+
+    it("reads each decayed topic's window before the seek time back into the renderer", async () => {
+      // Given
+      const topics = [
+        RenderStateBuilder.topic({ name: "/scan", schemaName: "sensor_msgs/LaserScan" }),
+      ];
+      const customRendererInstance = createMockRenderer({
+        schemaSubscriptions: new Map([["sensor_msgs/LaserScan", [{}]]]),
+      });
+      vi.mocked(Renderer).mockImplementationOnce(function () {
+        return customRendererInstance as any;
+      });
+      const older = MessageEventBuilder.messageEvent({ topic: "/scan" });
+      const mockContext = createPreloadingContext({
+        initialState: { topics: { "/scan": { visible: true, decayTime: 30 } } },
+        onSubscribe: (args: SubscribeMessageRangeArgs) => {
+          void args.onNewRangeIterator(
+            (async function* () {
+              yield [older];
+            })(),
+          );
+        },
+      });
+      render(<ThreeDeeRender {...setup({}, mockContext)} />);
+      await waitFor(() => {
+        expect(mockContext.onRender).toBeDefined();
+      });
+      act(() => {
+        mockContext.onRender!({ topics, currentFrame: [] }, vi.fn());
+      });
+      vi.mocked(mockContext.unstable_subscribeMessageRange).mockClear();
+
+      // When
+      act(() => {
+        mockContext.onRender!(
+          { topics, currentFrame: [], currentTime: { sec: 100, nsec: 0 }, didSeek: true },
+          vi.fn(),
+        );
+      });
+
+      // Then: the window ends at the seek time, and its messages go to the renderer
+      await waitFor(() => {
+        expect(mockContext.unstable_subscribeMessageRange).toHaveBeenCalledWith(
+          expect.objectContaining({
+            topic: "/scan",
+            start: { sec: 70, nsec: 0 },
+            end: { sec: 100, nsec: 0 },
+          }),
+        );
+      });
+      await waitFor(() => {
+        expect(customRendererInstance.addMessageEvent).toHaveBeenCalledWith(older);
+      });
+      expect(customRendererInstance.queueAnimationFrame).toHaveBeenCalled();
     });
 
     it("updates loading indicator during progressive loading", async () => {

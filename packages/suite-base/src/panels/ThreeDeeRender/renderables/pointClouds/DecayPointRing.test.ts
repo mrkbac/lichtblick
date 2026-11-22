@@ -91,6 +91,20 @@ describe("DecayPointRing", () => {
     expect(ring.visible).toBe(true);
   });
 
+  it("places scans older than the newest in age order and skips ones it already has", () => {
+    const { ring } = makeRing();
+    push(ring, 5n, 1); // e.g. the latest scan before the seek read's older ones arrive
+    push(ring, 2n, 1);
+    push(ring, 3n, 1);
+    push(ring, 3n, 1);
+
+    expect(ring.scanCount()).toBe(3);
+    expect(ring.oldestReceiveTime()).toBe(2n);
+    ring.expire(4n);
+    expect(ring.scanCount()).toBe(1);
+    expect(ring.oldestReceiveTime()).toBe(5n);
+  });
+
   it("hides expired scans", () => {
     const { ring, slots } = makeRing();
     push(ring, 1n, 4);

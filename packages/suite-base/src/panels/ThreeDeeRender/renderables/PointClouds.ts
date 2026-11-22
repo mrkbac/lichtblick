@@ -176,6 +176,8 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
    * PointCloudRenderable, so picking it still shows the message and per-point fields.
    */
   #decayRing: DecayPointRing | undefined;
+  /** Decodes scans older than the latest before they are copied into the ring */
+  #scratch: DynamicBufferGeometry | undefined;
   /** What the shown decay limit notice says, to format it again only when that changes */
   #decayNoticeKey: string | undefined;
 
@@ -252,6 +254,7 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
     this.#pointsHistory.dispose();
     this.#stixelsHistory.dispose();
     this.#decayRing?.dispose();
+    this.#scratch?.dispose();
     this.renderer.settings.errors.remove(this.userData.settingsPath, DECAY_LIMITED);
     super.dispose();
   }
@@ -409,17 +412,8 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
     const latest = pointsHistory.latest();
     const latestCount = latest.renderable.decoded ? latest.renderable.geometry.drawRange.count : 0;
     if (latestCount > 0) {
-      if (!this.#decayRing) {
-        this.#decayRing = new DecayPointRing(topic, pointStyle(settings), {
-          maxEntries: DECAY_RING_LIMITS.maxEntries,
-          maxPoints: decayMaxPoints(settings),
-        });
-        this.add(this.#decayRing);
-      }
       const { position, color } = latest.renderable.geometry.attributes;
-      // A limit changed since the last frame applies to this scan already
-      this.#decayRing.setMaxPoints(decayMaxPoints(settings));
-      this.#decayRing.push(
+      this.#ring(settings).push(
         {
           receiveTime: latest.receiveTime,
           messageTime: latest.messageTime,
@@ -450,6 +444,62 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
       stixelsHistory.addHistoryEntry({ receiveTime, messageTime, renderable: stixels });
       this.add(stixels);
     }
+  }
+
+  /**
+   * Decodes a scan older than the latest one (e.g. read back after a seek) straight into the decay
+   * ring, leaving the latest scan as it is
+   */
+  public addOlderScan(
+    pointCloud: PointCloud | PointCloud2,
+    settings: LayerSettingsPointClouds,
+    receiveTime: bigint,
+  ): void {
+    if (
+      !this.#validatePointCloud(pointCloud) ||
+      !this.#getPointCloudFieldReaders(tempFieldReaders, pointCloud, settings)
+    ) {
+      return;
+    }
+    const count = Math.trunc(pointCloud.data.length / getStride(pointCloud));
+    this.#scratch ??= createGeometry(`${this.userData.topic}:older`, THREE.StaticDrawUsage);
+    this.#scratch.resize(count);
+    const { position, color } = this.#scratch.attributes;
+    // Stixels have no decay ring, so the stixel attributes are never written
+    this.#updatePointCloudBuffers(
+      pointCloud,
+      tempFieldReaders,
+      count,
+      { ...settings, stixelsEnabled: false },
+      position!,
+      color!,
+      position!,
+      color!,
+    );
+    this.#ring(settings).push(
+      {
+        receiveTime,
+        messageTime: toNanoSec(getTimestamp(pointCloud)),
+        frameId: this.renderer.normalizeFrameId(getFrameId(pointCloud)),
+        pose: getPose(pointCloud),
+      },
+      (position!.array as Float32Array).subarray(0, count * 3),
+      (color!.array as Uint8Array).subarray(0, count * 4),
+    );
+  }
+
+  /** The decay ring, created on first use, with the point budget of `settings` */
+  #ring(settings: LayerSettingsPointClouds): DecayPointRing {
+    if (!this.#decayRing) {
+      this.#decayRing = new DecayPointRing(this.userData.topic, pointStyle(settings), {
+        maxEntries: DECAY_RING_LIMITS.maxEntries,
+        maxPoints: decayMaxPoints(settings),
+      });
+      this.add(this.#decayRing);
+    }
+    // A limit changed since the last frame applies to this scan already
+    this.#decayRing.setMaxPoints(decayMaxPoints(settings));
+    return this.#decayRing;
   }
 
   /** Expires, poses and budget-checks the decay ring. Returns whether all its scans resolved. */
@@ -1074,6 +1124,18 @@ export class PointClouds extends SceneExtension<PointCloudHistoryRenderable> {
     }
 
     let renderable = this.renderables.get(topic);
+    // A scan not newer than the latest one (read back after a seek, or the latest again) only adds
+    // to the decay history
+    if (
+      renderable &&
+      renderable.userData.settings.decayTime > 0 &&
+      receiveTime <= renderable.userData.receiveTime
+    ) {
+      if (receiveTime < renderable.userData.receiveTime) {
+        renderable.addOlderScan(pointCloud, renderable.userData.settings, receiveTime);
+      }
+      return;
+    }
     if (!renderable) {
       // Set the initial settings from default values merged with any user settings
       const userSettings = (this.renderer.config.topics[topic] ??

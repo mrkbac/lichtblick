@@ -243,6 +243,24 @@ describe("PointCloudHistoryRenderable decay", () => {
     expect(latest.instanceDetails(0)).toMatchObject({ x: 42, y: 2, z: 3 });
   });
 
+  it("puts an older scan (read back after a seek) straight into the ring, keeping the latest", () => {
+    const { renderable, settings } = decode(makeCloud(), { colorMode: "flat", decayTime: 10 });
+    renderable.updatePointCloud(makeCloud(), undefined, settings, 10n);
+    const older = makeCloud();
+    new DataView(older.data.buffer).setFloat32(0, 42, true);
+
+    renderable.addOlderScan(older, settings, 5n);
+
+    const ring = renderable.children.find((child) => child instanceof DecayPointRing)!;
+    expect(ring.scanCount()).toBe(1);
+    expect(ring.oldestReceiveTime()).toBe(5n);
+    expect(ring.points().positionAttribute().array[0]).toBe(42);
+    const latest = renderable.children[0] as unknown as {
+      instanceDetails: (instanceId: number) => Record<string, unknown> | undefined;
+    };
+    expect(latest.instanceDetails(0)).toMatchObject({ x: POSITIONS[0]![0] });
+  });
+
   it("drops the ring and its limit notice when the decay time is turned off", () => {
     const errors = new LayerErrors();
     const path = ["topics", "/points"];
