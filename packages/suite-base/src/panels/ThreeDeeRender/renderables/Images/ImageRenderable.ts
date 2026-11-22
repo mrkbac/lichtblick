@@ -139,6 +139,13 @@ const MAX_VIDEO_FRAME_HISTORY = 2000;
  */
 const MAX_VIDEO_FRAME_HISTORY_BYTES = 256 * 1024 * 1024;
 
+/**
+ * Longest a video decode backlog goes without painting. Frames with a newer frame queued are
+ * decoded without a bitmap; on a machine that decodes slower than playback that would be every
+ * frame, so one is painted at least this often.
+ */
+const MIN_VIDEO_PAINT_INTERVAL_MS = 100;
+
 type PendingVideoDecode = {
   image: AnyImage;
   resizeWidth?: number;
@@ -626,6 +633,7 @@ export class ImageRenderable extends Renderable<ImageUserData> {
   }
 
   async #drainPendingVideoDecodes(): Promise<void> {
+    let lastPaintAt = performance.now();
     while (this.#pendingVideoDecodeQueue.length > 0) {
       const pendingDecode = this.#pendingVideoDecodeQueue.shift();
       if (pendingDecode == undefined) {
@@ -638,7 +646,15 @@ export class ImageRenderable extends Renderable<ImageUserData> {
       // latest-received frame collapses the burst into a single jump to the current frame.
       // Comparing with the newest queued frame (not the momentary queue length) is robust to
       // frames being fed incrementally across multiple drain passes during playback.
-      const skipRender = pendingDecode.seq < this.#lastQueuedVideoSeq;
+      // When decoding stays slower than playback there is always a newer frame, so still paint
+      // every MIN_VIDEO_PAINT_INTERVAL_MS: the picture keeps moving instead of freezing.
+      const now = performance.now();
+      const skipRender =
+        pendingDecode.seq < this.#lastQueuedVideoSeq &&
+        now - lastPaintAt < MIN_VIDEO_PAINT_INTERVAL_MS;
+      if (!skipRender) {
+        lastPaintAt = now;
+      }
 
       await this.#startDecode(
         pendingDecode.image,
@@ -890,8 +906,8 @@ export class ImageRenderable extends Renderable<ImageUserData> {
 
   /**
    * With `skipRender`, a video frame that decodes normally only advances the decoder and returns
-   * undefined instead of a bitmap nobody would see. The rare fallback paths (GOP replay after a
-   * seek, empty and B-frame placeholders) still return a bitmap.
+   * undefined instead of a bitmap nobody would see, as do empty frames and B frames. The rare
+   * keyframe-wait paths (GOP replay after a seek, the black placeholder) still return a bitmap.
    */
   protected async decodeImage(
     image: AnyImage,
@@ -914,6 +930,9 @@ export class ImageRenderable extends Renderable<ImageUserData> {
         if (frameMsg.data.byteLength === 0) {
           const error = "Empty video frame";
           log.error(error);
+          if (skipRender) {
+            return undefined;
+          }
           // Show the last frame (black before the first one) instead of an error image
           return this.videoPlayer
             ? await latestVideoBitmap(this.videoPlayer, resizeWidth)
@@ -937,7 +956,7 @@ export class ImageRenderable extends Renderable<ImageUserData> {
         const { preparedFrame } = this.#prepareIncomingVideoFrame(frameMsg);
 
         if (preparedFrame.status === PreparedVideoFrameStatus.UnsupportedBFrame) {
-          return await latestVideoBitmap(videoPlayer, resizeWidth);
+          return skipRender ? undefined : await latestVideoBitmap(videoPlayer, resizeWidth);
         }
         if (this.#waitingForVideoKeyframe && preparedFrame.type !== "key") {
           const replayBitmap = this.#canReplayVideoGop
