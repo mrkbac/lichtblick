@@ -220,16 +220,7 @@ export class CoordinateFrame<ID extends AnyFrameId = UserFrameId> {
       return;
     }
 
-    // Prune by time on insert. Wait until the oldest entry is an eighth of maxStorageTime past the
-    // window so the O(n) removal runs once per eighth window, not on every insert, while keeping at
-    // most ~12% more than the window (a quarter cost ~50% more memory, a sixteenth ~5% more CPU).
-    const windowStart = history.timeAt(history.size() - 1) - this.maxStorageTime;
-    if (history.timeAt(0) < windowStart - this.maxStorageTime / 8n) {
-      // Keep the newest transform before the window, so lookups inside the window still
-      // interpolate from it instead of snapping to the next one.
-      const index = history.binarySearch(windowStart);
-      history.removeFirst(index >= 0 ? index : ~index - 1);
-    }
+    history.removeOlderThan(Number(this.maxStorageTime));
   }
 
   /**

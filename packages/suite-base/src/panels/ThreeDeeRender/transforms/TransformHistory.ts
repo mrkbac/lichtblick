@@ -8,6 +8,14 @@ import { Time } from "./time";
 const STRIDE = 9;
 const VALUES = 2;
 const INITIAL_CAPACITY = 4;
+/**
+ * Capacity relative to the sample count when growing or shrinking. A pruned window compacts once
+ * per (capacity - size) inserts, copying the window: 1.25 copies 4 samples per insert and holds 25%
+ * spare (1.5 measured no faster with 50% spare, 1.125 ~20% slower inserts).
+ */
+const GROWTH = 1.25;
+/** Compact the view instead of growing while the samples fill at most this share of the buffer */
+const COMPACT_BELOW = 1 / GROWTH;
 
 /**
  * Time-sorted transform samples of one frame, packed into a single Float64Array: 72 bytes per
@@ -19,15 +27,24 @@ const INITIAL_CAPACITY = 4;
 export class TransformHistory {
   #base: Time = 0n;
   #receiveBase: Time | undefined;
-  #data = new Float64Array(STRIDE * INITIAL_CAPACITY);
+  /** Backing storage; #data is a view of it that starts after samples removed from the front */
+  #buffer = new Float64Array(STRIDE * INITIAL_CAPACITY);
+  #data = this.#buffer;
   #size = 0;
   /** Keep one appended sample per this many; the newest one is always kept */
   #keepEvery = 1;
+  /** Relative time the newest sample must reach before removeOlderThan has anything to remove */
+  #pruneAt = -Infinity;
   /** Appended samples merged into the newest one since it was appended */
   #headInputs = 0;
 
   public size(): number {
     return this.#size;
+  }
+
+  /** Samples the backing storage holds */
+  public capacity(): number {
+    return this.#buffer.length / STRIDE;
   }
 
   public setKeepEvery(keepEvery: number): void {
@@ -62,6 +79,11 @@ export class TransformHistory {
     }
     const target = Number(time - this.#base);
     const d = this.#data;
+    // Fast path: lookups at or after the newest sample (the current time of a live source)
+    const newest = d[(size - 1) * STRIDE]!;
+    if (target >= newest) {
+      return target === newest ? size - 1 : ~size;
+    }
     let low = 0;
     let high = size - 1;
     while (low <= high) {
@@ -114,9 +136,10 @@ export class TransformHistory {
     }
     let receive = receiveTime == undefined ? -Infinity : Number(receiveTime - this.#receiveBase!);
     const lastIndex = this.#size - 1;
+    const relativeTime = Number(time - this.#base);
     // Fast path: samples almost always arrive in time order
     let index =
-      lastIndex < 0 || Number(time - this.#base) > this.#data[lastIndex * STRIDE]!
+      lastIndex < 0 || relativeTime > this.#data[lastIndex * STRIDE]!
         ? ~this.#size
         : this.binarySearch(time);
     if (index < 0) {
@@ -127,7 +150,7 @@ export class TransformHistory {
         // #keepEvery samples. The first sample and the newest one always stay.
         if (this.#extendsRun(transform) || this.#headInputs < this.#keepEvery) {
           this.#headInputs++;
-          this.#write(lastIndex, time, receive, transform);
+          this.#write(lastIndex, relativeTime, receive, transform);
           this.#keepReceiveOrder(lastIndex);
           return;
         }
@@ -138,7 +161,7 @@ export class TransformHistory {
       // The same transform received again: it was visible since it first arrived
       receive = Math.min(receive, this.#data[index * STRIDE + 1]!);
     }
-    this.#write(index, time, receive, transform);
+    this.#write(index, relativeTime, receive, transform);
     this.#keepReceiveOrder(index);
   }
 
@@ -167,6 +190,7 @@ export class TransformHistory {
     }
     this.#data.copyWithin(index * STRIDE, (index + 1) * STRIDE, this.#size * STRIDE);
     this.#size--;
+    this.#shrink();
     return true;
   }
 
@@ -176,14 +200,46 @@ export class TransformHistory {
     if (n <= 0) {
       return;
     }
-    this.#data.copyWithin(0, n * STRIDE, this.#size * STRIDE);
+    // O(1): move the view forward; #insertGap compacts it when it reaches the end of the buffer
+    this.#data = this.#data.subarray(n * STRIDE);
     this.#size -= n;
+    this.#shrink();
+  }
+
+  /**
+   * Removes samples older than `duration` ns before the newest one, keeping the newest sample at or
+   * before the window start so lookups inside the window still interpolate from it.
+   */
+  public removeOlderThan(duration: number): void {
+    const d = this.#data;
+    const newest = d[(this.#size - 1) * STRIDE]!;
+    // Skip without touching the (cold) front of the buffer until a removal can be due
+    if (newest < this.#pruneAt) {
+      return;
+    }
+    const start = newest - duration;
+    // Batch removals (each one allocates a view): wait until 1/64 of the samples are past the start
+    const batch = Math.max(1, this.#size >> 6);
+    if (batch >= this.#size) {
+      return;
+    }
+    if (d[batch * STRIDE]! > start) {
+      this.#pruneAt = d[batch * STRIDE]! + duration;
+      return;
+    }
+    let n = batch;
+    while (n + 1 < this.#size && d[(n + 1) * STRIDE]! <= start) {
+      n++;
+    }
+    this.removeFirst(n);
   }
 
   public clear(): void {
     this.#size = 0;
     this.#receiveBase = undefined;
-    this.#data = new Float64Array(STRIDE * INITIAL_CAPACITY);
+    this.#pruneAt = -Infinity;
+    this.#buffer = new Float64Array(STRIDE * INITIAL_CAPACITY);
+    this.#data = this.#buffer;
   }
 
   /**
@@ -202,6 +258,7 @@ export class TransformHistory {
     }
     d.copyWithin(write * STRIDE, (size - 1) * STRIDE, size * STRIDE);
     this.#size = write + 1;
+    this.#shrink();
     return size - this.#size;
   }
 
@@ -240,11 +297,36 @@ export class TransformHistory {
     return true;
   }
 
+  /**
+   * Releases storage once less than half of it is used (after thinning or pruning), so retained
+   * memory follows the sample count. The half threshold keeps a window that prunes and refills
+   * from reallocating.
+   */
+  #shrink(): void {
+    const capacity = this.#buffer.length / STRIDE;
+    if (capacity > INITIAL_CAPACITY && this.#size < capacity / 2) {
+      this.#reallocate(Math.max(INITIAL_CAPACITY, Math.ceil(this.#size * GROWTH)));
+    }
+  }
+
+  #reallocate(capacity: number): void {
+    const buffer = new Float64Array(STRIDE * capacity);
+    buffer.set(this.#data.subarray(0, this.#size * STRIDE));
+    this.#buffer = buffer;
+    this.#data = buffer;
+  }
+
   #insertGap(index: number): void {
     if ((this.#size + 1) * STRIDE > this.#data.length) {
-      const grown = new Float64Array(Math.ceil(this.#data.length * 1.5) + STRIDE);
-      grown.set(this.#data.subarray(0, this.#size * STRIDE));
-      this.#data = grown;
+      if (this.#size + 1 <= (this.#buffer.length / STRIDE) * COMPACT_BELOW) {
+        // The view reached the end of the buffer after removals from the front: move it back to
+        // the start. A pruned window does this once per (capacity - size) inserts.
+        const start = this.#data.byteOffset / Float64Array.BYTES_PER_ELEMENT;
+        this.#buffer.copyWithin(0, start, start + this.#size * STRIDE);
+        this.#data = this.#buffer;
+      } else {
+        this.#reallocate(Math.ceil((this.#size + 1) * GROWTH));
+      }
     }
     if (index < this.#size) {
       this.#data.copyWithin((index + 1) * STRIDE, index * STRIDE, this.#size * STRIDE);
@@ -252,12 +334,12 @@ export class TransformHistory {
     this.#size++;
   }
 
-  #write(index: number, time: Time, receiveTime: number, transform: Transform): void {
+  #write(index: number, relativeTime: number, receiveTime: number, transform: Transform): void {
     const d = this.#data;
     const o = index * STRIDE;
     const p = transform.position();
     const q = transform.rotation();
-    d[o] = Number(time - this.#base);
+    d[o] = relativeTime;
     d[o + 1] = receiveTime;
     d[o + 2] = p[0];
     d[o + 3] = p[1];

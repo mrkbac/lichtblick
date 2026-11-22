@@ -80,9 +80,10 @@ export class TransformTree {
     receiveTime?: Time,
   ): AddTransformResult {
     this.version++;
-    let updated = !this.hasFrame(frameId);
+    const existing = this.#frames.get(frameId);
+    let updated = existing == undefined;
     let cycleDetected = false;
-    const frame = this.getOrCreateFrame(frameId);
+    const frame = existing ?? this.getOrCreateFrame(frameId);
     const sizeBefore = frame.transformsSize();
     const curParentFrame = frame.latestParent();
     if (curParentFrame?.id !== parentFrameId) {
