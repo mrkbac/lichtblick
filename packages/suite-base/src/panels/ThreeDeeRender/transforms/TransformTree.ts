@@ -23,6 +23,15 @@ import { Duration, Time } from "./time";
 export const DEFAULT_MAX_STORAGE_TIME: Duration = 300n * BigInt(1e9);
 
 /**
+ * Live frames keep every transform received in this long before their newest one (scrubbing back
+ * and short decay times need full rate), and older ones at most
+ * {@link THINNED_TRANSFORM_SPACING} apart, which interpolation bridges. A 200 Hz frame keeps 30 s
+ * at 200 Hz and the rest of its window at 20 Hz: ~11k instead of 60k samples.
+ */
+export const FULL_RATE_TRANSFORM_TIME: Duration = 30n * BigInt(1e9);
+export const THINNED_TRANSFORM_SPACING: Duration = 50_000_000n;
+
+/**
  * Sample budget across all frames, about 144 MB at 72 bytes per sample. Past it, every frame's
  * history is halved, so long recordings and fast live frames lose time resolution evenly instead of
  * losing their oldest transforms.
@@ -242,6 +251,11 @@ export class TransformTree {
   #applyLimits(frame: CoordinateFrame): void {
     frame.maxStorageTime = this.#complete ? MAX_DURATION : this.#maxStorageTime;
     frame.setKeepEvery(2 ** this.decimations);
+    // A complete history is scrubbed anywhere, so only live ones thin by age
+    frame.setAgeThinning(
+      this.#complete ? Infinity : FULL_RATE_TRANSFORM_TIME,
+      THINNED_TRANSFORM_SPACING,
+    );
   }
 
   #decimate(): void {

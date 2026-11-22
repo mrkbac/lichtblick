@@ -8,7 +8,12 @@
 import { Transform } from "@lichtblick/suite-base/panels/ThreeDeeRender/transforms/Transform";
 
 import { MAX_DURATION } from "./CoordinateFrame";
-import { AddTransformResult, TransformTree } from "./TransformTree";
+import {
+  AddTransformResult,
+  FULL_RATE_TRANSFORM_TIME,
+  THINNED_TRANSFORM_SPACING,
+  TransformTree,
+} from "./TransformTree";
 
 const tf = Transform.Identity();
 describe("TransformTree", () => {
@@ -107,13 +112,46 @@ describe("TransformTree", () => {
     for (let i = 0; i < 200 * 120; i++) {
       tfTree.addTransform("b", "a", BigInt(i) * step, new Transform([i, 0, 0], [0, 0, 0, 1]));
     }
+    const frame = tfTree.frame("b")!;
     const lower: [bigint, Transform] = [0n, Transform.Empty()];
     const upper: [bigint, Transform] = [0n, Transform.Empty()];
-    // 100 s before the newest transform
-    const time = 20n * sec;
-    expect(tfTree.frame("b")!.findClosestTransforms(lower, upper, time, 0n)).toBe(true);
-    expect(lower[0]).toBe(time);
-    expect(lower[1].position()[0]).toBe(20 * 200);
+    // 100 s before the newest transform: bracketed by kept transforms at most the thinned spacing
+    // apart, and interpolating between them gives the pose (x grows linearly with time)
+    const time = 20n * sec + 3n * step;
+    expect(frame.findClosestTransforms(lower, upper, time, 0n)).toBe(true);
+    expect(lower[0]).toBeLessThanOrEqual(time);
+    expect(upper[0]).toBeGreaterThanOrEqual(time);
+    expect(upper[0] - lower[0]).toBeLessThanOrEqual(2n * THINNED_TRANSFORM_SPACING);
+    const fraction = Number(time - lower[0]) / Math.max(1, Number(upper[0] - lower[0]));
+    const x = lower[1].position()[0] + fraction * (upper[1].position()[0] - lower[1].position()[0]);
+    expect(x).toBeCloseTo(20 * 200 + 3, 6);
+  });
+
+  it("keeps full rate for recent live transforms and thins older ones to a fixed spacing", () => {
+    const sec = BigInt(1e9);
+    const tfTree = new TransformTree();
+    const step = sec / 200n;
+    const count = 200 * 120;
+    for (let i = 0; i < count; i++) {
+      tfTree.addTransform("b", "a", BigInt(i) * step, new Transform([i, 0, 0], [0, 0, 0, 1]));
+    }
+    const frame = tfTree.frame("b")!;
+    const newest = BigInt(count - 1) * step;
+    const times: bigint[] = [];
+    for (let t: bigint | undefined = newest; t != undefined; ) {
+      times.push(t);
+      t = t > 0n ? frame.latestTimeAtOrBefore(t - 1n) : undefined;
+    }
+    times.reverse();
+    const recent = times.filter((t) => t >= newest - FULL_RATE_TRANSFORM_TIME);
+    const old = times.filter((t) => t < newest - FULL_RATE_TRANSFORM_TIME - 5n * sec);
+    // Every recent transform is kept
+    expect(recent.length).toBeGreaterThanOrEqual(30 * 200);
+    // Older ones keep the thinned spacing, about 20 Hz instead of 200 Hz
+    const gaps = old.slice(1).map((t, i) => t - old[i]!);
+    expect(gaps.every((gap) => gap >= THINNED_TRANSFORM_SPACING)).toBe(true);
+    expect(gaps.every((gap) => gap <= 2n * THINNED_TRANSFORM_SPACING)).toBe(true);
+    expect(frame.transformsSize()).toBeLessThan(count / 2);
   });
 
   it("thins a live tree evenly past the sample budget instead of dropping old transforms", () => {

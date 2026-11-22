@@ -242,6 +242,11 @@ export class CoordinateFrame<ID extends AnyFrameId = UserFrameId> {
     this.#transforms.setKeepEvery(keepEvery);
   }
 
+  /** See {@link TransformHistory.setAgeThinning}; Infinity turns it off */
+  public setAgeThinning(fullRateDuration: Duration | number, spacing: Duration): void {
+    this.#transforms.setAgeThinning(Number(fullRateDuration), Number(spacing));
+  }
+
   /** Time of the newest transform at or before `time` that lookups can see, if any */
   public latestTimeAtOrBefore(time: Time): Time | undefined {
     const history = this.#activeTransforms();

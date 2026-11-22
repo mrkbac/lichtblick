@@ -33,6 +33,9 @@ export class TransformHistory {
   #size = 0;
   /** Keep one appended sample per this many; the newest one is always kept */
   #keepEvery = 1;
+  /** Samples older than this (ns before the newest) keep at least #thinSpacing ns between them */
+  #thinAfter = Infinity;
+  #thinSpacing = 0;
   /** Relative time the newest sample must reach before removeOlderThan has anything to remove */
   #pruneAt = -Infinity;
   /** Appended samples merged into the newest one since it was appended */
@@ -49,6 +52,15 @@ export class TransformHistory {
 
   public setKeepEvery(keepEvery: number): void {
     this.#keepEvery = keepEvery;
+  }
+
+  /**
+   * Thin by age: samples more than `fullRateDuration` ns older than the newest keep at least
+   * `spacing` ns between them. Applied while compacting, which copies the samples anyway.
+   */
+  public setAgeThinning(fullRateDuration: number, spacing: number): void {
+    this.#thinAfter = fullRateDuration;
+    this.#thinSpacing = spacing;
   }
 
   public timeAt(index: number): Time {
@@ -135,6 +147,9 @@ export class TransformHistory {
       this.#receiveBase ??= receiveTime;
     }
     let receive = receiveTime == undefined ? -Infinity : Number(receiveTime - this.#receiveBase!);
+    if ((this.#size + 1) * STRIDE > this.#data.length) {
+      this.#makeRoom();
+    }
     const lastIndex = this.#size - 1;
     const relativeTime = Number(time - this.#base);
     // Fast path: samples almost always arrive in time order
@@ -305,29 +320,81 @@ export class TransformHistory {
   #shrink(): void {
     const capacity = this.#buffer.length / STRIDE;
     if (capacity > INITIAL_CAPACITY && this.#size < capacity / 2) {
-      this.#reallocate(Math.max(INITIAL_CAPACITY, Math.ceil(this.#size * GROWTH)));
+      this.#compact(Math.max(INITIAL_CAPACITY, Math.ceil(this.#size * GROWTH)));
     }
   }
 
-  #reallocate(capacity: number): void {
-    const buffer = new Float64Array(STRIDE * capacity);
-    buffer.set(this.#data.subarray(0, this.#size * STRIDE));
-    this.#buffer = buffer;
-    this.#data = buffer;
+  /**
+   * Makes room for one more sample at the end of the view: moves the view back to the start of the
+   * buffer (thinning old samples on the way) while that leaves headroom, else grows the buffer.
+   * A pruned window does this once per (capacity - size) inserts.
+   */
+  #makeRoom(): void {
+    const capacity = this.#buffer.length / STRIDE;
+    if (this.#data.byteOffset > 0 || this.#thinAfter !== Infinity) {
+      this.#compact(capacity);
+    }
+    if (this.#size + 1 > capacity * COMPACT_BELOW) {
+      this.#compact(Math.ceil((this.#size + 1) * GROWTH));
+    }
+  }
+
+  /**
+   * Copies the samples to the start of a buffer of `capacity` samples (the current one if it has
+   * that size), dropping samples older than #thinAfter that are closer than #thinSpacing to the
+   * previous kept one.
+   */
+  #compact(capacity: number): void {
+    const src = this.#data;
+    const size = this.#size;
+    const inPlace = capacity * STRIDE === this.#buffer.length;
+    const dest = inPlace ? this.#buffer : new Float64Array(STRIDE * capacity);
+    const srcOffset = src.byteOffset / Float64Array.BYTES_PER_ELEMENT;
+    // First sample within #thinAfter of the newest; the ones before it are thinned
+    let recent = 0;
+    if (this.#thinAfter !== Infinity && size > 0) {
+      const cutoff = src[(size - 1) * STRIDE]! - this.#thinAfter;
+      let high = size;
+      while (recent < high) {
+        const mid = (recent + high) >>> 1;
+        if (src[mid * STRIDE]! < cutoff) {
+          recent = mid + 1;
+        } else {
+          high = mid;
+        }
+      }
+    }
+    let write = 0;
+    let lastKept = -Infinity;
+    for (let read = 0; read < recent; read++) {
+      const o = read * STRIDE;
+      const time = src[o]!;
+      if (time - lastKept < this.#thinSpacing) {
+        continue;
+      }
+      lastKept = time;
+      const w = write * STRIDE;
+      if (!inPlace || w !== srcOffset + o) {
+        // dest is at or before src when they share the buffer, so copying forward is safe
+        for (let k = 0; k < STRIDE; k++) {
+          dest[w + k] = src[o + k]!;
+        }
+      }
+      write++;
+    }
+    if (inPlace) {
+      if (write * STRIDE !== srcOffset + recent * STRIDE) {
+        dest.copyWithin(write * STRIDE, srcOffset + recent * STRIDE, srcOffset + size * STRIDE);
+      }
+    } else {
+      dest.set(src.subarray(recent * STRIDE, size * STRIDE), write * STRIDE);
+    }
+    this.#size = write + size - recent;
+    this.#buffer = dest;
+    this.#data = dest;
   }
 
   #insertGap(index: number): void {
-    if ((this.#size + 1) * STRIDE > this.#data.length) {
-      if (this.#size + 1 <= (this.#buffer.length / STRIDE) * COMPACT_BELOW) {
-        // The view reached the end of the buffer after removals from the front: move it back to
-        // the start. A pruned window does this once per (capacity - size) inserts.
-        const start = this.#data.byteOffset / Float64Array.BYTES_PER_ELEMENT;
-        this.#buffer.copyWithin(0, start, start + this.#size * STRIDE);
-        this.#data = this.#buffer;
-      } else {
-        this.#reallocate(Math.ceil((this.#size + 1) * GROWTH));
-      }
-    }
     if (index < this.#size) {
       this.#data.copyWithin((index + 1) * STRIDE, index * STRIDE, this.#size * STRIDE);
     }
