@@ -713,7 +713,8 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
   ): Promise<MessageEvent<Uint8Array>[]> {
     const { topics, time } = args;
     const end = toNanoSec(time);
-    // The topics are read one after the other; fetch each one's latest chunks at once up front
+    // The topics are read one after the other; fetch each one's latest chunks (and the chunks
+    // spanning `time`, which every topic's reverse read looks at first) at once up front
     this.#prefetch?.(
       this.#skimChunks(new Set(topics.keys()), 0n, end, end + 1n).map(chunkByteRange),
       { skim: false },
