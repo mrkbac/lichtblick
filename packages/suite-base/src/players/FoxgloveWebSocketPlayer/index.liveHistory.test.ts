@@ -151,6 +151,29 @@ describe("FoxgloveWebSocketPlayer live history", () => {
     delete (global as { WebSocket?: unknown }).WebSocket;
   });
 
+  it("resubscribes to a re-advertised topic without unsubscribing the removed channel", async () => {
+    const sentOps = () =>
+      ws.send.mock.calls
+        .map(([data]) => data)
+        .filter((data): data is string => typeof data === "string")
+        .map((data) => JSON.parse(data) as { op: string; subscriptions?: { channelId: number }[] });
+    ws.send.mockClear();
+
+    ws.receive(JSON.stringify({ op: "unadvertise", channelIds: [1] }));
+    await flush();
+    ws.receive(
+      JSON.stringify({
+        op: "advertise",
+        channels: [{ id: 2, topic: "/a", encoding: "json", schemaName: "S", schema: SCHEMA }],
+      }),
+    );
+    await flush();
+
+    // The server ended the old subscription with the channel; unsubscribing it only draws a warning.
+    expect(sentOps().map(({ op }) => op)).toEqual(["subscribe"]);
+    expect(sentOps()[0]!.subscriptions).toEqual([expect.objectContaining({ channelId: 2 })]);
+  });
+
   it.each([0, 256, 100_000])("round-trips %i byte parameter values", async (length) => {
     const bytes = Uint8Array.from({ length }, (_, i) => i % 256);
     const encoded = Buffer.from(bytes).toString("base64");

@@ -189,6 +189,21 @@ describe("useIndexedDbRecents", () => {
     unmount();
   });
 
+  it("identifies a connection by its arguments, not its display name", () => {
+    const recent = (extra: Record<string, string>) => ({
+      type: "connection" as const,
+      sourceId: "remote-file",
+      title: "https://example.com/a.mcap",
+      extra,
+    });
+    const url = "https://example.com/a.mcap";
+    expect(isSameRecent(recent({ url }), recent({ url, name: "Sample" }))).toBe(true);
+    expect(isSameRecent(recent({ url, name: "Old" }), recent({ url, name: "New" }))).toBe(true);
+    expect(isSameRecent(recent({ url }), recent({ url: "https://example.com/b.mcap" }))).toBe(
+      false,
+    );
+  });
+
   it("tells comparisons of the same files with other sides apart", () => {
     const recent = (compare: string[] | undefined, names = ["a.mcap", "b.mcap", "c.mcap"]) => ({
       type: "file" as const,

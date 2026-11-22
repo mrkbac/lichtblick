@@ -59,6 +59,11 @@ export type LayoutState = Readonly<{
         data: LayoutData | undefined;
         name?: string;
         edited?: boolean;
+        /**
+         * Set when `data` didn't come from the panels' own edits (undo, redo, a layout load or
+         * revert): panels whose config it changed are remounted to pick that config up.
+         */
+        externalEdit?: boolean;
       }
     | undefined;
 }>;

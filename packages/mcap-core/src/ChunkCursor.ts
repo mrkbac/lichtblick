@@ -267,7 +267,7 @@ export class ChunkCursor {
       throw new Error("Cannot compare a reversed ChunkCursor to a non-reversed ChunkCursor");
     }
 
-    let diff = Number(this.#getSortTime() - other.#getSortTime());
+    let diff = Number(this.sortTime() - other.sortTime());
 
     // Break ties by chunk offset in the file
     if (diff === 0) {
@@ -417,8 +417,11 @@ export class ChunkCursor {
     }
   }
 
-  // Get the next available message logTime which is being used when comparing chunkCursors (for ordering purposes).
-  #getSortTime(): bigint {
+  /**
+   * The logTime the cursor is ordered by: its next message's, or before message indexes are loaded
+   * (or once it is done) the chunk's first message time (last, for a reverse cursor).
+   */
+  public sortTime(): bigint {
     // If message indexes have been loaded and are non-empty, we return the logTime of the next available message.
     if (this.#index != undefined && this.#next >= this.#first && this.#next <= this.#last) {
       return this.#index.logTimes[this.#next]!;

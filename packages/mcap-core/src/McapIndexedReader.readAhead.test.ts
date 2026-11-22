@@ -12,7 +12,7 @@ import type { DecompressHandlers } from "./types.ts";
 const reverse = (data: Uint8Array) => data.slice().reverse();
 
 /** One message per chunk, alternating between /a and /b, with log times 0..count-1 */
-async function writeFile(count: number): Promise<TempBuffer> {
+async function writeFile(count: number, logTime = (i: number) => i): Promise<TempBuffer> {
   const buffer = new TempBuffer();
   const writer = new McapWriter({
     writable: buffer,
@@ -35,7 +35,7 @@ async function writeFile(count: number): Promise<TempBuffer> {
     await writer.addMessage({
       channelId: channels[i % 2]!,
       sequence: i,
-      logTime: BigInt(i),
+      logTime: BigInt(logTime(i)),
       publishTime: BigInt(i),
       data: new Uint8Array([i]),
     });
@@ -120,6 +120,24 @@ describe("McapIndexedReader read-ahead", () => {
     // When it is read backwards, Then only its last chunk is decompressed inline
     await expect(collect(reader, { reverse: true })).resolves.toEqual([5, 4, 3, 2, 1, 0]);
     expect(inline()).toBe(1);
+  });
+
+  it("reads ahead in the read's order when chunks tie on time and the summary isn't in file order", async () => {
+    for (const backwards of [false, true]) {
+      // Given chunks that all have the same log time, listed in the summary last chunk first
+      const buffer = await writeFile(6, () => 0);
+      const readAhead = fakeReadAhead();
+      const { reader, inline } = await open(buffer, readAhead);
+      reader.setChunkIndexes([...reader.chunkIndexes].reverse());
+
+      // When the file is read, Then it comes in file order (backwards for a reverse read)
+      const forward = [0, 1, 2, 3, 4, 5];
+      await expect(collect(reader, { reverse: backwards })).resolves.toEqual(
+        backwards ? forward.reverse() : forward,
+      );
+      // And every chunk after the first was loaded ahead
+      expect(inline()).toBe(1);
+    }
   });
 
   it("only reads ahead chunks with a message on a requested topic", async () => {
