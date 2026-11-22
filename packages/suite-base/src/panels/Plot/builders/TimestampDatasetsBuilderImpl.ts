@@ -22,7 +22,7 @@ import {
   SeriesItem,
   Viewport,
 } from "./IDatasetsBuilder";
-import { MAX_CURRENT_DATUMS_PER_SERIES, buildDatasetStyle, isDerivedSeries } from "./utils";
+import { buildDatasetStyle, isDerivedSeries } from "./utils";
 import { Dataset } from "../types";
 import { AnalysisColumns, computeHistogram, computeSpectrum } from "../utils/analysis";
 import { Datum, OriginalValue } from "../utils/datum";
@@ -71,7 +71,11 @@ class PointColumns {
 
   public push(item: Immutable<DataItem>): void {
     this.#reserve(this.length + 1);
-    const i = this.length++;
+    this.set(this.length++, item);
+  }
+
+  /** Overwrite row `i` */
+  public set(i: number, item: Immutable<DataItem>): void {
     this.x[i] = item.x;
     this.y[i] = item.y;
     this.#receiveSec[i] = item.receiveTime.sec;
@@ -86,6 +90,36 @@ class PointColumns {
       this.#values[i] = value;
     } else if (this.#values) {
       this.#values[i] = undefined;
+    }
+  }
+
+  /**
+   * Halve rows [start, length) by dropping every other row; the first and the last row stay.
+   * Returns the number of rows removed.
+   */
+  public halve(start: number): number {
+    const end = this.length;
+    if (end - start <= 2) {
+      return 0;
+    }
+    let write = start + 1;
+    for (let read = start + 2; read < end - 1; read += 2) {
+      this.#moveRow(read, write++);
+    }
+    this.#moveRow(end - 1, write++);
+    this.length = write;
+    if (this.#values && this.#values.length > write) {
+      this.#values.length = write;
+    }
+    return end - write;
+  }
+
+  #moveRow(from: number, to: number): void {
+    for (const col of this.#columns()) {
+      col[to] = col[from]!;
+    }
+    if (this.#values) {
+      this.#values[to] = this.#values[from];
     }
   }
 
@@ -239,7 +273,20 @@ type Series = {
   points: PointColumns;
   fullLength: number;
   derived?: Derived;
+  /** Current rows keep one in `keepEvery` samples; doubles each time they are halved */
+  keepEvery: number;
+  /** Samples folded into the newest current row so far */
+  headInputs: number;
 };
+
+/** Bytes per row in PointColumns: x, y, receive and stamp sec (f64), receive and stamp nsec (u32) */
+const BYTES_PER_ROW = 40;
+
+/**
+ * Memory budget for current (live, not preloaded) rows of all series of a plot. Past it, the
+ * series with the most current rows is thinned evenly instead of dropping its oldest data.
+ */
+const CURRENT_ROWS_BUDGET = Math.floor((32 * 1024 * 1024) / BYTES_PER_ROW);
 
 type ResetSeriesFullAction = {
   type: "reset-full";
@@ -524,6 +571,11 @@ function downsampleInto(
 
 export class TimestampDatasetsBuilderImpl {
   #seriesByKey = new Map<SeriesConfigKey, Series>();
+  readonly #currentRowsBudget: number;
+
+  public constructor(currentRowsBudget = CURRENT_ROWS_BUDGET) {
+    this.#currentRowsBudget = currentRowsBudget;
+  }
   /** Bumped on every data or series change; keys the analysis cache */
   #dataVersion = 0;
   #analysisCache?: { key: string; results: Map<SeriesConfigKey, AnalysisResult | undefined> };
@@ -789,6 +841,58 @@ export class TimestampDatasetsBuilderImpl {
     }
   }
 
+  /**
+   * Append a current row, or with `keepEvery` > 1 overwrite the newest row until it has folded in
+   * `keepEvery` samples, so the newest sample is always plotted. Gaps (NaN) are never folded.
+   */
+  #appendCurrent(series: Series, item: Immutable<DataItem>): void {
+    const { points } = series;
+    const last = points.length - 1;
+    if (
+      series.headInputs < series.keepEvery &&
+      last > series.fullLength &&
+      !Number.isNaN(item.y) &&
+      !Number.isNaN(points.y[last]!)
+    ) {
+      points.set(last, item);
+      series.headInputs++;
+    } else {
+      points.push(item);
+      series.headInputs = 1;
+    }
+  }
+
+  /**
+   * Halve the current rows of the series with the most of them until all fit the budget. Older
+   * data loses resolution evenly (later samples are kept at the same rate) instead of being cut.
+   */
+  #enforceCurrentBudget(): boolean {
+    let total = 0;
+    for (const series of this.#seriesByKey.values()) {
+      total += series.points.length - series.fullLength;
+    }
+    let thinned = false;
+    while (total > this.#currentRowsBudget) {
+      let largest: Series | undefined;
+      for (const series of this.#seriesByKey.values()) {
+        const rows = series.points.length - series.fullLength;
+        if (!largest || rows > largest.points.length - largest.fullLength) {
+          largest = series;
+        }
+      }
+      const removed = largest?.points.halve(largest.fullLength) ?? 0;
+      if (!largest || removed === 0) {
+        break;
+      }
+      largest.keepEvery *= 2;
+      // the newest row stays as it is; the next sample starts a new one
+      largest.headInputs = largest.keepEvery;
+      total -= removed;
+      thinned = true;
+    }
+    return thinned;
+  }
+
   public applyActions(actions: Immutable<UpdateDataAction[]>): void {
     for (const action of actions) {
       this.applyAction(action);
@@ -807,6 +911,8 @@ export class TimestampDatasetsBuilderImpl {
           return;
         }
         series.points.length = series.fullLength;
+        series.keepEvery = 1;
+        series.headInputs = 0;
         break;
       }
       case "reset-full": {
@@ -826,33 +932,30 @@ export class TimestampDatasetsBuilderImpl {
           return;
         }
         const { points, fullLength } = series;
+        const lengthBefore = points.length;
 
         // trim current data to remove values present in the full data
         const lastX = fullLength > 0 ? points.x[fullLength - 1] : undefined;
-
-        // Limit the total current datums for any series so they do not grow indefinitely
-        const currentLength = points.length - fullLength;
-        const cullSize = Math.max(
-          0,
-          currentLength + action.items.length - MAX_CURRENT_DATUMS_PER_SERIES,
-        );
-
-        // cull more than max so we don't have to cull again immediately
-        if (cullSize > 0) {
-          points.remove(fullLength, fullLength + cullSize + MAX_CURRENT_DATUMS_PER_SERIES * 0.25);
-        }
 
         // Message times other than receive time can arrive out of order
         const needsSort = series.config.timestampMethod !== "receiveTime";
         const items = (needsSort ? action.items.slice().sort(compareDatum) : action.items).filter(
           (item) => lastX == undefined || item.x > lastX,
         );
-        if (needsSort) {
-          points.insert(fullLength, items, points.length);
-        } else {
-          points.insert(points.length, items);
+        // Items before the newest current row merge into place; the rest append (thinned)
+        const newestX = points.length > fullLength ? points.x[points.length - 1]! : -Infinity;
+        let split = 0;
+        while (needsSort && split < items.length && items[split]!.x < newestX) {
+          split++;
         }
-        if (cullSize > 0 || items.length > 0) {
+        if (split > 0) {
+          points.insert(fullLength, items.slice(0, split), points.length);
+        }
+        for (let i = split; i < items.length; i++) {
+          this.#appendCurrent(series, items[i]!);
+        }
+        const thinned = this.#enforceCurrentBudget();
+        if (thinned || items.length > 0 || points.length !== lengthBefore) {
           this.#dataVersion += 1;
         }
         break;
@@ -906,6 +1009,8 @@ export class TimestampDatasetsBuilderImpl {
             config,
             points: new PointColumns(),
             fullLength: 0,
+            keepEvery: 1,
+            headInputs: 0,
           };
           series.config = config;
           newSeries.set(config.key, series);
