@@ -11,10 +11,10 @@
 //
 // An open WebSocket keeps the service worker alive (Chrome 116+).
 
-const ALLOWED_ORIGIN = "https://licht.marko.im";
+const ALLOWED_ORIGINS = new Set(["https://digitalis.marko.im", "https://licht.marko.im"]);
 
 chrome.runtime.onConnect.addListener((port) => {
-  if (port.name !== "ws" || port.sender?.origin !== ALLOWED_ORIGIN) {
+  if (port.name !== "ws" || !ALLOWED_ORIGINS.has(port.sender?.origin)) {
     port.disconnect();
     return;
   }

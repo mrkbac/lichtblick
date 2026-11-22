@@ -379,7 +379,7 @@ export default class FoxgloveWebSocketPlayer implements Player {
         message: "Connection failed",
         tip:
           (event as { reason?: unknown } | undefined)?.reason === PROXY_MISSING_REASON
-            ? `Browsers block ws:// from an https page. Install the WebSocket proxy extension (chrome-extension/ in the Lichtblick repo) and reload the page, or use wss://.`
+            ? `Browsers block ws:// from an https page. Install the WebSocket proxy extension (chrome-extension/ in the app repository) and reload the page, or use wss://.`
             : `Check that the WebSocket server at ${
                 this.#url
               } is reachable and supports protocol version one of: ${subprotocols.join(", ")}.`,
@@ -907,7 +907,7 @@ export default class FoxgloveWebSocketPlayer implements Player {
               severity: "warn",
               message: `Service ${service.name}`,
               error: new Error(
-                "requestSchema and responseSchema are deprecated and will not be supported in future versions of Lichtblick",
+                `requestSchema and responseSchema are deprecated and will not be supported in future versions of ${APP_CONFIG.productName}`,
               ),
             });
           }

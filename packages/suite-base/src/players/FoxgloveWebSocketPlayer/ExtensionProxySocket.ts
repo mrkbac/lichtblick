@@ -36,7 +36,7 @@ function isLoopback(hostname: string): boolean {
 
 // Origins the extension's content script runs on (chrome-extension/manifest.json). Elsewhere
 // keep the direct socket: Chrome may still allow it (e.g. local network access).
-const PROXY_ORIGINS = new Set(["https://licht.marko.im"]);
+const PROXY_ORIGINS = new Set(["https://digitalis.marko.im", "https://licht.marko.im"]);
 
 /** True when this page can use the proxy and the browser would block the socket directly. */
 export function needsExtensionProxy(

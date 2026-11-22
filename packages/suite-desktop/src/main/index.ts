@@ -59,14 +59,17 @@ async function updateLanguage() {
 }
 
 export async function main(): Promise<void> {
+  // Allow integration tests to override the userData directory. Otherwise keep the pre-rebrand
+  // profile dir so layouts and settings survive the product name change.
+  const userDataOverride = process.argv.find((arg) => arg.startsWith("--user-data-dir="));
+  app.setPath(
+    "userData",
+    userDataOverride?.slice("--user-data-dir=".length) ??
+      `${app.getPath("appData")}/${app.isPackaged ? "Lichtblick" : "Lichtblick Dev"}`,
+  );
+
   await initI18n({ context: "electron-main" });
   await updateLanguage();
-
-  // Allow integration tests to override the userData directory
-  const userDataOverride = process.argv.find((arg) => arg.startsWith("--user-data-dir="));
-  if (userDataOverride != undefined) {
-    app.setPath("userData", userDataOverride.slice("--user-data-dir=".length));
-  }
 
   // https://github.com/electron/electron/issues/28422#issuecomment-987504138
   app.commandLine.appendSwitch("enable-experimental-web-platform-features");

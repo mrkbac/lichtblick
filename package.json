@@ -3,9 +3,9 @@
   "version": "1.30.0",
   "license": "MPL-2.0",
   "private": true,
-  "productName": "Lichtblick",
-  "description": "Core components of Lichtblick",
-  "productDescription": "Lichtblick Suite",
+  "productName": "Digitalis",
+  "description": "Robotics data visualization and diagnosis",
+  "productDescription": "Digitalis",
   "packageManager": "pnpm@10.34.9",
   "repository": {
     "type": "git",

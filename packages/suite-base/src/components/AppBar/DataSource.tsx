@@ -10,6 +10,7 @@ import { CircularProgress, IconButton, Tooltip } from "@mui/material";
 import { useTranslation } from "react-i18next";
 import { makeStyles } from "tss-react/mui";
 
+import LichtblickLogoText from "@lichtblick/suite-base/components/LichtblickLogoText";
 import {
   MessagePipelineContext,
   useMessagePipeline,
@@ -41,6 +42,10 @@ const useStyles = makeStyles<void, "adornmentError">()((theme, _params, _classes
     paddingInlineEnd: theme.spacing(0.75),
     whiteSpace: "nowrap",
     minWidth: 0,
+  },
+  logo: {
+    width: 112,
+    height: 28,
   },
   adornment: {
     display: "flex",
@@ -106,7 +111,11 @@ export function DataSource(): React.JSX.Element {
   const playerDisplayName = initializing && playerName == undefined ? "Initializing…" : playerName;
 
   if (playerPresence === PlayerPresence.NOT_PRESENT) {
-    return <div className={classes.sourceName}>{t("noDataSource")}</div>;
+    return (
+      <div className={classes.sourceName}>
+        <LichtblickLogoText titleAccess={t("noDataSource")} className={classes.logo} />
+      </div>
+    );
   }
 
   return (
