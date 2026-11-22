@@ -5,6 +5,7 @@ import { fromSec } from "@foxglove/rostime";
 import { MessageEvent } from "@lichtblick/suite-base/players/types";
 
 import {
+  CHECKPOINT_INTERVAL,
   HEAP_MIN_HISTORY_BYTES,
   heapLimitBytes,
   LiveHistoryBuffer,
@@ -193,7 +194,7 @@ describe("LiveHistoryBuffer", () => {
   });
 
   it("seeks without walking the history of other topics or frames", () => {
-    const buffer = new LiveHistoryBuffer({ windowNs: 1000n * SEC, maxBytes: 1e9 });
+    const buffer = new LiveHistoryBuffer({ windowNs: 100_000n * SEC, maxBytes: 1e12 });
     let reads = 0;
     const counted = (event: MessageEvent): MessageEvent => {
       const { message } = event;
@@ -205,19 +206,73 @@ describe("LiveHistoryBuffer", () => {
       });
     };
     buffer.add(counted(tf(1, "static")));
-    for (let t = 2; t <= 500; t++) {
-      buffer.add(counted(tf(t, "base")));
-      buffer.add(counted(msg("/a", t)));
+    const last = 4 * CHECKPOINT_INTERVAL;
+    for (let t = 2; t <= last; t++) {
+      buffer.add(counted(t % 2 === 0 ? tf(t, "base") : msg("/a", t)));
     }
+    // A subscribed topic with no messages and a transform topic used to walk the whole history on
+    // every seek. While scrubbing, the second seek builds checkpoints; later ones read at most
+    // one block.
+    const topics = new Set(["/tf", "/a", "/empty"]);
+    buffer.backfill(fromSec(last), topics);
+    buffer.backfill(fromSec(last - 5000), topics);
     reads = 0;
-    // A subscribed topic with no messages and a transform topic used to walk the whole history.
-    const result = buffer.backfill(fromSec(400), new Set(["/tf", "/a", "/empty"]));
+    const result = buffer.backfill(fromSec(last - 1001), topics);
     expect(result.map((e) => [e.topic, e.receiveTime.sec])).toEqual([
       ["/tf", 1],
-      ["/tf", 400],
-      ["/a", 400],
+      ["/tf", last - 1002],
+      ["/a", last - 1001],
     ]);
-    expect(reads).toBe(0);
+    expect(reads).toBeLessThanOrEqual(CHECKPOINT_INTERVAL);
+  });
+
+  it("backfills the same as a full scan, across checkpoints and evictions", () => {
+    const windowSec = 3 * CHECKPOINT_INTERVAL;
+    const buffer = new LiveHistoryBuffer({ windowNs: BigInt(windowSec) * SEC, maxBytes: 1e12 });
+    const all: MessageEvent[] = [];
+    let seed = 1;
+    const random = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+    const frames = ["a", "b", "c", "d"];
+    const topics = new Set(["/tf", "/x", "/y", "/rare", "/empty"]);
+    const expected = (at: number) => {
+      const latest = new Map<string, MessageEvent>();
+      for (const m of all) {
+        if (m.receiveTime.sec <= at) {
+          for (const key of transformChildFrames(m.message) ?? [""]) {
+            latest.set(`${m.topic}/${key}`, m);
+          }
+        }
+      }
+      return times(
+        [...new Set(latest.values())].sort((p, q) => p.receiveTime.sec - q.receiveTime.sec),
+      );
+    };
+    const mismatches: number[] = [];
+    for (let t = 1; t <= 10 * CHECKPOINT_INTERVAL; t++) {
+      const r = random();
+      const m =
+        r < 0.4
+          ? tf(t, ...frames.filter(() => random() < 0.5))
+          : r < 0.7
+            ? msg("/x", t)
+            : r < 0.9999
+              ? msg("/y", t)
+              : msg("/rare", t);
+      all.push(m);
+      buffer.add(m);
+      if (t % 5000 === 0) {
+        for (let k = 0; k < 3; k++) {
+          const at = t - Math.floor(random() * Math.min(t, windowSec));
+          if (
+            JSON.stringify(times(buffer.backfill(fromSec(at), topics))) !==
+            JSON.stringify(expected(at))
+          ) {
+            mismatches.push(at);
+          }
+        }
+      }
+    }
+    expect(mismatches).toEqual([]);
   });
 
   it("clears everything, including seeds, e.g. on a clock reset", () => {

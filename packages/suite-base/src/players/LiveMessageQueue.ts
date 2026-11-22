@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import PlayerAlertManager from "@lichtblick/suite-base/players/PlayerAlertManager";
-import { seedKeys } from "@lichtblick/suite-base/players/liveHistory/LiveHistoryBuffer";
+import { transformEntries } from "@lichtblick/suite-base/players/liveHistory/LiveHistoryBuffer";
 import { MessageEvent } from "@lichtblick/suite-base/players/types";
 
 /**
@@ -65,46 +65,55 @@ export class LiveMessageQueue {
   }
 
   #dropOldest(): void {
-    // The newest message of each topic (each child frame for transforms) is kept, so a one-shot
-    // static transform or map isn't lost for good while the tab is in the background.
-    const latest = new Set<MessageEvent>();
-    const seen = new Map<string, Set<string>>();
-    for (let i = this.#messages.length - 1; i >= 0; i--) {
-      const msg = this.#messages[i]!;
-      let keys = seen.get(msg.topic);
-      if (!keys) {
-        keys = new Set();
-        seen.set(msg.topic, keys);
-      }
-      for (const key of seedKeys(msg)) {
-        if (!keys.has(key)) {
-          keys.add(key);
-          latest.add(msg);
-        }
-      }
-    }
     const target = 0.8 * this.#maxBytes;
-    const kept: MessageEvent[] = [];
     let bytes = this.#bytes;
     let count = 0;
-    for (; count < this.#messages.length && bytes > target; count++) {
-      const msg = this.#messages[count]!;
-      if (latest.has(msg)) {
-        kept.push(msg);
+    while (count < this.#messages.length && bytes > target) {
+      bytes -= this.#messages[count]!.sizeInBytes;
+      count++;
+    }
+    // Keep the newest dropped message of each topic (each child frame for transforms), so a one-shot
+    // static transform or map isn't lost for good while the tab is in the background. Only the
+    // dropped part is scanned; a kept message that a later one replaces goes in the next drop.
+    const done = new Set<string>(); // topics whose newest whole message is kept
+    const seenFrames = new Map<string, Set<string>>();
+    const kept: MessageEvent[] = [];
+    let keptBytes = 0;
+    for (let i = count - 1; i >= 0; i--) {
+      const msg = this.#messages[i]!;
+      if (done.has(msg.topic)) {
+        continue;
+      }
+      const transforms = transformEntries(msg.message);
+      let isNew = transforms == undefined;
+      if (transforms == undefined) {
+        done.add(msg.topic);
       } else {
-        bytes -= msg.sizeInBytes;
+        let seen = seenFrames.get(msg.topic);
+        if (!seen) {
+          seen = new Set();
+          seenFrames.set(msg.topic, seen);
+        }
+        for (const { child_frame_id: frame } of transforms) {
+          if (!seen.has(frame)) {
+            seen.add(frame);
+            isNew = true;
+          }
+        }
+      }
+      if (isNew) {
+        kept.push(msg);
+        keptBytes += msg.sizeInBytes;
       }
     }
-    if (bytes > 0.9 * this.#maxBytes) {
-      // The kept messages leave too little headroom, so every push would rescan: drop them too.
+    // Leave headroom, or every push would drop again; without room, drop those too.
+    if (bytes + keptBytes <= 0.9 * this.#maxBytes) {
+      bytes += keptBytes;
+    } else {
       kept.length = 0;
-      bytes = this.#bytes;
-      for (count = 0; count < this.#messages.length && bytes > target; count++) {
-        bytes -= this.#messages[count]!.sizeInBytes;
-      }
     }
     this.#bytes = bytes;
-    this.#messages = kept.concat(this.#messages.slice(count));
+    this.#messages.splice(0, count, ...kept.reverse());
     this.#alerts.addAlert(LIVE_QUEUE_FULL_ALERT_ID, {
       severity: "warn",
       message: `Dropped messages: more than ${(this.#maxBytes / 1_000_000).toFixed(0)} MB were waiting to be shown.`,
