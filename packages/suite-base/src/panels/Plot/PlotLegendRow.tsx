@@ -144,13 +144,24 @@ const useStyles = makeStyles<void, "plotName" | "actionButton">()((theme, _param
   },
 }));
 
+/**
+ * Integers (counters, seconds timestamps) show exactly. Fractions keep four decimals for a steady
+ * width, switching to an exponent only where fixed digits stop being readable.
+ */
+export function formatLegendNumber(value: number): string {
+  if (Number.isInteger(value)) {
+    return String(value);
+  }
+  return Math.abs(value) >= 1e5 && Math.abs(value) < 1e15 ? value.toFixed(4) : formatStat(value);
+}
+
 function renderValue(value: unknown): string | number | undefined {
   switch (typeof value) {
     case "bigint":
     case "boolean":
       return value.toString();
     case "number":
-      return formatStat(value);
+      return formatLegendNumber(value);
     case "string":
       return value;
     case "object":
