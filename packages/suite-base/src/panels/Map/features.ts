@@ -13,7 +13,7 @@ import { DEFAULT_POINT_SIZE, TopicStyle } from "./config";
 import { bearingDegrees, distanceMeters, ellipseRing, LngLat } from "./geo";
 import { getAccuracy } from "./getAccuracy";
 import { GeoJsonMessage, hasFix, parseGeoJSON } from "./support";
-import { TrackStore } from "./track";
+import { lastIndexAtOrBefore, nearestFix, TrackStore } from "./track";
 import { NavSatFixMsg } from "./types";
 
 export type NavMessage = MessageEvent<NavSatFixMsg>;
@@ -287,21 +287,35 @@ const collection = (features: Feature[]): FeatureCollection => ({
 const VALUE_COLORS = Array.from({ length: 64 }, (_unused, i) => turboColorString(i / 63));
 
 /** Values mapped onto the color scale between `range`, high to low when `reverse`. */
-export type ColorScale = { values: Float64Array; range: [number, number]; reverse: boolean };
+export type ColorScale = {
+  values: Float64Array;
+  range: [number, number];
+  reverse: boolean;
+  /** Appended to values in labels, e.g. " km/h". */
+  unit: string;
+};
 
 /** A topic's track as drawn: the fixes to draw (see `thinTrack`) and how. */
 export type DrawnTrack = {
   store: TrackStore;
   indices: Uint32Array;
   runs: readonly number[];
+  /** `store.version` when `indices` were chosen; they are stale once it changes. */
+  version: number;
   color: string;
   style: TopicStyle;
   /** Per-fix values (NaN where unknown) and their color scale, when colored by a value. */
   colorScale?: ColorScale;
 };
 
-/** Point property `k` indexes into `tracks`, `i` into that track's store. */
-export function trackFeatures(tracks: readonly DrawnTrack[]): {
+/**
+ * Point property `k` indexes into `tracks`, `i` into that track's store, and `g` is the
+ * `generation` of `tracks`, so hovers resolve against the tracks the map actually shows.
+ */
+export function trackFeatures(
+  tracks: readonly DrawnTrack[],
+  generation = 0,
+): {
   points: FeatureCollection;
   lines: FeatureCollection;
 } {
@@ -324,7 +338,7 @@ export function trackFeatures(tracks: readonly DrawnTrack[]): {
         points.push({
           type: "Feature",
           geometry: { type: "Point", coordinates: store.lngLat(i) },
-          properties: { k, i, c: colorAt(i), r },
+          properties: { g: generation, k, i, c: colorAt(i), r },
         });
       }
     }
@@ -473,4 +487,31 @@ export function headingFromTrack(
     }
   }
   return undefined;
+}
+
+/**
+ * The fix under the cursor for a track point feature (`k`, `i` from `trackFeatures`) drawn from
+ * `tracks`: the full-resolution fix nearest `at` among those the point stands for. Undefined when
+ * the feature doesn't belong to `tracks` or the track changed since (cleared or thinned).
+ */
+export function resolveTrackFix(
+  tracks: readonly DrawnTrack[] | undefined,
+  k: unknown,
+  i: unknown,
+  at: LngLat,
+): { track: DrawnTrack; fix: number } | undefined {
+  const track = typeof k === "number" ? tracks?.[k] : undefined;
+  if (
+    !track ||
+    typeof i !== "number" ||
+    track.store.version !== track.version ||
+    i >= track.store.length
+  ) {
+    return undefined;
+  }
+  const position = lastIndexAtOrBefore(track.indices, track.indices.length, i);
+  if (track.indices[position] !== i) {
+    return undefined;
+  }
+  return { track, fix: nearestFix(track.store, track.indices, position, at) };
 }

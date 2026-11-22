@@ -66,6 +66,7 @@ import {
   OVERLAY,
   OverlaySource,
   overlayStyle,
+  resolveTrackFix,
   trackFeatures,
   trackFlushDelayMs,
 } from "./features";
@@ -90,11 +91,12 @@ import {
 } from "./support";
 import {
   lastIndexAtOrBefore,
-  nearestFix,
   SampleStore,
   thinTrack,
+  thinViewCovers,
+  thinViewFor,
+  ThinView,
   TrackStore,
-  Viewport,
 } from "./track";
 
 const log = Logger.getLogger(__filename);
@@ -106,24 +108,6 @@ const TRACK_POINT_BUDGET = 50_000;
 type Hit =
   | { kind: "nav"; id: unknown; message: NavMessage; value?: string }
   | { kind: "geojson"; id: unknown; message: GeoJsonMessage; name?: string };
-
-/** Fixes to draw on the map, at a zoom and with the viewport padded by its size on each side. */
-type ThinView = { zoom: number; viewport?: Viewport };
-
-function thinViewOf(map: MapLibreMap): ThinView {
-  const bounds = map.getBounds();
-  const width = bounds.getEast() - bounds.getWest();
-  const height = bounds.getNorth() - bounds.getSouth();
-  const viewport = {
-    west: bounds.getWest() - width,
-    east: bounds.getEast() + width,
-    south: bounds.getSouth() - height,
-    north: bounds.getNorth() + height,
-  };
-  // ponytail: no culling across the antimeridian or when the whole world is in view.
-  const wraps = viewport.west < -180 || viewport.east > 180;
-  return { zoom: map.getZoom(), viewport: wraps ? undefined : viewport };
-}
 
 type View = Pick<Config, "center" | "zoomLevel" | "bearing" | "pitch">;
 
@@ -743,7 +727,7 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
 
   // "Color by": per-fix values from speed or a message path, with a range per topic.
   const { colorValues, legends } = useMemo(() => {
-    const values = new Map<string, ColorScale & { unit: string }>();
+    const values = new Map<string, ColorScale>();
     const legendList: {
       topic: string;
       title: string;
@@ -813,7 +797,6 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
   const currentRef = useLatest(currentMessages);
   const geoRef = useLatest(geoMessages);
   const visibleTracksRef = useLatest(visibleTracks);
-  const colorValuesRef = useLatest(colorValues);
 
   // --- Map --------------------------------------------------------------------------------
 
@@ -1114,7 +1097,18 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
       return;
     }
     const update = () => {
-      setThinView(thinViewOf(map));
+      const b = map.getBounds();
+      const bounds = {
+        west: b.getWest(),
+        east: b.getEast(),
+        south: b.getSouth(),
+        north: b.getNorth(),
+      };
+      const zoom = map.getZoom();
+      // Keep the thinned track (and skip its upload) while it still covers the view.
+      setThinView((prev) =>
+        prev && thinViewCovers(prev, zoom, bounds) ? prev : thinViewFor(zoom, bounds),
+      );
     };
     update();
     map.on("moveend", update);
@@ -1139,7 +1133,12 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
       // Points overlap heavily at half their radius apart; lines only need a pixel.
       const minPixels =
         history === "line" ? 1 : Math.max(1, (style.pointSize ?? DEFAULT_POINT_SIZE) / 2);
-      return { store, style, ...thinTrack(store, { ...thinView, minPixels, budget }) };
+      return {
+        store,
+        style,
+        version: store.version,
+        ...thinTrack(store, { ...thinView, minPixels, budget }),
+      };
     });
   }, [config.topicStyles, thinView, visibleTracks]);
 
@@ -1153,10 +1152,16 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
       }),
     [colorValues, colors, thinned],
   );
-  const drawnTracksRef = useLatest(drawnTracks);
+  // Tracks of the overlays sent to the map, by generation. Features the map still shows may be
+  // from the previous one, so hovers resolve against the tracks their features were built from.
+  const trackGenerations = useRef(new Map<number, readonly DrawnTrack[]>());
+  const generationRef = useRef(0);
 
   useEffect(() => {
-    const { points, lines } = trackFeatures(drawnTracks);
+    const generation = ++generationRef.current;
+    trackGenerations.current.set(generation, drawnTracks);
+    trackGenerations.current.delete(generation - 2);
+    const { points, lines } = trackFeatures(drawnTracks, generation);
     setOverlay(OVERLAY.track, points);
     setOverlay(OVERLAY.trackLine, lines);
   }, [drawnTracks, setOverlay]);
@@ -1348,17 +1353,22 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
       const layerId = feature.layer.id;
       if (layerId === INTERACTIVE_LAYERS.track) {
         // The drawn point stands for the fixes around it: show the one under the cursor.
-        const track = drawnTracksRef.current[feature.properties.k as number];
-        if (!track || index >= track.store.length) {
+        const generation: unknown = feature.properties.g;
+        const hit = resolveTrackFix(
+          typeof generation === "number" ? trackGenerations.current.get(generation) : undefined,
+          feature.properties.k,
+          index,
+          [event.lngLat.lng, event.lngLat.lat],
+        );
+        if (!hit) {
           return undefined;
         }
-        const k = lastIndexAtOrBefore(track.indices, track.indices.length, index);
-        const fix = nearestFix(track.store, track.indices, k, [event.lngLat.lng, event.lngLat.lat]);
-        const colored = colorValuesRef.current.get(track.store.topic);
+        const { track, fix } = hit;
+        const colored = track.colorScale;
         const value = colored?.values[fix];
         return {
           kind: "nav",
-          id: `${track.store.topic}\0${fix}`,
+          id: `${generation as number}\0${track.store.topic}\0${fix}`,
           message: track.store.message(fix),
           value:
             colored && value != undefined && isFinite(value)
@@ -1428,7 +1438,7 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
       map.getCanvas().removeEventListener("mouseleave", clear);
       popup.remove();
     };
-  }, [colorValuesRef, context, currentRef, drawnTracksRef, geoRef, map]);
+  }, [context, currentRef, geoRef, map]);
 
   // --- Render -----------------------------------------------------------------------------
 

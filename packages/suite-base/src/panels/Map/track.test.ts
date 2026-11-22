@@ -1,7 +1,15 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import { lastIndexAtOrBefore, nearestFix, SampleStore, thinTrack, TrackStore } from "./track";
+import {
+  lastIndexAtOrBefore,
+  nearestFix,
+  SampleStore,
+  thinTrack,
+  thinViewCovers,
+  thinViewFor,
+  TrackStore,
+} from "./track";
 
 function storeOf(count: number, lngLat: (i: number) => [number, number]): TrackStore {
   const store = new TrackStore("/fix");
@@ -121,6 +129,52 @@ describe("thinTrack", () => {
       0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29,
     ]);
     expect(twoParts.runs).toEqual([0, 11]);
+  });
+});
+
+describe("thinTrack with sparse or zigzagging tracks", () => {
+  it("keeps a segment crossing the viewport with both ends outside it", () => {
+    const store = storeOf(2, (i) => [i === 0 ? -1 : 1, 0]);
+    const { indices, runs } = thinTrack(store, {
+      zoom: 10,
+      minPixels: 1,
+      budget: 100,
+      viewport: { west: -0.1, east: 0.1, south: -0.1, north: 0.1 },
+    });
+    expect([...indices]).toEqual([0, 1]);
+    expect(runs).toEqual([0]);
+  });
+
+  it("stays under the budget when run ends alone exceed it", () => {
+    // Every other fix is outside the viewport: each visible fix is the end of a run.
+    const store = storeOf(150_000, (i) => [i % 2 === 0 ? 0 : 10, i % 4 < 2 ? 0 : 0.5]);
+    const viewport = { west: -1, east: 1, south: -1, north: 1 };
+    const { indices, runs } = thinTrack(store, {
+      zoom: 18,
+      minPixels: 1,
+      budget: 50_000,
+      viewport,
+    });
+    expect(indices.length).toBeLessThanOrEqual(50_000);
+    expect(indices.length).toBeGreaterThan(40_000);
+    expect(runs[0]).toBe(0);
+    expect(runs.every((run, i) => i === 0 || run > runs[i - 1]!)).toBe(true);
+  });
+});
+
+describe("thinViewCovers", () => {
+  const bounds = { west: 0, east: 1, south: 0, north: 1 };
+  const view = thinViewFor(10, bounds);
+
+  it("keeps the thinned track for small moves and zooms", () => {
+    expect(thinViewCovers(view, 10, { west: 0.5, east: 1.5, south: 0.5, north: 1.5 })).toBe(true);
+    expect(thinViewCovers(view, 10.1, bounds)).toBe(true);
+  });
+
+  it("re-thins after leaving the padding or zooming further", () => {
+    expect(thinViewCovers(view, 10, { west: 1.5, east: 2.5, south: 0, north: 1 })).toBe(false);
+    expect(thinViewCovers(view, 11, bounds)).toBe(false);
+    expect(thinViewCovers(view, 9, { west: -1, east: 2, south: -1, north: 2 })).toBe(false);
   });
 });
 

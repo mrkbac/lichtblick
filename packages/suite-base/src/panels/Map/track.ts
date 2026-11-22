@@ -209,6 +209,42 @@ const mercatorY = (lat: number) => {
 /** Area to draw, in degrees. */
 export type Viewport = { west: number; south: number; east: number; north: number };
 
+/** What the track was thinned for: a zoom, and the viewport padded by its size on each side. */
+export type ThinView = { zoom: number; viewport?: Viewport };
+
+/** The view to thin for, given the visible bounds at `zoom` (no culling when it would wrap). */
+export function thinViewFor(zoom: number, bounds: Viewport): ThinView {
+  const width = bounds.east - bounds.west;
+  const height = bounds.north - bounds.south;
+  const viewport = {
+    west: bounds.west - width,
+    east: bounds.east + width,
+    south: bounds.south - height,
+    north: bounds.north + height,
+  };
+  // ponytail: no culling across the antimeridian or when the whole world is in view.
+  const wraps = viewport.west < -180 || viewport.east > 180;
+  return { zoom, viewport: wraps ? undefined : viewport };
+}
+
+/**
+ * Whether a track thinned for `previous` still serves the visible `bounds` at `zoom`: the view
+ * stayed inside the padding and the spacing is still about right. Following a moving fix pans the
+ * map on every fix, and re-thinning a long track each time costs tens of milliseconds.
+ */
+export function thinViewCovers(previous: ThinView, zoom: number, bounds: Viewport): boolean {
+  const v = previous.viewport;
+  return (
+    Math.abs(zoom - previous.zoom) < 0.25 &&
+    (v == undefined
+      ? thinViewFor(zoom, bounds).viewport == undefined
+      : bounds.west >= v.west &&
+        bounds.east <= v.east &&
+        bounds.south >= v.south &&
+        bounds.north <= v.north)
+  );
+}
+
 /**
  * Indices of the fixes to draw: inside the viewport (and one beyond, so lines leave it), at
  * least `minPixels` apart at `zoom`, and at most about `budget` of them (the spacing grows until
@@ -225,12 +261,21 @@ export function thinTrack(
   const inView = (i: number) =>
     v == undefined ||
     (lon[i]! >= v.west && lon[i]! <= v.east && lat[i]! >= v.south && lat[i]! <= v.north);
+  // Whether the segment from fix i to i + 1 may cross the viewport (its bounding box does), so a
+  // sparse line through the view is kept even with both ends outside it.
+  const segmentInView = (i: number) =>
+    v == undefined ||
+    (Math.min(lon[i]!, lon[i + 1]!) <= v.east &&
+      Math.max(lon[i]!, lon[i + 1]!) >= v.west &&
+      Math.min(lat[i]!, lat[i + 1]!) <= v.north &&
+      Math.max(lat[i]!, lat[i + 1]!) >= v.south);
   // MapLibre's world is 512 px wide at zoom 0.
   // ponytail: ignores pitch, so near the camera a tilted map shows the spacing; scale by the
   // tilt if that matters.
   // In degrees of longitude. Locally a degree of latitude is 1/cos(lat) as long on a Mercator map,
   // so distances need no projection (no log or sin per fix).
   let minDistance = (options.minPixels / (512 * 2 ** options.zoom)) * 360;
+  let previousCount = Infinity;
   for (;;) {
     const minSquared = minDistance * minDistance;
     const indices: number[] = [];
@@ -239,11 +284,10 @@ export function thinTrack(
     let lastLon = 0;
     let lastLat = 0;
     let latScale = 1;
-    let nearPrevious = false;
-    let near = n > 0 && inView(0);
+    let segmentBefore = false;
     for (let i = 0; i < n; i++) {
-      const nearNext = i + 1 < n && inView(i + 1);
-      if (!near && !nearPrevious && !nearNext) {
+      const segmentAfter = i + 1 < n && segmentInView(i);
+      if (!segmentBefore && !segmentAfter && !inView(i)) {
         gap = true;
       } else {
         const x = lon[i]!;
@@ -251,7 +295,7 @@ export function thinTrack(
         const dx = x - lastLon;
         const dy = (y - lastLat) * latScale;
         // The ends of each run are always kept, so the track meets the viewport edge.
-        if (gap || i === n - 1 || !nearNext || dx * dx + dy * dy >= minSquared) {
+        if (gap || !segmentAfter || dx * dx + dy * dy >= minSquared) {
           if (gap) {
             runs.push(indices.length);
             gap = false;
@@ -262,15 +306,45 @@ export function thinTrack(
           latScale = 1 / Math.cos((Math.max(-85, Math.min(85, y)) * Math.PI) / 180);
         }
       }
-      nearPrevious = near;
-      near = nearNext;
+      segmentBefore = segmentAfter;
     }
-    if (indices.length <= options.budget || minDistance > 360) {
+    if (indices.length <= options.budget) {
       return { indices: Uint32Array.from(indices), runs };
     }
+    // Run ends are kept at any spacing: when they alone exceed the budget (a track zigzagging
+    // across the viewport edge), take an even sample instead.
+    if (minDistance > 360 || indices.length > previousCount * 0.9) {
+      return sampleEvenly(indices, runs, options.budget);
+    }
+    previousCount = indices.length;
     // Kept points shrink roughly in proportion to the spacing; overshoot a little.
     minDistance *= Math.max(1.25, (indices.length / options.budget) * 1.1);
   }
+}
+
+/** At most `budget` of `indices`, evenly spaced, with each sample in its original run. */
+function sampleEvenly(
+  indices: readonly number[],
+  runs: readonly number[],
+  budget: number,
+): { indices: Uint32Array; runs: number[] } {
+  const stride = Math.ceil(indices.length / budget);
+  const sampled = new Uint32Array(Math.ceil(indices.length / stride));
+  const sampledRuns: number[] = [];
+  let run = 0;
+  let previousRun = -1;
+  for (let j = 0, k = 0; j < indices.length; j += stride, k++) {
+    while (run + 1 < runs.length && runs[run + 1]! <= j) {
+      run++;
+    }
+    // Samples from different runs must not be joined by a line.
+    if (run !== previousRun) {
+      sampledRuns.push(k);
+    }
+    previousRun = run;
+    sampled[k] = indices[j]!;
+  }
+  return { indices: sampled, runs: sampledRuns };
 }
 
 /** The fix between the kept neighbors of `kept[k]` that is closest to `at`, at full resolution. */
