@@ -94,7 +94,12 @@ export function isSameRecent(a: UnsavedRecentRecord, b: UnsavedRecentRecord): bo
   // Connections are identified by their arguments, files by name. A comparison also by which
   // file is in which side, since its title lists each file once.
   if (a.type === "connection" || b.type === "connection") {
-    return a.type === "connection" && b.type === "connection" && _.isEqual(a.extra, b.extra);
+    // The display name (`name`) isn't identity: a catalog name or a renamed entry reuses the row.
+    return (
+      a.type === "connection" &&
+      b.type === "connection" &&
+      _.isEqual(_.omit(a.extra, "name"), _.omit(b.extra, "name"))
+    );
   }
   const names = (r: typeof a) => r.handles.map((h) => h.name);
   return (

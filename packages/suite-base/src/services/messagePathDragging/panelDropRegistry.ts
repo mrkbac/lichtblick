@@ -44,6 +44,14 @@ export function dropOnFirstAcceptingPanel(
   return panelIds.find((id) => tryDrop(dropConfigs.get(id), paths));
 }
 
+/** Whether one of the panels would accept the paths, without dropping them. */
+export function anyPanelAccepts(
+  panelIds: readonly string[],
+  paths: readonly DraggedMessagePath[],
+): boolean {
+  return panelIds.some((id) => dropConfigs.get(id)?.getDropStatus(paths).canDrop === true);
+}
+
 /** Drops onto a panel as soon as it registers a drop config that accepts the paths. */
 export function queuePanelDrop(panelId: string, paths: readonly DraggedMessagePath[]): void {
   if (!tryDrop(dropConfigs.get(panelId), paths)) {

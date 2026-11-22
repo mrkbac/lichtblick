@@ -110,10 +110,13 @@ export default class ChartJsMux {
 
   // create a new chartjs instance
   // this must be done before sending any other requests to the instance
-  public initialize(args: InitOpts): RpcScales {
+  public async initialize(args: InitOpts): Promise<RpcScales> {
     args.fontLoaded = fontLoaded;
     const manager = new ChartJSManager(args);
     this.#managers.set(args.id, manager);
+    // The caller sends its first update as soon as this resolves. The chart is created only after
+    // the font loads, and an update before that is dropped (its bounds and data never resent).
+    await manager.ready;
     return manager.getScales();
   }
 

@@ -8,6 +8,7 @@ import { useTranslation } from "react-i18next";
 import { pushAll } from "@lichtblick/den/collection";
 import Logger from "@lichtblick/log";
 import { MessagePathStructureItem } from "@lichtblick/message-path";
+import { useToggleColorScheme } from "@lichtblick/suite-base/components/ColorSchemeThemeProvider";
 import { useShowCompareDialog } from "@lichtblick/suite-base/components/Compare/CompareDialog";
 import { useKeyboardShortcutsStore } from "@lichtblick/suite-base/components/KeyboardShortcuts/KeyboardShortcuts";
 import {
@@ -216,6 +217,7 @@ export function useAppCommands(): {
 } {
   const { t } = useTranslation("commandPalette");
   const showShortcuts = useKeyboardShortcutsStore((state) => state.show);
+  const toggleColorScheme = useToggleColorScheme();
   const showCompare = useShowCompareDialog();
   const { recentSources, selectRecent } = usePlayerSelection();
   const { dialogActions, sidebarActions, openPanelSettings } = useWorkspaceActions();
@@ -716,6 +718,13 @@ export function useAppCommands(): {
         },
       },
       {
+        id: "view.toggle-theme",
+        title: t("toggleTheme"),
+        keywords: ["theme", "dark", "light", "color scheme"],
+        shortcut: shortcutLabel(APP_SHORTCUTS, "app.toggleTheme"),
+        run: toggleColorScheme,
+      },
+      {
         id: "view.settings",
         title: t("settings"),
         keywords: ["preferences", "theme", "language"],
@@ -787,6 +796,7 @@ export function useAppCommands(): {
     setSelectedPanelIds,
     setSpeed,
     showShortcuts,
+    toggleColorScheme,
     sidebarActions,
     startTime,
     t,

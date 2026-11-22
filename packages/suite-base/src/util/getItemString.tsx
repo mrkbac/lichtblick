@@ -25,7 +25,14 @@ export function getItemString(
   _keyPath: readonly (string | number)[],
   timezone?: string,
 ): ReactNode {
-  if (typeof data !== "object" || data == undefined) {
+  // Arrays match none of the summaries below, and listing the keys of a big one (a point cloud's
+  // millions of bytes) costs more than the whole render.
+  if (
+    typeof data !== "object" ||
+    data == undefined ||
+    Array.isArray(data) ||
+    ArrayBuffer.isView(data)
+  ) {
     return (
       <span>
         {itemType} {itemString}
