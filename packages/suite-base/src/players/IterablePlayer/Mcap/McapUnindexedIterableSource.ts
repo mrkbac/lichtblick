@@ -473,7 +473,14 @@ export class McapUnindexedIterableSource implements ISerializedIterableSource {
       const channelId = index.channels[i]!;
       const topic = this.#channelInfoById.get(channelId)?.channel.topic;
       if (wanted[channelId] === 1 && topic != undefined && !found.has(topic)) {
-        const record = this.#peekRecord(i, reader) ?? (await this.#loadRecord(i, reader));
+        let record = this.#peekRecord(i, reader);
+        if (!record) {
+          // A seek moved on: stop before another read instead of holding up the next backfill
+          if (args.abortSignal?.aborted === true) {
+            return [];
+          }
+          record = await this.#loadRecord(i, reader);
+        }
         found.set(topic, this.#messageEvent(i, record));
       }
     }

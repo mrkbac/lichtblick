@@ -136,6 +136,53 @@ describe("McapIterableSource", () => {
     ]);
   });
 
+  it("keeps the first definition of a channel defined twice in a recovered file, and says so", async () => {
+    // Given a cut-off file of two chunks that each define channel 1, under different topics
+    const chunkOf = (topic: string, logTime: bigint) => {
+      const inner = new McapRecordBuilder();
+      inner.writeChannel({
+        id: 1,
+        schemaId: 0,
+        topic,
+        messageEncoding: "json",
+        metadata: new Map(),
+      });
+      inner.writeMessage({
+        channelId: 1,
+        sequence: 0,
+        logTime,
+        publishTime: logTime,
+        data: new TextEncoder().encode("{}"),
+      });
+      const records = inner.buffer.slice();
+      return {
+        messageStartTime: logTime,
+        messageEndTime: logTime,
+        uncompressedSize: BigInt(records.byteLength),
+        uncompressedCrc: 0,
+        compression: "",
+        records,
+      };
+    };
+    const builder = new McapRecordBuilder();
+    builder.writeMagic();
+    builder.writeHeader({ library: "test", profile: "" });
+    builder.writeChunk(chunkOf("/first", 1n));
+    builder.writeChunk(chunkOf("/second", 2n));
+    const source = new McapIterableSource({
+      type: "file",
+      file: new Blob([builder.buffer.slice()]) as unknown as globalThis.Blob,
+    });
+
+    const { topics, alerts } = await source.initialize();
+
+    // Then both messages stay on the first topic, and the conflict is reported
+    expect(topics.map(({ name }) => name)).toEqual(["/first"]);
+    expect(alerts.map((alert) => alert.message)).toContain(
+      "Channel 1 is defined twice with different content",
+    );
+  });
+
   it("opens a recording that was cut off before its footer was written", async () => {
     const tempBuffer = new TempBuffer();
     const writer = new McapWriter({ writable: tempBuffer, chunkSize: 1 });

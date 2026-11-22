@@ -38,7 +38,7 @@ import {
   estimateAddedWeightBytes,
   estimateReaderWeightBytes,
 } from "./readerWeight";
-import { liveRecoveryAlerts, recoveryAlert } from "./recoveryAlerts";
+import { conflictAlerts, liveRecoveryAlerts, recoveryAlert } from "./recoveryAlerts";
 import {
   IteratorResult,
   Initialization,
@@ -704,6 +704,7 @@ export class McapIterableSource implements ISerializedIterableSource {
           message: `Indexing ${name ?? "this file"}: ${percent}% read`,
           tip: "Its index is being rebuilt. Messages play from the part indexed so far; the time range grows as indexing continues.",
         },
+        ...conflictAlerts(this.#recovery),
         ...init.alerts,
       ];
     } else if (this.#recovery && this.#isBeingWritten() && !this.#source.pool) {
@@ -721,10 +722,15 @@ export class McapIterableSource implements ISerializedIterableSource {
               tip: "To follow it as it grows, open it with Open file or drag and drop in a Chromium-based browser or the desktop app.",
             },
         ...liveRecoveryAlerts(this.#recovery),
+        ...conflictAlerts(this.#recovery),
         ...init.alerts,
       ];
     } else if (this.#recovery) {
-      init.alerts = [recoveryAlert(this.#recovery), ...init.alerts];
+      init.alerts = [
+        recoveryAlert(this.#recovery),
+        ...conflictAlerts(this.#recovery),
+        ...init.alerts,
+      ];
     }
     if (this.#scanError) {
       init.alerts = withScanError(init, this.#scanError).alerts;

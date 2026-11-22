@@ -36,13 +36,14 @@ const json = (value: unknown) => new TextEncoder().encode(JSON.stringify(value))
 /** An unchunked recording with topics "a" (channel 1) and "b" (channel 2) */
 async function unchunked(
   messages: { channelId: number; logTime: bigint }[],
-  { useChunks = false }: { useChunks?: boolean } = {},
+  { useChunks = false, chunkSize }: { useChunks?: boolean; chunkSize?: number } = {},
 ): Promise<Uint8Array> {
   const buffer = new TempBuffer();
   const writer = new McapWriter({
     writable: buffer,
     startChannelId: 1,
     useChunks,
+    chunkSize,
     useSummaryOffsets: false,
     useChunkIndex: false,
     useMessageIndex: false,
@@ -519,5 +520,38 @@ describe("McapUnindexedIterableSource", () => {
     // Then each reads and decompresses the chunk once
     expect(count).toBe(50);
     expect(readable.reads).toBe(2);
+  });
+  it("stops a backfill between chunk reads once it is aborted", async () => {
+    // Given one chunk per message, so a backfill of two topics reads two chunks
+    const bytes = await unchunked(
+      [
+        { channelId: 1, logTime: 1n },
+        { channelId: 2, logTime: 2n },
+      ],
+      { useChunks: true, chunkSize: 1 },
+    );
+    const file = readableOf(bytes);
+    const source = new McapUnindexedIterableSource({ readable: file });
+    await source.initialize();
+    // And a seek that moves on during the first chunk read
+    const controller = new AbortController();
+    file.reads = 0;
+    const read = file.read.bind(file);
+    file.read = async (offset, size) => {
+      controller.abort();
+      return await read(offset, size);
+    };
+
+    const backfill = await source.getBackfillMessages({
+      topics: new Map([
+        ["a", { topic: "a" }],
+        ["b", { topic: "b" }],
+      ]),
+      time: { sec: 0, nsec: 2 },
+      abortSignal: controller.signal,
+    });
+
+    expect(backfill).toEqual([]);
+    expect(file.reads).toBe(1);
   });
 });
