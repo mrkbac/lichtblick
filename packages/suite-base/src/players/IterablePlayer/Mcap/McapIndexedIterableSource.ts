@@ -17,6 +17,7 @@ import {
   ISerializedIterableSource,
   IteratorResult,
   MessageIteratorArgs,
+  SKIM_TAIL_NS,
   TopicWithDecodingInfo,
 } from "@lichtblick/suite-base/players/IterablePlayer/IIterableSource";
 import { PlayerAlert, RecordingFileInfo, TopicStats } from "@lichtblick/suite-base/players/types";
@@ -26,9 +27,6 @@ import { toError } from "@lichtblick/suite-base/util/toError";
 
 const log = Logger.getLogger(__filename);
 
-// Skim reads the last 50ms of each window: enough for every fast topic (and every publisher on
-// a shared topic) to show up, while skipping the rest of the window's chunks.
-const SKIM_TAIL_NS = 50_000_000n;
 // How many chunks skimming prefetches ahead of the window it is reading
 const SKIM_PREFETCH_AHEAD_CHUNKS = 24;
 

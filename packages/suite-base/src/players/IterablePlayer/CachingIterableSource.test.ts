@@ -1438,6 +1438,28 @@ describe("CachingIterableSource", () => {
       expect(cache.getCacheSize()).toBe(100 * stored.length);
     });
 
+    it("keeps a block registered while another read still writes it", async () => {
+      // Given a read of a and b still writing its block
+      const { source } = recordingSource(["a", "b", "c"], 10);
+      const cache = new CachingIterableSource(source, { maxTotalSize: 600 });
+      await cache.initialize();
+      const older = cache.messageIterator({ topics: mockTopicSelection("a", "b") });
+      for (let i = 0; i < 4; i++) {
+        await older.next();
+      }
+
+      // When a read of a and c fills that same block and moves on
+      const newer = cache.messageIterator({ topics: mockTopicSelection("a", "c") });
+      for (let i = 0; i < 3; i++) {
+        await newer.next();
+      }
+
+      // Then b's bytes in it still can't be dropped: the older read still writes the block
+      expect(cache.canReadMore()).toBe(false);
+      await newer.return?.(undefined);
+      await older.return?.(undefined);
+    });
+
     it("drops unwanted results only from blocks no read is writing", async () => {
       // Given a read of a and b still writing its block with a full budget
       const { source } = recordingSource(["a", "b"], 10);
@@ -1632,6 +1654,89 @@ describe("CachingIterableSource", () => {
       ]);
     });
 
+    it("keeps every publisher on a shared topic current when thinning", async () => {
+      // Given two publishers on one topic, each at the end of every second, and a slow topic
+      const source = new TestSource();
+      const cache = new CachingIterableSource(source, { maxTotalSize: TEST_CACHE_BYTES });
+      await cache.initialize();
+      const message = (topic: string, sec: number, nsec: number, publisher: string) => ({
+        type: "message-event" as const,
+        msgEvent: {
+          topic,
+          receiveTime: { sec, nsec },
+          message: publisher,
+          sizeInBytes: 1,
+          schemaName: "foo",
+        },
+      });
+      source.messageIterator = async function* () {
+        for (let sec = 0; sec < 4; sec++) {
+          if (sec % 2 === 0) {
+            yield message("slow", sec, 0, "s");
+          }
+          yield message("shared", sec, 980_000_000, "p1");
+          yield message("shared", sec, 980_000_000, "p2");
+        }
+      };
+      await readTopics(cache.messageIterator({ topics: mockTopicSelection("shared", "slow") }));
+
+      const results: string[] = [];
+      for await (const result of cache.messageIterator({
+        topics: mockTopicSelection("shared", "slow"),
+        skimInterval: { sec: 2, nsec: 0 },
+      })) {
+        if (result.type === "message-event") {
+          results.push(`${result.msgEvent.message as string}@${result.msgEvent.receiveTime.sec}`);
+        }
+      }
+
+      // Then each window's tail keeps both publishers; the slow topic keeps its latest message
+      expect(results).toEqual(["s@0", "p1@1", "p2@1", "s@2", "p1@3", "p2@3"]);
+    });
+
+    it("keeps alerts in order with the thinned messages", async () => {
+      const source = new TestSource();
+      const cache = new CachingIterableSource(source, { maxTotalSize: TEST_CACHE_BYTES });
+      await cache.initialize();
+      const message = (sec: number) => ({
+        type: "message-event" as const,
+        msgEvent: {
+          topic: "a",
+          receiveTime: { sec, nsec: 0 },
+          message: sec,
+          sizeInBytes: 1,
+          schemaName: "foo",
+        },
+      });
+      source.messageIterator = async function* () {
+        yield message(0);
+        yield message(1);
+        yield {
+          type: "alert" as const,
+          connectionId: 0,
+          alert: { severity: "warn" as const, message: "late" },
+        };
+        yield message(3);
+      };
+      await readTopics(cache.messageIterator({ topics: mockTopicSelection("a") }));
+
+      const results: string[] = [];
+      for await (const result of cache.messageIterator({
+        topics: mockTopicSelection("a"),
+        skimInterval: { sec: 2, nsec: 0 },
+      })) {
+        results.push(
+          result.type === "message-event"
+            ? `a${result.msgEvent.receiveTime.sec}`
+            : result.type === "stamp"
+              ? "stamp"
+              : result.type,
+        );
+      }
+
+      expect(results).toEqual(["a1", "alert", "stamp", "a3"]);
+    });
+
     it("reads a range skimmed instead of filling a full block during a skimmed read", async () => {
       const { source, reads } = recordingSource(["a", "b"], 10);
       const cache = new CachingIterableSource(source, { maxTotalSize: TEST_CACHE_BYTES });
@@ -1639,17 +1744,20 @@ describe("CachingIterableSource", () => {
       await readTopics(cache.messageIterator({ topics: mockTopicSelection("a") }));
       reads.length = 0;
 
-      await readTopics(
+      const topics = await readTopics(
         cache.messageIterator({
           topics: mockTopicSelection("a", "b"),
           skimInterval: { sec: 2, nsec: 0 },
         }),
       );
 
-      // Then b isn't read at full density, and the full block stays as it was
-      expect(reads.map(({ topics, skimInterval }) => ({ topics, skimInterval }))).toEqual([
-        { topics: ["a", "b"], skimInterval: { sec: 2, nsec: 0 } },
-      ]);
+      // Then b isn't read at full density, and what a source returns at full density anyway is
+      // thinned like cached results: the last a and b of each 2 s window
+      expect(topics).toHaveLength(10);
+      // and the full block stays as it was
+      expect(
+        reads.map((read) => ({ topics: read.topics, skimInterval: read.skimInterval })),
+      ).toEqual([{ topics: ["a", "b"], skimInterval: { sec: 2, nsec: 0 } }]);
       expect(cache.getCacheSize()).toBe(1000);
       reads.length = 0;
       await readTopics(cache.messageIterator({ topics: mockTopicSelection("a") }));

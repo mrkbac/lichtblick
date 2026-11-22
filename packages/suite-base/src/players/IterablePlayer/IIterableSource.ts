@@ -19,6 +19,14 @@ import {
 } from "@lichtblick/suite-base/players/types";
 import { RosDatatypes } from "@lichtblick/suite-base/types/RosDatatypes";
 
+/**
+ * A skimmed read keeps every message in the last SKIM_TAIL_NS of each window: enough for every fast
+ * topic (and every publisher on a shared topic) to show up, while skipping the rest of the window.
+ * Topics with nothing in the tail get their latest message before it. Shared by the sources that
+ * skim and by the cache, which thins full-density blocks the same way.
+ */
+export const SKIM_TAIL_NS = 50_000_000n;
+
 export type TopicWithDecodingInfo = Topic & {
   messageEncoding?: string;
   schemaEncoding?: string;
