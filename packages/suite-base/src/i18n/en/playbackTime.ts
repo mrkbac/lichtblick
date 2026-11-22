@@ -4,6 +4,8 @@ export const playbackTime = {
   copied: "Copied",
   copyCurrentTime: "Copy current time",
   copyValue: "Copy {{label}}",
+  data: "Data",
+  dataGap: "none or very little",
   isoUtc: "UTC (ISO 8601)",
   nanoseconds: "Nanoseconds",
   seconds: "Seconds",

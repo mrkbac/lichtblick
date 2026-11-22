@@ -125,7 +125,14 @@ export class TopicEntities extends Renderable<EntityTopicUserData> {
         );
         renderable.visible = updated;
         if (!updated) {
-          missingTransform ??= missingTransformMessage(renderFrameId, fixedFrameId, frameId);
+          missingTransform ??= missingTransformMessage(
+            this.renderer.transformTree,
+            renderFrameId,
+            fixedFrameId,
+            frameId,
+            currentTime,
+            srcTime,
+          );
         } else {
           anyUpdated = true;
         }

@@ -469,7 +469,14 @@ export class Urdfs extends SceneExtension<UrdfRenderable> {
             currentTime,
           );
           if (missingFrame != undefined) {
-            const message = missingTransformMessage(renderFrameId, fixedFrameId, missingFrame);
+            const message = missingTransformMessage(
+              this.renderer.transformTree,
+              renderFrameId,
+              fixedFrameId,
+              missingFrame,
+              currentTime,
+              currentTime,
+            );
             this.renderer.settings.errors.add(path, MISSING_TRANSFORM, message);
             hasTfError = true;
           }

@@ -161,6 +161,36 @@ const tempVec3: vec3 = [0, 0, 0];
 const tempQuat: quat = [0, 0, 0, 1];
 const tempTransform = Transform.Identity();
 
+/**
+ * three's WebGPU renderer starts a requestAnimationFrame loop on its first `render()` and never stops
+ * it, even with no animation loop set. That loop only advances the node frame (frame id and time),
+ * yet keeps every panel waking the browser 60 times a second while paused. We render on demand:
+ * stop the loop and return the frame advance for the renderer to call once per drawn frame. Pick
+ * passes and compute() calls in between reuse the current frame, so three's per-frame caches
+ * (shadow maps among them) are not redrawn for them.
+ */
+export function stopThreeAnimationLoop(gl: THREE.WebGPURenderer): () => void {
+  const internals = gl as unknown as {
+    _animation?: { start?: () => void; stop?: () => void } | null;
+    _nodes?: { nodeFrame?: { update?: () => void; frameId?: number } } | null;
+  };
+  const { _animation: animation, _nodes: nodes } = internals;
+  const nodeFrame = nodes?.nodeFrame;
+  // Private three API: if a three upgrade renames it, keep rendering with the loop running
+  if (animation?.stop == undefined || nodeFrame?.update == undefined) {
+    log.warn("three.js internals changed; its idle animation loop keeps running");
+    return () => {};
+  }
+  animation.stop();
+  animation.start = () => {};
+  return () => {
+    nodeFrame.update?.();
+    // GPU timestamp queries are keyed by frame, as three's loop did
+    // Read-only in three's types; three's own loop writes it the same way
+    (gl.info as { frame: number }).frame = nodeFrame.frameId ?? gl.info.frame;
+  };
+}
+
 type StaticTransform = {
   /** Topic it came from, so it can be dropped when the topic goes away */
   topic: string;
@@ -287,6 +317,8 @@ export class Renderer extends EventEmitter<RendererEvents> {
   #rendering = false;
   #disposed = false;
   #animationFrame?: number;
+  /** Advances three's node frame; once per drawn frame (see stopThreeAnimationLoop) */
+  #advanceNodeFrame = (): void => {};
   #historyRepaintTimer: ReturnType<typeof setTimeout> | undefined;
   #historyRepaintPending = false;
   #cameraSyncError: undefined | string;
@@ -544,6 +576,7 @@ export class Renderer extends EventEmitter<RendererEvents> {
       if ((this.gl.backend as { isWebGPUBackend?: boolean }).isWebGPUBackend !== true) {
         throw new Error("three.js fell back to WebGL");
       }
+      this.#advanceNodeFrame = stopThreeAnimationLoop(this.gl);
       this.#gpuReady = true;
       this.queueAnimationFrame();
     } catch (error) {
@@ -1818,6 +1851,7 @@ export class Renderer extends EventEmitter<RendererEvents> {
     if (!this.#gpuReady) {
       return;
     }
+    this.#advanceNodeFrame();
     const camera = this.cameraHandler.getActiveCamera();
     camera.layers.set(LAYER_DEFAULT);
     // The raster reads world matrices before render() would refresh them; stale ones draw points a
