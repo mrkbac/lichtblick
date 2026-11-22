@@ -17,6 +17,7 @@ import {
   continueDownsample,
   finishDownsample,
   downsampleScatter,
+  downsamplePathColumns,
   DownsampleState,
 } from "./downsample";
 
@@ -226,5 +227,59 @@ describe("downsampleTimeseriesColumns", () => {
     expect(downsampleTimeseriesColumns(xs, ys, 1000, 19_000, view, 1000)).toEqual(
       downsampleTimeseries(points, view, 1000),
     );
+  });
+});
+
+describe("downsamplePathColumns", () => {
+  const view = {
+    width: 100,
+    height: 100,
+    bounds: { x: { min: 0, max: 10 }, y: { min: 0, max: 10 } },
+  };
+  const run = (points: [number, number][]) =>
+    downsamplePathColumns(
+      Float64Array.from(points, (p) => p[0]),
+      Float64Array.from(points, (p) => p[1]),
+      0,
+      points.length,
+      view,
+    );
+
+  it("reduces a run beyond one edge to its ends", () => {
+    // GIVEN a line that wanders left of the view and comes back
+    expect(
+      run([
+        [5, 5],
+        [-1, 5],
+        [-2, 6],
+        [-3, 4],
+        [-1, 5],
+        [5, 5],
+      ]),
+    ).toEqual([0, 1, 4, 5]);
+  });
+
+  it("keeps runs that cross from one edge to another, so the line cannot cut the view", () => {
+    // GIVEN a line going around the view from the left to the right, above it
+    const indices = run([
+      [-1, 5],
+      [-1, 11],
+      [5, 11],
+      [11, 11],
+      [11, 5],
+    ]);
+    expect(indices).toEqual([0, 1, 3, 4]);
+  });
+
+  it("drops rows within a pixel of the last kept one and keeps gaps", () => {
+    const indices = run([
+      [1, 1],
+      [1.01, 1.01],
+      [1.02, 1],
+      [Number.NaN, Number.NaN],
+      [5, 5],
+      [5, 5.01],
+    ]);
+    expect(indices).toEqual([0, 2, 3, 4, 5]);
   });
 });

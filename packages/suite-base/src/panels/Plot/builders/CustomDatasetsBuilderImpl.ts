@@ -7,11 +7,13 @@
 
 import { compare } from "@foxglove/rostime";
 
-import { pushAll } from "@lichtblick/den/collection";
 import { Immutable, Time } from "@lichtblick/suite";
-import { downsampleScatter } from "@lichtblick/suite-base/components/TimeBasedChart/downsample";
+import {
+  MAX_POINTS,
+  downsamplePathColumns,
+  downsampleScatter,
+} from "@lichtblick/suite-base/components/TimeBasedChart/downsample";
 import { Bounds1D } from "@lichtblick/suite-base/components/TimeBasedChart/types";
-import { extendBounds1D } from "@lichtblick/suite-base/types/Bounds";
 
 import {
   CsvDataset,
@@ -20,9 +22,10 @@ import {
   SeriesItem,
   Viewport,
 } from "./IDatasetsBuilder";
-import { MAX_CURRENT_DATUMS_PER_SERIES, buildDatasetStyle, updateSeriesConfig } from "./utils";
+import { PointColumns, iteratePoints } from "./columns";
+import { buildDatasetStyle } from "./utils";
 import { Dataset } from "../types";
-import { Datum, OriginalValue } from "../utils/datum";
+import { OriginalValue } from "../utils/datum";
 
 export type ValueItem = {
   /** Set when the series has its own x path; otherwise x comes from the panel's x-axis path. */
@@ -32,15 +35,21 @@ export type ValueItem = {
   receiveTime: Time;
 };
 
-type FullDatum = Datum & {
-  receiveTime: Time;
-  index: number;
+/** Rows in receive order: full (preloaded) rows first, then current rows */
+type Stream = {
+  points: PointColumns;
+  fullLength: number;
 };
 
-type Series = {
+type Series = Stream & {
   config: Immutable<SeriesItem>;
-  current: ValueItem[];
-  full: ValueItem[];
+  /**
+   * Without its own x path, `points.x` holds the x-axis value paired with each row. Rows before
+   * `pairedUpTo` are paired for good; later ones are paired again on each read.
+   */
+  pairedUpTo: number;
+  /** A message had more y values than its x-axis message had x values */
+  mismatched: boolean;
 };
 
 type ResetSeriesFullAction = {
@@ -99,12 +108,85 @@ export type UpdateDataAction =
   | UpdateSeriesCurrentAction
   | UpdateSeriesFullAction;
 
+/** Bytes per row in PointColumns (see TimestampDatasetsBuilderImpl) */
+const BYTES_PER_ROW = 40;
+
+/**
+ * Memory budget for current (live, not preloaded) rows of the x-axis and all series. Past it,
+ * live data is thinned evenly in time instead of dropping its oldest part.
+ */
+const CURRENT_ROWS_BUDGET = Math.floor((32 * 1024 * 1024) / BYTES_PER_ROW);
+
+const newStream = (): Stream => ({ points: new PointColumns(), fullLength: 0 });
+
+/** Start of the message (rows with the same receive time) that ends just before row `end` */
+function messageStart(points: PointColumns, end: number, floor: number): number {
+  let start = end - 1;
+  while (start > floor && points.sameReceive(start - 1, end - 1)) {
+    start--;
+  }
+  return start;
+}
+
+const toRow = (item: Immutable<ValueItem>) => ({
+  x: item.x ?? Number.NaN,
+  y: item.value,
+  value: item.originalValue,
+  receiveTime: item.receiveTime,
+});
+
+/** Add full (preloaded) rows; returns the first row that changed. */
+function appendFull(stream: Stream, items: Immutable<ValueItem[]>): number {
+  const { points } = stream;
+  if (items.length === 0) {
+    return points.length;
+  }
+  const at = points.receiveUpperBound(items[0]!.receiveTime, 0, stream.fullLength);
+  points.insert(at, items.map(toRow));
+  stream.fullLength += items.length;
+  // drop current rows the full rows now cover
+  const last = points.receiveTime(stream.fullLength - 1);
+  points.remove(stream.fullLength, points.receiveUpperBound(last, stream.fullLength));
+  return at;
+}
+
+/**
+ * Add current rows in receive order; returns the first row that changed. Current rows that full rows
+ * cover are skipped. Without a range source, a backward seek plays older messages again; they are
+ * inserted in order.
+ */
+function appendCurrent(stream: Stream, items: Immutable<ValueItem[]>): number {
+  const { points } = stream;
+  if (items.length === 0) {
+    return points.length;
+  }
+  const lastFull = stream.fullLength > 0 ? points.receiveTime(stream.fullLength - 1) : undefined;
+  let changed = points.length;
+  for (const item of items) {
+    if (lastFull != undefined && compare(item.receiveTime, lastFull) <= 0) {
+      continue;
+    }
+    const at = points.receiveUpperBound(item.receiveTime, stream.fullLength);
+    if (at === points.length) {
+      points.push(toRow(item));
+    } else {
+      points.insert(at, [toRow(item)]);
+      changed = Math.min(changed, at);
+    }
+  }
+  return changed;
+}
+
 export class CustomDatasetsBuilderImpl {
-  #xValues: { current: ValueItem[]; full: ValueItem[] } = {
-    current: [],
-    full: [],
-  };
+  #x: Stream = newStream();
   #seriesByKey = new Map<SeriesConfigKey, Series>();
+  readonly #currentRowsBudget: number;
+  /** Live rows keep one message per this many seconds; 0 keeps all */
+  #bucket = 0;
+
+  public constructor(currentRowsBudget = CURRENT_ROWS_BUDGET) {
+    this.#currentRowsBudget = currentRowsBudget;
+  }
 
   public updateData(actions: Immutable<UpdateDataAction[]>): void {
     for (const action of actions) {
@@ -119,77 +201,49 @@ export class CustomDatasetsBuilderImpl {
       if (!series.config.enabled) {
         continue;
       }
-      const dataset: Dataset = {
-        ...buildDatasetStyle(series.config),
-        data: [],
-      };
-
+      const dataset: Dataset = { ...buildDatasetStyle(series.config), data: [] };
       datasets[series.config.configIndex] = dataset;
 
-      // Create the full dataset by pairing full y-values with their x-value peers
-      // And then pairing current y-values with their x-value peers
-      const allData = this.#pairFullAndCurrentData(series);
-
-      const xBounds: Bounds1D = { min: Number.MAX_VALUE, max: -Number.MAX_VALUE };
-      const yBounds: Bounds1D = { min: Number.MAX_VALUE, max: -Number.MAX_VALUE };
-
-      for (const item of allData) {
-        if (!Number.isNaN(item.x)) {
-          extendBounds1D(xBounds, item.x);
-        }
-        if (!Number.isNaN(item.y)) {
-          extendBounds1D(yBounds, item.y);
-        }
-      }
-
-      // Downsample scatter is designed for scatter plots without points since it culls values
-      // outside of the viewport and these are needed when connecting the points with lines.
-      if (dataset.showLine === true) {
-        for (const item of allData) {
-          dataset.data.push({
-            x: item.x,
-            y: item.y,
-            value: item.value,
-          });
-        }
-      } else {
-        const downsampleViewport = {
-          width: viewport.size.width,
-          height: viewport.size.height,
-          bounds: {
-            x: {
-              min: viewport.bounds.x?.min ?? xBounds.min,
-              max: viewport.bounds.x?.max ?? xBounds.max,
-            },
-            y: {
-              min: viewport.bounds.y?.min ?? yBounds.min,
-              max: viewport.bounds.y?.max ?? yBounds.max,
-            },
-          },
-        };
-
-        const downsampledIndicies = downsampleScatter(allData, downsampleViewport);
-
-        for (const index of downsampledIndicies) {
-          const item = allData[index];
-          if (!item) {
-            continue;
-          }
-
-          dataset.data.push({
-            x: item.x,
-            y: item.y,
-            value: item.value,
-          });
-        }
-      }
-
-      if (
-        !series.config.xParsed &&
-        (this.#xValues.full.length !== series.full.length ||
-          this.#xValues.current.length !== series.current.length)
-      ) {
+      this.#pair(series);
+      const { x: xs, y: ys, length } = series.points;
+      if (series.mismatched) {
         pathsWithMismatchedDataLengths.add(series.config.messagePath);
+      }
+
+      const xMin = viewport.bounds.x?.min;
+      const xMax = viewport.bounds.x?.max;
+      const yMin = viewport.bounds.y?.min;
+      const yMax = viewport.bounds.y?.max;
+      const bounds = {
+        x: { min: xMin ?? 0, max: xMax ?? 0 },
+        y: { min: yMin ?? 0, max: yMax ?? 0 },
+      };
+      if (xMin == undefined || xMax == undefined || yMin == undefined || yMax == undefined) {
+        const data = dataBounds(xs, ys, length);
+        bounds.x = { min: xMin ?? data.x.min, max: xMax ?? data.x.max };
+        bounds.y = { min: yMin ?? data.y.min, max: yMax ?? data.y.max };
+      }
+      const view = { width: viewport.size.width, height: viewport.size.height, bounds };
+
+      let indices: Iterable<number>;
+      let count: number;
+      if (length < Math.min(view.width, MAX_POINTS)) {
+        indices = Array.from({ length }, (_, i) => i);
+        count = length;
+      } else {
+        const picked =
+          dataset.showLine === true
+            ? downsamplePathColumns(xs, ys, 0, length, view, MAX_POINTS)
+            : downsampleScatter(iteratePoints(xs, ys, 0, length), view);
+        indices = picked;
+        count = picked.length;
+      }
+      // Hide points as a sign of downsampling; without lines they are all there is to see
+      if (count < length && dataset.showLine === true) {
+        dataset.pointRadius = 0;
+      }
+      for (const i of indices) {
+        dataset.data.push({ x: xs[i]!, y: ys[i]!, value: series.points.value(i) });
       }
     }
 
@@ -202,207 +256,255 @@ export class CustomDatasetsBuilderImpl {
       if (!series.config.enabled) {
         continue;
       }
-
+      this.#pair(series);
+      const { points } = series;
+      const data: CsvDataset["data"] = [];
+      for (let i = 0; i < points.length; i++) {
+        const x = points.x[i]!;
+        if (xRange && !(x >= xRange.min && x <= xRange.max)) {
+          continue;
+        }
+        data.push({
+          x,
+          y: points.y[i]!,
+          receiveTime: points.receiveTime(i),
+          value: points.value(i),
+        });
+      }
       datasets.push({
         label: series.config.messagePath,
         configIndex: series.config.configIndex,
-        data: this.#pairFullAndCurrentData(series).filter(
-          (datum) => !xRange || (datum.x >= xRange.min && datum.x <= xRange.max),
-        ),
+        data,
       });
     }
-
     return datasets;
   }
 
-  // Pairs each series' full and current y-values with their x-value peers (by array index) into
-  // a single, index-ordered array of datums. Shared by getViewportDatasets and getCsvData.
-  #pairFullAndCurrentData(series: Series): FullDatum[] {
-    const allData: FullDatum[] = [];
-
+  /**
+   * Pair each y row with the x-axis message received last at or before it (the same message when
+   * x and y share a topic), by the value's index within its message. Pairs are kept once the
+   * x-axis has data at or after the row's receive time, so pans and zooms do not pair again.
+   */
+  #pair(series: Series): void {
     if (series.config.xParsed) {
-      for (const items of [series.full, series.current]) {
-        for (const item of items) {
-          allData.push({
-            x: item.x ?? NaN,
-            y: item.value,
-            index: allData.length,
-            receiveTime: item.receiveTime,
-            value: item.originalValue,
-          });
+      return;
+    }
+    const { points } = series;
+    const xPoints = this.#x.points;
+    const newestX = xPoints.length > 0 ? xPoints.receiveTime(xPoints.length - 1) : undefined;
+    let groupStart = series.pairedUpTo > 0 ? messageStart(points, series.pairedUpTo + 1, 0) : 0;
+    let settled = true;
+    let xEnd = 0;
+    let xStart = 0;
+    const from = series.pairedUpTo;
+    for (let i = from; i < points.length; i++) {
+      const time = points.receiveTime(i);
+      if (i === from || !points.sameReceive(i, i - 1)) {
+        if (i > from) {
+          groupStart = i;
+        }
+        // the x-axis message received last at or before this one
+        xEnd = xPoints.receiveUpperBound(time);
+        xStart = xEnd > 0 ? messageStart(xPoints, xEnd, 0) : 0;
+      }
+      let x = Number.NaN;
+      const index = i - groupStart;
+      if (xEnd > 0) {
+        x = xStart + index < xEnd ? xPoints.y[xStart + index]! : Number.NaN;
+        // At the message's last value: a message without a partner for every value, or one from
+        // the x-axis topic's message (same time) with another value count, is a mismatch
+        const groupEnds = i + 1 === points.length || !points.sameReceive(i + 1, i);
+        const xCount = xEnd - xStart;
+        if (
+          groupEnds &&
+          (index + 1 > xCount ||
+            (index + 1 !== xCount && compare(xPoints.receiveTime(xStart), time) === 0))
+        ) {
+          series.mismatched = true;
         }
       }
-      return allData;
-    }
-
-    for (let idx = 0; idx < series.full.length && idx < this.#xValues.full.length; ++idx) {
-      const xValue = this.#xValues.full[idx];
-      const yValue = series.full[idx];
-      if (xValue == undefined || yValue == undefined) {
-        continue;
+      points.x[i] = x;
+      settled &&=
+        newestX != undefined &&
+        (newestX.sec > time.sec || (newestX.sec === time.sec && newestX.nsec >= time.nsec));
+      if (settled) {
+        series.pairedUpTo = i + 1;
       }
-
-      allData.push({
-        x: xValue.value,
-        y: yValue.value,
-        index: idx,
-        receiveTime: xValue.receiveTime,
-        value: yValue.originalValue,
-      });
     }
+  }
 
-    const fullLength = allData.length;
-    for (let idx = 0; idx < series.current.length && idx < this.#xValues.current.length; ++idx) {
-      const xValue = this.#xValues.current[idx];
-      const yValue = series.current[idx];
-      if (xValue == undefined || yValue == undefined) {
-        continue;
+  /** Rows of the x-axis changed from receive time `from` on: pair the y rows after it again. */
+  #unpairFrom(from: Time | undefined): void {
+    for (const series of this.#seriesByKey.values()) {
+      const row = from == undefined ? 0 : series.points.receiveLowerBound(from);
+      if (row < series.pairedUpTo) {
+        series.pairedUpTo = row;
       }
-
-      allData.push({
-        x: xValue.value,
-        y: yValue.value,
-        index: idx + fullLength,
-        receiveTime: xValue.receiveTime,
-        value: yValue.originalValue,
-      });
+      if (row === 0) {
+        series.mismatched = false;
+      }
     }
+  }
 
-    return allData;
+  #streams(): Stream[] {
+    return [this.#x, ...this.#seriesByKey.values()];
+  }
+
+  /**
+   * Keep current rows within the budget by thinning them to one message per time bucket. The
+   * bucket only grows (doubles), and later messages are kept at the same rate. All streams use
+   * the same bucket, so x and y values of the same message are kept together.
+   */
+  #thinCurrent(stream: Stream, from: number): void {
+    const floor = stream.fullLength;
+    if (this.#bucket > 0 && from > floor && from < stream.points.length) {
+      // Only the newest message may break the bucket rule. Re-check from the message before the
+      // one that was newest; it is first in its bucket, and older ones are settled.
+      const prevStart = messageStart(stream.points, from, floor);
+      const start = prevStart > floor ? messageStart(stream.points, prevStart, floor) : floor;
+      if (stream.points.thinByTime(start, this.#bucket) > 0) {
+        this.#rowsChanged(stream, start);
+      }
+    }
+    const currentRows = () =>
+      this.#streams().reduce((sum, s) => sum + s.points.length - s.fullLength, 0);
+    let total = currentRows();
+    while (total > this.#currentRowsBudget) {
+      if (this.#bucket === 0) {
+        // Start at about half the message rate of the busiest stream
+        let busiest = this.#x;
+        for (const other of this.#streams()) {
+          if (other.points.length - other.fullLength > busiest.points.length - busiest.fullLength) {
+            busiest = other;
+          }
+        }
+        const { points, fullLength } = busiest;
+        const span = points.receiveSeconds(points.length - 1) - points.receiveSeconds(fullLength);
+        this.#bucket = span > 0 ? (2 * span) / (points.length - fullLength) : 1e-3;
+      } else {
+        this.#bucket *= 2;
+      }
+      for (const other of this.#streams()) {
+        if (other.points.thinByTime(other.fullLength, this.#bucket) > 0) {
+          this.#rowsChanged(other, other.fullLength);
+        }
+      }
+      const next = currentRows();
+      if (next >= total) {
+        break;
+      }
+      total = next;
+    }
+  }
+
+  /** Rows of `stream` from `row` on changed */
+  #rowsChanged(stream: Stream, row: number): void {
+    if (stream === this.#x) {
+      if (row < stream.points.length) {
+        this.#unpairFrom(stream.points.receiveTime(row));
+      }
+      return;
+    }
+    const series = stream as Series;
+    series.pairedUpTo = Math.min(series.pairedUpTo, row);
   }
 
   #applyAction(action: Immutable<UpdateDataAction>): void {
     switch (action.type) {
-      case "reset-current-x": {
-        this.#xValues.current = [];
+      case "reset-current-x":
+        this.#x.points.length = this.#x.fullLength;
+        this.#unpairFrom(undefined);
         break;
-      }
-      case "reset-full-x": {
-        this.#xValues.full = [];
+      case "reset-full-x":
+        this.#x.points.remove(0, this.#x.fullLength);
+        this.#x.fullLength = 0;
+        this.#unpairFrom(undefined);
         break;
-      }
       case "reset-current": {
         const series = this.#seriesByKey.get(action.series);
-        if (!series) {
-          return;
+        if (series) {
+          series.points.length = series.fullLength;
+          series.pairedUpTo = Math.min(series.pairedUpTo, series.fullLength);
         }
-        // when we reset current we make a new array since we'll assume the full will load
-        // we won't need to keep getting current data
-        series.current = [];
         break;
       }
       case "reset-full": {
         const series = this.#seriesByKey.get(action.series);
-        if (!series) {
-          return;
-        }
-        // splice to keep underlying memory since we typically expect to fill it again
-        series.full.splice(0, series.full.length);
-        break;
-      }
-      case "append-current-x": {
-        const lastFullReceiveTime = this.#xValues.full[this.#xValues.full.length - 1]?.receiveTime;
-
-        // Limit the total current datums so they do not grow indefinitely
-        const cullSize = Math.max(
-          0,
-          this.#xValues.current.length + action.items.length - MAX_CURRENT_DATUMS_PER_SERIES,
-        );
-
-        // cull more than max so we don't have to cull again immediately
-        if (cullSize > 0) {
-          this.#xValues.current.splice(0, cullSize + MAX_CURRENT_DATUMS_PER_SERIES * 0.25);
-        }
-
-        for (const item of action.items) {
-          if (lastFullReceiveTime && compare(item.receiveTime, lastFullReceiveTime) <= 0) {
-            continue;
-          }
-
-          this.#xValues.current.push(item);
+        if (series) {
+          series.points.remove(0, series.fullLength);
+          series.fullLength = 0;
+          series.pairedUpTo = 0;
+          series.mismatched = false;
         }
         break;
       }
       case "append-full-x": {
-        pushAll(this.#xValues.full, action.items);
-
-        // trim current data to remove values present in the full data
-        const lastFullReceiveTime = this.#xValues.full[this.#xValues.full.length - 1]?.receiveTime;
-        if (lastFullReceiveTime) {
-          let idx = 0;
-          for (const item of this.#xValues.current) {
-            if (compare(item.receiveTime, lastFullReceiveTime) > 0) {
-              break;
-            }
-            idx += 1;
-          }
-
-          if (idx > 0) {
-            this.#xValues.current.splice(0, idx);
-          }
+        const changed = appendFull(this.#x, action.items);
+        this.#rowsChanged(this.#x, changed);
+        break;
+      }
+      case "append-current-x": {
+        const changed = appendCurrent(this.#x, action.items);
+        this.#rowsChanged(this.#x, changed);
+        this.#thinCurrent(this.#x, changed);
+        break;
+      }
+      case "append-full": {
+        const series = this.#seriesByKey.get(action.series);
+        if (series) {
+          this.#rowsChanged(series, appendFull(series, action.items));
         }
         break;
       }
       case "append-current": {
         const series = this.#seriesByKey.get(action.series);
-        if (!series) {
-          return;
-        }
-
-        // Limit the total current datums so they do not grow indefinitely
-        const cullSize = Math.max(
-          0,
-          series.current.length + action.items.length - MAX_CURRENT_DATUMS_PER_SERIES,
-        );
-
-        // cull more than max so we don't have to cull again immediately
-        if (cullSize > 0) {
-          series.current.splice(0, cullSize + MAX_CURRENT_DATUMS_PER_SERIES * 0.25);
-        }
-
-        const lastFullReceiveTime = series.full[series.full.length - 1]?.receiveTime;
-        for (const item of action.items) {
-          if (lastFullReceiveTime && compare(item.receiveTime, lastFullReceiveTime) <= 0) {
-            continue;
-          }
-
-          series.current.push(item);
-        }
-
-        break;
-      }
-      case "append-full": {
-        const series = this.#seriesByKey.get(action.series);
-        if (!series) {
-          return;
-        }
-
-        pushAll(series.full, action.items);
-
-        // trim current data to remove values present in the full data
-        const lastFullReceiveTime = series.full[series.full.length - 1]?.receiveTime;
-        if (lastFullReceiveTime) {
-          let idx = 0;
-          for (const item of series.current) {
-            if (compare(item.receiveTime, lastFullReceiveTime) > 0) {
-              break;
-            }
-            idx += 1;
-          }
-
-          if (idx > 0) {
-            series.current.splice(0, idx);
-          }
+        if (series) {
+          const changed = appendCurrent(series, action.items);
+          this.#rowsChanged(series, changed);
+          this.#thinCurrent(series, changed);
         }
         break;
       }
-      case "update-series-config":
-        this.#updateSeriesConfigAction(action.seriesItems);
+      case "update-series-config": {
+        const next = new Map<SeriesConfigKey, Series>();
+        for (const config of action.seriesItems) {
+          const series = this.#seriesByKey.get(config.key) ?? {
+            ...newStream(),
+            config,
+            pairedUpTo: 0,
+            mismatched: false,
+          };
+          if (Boolean(series.config.xParsed) !== Boolean(config.xParsed)) {
+            series.pairedUpTo = 0;
+            series.mismatched = false;
+          }
+          series.config = config;
+          next.set(config.key, series);
+        }
+        this.#seriesByKey = next;
         break;
+      }
     }
   }
+}
 
-  #updateSeriesConfigAction(series: Immutable<SeriesItem[]>): void {
-    this.#seriesByKey = updateSeriesConfig(this.#seriesByKey, series);
+/** Bounds of the finite values (NaN marks gaps and unpaired rows) */
+function dataBounds(xs: Float64Array, ys: Float64Array, length: number) {
+  let xMin = Number.MAX_VALUE;
+  let xMax = -Number.MAX_VALUE;
+  let yMin = Number.MAX_VALUE;
+  let yMax = -Number.MAX_VALUE;
+  for (let i = 0; i < length; i++) {
+    const x = xs[i]!;
+    const y = ys[i]!;
+    if (!Number.isNaN(x)) {
+      xMin = x < xMin ? x : xMin;
+      xMax = x > xMax ? x : xMax;
+    }
+    if (!Number.isNaN(y)) {
+      yMin = y < yMin ? y : yMin;
+      yMax = y > yMax ? y : yMax;
+    }
   }
+  return { x: { min: xMin, max: xMax }, y: { min: yMin, max: yMax } };
 }
