@@ -1028,6 +1028,9 @@ export default class UserScriptPlayer implements Player {
       ({ output }) => this.#scriptSubscriptions[output.name]?.preloadType === "full",
     );
     if (preloaded.length === 0) {
+      if (this.#lastMessageCache) {
+        this.#conversionGeneration++; // a pending retry must not bring back a converter's alert
+      }
       this.#lastMessageCache = undefined;
       return progress;
     }
@@ -1432,6 +1435,7 @@ export default class UserScriptPlayer implements Player {
   }
 
   public close = (): void => {
+    this.#conversionGeneration++; // drop pending retries
     void this.#protectedState.runExclusive(async (state) => {
       for (const scriptRegistration of state.scriptRegistrations) {
         scriptRegistration.terminate();

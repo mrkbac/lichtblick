@@ -616,6 +616,45 @@ describe("UserScriptPlayer topic converter preloading", () => {
     });
   });
 
+  describe("drops a queued retry", () => {
+    async function failedThenSeeked() {
+      const create = vi.fn(() => () => {
+        throw new Error("bad input");
+      });
+      const env = await setup(converterArgs({ create }), [{ topic: "/out", preloadType: "full" }]);
+      const messageCache = { startTime: { sec: 0, nsec: 0 }, blocks: [block([input("one", 1)])] };
+      await env.fakePlayer.emit({ activeData: activeData([]), progress: { messageCache } });
+      // The seek clears the alert and queues a retry of the failed block.
+      await env.fakePlayer.emit({
+        activeData: { ...activeData([]), lastSeekTime: 1 },
+        progress: { messageCache },
+      });
+      expect(create).toHaveBeenCalledTimes(1);
+      return { ...env, create, messageCache };
+    }
+    const failedAlert = (states: PlayerState[]) =>
+      states.at(-1)!.alerts?.some(({ message }) => message.includes("failed")) === true;
+
+    it("when the output is no longer preloaded", async () => {
+      const { fakePlayer, player, states, create, messageCache } = await failedThenSeeked();
+      player.setSubscriptions([{ topic: "/out" }]);
+      await Promise.resolve();
+      await fakePlayer.emit({ activeData: activeData([]), progress: { messageCache } });
+      await delay(20);
+
+      expect(create).toHaveBeenCalledTimes(1);
+      expect(failedAlert(states)).toBe(false);
+    });
+
+    it("when the player closes", async () => {
+      const { player, create } = await failedThenSeeked();
+      player.close();
+      await delay(20);
+
+      expect(create).toHaveBeenCalledTimes(1);
+    });
+  });
+
   it("stops adding converter outputs once the output is no longer preloaded", async () => {
     const { fakePlayer, player, states } = await setup(converterArgs(), [
       { topic: "/out", preloadType: "full" },
