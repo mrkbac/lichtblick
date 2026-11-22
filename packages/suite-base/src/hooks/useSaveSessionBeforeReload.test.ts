@@ -9,7 +9,7 @@ import { PLAYER_CAPABILITIES } from "@lichtblick/suite-base/players/constants";
 import { useSaveSessionBeforeReload } from "./useSaveSessionBeforeReload";
 import { takeResumePlayback } from "./useServiceWorkerUpdate";
 
-let busy = true;
+let busy = false;
 let saveSession: (() => Promise<string | undefined>) | undefined;
 
 vi.mock("@lichtblick/suite-base/hooks/useServiceWorkerUpdate", async (importOriginal) => ({
@@ -17,6 +17,14 @@ vi.mock("@lichtblick/suite-base/hooks/useServiceWorkerUpdate", async (importOrig
   setSaveSessionBeforeReload: (save: () => Promise<string | undefined>) => {
     saveSession = save;
     return () => {};
+  },
+}));
+const flushPendingLayoutSave = vi.fn(() => {
+  busy = true; // the flushed edit starts its write
+});
+vi.mock("@lichtblick/suite-base/components/CurrentLayoutLocalStorageSyncAdapter", () => ({
+  flushPendingLayoutSave: () => {
+    flushPendingLayoutSave();
   },
 }));
 vi.mock("@lichtblick/suite-base/context/LayoutManagerContext", () => ({
@@ -34,7 +42,7 @@ vi.mock("@lichtblick/suite-base/components/MessagePipeline", () => ({
 }));
 
 describe("useSaveSessionBeforeReload", () => {
-  it("waits for the layout save, then writes the exact time and returns what was playing", async () => {
+  it("flushes and waits for the layout save, then writes the exact time and returns what was playing", async () => {
     vi.useFakeTimers();
     renderHook(() => {
       useSaveSessionBeforeReload();
@@ -46,8 +54,9 @@ describe("useSaveSessionBeforeReload", () => {
       resumeSource = source;
     });
 
+    expect(flushPendingLayoutSave).toHaveBeenCalledOnce();
     await vi.advanceTimersByTimeAsync(1000);
-    expect(saved).toBe(false); // the layout manager is still writing
+    expect(saved).toBe(false); // the layout manager is still writing the flushed edit
     busy = false;
     await vi.advanceTimersByTimeAsync(100);
     expect(saved).toBe(true);

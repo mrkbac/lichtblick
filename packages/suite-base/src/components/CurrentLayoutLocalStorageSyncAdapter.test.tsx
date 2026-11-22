@@ -8,6 +8,7 @@ import type { Mock } from "vitest";
 
 import {
   CurrentLayoutLocalStorageSyncAdapter,
+  flushPendingLayoutSave,
   selectLayoutData,
   selectLayoutId,
 } from "@lichtblick/suite-base/components/CurrentLayoutLocalStorageSyncAdapter";
@@ -97,6 +98,28 @@ describe("CurrentLayoutLocalStorageSyncAdapter", () => {
     // Then
     const storedData = localStorage.getItem(LOCAL_STORAGE_STUDIO_LAYOUT_KEY);
     expect(storedData).toBe(JSON.stringify(mockLayoutData));
+  });
+
+  it("writes a pending edit at once when flushed, without waiting for the debounce", async () => {
+    const { rerender } = renderComponent();
+    const modifiedData = { ...mockLayoutData, modified: true };
+    (useCurrentLayoutSelector as Mock).mockImplementation((selector) =>
+      selector === selectLayoutData ? modifiedData : mockLayoutId,
+    );
+    await act(async () => {
+      rerender();
+    });
+    expect(localStorage.getItem(LOCAL_STORAGE_STUDIO_LAYOUT_KEY)).toBe(
+      JSON.stringify(mockLayoutData),
+    );
+
+    await act(async () => {
+      flushPendingLayoutSave();
+    });
+
+    expect(localStorage.getItem(LOCAL_STORAGE_STUDIO_LAYOUT_KEY)).toBe(
+      JSON.stringify(modifiedData),
+    );
   });
 
   it("sends new layout data to layoutManager after initial load", async () => {

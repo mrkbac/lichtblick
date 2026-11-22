@@ -44,6 +44,10 @@ export async function checkForServiceWorkerUpdate(): Promise<boolean> {
 
 /** Set when this window asked for the update; only then does controllerchange reload it. */
 let updateRequestedHere = false;
+/** Set when another window switched this page's service worker to a newer build. */
+let controllerChangedElsewhere = false;
+/** One update at a time: repeated clicks must not run several saves. */
+let updateInFlight = false;
 
 /**
  * Saves the session and returns the playerSourceKey of the recording to resume, if it was playing.
@@ -139,6 +143,12 @@ export function applyServiceWorkerUpdate(worker: ServiceWorker): void {
   worker.addEventListener("statechange", () => {
     if (worker.state === "activated" && !navigator.serviceWorker.controller) {
       reloadPage();
+    } else if (worker.state === "redundant") {
+      // It never activated: forget the request, so a later update by another window doesn't
+      // reload this one unasked (or resume playback the user paused meanwhile)
+      updateRequestedHere = false;
+      pendingResumeSource = undefined;
+      updateInFlight = false;
     }
   });
   worker.postMessage({ type: "SKIP_WAITING" });
@@ -177,9 +187,6 @@ export async function reloadToLatestVersion(): Promise<boolean> {
   return true;
 }
 
-/** Set when another window switched this page's service worker to a newer build. */
-let controllerChangedElsewhere = false;
-
 /** Same literal in the service worker's runtime cache plugin (rspackConfigs.ts). */
 const MISSING_ASSET_MESSAGE = "lichtblick.missingAsset";
 
@@ -200,9 +207,10 @@ function isMissingAssetMessage(data: unknown): data is MissingAssetMessage {
  * A window left on an older build keeps running until the user updates it, but a file it loads
  * later (a lazy chunk, a worker, a wasm module, a fetched asset) may be gone from the host. The
  * service worker sees every such request and reports a missing file: to the window that asked
- * (`direct`), or, when a worker asked, to every window. Switch to the latest version then (the
- * session is saved first). A broadcast only switches windows that are known to be stale, so a
- * window on the current build is never interrupted.
+ * (`direct`), or, when a worker asked, to every window (it can't tell which window owns the
+ * worker). Switch to the latest version then (the session is saved first). A broadcast switches
+ * every window known to be stale, not only the one whose worker asked; a window on the current
+ * build is never interrupted.
  * The script `error` listener in suite-web's index.tsx covers pages without a service worker.
  */
 export function recoverFromMissingAssets(): void {
@@ -247,7 +255,8 @@ export type ServiceWorkerUpdate = {
  */
 export function useServiceWorkerUpdate(): ServiceWorkerUpdate | undefined {
   const [waiting, setWaiting] = useState<ServiceWorker | undefined>();
-  const [activatedElsewhere, setActivatedElsewhere] = useState(false);
+  // another window may have updated before this mounted (or before a remount)
+  const [activatedElsewhere, setActivatedElsewhere] = useState(() => controllerChangedElsewhere);
 
   useEffect(() => {
     const container = navigator.serviceWorker as ServiceWorkerContainer | undefined;
@@ -258,6 +267,7 @@ export function useServiceWorkerUpdate(): ServiceWorkerUpdate | undefined {
     let reloading = false;
     const onControllerChange = () => {
       if (!updateRequestedHere) {
+        controllerChangedElsewhere = true;
         setWaiting(undefined);
         setActivatedElsewhere(true);
       } else if (!reloading) {
@@ -307,6 +317,10 @@ export function useServiceWorkerUpdate(): ServiceWorkerUpdate | undefined {
     return {
       kind: "activated",
       update: () => {
+        if (updateInFlight) {
+          return;
+        }
+        updateInFlight = true;
         void saveSessionBeforeReload().then(reloadPage);
       },
     };
@@ -315,6 +329,10 @@ export function useServiceWorkerUpdate(): ServiceWorkerUpdate | undefined {
     ? {
         kind: "waiting",
         update: () => {
+          if (updateInFlight) {
+            return;
+          }
+          updateInFlight = true;
           void saveSessionBeforeReload().then(async () => {
             let worker: ServiceWorker | null | undefined = waiting;
             // A newer deploy may have replaced it during the save: update to that one instead
@@ -332,4 +350,12 @@ export function useServiceWorkerUpdate(): ServiceWorkerUpdate | undefined {
         },
       }
     : undefined;
+}
+
+/** Tests only: module state outlives a test. */
+export function resetServiceWorkerUpdateStateForTests(): void {
+  updateRequestedHere = false;
+  controllerChangedElsewhere = false;
+  updateInFlight = false;
+  pendingResumeSource = undefined;
 }

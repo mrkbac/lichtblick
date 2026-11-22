@@ -5,6 +5,7 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 
 import {
+  resetServiceWorkerUpdateStateForTests,
   setSaveSessionBeforeReload,
   takeResumePlayback,
 } from "@lichtblick/suite-base/hooks/useServiceWorkerUpdate";
@@ -37,7 +38,11 @@ const renderIndicator = () =>
   );
 
 describe("UpdateIndicator", () => {
-  // first: once any window here applies an update, module state marks it as requested
+  beforeEach(() => {
+    resetServiceWorkerUpdateStateForTests();
+    sessionStorage.clear();
+  });
+
   it("does not reload when another window applied the update, and marks it stale", async () => {
     const reload = vi.fn();
     vi.spyOn(window, "location", "get").mockReturnValue({ reload } as unknown as Location);
@@ -60,7 +65,6 @@ describe("UpdateIndicator", () => {
     vi.restoreAllMocks();
   });
 
-  // also before any test applies an update here (module state)
   it("reloads when another window activates the update while this one saves", async () => {
     const reload = vi.fn();
     vi.spyOn(window, "location", "get").mockReturnValue({ reload } as unknown as Location);
@@ -158,6 +162,60 @@ describe("UpdateIndicator", () => {
     expect(takeResumePlayback()).toBe("source");
     unregister();
     vi.restoreAllMocks();
+  });
+
+  it("keeps showing a stale window's button after a remount", async () => {
+    mockRegistration({ active: fakeWorker(), waiting: fakeWorker() });
+    const { unmount } = renderIndicator();
+    await screen.findByTestId("update-indicator");
+    act(() => {
+      navigator.serviceWorker.dispatchEvent(new Event("controllerchange"));
+    });
+    unmount();
+    mockRegistration({ active: fakeWorker() }); // nothing waits any more
+    renderIndicator();
+    expect(screen.getByTestId("update-indicator").dataset.updateKind).toBe("activated");
+  });
+
+  it("forgets a requested update that never activated", async () => {
+    const reload = vi.fn();
+    vi.spyOn(window, "location", "get").mockReturnValue({ reload } as unknown as Location);
+    const unregister = setSaveSessionBeforeReload(async () => "source");
+    const waiting = fakeWorker();
+    mockRegistration({ active: fakeWorker(), waiting });
+    renderIndicator();
+
+    fireEvent.click(await screen.findByTestId("update-indicator"));
+    await waitFor(() => {
+      expect(waiting.postMessage).toHaveBeenCalledWith({ type: "SKIP_WAITING" });
+    });
+    waiting.state = "redundant";
+    waiting.dispatchEvent(new Event("statechange"));
+    // later another window updates: this one must not reload unasked, nor resume playback
+    act(() => {
+      navigator.serviceWorker.dispatchEvent(new Event("controllerchange"));
+    });
+    expect(reload).not.toHaveBeenCalled();
+    expect(takeResumePlayback()).toBeUndefined();
+    expect(screen.getByTestId("update-indicator").dataset.updateKind).toBe("activated");
+    unregister();
+    vi.restoreAllMocks();
+  });
+
+  it("runs one update at a time however often the button is clicked", async () => {
+    const save = vi.fn(async () => {
+      await new Promise(() => {}); // still saving
+      return undefined;
+    });
+    const unregister = setSaveSessionBeforeReload(save);
+    mockRegistration({ active: fakeWorker(), waiting: fakeWorker() });
+    renderIndicator();
+
+    const button = await screen.findByTestId("update-indicator");
+    fireEvent.click(button);
+    fireEvent.click(button);
+    expect(save).toHaveBeenCalledTimes(1);
+    unregister();
   });
 
   it("stays hidden on the very first install", async () => {

@@ -3,7 +3,7 @@
 
 import { useEffect } from "react";
 
-import { LAYOUT_SAVE_MAX_WAIT_MS } from "@lichtblick/suite-base/components/CurrentLayoutLocalStorageSyncAdapter";
+import { flushPendingLayoutSave } from "@lichtblick/suite-base/components/CurrentLayoutLocalStorageSyncAdapter";
 import { useMessagePipelineGetter } from "@lichtblick/suite-base/components/MessagePipeline";
 import { useLayoutManager } from "@lichtblick/suite-base/context/LayoutManagerContext";
 import {
@@ -30,7 +30,10 @@ export function useSaveSessionBeforeReload(): void {
     () =>
       setSaveSessionBeforeReload(async () => {
         const deadline = Date.now() + MAX_SAVE_WAIT_MS;
-        await delay(LAYOUT_SAVE_MAX_WAIT_MS + 50);
+        // No fixed wait for the debounce: timers in a background tab run late
+        flushPendingLayoutSave();
+        // lets React render the flushed layout, which starts its write
+        await delay(50);
         while (layoutManager.isBusy() && Date.now() < deadline) {
           await delay(50);
         }

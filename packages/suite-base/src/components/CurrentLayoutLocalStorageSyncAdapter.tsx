@@ -31,7 +31,17 @@ export function selectLayoutId(state: LayoutState): LayoutID | undefined {
 const log = Log.getLogger(__filename);
 
 /** Layout edits reach storage at most this long after they happen. */
-export const LAYOUT_SAVE_MAX_WAIT_MS = 500;
+const LAYOUT_SAVE_MAX_WAIT_MS = 500;
+
+let flushDebouncedLayout: (() => void) | undefined;
+
+/**
+ * Starts saving a debounced layout edit now instead of after the debounce (see
+ * useSaveSessionBeforeReload). The write itself is async: LayoutManager.isBusy() reports it.
+ */
+export function flushPendingLayoutSave(): void {
+  flushDebouncedLayout?.();
+}
 
 export function CurrentLayoutLocalStorageSyncAdapter(): React.JSX.Element {
   const { getCurrentLayoutState } = useCurrentLayoutActions();
@@ -40,9 +50,20 @@ export function CurrentLayoutLocalStorageSyncAdapter(): React.JSX.Element {
 
   const layoutManager = useLayoutManager();
 
-  const [debouncedLayoutData] = useDebounce(currentLayoutData, 250, {
+  const [debouncedLayoutData, debounce] = useDebounce(currentLayoutData, 250, {
     maxWait: LAYOUT_SAVE_MAX_WAIT_MS,
   });
+  useEffect(() => {
+    const flush = () => {
+      debounce.flush();
+    };
+    flushDebouncedLayout = flush;
+    return () => {
+      if (flushDebouncedLayout === flush) {
+        flushDebouncedLayout = undefined;
+      }
+    };
+  }, [debounce]);
 
   // Track if this is the initial layout load to prevent false "edited" states
   const isInitialLayoutLoad = useRef(true);
