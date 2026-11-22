@@ -121,6 +121,14 @@ type ProtectedState = {
 
 type CacheConsumerHandle = { index: number };
 
+/** What converting a preloaded block with topic converters depends on. */
+type BlockConversion = {
+  needed: readonly ScriptRegistration[];
+  sourceTopics: readonly string[];
+  outputTopics: ReadonlySet<string>;
+  globalVariables: GlobalVariables;
+};
+
 type BatchIteratorCacheEntry = {
   topic: string;
   /** Results not yet read by every consumer; `results.at(0)` has index `pruneOffset`. */
@@ -248,7 +256,7 @@ async function runFresh(
       async (registration, inputs) =>
         await processors.get(registration)!.processMessages(inputs, globalVariables),
     );
-    const failed = [...processors.values()].some((processor) => processor.failed?.() === true);
+    const failed = [...processors.values()].some((processor) => processor.failed());
     return { outputs, failed };
   } finally {
     for (const processor of processors.values()) {
@@ -332,9 +340,12 @@ export default class UserScriptPlayer implements Player {
   // What the key above was computed from; when none of it changed, neither did the key.
   #convertedBlocksInputs: unknown[] = [];
   // Blocks whose conversion hit an error, with their partial result. Kept apart from
-  // #convertedBlocks and dropped on every reset (e.g. a seek, which clears converter alerts), so
-  // they are converted again then and the alert comes back, but not on every progress update.
+  // #convertedBlocks and served as is, so they are not converted again on every progress update.
   #failedBlocks = new WeakMap<MessageBlock, MessageBlock>();
+  // Set by a reset (e.g. a seek, which clears converter alerts): the next pass still serves the
+  // failed blocks right away, then converts them again in the background, outside the player state
+  // lock, so the alert comes back without delaying the seek.
+  #retryFailedBlocks = false;
   // `failed`: the result holds a failed block, so a reset must not reuse it as is.
   #lastMessageCache?: { source: BlockCache; converted: BlockCache; failed: boolean };
 
@@ -561,12 +572,10 @@ export default class UserScriptPlayer implements Player {
       void this.#queueEmitState();
     };
 
-    const buildMessageProcessor = (): {
-      processMessages: ProcessMessages;
-      terminate: () => void;
-    } => {
+    const buildMessageProcessor: ScriptRegistration["buildMessageProcessor"] = () => {
       // Worker for this processor, taken from the pool on first use.
       let worker: RuntimeWorker | undefined;
+      let failed = false;
 
       const processMessages: ProcessMessages = async (msgEvents, globalVariables) => {
         if (msgEvents.length === 0) {
@@ -580,6 +589,7 @@ export default class UserScriptPlayer implements Player {
             scriptCode: transpiledCode,
           });
           if (error != undefined) {
+            failed = true;
             this.#setUserScriptDiagnostics(scriptId, [
               ...userScriptDiagnostics,
               {
@@ -623,6 +633,7 @@ export default class UserScriptPlayer implements Player {
             });
           }
           if (allDiagnostics.length > 0) {
+            failed = true;
             diagnostics = allDiagnostics;
             alert = errorAlert;
             return undefined;
@@ -663,7 +674,7 @@ export default class UserScriptPlayer implements Player {
         }
       };
 
-      return { processMessages, terminate };
+      return { processMessages, terminate, failed: () => failed };
     };
 
     const messageProcessor = buildMessageProcessor();
@@ -935,7 +946,7 @@ export default class UserScriptPlayer implements Player {
       }
     }
     // Their alerts are gone: convert failed blocks again so the alert comes back.
-    this.#failedBlocks = new WeakMap();
+    this.#retryFailedBlocks = true;
 
     const registrations: ScriptRegistration[] = [];
     for (const installed of this.#topicConverters) {
@@ -1051,6 +1062,9 @@ export default class UserScriptPlayer implements Player {
       return { ...progress, messageCache: this.#lastMessageCache.converted };
     }
     let failed = false;
+    const context = { needed, sourceTopics, outputTopics, globalVariables };
+    // Failed blocks served from #failedBlocks, not converted in this pass.
+    const staleFailedBlocks: MessageBlock[] = [];
 
     const convertBlock = async (block: MessageBlock): Promise<MessageBlock> => {
       const cached = this.#convertedBlocks.get(block);
@@ -1060,33 +1074,14 @@ export default class UserScriptPlayer implements Player {
       const failedBefore = this.#failedBlocks.get(block);
       if (failedBefore) {
         failed = true;
+        staleFailedBlocks.push(block);
         return failedBefore;
       }
-      const loaded = sourceTopics.every(
-        (topic) =>
-          block.messagesByTopic[topic] != undefined && block.needTopics?.has(topic) !== true,
-      );
-      if (!loaded) {
+      const result = await this.#convertBlock(block, context);
+      if (!result) {
         return block; // converted once its inputs finish loading (the block is replaced then)
       }
-      const inputs = sourceTopics
-        .flatMap((topic) => block.messagesByTopic[topic] ?? [])
-        .sort(byReceiveTime);
-      // ponytail: fresh converter instances per block, so converter state does not carry across
-      // block boundaries; carry it over in time order if a stateful converter needs it.
-      const { outputs, failed: blockFailed } = await runFresh(inputs, needed, globalVariables);
-      const messagesByTopic: Record<string, MessageEvent[]> = { ...block.messagesByTopic };
-      let sizeInBytes = block.sizeInBytes;
-      for (const topic of outputTopics) {
-        messagesByTopic[topic] = [];
-      }
-      for (const output of outputs) {
-        if (outputTopics.has(output.topic)) {
-          messagesByTopic[output.topic]!.push(output);
-          sizeInBytes += output.sizeInBytes;
-        }
-      }
-      const converted: MessageBlock = { ...block, messagesByTopic, sizeInBytes };
+      const { converted, failed: blockFailed } = result;
       if (blockFailed) {
         this.#failedBlocks.set(block, converted);
         failed = true;
@@ -1110,7 +1105,98 @@ export default class UserScriptPlayer implements Player {
         ? previous
         : { ...source, blocks };
     this.#lastMessageCache = { source, converted, failed };
+    const retry = this.#retryFailedBlocks;
+    this.#retryFailedBlocks = false;
+    if (retry && staleFailedBlocks.length > 0) {
+      void this.#retryFailedBlocksOf(source, staleFailedBlocks, context);
+    }
     return { ...progress, messageCache: converted };
+  }
+
+  /** Converts `block` with fresh converters; undefined while its inputs are still loading. */
+  async #convertBlock(
+    block: MessageBlock,
+    { needed, sourceTopics, outputTopics, globalVariables }: BlockConversion,
+  ): Promise<{ converted: MessageBlock; failed: boolean } | undefined> {
+    const loaded = sourceTopics.every(
+      (topic) => block.messagesByTopic[topic] != undefined && block.needTopics?.has(topic) !== true,
+    );
+    if (!loaded) {
+      return undefined;
+    }
+    const inputs = sourceTopics
+      .flatMap((topic) => block.messagesByTopic[topic] ?? [])
+      .sort(byReceiveTime);
+    // ponytail: fresh converter instances per block, so converter state does not carry across
+    // block boundaries; carry it over in time order if a stateful converter needs it.
+    const { outputs, failed } = await runFresh(inputs, needed, globalVariables);
+    const messagesByTopic: Record<string, MessageEvent[]> = { ...block.messagesByTopic };
+    let sizeInBytes = block.sizeInBytes;
+    for (const topic of outputTopics) {
+      messagesByTopic[topic] = [];
+    }
+    for (const output of outputs) {
+      if (outputTopics.has(output.topic)) {
+        messagesByTopic[output.topic]!.push(output);
+        sizeInBytes += output.sizeInBytes;
+      }
+    }
+    return { converted: { ...block, messagesByTopic, sizeInBytes }, failed };
+  }
+
+  /**
+   * Converts failed blocks of `source` again, outside the player state lock (a converter error
+   * raises its alert again). Blocks that now convert replace their failed result and the state is
+   * emitted again, unless the converters or their inputs changed in the meantime.
+   */
+  async #retryFailedBlocksOf(
+    source: BlockCache,
+    retryBlocks: readonly MessageBlock[],
+    context: BlockConversion,
+  ): Promise<void> {
+    // Let the pass that scheduled this finish and emit its state (e.g. the seek) first.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const convertedBlocks = this.#convertedBlocks;
+    const failedBlocks = this.#failedBlocks;
+    let changed = false;
+    for (const block of retryBlocks) {
+      const result = await this.#convertBlock(block, context);
+      if (this.#failedBlocks !== failedBlocks) {
+        return; // the converted blocks were dropped meanwhile; the next pass starts over
+      }
+      if (result && !result.failed) {
+        failedBlocks.delete(block);
+        convertedBlocks.set(block, result.converted);
+        changed = true;
+      }
+    }
+    const last = this.#lastMessageCache;
+    const playerState = this.#playerState;
+    if (!changed || last?.source !== source) {
+      return;
+    }
+    const converted: BlockCache = {
+      ...last.converted,
+      blocks: last.converted.blocks.map((block, i) => {
+        const sourceBlock = source.blocks[i];
+        return (sourceBlock && convertedBlocks.get(sourceBlock)) ?? block;
+      }),
+    };
+    this.#lastMessageCache = {
+      source,
+      converted,
+      failed: source.blocks.some((block) => block != undefined && failedBlocks.has(block)),
+    };
+    if (playerState?.progress.messageCache !== last.converted) {
+      // A newer state is on its way; make its pass pick up the new blocks.
+      this.#convertedBlocksInputs = [];
+      return;
+    }
+    this.#playerState = {
+      ...playerState,
+      progress: { ...playerState.progress, messageCache: converted },
+    };
+    await this.#queueEmitState();
   }
 
   async #getLib(

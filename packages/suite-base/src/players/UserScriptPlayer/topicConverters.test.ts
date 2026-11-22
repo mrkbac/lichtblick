@@ -401,16 +401,48 @@ describe("UserScriptPlayer topic converter preloading", () => {
     await fakePlayer.emit({ activeData: activeData([]), progress: { messageCache } });
     expect(create).toHaveBeenCalledTimes(2);
 
-    // A seek clears converter alerts; only the failed block is converted again, raising it again.
+    // A seek clears converter alerts. Its state comes out right away with the failed block's last
+    // result; only the failed block is converted again afterwards, raising the alert again.
     await fakePlayer.emit({
       activeData: { ...activeData([]), lastSeekTime: 1 },
       progress: { messageCache },
     });
-    expect(failedAlert()).toBe(true);
-    expect(create).toHaveBeenCalledTimes(3);
+    expect(create).toHaveBeenCalledTimes(2);
     expect(
       values(states.at(-1)!.progress.messageCache!.blocks[0]!.messagesByTopic["/out"]!, "/out"),
     ).toEqual(["good"]);
+    await vi.waitFor(() => {
+      expect(create).toHaveBeenCalledTimes(3);
+      expect(failedAlert()).toBe(true);
+    });
+  });
+
+  it("emits a block that converts on the retry after a seek", async () => {
+    let failing = true;
+    const create = vi.fn(() => (event: { message: unknown }) => {
+      if (failing) {
+        throw new Error("not ready");
+      }
+      return event.message;
+    });
+    const { fakePlayer, states } = await setup(converterArgs({ create }), [
+      { topic: "/out", preloadType: "full" },
+    ]);
+    const messageCache = { startTime: { sec: 0, nsec: 0 }, blocks: [block([input("one", 1)])] };
+    const outputs = () =>
+      values(states.at(-1)!.progress.messageCache!.blocks[0]!.messagesByTopic["/out"]!, "/out");
+
+    await fakePlayer.emit({ activeData: activeData([]), progress: { messageCache } });
+    expect(outputs()).toEqual([]);
+
+    failing = false;
+    await fakePlayer.emit({
+      activeData: { ...activeData([]), lastSeekTime: 1 },
+      progress: { messageCache },
+    });
+    await vi.waitFor(() => {
+      expect(outputs()).toEqual(["one"]);
+    });
   });
 
   const failOnBad = () =>
