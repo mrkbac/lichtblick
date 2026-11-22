@@ -2160,6 +2160,32 @@ describe("Renderer.addTransformMessages", () => {
     expect(updates).toHaveBeenCalledTimes(1);
   });
 
+  it("repaints for history batches at most every 250 ms, plus once after the last", () => {
+    vi.useFakeTimers();
+    const renderer = new Renderer({ ...defaultRendererProps, canvas });
+    const queue = vi.spyOn(renderer, "queueAnimationFrame").mockImplementation(() => {});
+    renderer.currentTime = 10n;
+
+    // Any batch can change what is on screen, also one received after the current time
+    renderer.addTransformMessages([createTFMessageEvent("root", "a", 11n, [11n])]);
+    renderer.addTransformMessages([createTFMessageEvent("root", "a", 5n, [5n])]);
+    renderer.addTransformMessages([createTFMessageEvent("root", "a", 6n, [6n])]);
+    expect(queue).toHaveBeenCalledTimes(1);
+
+    // One trailing repaint shows the batches that waited
+    vi.advanceTimersByTime(250);
+    expect(queue).toHaveBeenCalledTimes(2);
+    vi.advanceTimersByTime(1000);
+    expect(queue).toHaveBeenCalledTimes(2);
+
+    // An empty batch changes nothing
+    renderer.addTransformMessages([]);
+    expect(queue).toHaveBeenCalledTimes(2);
+
+    renderer.dispose();
+    vi.useRealTimers();
+  });
+
   it("reports which frames the messages gave a transform", () => {
     const renderer = new Renderer({ ...defaultRendererProps, canvas });
     const touched = new Set<string>();
