@@ -1,11 +1,12 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import { MessagePathDataItem } from "@lichtblick/suite-base/components/MessagePathSyntax/useCachedGetMessagePathDataItems";
 import {
   PathSample,
+  PathSampleColumns,
   toPathSample,
-} from "@lichtblick/suite-base/components/MessagePathSyntax/usePathSampleHistory";
+} from "@lichtblick/suite-base/components/MessagePathSyntax/PathSampleColumns";
+import { MessagePathDataItem } from "@lichtblick/suite-base/components/MessagePathSyntax/useCachedGetMessagePathDataItems";
 import {
   ImmutableDataset,
   StateTransitionPath,
@@ -85,27 +86,33 @@ describe("datasetContainsArray", () => {
   });
 
   it("should return false when the dataset contains mixed undefined and empty arrays", () => {
-    const dataset: ImmutableDataset = [undefined, []];
+    const dataset: ImmutableDataset = [undefined, PathSampleColumns.from([])];
     expect(datasetContainsArray(dataset)).toBe(false);
   });
 
   it("should return false for a single PathSample[] element with queriedData of length 1", () => {
-    const dataset: ImmutableDataset = [[createMessageAndData(1)]];
+    const dataset: ImmutableDataset = [PathSampleColumns.from([createMessageAndData(1)])];
     expect(datasetContainsArray(dataset)).toBe(false);
   });
 
   it("should return true for a single PathSample[] element with queriedData of length greater than 1", () => {
-    const dataset: ImmutableDataset = [[createMessageAndData(2)]];
+    const dataset: ImmutableDataset = [PathSampleColumns.from([createMessageAndData(2)])];
     expect(datasetContainsArray(dataset)).toBe(true);
   });
 
   it("should return true for multiple PathSample[] elements with consistent queriedData lengths greater than 1", () => {
-    const dataset: ImmutableDataset = [[createMessageAndData(2)], [createMessageAndData(2)]];
+    const dataset: ImmutableDataset = [
+      PathSampleColumns.from([createMessageAndData(2)]),
+      PathSampleColumns.from([createMessageAndData(2)]),
+    ];
     expect(datasetContainsArray(dataset)).toBe(true);
   });
 
   it("should return false for multiple PathSample[] elements with mixed queriedData lengths, including lengths less than or equal to 1", () => {
-    const dataset: ImmutableDataset = [[createMessageAndData(2)], [createMessageAndData(1)]];
+    const dataset: ImmutableDataset = [
+      PathSampleColumns.from([createMessageAndData(2)]),
+      PathSampleColumns.from([createMessageAndData(1)]),
+    ];
     expect(datasetContainsArray(dataset)).toBe(false);
   });
 });

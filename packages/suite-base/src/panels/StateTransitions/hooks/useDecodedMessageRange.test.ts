@@ -19,6 +19,9 @@ vi.mock("@lichtblick/suite-base/components/MessagePathSyntax/useCachedGetMessage
 vi.mock("@lichtblick/suite-base/components/PanelExtensionAdapter");
 vi.mock("@lichtblick/suite-base/hooks/useGlobalVariables");
 
+const keyOf = (message: MessageEvent) =>
+  `${message.topic}@${message.receiveTime.sec}.${message.receiveTime.nsec}`;
+
 describe("useDecodedMessageRange", () => {
   let mockSubscribeMessageRange: Mock;
   let mockDecode: Mock;
@@ -30,8 +33,8 @@ describe("useDecodedMessageRange", () => {
 
     mockCancel = vi.fn();
     mockSubscribeMessageRange = vi.fn().mockReturnValue(mockCancel);
-    // Decodes a path to the whole message, so tests can check which messages were kept.
-    mockDecode = vi.fn((path: string, message: MessageEvent) => [{ value: message, path }]);
+    // Decodes a path to a key of its message, so tests can check which messages were kept.
+    mockDecode = vi.fn((path: string, message: MessageEvent) => [{ value: keyOf(message), path }]);
 
     (useSubscribeMessageRange as Mock).mockReturnValue(mockSubscribeMessageRange);
     (useCachedGetMessagePathDataItems as Mock).mockReturnValue(mockDecode);
@@ -63,7 +66,7 @@ describe("useDecodedMessageRange", () => {
   }
 
   const valuesOf = (current: PathSamplesByPath[], path: string) =>
-    current[0]?.[path]?.map((sample) => sample.value);
+    current[0]?.[path]?.toArray().map((sample) => sample.value);
 
   it("subscribes to each topic and cancels on unmount", () => {
     const topicA = PlayerBuilder.topic().name;
@@ -107,8 +110,8 @@ describe("useDecodedMessageRange", () => {
       await simulateBatches(topic, [msgs]);
     });
 
-    expect(valuesOf(result.current, path)).toEqual(msgs);
-    expect(result.current[0]?.[path]?.[0]).toEqual(
+    expect(valuesOf(result.current, path)).toEqual(msgs.map(keyOf));
+    expect(result.current[0]?.[path]?.at(0)).toEqual(
       expect.objectContaining({
         receiveTime: msgs[0]!.receiveTime,
         headerStamp: { sec: 1, nsec: 2 },
@@ -138,7 +141,7 @@ describe("useDecodedMessageRange", () => {
     });
 
     expect(mockDecode).toHaveBeenCalledTimes(40);
-    expect(valuesOf(result.current, path)).toEqual(batches.flat());
+    expect(valuesOf(result.current, path)).toEqual(batches.flat().map(keyOf));
   });
 
   it("replaces a topic's data when a new range iterator is provided", async () => {
@@ -154,7 +157,7 @@ describe("useDecodedMessageRange", () => {
       await simulateBatches(topic, [second]);
     });
 
-    expect(valuesOf(result.current, path)).toEqual(second);
+    expect(valuesOf(result.current, path)).toEqual(second.map(keyOf));
   });
 
   it("only subscribes added topics and only drops removed ones", async () => {
@@ -183,13 +186,13 @@ describe("useDecodedMessageRange", () => {
     await act(async () => {
       await simulateBatches(topicB, [msgsB]);
     });
-    expect(valuesOf(result.current, `${topicA}.field`)).toEqual(msgsA);
-    expect(valuesOf(result.current, `${topicB}.field`)).toEqual(msgsB);
+    expect(valuesOf(result.current, `${topicA}.field`)).toEqual(msgsA.map(keyOf));
+    expect(valuesOf(result.current, `${topicB}.field`)).toEqual(msgsB.map(keyOf));
 
     rerender({ topics: [topicB], paths: [`${topicB}.field`] });
     expect(cancelA).toHaveBeenCalledTimes(1);
     expect(result.current[0]?.[`${topicA}.field`]).toBeUndefined();
-    expect(valuesOf(result.current, `${topicB}.field`)).toEqual(msgsB);
+    expect(valuesOf(result.current, `${topicB}.field`)).toEqual(msgsB.map(keyOf));
   });
 
   it("reloads a topic when the paths reading it change", async () => {

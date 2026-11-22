@@ -50,19 +50,20 @@ export function messagesToDataset(args: MessageDatasetArgs): ChartDataset {
       continue;
     }
 
-    for (const itemByPath of messages) {
+    for (let i = 0; i < messages.size(); i++) {
+      const sample = messages.sampleValue(i);
+      // A path matching several values is invalid input (see datasetContainsArray)
+      if (sample.count !== 1) {
+        continue;
+      }
+
       const timestamp =
-        path.timestampMethod === "headerStamp" ? itemByPath.headerStamp : itemByPath.receiveTime;
+        path.timestampMethod === "headerStamp" ? messages.headerStamp(i) : messages.receiveTime(i);
       if (!timestamp) {
         continue;
       }
 
-      // A path matching several values is invalid input (see datasetContainsArray)
-      if (itemByPath.count !== 1) {
-        continue;
-      }
-
-      const { constantName: rawConstantName, value: rawValue } = itemByPath;
+      const { constantName: rawConstantName, value: rawValue } = sample;
       const x = toSec(subtractTimes(timestamp, startTime));
 
       // A null value marks a gap: break the line here and start a fresh segment once data resumes.
