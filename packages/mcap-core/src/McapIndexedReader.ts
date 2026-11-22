@@ -955,9 +955,18 @@ function sortChunksForRead(chunks: ChunkIndex[], reverse: boolean): void {
   if (reverse) {
     chunks.reverse();
   }
-  const compare = reverse
-    ? (a: ChunkIndex, b: ChunkIndex) => compareBigInt(b.messageEndTime, a.messageEndTime)
-    : (a: ChunkIndex, b: ChunkIndex) => compareBigInt(a.messageStartTime, b.messageStartTime);
+  // Ties go by file offset, like the merge heap: a read-ahead plan in another order would skip
+  // the chunk the read reaches next
+  const compare = (a: ChunkIndex, b: ChunkIndex) => {
+    const byTime = reverse
+      ? compareBigInt(b.messageEndTime, a.messageEndTime)
+      : compareBigInt(a.messageStartTime, b.messageStartTime);
+    if (byTime !== 0) {
+      return byTime;
+    }
+    const byOffset = compareBigInt(a.chunkStartOffset, b.chunkStartOffset);
+    return reverse ? -byOffset : byOffset;
+  };
   // Chunks are usually written in time order already
   if (chunks.some((chunk, i) => i > 0 && compare(chunks[i - 1]!, chunk) > 0)) {
     chunks.sort(compare);
