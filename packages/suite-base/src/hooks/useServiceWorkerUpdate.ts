@@ -216,8 +216,8 @@ function isMissingAssetMessage(data: unknown): data is MissingAssetMessage {
  * later (a lazy chunk, a worker, a wasm module, a fetched asset) may be gone from the host. The
  * service worker sees every such request and reports a missing file to the window that asked, or
  * that created the worker that asked (`direct`; sw-worker-owners.js). Switch to the latest version
- * then (the session is saved first). Only when it can't tell the owner (the idle service worker
- * forgot it) does it report to every window, and then every window known to be stale switches; a
+ * then (the session is saved first). Only when it can't tell the owner (a worker created before
+ * this service worker version) does it report to every window, and then every window known to be stale switches; a
  * window on the current build is never interrupted.
  * The script `error` listener in suite-web's index.tsx covers pages without a service worker.
  */
