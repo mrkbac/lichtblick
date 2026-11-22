@@ -17,7 +17,7 @@ import {
   Tooltip,
   Typography,
 } from "@mui/material";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { makeStyles } from "tss-react/mui";
 
@@ -246,6 +246,13 @@ function CompareDialogContent({ initial }: { initial: CompareDraft }): React.JSX
   const hide = useCompareDialog((state) => state.hide);
   const { availableSources, selectSource } = usePlayerSelection();
   const [draft, setDraft] = useState(() => toDialogDraft(initial));
+  // The latest draft, ahead of renders: picks finishing close together each check and change the
+  // draft the one before left, not the one their render saw
+  const draftRef = useRef(draft);
+  const updateDraft = (update: (old: DialogDraft) => DialogDraft) => {
+    draftRef.current = update(draftRef.current);
+    setDraft(draftRef.current);
+  };
   const [error, setError] = useState<string | undefined>();
 
   const sources = useMemo(
@@ -309,7 +316,10 @@ function CompareDialogContent({ initial }: { initial: CompareDraft }): React.JSX
    * Pick recordings for a row in the app's open dialog: whatever the user opens there (a recent, a
    * URL, a catalog entry, a sample, a local file) is added to the row instead of being opened
    */
-  const pickElsewhere = (label: string, apply: (picked: Recording[]) => void) => {
+  const pickElsewhere = (
+    label: string,
+    add: (old: DialogDraft, picked: Recording[]) => DialogDraft,
+  ) => {
     setError(undefined);
     useSourcePick.setState({
       pick: {
@@ -322,13 +332,18 @@ function CompareDialogContent({ initial }: { initial: CompareDraft }): React.JSX
           recordingsOf(source, args)
             .then(({ recordings: picked, withCookies }) => {
               const unsupported = picked.find((r) => !accepts(r));
-              // One URL, one cookie policy: the same recording can't be fetched both ways
-              const inDraft = new Set([...draft.shared, ...draft.sides.flatMap((s) => s.files)]);
+              // One URL, one cookie policy: the same recording can't be fetched both ways. Checked
+              // and committed against the latest draft in one step.
+              const current = draftRef.current;
+              const inDraft = new Set([
+                ...current.shared,
+                ...current.sides.flatMap((s) => s.files),
+              ]);
               const conflict = picked.find(
                 (r) =>
                   typeof r === "string" &&
                   inDraft.has(r) &&
-                  draft.withCookies.includes(r) !== withCookies,
+                  current.withCookies.includes(r) !== withCookies,
               );
               if (conflict != undefined) {
                 setError(t("cookiesConflict", { name: recordingName(conflict) }));
@@ -345,14 +360,18 @@ function CompareDialogContent({ initial }: { initial: CompareDraft }): React.JSX
               }
               // The draft's cookie setting for each picked URL follows this pick
               const urls = picked.filter((r) => typeof r === "string");
-              setDraft((old) => ({
-                ...old,
-                withCookies: [
-                  ...old.withCookies.filter((url) => !urls.includes(url)),
-                  ...(withCookies ? urls : []),
-                ],
-              }));
-              apply(picked);
+              updateDraft((old) =>
+                add(
+                  {
+                    ...old,
+                    withCookies: [
+                      ...old.withCookies.filter((url) => !urls.includes(url)),
+                      ...(withCookies ? urls : []),
+                    ],
+                  },
+                  picked,
+                ),
+              );
             })
             .catch((err: unknown) => {
               setError(String(err));
@@ -363,7 +382,7 @@ function CompareDialogContent({ initial }: { initial: CompareDraft }): React.JSX
     dialogActions.dataSource.open("start");
   };
   const updateSide = (id: number, update: (side: DialogSide) => Partial<DialogSide>) => {
-    setDraft((old) => ({
+    updateDraft((old) => ({
       ...old,
       sides: old.sides.map((s) => (s.id === id ? { ...s, ...update(s) } : s)),
     }));
@@ -415,17 +434,18 @@ function CompareDialogContent({ initial }: { initial: CompareDraft }): React.JSX
             accepts={accepts}
             emptyHint={t("sharedEmpty")}
             onFiles={(shared) => {
-              setDraft((old) => ({ ...old, shared }));
+              updateDraft((old) => ({ ...old, shared }));
             }}
             onPick={() => {
               pickInto((picked) => {
-                setDraft((old) => ({ ...old, shared: [...old.shared, ...picked] }));
+                updateDraft((old) => ({ ...old, shared: [...old.shared, ...picked] }));
               });
             }}
             onPickElsewhere={() => {
-              pickElsewhere(t("sharedPick"), (picked) => {
-                setDraft((old) => ({ ...old, shared: [...old.shared, ...picked] }));
-              });
+              pickElsewhere(t("sharedPick"), (old, picked) => ({
+                ...old,
+                shared: [...old.shared, ...picked],
+              }));
             }}
           />
           {draft.sides.map((side, index) => (
@@ -468,14 +488,17 @@ function CompareDialogContent({ initial }: { initial: CompareDraft }): React.JSX
                 });
               }}
               onPickElsewhere={() => {
-                pickElsewhere(t("sideName", { label: sideLabel(index) }), (picked) => {
-                  updateSide(side.id, (s) => ({ files: [...s.files, ...picked] }));
-                });
+                pickElsewhere(t("sideName", { label: sideLabel(index) }), (old, picked) => ({
+                  ...old,
+                  sides: old.sides.map((s) =>
+                    s.id === side.id ? { ...s, files: [...s.files, ...picked] } : s,
+                  ),
+                }));
               }}
               onRemoveRow={
                 draft.sides.length > 2
                   ? () => {
-                      setDraft((old) => ({
+                      updateDraft((old) => ({
                         ...old,
                         sides: old.sides.filter((s) => s.id !== side.id),
                       }));
@@ -489,7 +512,7 @@ function CompareDialogContent({ initial }: { initial: CompareDraft }): React.JSX
               size="small"
               startIcon={<AddIcon />}
               onClick={() => {
-                setDraft((old) => ({ ...old, sides: [...old.sides, newSide()] }));
+                updateDraft((old) => ({ ...old, sides: [...old.sides, newSide()] }));
               }}
             >
               {t("addRecording")}
@@ -500,7 +523,7 @@ function CompareDialogContent({ initial }: { initial: CompareDraft }): React.JSX
                 onClick={() => {
                   // Each picked file becomes a recording of its own, filling empty rows first
                   pickInto((picked) => {
-                    setDraft((old) => {
+                    updateDraft((old) => {
                       const sides = [...old.sides];
                       for (const file of picked) {
                         const empty = sides.findIndex((s) => s.files.length === 0);

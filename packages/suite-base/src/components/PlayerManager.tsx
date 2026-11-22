@@ -257,13 +257,9 @@ export default function PlayerManager(
   // superseded and won't apply its player or layout late.
   const selectionSeq = useRef(0);
 
-  const selectSource = useCallback(
+  const openSource = useCallback(
     async (sourceId: string, args?: DataSourceArgs) => {
       log.debug(`Select Source: ${sourceId}`);
-      // Picked for something else (e.g. a comparison): leave the open source as it is
-      if (takeSourcePick(sourceId, args)) {
-        return;
-      }
       const seq = ++selectionSeq.current;
 
       const foundSource = playerSources.find(
@@ -515,6 +511,18 @@ export default function PlayerManager(
     ],
   );
 
+  // Opening from what the user did (a menu, the open page, a recent, a link): a source picked for
+  // something else (e.g. a comparison row) goes there instead, leaving the open source as it is.
+  // Opening on its own (restoring the last file) uses openSource and never satisfies a pick.
+  const selectSource = useCallback(
+    async (sourceId: string, args?: DataSourceArgs) => {
+      if (!takeSourcePick(sourceId, args)) {
+        await openSource(sourceId, args);
+      }
+    },
+    [openSource],
+  );
+
   // Select a recent entry by id
   // necessary to pull out callback creation to avoid capturing the initial player in closure context
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -563,7 +571,7 @@ export default function PlayerManager(
         return;
       }
       if (permissions.every((p) => p === "granted")) {
-        void selectSource(recent.sourceId, recentArgs(recent));
+        void openSource(recent.sourceId, recentArgs(recent));
         return;
       }
       // requestPermission needs a user gesture, so ask with a click
@@ -575,7 +583,7 @@ export default function PlayerManager(
             color="inherit"
             onClick={() => {
               closeSnackbar(key);
-              void selectSource(recent.sourceId, recentArgs(recent));
+              void openSource(recent.sourceId, recentArgs(recent));
             }}
           >
             Reopen
@@ -583,7 +591,7 @@ export default function PlayerManager(
         ),
       });
     })();
-  }, [recentsLoaded, recents, selectSource, enqueueSnackbar, closeSnackbar]);
+  }, [recentsLoaded, recents, openSource, enqueueSnackbar, closeSnackbar]);
 
   const closeSource = useCallback(() => {
     selectionSeq.current++;

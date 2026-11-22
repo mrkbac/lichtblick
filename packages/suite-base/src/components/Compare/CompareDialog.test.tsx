@@ -313,4 +313,23 @@ describe("CompareDialog", () => {
       },
     });
   });
+
+  it("checks picks that finish together against each other's cookie settings", async () => {
+    renderDialog();
+    act(() => {
+      useCompareDialog.getState().show({ shared: [], sides: [] });
+    });
+    const url = "https://example.com/race.mcap";
+    // Both picks are handed over before either has been read and committed
+    await act(async () => {
+      fireEvent.click(screen.getAllByText("URL, recent or catalog")[1]!);
+      takeSourcePick("remote", { type: "connection", params: { url, includeCredentials: "true" } });
+      fireEvent.click(screen.getAllByText("URL, recent or catalog")[2]!);
+      takeSourcePick("remote", { type: "connection", params: { url } });
+    });
+
+    expect(screen.getByText(/different cookie setting/)).toBeTruthy();
+    const chips = [...document.querySelectorAll(".MuiChip-label")].map((chip) => chip.textContent);
+    expect(chips).toEqual(["race.mcap"]);
+  });
 });
