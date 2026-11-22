@@ -118,11 +118,13 @@ class RemoteDataSourceFactory implements IDataSourceFactory {
 
     return new IterablePlayer({
       source,
-      name: urls.join(),
+      // A catalog passes the recording's name, so the title bar shows it instead of the URL
+      name: args.params.name ?? urls.join(),
       // Keep includeCredentials in the app URL so reloads and shared links still send cookies
       urlParams: {
         urls,
         ...(includeCredentials && { includeCredentials: "true" }),
+        ...(args.params.name != undefined && { name: args.params.name }),
         ...(validCompare && { compare: compareParam! }),
       },
       sourceId: this.id,
