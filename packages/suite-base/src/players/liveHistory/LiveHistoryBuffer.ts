@@ -262,16 +262,22 @@ export class LiveHistoryBuffer {
     const added = this.#seqOf(this.#messages.length);
     const scrubbing = added - this.#lastSeekSeq < CHECKPOINT_INTERVAL;
     this.#lastSeekSeq = added;
-    const checkpoint =
-      scrubbing && blockStart > this.#head && this.#headSeq >= this.#noCheckpointsBeforeSeq
-        ? this.#checkpoint(block)
-        : undefined;
-    const stop = checkpoint ? blockStart : this.#head;
-    for (let i = end - 1; i >= stop && complete < topics.size; i--) {
-      const msg = this.#messages[i]!;
-      if (topics.has(msg.topic) && found.get(msg.topic)?.has(WHOLE_MESSAGE) !== true) {
-        take(msg, this.#seqOf(i), seedKeys(msg));
+    const walk = (from: number, to: number) => {
+      for (let i = from - 1; i >= to && complete < topics.size; i--) {
+        const msg = this.#messages[i]!;
+        if (topics.has(msg.topic) && found.get(msg.topic)?.has(WHOLE_MESSAGE) !== true) {
+          take(msg, this.#seqOf(i), seedKeys(msg));
+        }
       }
+    };
+    const useCheckpoint =
+      scrubbing && blockStart > this.#head && this.#headSeq >= this.#noCheckpointsBeforeSeq;
+    // The current block first: if it has everything, no checkpoint is needed.
+    walk(end, useCheckpoint ? blockStart : this.#head);
+    const checkpoint =
+      useCheckpoint && complete < topics.size ? this.#checkpoint(block) : undefined;
+    if (useCheckpoint && complete < topics.size && !checkpoint) {
+      walk(blockStart, this.#head);
     }
     if (checkpoint && complete < topics.size) {
       // Entries older than the oldest message were evicted; the seed for their key is that message.

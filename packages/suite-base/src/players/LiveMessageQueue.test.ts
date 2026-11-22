@@ -177,4 +177,37 @@ describe("LiveMessageQueue", () => {
     expect(queue.drain().slice(0, 2)).toEqual([older, newer]);
     (console.warn as Mock).mockClear();
   });
+
+  it("drops replaced camera frames before a one-shot map", () => {
+    const queue = new LiveMessageQueue(1000, new PlayerAlertManager());
+    const map = msg(0, 300, "/map");
+    queue.push(map);
+    for (let t = 1; t < 100; t++) {
+      queue.push(msg(t, 50, "/camera"));
+      expect(queue.sizeInBytes()).toBeLessThanOrEqual(1000);
+    }
+    const kept = queue.drain();
+    expect(kept[0]).toBe(map);
+    expect(kept.at(-1)!.receiveTime.sec).toBe(99);
+    (console.warn as Mock).mockClear();
+  });
+
+  it("keeps kept messages in arrival order across a clock reset", () => {
+    const queue = new LiveMessageQueue(1000, new PlayerAlertManager());
+    const tfs = (...children: string[]) => ({
+      transforms: children.map((child_frame_id) => ({ child_frame_id })),
+    });
+    const before = msg(100, 20, "/transforms", tfs("f", "g"));
+    queue.push(before);
+    for (let t = 101; t < 200; t++) {
+      queue.push(msg(t, 10));
+    }
+    const after = msg(5, 20, "/transforms", tfs("f")); // the clock went back; newer value for f
+    queue.push(after);
+    for (let t = 6; t < 300; t++) {
+      queue.push(msg(t, 10));
+    }
+    expect(queue.drain().slice(0, 2)).toEqual([before, after]);
+    (console.warn as Mock).mockClear();
+  });
 });

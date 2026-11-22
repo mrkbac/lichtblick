@@ -338,6 +338,29 @@ describe("LiveHistoryBuffer", () => {
     }
   });
 
+  it("doesn't build a checkpoint when the current block has everything", () => {
+    const buffer = new LiveHistoryBuffer({ windowNs: 100_000n * SEC, maxBytes: 1e12 });
+    const reads = { count: 0 };
+    const counted = (event: MessageEvent): MessageEvent => {
+      const { message } = event;
+      return Object.defineProperty({ ...event }, "message", {
+        get: () => {
+          reads.count++;
+          return message;
+        },
+      });
+    };
+    const last = 4 * CHECKPOINT_INTERVAL;
+    for (let t = 1; t <= last; t++) {
+      buffer.add(counted(msg("/a", t)));
+    }
+    const topics = new Set(["/a"]);
+    buffer.backfill(fromSec(last), topics);
+    reads.count = 0;
+    expect(times(buffer.backfill(fromSec(last - 1), topics))).toEqual([last - 1]);
+    expect(reads.count).toBeLessThan(10);
+  });
+
   it("clears everything, including seeds, e.g. on a clock reset", () => {
     const buffer = new LiveHistoryBuffer({ windowNs: 1n * SEC, maxBytes: 1e9 });
     buffer.add(msg("/a", 1));

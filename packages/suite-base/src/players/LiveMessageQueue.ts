@@ -1,8 +1,6 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import { compare } from "@foxglove/rostime";
-
 import PlayerAlertManager from "@lichtblick/suite-base/players/PlayerAlertManager";
 import { transformEntries } from "@lichtblick/suite-base/players/liveHistory/LiveHistoryBuffer";
 import { MessageEvent } from "@lichtblick/suite-base/players/types";
@@ -91,7 +89,7 @@ export class LiveMessageQueue {
     // them against newer dropped messages, so a key that never comes back is searched for once.
     const claimed = new Map<string, Set<string>>(); // per topic: child frames, or "" for the topic
     const candidates: Candidate[] = [];
-    // `arrival` orders ties: kept messages arrived before every queued one.
+    // Kept messages arrived before every queued one.
     const consider = (msg: MessageEvent, source: "queue" | "latched", arrival: number) => {
       let topicKeys = claimed.get(msg.topic);
       if (topicKeys?.has("") === true) {
@@ -133,18 +131,26 @@ export class LiveMessageQueue {
     // Drop candidates that a still queued message replaces. Latched ones are only checked when they
     // don't all fit, since a key that never comes back (a static transform) means a full scan.
     let wanted = this.#unreplaced(candidates, count, ({ latched }) => !latched);
-    let kept = selectWithin(wanted, bytes, 0.9 * this.#maxBytes);
+    const limit = 0.9 * this.#maxBytes;
+    let kept = selectWithin(wanted, bytes, limit);
+    let messages = this.#messages.slice(count);
     if (kept.length < wanted.length) {
       wanted = this.#unreplaced(wanted, count, ({ latched }) => latched);
-      kept = selectWithin(wanted, bytes, 0.9 * this.#maxBytes);
+      // Still short: reclaim queued messages that a newer queued one replaces, oldest first, down
+      // to the same floor as above.
+      const short = Math.min(
+        wanted.reduce((sum, { msg }) => sum + msg.sizeInBytes, bytes) - limit,
+        bytes - 0.4 * this.#maxBytes,
+      );
+      if (short > 0) {
+        const reclaim = replacedWithin(messages, short);
+        messages = messages.filter((msg) => !reclaim.has(msg));
+        reclaim.forEach((msg) => (bytes -= msg.sizeInBytes));
+      }
+      kept = selectWithin(wanted, bytes, limit);
     }
-    const messages = this.#messages.slice(count);
-    this.#latched = kept
-      .sort((a, b) => {
-        const order = compare(a.msg.receiveTime, b.msg.receiveTime);
-        return order !== 0 ? order : a.arrival - b.arrival;
-      })
-      .map(({ msg }) => msg);
+    // Arrival order, not receive time: a clock reset must not put an older value last.
+    this.#latched = kept.sort((a, b) => a.arrival - b.arrival).map(({ msg }) => msg);
     this.#messages = messages;
     this.#bytes = kept.reduce((sum, { msg }) => sum + msg.sizeInBytes, bytes);
     this.#alerts.addAlert(LIVE_QUEUE_FULL_ALERT_ID, {
@@ -219,4 +225,38 @@ function selectWithin(candidates: readonly Candidate[], bytes: number, limit: nu
     }
   }
   return kept;
+}
+
+/**
+ * Messages, oldest first, that a later message of the same topic (same child frames for
+ * transforms) replaces, until they add up to `bytes`.
+ */
+function replacedWithin(messages: readonly MessageEvent[], bytes: number): Set<MessageEvent> {
+  const seen = new Map<string, Set<string>>();
+  const replaced: MessageEvent[] = [];
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const msg = messages[i]!;
+    let topicKeys = seen.get(msg.topic);
+    if (!topicKeys) {
+      topicKeys = new Set();
+      seen.set(msg.topic, topicKeys);
+    }
+    let isReplaced = true;
+    for (const key of transformEntries(msg.message)?.map((tf) => tf.child_frame_id) ?? [""]) {
+      if (!topicKeys.has(key)) {
+        topicKeys.add(key);
+        isReplaced = false;
+      }
+    }
+    if (isReplaced) {
+      replaced.push(msg);
+    }
+  }
+  const reclaim = new Set<MessageEvent>();
+  let freed = 0;
+  for (let i = replaced.length - 1; i >= 0 && freed < bytes; i--) {
+    reclaim.add(replaced[i]!);
+    freed += replaced[i]!.sizeInBytes;
+  }
+  return reclaim;
 }
