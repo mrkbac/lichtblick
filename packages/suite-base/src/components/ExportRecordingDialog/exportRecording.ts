@@ -15,8 +15,13 @@ import {
   type McapTypes,
 } from "@lichtblick/mcap-core";
 import { ChunkJob, ExportMcapOptions, ExportTopicOptions } from "@lichtblick/mcap-support";
+import {
+  MessagePipelineContext,
+  useMessagePipeline,
+} from "@lichtblick/suite-base/components/MessagePipeline";
 import { usePlayerSelection } from "@lichtblick/suite-base/context/PlayerSelectionContext";
 import { RemoteFileReadable } from "@lichtblick/suite-base/players/IterablePlayer/Mcap/RemoteFileReadable";
+import { isRecoveryAlert } from "@lichtblick/suite-base/players/IterablePlayer/Mcap/recoveryAlerts";
 import { downloadFiles } from "@lichtblick/suite-base/util/download";
 
 import type { ExportChunkWorker } from "./exportChunk.worker";
@@ -30,16 +35,27 @@ export function useExportableFile(): File | undefined {
 }
 
 /** An MCAP recording the export dialog can read: a local file or a remote URL. */
+export type ExportReadable = McapTypes.IReadable & { close?: () => void };
+
 export type ExportSource = {
   name: string;
-  open: () => Promise<McapTypes.IReadable>;
+  /** The caller closes what it opens, also when it stops early */
+  open: () => Promise<ExportReadable>;
 };
+
+const selectIndexRebuilt = (ctx: MessagePipelineContext) =>
+  ctx.playerState.alerts?.some(isRecoveryAlert) ?? false;
 
 /** The opened recording, if it can be exported: a single local or remote MCAP file. */
 export function useExportSource(): ExportSource | undefined {
   const file = useExportableFile();
   const { selectedRemoteFile } = usePlayerSelection();
+  // Playback rebuilt a missing or damaged index in memory; the export reads the file's own index.
+  const indexRebuilt = useMessagePipeline(selectIndexRebuilt);
   return useMemo(() => {
+    if (indexRebuilt) {
+      return undefined;
+    }
     if (file) {
       return { name: file.name, open: async () => new BlobReadable(file) };
     }
@@ -55,12 +71,18 @@ export function useExportSource(): ExportSource | undefined {
       name: decodeURIComponent(pathname.slice(pathname.lastIndexOf("/") + 1)),
       open: async () => {
         // Its own reader: the player's cache and prefetching stay untouched by the export.
-        const readable = new RemoteFileReadable(url, { credentials, readAheadEnabled: true });
-        await readable.open();
+        // No read-ahead: opening reads only the summary and indexes, never the whole file.
+        const readable = new RemoteFileReadable(url, { credentials, readAheadEnabled: false });
+        try {
+          await readable.open();
+        } catch (error) {
+          readable.close();
+          throw error;
+        }
         return readable;
       },
     };
-  }, [file, selectedRemoteFile]);
+  }, [file, selectedRemoteFile, indexRebuilt]);
 }
 
 /**

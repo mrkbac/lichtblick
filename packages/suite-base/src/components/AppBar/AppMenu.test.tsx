@@ -24,6 +24,11 @@ vi.mock("react-i18next", () => ({
   useTranslation: vi.fn(),
 }));
 
+vi.mock("@lichtblick/suite-base/components/MessagePipeline", async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  useMessagePipeline: (selector: (ctx: unknown) => unknown) => selector({ playerState: {} }),
+}));
+
 vi.mock("@lichtblick/suite-base/context/PlayerSelectionContext", () => ({
   usePlayerSelection: vi.fn(),
 }));

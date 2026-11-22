@@ -50,9 +50,11 @@ import {
 } from "@lichtblick/mcap-support";
 import { useMessagePipeline } from "@lichtblick/suite-base/components/MessagePipeline";
 import { selectCurrentTime } from "@lichtblick/suite-base/components/MessagePipeline/selectors";
+import { toError } from "@lichtblick/suite-base/util/toError";
 
 import { useStyles } from "./ExportRecordingDialog.style";
 import {
+  ExportReadable,
   ExportSource,
   topicFilterPattern,
   TopicEdit,
@@ -86,17 +88,43 @@ export function ExportRecordingDialog({ source, onClose }: Props): React.JSX.Ele
   const { t } = useTranslation("exportRecording");
   const { classes } = useStyles();
 
-  const opened = useAsync(async () => {
-    const readable = await source.open();
-    const newReader = await openCachedMcapReader({
-      readable,
-      decompressHandlers: await loadDecompressHandlers(),
-      chunkCache: new ChunkCache(),
-    });
-    return { reader: newReader, readable, source };
+  const [opened, setOpened] = useState<
+    { reader: McapIndexedReader; readable: ExportReadable; source: ExportSource } | Error
+  >();
+  useEffect(() => {
+    // Closing the readable on dismiss or source change also stops its pending reads.
+    let cancelled = false;
+    const isCancelled = () => cancelled;
+    let readable: ExportReadable | undefined;
+    void (async () => {
+      try {
+        readable = await source.open();
+        if (isCancelled()) {
+          readable.close?.();
+          return;
+        }
+        const reader = await openCachedMcapReader({
+          readable,
+          decompressHandlers: await loadDecompressHandlers(),
+          chunkCache: new ChunkCache(),
+        });
+        if (!isCancelled()) {
+          setOpened({ reader, readable, source });
+        }
+      } catch (error) {
+        readable?.close?.();
+        if (!isCancelled()) {
+          setOpened(toError(error));
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+      readable?.close?.();
+      setOpened(undefined);
+    };
   }, [source]);
-  // useAsync keeps the previous value while the next file loads; only use a matching reader.
-  const value = opened.value?.source === source ? opened.value : undefined;
+  const value = opened instanceof Error ? undefined : opened;
 
   return (
     <Dialog
@@ -112,15 +140,15 @@ export function ExportRecordingDialog({ source, onClose }: Props): React.JSX.Ele
           {source.name}
         </Typography>
       </DialogTitle>
-      {opened.loading && (
+      {opened == undefined && (
         <DialogContent>
           <Typography>{t("opening")}</Typography>
           <LinearProgress />
         </DialogContent>
       )}
-      {opened.error && (
+      {opened instanceof Error && (
         <DialogContent>
-          <Alert severity="error">{opened.error.message}</Alert>
+          <Alert severity="error">{opened.message}</Alert>
         </DialogContent>
       )}
       {value && (
