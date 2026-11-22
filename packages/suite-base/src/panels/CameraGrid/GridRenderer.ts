@@ -26,11 +26,11 @@ import { formatTimeRaw } from "@lichtblick/suite-base/util/time";
 import { toError } from "@lichtblick/suite-base/util/toError";
 
 import {
-  ANNOTATION_HISTORY,
   AnnotationEntry,
   drawAnnotations,
   makeAnnotationEntry,
   pickAnnotations,
+  pruneAnnotationHistory,
 } from "./annotations";
 import { imageKind } from "./layout";
 import { TileConfig } from "./types";
@@ -146,9 +146,7 @@ export class GridRenderer {
         // A malformed message must not stop the rest of the frame (and `done()`) from running.
         try {
           history.push(makeAnnotationEntry(normalizeAnnotations(event.message, event.schemaName)));
-          if (history.length > ANNOTATION_HISTORY) {
-            history.shift();
-          }
+          pruneAnnotationHistory(history, this.#oldestImageStamp(event.topic));
           (annotated ??= new Set()).add(event.topic);
         } catch (error) {
           this.#warnMalformed(event.topic, error);
@@ -177,6 +175,21 @@ export class GridRenderer {
         }
       }
     }
+  }
+
+  /** Stamp of the oldest image shown on a tile that draws `annotationTopic` */
+  #oldestImageStamp(annotationTopic: string): bigint | undefined {
+    let oldest: bigint | undefined;
+    for (const tile of this.#tiles.values()) {
+      if (
+        tile.stampNs != undefined &&
+        (oldest == undefined || tile.stampNs < oldest) &&
+        tile.annotationTopics.includes(annotationTopic)
+      ) {
+        oldest = tile.stampNs;
+      }
+    }
+    return oldest;
   }
 
   /** Drops queued video frames and restarts decoding at the next keyframe (the player backfills it). */
