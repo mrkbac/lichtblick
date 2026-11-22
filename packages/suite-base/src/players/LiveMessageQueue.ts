@@ -136,12 +136,9 @@ export class LiveMessageQueue {
     let messages = this.#messages.slice(count);
     if (kept.length < wanted.length) {
       wanted = this.#unreplaced(wanted, count, ({ latched }) => latched);
-      // Still short: reclaim queued messages that a newer queued one replaces, oldest first, down
-      // to the same floor as above.
-      const short = Math.min(
-        wanted.reduce((sum, { msg }) => sum + msg.sizeInBytes, bytes) - limit,
-        bytes - 0.4 * this.#maxBytes,
-      );
+      // Still short: reclaim queued messages that a newer queued one replaces, oldest first. They
+      // only repeat older values, so they go before a kept message that has no newer copy.
+      const short = wanted.reduce((sum, { msg }) => sum + msg.sizeInBytes, bytes) - limit;
       if (short > 0) {
         const reclaim = replacedWithin(messages, short);
         messages = messages.filter((msg) => !reclaim.has(msg));

@@ -147,7 +147,7 @@ describe("LiveMessageQueue", () => {
     (console.warn as Mock).mockClear();
   });
 
-  it("keeps queueing new messages when kept messages are large", () => {
+  it("keeps the newest message per topic when kept messages are large", () => {
     const queue = new LiveMessageQueue(1000, new PlayerAlertManager());
     let t = 0;
     for (let topic = 0; topic < 23; topic++) {
@@ -158,7 +158,22 @@ describe("LiveMessageQueue", () => {
       expect(queue.sizeInBytes()).toBeLessThanOrEqual(1000);
     }
     const kept = queue.drain();
-    expect(kept.filter((m) => m.topic === "/a").length).toBeGreaterThan(40);
+    expect(kept.at(-1)!.receiveTime.sec).toBe(t - 1);
+    expect(kept.filter((m) => m.topic !== "/a").length).toBeGreaterThan(15);
+    (console.warn as Mock).mockClear();
+  });
+
+  it("drops older images before a one-shot map when the map and the newest image fit", () => {
+    const queue = new LiveMessageQueue(1000, new PlayerAlertManager());
+    const map = msg(0, 525, "/map");
+    queue.push(map);
+    for (let t = 1; t < 40; t++) {
+      queue.push(msg(t, 20, "/image"));
+      expect(queue.sizeInBytes()).toBeLessThanOrEqual(1000);
+    }
+    const kept = queue.drain();
+    expect(kept[0]).toBe(map);
+    expect(kept.at(-1)!.receiveTime.sec).toBe(39);
     (console.warn as Mock).mockClear();
   });
 

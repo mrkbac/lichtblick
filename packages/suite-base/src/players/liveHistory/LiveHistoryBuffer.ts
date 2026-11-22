@@ -257,7 +257,9 @@ export class LiveHistoryBuffer {
     // costs at most that same walk to bring up to date. A lone seek walks as before, so checkpoints
     // are only built when later seeks will reuse them.
     const end = this.#upperBound(at);
-    const block = Math.floor(this.#seqOf(end) / CHECKPOINT_INTERVAL);
+    // The block of the last message at or before `at`, so a seek at a block boundary walks the
+    // block that ends there instead of the empty one after it.
+    const block = Math.floor(Math.max(this.#seqOf(end) - 1, 0) / CHECKPOINT_INTERVAL);
     const blockStart = this.#indexOf(block * CHECKPOINT_INTERVAL);
     const added = this.#seqOf(this.#messages.length);
     const scrubbing = added - this.#lastSeekSeq < CHECKPOINT_INTERVAL;

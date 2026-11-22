@@ -356,9 +356,12 @@ describe("LiveHistoryBuffer", () => {
     }
     const topics = new Set(["/a"]);
     buffer.backfill(fromSec(last), topics);
-    reads.count = 0;
-    expect(times(buffer.backfill(fromSec(last - 1), topics))).toEqual([last - 1]);
-    expect(reads.count).toBeLessThan(10);
+    // Including a seek that ends exactly at a block boundary.
+    for (const at of [last - 1, 2 * CHECKPOINT_INTERVAL]) {
+      reads.count = 0;
+      expect(times(buffer.backfill(fromSec(at), topics))).toEqual([at]);
+      expect(reads.count).toBeLessThan(10);
+    }
   });
 
   it("clears everything, including seeds, e.g. on a clock reset", () => {
