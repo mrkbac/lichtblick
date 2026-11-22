@@ -308,14 +308,28 @@ export default class UserScriptPlayer implements Player {
   // Foxglove topic converters from extensions; they run in this thread like user scripts.
   #topicConverters: Immutable<InstalledTopicConverter[]> = [];
 
+  // Registration per installed converter, kept across resets (e.g. seeks) like user script
+  // registrations, so the preloaded outputs below stay valid. terminate() still resets its state.
+  #topicConverterRegistrationCache = new WeakMap<
+    Immutable<InstalledTopicConverter>,
+    ScriptRegistration
+  >();
+
   // Preloaded blocks with topic converter outputs added, per source block. Replaced (dropping all
-  // entries) whenever the registrations or the preloaded converter outputs change.
+  // entries) whenever the converters producing them or their source topics change.
   #convertedBlocks = new WeakMap<MessageBlock, MessageBlock>();
-  #convertedBlocksKey: { registrations: readonly ScriptRegistration[]; outputs: string } = {
-    registrations: [],
-    outputs: "",
-  };
-  #lastMessageCache?: { source: BlockCache; converted: BlockCache };
+  #convertedBlocksKey: {
+    needed: readonly ScriptRegistration[];
+    topics: string;
+    variables: unknown[];
+  } = { needed: [], topics: "", variables: [] };
+  // What the key above was computed from; when none of it changed, neither did the key.
+  #convertedBlocksInputs: unknown[] = [];
+  // `failed`: some block's conversion reported an error and was left out of #convertedBlocks, so
+  // it is retried (and its alert raised again) the next time the inputs or the blocks change.
+  #lastMessageCache?: { source: BlockCache; converted: BlockCache; failed: boolean };
+  // Counts topic converter errors, so a block conversion can tell whether it hit one.
+  #topicConverterFailures = 0;
 
   // exposed as a static to allow testing to mock/replace
   public static CreateTransformWorker = (): SharedWorker => {
@@ -934,14 +948,19 @@ export default class UserScriptPlayer implements Player {
         continue;
       }
 
-      const registration = buildTopicConverterRegistration(installed, (error) => {
-        this.#alertStore.set(alertKey, {
-          severity: "error",
-          message: `Topic converter for "${topic}" from extension ${installed.extensionId} failed.`,
-          error: toError(error),
+      let registration = this.#topicConverterRegistrationCache.get(installed);
+      if (!registration) {
+        registration = buildTopicConverterRegistration(installed, (error) => {
+          this.#topicConverterFailures++;
+          this.#alertStore.set(alertKey, {
+            severity: "error",
+            message: `Topic converter for "${topic}" from extension ${installed.extensionId} failed.`,
+            error: toError(error),
+          });
+          void this.#queueEmitState();
         });
-        void this.#queueEmitState();
-      });
+        this.#topicConverterRegistrationCache.set(installed, registration);
+      }
       state.inputsByOutputTopic.set(topic, registration.inputs);
       registrations.push(registration);
     }
@@ -969,34 +988,58 @@ export default class UserScriptPlayer implements Player {
     registrations: readonly ScriptRegistration[],
   ): Promise<Progress> {
     const source = progress.messageCache;
+    if (!source) {
+      return progress;
+    }
+    const keyInputs = [registrations, this.#scriptSubscriptions, this.#globalVariables];
+    if (
+      this.#lastMessageCache?.source === source &&
+      keyInputs.every((input, i) => input === this.#convertedBlocksInputs[i])
+    ) {
+      return { ...progress, messageCache: this.#lastMessageCache.converted };
+    }
+    this.#convertedBlocksInputs = keyInputs;
     const converters = registrations.filter(isTopicConverter);
     const preloaded = converters.filter(
       ({ output }) => this.#scriptSubscriptions[output.name]?.preloadType === "full",
     );
-    if (!source || preloaded.length === 0) {
+    if (preloaded.length === 0) {
+      this.#lastMessageCache = undefined;
       return progress;
     }
     const outputTopics = new Set(preloaded.map(({ output }) => output.name));
-    const key = { registrations, outputs: [...outputTopics].sort().join("\n") };
-    if (
-      key.registrations !== this.#convertedBlocksKey.registrations ||
-      key.outputs !== this.#convertedBlocksKey.outputs
-    ) {
-      this.#convertedBlocksKey = key;
-      this.#convertedBlocks = new WeakMap();
-      this.#lastMessageCache = undefined;
-    }
-    if (this.#lastMessageCache?.source === source) {
-      return { ...progress, messageCache: this.#lastMessageCache.converted };
-    }
-
     // User script outputs are never in blocks, so converters reading them get no input there.
     const needed = withDependencies(converters, outputTopics);
     const virtualTopics = new Set(registrations.map(({ output }) => output.name));
     const sourceTopics = _.uniq(
       needed.flatMap(({ inputs }) => inputs.filter((input) => !virtualTopics.has(input))),
     );
+    // Seeks rebuild the registrations array but reuse the converter registrations, so this key
+    // stays the same and the converted blocks survive them.
     const globalVariables = this.#globalVariables;
+    const key = {
+      needed,
+      topics: [...[...outputTopics].sort(), "", ...sourceTopics].join("\n"),
+      // Converters are recreated when a variable they watch changes, so their outputs change too.
+      // Per the topic converter contract, outputs depend only on watched variables.
+      variables: needed.flatMap(({ scriptData }) =>
+        scriptData.globalVariables.map((name) => globalVariables[name]),
+      ),
+    };
+    if (
+      key.topics !== this.#convertedBlocksKey.topics ||
+      !_.isEqual(key.variables, this.#convertedBlocksKey.variables) ||
+      key.needed.length !== this.#convertedBlocksKey.needed.length ||
+      key.needed.some((registration, i) => registration !== this.#convertedBlocksKey.needed[i])
+    ) {
+      this.#convertedBlocksKey = key;
+      this.#convertedBlocks = new WeakMap();
+      this.#lastMessageCache = undefined;
+    }
+    if (this.#lastMessageCache?.source === source && !this.#lastMessageCache.failed) {
+      return { ...progress, messageCache: this.#lastMessageCache.converted };
+    }
+    let failed = false;
 
     const convertBlock = async (block: MessageBlock): Promise<MessageBlock> => {
       const cached = this.#convertedBlocks.get(block);
@@ -1015,6 +1058,7 @@ export default class UserScriptPlayer implements Player {
         .sort(byReceiveTime);
       // ponytail: fresh converter instances per block, so converter state does not carry across
       // block boundaries; carry it over in time order if a stateful converter needs it.
+      const failuresBefore = this.#topicConverterFailures;
       const outputs = await runFresh(inputs, needed, globalVariables);
       const messagesByTopic: Record<string, MessageEvent[]> = { ...block.messagesByTopic };
       let sizeInBytes = block.sizeInBytes;
@@ -1028,13 +1072,20 @@ export default class UserScriptPlayer implements Player {
         }
       }
       const converted: MessageBlock = { ...block, messagesByTopic, sizeInBytes };
-      this.#convertedBlocks.set(block, converted);
+      if (this.#topicConverterFailures === failuresBefore) {
+        this.#convertedBlocks.set(block, converted);
+      } else {
+        failed = true;
+      }
       return converted;
     };
 
-    const blocks = await Promise.all(
-      source.blocks.map(async (block) => (block ? await convertBlock(block) : undefined)),
-    );
+    // One block at a time (converters run on this thread anyway), so an error is counted against
+    // the block that hit it.
+    const blocks: (MessageBlock | undefined)[] = [];
+    for (const block of source.blocks) {
+      blocks.push(block ? await convertBlock(block) : undefined);
+    }
     const previous = this.#lastMessageCache?.converted;
     // Keep the previous array when no block changed, so panels don't re-process allFrames.
     const converted: BlockCache =
@@ -1044,7 +1095,7 @@ export default class UserScriptPlayer implements Player {
       previous.blocks.every((block, i) => block === blocks[i])
         ? previous
         : { ...source, blocks };
-    this.#lastMessageCache = { source, converted };
+    this.#lastMessageCache = { source, converted, failed };
     return { ...progress, messageCache: converted };
   }
 
