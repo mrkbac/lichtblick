@@ -86,16 +86,16 @@ export const SEEK_LOOKBACK_NS = [2e9, 8e9, 32e9, 128e9].map(BigInt);
 
 /**
  * After a seek to `time`, read the transform topics just before it, so every frame has its latest
- * transform at `time`. Starts with a short window and widens it while `isMissing(windowStart)` says
- * some known frame has no transform in [windowStart, time]. Never reads before `floor`, the time up
- * to which the history is already complete.
+ * transform at `time`. Starts with a short window and widens it over older slices while
+ * `isMissing()` says some known frame got no transform from the read yet. Never reads before
+ * `floor`, the time up to which the history is already complete.
  */
 export async function readTransformsBefore(args: {
   subscribeRange: SubscribeRange;
   topics: readonly TransformTopic[];
   time: bigint;
   floor: bigint;
-  isMissing: (windowStart: bigint) => boolean;
+  isMissing: () => boolean;
   onBatch: (batch: readonly MessageEvent[]) => void;
   signal: AbortSignal;
 }): Promise<void> {
@@ -107,7 +107,7 @@ export async function readTransformsBefore(args: {
       return;
     }
     await readTransformRange({ ...args, start, end });
-    if (signal.aborted || start <= floor || !isMissing(start)) {
+    if (signal.aborted || start <= floor || !isMissing()) {
       return;
     }
     // Next window only reads the older part; ranges are inclusive, so step one nanosecond back

@@ -573,6 +573,7 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
       }
       const abort = new AbortController();
       seekReadRef.current = abort;
+      const refreshed = new Set<string>();
       void readTransformsBefore({
         subscribeRange: context.unstable_subscribeMessageRange,
         topics: transformTopics,
@@ -580,17 +581,12 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
         floor,
         signal: abort.signal,
         onBatch: (batch) => {
-          renderer.addTransformMessages(batch);
+          renderer.addTransformMessages(batch, refreshed);
         },
-        // A frame counts as found once the read gave it a transform in the window; an older cached
-        // one may be stale. Static frames are published once, so any transform will do for them.
-        isMissing: (windowStart) =>
-          knownFrameIds.some((id) => {
-            const latest = renderer.transformTree.frame(id)?.latestTimeAtOrBefore(time);
-            return (
-              latest == undefined || (latest < windowStart && !renderer.isStaticTransformFrame(id))
-            );
-          }),
+        // A frame counts as found once this read gave it a transform; a cached one may be stale.
+        // Static frames are published once and restored from their cache, so they never block.
+        isMissing: () =>
+          knownFrameIds.some((id) => !refreshed.has(id) && !renderer.isStaticTransformFrame(id)),
       });
     },
     // context is static, we're just using it to subscribe
@@ -611,7 +607,7 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
       // The history came from the previous topics (or preloading is turning off): start over from
       // the current ones, and read the transforms around the current time again right away
       const knownFrameIds = [...renderer.transformTree.frames().keys()];
-      renderer.transformTree.setComplete(false);
+      renderer.resetTransformHistory(new Set(transformTopics.map(({ topic }) => topic)));
       readTransformsAfterSeek(renderer.currentTime, knownFrameIds);
     }
     setTransformDecimations(renderer.transformTree.decimations);

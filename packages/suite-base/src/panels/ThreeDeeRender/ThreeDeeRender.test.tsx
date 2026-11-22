@@ -1169,6 +1169,77 @@ describe("ThreeDeeRender", () => {
       });
     });
 
+    it("keeps widening the seek read until it refreshes every known frame", async () => {
+      // Given: frames A and B are known; a cached transform must not count as refreshed. The first
+      // window only gives B a transform, the second one gives A one.
+      const topics = [RenderStateBuilder.topic({ name: "/tf", schemaName: "tf2_msgs/TFMessage" })];
+      const frame = (id: string) => ({ id, parent: () => ({ id: "root" }) });
+      let reads = 0;
+      const customRendererInstance = createMockRenderer({
+        schemaSubscriptions: new Map([["tf2_msgs/TFMessage", [{ preload: true }]]]),
+        transformTree: {
+          setComplete: vi.fn(),
+          isComplete: vi.fn().mockReturnValue(false),
+          frames: vi.fn().mockReturnValue(
+            new Map([
+              ["A", frame("A")],
+              ["B", frame("B")],
+            ]),
+          ),
+          frame: vi.fn(),
+          decimations: 0,
+        },
+        isStaticTransformFrame: vi.fn().mockReturnValue(false),
+        addTransformMessages: vi.fn((_batch: unknown, touched?: Set<string>) => {
+          touched?.add(reads === 1 ? "B" : "A");
+        }),
+      });
+      vi.mocked(Renderer).mockImplementationOnce(function () {
+        return customRendererInstance as any;
+      });
+      const mockContext = createPreloadingContext({
+        initialState: {
+          scene: { transforms: { enablePreloading: false } },
+          topics: { "/tf": { visible: true } },
+        },
+        onSubscribe: (args: any) => {
+          reads++;
+          void args.onNewRangeIterator?.({
+            async *[Symbol.asyncIterator]() {
+              yield buildTfMessages({ topic: "/tf", count: 1 });
+            },
+          });
+        },
+      });
+      render(<ThreeDeeRender {...setup({}, mockContext)} />);
+      await waitFor(() => {
+        expect(mockContext.onRender).toBeDefined();
+      });
+      act(() => {
+        mockContext.onRender!({ topics, currentFrame: [] }, vi.fn());
+      });
+
+      // When
+      act(() => {
+        mockContext.onRender!(
+          { topics, currentFrame: [], currentTime: { sec: 100, nsec: 0 }, didSeek: true },
+          vi.fn(),
+        );
+      });
+
+      // Then: a second, older window was read, and no third one
+      await waitFor(() => {
+        expect(mockContext.unstable_subscribeMessageRange).toHaveBeenCalledTimes(2);
+      });
+      expect(mockContext.unstable_subscribeMessageRange).toHaveBeenLastCalledWith(
+        expect.objectContaining({ start: { sec: 92, nsec: 0 } }),
+      );
+      await act(async () => {
+        await Promise.resolve();
+      });
+      expect(mockContext.unstable_subscribeMessageRange).toHaveBeenCalledTimes(2);
+    });
+
     it("reads the transforms just before the seek time when preloading is off", async () => {
       // Given
       const topics = [RenderStateBuilder.topic({ name: "/tf", schemaName: "tf2_msgs/TFMessage" })];

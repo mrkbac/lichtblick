@@ -161,6 +161,8 @@ const tempQuat: quat = [0, 0, 0, 1];
 const tempTransform = Transform.Identity();
 
 type StaticTransform = {
+  /** Topic it came from, so it can be dropped when the topic goes away */
+  topic: string;
   parentFrameId: string;
   childFrameId: string;
   stamp: bigint;
@@ -263,6 +265,7 @@ export class Renderer extends EventEmitter<RendererEvents> {
 
   public transformTree = new TransformTree();
   readonly #staticTransformCache = new Map<string, StaticTransform>();
+  #touchedFrameIds: Set<string> | undefined;
 
   public coordinateFrameList: SelectEntry[] = [];
   // While > 0, transform tree changes are collected and announced once at the end of the batch
@@ -688,7 +691,12 @@ export class Renderer extends EventEmitter<RendererEvents> {
    * Feed the transform history of a recording (range reads, see ThreeDeeRender) straight into the
    * transform tree. Samples already in the tree are replaced, so overlapping reads are harmless.
    */
-  public addTransformMessages(messageEvents: readonly MessageEvent[]): void {
+  public addTransformMessages(
+    messageEvents: readonly MessageEvent[],
+    /** Collects the child frames these messages gave a transform */
+    touchedFrameIds?: Set<string>,
+  ): void {
+    this.#touchedFrameIds = touchedFrameIds;
     this.#batchTransformTreeUpdates(() => {
       for (const messageEvent of messageEvents) {
         for (const subscription of this.schemaSubscriptions.get(messageEvent.schemaName) ?? []) {
@@ -698,7 +706,24 @@ export class Renderer extends EventEmitter<RendererEvents> {
         }
       }
     });
+    this.#touchedFrameIds = undefined;
     this.queueAnimationFrame();
+  }
+
+  /**
+   * Starts the transform history over: clears the tree and drops cached static transforms from
+   * topics no longer read, then restores the remaining static ones.
+   */
+  public resetTransformHistory(topics: ReadonlySet<string>): void {
+    for (const [childFrameId, { topic }] of this.#staticTransformCache) {
+      if (!topics.has(topic)) {
+        this.#staticTransformCache.delete(childFrameId);
+      }
+    }
+    this.transformTree.setComplete(false);
+    this.transformTree.clear();
+    this.#reapplyStaticTransforms();
+    this.#transformTreeUpdated();
   }
 
   /** Whether the frame's transform came from a static transform topic */
@@ -1506,7 +1531,7 @@ export class Renderer extends EventEmitter<RendererEvents> {
 
   #addFrameTransform(
     transform: FrameTransform,
-    options?: { isStatic?: boolean; receiveTime?: bigint },
+    options?: { isStatic?: boolean; receiveTime?: bigint; topic?: string },
   ): void {
     const parentId = transform.parent_frame_id;
     const childId = transform.child_frame_id;
@@ -1527,6 +1552,7 @@ export class Renderer extends EventEmitter<RendererEvents> {
 
       if (options?.isStatic === true && result !== AddTransformResult.CYCLE_DETECTED) {
         this.#staticTransformCache.set(childId, {
+          topic: options.topic ?? "",
           parentFrameId: parentId,
           childFrameId: childId,
           stamp,
@@ -1546,7 +1572,7 @@ export class Renderer extends EventEmitter<RendererEvents> {
 
   #addTransformMessage(
     tf: TransformStamped,
-    options?: { isStatic?: boolean; receiveTime?: bigint },
+    options?: { isStatic?: boolean; receiveTime?: bigint; topic?: string },
   ): void {
     const normalizedParentId = this.normalizeFrameId(tf.header.frame_id);
     const normalizedChildId = this.normalizeFrameId(tf.child_frame_id);
@@ -1567,6 +1593,7 @@ export class Renderer extends EventEmitter<RendererEvents> {
 
       if (options?.isStatic === true && result !== AddTransformResult.CYCLE_DETECTED) {
         this.#staticTransformCache.set(normalizedChildId, {
+          topic: options.topic ?? "",
           parentFrameId: normalizedParentId,
           childFrameId: normalizedChildId,
           stamp,
@@ -1608,6 +1635,7 @@ export class Renderer extends EventEmitter<RendererEvents> {
     tempQuat[3] = q.w;
 
     tempTransform.setPositionRotation(tempVec3, tempQuat);
+    this.#touchedFrameIds?.add(childFrameId);
     const status = this.transformTree.addTransform(
       childFrameId,
       parentFrameId,
@@ -1927,7 +1955,7 @@ export class Renderer extends EventEmitter<RendererEvents> {
     // foxglove.FrameTransform - Ingest this single transform into our TF tree
     const transform = normalizeFrameTransform(message);
     const isStatic = isStaticTransformTopic(topic);
-    this.#addFrameTransform(transform, { isStatic, receiveTime: toNanoSec(receiveTime) });
+    this.#addFrameTransform(transform, { isStatic, receiveTime: toNanoSec(receiveTime), topic });
   };
 
   readonly #handleFrameTransforms = ({
@@ -1940,6 +1968,7 @@ export class Renderer extends EventEmitter<RendererEvents> {
     const options = {
       isStatic: isStaticTransformTopic(topic),
       receiveTime: toNanoSec(receiveTime),
+      topic,
     };
     for (const transform of frameTransforms.transforms) {
       this.#addFrameTransform(transform, options);
@@ -1956,6 +1985,7 @@ export class Renderer extends EventEmitter<RendererEvents> {
     const options = {
       isStatic: isStaticTransformTopic(topic),
       receiveTime: toNanoSec(receiveTime),
+      topic,
     };
     for (const tf of tfMessage.transforms) {
       this.#addTransformMessage(tf, options);
@@ -1970,7 +2000,7 @@ export class Renderer extends EventEmitter<RendererEvents> {
     // geometry_msgs/TransformStamped - Ingest this single transform into our TF tree
     const tf = normalizeTransformStamped(message);
     const isStatic = isStaticTransformTopic(topic);
-    this.#addTransformMessage(tf, { isStatic, receiveTime: toNanoSec(receiveTime) });
+    this.#addTransformMessage(tf, { isStatic, receiveTime: toNanoSec(receiveTime), topic });
   };
 
   #handleTopicsAction = (action: SettingsTreeAction): void => {

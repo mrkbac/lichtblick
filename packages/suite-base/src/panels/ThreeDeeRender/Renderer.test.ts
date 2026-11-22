@@ -2207,6 +2207,32 @@ describe("Renderer.addTransformMessages", () => {
     expect(updates).toHaveBeenCalledTimes(1);
   });
 
+  it("reports which frames the messages gave a transform", () => {
+    const renderer = new Renderer({ ...defaultRendererProps, canvas });
+    const touched = new Set<string>();
+    renderer.addTransformMessages([createTFMessageEvent("root", "a", 1n, [5n])], touched);
+    expect([...touched]).toEqual(["a"]);
+  });
+
+  it("drops cached static transforms of removed topics when the history starts over", () => {
+    const renderer = new Renderer({ ...defaultRendererProps, canvas });
+    renderer.setCurrentTime(100n);
+    renderer.addTransformMessages([
+      createTFMessageEvent("root", "kept", 1n, [1n], "/tf_static"),
+      createTFMessageEvent("root", "removed", 1n, [1n], "/old_tf_static"),
+    ]);
+
+    renderer.resetTransformHistory(new Set(["/tf_static"]));
+    expect(renderer.transformTree.frame("kept")?.transformsSize()).toBe(1);
+    expect(renderer.transformTree.frame("removed")).toBeUndefined();
+
+    // A later backward seek must not bring it back from the cache
+    renderer.setCurrentTime(50n);
+    renderer.handleSeek(100n);
+    expect(renderer.transformTree.frame("removed")).toBeUndefined();
+    expect(renderer.transformTree.frame("kept")).toBeDefined();
+  });
+
   it("is idempotent for transforms read twice", () => {
     const renderer = new Renderer({ ...defaultRendererProps, canvas });
     const batch = [createTFMessageEvent("root", "a", 1n, [1n, 2n])];
