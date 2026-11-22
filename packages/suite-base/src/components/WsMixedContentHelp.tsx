@@ -3,13 +3,11 @@
 
 import { ArrowClockwise16Regular, ArrowDownload16Regular } from "@fluentui/react-icons";
 import { Button, Link, Typography } from "@mui/material";
-import { useState } from "react";
 import { makeStyles } from "tss-react/mui";
 
 import CopyButton from "@lichtblick/suite-base/components/CopyButton";
 import Stack from "@lichtblick/suite-base/components/Stack";
 import { PROXY_ORIGINS } from "@lichtblick/suite-base/players/wsProxyOrigins";
-import { downloadFiles } from "@lichtblick/suite-base/util/download";
 import { fontMonospace } from "@lichtblick/theme";
 
 const useStyles = makeStyles()((theme) => ({
@@ -58,26 +56,6 @@ function detectBrowser(): Browser {
   return "other";
 }
 
-/** Zips the repository's chrome-extension/ folder in the browser, so it can be loaded unpacked. */
-async function downloadExtension(): Promise<void> {
-  const [{ default: JSZip }, manifest, background, content, readme] = await Promise.all([
-    import("jszip"),
-    import("../../../../chrome-extension/manifest.json?raw"),
-    import("../../../../chrome-extension/background.js?raw"),
-    import("../../../../chrome-extension/content.js?raw"),
-    import("../../../../chrome-extension/README.md?raw"),
-  ]);
-  const zip = new JSZip();
-  const folder = zip.folder("licht-ws-proxy")!;
-  folder.file("manifest.json", manifest.default);
-  folder.file("background.js", background.default);
-  folder.file("content.js", content.default);
-  folder.file("README.md", readme.default);
-  downloadFiles([
-    { blob: await zip.generateAsync({ type: "blob" }), fileName: "licht-ws-proxy.zip" },
-  ]);
-}
-
 function Code({ text, copy = false }: { text: string; copy?: boolean }): React.JSX.Element {
   const { classes } = useStyles();
   return (
@@ -102,7 +80,6 @@ function Code({ text, copy = false }: { text: string; copy?: boolean }): React.J
  */
 export function WsMixedContentHelp({ url }: { url: string }): React.JSX.Element {
   const { classes } = useStyles();
-  const [downloadError, setDownloadError] = useState<string>();
   const browser = detectBrowser();
   const origin = window.location.origin;
   const chromiumBased = browser === "chromium" || browser === "edge";
@@ -127,21 +104,13 @@ export function WsMixedContentHelp({ url }: { url: string }): React.JSX.Element 
                 size="small"
                 variant="outlined"
                 startIcon={<ArrowDownload16Regular />}
-                onClick={() => {
-                  setDownloadError(undefined);
-                  downloadExtension().catch((err: unknown) => {
-                    setDownloadError(String(err));
-                  });
-                }}
+                href="/licht-ws-proxy.zip"
+                target="_self"
+                download
               >
                 Download the extension
               </Button>{" "}
               and unzip it.
-              {downloadError != undefined && (
-                <Typography variant="inherit" color="error">
-                  {downloadError}
-                </Typography>
-              )}
             </li>
             <li>
               Open <Code text={`${settingsScheme}://extensions`} copy /> and turn on{" "}
