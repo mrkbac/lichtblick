@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
+import type { MessageEvent } from "@lichtblick/suite-base/players/types";
+
 import type { IteratorResult } from "./IIterableSource";
 import { packBatch, unpackBatch } from "./packedBatch";
 
@@ -66,6 +68,42 @@ describe("packBatch", () => {
 
     expect(shared.byteLength).toBe(0);
     expect(unpackBatch(received)).toEqual(expected);
+  });
+
+  it("lists each topic and schema pair once when a topic alternates schemas", () => {
+    const event = (schemaName: string): IteratorResult => ({
+      type: "message-event",
+      msgEvent: {
+        topic: "/a",
+        schemaName,
+        receiveTime: { sec: 1, nsec: 0 },
+        message: {},
+        sizeInBytes: 1,
+      },
+    });
+    const batch = [event("A"), event("B"), event("A"), event("B")];
+
+    const { packed } = packBatch(batch);
+
+    expect(packed.names).toEqual(["/a", "A", "/a", "B"]);
+    expect(
+      unpackBatch(packed).map((r) => r.type === "message-event" && r.msgEvent.schemaName),
+    ).toEqual(["A", "B", "A", "B"]);
+  });
+
+  it("keeps serializedSizeInBytes", () => {
+    const msgEvent: MessageEvent = {
+      topic: "/a",
+      schemaName: "A",
+      receiveTime: { sec: 1, nsec: 0 },
+      message: {},
+      sizeInBytes: 10,
+      serializedSizeInBytes: 4,
+    };
+
+    const { packed } = packBatch([{ type: "message-event", msgEvent }]);
+
+    expect(unpackBatch(packed)).toEqual([{ type: "message-event", msgEvent }]);
   });
 
   it("packs an empty batch", () => {

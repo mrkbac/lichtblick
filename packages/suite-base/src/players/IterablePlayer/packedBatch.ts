@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import type { MessageEvent } from "@lichtblick/suite";
+import type { MessageEvent } from "@lichtblick/suite-base/players/types";
 
 import type { IteratorResult } from "./IIterableSource";
 
@@ -31,7 +31,8 @@ export function packBatch<MessageType>(batch: readonly IteratorResult<MessageTyp
   transfer: Transferable[];
 } {
   const names: string[] = [];
-  const nameIndexByTopic = new Map<string, number>();
+  // By topic, then schema name: a topic may alternate schemas (e.g. merged files)
+  const nameIndexBySchemaByTopic = new Map<string, Map<string, number>>();
   // Sized for every result; the tail past the last message is unused
   const nameIndexes = new Uint32Array(batch.length);
   const numbers = new Float64Array(batch.length * STRIDE);
@@ -47,11 +48,15 @@ export function packBatch<MessageType>(batch: readonly IteratorResult<MessageTyp
       continue;
     }
     const { topic, schemaName, receiveTime, publishTime, message, sizeInBytes } = result.msgEvent;
-    let nameIndex = nameIndexByTopic.get(topic);
-    if (nameIndex == undefined || names[nameIndex + 1] !== schemaName) {
+    let bySchema = nameIndexBySchemaByTopic.get(topic);
+    if (!bySchema) {
+      nameIndexBySchemaByTopic.set(topic, (bySchema = new Map<string, number>()));
+    }
+    let nameIndex = bySchema.get(schemaName);
+    if (nameIndex == undefined) {
       nameIndex = names.length;
       names.push(topic, schemaName);
-      nameIndexByTopic.set(topic, nameIndex);
+      bySchema.set(schemaName, nameIndex);
     }
     const i = messages.length;
     const n = i * STRIDE;
@@ -121,6 +126,7 @@ const FIELDS = {
   sizeInBytes: "packed",
   originalMessageEvent: "unpacked",
   topicConfig: "unpacked",
+  serializedSizeInBytes: "unpacked",
 } as const satisfies Record<keyof MessageEvent, "packed" | "unpacked">;
 
 const UNPACKED_FIELDS = (Object.keys(FIELDS) as (keyof MessageEvent)[]).filter(
