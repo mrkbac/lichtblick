@@ -48,7 +48,9 @@ import {
   buildSettingsTree,
   Config,
   DEFAULT_POINT_SIZE,
+  FOLLOW_MOVE_EVENT,
   normalizeConfig,
+  shouldSaveView,
 } from "./config";
 import {
   ARROW_IMAGE,
@@ -848,7 +850,7 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
         didInitialFitRef.current = true;
       }
     });
-    instance.on("moveend", () => {
+    instance.on("moveend", (event) => {
       userMovingRef.current = false;
       const center = instance.getCenter();
       viewRef.current = {
@@ -857,7 +859,9 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
         bearing: instance.getBearing(),
         pitch: instance.getPitch(),
       };
-      context.saveState(viewRef.current);
+      if (shouldSaveView(event, configRef.current)) {
+        context.saveState(viewRef.current);
+      }
     });
 
     // Resizing clears the WebGL canvas; redraw in the same frame or the cleared (black)
@@ -874,7 +878,7 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
       instance.remove();
       setMap(undefined);
     };
-  }, [context]);
+  }, [configRef, context]);
 
   // Custom URL fields update on every keystroke; only use URLs once they stop changing so
   // half-typed URLs aren't fetched. Other layer settings (sliders, toggles) apply immediately.
@@ -1306,14 +1310,17 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
     };
     // Jump on seeks and big moves, glide during normal playback.
     if (map.getBounds().contains(center)) {
-      map.easeTo({
-        ...options,
-        duration: 200,
-        easing: (t) => t,
-        essential: true,
-      });
+      map.easeTo(
+        {
+          ...options,
+          duration: 200,
+          easing: (t) => t,
+          essential: true,
+        },
+        FOLLOW_MOVE_EVENT,
+      );
     } else {
-      map.jumpTo(options);
+      map.jumpTo(options, FOLLOW_MOVE_EVENT);
     }
   }, [config.followMode, config.followTopic, currentNav, headings, map]);
 

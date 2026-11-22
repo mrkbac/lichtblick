@@ -11,6 +11,7 @@ import {
   TRANSFORM_STAMPED_DATATYPES,
 } from "@lichtblick/suite-base/panels/ThreeDeeRender/ros";
 import { Quaternion, Vector3 } from "@lichtblick/suite-base/util/geometry";
+import { stampToTime } from "@lichtblick/suite-base/util/time";
 
 import { TransformSample } from "./types";
 
@@ -60,17 +61,6 @@ const hasNumbers = <K extends string>(
   value != null &&
   keys.every((key) => typeof Reflect.get(value, key) === "number");
 
-/** ROS 1 and Foxglove stamps use `nsec`; the ROS 2 CDR decoder gives `nanosec`. */
-function toTime(stamp: unknown): Time | undefined {
-  if (hasNumbers(stamp, ["sec", "nsec"])) {
-    return stamp;
-  }
-  if (hasNumbers(stamp, ["sec", "nanosec"])) {
-    return { sec: stamp.sec, nsec: stamp.nanosec };
-  }
-  return undefined;
-}
-
 /**
  * The sample, or undefined when a field is missing or has the wrong type, e.g. a message sliced
  * to fewer fields or a hand-written JSON recording. One bad transform must not break the panel.
@@ -82,7 +72,7 @@ function toSample(
   rotation: unknown,
   stamp: unknown,
 ): TransformSample | undefined {
-  const time = toTime(stamp);
+  const time = stampToTime(stamp);
   if (
     typeof parent !== "string" ||
     typeof child !== "string" ||

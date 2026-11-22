@@ -503,6 +503,7 @@ describe("McapIterableSource", () => {
     type MockRemoteReadable = {
       open: Mock<(...args: []) => Promise<void>>;
       close: Mock<(...args: []) => void>;
+      setChunks: Mock<RemoteFileReadable["setChunks"]>;
       size: Mock<(...args: []) => Promise<bigint>>;
       read: Mock<(...args: [bigint, bigint]) => Promise<Uint8Array>>;
     };
@@ -517,6 +518,7 @@ describe("McapIterableSource", () => {
         const instance: MockRemoteReadable = {
           open: vi.fn().mockResolvedValue(undefined),
           close: vi.fn(),
+          setChunks: vi.fn(),
           size: vi.fn().mockResolvedValue(BigInt(mcapData.byteLength)),
           read: vi.fn().mockImplementation(async (offset: bigint, size: bigint) => {
             return new Uint8Array(

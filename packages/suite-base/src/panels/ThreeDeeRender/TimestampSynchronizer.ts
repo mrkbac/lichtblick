@@ -4,7 +4,7 @@
 import { toNanoSec, type Time } from "@foxglove/rostime";
 
 import type { MessageEvent } from "@lichtblick/suite";
-import { getTimestampForMessage } from "@lichtblick/suite-base/util/time";
+import { getTimestampForMessage, stampToTime } from "@lichtblick/suite-base/util/time";
 
 /** Unique timestamps buffered per topic while waiting for a match (~10 s at 25 Hz). */
 export const MAX_SYNC_STAMPS_PER_TOPIC = 250;
@@ -18,12 +18,7 @@ type Stamped = { timestamp?: Partial<Time> };
 export function syncTimestamp(event: MessageEvent): bigint {
   const message = event.message as (Stamped & { entities?: Stamped[] }) | undefined;
   const timestamp = message?.timestamp ?? message?.entities?.[0]?.timestamp;
-  const stamp =
-    getTimestampForMessage(message) ??
-    (typeof timestamp?.sec === "number" && typeof timestamp.nsec === "number"
-      ? (timestamp as Time)
-      : undefined) ??
-    event.receiveTime;
+  const stamp = getTimestampForMessage(message) ?? stampToTime(timestamp) ?? event.receiveTime;
   return toNanoSec(stamp);
 }
 

@@ -34,6 +34,7 @@ import { toError } from "@lichtblick/suite-base/util/toError";
 
 import { BaseUserData, Renderable } from "../Renderable";
 import { Axis } from "./Axis";
+import { setFrameOffsets } from "./FrameAxes";
 import { RenderableCube } from "./markers/RenderableCube";
 import { RenderableCylinder } from "./markers/RenderableCylinder";
 import { RenderableMarker } from "./markers/RenderableMarker";
@@ -706,20 +707,26 @@ export class Urdfs extends SceneExtension<UrdfRenderable> {
       // undefined when the field is cleared: drop the manual offset
       const value = action.payload.value;
       if (isAngular) {
+        const tree = this.renderer.transformTree;
         if (value == undefined) {
-          frame.offsetEulerDegrees = undefined;
+          setFrameOffsets(tree, frame, frame.offsetPosition, undefined);
         } else {
           const quaternion = tempQuaternion1.setFromAxisAngle(axis, value * DEG2RAD);
           const euler = tempEuler.setFromQuaternion(quaternion);
-          frame.offsetEulerDegrees = [euler.x * RAD2DEG, euler.y * RAD2DEG, euler.z * RAD2DEG];
+          setFrameOffsets(tree, frame, frame.offsetPosition, [
+            euler.x * RAD2DEG,
+            euler.y * RAD2DEG,
+            euler.z * RAD2DEG,
+          ]);
         }
         this.saveSetting(["transforms", frameKey, "rpyCoefficient"], frame.offsetEulerDegrees);
       } else {
+        const tree = this.renderer.transformTree;
         if (value == undefined) {
-          frame.offsetPosition = undefined;
+          setFrameOffsets(tree, frame, undefined, frame.offsetEulerDegrees);
         } else {
           axis.multiplyScalar(value);
-          frame.offsetPosition = [axis.x, axis.y, axis.z];
+          setFrameOffsets(tree, frame, [axis.x, axis.y, axis.z], frame.offsetEulerDegrees);
         }
         this.saveSetting(["transforms", frameKey, "xyzOffset"], frame.offsetPosition);
       }

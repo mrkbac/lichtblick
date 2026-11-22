@@ -5,6 +5,7 @@ import {
   ArrowCounterclockwise20Regular,
   Dismiss12Regular,
   PointScan20Regular,
+  Settings16Regular,
   Square12Regular,
   TextBulletListLtr20Regular,
   ZoomIn20Regular,
@@ -32,5 +33,6 @@ export const PLOT_BUTTONS = {
   measure: { id: "plotMeasure", icon: PointScan20Regular, placement: "toolbar" },
   toggleSeries: { id: "plotToggleSeries", icon: Square12Regular, placement: "inline" },
   addSeries: { id: "plotAddSeries", icon: Add12Regular, placement: "inline" },
+  seriesSettings: { id: "plotSeriesSettings", icon: Settings16Regular, placement: "inline" },
   deleteSeries: { id: "plotDeleteSeries", icon: Dismiss12Regular, placement: "inline" },
 } as const satisfies Record<string, PanelButton>;

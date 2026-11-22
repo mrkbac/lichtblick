@@ -70,7 +70,6 @@ export function AttachmentList(): React.JSX.Element {
       {viewableFile && viewed && viewing != undefined && (
         <AttachmentDialog
           file={viewableFile}
-          attachmentIndex={viewing}
           {...viewed}
           onClose={() => {
             setViewing(undefined);
