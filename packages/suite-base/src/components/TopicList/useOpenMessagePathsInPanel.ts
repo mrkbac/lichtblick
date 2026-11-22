@@ -20,7 +20,7 @@ export type SchemasByPanelType = ReadonlyMap<string, ReadonlySet<string>>;
 
 const schemasByPanel = new WeakMap<PanelInfo, Promise<ReadonlySet<string>>>();
 
-async function loadSchemas(panel: PanelInfo): Promise<ReadonlySet<string>> {
+function loadSchemas(panel: PanelInfo): Promise<ReadonlySet<string>> {
   let schemas = schemasByPanel.get(panel);
   if (!schemas) {
     schemas = (panel.docs?.() ?? Promise.resolve(undefined)).then(
