@@ -23,17 +23,12 @@ export async function encodeSharedLayout(data: unknown): Promise<string> {
   const compressed = await (
     await pipe(JSON.stringify(data) ?? "null", new CompressionStream("deflate-raw"))
   ).arrayBuffer();
-  let binary = "";
-  for (const byte of new Uint8Array(compressed)) {
-    binary += String.fromCharCode(byte);
-  }
-  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  return new Uint8Array(compressed).toBase64({ alphabet: "base64url", omitPadding: true });
 }
 
 /** Reverses encodeSharedLayout, returning the layout's JSON text. */
 export async function decodeSharedLayout(encoded: string): Promise<string> {
-  const binary = atob(encoded.replace(/-/g, "+").replace(/_/g, "/"));
-  const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
+  const bytes = Uint8Array.fromBase64(encoded, { alphabet: "base64url" });
   return await (await pipe(bytes, new DecompressionStream("deflate-raw"))).text();
 }
 

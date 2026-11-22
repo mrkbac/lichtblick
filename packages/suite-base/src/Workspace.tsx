@@ -601,7 +601,8 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
       try {
         const text = await decodeSharedLayout(encoded);
         controller.signal.throwIfAborted();
-        await installLayoutText(text, "Shared layout.json", controller.signal);
+        const file = new File([text], "Shared layout.json", { type: "application/json" });
+        await parseAndInstallLayout(file, "local", controller.signal);
       } catch (error) {
         if (controller.signal.aborted) {
           return;
