@@ -116,6 +116,7 @@ export class McapUnindexedIterableSource implements ISerializedIterableSource {
     const columns = new IndexBuilder();
     let profile: string | undefined;
     let corruptChunks = 0;
+    let firstChunkError: string | undefined;
     let corruptRecords = 0;
 
     // Duplicate ids with different content: keep the first definition and say so, instead of
@@ -203,6 +204,9 @@ export class McapUnindexedIterableSource implements ISerializedIterableSource {
           const end = recordEnd(view, at);
           const opcode = records[at];
           if (opcode === Opcode.MESSAGE) {
+            if (end - at < MESSAGE_DATA_AT) {
+              throw new Error("Message record is too short");
+            }
             columns.add(view, at, end - at, chunkIndex, at);
           } else if (opcode === Opcode.SCHEMA || opcode === Opcode.CHANNEL) {
             const record = parseRecord(byteReader(records.subarray(at, end)), true);
@@ -257,6 +261,10 @@ export class McapUnindexedIterableSource implements ISerializedIterableSource {
       // opening part of the file. Only records that don't parse are skipped as corrupt.
       switch (opcode) {
         case Opcode.MESSAGE: {
+          if (length < MESSAGE_DATA_AT) {
+            corruptRecords++;
+            break;
+          }
           const head =
             reader.peek(offset, MESSAGE_DATA_AT) ?? (await reader.read(offset, MESSAGE_DATA_AT));
           columns.add(new DataView(head.buffer, head.byteOffset), 0, length, -1, offset);
@@ -266,8 +274,9 @@ export class McapUnindexedIterableSource implements ISerializedIterableSource {
           const bytes = await reader.read(offset, length);
           try {
             processChunk(bytes, offset);
-          } catch {
+          } catch (error) {
             corruptChunks++;
+            firstChunkError ??= toError(error).message;
           }
           break;
         }
@@ -297,7 +306,9 @@ export class McapUnindexedIterableSource implements ISerializedIterableSource {
       alerts.push({
         severity: "warn",
         message: "Some records in this file are corrupt and were skipped",
-        tip: `${corruptChunks} chunks and ${corruptRecords} other records could not be read.`,
+        tip:
+          `${corruptChunks} chunks and ${corruptRecords} other records could not be read.` +
+          (firstChunkError != undefined ? ` First chunk error: ${firstChunkError}.` : ""),
       });
     }
 
@@ -496,7 +507,14 @@ export class McapUnindexedIterableSource implements ISerializedIterableSource {
     if (chunk === -1) {
       return reader.peek(position, length);
     }
-    const records = this.#cachedRecords(chunk);
+    // Each reader keeps its current chunk itself, so it survives eviction from the shared cache
+    let records = reader.chunk?.index === chunk ? reader.chunk.records : undefined;
+    if (!records) {
+      records = this.#cachedRecords(chunk);
+      if (records) {
+        reader.chunk = { index: chunk, records };
+      }
+    }
     return records?.subarray(position, position + length);
   }
 
@@ -510,9 +528,12 @@ export class McapUnindexedIterableSource implements ISerializedIterableSource {
     const position = index.positions[i]!;
     const length = index.lengths[i]!;
     const chunk = index.chunks[i]!;
-    return chunk === -1
-      ? await reader.read(position, length, readUntil)
-      : (await this.#chunkRecords(chunk)).subarray(position, position + length);
+    if (chunk === -1) {
+      return await reader.read(position, length, readUntil);
+    }
+    const records = await this.#chunkRecords(chunk);
+    reader.chunk = { index: chunk, records };
+    return records.subarray(position, position + length);
   }
 
   #messageEvent(i: number, record: Uint8Array): MessageEvent<Uint8Array> {
@@ -688,6 +709,8 @@ class WindowedReader {
   #readable: McapTypes.IReadable;
   #size: number;
   #buffered?: { offset: number; bytes: Uint8Array };
+  /** The decompressed chunk this reader is in */
+  public chunk?: { index: number; records: Uint8Array };
 
   public constructor(readable: McapTypes.IReadable, size: number) {
     this.#readable = readable;
@@ -758,7 +781,8 @@ function recordEnd(view: DataView, at: number): number {
 
 function decompress(handlers: McapTypes.DecompressHandlers, chunk: McapTypes.Chunk): Uint8Array {
   let records = chunk.records;
-  if (chunk.compression !== "") {
+  // An empty chunk has nothing to decompress (as in McapIndexedReader and McapStreamReader)
+  if (chunk.compression !== "" && chunk.records.byteLength > 0) {
     const handler = handlers[chunk.compression];
     if (!handler) {
       throw new Error(`Unsupported compression ${chunk.compression}`);

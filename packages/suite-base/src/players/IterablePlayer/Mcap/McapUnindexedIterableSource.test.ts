@@ -6,6 +6,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import {
+  ChunkCache,
   McapRecordBuilder,
   McapTypes,
   McapWriter,
@@ -436,5 +437,87 @@ describe("McapUnindexedIterableSource", () => {
 
     expect([a.length, b.length]).toEqual([1, 1]);
     expect(readable.reads).toBe(1);
+  });
+  it("skips a message record too short to read and keeps the rest", async () => {
+    const builder = new McapRecordBuilder();
+    builder.writeMagic();
+    builder.writeHeader({ library: "", profile: "" });
+    builder.writeChannel({
+      id: 1,
+      schemaId: 0,
+      topic: "a",
+      messageEncoding: "json",
+      metadata: new Map(),
+    });
+    const after = new McapRecordBuilder();
+    after.writeMessage({ channelId: 1, sequence: 0, logTime: 1n, publishTime: 1n, data: json(1) });
+    const tooShort = [Opcode.MESSAGE, 4, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0];
+    const bytes = new Uint8Array([...builder.buffer, ...tooShort, ...after.buffer]);
+    const source = new McapUnindexedIterableSource({ readable: readableOf(bytes) });
+
+    const init = await source.initialize();
+
+    expect(init.alerts.map((alert) => alert.message)).toContain(
+      "Some records in this file are corrupt and were skipped",
+    );
+    expect(await readAll(source, ["a"])).toHaveLength(1);
+  });
+
+  it("reads an empty compressed chunk without a warning, and names an unsupported one", async () => {
+    const withChunk = async (compression: string) => {
+      const builder = new McapRecordBuilder();
+      builder.writeMagic();
+      builder.writeHeader({ library: "", profile: "" });
+      builder.writeChunk({
+        messageStartTime: 0n,
+        messageEndTime: 0n,
+        uncompressedSize: compression === "zstd" ? 0n : 1n,
+        uncompressedCrc: 0,
+        compression,
+        records: compression === "zstd" ? new Uint8Array() : new Uint8Array([1]),
+      });
+      const source = new McapUnindexedIterableSource({
+        readable: readableOf(builder.buffer.slice()),
+      });
+      return (await source.initialize()).alerts;
+    };
+
+    expect((await withChunk("zstd")).map((alert) => alert.message)).not.toContain(
+      "Some records in this file are corrupt and were skipped",
+    );
+    expect((await withChunk("custom")).map((alert) => alert.tip).join()).toContain(
+      "Unsupported compression custom",
+    );
+  });
+
+  it("keeps each reader's current chunk when the shared cache drops it", async () => {
+    // Given a chunk of many messages and a cache that keeps nothing
+    const bytes = await unchunked(
+      Array.from({ length: 50 }, (_, i) => ({ channelId: (i % 2) + 1, logTime: BigInt(i) })),
+      { useChunks: true },
+    );
+    const readable = readableOf(bytes);
+    class NoCache extends ChunkCache {
+      public override get(): undefined {
+        return undefined;
+      }
+    }
+    const source = new McapUnindexedIterableSource({ readable, chunkCache: new NoCache() });
+    await source.initialize();
+    readable.reads = 0;
+
+    // When two readers take turns
+    const iterate = (topic: string) =>
+      source.messageIterator({ topics: new Map([[topic, { topic }]]) });
+    const a = iterate("a");
+    const b = iterate("b");
+    let count = 0;
+    while ((await a.next()).done !== true && (await b.next()).done !== true) {
+      count += 2;
+    }
+
+    // Then each reads and decompresses the chunk once
+    expect(count).toBe(50);
+    expect(readable.reads).toBe(2);
   });
 });
