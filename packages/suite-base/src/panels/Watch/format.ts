@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import { Time } from "@foxglove/rostime";
+import { Time, toNanoSec } from "@foxglove/rostime";
 
 import { isTypedArray } from "@lichtblick/suite-base/types/isTypedArray";
 import { stampToTime } from "@lichtblick/suite-base/util/time";
@@ -23,7 +23,18 @@ export function isExpandable(value: unknown): boolean {
 
 /** A stamp (ROS 1 / Foxglove `nsec` or ROS 2 `nanosec`) with no other fields. */
 function asTime(value: object): Time | undefined {
+  if (Array.isArray(value) || ArrayBuffer.isView(value)) {
+    return undefined; // Object.keys would list every element
+  }
   return Object.keys(value).length === 2 ? stampToTime(value) : undefined;
+}
+
+/** `sec.nsec` with the sign of the whole value: { sec: -1, nsec: 5e8 } is -0.5 s. */
+function formatTime(time: Time): string {
+  const ns = toNanoSec(time);
+  const abs = ns < 0n ? -ns : ns;
+  const frac = String(abs % 1_000_000_000n).padStart(9, "0");
+  return `${ns < 0n ? "-" : ""}${abs / 1_000_000_000n}.${frac}`;
 }
 
 export function formatNumber(value: number, precision: number | undefined): string {
@@ -97,7 +108,7 @@ export function formatValue(
   }
   const time = asTime(value);
   if (time) {
-    return `${time.sec}.${String(time.nsec).padStart(9, "0")}`;
+    return formatTime(time);
   }
   if (Array.isArray(value) || isTypedArray(value)) {
     const arr: ArrayLike<unknown> = value;

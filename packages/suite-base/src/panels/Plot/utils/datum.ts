@@ -5,9 +5,10 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { isTime, toSec } from "@foxglove/rostime";
+import { toSec } from "@foxglove/rostime";
 
 import { Time } from "@lichtblick/suite";
+import { stampToTime } from "@lichtblick/suite-base/util/time";
 
 // In addition to the base datum, we also add receiveTime and optionally header stamp to our datums
 // These are used in the csv export.
@@ -31,10 +32,7 @@ export function isChartValue(value: unknown): value is OriginalValue {
     case "string":
       return true;
     case "object":
-      if (isTime(value)) {
-        return true;
-      }
-      return false;
+      return stampToTime(value) != undefined;
     default:
       return false;
   }
@@ -52,11 +50,10 @@ export function getChartValue(value: unknown): number | undefined {
       return Number(value);
     case "number":
       return value;
-    case "object":
-      if (isTime(value)) {
-        return toSec(value);
-      }
-      return undefined;
+    case "object": {
+      const time = stampToTime(value);
+      return time ? toSec(time) : undefined;
+    }
     case "string":
       return +value;
     default:
