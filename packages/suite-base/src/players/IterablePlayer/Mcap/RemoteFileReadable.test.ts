@@ -143,7 +143,7 @@ describe("RemoteFileReadable", () => {
 
     it("reads a chunk's message indexes together with the chunk before them", async () => {
       mockRead.mockResolvedValueOnce(Uint8Array.from({ length: 60 }, (_, i) => 100 + i));
-      const reader = new RemoteFileReadable(testUrl);
+      const reader = new RemoteFileReadable(testUrl, { cacheSizeInBytes: 87_381_333 });
       reader.setChunks([chunk()]);
 
       const data = await reader.read(150n, 10n);
