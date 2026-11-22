@@ -217,6 +217,9 @@ export function TransformTree({ config, saveConfig }: Props): React.JSX.Element 
     topics: visibleTopics,
     restore: restoreEntries,
     addMessages: addTransformState,
+    // `known` records every frame seen across seeks after each render; a batched hidden value
+    // could be dropped by a seek before it is rendered and recorded.
+    batchWhenHidden: false,
   });
 
   // Static transforms are published once, usually at the start of a recording, so a seek would

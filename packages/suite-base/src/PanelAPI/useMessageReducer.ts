@@ -48,6 +48,12 @@ type Params<T> = {
    * @default "partial"
    */
   preloadType?: SubscriptionPreloadType;
+  /**
+   * A hidden panel gets the reduced value at most once a second (default). Pass false when the
+   * panel must see every value, e.g. because it records them across seeks while rendering.
+   * @default true
+   */
+  batchWhenHidden?: boolean;
 
   /**
    * Called on intialization, seek, and when reducers change.
@@ -74,7 +80,13 @@ function selectSetSubscriptions(ctx: MessagePipelineContext) {
 
 export function useMessageReducer<T>(props: Params<T>): T {
   const [id] = useState(() => randomUUID());
-  const { restore, addMessage, addMessages, preloadType = "partial" } = props;
+  const {
+    restore,
+    addMessage,
+    addMessages,
+    preloadType = "partial",
+    batchWhenHidden = true,
+  } = props;
 
   // only one of the add message callbacks should be provided
   if ([props.addMessage, props.addMessages].filter(Boolean).length !== 1) {
@@ -193,5 +205,6 @@ export function useMessageReducer<T>(props: Params<T>): T {
       },
       [id, addMessage, addMessages, restore],
     ),
+    { enabled: batchWhenHidden },
   );
 }

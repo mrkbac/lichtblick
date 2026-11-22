@@ -82,8 +82,9 @@ export function useMessagePipeline<T>(selector: (arg0: MessagePipelineContext) =
  */
 export function useMessagePipelineBatchedWhenHidden<T>(
   selector: (arg0: MessagePipelineContext) => T,
+  { enabled = true }: { enabled?: boolean } = {},
 ): T {
-  const visible = useContext(PanelVisibleContext);
+  const visible = useContext(PanelVisibleContext) || !enabled;
   const handedOut = useRef<{ value: T; at: number } | undefined>(undefined);
   return useMessagePipeline(
     useCallback(

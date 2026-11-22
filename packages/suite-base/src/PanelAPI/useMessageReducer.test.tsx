@@ -261,6 +261,45 @@ describe("useMessageReducer", () => {
     now.mockRestore();
   });
 
+  it("hands every value to a hidden panel that opts out of batching", () => {
+    // Given
+    const msg: MessageEvent = {
+      topic: "/foo",
+      receiveTime: { sec: 1, nsec: 0 },
+      message: { value: 1 },
+      schemaName: "foo",
+      sizeInBytes: 0,
+    };
+    const restore = vi.fn().mockReturnValue(0);
+    const addMessage = vi.fn().mockImplementation((_, m) => m.message.value);
+    let messages: MessageEvent[] = [];
+    const { result, rerender } = renderHook(
+      () =>
+        PanelAPI.useMessageReducer({
+          topics: ["/foo"],
+          restore,
+          addMessage,
+          batchWhenHidden: false,
+        }),
+      {
+        wrapper: ({ children }: PropsWithChildren) => (
+          <PanelVisibleContext.Provider value={false}>
+            <MockMessagePipelineProvider messages={messages}>
+              {children}
+            </MockMessagePipelineProvider>
+          </PanelVisibleContext.Provider>
+        ),
+      },
+    );
+
+    // When
+    messages = [msg];
+    rerender();
+
+    // Then
+    expect(result.current).toBe(1);
+  });
+
   it("calls addMessages for messages added later", async () => {
     const message1: MessageEvent = {
       topic: "/foo",
