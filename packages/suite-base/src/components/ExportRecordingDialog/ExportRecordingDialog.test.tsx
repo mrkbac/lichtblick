@@ -12,12 +12,12 @@ import { render, waitFor } from "@testing-library/react";
 import { ExportRecordingDialog } from "./ExportRecordingDialog";
 import { ExportReadable } from "./exportRecording";
 
-function pendingReadable(): ExportReadable & { close: ReturnType<typeof vi.fn> } {
+function pendingReadable(): ExportReadable & { close: () => void } {
   return {
     size: async () => 1000n,
     // A read that never finishes, like an index scan over a slow connection
     read: async () => await new Promise<Uint8Array>(() => {}),
-    close: vi.fn(),
+    close: vi.fn<() => void>(),
   };
 }
 
@@ -36,10 +36,10 @@ describe("ExportRecordingDialog", () => {
   });
 
   it("closes the readable when the file can't be opened", async () => {
-    const readable: ExportReadable & { close: ReturnType<typeof vi.fn> } = {
+    const readable: ExportReadable & { close: () => void } = {
       size: async () => 4n,
       read: async () => new Uint8Array([1, 2, 3, 4]),
-      close: vi.fn(),
+      close: vi.fn<() => void>(),
     };
     render(
       <ExportRecordingDialog
