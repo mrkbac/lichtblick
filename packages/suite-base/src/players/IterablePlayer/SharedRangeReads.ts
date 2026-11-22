@@ -23,40 +23,38 @@ const MAX_QUEUED_BYTES = 16 * 1024 * 1024;
 const GATHER_MS = 10;
 
 /**
- * Range reads of single topics (Plot, Log, Map… each read their topics' whole history) that start
- * at about the same time over the same range share one read of all their topics: one pass over
- * the recording instead of one per topic, which would also push each other's chunks out of the
- * source's chunk cache.
+ * Reads of single topics' whole history (Plot, Log, Map…) that start at about the same time share
+ * one read of all their topics: one pass over the recording instead of one per topic, which would
+ * also push each other's chunks out of the source's chunk cache. Reads of part of the recording
+ * (e.g. stepping to the next message) start right away on their own.
  */
 // ponytail: a read that starts while a shared read is running makes its own pass; joining a running
 // pass would need a second read for the part it missed
 export class SharedRangeReads {
   readonly #readRange: ReadRange;
-  /** Shared reads still gathering readers, by range */
-  readonly #gathering = new Map<string, SharedRead>();
+  /** The shared read still gathering readers */
+  #gathering?: SharedRead;
 
   public constructor(readRange: ReadRange) {
     this.#readRange = readRange;
   }
 
   public read(topic: string, range: Range): AsyncIterableIterator<Readonly<ReadResult>> {
-    const key = `${timeKey(range.start)}-${timeKey(range.end)}`;
-    let shared = this.#gathering.get(key);
+    if (range.start || range.end) {
+      return this.#readRange(new Map([[topic, { topic }]]), range);
+    }
+    let shared = this.#gathering;
     if (!shared) {
       const newShared = new SharedRead(this.#readRange, range);
-      this.#gathering.set(key, newShared);
+      this.#gathering = newShared;
       setTimeout(() => {
-        this.#gathering.delete(key);
+        this.#gathering = undefined;
         void newShared.run();
       }, GATHER_MS);
       shared = newShared;
     }
     return shared.join(topic);
   }
-}
-
-function timeKey(time: Time | undefined): string {
-  return time ? `${time.sec}.${time.nsec}` : "";
 }
 
 class Reader implements AsyncIterableIterator<Readonly<ReadResult>> {

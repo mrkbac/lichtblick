@@ -58,15 +58,17 @@ describe("SharedRangeReads", () => {
     expect(b).toEqual(["b0", "b1", "b2", "b3"]);
   });
 
-  it("reads other ranges separately", async () => {
+  it("starts reads of part of the recording right away, on their own", async () => {
     const { shared, reads } = setup();
 
-    await Promise.all([
-      collect(shared.read("a", {})),
-      collect(shared.read("b", { start: { sec: 1, nsec: 0 } })),
-    ]);
+    const whole = collect(shared.read("a", {}));
+    const partial = shared.read("b", { start: { sec: 1, nsec: 0 } });
+    // Read before the whole-history read has gathered its readers
+    expect((await partial.next()).done).toBe(false);
+    expect(reads.map((topics) => [...topics.keys()])).toEqual([["b"]]);
 
-    expect(reads).toHaveLength(2);
+    await Promise.all([whole, collect(partial)]);
+    expect(reads.map((topics) => [...topics.keys()])).toEqual([["b"], ["a"]]);
   });
 
   it("keeps reading for the others when one reader stops", async () => {
