@@ -593,11 +593,22 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
           start: time - decayNs,
           end: time,
           signal: abort.signal,
-          onBatch: (batch) => {
+          onBatch: async (batch) => {
             for (const messageEvent of batch) {
               renderer.addMessageEvent(messageEvent);
             }
-            renderer.queueAnimationFrame();
+            // Read on once a frame has decoded these, so the window is never queued as raw
+            // messages all at once
+            await new Promise<void>((resolve) => {
+              const done = () => {
+                renderer.removeListener("endFrame", done);
+                abort.signal.removeEventListener("abort", done);
+                resolve();
+              };
+              renderer.addListener("endFrame", done);
+              abort.signal.addEventListener("abort", done);
+              renderer.queueAnimationFrame();
+            });
           },
         });
       }

@@ -24,7 +24,8 @@ export async function readTransformRange(args: {
   topics: readonly TransformTopic[];
   start?: bigint;
   end?: bigint;
-  onBatch: (batch: readonly MessageEvent[], source: TransformTopic) => void;
+  /** The next batch is read once a returned promise settles */
+  onBatch: (batch: readonly MessageEvent[], source: TransformTopic) => void | Promise<void>;
   /** Called when a topic is read to its end without errors */
   onTopicDone?: (source: TransformTopic) => void;
   signal: AbortSignal;
@@ -51,7 +52,7 @@ export async function readTransformRange(args: {
                   break;
                 }
                 if (batch.length > 0) {
-                  onBatch(batch, source);
+                  await onBatch(batch, source);
                 }
               }
               if (!signal.aborted) {
