@@ -163,8 +163,10 @@ describe("McapIterableSource", () => {
       type: "file",
       file: new Blob([tempBuffer.get().slice()]) as unknown as globalThis.Blob,
     });
-    const { topics } = await source.initialize();
+    const { topics, recordingFiles } = await source.initialize();
     expect(topics.map(({ name }) => name)).toEqual(["/cut"]);
+    // Its index was rebuilt: export, which reads the file's own index, must not be offered
+    expect(recordingFiles?.[0]?.footerIndexed).toBe(false);
 
     const values = [];
     for await (const result of source.messageIterator({
@@ -1072,6 +1074,7 @@ describe("McapIterableSource", () => {
       expect(result).toBeDefined();
       expect(result.topics).toHaveLength(1);
       expect(result.topics[0]?.name).toBe(topic);
+      expect(result.recordingFiles?.[0]?.footerIndexed).toBe(true);
     });
 
     it("falls back to unindexed reader when MCAP has no chunks", async () => {

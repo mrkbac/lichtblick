@@ -761,6 +761,7 @@ export class McapIterableSource implements ISerializedIterableSource {
         start,
         end,
         sizeBytes: Number.isFinite(sizeBytes) ? sizeBytes : undefined,
+        footerIndexed: this.#recovery == undefined,
       }));
     }
     return init;

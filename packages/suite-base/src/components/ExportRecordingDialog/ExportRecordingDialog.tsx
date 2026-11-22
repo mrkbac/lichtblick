@@ -36,7 +36,6 @@ import { useTranslation } from "react-i18next";
 
 import { useAsync } from "@lichtblick/hooks";
 import {
-  BlobReadable,
   ChunkCache,
   type McapIndexedReader,
   type McapTypes,
@@ -51,9 +50,13 @@ import {
 } from "@lichtblick/mcap-support";
 import { useMessagePipeline } from "@lichtblick/suite-base/components/MessagePipeline";
 import { selectCurrentTime } from "@lichtblick/suite-base/components/MessagePipeline/selectors";
+import { toError } from "@lichtblick/suite-base/util/toError";
 
 import { useStyles } from "./ExportRecordingDialog.style";
 import {
+  ExportReadable,
+  ExportSource,
+  topicFilterPattern,
   TopicEdit,
   createChunkWorkerPool,
   exportFileName,
@@ -77,25 +80,51 @@ function toSecondsText(ns: bigint): string {
 }
 
 type Props = {
-  file: File;
+  source: ExportSource;
   onClose: () => void;
 };
 
-export function ExportRecordingDialog({ file, onClose }: Props): React.JSX.Element {
+export function ExportRecordingDialog({ source, onClose }: Props): React.JSX.Element {
   const { t } = useTranslation("exportRecording");
   const { classes } = useStyles();
 
-  const readable = useMemo(() => new BlobReadable(file), [file]);
-  const opened = useAsync(async () => {
-    const newReader = await openCachedMcapReader({
-      readable,
-      decompressHandlers: await loadDecompressHandlers(),
-      chunkCache: new ChunkCache(),
-    });
-    return { reader: newReader, readable };
-  }, [readable]);
-  // useAsync keeps the previous value while the next file loads; only use a matching reader.
-  const reader = opened.value?.readable === readable ? opened.value.reader : undefined;
+  const [opened, setOpened] = useState<
+    { reader: McapIndexedReader; readable: ExportReadable; source: ExportSource } | Error
+  >();
+  useEffect(() => {
+    // Closing the readable on dismiss or source change also stops its pending reads.
+    const controller = new AbortController();
+    const isCancelled = () => controller.signal.aborted;
+    let readable: ExportReadable | undefined;
+    void (async () => {
+      try {
+        readable = await source.open(controller.signal);
+        if (isCancelled()) {
+          readable.close?.();
+          return;
+        }
+        const reader = await openCachedMcapReader({
+          readable,
+          decompressHandlers: await loadDecompressHandlers(),
+          chunkCache: new ChunkCache(),
+        });
+        if (!isCancelled()) {
+          setOpened({ reader, readable, source });
+        }
+      } catch (error) {
+        readable?.close?.();
+        if (!isCancelled()) {
+          setOpened(toError(error));
+        }
+      }
+    })();
+    return () => {
+      controller.abort();
+      readable?.close?.();
+      setOpened(undefined);
+    };
+  }, [source]);
+  const value = opened instanceof Error ? undefined : opened;
 
   return (
     <Dialog
@@ -108,22 +137,29 @@ export function ExportRecordingDialog({ file, onClose }: Props): React.JSX.Eleme
       <DialogTitle>
         {t("title")}
         <Typography variant="body2" noWrap color="textSecondary">
-          {file.name}
+          {source.name}
         </Typography>
       </DialogTitle>
-      {opened.loading && (
+      {opened == undefined && (
         <DialogContent>
           <Typography>{t("opening")}</Typography>
           <LinearProgress />
         </DialogContent>
       )}
-      {opened.error && (
+      {opened instanceof Error && (
         <DialogContent>
-          <Alert severity="error">{opened.error.message}</Alert>
+          <Alert severity="error">{opened.message}</Alert>
         </DialogContent>
       )}
-      {reader && <ExportForm file={file} reader={reader} readable={readable} onClose={onClose} />}
-      {!reader && (
+      {value && (
+        <ExportForm
+          source={source}
+          reader={value.reader}
+          readable={value.readable}
+          onClose={onClose}
+        />
+      )}
+      {!value && (
         <DialogActions>
           <Button onClick={onClose}>{t("close")}</Button>
         </DialogActions>
@@ -133,7 +169,7 @@ export function ExportRecordingDialog({ file, onClose }: Props): React.JSX.Eleme
 }
 
 function ExportForm({
-  file,
+  source,
   reader,
   readable,
   onClose,
@@ -204,8 +240,8 @@ function ExportForm({
   // Exact counts come from the message indexes; until they're read (or if a chunk has none),
   // estimate from the share of the recording's duration.
   const messageTimesState = useAsync(
-    async () => await readMessageTimes(reader, readable),
-    [reader, readable],
+    async () => (source.exactCounts ? await readMessageTimes(reader, readable) : undefined),
+    [reader, readable, source.exactCounts],
   );
   const messageTimes = messageTimesState.value;
   const exactCounts = messageTimes != undefined;
@@ -234,7 +270,8 @@ function ExportForm({
 
   const topics = useMemo(() => toExportTopics(edits), [edits]);
   const duplicates = useMemo(() => findDuplicateOutputTopics(topics), [topics]);
-  const visibleRows = rows.filter((row) => row.topic.toLowerCase().includes(filter.toLowerCase()));
+  const filterPattern = useMemo(() => topicFilterPattern(filter), [filter]);
+  const visibleRows = rows.filter((row) => filterPattern.test(row.topic));
   const exporting = busy;
   // With exact counts, don't offer to write an empty file.
   const canExport =
@@ -260,7 +297,7 @@ function ExportForm({
     progressRef.current = undefined;
     let output;
     try {
-      output = await openExportOutput(exportFileName(file.name));
+      output = await openExportOutput(exportFileName(source.name));
     } catch (err) {
       setResult({ error: String(err) });
     }
