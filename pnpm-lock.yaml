@@ -11,6 +11,11 @@ overrides:
   '@foxglove/rosbag2>@foxglove/schemas': 2.3.1
   utif>pako: ^2.2.0
 
+patchedDependencies:
+  '@foxglove/ulog@2.3.2':
+    hash: b98cc1e98d01c6fbb959f3aadb54a5ed479cd065e5438141c0cac119f140785c
+    path: patches/@foxglove__ulog@2.3.2.patch
+
 importers:
 
   .:
@@ -493,7 +498,7 @@ importers:
         version: 0.6.1(three@0.187.0)
       '@foxglove/ulog':
         specifier: 2.3.2
-        version: 2.3.2
+        version: 2.3.2(patch_hash=b98cc1e98d01c6fbb959f3aadb54a5ed479cd065e5438141c0cac119f140785c)
       '@foxglove/velodyne-cloud':
         specifier: 1.0.1
         version: 1.0.1
@@ -9482,7 +9487,7 @@ snapshots:
       '@mapbox/tiny-sdf': 2.0.6
       three: 0.187.0
 
-  '@foxglove/ulog@2.3.2': {}
+  '@foxglove/ulog@2.3.2(patch_hash=b98cc1e98d01c6fbb959f3aadb54a5ed479cd065e5438141c0cac119f140785c)': {}
 
   '@foxglove/velodyne-cloud@1.0.1': {}
 

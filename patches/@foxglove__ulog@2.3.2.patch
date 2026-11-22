@@ -1,0 +1,209 @@
+diff --git a/dist/ULog.js b/dist/ULog.js
+index 705fb92178b273ef1ee8848968656accba028e2e..a5b772aae96920eb09690d1432bdaa4645627299 100644
+--- a/dist/ULog.js
++++ b/dist/ULog.js
+@@ -5,7 +5,6 @@ exports.computeTimetampOffset = computeTimetampOffset;
+ const ChunkedReader_1 = require("./ChunkedReader");
+ const definition_1 = require("./definition");
+ const enums_1 = require("./enums");
+-const findRange_1 = require("./findRange");
+ const hex_1 = require("./hex");
+ const parse_1 = require("./parse");
+ const readMessage_1 = require("./readMessage");
+@@ -17,6 +16,95 @@ const MAGIC = [0x55, 0x4c, 0x6f, 0x67, 0x01, 0x12, 0x35];
+  * log messages in the readMessage function if the `includeLogs` option is true.
+  */
+ const LogMessageId = -1;
++/** msgId in the time index of entries that are neither data nor log messages */
++const NoMessageId = -2;
++/**
++ * The time index in typed arrays (20 bytes per message) instead of one [bigint, number, id]
++ * array per message (~100 bytes), sorted by timestamp then file offset.
++ */
++class TimeIndex {
++    length = 0;
++    timestamps = new Float64Array(1024);
++    offsets = new Float64Array(1024);
++    msgIds = new Int32Array(1024);
++    #sorted = true;
++    push(timestamp, offset, msgId) {
++        const i = this.length;
++        if (i === this.timestamps.length) {
++            this.timestamps = grow(this.timestamps, Float64Array);
++            this.offsets = grow(this.offsets, Float64Array);
++            this.msgIds = grow(this.msgIds, Int32Array);
++        }
++        // µs timestamps stay exact as doubles up to 2^53
++        const ts = Number(timestamp);
++        if (i > 0 && ts < this.timestamps[i - 1]) {
++            this.#sorted = false;
++        }
++        this.timestamps[i] = ts;
++        this.offsets[i] = offset;
++        this.msgIds[i] = msgId;
++        this.length = i + 1;
++    }
++    /** Sort (if needed) and drop the spare capacity */
++    finish() {
++        const n = this.length;
++        if (this.#sorted) {
++            this.timestamps = this.timestamps.slice(0, n);
++            this.offsets = this.offsets.slice(0, n);
++            this.msgIds = this.msgIds.slice(0, n);
++            return;
++        }
++        const { timestamps, offsets, msgIds } = this;
++        const order = new Uint32Array(n);
++        for (let i = 0; i < n; i++) {
++            order[i] = i;
++        }
++        // offsets grow with the index, so ties keep file order
++        order.sort((a, b) => timestamps[a] - timestamps[b] || a - b);
++        this.timestamps = new Float64Array(n);
++        this.offsets = new Float64Array(n);
++        this.msgIds = new Int32Array(n);
++        for (let i = 0; i < n; i++) {
++            const j = order[i];
++            this.timestamps[i] = timestamps[j];
++            this.offsets[i] = offsets[j];
++            this.msgIds[i] = msgIds[j];
++        }
++    }
++    /** [first index with timestamp >= min, last index with timestamp <= max], or undefined */
++    findRange(min, max) {
++        const ts = this.timestamps;
++        let low = 0;
++        let high = this.length;
++        while (low < high) {
++            const mid = (low + high) >>> 1;
++            if (ts[mid] >= min) {
++                high = mid;
++            }
++            else {
++                low = mid + 1;
++            }
++        }
++        const start = low;
++        high = this.length;
++        while (low < high) {
++            const mid = (low + high) >>> 1;
++            if (ts[mid] <= max) {
++                low = mid + 1;
++            }
++            else {
++                high = mid;
++            }
++        }
++        const end = low - 1;
++        return start <= end ? [start, end] : undefined;
++    }
++}
++function grow(array, ArrayType) {
++    const next = new ArrayType(array.length * 2);
++    next.set(array);
++    return next;
++}
+ class ULog {
+     #filelike;
+     #chunkSize;
+@@ -164,9 +252,11 @@ class ULog {
+         if (timeIndex.length === 0) {
+             return;
+         }
+-        const startTime = opts.startTime ?? timeIndex[0][0];
+-        const endTime = opts.endTime ?? timeIndex[timeIndex.length - 1][0];
+-        const range = (0, findRange_1.findRange)(timeIndex, startTime, endTime);
++        const startTime = opts.startTime != undefined ? Number(opts.startTime) : timeIndex.timestamps[0];
++        const endTime = opts.endTime != undefined
++            ? Number(opts.endTime)
++            : timeIndex.timestamps[timeIndex.length - 1];
++        const range = timeIndex.findRange(startTime, endTime);
+         if (range == undefined) {
+             return;
+         }
+@@ -179,7 +269,9 @@ class ULog {
+         const increment = opts.reverse === true ? -1 : 1;
+         let idx = opts.reverse === true ? endIndex : startIndex;
+         for (let i = 0; i <= diffIndex; i++, idx += increment) {
+-            const [_timestamp, offset, msgId] = timeIndex[idx];
++            const offset = timeIndex.offsets[idx];
++            const indexMsgId = timeIndex.msgIds[idx];
++            const msgId = indexMsgId === NoMessageId ? undefined : indexMsgId;
+             if (includeLogs && msgId === LogMessageId) {
+                 reader.seekTo(offset);
+                 const msg = await this.#readParsedMessage(reader);
+@@ -218,7 +310,7 @@ class ULog {
+             throw new Error(`Cannot read before open`);
+         }
+         const dataEnd = this.#dataEnd;
+-        const timeIndex = [];
++        const timeIndex = new TimeIndex();
+         const dataCounts = new Map();
+         let minTimestamp;
+         let maxTimestamp = 0n;
+@@ -242,7 +334,7 @@ class ULog {
+                 // read the AddLogged message from the reader data
+                 const addLogged = await (0, readMessage_1.readMessageAddLogged)(reader, header);
+                 this.#handleSubscription(addLogged);
+-                timeIndex.push([maxTimestamp, offset, undefined]);
++                timeIndex.push(maxTimestamp, offset, NoMessageId);
+             }
+             else if (type === enums_1.MessageType.Log) {
+                 const logMsg = await (0, readMessage_1.readMessageLog)(reader, header);
+@@ -252,7 +344,7 @@ class ULog {
+                 if (logMsg.timestamp > maxTimestamp) {
+                     maxTimestamp = logMsg.timestamp;
+                 }
+-                timeIndex.push([logMsg.timestamp, offset, LogMessageId]);
++                timeIndex.push(logMsg.timestamp, offset, LogMessageId);
+                 logMessageCount++;
+             }
+             else if (type === enums_1.MessageType.LogTagged) {
+@@ -263,7 +355,7 @@ class ULog {
+                 if (logMsg.timestamp > maxTimestamp) {
+                     maxTimestamp = logMsg.timestamp;
+                 }
+-                timeIndex.push([logMsg.timestamp, offset, LogMessageId]);
++                timeIndex.push(logMsg.timestamp, offset, LogMessageId);
+                 logMessageCount++;
+             }
+             else if (type === enums_1.MessageType.Data) {
+@@ -288,16 +380,17 @@ class ULog {
+                 if (timestamp > maxTimestamp) {
+                     maxTimestamp = timestamp;
+                 }
+-                timeIndex.push([timestamp, offset, dataMsg.msgId]);
++                timeIndex.push(timestamp, offset, dataMsg.msgId);
+                 dataCounts.set(dataMsg.msgId, (dataCounts.get(dataMsg.msgId) ?? 0) + 1);
+             }
+             else {
+-                timeIndex.push([maxTimestamp, offset, undefined]);
++                timeIndex.push(maxTimestamp, offset, NoMessageId);
+                 // Skip past this message
+                 reader.seek(header.size);
+             }
+         }
+-        this.#timeIndex = timeIndex.sort(sortTimeIndex);
++        timeIndex.finish();
++        this.#timeIndex = timeIndex;
+         this.#dataMessageCounts = dataCounts;
+         this.#logMessageCount = logMessageCount;
+         this.#dataTimeRange = minTimestamp != undefined ? [minTimestamp, maxTimestamp] : undefined;
+@@ -366,17 +459,6 @@ function isValidInfoField(field) {
+ function isValidParameter(field) {
+     return Boolean(field && (field.type === "int32_t" || field.type === "float") && field.arrayLength == undefined);
+ }
+-function sortTimeIndex(a, b) {
+-    const timestampA = a[0];
+-    const timestampB = b[0];
+-    // If the timestamps are the same, sort by the offset within the file
+-    if (timestampA === timestampB) {
+-        const indexA = a[1];
+-        const indexB = b[1];
+-        return indexA - indexB;
+-    }
+-    return Number(timestampA - timestampB);
+-}
+ function computeTimetampOffset(definition, definitions) {
+     let curOffset = 0;
+     for (const field of definition.fields) {

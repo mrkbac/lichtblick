@@ -5,8 +5,8 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 import { ros1 } from "@foxglove/rosmsg-msgs-common";
-import { Time, fromMicros, isTimeInRangeInclusive, toMicroSec } from "@foxglove/rostime";
-import { MessageType, ULog } from "@foxglove/ulog";
+import { Time, compare, fromMicros, isTimeInRangeInclusive, toMicroSec } from "@foxglove/rostime";
+import { DataSectionMessage, MessageType, ULog } from "@foxglove/ulog";
 import { BlobReader } from "@foxglove/ulog/web";
 
 import Logger from "@lichtblick/log";
@@ -141,52 +141,94 @@ export class UlogIterableSource implements IIterableSource {
 
     const startTime = BigInt(Math.floor(toMicroSec(start)));
     const endTime = BigInt(Math.floor(toMicroSec(end)));
-
-    for await (const msg of this.#ulog.readMessages({ startTime, endTime })) {
-      if (msg.type === MessageType.Data) {
-        const timestamp = (msg.value as { timestamp: bigint }).timestamp;
-        const receiveTime = fromMicros(Number(timestamp));
-        const sub = this.#ulog.subscriptions.get(msg.msgId);
-        const topic = sub?.name;
-        if (topic && topics.has(topic) && isTimeInRangeInclusive(receiveTime, start, end)) {
-          yield {
-            type: "message-event",
-            msgEvent: {
-              topic,
-              receiveTime,
-              message: msg.value,
-              sizeInBytes: msg.data.byteLength,
-              schemaName: sub.name,
-            },
-          };
-        }
-      } else if (msg.type === MessageType.Log || msg.type === MessageType.LogTagged) {
-        const receiveTime = fromMicros(Number(msg.timestamp));
-        if (topics.has(LOG_TOPIC) && isTimeInRangeInclusive(receiveTime, start, end)) {
-          yield {
-            type: "message-event",
-            msgEvent: {
-              topic: LOG_TOPIC,
-              receiveTime,
-              message: {
-                file: "",
-                function: "",
-                header: { stamp: receiveTime },
-                level: logLevelToRosout(msg.logLevel),
-                line: 0,
-                msg: msg.message,
-                name: "",
-              },
-              schemaName: "rosgraph_msgs/Log",
-              sizeInBytes: msg.size,
-            },
-          };
-        }
+    for await (const msg of this.#ulog.readMessages({
+      startTime,
+      endTime,
+      msgIds: this.#msgIds(topics.keys()),
+      includeLogs: topics.has(LOG_TOPIC),
+    })) {
+      const msgEvent = this.#toMessageEvent(msg);
+      if (
+        msgEvent &&
+        topics.has(msgEvent.topic) &&
+        isTimeInRangeInclusive(msgEvent.receiveTime, start, end)
+      ) {
+        yield { type: "message-event", msgEvent };
       }
     }
   }
 
-  public async getBackfillMessages(_args: GetBackfillMessagesArgs): Promise<MessageEvent[]> {
-    return [];
+  public async getBackfillMessages({
+    topics,
+    time,
+  }: GetBackfillMessagesArgs): Promise<MessageEvent[]> {
+    if (this.#ulog == undefined) {
+      throw new Error(`UlogDataProvider is not initialized`);
+    }
+    const endTime = BigInt(Math.floor(toMicroSec(time)));
+    const messages: MessageEvent[] = [];
+    for (const topic of topics.keys()) {
+      // Reading back skips other topics in the index without touching the file
+      for await (const msg of this.#ulog.readMessages({
+        endTime,
+        msgIds: this.#msgIds([topic]),
+        includeLogs: topic === LOG_TOPIC,
+        reverse: true,
+      })) {
+        const msgEvent = this.#toMessageEvent(msg);
+        if (msgEvent?.topic === topic) {
+          messages.push(msgEvent);
+          break;
+        }
+      }
+    }
+    return messages.sort((a, b) => compare(a.receiveTime, b.receiveTime));
+  }
+
+  /** ULog message ids of the topics: only these are read and parsed */
+  #msgIds(topics: Iterable<string>): Set<number> {
+    const names = new Set(topics);
+    const msgIds = new Set<number>();
+    for (const [msgId, sub] of this.#ulog?.subscriptions ?? []) {
+      if (names.has(sub.name)) {
+        msgIds.add(msgId);
+      }
+    }
+    return msgIds;
+  }
+
+  #toMessageEvent(msg: DataSectionMessage): MessageEvent | undefined {
+    if (msg.type === MessageType.Data) {
+      const timestamp = (msg.value as { timestamp: bigint }).timestamp;
+      const sub = this.#ulog?.subscriptions.get(msg.msgId);
+      if (!sub) {
+        return undefined;
+      }
+      return {
+        topic: sub.name,
+        receiveTime: fromMicros(Number(timestamp)),
+        message: msg.value,
+        sizeInBytes: msg.data.byteLength,
+        schemaName: sub.name,
+      };
+    } else if (msg.type === MessageType.Log || msg.type === MessageType.LogTagged) {
+      const receiveTime = fromMicros(Number(msg.timestamp));
+      return {
+        topic: LOG_TOPIC,
+        receiveTime,
+        message: {
+          file: "",
+          function: "",
+          header: { stamp: receiveTime },
+          level: logLevelToRosout(msg.logLevel),
+          line: 0,
+          msg: msg.message,
+          name: "",
+        },
+        schemaName: "rosgraph_msgs/Log",
+        sizeInBytes: msg.size,
+      };
+    }
+    return undefined;
   }
 }
