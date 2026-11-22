@@ -274,16 +274,24 @@ export default function PlayerManager(
         }
         return newPlayer;
       };
-      setCurrentRecentId(undefined);
-
-      setSelectedSource(foundSource);
-      setSelectedFiles(undefined);
-      setSelectedRemoteFile(undefined);
-      setSelectedCompare(undefined);
+      // Only once the new player exists: a failed initialize keeps the current player running,
+      // and it still needs its selection (Compare, Export).
+      const commitSelection = (
+        files?: readonly File[],
+        compare?: readonly string[],
+        remoteFile?: RemoteFileSelection,
+      ) => {
+        setCurrentRecentId(undefined);
+        setSelectedSource(foundSource);
+        setSelectedFiles(files);
+        setSelectedRemoteFile(remoteFile);
+        setSelectedCompare(compare);
+      };
 
       // Sample sources don't need args or prompts to initialize
       if (foundSource.type === "sample") {
         const newPlayer = initializePlayer({});
+        commitSelection();
 
         setBasePlayer(newPlayer);
         writeLastFile(undefined);
@@ -348,7 +356,6 @@ export default function PlayerManager(
         enqueueSnackbar("Unable to initialize player: no args", {
           variant: "error",
         });
-        setSelectedSource(undefined);
         return;
       }
 
@@ -359,10 +366,10 @@ export default function PlayerManager(
               params: args.params,
               sourceMetadata: args.sourceMetadata,
             });
-            setBasePlayer(newPlayer);
-            writeLastFile(undefined);
             const url = args.params?.url;
-            setSelectedRemoteFile(
+            commitSelection(
+              undefined,
+              undefined,
               foundSource.id === "remote-file" && url != undefined && !url.includes(",")
                 ? {
                     url,
@@ -370,6 +377,8 @@ export default function PlayerManager(
                   }
                 : undefined,
             );
+            setBasePlayer(newPlayer);
+            writeLastFile(undefined);
 
             if (args.params?.url) {
               const recentId = addRecent({
@@ -436,10 +445,9 @@ export default function PlayerManager(
                 files: multiFile ? files : undefined,
                 compare,
               });
+              commitSelection(files, compare);
 
               setBasePlayer(newPlayer);
-              setSelectedFiles(files);
-              setSelectedCompare(compare);
 
               // Only handles can be reopened after a reload
               if (handles) {
@@ -578,6 +586,7 @@ export default function PlayerManager(
       (item): RecentSource => ({
         id: item.id,
         title: item.title,
+        name: item.type === "connection" ? item.extra?.name : undefined,
         label: item.label,
         sourceId: item.sourceId,
         type: item.type,

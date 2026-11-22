@@ -326,7 +326,14 @@ class LaserScanHistoryRenderable extends Renderable<LaserScanHistoryUserData> {
       this.renderer.settings.errors.add(
         settingsPath,
         MISSING_TRANSFORM,
-        missingTransformMessage(renderFrameId, fixedFrameId, missingFrame),
+        missingTransformMessage(
+          this.renderer.transformTree,
+          renderFrameId,
+          fixedFrameId,
+          missingFrame.frameId,
+          currentTime,
+          missingFrame.messageTime,
+        ),
       );
       return false;
     }

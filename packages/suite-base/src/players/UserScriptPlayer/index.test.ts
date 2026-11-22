@@ -20,6 +20,7 @@ import type { Mock } from "vitest";
 import FakePlayer from "@lichtblick/suite-base/components/MessagePipeline/FakePlayer";
 import { GlobalVariables } from "@lichtblick/suite-base/hooks/useGlobalVariables";
 import MockUserScriptPlayerWorker from "@lichtblick/suite-base/players/UserScriptPlayer/MockUserScriptPlayerWorker";
+import { PLAYER_CAPABILITIES } from "@lichtblick/suite-base/players/constants";
 import {
   AdvertiseOptions,
   MessageEvent,
@@ -804,6 +805,149 @@ describe("UserScriptPlayer", () => {
           topic: "/studio_script/1",
         },
       ]);
+    });
+
+    describe("rerunning a saved script on its last input", () => {
+      const scriptCode = (value: string, input = "/np_input") => `
+        export const inputs = ["${input}"];
+        export const output = "${DEFAULT_STUDIO_SCRIPT_PREFIX}1";
+        export default (message: { message: { payload: string } }): { value: string } => {
+          return { value: "${value}" };
+        };
+      `;
+      const save = async (player: UserScriptPlayer, sourceCode: string) => {
+        await player.setUserScripts({
+          nodeId: { name: `${DEFAULT_STUDIO_SCRIPT_PREFIX}1`, sourceCode },
+        });
+      };
+      const outputValues = (messages: readonly MessageEvent[]) =>
+        messages.map((m) => (m.message as { value: string }).value);
+
+      const output = { topic: `${DEFAULT_STUDIO_SCRIPT_PREFIX}1` };
+      // Another panel shows /other.
+      const other = { ...upstreamFirst, topic: "/other" };
+
+      async function setupPaused({ recording = false } = {}) {
+        const fakePlayer = new FakePlayer();
+        if (recording) {
+          fakePlayer.setCapabilities([PLAYER_CAPABILITIES.playbackControl]);
+        }
+        const userScriptPlayer = new UserScriptPlayer(fakePlayer, defaultUserScriptActions);
+        const emitted: (readonly MessageEvent[])[] = [];
+        userScriptPlayer.setListener(async (state) => {
+          emitted.push(state.activeData?.messages ?? []);
+        });
+        userScriptPlayer.setSubscriptions([output, { topic: "/other" }]);
+        await save(userScriptPlayer, scriptCode("v1"));
+        await fakePlayer.emit({
+          activeData: {
+            ...basicPlayerState,
+            isPlaying: false,
+            messages: [upstreamFirst, other],
+            topics: [
+              { name: "/np_input", schemaName: "foo" },
+              { name: "/other", schemaName: "foo" },
+            ],
+            datatypes: new Map(Object.entries({ foo: { definitions: [] } })),
+          },
+        });
+        const lastOutput = () =>
+          outputValues(emitted.at(-1)!.filter((m) => m.topic === output.topic));
+        expect(lastOutput()).toEqual(["v1"]);
+        return { userScriptPlayer, lastOutput };
+      }
+
+      it("reruns the first script of a paused recording on a topic a panel already shows", async () => {
+        const fakePlayer = new FakePlayer();
+        fakePlayer.setCapabilities([PLAYER_CAPABILITIES.playbackControl]);
+        const userScriptPlayer = new UserScriptPlayer(fakePlayer, defaultUserScriptActions);
+        const emitted: (readonly MessageEvent[])[] = [];
+        userScriptPlayer.setListener(async (state) => {
+          emitted.push(state.activeData?.messages ?? []);
+        });
+        // No scripts yet; a panel shows /np_input, so subscribing to it again backfills nothing.
+        userScriptPlayer.setSubscriptions([output, { topic: "/np_input" }]);
+        await fakePlayer.emit({
+          activeData: {
+            ...basicPlayerState,
+            isPlaying: false,
+            messages: [upstreamFirst],
+            topics: [{ name: "/np_input", schemaName: "foo" }],
+            datatypes: new Map(Object.entries({ foo: { definitions: [] } })),
+          },
+        });
+        await save(userScriptPlayer, scriptCode("v1"));
+        await save(userScriptPlayer, scriptCode("v2"));
+
+        expect(outputValues(emitted.at(-1)!.filter((m) => m.topic === output.topic))).toEqual([
+          "v2",
+        ]);
+      });
+
+      it("reruns on a new input that another panel already shows", async () => {
+        const { userScriptPlayer, lastOutput } = await setupPaused();
+        await save(userScriptPlayer, scriptCode("v2", "/other"));
+
+        expect(lastOutput()).toEqual(["v2"]);
+      });
+
+      it("keeps the old input of a live source across a panel change and switches back", async () => {
+        const { userScriptPlayer, lastOutput } = await setupPaused();
+        await save(userScriptPlayer, scriptCode("v2", "/other"));
+        userScriptPlayer.setSubscriptions([output, { topic: "/third" }]);
+        await save(userScriptPlayer, scriptCode("v3"));
+
+        expect(lastOutput()).toEqual(["v3"]);
+      });
+
+      it("keeps the input across a save whose inputs are broken", async () => {
+        const { userScriptPlayer, lastOutput } = await setupPaused();
+        await save(userScriptPlayer, "export const inputs = 42;");
+        await save(userScriptPlayer, scriptCode("v2"));
+
+        expect(lastOutput()).toEqual(["v2"]);
+      });
+
+      it("reruns on the source topic after switching the input away from its alias", async () => {
+        const fakePlayer = new FakePlayer();
+        // A recording, so the cache is pruned: the source topic is only kept as the alias's twin.
+        fakePlayer.setCapabilities([PLAYER_CAPABILITIES.playbackControl]);
+        const userScriptPlayer = new UserScriptPlayer(fakePlayer, defaultUserScriptActions);
+        const emitted: (readonly MessageEvent[])[] = [];
+        userScriptPlayer.setListener(async (state) => {
+          emitted.push(state.activeData?.messages ?? []);
+        });
+        userScriptPlayer.setSubscriptions([{ topic: `${DEFAULT_STUDIO_SCRIPT_PREFIX}1` }]);
+        const aliasScript = scriptCode("v1").replace('["/np_input"]', '["/np_alias"]');
+        await save(userScriptPlayer, aliasScript);
+        // The aliasing player emits each source event under the source name and the alias.
+        await fakePlayer.emit({
+          activeData: {
+            ...basicPlayerState,
+            isPlaying: false,
+            messages: [upstreamFirst, { ...upstreamFirst, topic: "/np_alias" }],
+            topics: [
+              { name: "/np_input", schemaName: "foo" },
+              { name: "/np_alias", schemaName: "foo", aliasedFromName: "/np_input" },
+            ],
+            datatypes: new Map(Object.entries({ foo: { definitions: [] } })),
+          },
+        });
+
+        await save(userScriptPlayer, scriptCode("v2"));
+
+        expect(outputValues(emitted.at(-1)!)).toEqual(["v2"]);
+      });
+
+      it("drops the input of a recording once no panel reads the script output", async () => {
+        // A recording backfills a topic that is subscribed again, so nothing needs keeping.
+        const { userScriptPlayer, lastOutput } = await setupPaused({ recording: true });
+        userScriptPlayer.setSubscriptions([]);
+        userScriptPlayer.setSubscriptions([output]);
+        await save(userScriptPlayer, scriptCode("v2"));
+
+        expect(lastOutput()).toEqual([]);
+      });
     });
 
     it("subscribes to underlying topics when nodeInfo is added", async () => {
