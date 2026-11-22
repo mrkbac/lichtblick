@@ -120,7 +120,13 @@ describe("TopicMarkers.startFrame", () => {
       frameId: "",
       pose: makePose(),
       settingsPath: ["topics", "/markers"],
-      settings: { visible: true },
+      settings: {
+        visible: true,
+        color: undefined,
+        showOutlines: undefined,
+        selectedIdVariable: undefined,
+        namespaces: {},
+      },
       topic: "/markers",
     });
   }
