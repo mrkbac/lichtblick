@@ -70,6 +70,7 @@ const ALL_LASERSCAN_DATATYPES = new Set<string>([
   ...ROS_LASERSCAN_DATATYPES,
 ]);
 
+const EMPTY_RANGES = new Float32Array(0);
 const INVALID_LASERSCAN = "INVALID_LASERSCAN";
 
 const tempColor = { r: 0, g: 0, b: 0, a: 0 };
@@ -194,14 +195,14 @@ class LaserScanHistoryRenderable extends Renderable<LaserScanHistoryUserData> {
       (latestEntry.receiveTime === receiveTime &&
         latestEntry.messageTime === messageTime &&
         payloadFingerprint(laserScan.ranges) ===
-          payloadFingerprint(latest.userData.laserScan?.ranges ?? []));
+          payloadFingerprint(latest.userData.laserScan?.ranges ?? EMPTY_RANGES));
     if (settings.decayTime > 0 && previousCount > 0 && !sameScan) {
       const { position, color } = latest.geometry.attributes;
       this.#ring(style).push(
         {
           receiveTime: latestEntry.receiveTime,
           messageTime: latestEntry.messageTime,
-          fingerprint: payloadFingerprint(latest.userData.laserScan?.ranges ?? []),
+          fingerprint: payloadFingerprint(latest.userData.laserScan?.ranges ?? EMPTY_RANGES),
           frameId: latest.userData.frameId,
           pose: latest.userData.pose,
         },
@@ -511,13 +512,12 @@ export class LaserScans extends SceneExtension<LaserScanHistoryRenderable> {
   ]);
 
   /** See {@link DecayHistoryIngest} */
-  public addHistoricalMessage(messageEvent: MessageEvent): void {
+  public addHistoricalMessage(messageEvent: MessageEvent): bigint | undefined {
     const renderable = this.renderables.get(messageEvent.topic);
     const receiveTime = toNanoSec(messageEvent.receiveTime);
+    // The drawn scan and anything newer are playback's, which delivers them through timestamp sync
     if (!renderable || receiveTime > renderable.userData.receiveTime) {
-      // It may become the drawn scan: through the playback path, so timestamp sync applies
-      this.renderer.addMessageEvent(messageEvent);
-      return;
+      return undefined;
     }
     const message = messageEvent.message as PartialMessage<RosLaserScan | FoxgloveLaserScan>;
     const laserScan =
@@ -530,9 +530,11 @@ export class LaserScans extends SceneExtension<LaserScanHistoryRenderable> {
       toNanoSec(laserScan.timestamp) === messageTime &&
       payloadFingerprint(laserScan.ranges) ===
         payloadFingerprint(renderable.userData.latestLaserScan.ranges);
-    if (settings.decayTime > 0 && !sameAsDrawn) {
-      renderable.addOlderScan(laserScan, settings, receiveTime);
+    if (settings.decayTime <= 0 || sameAsDrawn) {
+      return undefined;
     }
+    renderable.addOlderScan(laserScan, settings, receiveTime);
+    return toNanoSec(laserScan.timestamp);
   }
 }
 

@@ -81,6 +81,23 @@ const LAYER_ERROR_LOG_GRACE_MS = 3000;
 
 const log = Logger.getLogger(__filename);
 
+/** Transforms are read back this far before a read-back scan's oldest header stamp */
+const STAMP_LOOKBACK_NS = 1_000_000_000n;
+
+/** Resolves after the renderer's next frame (or on abort) */
+async function nextFrame(renderer: Renderer, signal: AbortSignal): Promise<void> {
+  await new Promise<void>((resolve) => {
+    const done = () => {
+      renderer.removeListener("endFrame", done);
+      signal.removeEventListener("abort", done);
+      resolve();
+    };
+    renderer.addListener("endFrame", done);
+    signal.addEventListener("abort", done);
+    renderer.queueAnimationFrame();
+  });
+}
+
 /** Frames placed under a parent, which reads of transforms around a time should refresh */
 function placedFrameIds(renderer: Renderer): string[] {
   const ids: string[] = [];
@@ -616,8 +633,12 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
   const decayKey = decayTopics.map((d) => `${d.topic} ${d.convertTo} ${d.decayNs}`).join("\n");
 
   // A seek empties the decay histories: read each decayed topic's window before the new time again.
-  // The layers put messages older than their latest one straight into the history. With `only`,
-  // read just those topics and keep the reads in flight (a decay time changed, not the time).
+  // The layers decode each batch straight into the history (never through the renderer's message
+  // queue, so nothing piles up while frames wait, e.g. in a background tab); the drawn scan and
+  // anything newer stay playback's. After a seek, the reads start once the seek's frame has drawn
+  // the latest scans. With `only`, read just those topics and keep the reads in flight (a decay
+  // time changed, not the time).
+  const transformTopicsRef = useLatest(transformTopics);
   const readDecayHistory = useCallback(
     (time: bigint, only?: ReadonlySet<string>) => {
       if (only == undefined || decayReadRef.current?.signal.aborted !== false) {
@@ -625,33 +646,76 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
         decayReadRef.current = new AbortController();
       }
       const abort = decayReadRef.current;
-      if (!renderer || decayTopicsRef.current.length === 0) {
+      const sources = decayTopicsRef.current;
+      if (!renderer || sources.length === 0) {
         abort.abort();
         return;
       }
-      for (const { decayNs, ingest, ...source } of decayTopicsRef.current) {
-        if (only != undefined && !only.has(source.topic)) {
-          continue;
+      const read = async () => {
+        if (only == undefined) {
+          await nextFrame(renderer, abort.signal);
+          if (abort.signal.aborted) {
+            return;
+          }
         }
-        void readTransformRange({
+        let oldestStamp: bigint | undefined;
+        await Promise.all(
+          sources
+            .filter(({ topic }) => only == undefined || only.has(topic))
+            .map(
+              async ({ decayNs, ingest, ...source }) =>
+                await readTransformRange({
+                  subscribeRange: context.unstable_subscribeMessageRange,
+                  topics: [source],
+                  start: time - decayNs,
+                  end: time,
+                  signal: abort.signal,
+                  onBatch: (batch) => {
+                    for (const messageEvent of batch) {
+                      const stamp = ingest.addHistoricalMessage(messageEvent);
+                      if (stamp != undefined && (oldestStamp == undefined || stamp < oldestStamp)) {
+                        oldestStamp = stamp;
+                      }
+                    }
+                    renderer.queueAnimationFrame();
+                  },
+                }),
+            ),
+        );
+        // The transform reads go back to the longest decay time by receive time; scans can be
+        // stamped earlier than they were received, so also read back to their oldest stamp
+        const covered = sources.reduce(
+          (min, { decayNs }) => (time - decayNs < min ? time - decayNs : min),
+          time,
+        );
+        const transformSources = transformTopicsRef.current;
+        if (
+          abort.signal.aborted ||
+          oldestStamp == undefined ||
+          oldestStamp >= covered ||
+          transformSources.length === 0 ||
+          transformsCompleteUntilRef.current >= time
+        ) {
+          return;
+        }
+        await readTransformRange({
           subscribeRange: context.unstable_subscribeMessageRange,
-          topics: [source],
-          start: time - decayNs,
-          end: time,
+          topics: transformSources,
+          // A sample before the oldest stamp, to interpolate at it
+          start: oldestStamp - STAMP_LOOKBACK_NS,
+          end: covered,
           signal: abort.signal,
           onBatch: (batch) => {
-            // Decoded right away into the history, so only one batch of raw messages is ever held
-            for (const messageEvent of batch) {
-              ingest.addHistoricalMessage(messageEvent);
-            }
-            renderer.queueAnimationFrame();
+            renderer.addTransformMessages(batch);
           },
         });
-      }
+        renderer.queueAnimationFrame();
+      };
+      void read();
     },
     // context is static, we're just using it to subscribe
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [renderer, decayTopicsRef],
+    [renderer, decayTopicsRef, transformTopicsRef],
   );
   useLayoutEffect(() => () => decayReadRef.current?.abort(), [readDecayHistory]);
 

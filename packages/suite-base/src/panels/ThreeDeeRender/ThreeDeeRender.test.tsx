@@ -1484,12 +1484,19 @@ describe("ThreeDeeRender", () => {
         vi.mocked(mockContext.unstable_subscribeMessageRange).mockClear();
       }
 
-      function seek(mockContext: BuiltinPanelExtensionContext) {
+      function seek(
+        mockContext: BuiltinPanelExtensionContext,
+        renderer: ReturnType<typeof createMockRenderer>,
+      ) {
         act(() => {
           mockContext.onRender!(
             { topics, currentFrame: [], currentTime: { sec: 100, nsec: 0 }, didSeek: true },
             vi.fn(),
           );
+        });
+        // The seek's frame draws the latest scans; the reads start after it
+        act(() => {
+          renderer.emit("endFrame", 100_000_000_000n, renderer);
         });
       }
 
@@ -1499,7 +1506,7 @@ describe("ThreeDeeRender", () => {
         });
         await start(mockContext);
 
-        seek(mockContext);
+        seek(mockContext, customRendererInstance);
 
         await waitFor(() => {
           expect(mockContext.unstable_subscribeMessageRange).toHaveBeenCalledWith(
@@ -1570,11 +1577,75 @@ describe("ThreeDeeRender", () => {
         });
       });
 
+      it("reads transforms back to the oldest header stamp of the scans read back", async () => {
+        const layer = {
+          historySchemas: new Set(["sensor_msgs/LaserScan"]),
+          // Stamped 5 s before it was received, before the decay window
+          addHistoricalMessage: vi.fn(() => 65_000_000_000n),
+        };
+        const customRendererInstance = createMockRenderer({
+          schemaSubscriptions: new Map([
+            ["sensor_msgs/LaserScan", [{}]],
+            ["tf2_msgs/TFMessage", [{ preload: true }]],
+          ]),
+          sceneExtensions: new Map([["laserScans", layer]]),
+          currentTime: 100_000_000_000n,
+        });
+        vi.mocked(Renderer).mockImplementationOnce(function () {
+          return customRendererInstance as any;
+        });
+        const mockContext = createPreloadingContext({
+          initialState: {
+            scene: { transforms: { enablePreloading: false } },
+            topics: { "/scan": { visible: true, decayTime: 30 }, "/tf": { visible: true } },
+          },
+          onSubscribe: (args: SubscribeMessageRangeArgs) => {
+            if (args.topic === "/scan") {
+              void args.onNewRangeIterator(
+                (async function* () {
+                  yield [MessageEventBuilder.messageEvent({ topic: "/scan" })];
+                })(),
+              );
+            }
+          },
+        });
+        render(<ThreeDeeRender {...setup({}, mockContext)} />);
+        await waitFor(() => {
+          expect(mockContext.onRender).toBeDefined();
+        });
+
+        act(() => {
+          mockContext.onRender!(
+            {
+              topics: [
+                scanTopic,
+                RenderStateBuilder.topic({ name: "/tf", schemaName: "tf2_msgs/TFMessage" }),
+              ],
+              currentFrame: [],
+            },
+            vi.fn(),
+          );
+        });
+
+        // [70 s, 100 s] by receive time, then back to a second before the 65 s stamp
+        await waitFor(() => {
+          expect(mockContext.unstable_subscribeMessageRange).toHaveBeenCalledWith(
+            expect.objectContaining({
+              topic: "/tf",
+              start: { sec: 64, nsec: 0 },
+              end: { sec: 70, nsec: 0 },
+            }),
+          );
+        });
+      });
+
       it("skips topics whose layer takes no history", async () => {
-        const { mockContext } = renderWithDecay({ "/raw": { visible: true, decayTime: 30 } });
+        const { mockContext, customRendererInstance } = renderWithDecay({
+          "/raw": { visible: true, decayTime: 30 },
+        });
         await start(mockContext);
 
-        seek(mockContext);
+        seek(mockContext, customRendererInstance);
 
         expect(mockContext.unstable_subscribeMessageRange).not.toHaveBeenCalledWith(
           expect.objectContaining({ topic: "/raw" }),
@@ -1582,11 +1653,11 @@ describe("ThreeDeeRender", () => {
       });
 
       it("stops the read when no decayed topic is left", async () => {
-        const { cancel, mockContext } = renderWithDecay({
+        const { cancel, mockContext, customRendererInstance } = renderWithDecay({
           "/scan": { visible: true, decayTime: 30 },
         });
         await start(mockContext);
-        seek(mockContext);
+        seek(mockContext, customRendererInstance);
         await waitFor(() => {
           expect(mockContext.unstable_subscribeMessageRange).toHaveBeenCalled();
         });

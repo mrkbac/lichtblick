@@ -13,6 +13,7 @@ import { BasicBuilder } from "@lichtblick/test-builders";
 import {
   createGeometry,
   HistoryLimits,
+  payloadFingerprint,
   PointsRenderable,
   RenderObjectHistory,
   pointStyle,
@@ -280,5 +281,20 @@ describe("PointsRenderable mesh shapes", () => {
     points.setStyle(style("sphere", { outline: true }));
     expect(lines()).toHaveLength(0);
     points.dispose();
+  });
+});
+
+describe("payloadFingerprint", () => {
+  it("tells apart payloads that differ anywhere, not just where it might sample", () => {
+    const payload = new Uint8Array(10_000).map((_, i) => i % 251);
+    const changed = payload.slice();
+    changed[5_003] = (changed[5_003]! + 1) % 256;
+
+    expect(payloadFingerprint(payload)).toBe(payloadFingerprint(payload.slice()));
+    expect(payloadFingerprint(changed)).not.toBe(payloadFingerprint(payload));
+    // Unaligned views of the same bytes hash the same
+    const shifted = new Uint8Array(10_001);
+    shifted.set(payload, 1);
+    expect(payloadFingerprint(shifted.subarray(1))).toBe(payloadFingerprint(payload));
   });
 });

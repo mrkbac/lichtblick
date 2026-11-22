@@ -373,7 +373,7 @@ describe("PointCloudHistoryRenderable decay", () => {
 });
 
 describe("PointClouds read-back history", () => {
-  it("promotes a scan newer than the drawn one through the playback path, so sync applies", () => {
+  it("leaves the drawn scan and anything newer to playback (through timestamp sync)", () => {
     const addMessageEvent = vi.fn();
     const extension = new PointClouds({
       ...rendererMock,
@@ -391,8 +391,9 @@ describe("PointClouds read-back history", () => {
       sizeInBytes: 0,
     };
 
-    extension.addHistoricalMessage(messageEvent); // nothing drawn yet: it may become the latest
-
-    expect(addMessageEvent).toHaveBeenCalledWith(messageEvent);
+    // Nothing drawn yet: neither drawn nor queued from the read
+    expect(extension.addHistoricalMessage(messageEvent)).toBeUndefined();
+    expect(addMessageEvent).not.toHaveBeenCalled();
+    expect(extension.renderables.size).toBe(0);
   });
 });

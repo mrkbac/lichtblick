@@ -1223,14 +1223,13 @@ export class PointClouds extends SceneExtension<PointCloudHistoryRenderable> {
   ]);
 
   /** See {@link DecayHistoryIngest} */
-  public addHistoricalMessage(messageEvent: MessageEvent): void {
+  public addHistoricalMessage(messageEvent: MessageEvent): bigint | undefined {
     const ros = ROS_POINTCLOUD_DATATYPES.has(messageEvent.schemaName);
     const renderable = this.renderables.get(messageEvent.topic);
     const receiveTime = toNanoSec(messageEvent.receiveTime);
+    // The drawn scan and anything newer are playback's, which delivers them through timestamp sync
     if (!renderable || receiveTime > renderable.userData.receiveTime) {
-      // It may become the drawn scan: through the playback path, so timestamp sync applies
-      this.renderer.addMessageEvent(messageEvent);
-      return;
+      return undefined;
     }
     const pointCloud = ros
       ? normalizePointCloud2(messageEvent.message as PartialMessage<PointCloud2>)
@@ -1241,9 +1240,11 @@ export class PointClouds extends SceneExtension<PointCloudHistoryRenderable> {
       toNanoSec(getTimestamp(pointCloud)) === messageTime &&
       payloadFingerprint(pointCloud.data) ===
         payloadFingerprint(renderable.userData.latestPointCloud.data);
-    if (settings.decayTime > 0 && !sameAsDrawn) {
-      renderable.addOlderScan(pointCloud, settings, receiveTime);
+    if (settings.decayTime <= 0 || sameAsDrawn) {
+      return undefined;
     }
+    renderable.addOlderScan(pointCloud, settings, receiveTime);
+    return toNanoSec(getTimestamp(pointCloud));
   }
 }
 

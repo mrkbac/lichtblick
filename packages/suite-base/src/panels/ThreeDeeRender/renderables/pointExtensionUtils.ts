@@ -170,28 +170,48 @@ export const DECAY_LIMITED = "DECAY_LIMITED";
 
 /**
  * Tells apart distinct records received at the same time with the same header stamp (e.g. the
- * segments of one sweep published together): a hash of the payload's size and up to 64 values
- * spread across it. Messages carry no record id (offset or sequence) to use instead.
+ * segments of one sweep published together): a 53-bit hash of the whole payload. Messages carry no
+ * record id (offset or sequence), and keeping their bytes to compare would hold every message, so
+ * equal hashes count as equal payloads. About 0.3 ms per MB.
  */
-export function payloadFingerprint(values: ArrayLike<number>): number {
-  let hash = Math.imul(0x811c9dc5 ^ values.length, 16777619);
-  const step = Math.max(1, Math.floor(values.length / 64));
-  for (let i = 0; i < values.length; i += step) {
-    hash = Math.imul(hash ^ (Math.round(values[i]! * 4096) | 0), 16777619);
+export function payloadFingerprint(payload: ArrayBufferView): number {
+  const bytes = new Uint8Array(payload.buffer, payload.byteOffset, payload.byteLength);
+  let a = Math.imul(0x811c9dc5 ^ bytes.length, 16777619);
+  let b = 0x9747b28c ^ bytes.length;
+  const wordCount = bytes.length >> 2;
+  const mix = (word: number) => {
+    a = Math.imul(a ^ word, 16777619);
+    b = Math.imul(b ^ word, 0x5bd1e995) ^ (b >>> 15);
+  };
+  // The same little-endian words whatever the alignment of the view
+  if ((bytes.byteOffset & 3) === 0) {
+    for (const word of new Uint32Array(bytes.buffer, bytes.byteOffset, wordCount)) {
+      mix(word);
+    }
+  } else {
+    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    for (let w = 0; w < wordCount; w++) {
+      mix(view.getUint32(w * 4, true));
+    }
   }
-  return hash >>> 0;
+  for (let i = wordCount * 4; i < bytes.length; i++) {
+    a = Math.imul(a ^ bytes[i]!, 16777619);
+    b = Math.imul(b ^ bytes[i]!, 0x5bd1e995) ^ (b >>> 15);
+  }
+  return (a >>> 0) * 2 ** 21 + (b >>> 11);
 }
 
 /**
- * A scene extension that takes messages read back after a seek: ones newer than what it draws (or
- * when it draws nothing yet) go through the playback path like played ones (timestamp sync
- * included); older ones only go into the decay history, unsynchronized, since historical scans
- * have nothing to wait for.
+ * A scene extension that takes messages read back after a seek straight into its decay history,
+ * decoded right away (never through the renderer's message queue) and unsynchronized, since
+ * historical scans have nothing to wait for. The drawn scan and anything newer are left to
+ * playback, which delivers them through timestamp sync.
  */
 export type DecayHistoryIngest = {
   /** Schemas it takes history for */
   readonly historySchemas: ReadonlySet<string>;
-  addHistoricalMessage(messageEvent: MessageEvent): void;
+  /** Returns the header stamp of a scan it added to the history (to place it), else undefined */
+  addHistoricalMessage(messageEvent: MessageEvent): bigint | undefined;
 };
 
 export function isDecayHistoryIngest(extension: object): extension is DecayHistoryIngest {
