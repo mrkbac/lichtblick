@@ -109,6 +109,24 @@ describe("VirtualizedTree", () => {
       expect(rows).toHaveLength(3);
     });
 
+    it("shows index ranges of long arrays without a value", () => {
+      // Given
+      const renderValue = vi.fn();
+      useVirtualizer.mockReturnValue({
+        getVirtualItems: vi.fn(() => [{ index: 0, key: "0", size: 24, start: 0 }]),
+        getTotalSize: vi.fn(() => 24),
+        scrollToIndex: vi.fn(),
+        measureElement: vi.fn(),
+      });
+
+      // When
+      renderVirtualizedTree({ data: new Float32Array(1000), renderValue });
+
+      // Then
+      expect(screen.getByRole("treeitem")).toHaveTextContent("[0 … 99]");
+      expect(renderValue).not.toHaveBeenCalled();
+    });
+
     it("should apply custom fontSize when provided", () => {
       // Given
       const data = { field: BasicBuilder.string() };

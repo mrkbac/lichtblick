@@ -292,7 +292,9 @@ export const VirtualizedTree = memo(function VirtualizedTree({
                   )}
                 </span>
                 <span className={classes.key}>{node.label}</span>
-                <div className={classes.valueContainer}>{renderValue(node)}</div>
+                <div className={classes.valueContainer}>
+                  {node.isRange !== true && renderValue(node)}
+                </div>
               </div>
             );
           })}

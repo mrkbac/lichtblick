@@ -78,7 +78,29 @@ function isExpandable(value: unknown, { diff }: { diff: boolean }): boolean {
   return diff ? keys.some((key) => key !== diffLabels.ID.labelText) : keys.length > 0;
 }
 
-/** Flatten the visible part of a message tree into rows for the virtualized list. */
+/** Arrays longer than this show their elements in index ranges, like browser dev tools. */
+export const RANGE_THRESHOLD = 500;
+/** Most elements or sub-ranges listed under one range. */
+const RANGE_SIZE = 100;
+
+type Indexable = { readonly length: number; readonly [index: number]: unknown };
+
+/** Elements per sub-range for `count` elements: a power of RANGE_SIZE giving at most RANGE_SIZE ranges. */
+function rangeSpan(count: number): number {
+  let span = RANGE_SIZE;
+  while (count / span > RANGE_SIZE) {
+    span *= RANGE_SIZE;
+  }
+  return span;
+}
+
+/**
+ * Flatten the visible part of a message tree into rows for the virtualized list.
+ *
+ * Arrays longer than RANGE_THRESHOLD list index ranges (`[0 … 99]`) instead of their elements,
+ * so a point cloud's millions of bytes only cost rows for the ranges the user expands. Elements
+ * keep their usual keys, so their expansion doesn't depend on the ranges.
+ */
 export function flattenTreeData(
   data: unknown,
   isExpanded: (key: string, value: unknown) => boolean,
@@ -96,45 +118,110 @@ export function flattenTreeData(
   } = options;
 
   const nodes: TreeNode[] = [];
-  for (const [key, rawValue] of entriesOf(data, cache)) {
+
+  /** Rows for one entry and its expanded children. `rowParent` is the row it sits under. */
+  const visit = (
+    key: string | number,
+    rawValue: unknown,
+    path: string,
+    rowParent: string,
+    rowDepth: number,
+    parentKeyPath: (string | number)[],
+    parentStatus: DiffStatus | undefined,
+    filter: FlattenOptions["include"],
+  ): void => {
     if (diff && key === diffLabels.ID.labelText) {
-      continue;
+      return;
     }
-    const nodePath = parentPath ? `${key}${PATH_NAME_AGGREGATOR}${parentPath}` : String(key);
-    if (include && !include(nodePath)) {
-      continue;
+    const nodePath = path ? `${key}${PATH_NAME_AGGREGATOR}${path}` : String(key);
+    if (filter && !filter(nodePath)) {
+      return;
     }
     const unwrapped = diff ? unwrapDiffValue(rawValue) : { value: rawValue };
     // Children of added/deleted nodes inherit the status; "changed" only applies to the leaf.
-    const status = unwrapped.status ?? (diffStatus === "changed" ? undefined : diffStatus);
-    const currentKeyPath = [key, ...keyPath];
+    const status = unwrapped.status ?? (parentStatus === "changed" ? undefined : parentStatus);
+    const currentKeyPath = [key, ...parentKeyPath];
     const node: TreeNode = {
       key: nodePath,
       label: String(key),
       value: unwrapped.value,
-      depth,
+      depth: rowDepth,
       isExpandable: isExpandable(unwrapped.value, { diff }),
       keyPath: currentKeyPath,
-      parentPath,
+      parentPath: rowParent,
       ...(status ? { diffStatus: status } : undefined),
     };
     nodes.push(node);
 
     if (node.isExpandable && isExpanded(nodePath, node.value)) {
-      for (const child of flattenTreeData(unwrapped.value, isExpanded, {
-        diff,
-        include: includeSubtreeOf?.has(nodePath) === true ? undefined : include,
-        includeSubtreeOf,
-        cache,
-        parentPath: nodePath,
-        depth: depth + 1,
-        keyPath: currentKeyPath,
-        diffStatus: status,
-      })) {
-        nodes.push(child);
+      const childFilter = includeSubtreeOf?.has(nodePath) === true ? undefined : filter;
+      walk(unwrapped.value, nodePath, rowDepth + 1, currentKeyPath, status, childFilter);
+    }
+  };
+
+  /** Elements `start` to `end` of `array`, or ranges of them when there are too many. */
+  const walkRange = (
+    array: Indexable,
+    start: number,
+    end: number,
+    path: string,
+    rowParent: string,
+    rowDepth: number,
+    arrayKeyPath: (string | number)[],
+    status: DiffStatus | undefined,
+  ): void => {
+    if (end - start <= RANGE_SIZE) {
+      for (let index = start; index < end; index++) {
+        visit(index, array[index], path, rowParent, rowDepth, arrayKeyPath, status, undefined);
+      }
+      return;
+    }
+    const span = rangeSpan(end - start);
+    for (let rangeStart = start; rangeStart < end; rangeStart += span) {
+      const rangeEnd = Math.min(rangeStart + span, end);
+      const range = `${rangeStart}..${rangeEnd - 1}`;
+      const key = path ? `${range}${PATH_NAME_AGGREGATOR}${path}` : range;
+      nodes.push({
+        key,
+        label: `[${rangeStart} … ${rangeEnd - 1}]`,
+        value: undefined,
+        depth: rowDepth,
+        isExpandable: true,
+        isRange: true,
+        keyPath: arrayKeyPath,
+        parentPath: rowParent,
+        ...(status && status !== "changed" ? { diffStatus: status } : undefined),
+      });
+      if (isExpanded(key, undefined)) {
+        walkRange(array, rangeStart, rangeEnd, path, key, rowDepth + 1, arrayKeyPath, status);
       }
     }
-  }
+  };
+
+  /** Rows for the children of `value`. */
+  const walk = (
+    value: unknown,
+    path: string,
+    rowDepth: number,
+    valueKeyPath: (string | number)[],
+    status: DiffStatus | undefined,
+    filter: FlattenOptions["include"],
+  ): void => {
+    // Search results list only the matching elements, so they don't need ranges.
+    if (
+      filter == undefined &&
+      (Array.isArray(value) || isTypedArray(value)) &&
+      value.length > RANGE_THRESHOLD
+    ) {
+      walkRange(value, 0, value.length, path, path, rowDepth, valueKeyPath, status);
+      return;
+    }
+    for (const [key, rawValue] of entriesOf(value, cache)) {
+      visit(key, rawValue, path, path, rowDepth, valueKeyPath, status, filter);
+    }
+  };
+
+  walk(data, parentPath, depth, keyPath, diffStatus, include);
   return nodes;
 }
 

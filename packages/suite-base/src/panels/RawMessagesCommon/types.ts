@@ -55,6 +55,8 @@ export type TreeNode = {
   parentPath: string;
   /** Set in diff mode for added/changed/deleted nodes. */
   diffStatus?: DiffStatus;
+  /** An index range of a long array (`[0 … 99]`); it has no value of its own. */
+  isRange?: boolean;
 };
 
 export type ValueAction = {
