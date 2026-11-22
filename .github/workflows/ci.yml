@@ -1,4 +1,7 @@
 name: CI
+# The PR number makes a run identifiable for perf-budget-label.yml, also for fork PRs where GitHub
+# leaves the run's pull_requests empty. Pushes keep the default name.
+run-name: "${{ github.event_name == 'pull_request' && format('PR #{0}: {1}', github.event.pull_request.number, github.event.pull_request.title) || '' }}"
 
 on:
   push:
@@ -10,8 +13,10 @@ permissions:
 
 # A new push to a PR supersedes the previous run; cancel it so it doesn't hold runners.
 # Runs on licht are never cancelled, so every merge commit keeps a result.
+# Re-run attempts (e.g. perf-budget-label.yml re-running an older commit's perf-budget) get their own
+# group per commit, so they never cancel the CI of a newer push.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}${{ github.run_attempt != '1' && format('-rerun-{0}', github.sha) || '' }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
@@ -77,6 +82,53 @@ jobs:
           }
           ${{ matrix.config.command }}
           exit $failed
+
+  # Compares speed, memory, bytes read and startup bundle size with the PR's merge base
+  # (ci/perf-budget.ts). Required on licht, so the job id stays `perf-budget`. It waits for the
+  # cheap checks so a broken push doesn't hold a runner, and doesn't run on licht pushes (they
+  # could only report). Its table is in the job summary.
+  perf-budget:
+    if: github.event_name == 'pull_request'
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      # Reads the PR's labels when the budget is exceeded
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # The merge base must be in the clone
+          fetch-depth: 0
+
+      - uses: ./.github/actions/setup
+
+      - name: Run perf budget
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+        # Exit code 3 means over budget (and nothing worse), which a deliberate trade-off may accept
+        # with the `perf-budget-accepted` label. Not comparable (2), a failed base build or a crash
+        # always fail. The label is read now, not from the event, so a
+        # re-run (perf-budget-label.yml) sees the current state. The annotations say which way it went.
+        run: |
+          set +e
+          node --expose-gc ci/perf-budget.ts --base "$(git merge-base HEAD "$BASE")"
+          code=$?
+          if [ "$code" -eq 3 ]; then
+            if ! labels=$(gh pr view "$PR" -R "$GITHUB_REPOSITORY" --json labels --jq '.labels[].name'); then
+              echo "::error::Couldn't read the PR's labels"
+              exit 1
+            fi
+            if grep -qx perf-budget-accepted <<<"$labels"; then
+              echo "::notice title=perf-budget-accepted::Over budget, accepted with the perf-budget-accepted label"
+              exit 0
+            fi
+            echo "::error title=perf-budget-waivable::Over budget; the perf-budget-accepted label would accept it"
+          fi
+          exit "$code"
 
   e2e-desktop:
     runs-on: ubuntu-latest
