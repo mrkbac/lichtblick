@@ -190,7 +190,9 @@ export class PathSampleColumns {
     }
     data[n * STRIDE + 4] = this.#valueIndex(value, constantName, count);
     this.#length++;
-    this.#changes?.#append(receiveTime, headerStamp, count, value, constantName);
+    if (this.#changes) {
+      this.#changes.#append(receiveTime, headerStamp, count, value, constantName);
+    }
 
     // The previous newest sample was held provisionally until it was the stride-th one, or is
     // one the current thinning level drops.
