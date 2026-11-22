@@ -17,7 +17,10 @@ import { setupVitestCanvasMock } from "vitest-canvas-mock";
 import { CameraModelsMap } from "@lichtblick/den/image/types";
 import { MessageEvent } from "@lichtblick/suite";
 import { Asset, DraggedMessagePath } from "@lichtblick/suite-base/components/PanelExtensionAdapter";
-import { Renderer } from "@lichtblick/suite-base/panels/ThreeDeeRender/Renderer";
+import {
+  Renderer,
+  stopThreeAnimationLoop,
+} from "@lichtblick/suite-base/panels/ThreeDeeRender/Renderer";
 import { DEFAULT_SCENE_EXTENSION_CONFIG } from "@lichtblick/suite-base/panels/ThreeDeeRender/SceneExtensionConfig";
 import { DEFAULT_CAMERA_STATE } from "@lichtblick/suite-base/panels/ThreeDeeRender/camera";
 import { HOVER_PICK_THROTTLE_MS } from "@lichtblick/suite-base/panels/ThreeDeeRender/constants";
@@ -428,6 +431,43 @@ describe("3D Renderer", () => {
     expect(cancelAnimationFrameSpy).toHaveBeenCalledWith(mockResult);
 
     renderer.dispose();
+  });
+
+  it("stops three's idle animation loop and advances the node frame per render instead", async () => {
+    // Given
+    const renderer = new Renderer({ ...defaultRendererProps, canvas });
+    const { _animation: animation, _nodes: nodes } = renderer.gl as unknown as {
+      _animation: { start(): void; stop: Mock };
+      _nodes: { nodeFrame: { update: Mock } };
+    };
+    // When
+    await renderer.ready;
+    animation.start();
+    // Then
+    expect(animation.stop).toHaveBeenCalled();
+    expect(nodes.nodeFrame.update).toHaveBeenCalledTimes(1);
+    renderer.dispose();
+  });
+
+  it("relies on three internals that still exist", async () => {
+    // Given
+    const actual = await vi.importActual<typeof import("three/webgpu")>("three/webgpu");
+    // When
+    const gl = new actual.WebGPURenderer({ canvas: document.createElement("canvas") });
+    // Then: stopThreeAnimationLoop replaces these, and render() must still advance the frame
+    expect(gl).toHaveProperty("_animation");
+    expect(gl).toHaveProperty("_nodes");
+    expect(actual.WebGPURenderer.prototype.render.toString()).toContain("this._animation.start()");
+  });
+
+  it("keeps rendering when three's animation internals are missing", () => {
+    // Given
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    // When / Then
+    expect(() => {
+      stopThreeAnimationLoop({} as Parameters<typeof stopThreeAnimationLoop>[0]);
+    }).not.toThrow();
+    warn.mockRestore();
   });
 
   it("draws when the panel document is visible while the opener is hidden", async () => {

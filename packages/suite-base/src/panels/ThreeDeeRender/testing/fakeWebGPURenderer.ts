@@ -40,6 +40,9 @@ class FakeWebGPURenderer {
   public autoClear = true;
   public sortObjects = true;
   public onDeviceLost = (): void => {};
+  // three internals that stopThreeAnimationLoop replaces (set up by init() in three)
+  public _animation = { start: vi.fn(), stop: vi.fn() };
+  public _nodes = { nodeFrame: { update: vi.fn() } };
   #pixelRatio = 1;
   #renderTarget: unknown = null;
   #renderObjectFunction: unknown = null;
