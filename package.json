@@ -65,6 +65,7 @@
     "test:e2e:benchmark:report": "playwright show-report benchmark/e2e/reports",
     "test:e2e:benchmark:ci": "CI=true PLAYWRIGHT_JSON_OUTPUT_NAME=reports/results.json playwright test --config=benchmark/e2e/playwright.config.ts --reporter=list,json",
     "test:e2e:benchmark:summary": "node benchmark/e2e/ci-helpers/generate-benchmark-summary.ts",
+    "perf:budget": "node --expose-gc ci/perf-budget.ts",
     "package:win": "pnpm package --win",
     "package:darwin": "pnpm package --mac",
     "package:linux": "pnpm package --linux",

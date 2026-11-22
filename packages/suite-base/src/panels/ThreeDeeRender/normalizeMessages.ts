@@ -36,11 +36,12 @@ export type LegacyFrameTransform = {
   transform: LegacyTransform;
 };
 
-export function normalizeTime(time: Partial<Time> | undefined): Time {
+/** ROS 1 and Foxglove stamps use `nsec`; the ROS 2 CDR decoder gives `nanosec`. */
+export function normalizeTime(time: (Partial<Time> & { nanosec?: number }) | undefined): Time {
   if (!time) {
     return { sec: 0, nsec: 0 };
   }
-  return { sec: time.sec ?? 0, nsec: time.nsec ?? 0 };
+  return { sec: time.sec ?? 0, nsec: time.nsec ?? time.nanosec ?? 0 };
 }
 
 export function normalizeByteArray(byteArray: unknown): Uint8Array {
