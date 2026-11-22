@@ -49,7 +49,11 @@ export type MessagePipelineContext = Immutable<{
     topic: string,
     options?: { start?: Time; end?: Time },
   ) => AsyncIterableIterator<Readonly<IteratorResult>> | undefined;
-  /** Inspect topics in one pass without decoding; returned events omit message payloads. */
+  /**
+   * Inspect topics in one pass without decoding; returned events omit message payloads. Returns
+   * undefined when any topic has no stored records, e.g. a user-script or converter output: only
+   * recorded (physical) topics can be inspected. Creating the iterator reads nothing.
+   */
   getInspectionIterator?: (
     topics: readonly string[],
     options?: { start?: Time; end?: Time },

@@ -209,6 +209,26 @@ describe("IterablePlayer", () => {
     await player.isClosed;
   });
 
+  it("advertises indexed backfill only when the source reports it", async () => {
+    for (const indexedBackfill of [true, undefined]) {
+      const source = new TestSource();
+      const init = await source.initialize();
+      vi.spyOn(source, "initialize").mockResolvedValue({ ...init, indexedBackfill });
+      const player = new IterablePlayer({ source, enablePreload: false, sourceId: "test" });
+      const store = new PlayerStateStore(2);
+      player.setListener(async (state) => {
+        await store.add(state);
+      });
+      const states = await store.done;
+
+      expect(states.at(-1)!.capabilities.includes(PLAYER_CAPABILITIES.indexedBackfill)).toBe(
+        indexedBackfill === true,
+      );
+      player.close();
+      await player.isClosed;
+    }
+  });
+
   it("applies the updates of a source that grows after initialize", async () => {
     // Given a source that grows once after initialize, e.g. while its index is rebuilt
     const source = new TestSource();

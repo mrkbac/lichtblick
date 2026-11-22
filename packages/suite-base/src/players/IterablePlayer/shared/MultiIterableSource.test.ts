@@ -470,6 +470,7 @@ describe("MultiIterableSource", () => {
         },
       ];
       init2.recordingFiles = [{ ...init1.recordingFiles[0]!, library: "second", sizeBytes: 200 }];
+      init1.indexedBackfill = true;
       mockInitialization(init1);
       mockInitialization(init2);
 
@@ -479,6 +480,13 @@ describe("MultiIterableSource", () => {
         multiSource["mergeInitializations"]([{ ...init1 }, { ...init2, recordingFiles: undefined }])
           .recordingFiles,
       ).toBeUndefined();
+
+      // Indexed backfill only when every source has it
+      expect(result.indexedBackfill).toBe(false);
+      expect(
+        multiSource["mergeInitializations"]([init1, { ...init2, indexedBackfill: true }])
+          .indexedBackfill,
+      ).toBe(true);
 
       expect(result.start.sec).toBe(0);
       expect(result.end.sec).toBe(40);

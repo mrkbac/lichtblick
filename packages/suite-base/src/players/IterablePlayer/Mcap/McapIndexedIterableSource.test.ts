@@ -241,8 +241,9 @@ describe("McapIndexedIterableSource", () => {
 
     const source = new McapIndexedIterableSource(reader);
 
-    const { topicStats, start, end } = await source.initialize();
+    const { topicStats, start, end, indexedBackfill } = await source.initialize();
 
+    expect(indexedBackfill).toBe(true);
     expect(topicStats).toBeDefined();
     const testTopicStats = topicStats.get("test");
     expect(testTopicStats).toBeDefined();

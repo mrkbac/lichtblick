@@ -830,6 +830,11 @@ export class IterablePlayer implements Player {
     freezeMetadata(this.#metadata);
 
     this.#profile = profile;
+    this.#capabilities = [
+      PLAYER_CAPABILITIES.setSpeed,
+      PLAYER_CAPABILITIES.playbackControl,
+      ...(initResult.indexedBackfill === true ? [PLAYER_CAPABILITIES.indexedBackfill] : []),
+    ];
     this.#recordingFiles = initResult.recordingFiles;
     this.#compareSides = initResult.compareSides;
     this.#compareRequest = initResult.compareRequest;
