@@ -701,6 +701,11 @@ export class Renderer extends EventEmitter<RendererEvents> {
     this.queueAnimationFrame();
   }
 
+  /** Whether the frame's transform came from a static transform topic */
+  public isStaticTransformFrame(frameId: string): boolean {
+    return this.#staticTransformCache.has(frameId);
+  }
+
   #reapplyStaticTransforms(): void {
     const cache = this.#staticTransformCache;
     this.#batchTransformTreeUpdates(() => {

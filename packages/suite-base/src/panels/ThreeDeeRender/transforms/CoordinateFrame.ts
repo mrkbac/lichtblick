@@ -37,7 +37,11 @@ export type FallbackFrameId = typeof FALLBACK_FRAME_ID;
  * clock) are hidden from lookups, so a history preloaded past the current time behaves as if only
  * the transforms received so far were there. Undefined shows everything.
  */
-export type TransformVisibility = { receivedUntil: Time | undefined };
+export type TransformVisibility = {
+  /** The history is a recording's complete (preloaded) one, so earlier parents are kept too */
+  complete: boolean;
+  receivedUntil: Time | undefined;
+};
 
 export type UserFrameId = string;
 export type AnyFrameId = UserFrameId | FallbackFrameId;
@@ -59,6 +63,13 @@ export class CoordinateFrame<ID extends AnyFrameId = UserFrameId> {
 
   #parent?: CoordinateFrame;
   #transforms = new TransformHistory();
+  /**
+   * Parents and histories before the latest reparenting, oldest first. Only kept while lookups are
+   * limited to what was received (a preloaded history), so the frame keeps its earlier parent until
+   * playback reaches the reparenting.
+   */
+  #earlier: { parent: CoordinateFrame; transforms: TransformHistory }[] = [];
+  #keepEvery = 1;
   #visibility: TransformVisibility;
 
   public constructor(
@@ -66,7 +77,7 @@ export class CoordinateFrame<ID extends AnyFrameId = UserFrameId> {
     parent: CoordinateFrame | undefined, // fallback frame not allowed as parent
     maxStorageTime: Duration,
     maxCapacity: number,
-    visibility: TransformVisibility = { receivedUntil: undefined },
+    visibility: TransformVisibility = { complete: false, receivedUntil: undefined },
   ) {
     if (parent) {
       this.#parent = parent;
@@ -85,8 +96,48 @@ export class CoordinateFrame<ID extends AnyFrameId = UserFrameId> {
     }
   }
 
+  /** The parent at the playback time (see {@link TransformVisibility}) */
   public parent(): CoordinateFrame | undefined {
+    return this.#earlier.length === 0 ? this.#parent : this.#active().parent;
+  }
+
+  /** The parent of the newest transforms, whatever the playback time */
+  public latestParent(): CoordinateFrame | undefined {
     return this.#parent;
+  }
+
+  /** Every parent this frame has had in its kept history, newest first */
+  public allParents(): CoordinateFrame[] {
+    const parents: CoordinateFrame[] = this.#parent ? [this.#parent] : [];
+    for (let i = this.#earlier.length - 1; i >= 0; i--) {
+      parents.push(this.#earlier[i]!.parent);
+    }
+    return parents;
+  }
+
+  /**
+   * The parent and history in effect at the playback time: the newest one with a transform received
+   * by then, or the oldest one before any was received.
+   */
+  #active(): { parent: CoordinateFrame | undefined; transforms: TransformHistory } {
+    const receivedUntil = this.#visibility.receivedUntil;
+    if (
+      this.#earlier.length === 0 ||
+      receivedUntil == undefined ||
+      this.#transforms.receivedCount(receivedUntil) > 0
+    ) {
+      return { parent: this.#parent, transforms: this.#transforms };
+    }
+    for (let i = this.#earlier.length - 1; i > 0; i--) {
+      if (this.#earlier[i]!.transforms.receivedCount(receivedUntil) > 0) {
+        return this.#earlier[i]!;
+      }
+    }
+    return this.#earlier[0]!;
+  }
+
+  #activeTransforms(): TransformHistory {
+    return this.#earlier.length === 0 ? this.#transforms : this.#active().transforms;
   }
 
   /**
@@ -100,8 +151,8 @@ export class CoordinateFrame<ID extends AnyFrameId = UserFrameId> {
     CoordinateFrame.assertUserFrame(this);
     // eslint-disable-next-line @typescript-eslint/no-this-alias
     let root: CoordinateFrame = this;
-    while (root.#parent) {
-      root = root.#parent;
+    for (let parent = root.parent(); parent; parent = parent.parent()) {
+      root = parent;
     }
     return root as CoordinateFrame<ID>;
   }
@@ -110,26 +161,34 @@ export class CoordinateFrame<ID extends AnyFrameId = UserFrameId> {
    * Returns true if this frame has no parent frame.
    */
   public isRoot(): boolean {
-    return this.#parent == undefined;
+    return this.parent() == undefined;
   }
 
   /**
    * Returns the number of transforms stored in the transform history.
    */
   public transformsSize(): number {
-    return this.#transforms.size();
+    let size = this.#transforms.size();
+    for (const { transforms } of this.#earlier) {
+      size += transforms.size();
+    }
+    return size;
   }
 
   /**
-   * Set the parent frame for this frame. If the parent frame is already set to
-   * a different frame, the transform history is cleared.
+   * Set the parent frame for this frame. If the parent frame is already set to a different frame,
+   * the transform history starts over. A preloaded history keeps the earlier parent and its
+   * transforms for playback times before the reparenting.
    */
   public setParent(parent: CoordinateFrame): void {
     if (this.#parent && this.#parent !== parent) {
-      // ponytail: a complete (preloaded) history keeps only the transforms after the frame's last
-      // reparenting; keep one history per parent if recordings that reparent frames need the
-      // earlier ones.
-      this.#transforms.clear();
+      if (this.#visibility.complete && this.#transforms.size() > 0) {
+        this.#earlier.push({ parent: this.#parent, transforms: this.#transforms });
+        this.#transforms = new TransformHistory();
+        this.#transforms.setKeepEvery(this.#keepEvery);
+      } else {
+        this.#transforms.clear();
+      }
     }
     this.#parent = parent;
   }
@@ -141,12 +200,12 @@ export class CoordinateFrame<ID extends AnyFrameId = UserFrameId> {
    * @returns The ancestor frame, or undefined if not found
    */
   public findAncestor(id: string): CoordinateFrame | undefined {
-    let ancestor = this.#parent;
+    let ancestor = this.parent();
     while (ancestor) {
       if (ancestor.id === id) {
         return ancestor;
       }
-      ancestor = ancestor.#parent;
+      ancestor = ancestor.parent();
     }
     return undefined;
   }
@@ -192,20 +251,31 @@ export class CoordinateFrame<ID extends AnyFrameId = UserFrameId> {
    * `keepEvery` transforms added later. Returns the count removed.
    */
   public decimate(keepEvery: number): number {
-    this.#transforms.setKeepEvery(keepEvery);
-    return this.#transforms.decimate();
+    this.setKeepEvery(keepEvery);
+    let removed = this.#transforms.decimate();
+    for (const { transforms } of this.#earlier) {
+      removed += transforms.decimate();
+    }
+    return removed;
   }
 
   /** Keep one in `keepEvery` transforms added from now on */
   public setKeepEvery(keepEvery: number): void {
+    this.#keepEvery = keepEvery;
     this.#transforms.setKeepEvery(keepEvery);
   }
 
-  /** Time of the newest transform at or before `time`, if any */
+  /** Time of the newest transform at or before `time` that lookups can see, if any */
   public latestTimeAtOrBefore(time: Time): Time | undefined {
-    const index = this.#transforms.binarySearch(time);
+    const history = this.#activeTransforms();
+    const index = history.binarySearch(time, this.#visibleCount(history));
     const at = index >= 0 ? index : ~index - 1;
-    return at >= 0 ? this.#transforms.timeAt(at) : undefined;
+    return at >= 0 ? history.timeAt(at) : undefined;
+  }
+
+  #visibleCount(history: TransformHistory): number {
+    const receivedUntil = this.#visibility.receivedUntil;
+    return receivedUntil == undefined ? history.size() : history.receivedCount(receivedUntil);
   }
 
   /** Removes a transform with a specific timestamp */
@@ -234,10 +304,8 @@ export class CoordinateFrame<ID extends AnyFrameId = UserFrameId> {
     maxDelta: Duration,
   ): boolean {
     // perf-sensitive: function params instead of options object to avoid allocations
-    const history = this.#transforms;
-    const receivedUntil = this.#visibility.receivedUntil;
-    const transformCount =
-      receivedUntil == undefined ? history.size() : history.receivedCount(receivedUntil);
+    const history = this.#activeTransforms();
+    const transformCount = this.#visibleCount(history);
     if (transformCount === 0) {
       return false;
     }
@@ -334,7 +402,7 @@ export class CoordinateFrame<ID extends AnyFrameId = UserFrameId> {
           ? out
           : undefined;
       }
-      curSrcFrame = curSrcFrame.#parent;
+      curSrcFrame = curSrcFrame.parent();
     }
 
     return undefined;
@@ -486,12 +554,13 @@ export class CoordinateFrame<ID extends AnyFrameId = UserFrameId> {
 
       mat4.multiply(out, tempTransform.matrix(), out);
 
-      if (curFrame.#parent == undefined) {
+      const parent = curFrame.parent();
+      if (parent == undefined) {
         throw new Error(
           `Frame "${parentFrame.displayName()}" is not a parent of "${childFrame.displayName()}"`,
         );
       }
-      curFrame = curFrame.#parent;
+      curFrame = parent;
     }
 
     return true;

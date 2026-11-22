@@ -76,7 +76,7 @@ export class TransformTree {
   #maxCapacityPerFrame: number;
   #complete = false;
   #receivedUntil: Time | undefined;
-  #visibility: TransformVisibility = { receivedUntil: undefined };
+  #visibility: TransformVisibility = { complete: false, receivedUntil: undefined };
   #sampleBudget: number;
   #sampleCount = 0;
   /** How many times the histories were halved to stay within the sample budget */
@@ -114,7 +114,7 @@ export class TransformTree {
     let cycleDetected = false;
     const frame = this.getOrCreateFrame(frameId);
     const sizeBefore = frame.transformsSize();
-    const curParentFrame = frame.parent();
+    const curParentFrame = frame.latestParent();
     if (curParentFrame?.id !== parentFrameId) {
       cycleDetected = this.#checkParentForCycle(frameId, parentFrameId);
       // This frame was previously unparented but now we know its parent, or we
@@ -149,7 +149,7 @@ export class TransformTree {
     if (!child) {
       return;
     }
-    if (child.parent()?.id !== parentFrameId) {
+    if (child.latestParent()?.id !== parentFrameId) {
       return;
     }
     const sizeBefore = child.transformsSize();
@@ -234,6 +234,7 @@ export class TransformTree {
       return;
     }
     this.#complete = complete;
+    this.#visibility.complete = complete;
     this.#visibility.receivedUntil = complete ? this.#receivedUntil : undefined;
     if (!complete) {
       this.clear();
@@ -404,12 +405,21 @@ export class TransformTree {
       return true;
     }
     // walk up tree from parent Frame to check if it eventually crosses the frame
-    let frame = this.frame(parentFrameId);
-    while (frame?.parent()) {
-      if (frame.parent()?.id === frameId) {
-        return true;
+    // Walk every parent a frame had, not only the latest: a preloaded history switches to earlier
+    // parents at earlier playback times, and no playback time may see a cycle.
+    const visited = new Set<CoordinateFrame>();
+    const pending = [this.frame(parentFrameId)];
+    for (let frame = pending.pop(); frame; frame = pending.pop()) {
+      if (visited.has(frame)) {
+        continue;
       }
-      frame = frame.parent();
+      visited.add(frame);
+      for (const parent of frame.allParents()) {
+        if (parent.id === frameId) {
+          return true;
+        }
+        pending.push(parent);
+      }
     }
     return false;
   }

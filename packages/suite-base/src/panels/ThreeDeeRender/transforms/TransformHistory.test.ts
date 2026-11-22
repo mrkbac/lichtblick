@@ -61,4 +61,23 @@ describe("TransformHistory", () => {
     expect(history.decimate()).toBe(4);
     expect([0, 1, 2, 3, 4, 5].map((i) => history.timeAt(i))).toEqual([0n, 2n, 4n, 6n, 8n, 9n]);
   });
+
+  it("never shows a sample received after the cutoff, even when stamps arrive out of order", () => {
+    const history = new TransformHistory();
+    // stamp 20 received at 50, then stamp 10 received at 100
+    history.set(20n, at(20), 50n);
+    history.set(10n, at(10), 100n);
+    expect(history.receivedCount(75n)).toBe(0);
+    expect(history.receivedCount(100n)).toBe(2);
+  });
+
+  it("keeps the first receive time when the same transform is received again", () => {
+    const history = new TransformHistory();
+    history.set(5n, at(1), 10n);
+    history.set(5n, at(1), 20n);
+    expect(history.receivedCount(15n)).toBe(1);
+    // A different transform at the same stamp replaces it from its own receive time
+    history.set(5n, at(2), 30n);
+    expect(history.receivedCount(25n)).toBe(0);
+  });
 });

@@ -46,7 +46,9 @@ export const threeDee = {
   editable: "Editable",
   enablePreloading: "Enable preloading",
   enablePreloadingTooltip:
-    "Keep the transforms of the whole recording in memory, so frames are correct at any time and seeking is instant. When off, transforms are read around the new time after each seek, which uses less memory.",
+    "Keep the transforms of the whole recording in memory, so seeking rarely needs to read them again. Very long recordings keep fewer transforms per frame to fit in memory. When off, transforms are read around the new time after each seek, which uses less memory.",
+  loadingTransforms_one: "Loading transforms: {{formattedCount}} message",
+  loadingTransforms_other: "Loading transforms: {{formattedCount}} messages",
   transformHistoryThinnedAlert: "Transform history thinned to fit in memory",
   transformHistoryThinnedAlertTip:
     "This recording has more transforms than fit in memory, so each frame keeps about 1 in {{factor}} of them. Frames between kept transforms are interpolated.",

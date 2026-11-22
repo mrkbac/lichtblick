@@ -79,8 +79,8 @@ export class TransformHistory {
   }
 
   /**
-   * Number of leading samples received at or before `receivedUntil`. Assumes receive times grow
-   * with header stamps, as they do for one frame's transforms in practice.
+   * Number of leading samples received at or before `receivedUntil`. Receive times are kept
+   * non-decreasing in stamp order (see #keepReceiveOrder), so this is a binary search.
    */
   public receivedCount(receivedUntil: Time): number {
     if (this.#receiveBase == undefined) {
@@ -112,7 +112,7 @@ export class TransformHistory {
     if (receiveTime != undefined) {
       this.#receiveBase ??= receiveTime;
     }
-    const receive = receiveTime == undefined ? -Infinity : Number(receiveTime - this.#receiveBase!);
+    let receive = receiveTime == undefined ? -Infinity : Number(receiveTime - this.#receiveBase!);
     const lastIndex = this.#size - 1;
     // Fast path: samples almost always arrive in time order
     let index =
@@ -128,13 +128,35 @@ export class TransformHistory {
         if (this.#extendsRun(transform) || this.#headInputs < this.#keepEvery) {
           this.#headInputs++;
           this.#write(lastIndex, time, receive, transform);
+          this.#keepReceiveOrder(lastIndex);
           return;
         }
       }
       this.#headInputs = 1;
       this.#insertGap(index);
+    } else if (this.#equals(index, transform)) {
+      // The same transform received again: it was visible since it first arrived
+      receive = Math.min(receive, this.#data[index * STRIDE + 1]!);
     }
     this.#write(index, time, receive, transform);
+    this.#keepReceiveOrder(index);
+  }
+
+  /**
+   * Keeps receive times non-decreasing in stamp order. A sample whose stamp sorts before samples
+   * that were received earlier holds those back until it is received too, so lookups never see a
+   * transform from after the playback time; out-of-order arrival only delays visibility a little.
+   */
+  #keepReceiveOrder(index: number): void {
+    const d = this.#data;
+    const at = index * STRIDE + 1;
+    if (index > 0 && d[at]! < d[at - STRIDE]!) {
+      d[at] = d[at - STRIDE]!;
+    }
+    const receive = d[at]!;
+    for (let j = at + STRIDE; j < this.#size * STRIDE && d[j]! < receive; j += STRIDE) {
+      d[j] = receive;
+    }
   }
 
   /** Removes the sample with exactly this time; returns whether one existed */

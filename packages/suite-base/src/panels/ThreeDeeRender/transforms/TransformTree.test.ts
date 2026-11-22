@@ -200,6 +200,38 @@ describe("TransformTree", () => {
       expect(frame.transformsSize()).toBeLessThanOrEqual(100);
     });
 
+    it("keeps the earlier parent until playback reaches a preloaded reparenting", () => {
+      const tfTree = new TransformTree();
+      tfTree.setComplete(true);
+      tfTree.addTransform("b", "a", 0n, at(1), 0n);
+      tfTree.addTransform("b", "c", 10n * sec, at(2), 10n * sec);
+      const lower: [bigint, Transform] = [0n, Transform.Empty()];
+      const upper: [bigint, Transform] = [0n, Transform.Empty()];
+      const frame = tfTree.frame("b")!;
+
+      tfTree.setReceivedUntil(5n * sec);
+      expect(frame.parent()?.id).toBe("a");
+      expect(frame.findClosestTransforms(lower, upper, 5n * sec, MAX_DURATION)).toBe(true);
+      expect(upper[1].position()[0]).toBe(1);
+
+      tfTree.setReceivedUntil(20n * sec);
+      expect(frame.parent()?.id).toBe("c");
+      expect(frame.findClosestTransforms(lower, upper, 20n * sec, MAX_DURATION)).toBe(true);
+      expect(upper[1].position()[0]).toBe(2);
+      expect(frame.transformsSize()).toBe(2);
+    });
+
+    it("rejects a parent that would form a cycle with an earlier parent", () => {
+      const tfTree = new TransformTree();
+      tfTree.setComplete(true);
+      tfTree.addTransform("b", "a", 0n, at(1), 0n);
+      tfTree.addTransform("b", "c", 10n * sec, at(2), 10n * sec);
+      // b's earlier parent is a, so a under b would be a cycle before 10 s
+      expect(tfTree.addTransform("a", "b", 20n * sec, at(3), 20n * sec)).toBe(
+        AddTransformResult.CYCLE_DETECTED,
+      );
+    });
+
     it("clears the tree when leaving complete mode", () => {
       const tfTree = new TransformTree();
       tfTree.setComplete(true);

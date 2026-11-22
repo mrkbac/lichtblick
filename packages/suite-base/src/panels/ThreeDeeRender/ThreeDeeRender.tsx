@@ -99,7 +99,7 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
   } = context;
   const analytics = useAnalytics();
   const { classes } = useStyles();
-  const { t } = useTranslation("threeDee");
+  const { t, i18n } = useTranslation("threeDee");
 
   // Load and save the persisted panel configuration
   const [config, setConfig] = useState<Immutable<RendererConfig>>(() => {
@@ -582,10 +582,15 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
         onBatch: (batch) => {
           renderer.addTransformMessages(batch);
         },
-        isMissing: () =>
-          knownFrameIds.some(
-            (id) => renderer.transformTree.frame(id)?.latestTimeAtOrBefore(time) == undefined,
-          ),
+        // A frame counts as found once the read gave it a transform in the window; an older cached
+        // one may be stale. Static frames are published once, so any transform will do for them.
+        isMissing: (windowStart) =>
+          knownFrameIds.some((id) => {
+            const latest = renderer.transformTree.frame(id)?.latestTimeAtOrBefore(time);
+            return (
+              latest == undefined || (latest < windowStart && !renderer.isStaticTransformFrame(id))
+            );
+          }),
       });
     },
     // context is static, we're just using it to subscribe
@@ -600,22 +605,25 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
       return;
     }
     transformsCompleteUntilRef.current = -1n;
+    setIsLoadingTransforms(false);
+    setLoadedTransformCount(0);
+    if (renderer.transformTree.isComplete()) {
+      // The history came from the previous topics (or preloading is turning off): start over from
+      // the current ones, and read the transforms around the current time again right away
+      const knownFrameIds = [...renderer.transformTree.frames().keys()];
+      renderer.transformTree.setComplete(false);
+      readTransformsAfterSeek(renderer.currentTime, knownFrameIds);
+    }
+    setTransformDecimations(renderer.transformTree.decimations);
     if (!isPreloadingEnabled || transformTopics.length === 0) {
-      if (renderer.transformTree.isComplete()) {
-        // Leaving the complete history clears the tree, so read the current transforms again
-        const knownFrameIds = [...renderer.transformTree.frames().keys()];
-        renderer.transformTree.setComplete(false);
-        readTransformsAfterSeek(renderer.currentTime, knownFrameIds);
-      }
-      setIsLoadingTransforms(false);
-      setLoadedTransformCount(0);
-      setTransformDecimations(0);
       return;
     }
 
     const abort = new AbortController();
-    // Newest time read per topic; the tree is complete up to the oldest of them
-    const readUntil = new Map(transformTopics.map(({ topic }) => [topic, -1n]));
+    // Newest time read per range read (a topic can be read natively and converted); the tree is
+    // complete up to the oldest of them
+    const key = ({ topic, convertTo }: TransformTopic) => `${topic}\n${convertTo ?? ""}`;
+    const readUntil = new Map(transformTopics.map((source) => [key(source), -1n]));
     const updateCompleteUntil = () => {
       let until: bigint | undefined;
       for (const time of readUntil.values()) {
@@ -630,19 +638,18 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
       setTransformDecimations(renderer.transformTree.decimations);
     };
 
-    setLoadedTransformCount(0);
     void readTransformRange({
       subscribeRange: context.unstable_subscribeMessageRange,
       topics: transformTopics,
       signal: abort.signal,
-      onBatch: (batch, topic) => {
+      onBatch: (batch, source) => {
         // Only a source with ranges (a recording) has a complete history; live sources never get here
         if (count === 0) {
           renderer.transformTree.setComplete(true);
           setIsLoadingTransforms(true);
         }
         renderer.addTransformMessages(batch);
-        readUntil.set(topic, toNanoSec(batch[batch.length - 1]!.receiveTime));
+        readUntil.set(key(source), toNanoSec(batch[batch.length - 1]!.receiveTime));
         updateCompleteUntil();
         count += batch.length;
         const now = Date.now();
@@ -651,8 +658,8 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
           updateUi();
         }
       },
-      onTopicDone: (topic) => {
-        readUntil.set(topic, BigInt(Number.MAX_SAFE_INTEGER) * 1_000_000_000n);
+      onTopicDone: (source) => {
+        readUntil.set(key(source), BigInt(Number.MAX_SAFE_INTEGER) * 1_000_000_000n);
         updateCompleteUntil();
       },
     }).then(() => {
@@ -1176,7 +1183,10 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
         />
         {isLoadingTransforms && config.scene.enableStats === true && (
           <div className={classes.loadingTransforms}>
-            Loading transforms: {loadedTransformCount.toLocaleString()} messages
+            {t("loadingTransforms", {
+              count: loadedTransformCount,
+              formattedCount: loadedTransformCount.toLocaleString(i18n.language),
+            })}
           </div>
         )}
         {contextStatus !== "ok" && (

@@ -1091,7 +1091,7 @@ describe("ThreeDeeRender", () => {
 
     const renderPreloading = async (
       messages: MessageEvent[],
-      rendererOverrides?: Record<string, any>,
+      rendererOverrides?: { transformTree: ReturnType<typeof createMockRenderer>["transformTree"] },
     ) => {
       const topics = [RenderStateBuilder.topic({ name: "/tf", schemaName: "tf2_msgs/TFMessage" })];
       const customRendererInstance = createMockRenderer({
@@ -1149,7 +1149,7 @@ describe("ThreeDeeRender", () => {
         {
           transformTree: {
             setComplete: vi.fn(),
-            isComplete: vi.fn().mockReturnValue(true),
+            isComplete: vi.fn().mockReturnValue(false),
             frames: vi.fn().mockReturnValue(new Map()),
             frame: vi.fn(),
             decimations: 1,

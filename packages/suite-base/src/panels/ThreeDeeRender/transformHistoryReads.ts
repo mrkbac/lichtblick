@@ -3,52 +3,64 @@
 
 import { fromNanoSec } from "@foxglove/rostime";
 
-import { MessageEvent, PanelExtensionContext } from "@lichtblick/suite";
+import Logger from "@lichtblick/log";
+import { MessageEvent } from "@lichtblick/suite";
+import { BuiltinPanelExtensionContext } from "@lichtblick/suite-base/components/PanelExtensionAdapter";
+
+const log = Logger.getLogger(__filename);
 
 export type TransformTopic = { topic: string; convertTo?: string };
 
-type SubscribeRange = PanelExtensionContext["unstable_subscribeMessageRange"];
+type SubscribeRange = BuiltinPanelExtensionContext["unstable_subscribeMessageRange"];
 
 /**
  * Reads every topic in [start, end] (whole recording when omitted) and passes each batch to
- * `onBatch`. Resolves once all topics are read, at once for topics without a range (live sources),
- * or when `signal` aborts.
+ * `onBatch`. Resolves once all topics are read, failed or were cancelled, at once for topics
+ * without a range (live sources). `onTopicDone` only reports a topic read to its end.
  */
 export async function readTransformRange(args: {
   subscribeRange: SubscribeRange;
   topics: readonly TransformTopic[];
   start?: bigint;
   end?: bigint;
-  onBatch: (batch: readonly MessageEvent[], topic: string) => void;
-  /** Called when a topic is fully read */
-  onTopicDone?: (topic: string) => void;
+  onBatch: (batch: readonly MessageEvent[], source: TransformTopic) => void;
+  /** Called when a topic is read to its end without errors */
+  onTopicDone?: (source: TransformTopic) => void;
   signal: AbortSignal;
 }): Promise<void> {
   const { subscribeRange, topics, start, end, onBatch, onTopicDone, signal } = args;
   const cancels: (() => void)[] = [];
-  const reads = topics.map(async ({ topic, convertTo }) => {
+  const reads = topics.map(async (source) => {
     await new Promise<void>((resolve) => {
       const range = { started: false };
       cancels.push(
         subscribeRange({
-          topic,
-          convertTo,
+          topic: source.topic,
+          convertTo: source.convertTo,
           start: start != undefined ? fromNanoSec(start < 0n ? 0n : start) : undefined,
           end: end != undefined ? fromNanoSec(end) : undefined,
+          // A failed read must not count as read to the end
+          rethrowErrors: true,
           onNewRangeIterator: async (batches) => {
             range.started = true;
-            for await (const batch of batches) {
-              if (signal.aborted) {
-                break;
+            try {
+              for await (const batch of batches) {
+                if (signal.aborted) {
+                  break;
+                }
+                if (batch.length > 0) {
+                  onBatch(batch, source);
+                }
               }
-              if (batch.length > 0) {
-                onBatch(batch, topic);
+              if (!signal.aborted) {
+                onTopicDone?.(source);
               }
+            } catch (err: unknown) {
+              // Leave the unread part to the reads around seeks
+              log.error(`Reading transforms from ${source.topic} failed:`, err);
+            } finally {
+              resolve();
             }
-            if (!signal.aborted) {
-              onTopicDone?.(topic);
-            }
-            resolve();
           },
         }),
       );
@@ -74,16 +86,16 @@ export const SEEK_LOOKBACK_NS = [2e9, 8e9, 32e9, 128e9].map(BigInt);
 
 /**
  * After a seek to `time`, read the transform topics just before it, so every frame has its latest
- * transform at `time`. The first window refreshes every frame that publishes within it; it widens
- * only while `isMissing()` says some known frame has no transform at all at `time`. Never reads
- * before `floor`, the time up to which the history is already complete.
+ * transform at `time`. Starts with a short window and widens it while `isMissing(windowStart)` says
+ * some known frame has no transform in [windowStart, time]. Never reads before `floor`, the time up
+ * to which the history is already complete.
  */
 export async function readTransformsBefore(args: {
   subscribeRange: SubscribeRange;
   topics: readonly TransformTopic[];
   time: bigint;
   floor: bigint;
-  isMissing: () => boolean;
+  isMissing: (windowStart: bigint) => boolean;
   onBatch: (batch: readonly MessageEvent[]) => void;
   signal: AbortSignal;
 }): Promise<void> {
@@ -91,16 +103,16 @@ export async function readTransformsBefore(args: {
   let end = time;
   for (const lookback of SEEK_LOOKBACK_NS) {
     const start = time - lookback > floor ? time - lookback : floor;
-    if (start >= end) {
+    if (start > end) {
       return;
     }
     await readTransformRange({ ...args, start, end });
-    if (signal.aborted || start <= floor || !isMissing()) {
+    if (signal.aborted || start <= floor || !isMissing(start)) {
       return;
     }
     // Next window only reads the older part; ranges are inclusive, so step one nanosecond back
     end = start - 1n;
   }
-  // ponytail: frames silent for over SEEK_LOOKBACK_NS stay missing (e.g. a static topic published
-  // once at the start while preloading is off); widen the last window if that matters.
+  // ponytail: frames silent for over SEEK_LOOKBACK_NS stay missing (e.g. a dynamic frame that
+  // stopped publishing long ago); widen the last window if that matters.
 }

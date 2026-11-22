@@ -4,6 +4,7 @@
 import { toNanoSec } from "@foxglove/rostime";
 
 import { MessageEvent, SubscribeMessageRangeArgs } from "@lichtblick/suite";
+import MessageEventBuilder from "@lichtblick/suite-base/testing/builders/MessageEventBuilder";
 
 import { readTransformRange, readTransformsBefore } from "./transformHistoryReads";
 
@@ -20,13 +21,12 @@ function fakeSource() {
       (async function* () {
         const batch: MessageEvent[] = [];
         for (let t = (start + sec - 1n) / sec; t * sec <= end; t++) {
-          batch.push({
-            topic: args.topic,
-            schemaName: "",
-            receiveTime: { sec: Number(t), nsec: 0 },
-            message: {},
-            sizeInBytes: 0,
-          });
+          batch.push(
+            MessageEventBuilder.messageEvent({
+              topic: args.topic,
+              receiveTime: { sec: Number(t), nsec: 0 },
+            }),
+          );
         }
         yield batch;
       })(),
@@ -52,7 +52,7 @@ describe("readTransformRange", () => {
     });
     expect(onBatch).toHaveBeenCalledTimes(2);
     expect(onBatch.mock.calls[0]![0]).toHaveLength(3);
-    expect(onTopicDone.mock.calls.map(([topic]) => topic)).toEqual(["/a", "/b"]);
+    expect(onTopicDone.mock.calls.map(([source]) => source.topic)).toEqual(["/a", "/b"]);
   });
 
   it("resolves at once for a source without ranges", async () => {
@@ -64,6 +64,50 @@ describe("readTransformRange", () => {
       signal: new AbortController().signal,
     });
     expect(subscribeRange).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("readTransformRange failures", () => {
+  // Delivers one batch, then the read fails
+  const failingRange = () =>
+    vi.fn((args: SubscribeMessageRangeArgs & { rethrowErrors?: boolean }) => {
+      expect(args.rethrowErrors).toBe(true);
+      void args.onNewRangeIterator(
+        (async function* () {
+          yield [MessageEventBuilder.messageEvent({ topic: args.topic })];
+          throw new Error("read failed");
+        })(),
+      );
+      return () => {};
+    });
+
+  it("does not report a topic that failed mid-read as done", async () => {
+    const onBatch = vi.fn();
+    const onTopicDone = vi.fn();
+    await readTransformRange({
+      subscribeRange: failingRange(),
+      topics: [{ topic: "/tf" }],
+      onBatch,
+      onTopicDone,
+      signal: new AbortController().signal,
+    });
+    expect(onBatch).toHaveBeenCalledTimes(1);
+    expect(onTopicDone).not.toHaveBeenCalled();
+    expect(console.error).toHaveBeenCalled();
+    (console.error as ReturnType<typeof vi.fn>).mockClear();
+  });
+
+  it("settles when the batch callback throws", async () => {
+    await readTransformRange({
+      subscribeRange: fakeSource().subscribeRange,
+      topics: [{ topic: "/tf" }],
+      onBatch: () => {
+        throw new Error("consumer failed");
+      },
+      signal: new AbortController().signal,
+    });
+    expect(console.error).toHaveBeenCalled();
+    (console.error as ReturnType<typeof vi.fn>).mockClear();
   });
 });
 
