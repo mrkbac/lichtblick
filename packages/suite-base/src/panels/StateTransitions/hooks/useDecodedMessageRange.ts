@@ -29,8 +29,11 @@ type TopicRequest = { paths: string[]; key: string };
 export function useDecodedMessageRange(
   topics: readonly string[],
   pathStrings: readonly string[],
+  /** Paths whose exact value changes are kept for condition matches (see trackChanges). */
+  changesPaths: readonly string[] = [],
 ): PathSamplesByPath[] {
   const subscribeMessageRange = useSubscribeMessageRange();
+  const changesPathsRef = useLatest(changesPaths);
   const decodeRef = useLatest(useCachedGetMessagePathDataItems(pathStrings));
   const pathsRef = useLatest(pathStrings);
   const { globalVariables } = useGlobalVariables();
@@ -100,6 +103,9 @@ export function useDecodedMessageRange(
             }
             for (const path of request.paths) {
               const out = (acc[path] ??= new PathSampleColumns(MAX_SAMPLES_PER_PATH));
+              if (changesPathsRef.current.includes(path)) {
+                out.trackChanges();
+              }
               for (const message of batch) {
                 const queriedData = decodeRef.current(path, message);
                 if (queriedData) {
@@ -130,7 +136,7 @@ export function useDecodedMessageRange(
     if (removed) {
       publish();
     }
-  }, [decodeRef, pathsRef, requestByTopic, subscribeMessageRange]);
+  }, [changesPathsRef, decodeRef, pathsRef, requestByTopic, subscribeMessageRange]);
 
   // Clean up all subscriptions on unmount.
   useEffect(() => {

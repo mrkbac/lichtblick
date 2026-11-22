@@ -27,7 +27,10 @@ export function usePathSampleHistory(
   paths: readonly string[],
   /** Required and finite: samples kept per path. */
   maxSamples: number,
+  /** Paths whose exact value changes are kept apart once thinned (see trackChanges). */
+  changesPaths: readonly string[] = [],
 ): PathSampleHistoryByPath {
+  const changesPathsRef = useLatest(changesPaths);
   const memoizedPaths = useShallowMemo(paths);
   const subscribeTopics = useMemo(
     () =>
@@ -87,6 +90,9 @@ export function usePathSampleHistory(
         if (!buffer) {
           continue;
         }
+        if (changesPathsRef.current.includes(path)) {
+          buffer.trackChanges();
+        }
         for (const message of messages) {
           if (message.topic !== topic) {
             continue;
@@ -100,7 +106,7 @@ export function usePathSampleHistory(
       }
       return changed ? { ...prev } : prev;
     },
-    [decodeRef, topicByPath],
+    [changesPathsRef, decodeRef, topicByPath],
   );
 
   return useMessageReducer({ topics: subscribeTopics, restore, addMessages });

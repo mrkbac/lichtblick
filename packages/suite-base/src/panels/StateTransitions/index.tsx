@@ -46,7 +46,7 @@ import { useStateTransitionsStyles } from "@lichtblick/suite-base/panels/StateTr
 import { parseCondition } from "@lichtblick/suite-base/panels/StateTransitions/condition";
 import {
   EMPTY_ITEMS_BY_PATH,
-  MAX_SAMPLES_PER_PATH,
+  MAX_LIVE_SAMPLES_PER_PATH,
   LIVE_REDRAW_MS,
   EMPTY_PATHS,
   EMPTY_TOPICS,
@@ -121,9 +121,16 @@ function StateTransitions(props: StateTransitionPanelProps) {
     };
   }, [paths]);
 
+  // Series with a condition need exact matches even once their samples are thinned.
+  const changesPaths = useMemo(
+    () => _.uniq(paths.filter((path) => parseCondition(path.condition)).map((path) => path.value)),
+    [paths],
+  );
+
   const decodedMessages = useDecodedMessageRange(
     isPlayerPresent ? topics : EMPTY_TOPICS,
     isPlayerPresent ? pathStrings : EMPTY_PATHS,
+    changesPaths,
   );
 
   // When range data is active, skip the live subscription entirely
@@ -138,7 +145,8 @@ function StateTransitions(props: StateTransitionPanelProps) {
 
   const itemsByPath = usePathSampleHistory(
     hasRangeData ? EMPTY_PATHS : pathStrings,
-    MAX_SAMPLES_PER_PATH,
+    MAX_LIVE_SAMPLES_PER_PATH,
+    changesPaths,
   );
 
   const { height, heightPerTopic } = useMemo(() => {

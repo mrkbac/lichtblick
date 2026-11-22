@@ -38,26 +38,31 @@ export function toPathSample(
 }
 
 // One sample = receive sec, receive nsec, header sec, header nsec (NO_STAMP without one), value
-// index. Seconds keep their low 32 bits and bit 31 of the nsec word (nsec < 1e9 < 2^31) marks a
+// word. Seconds keep their low 32 bits and bit 31 of the nsec word (nsec < 1e9 < 2^31) marks a
 // negative second, so signed ROS 2 stamps and unsigned ROS 1 ones (up to 2^32 - 1) both round-trip.
 // (Float64 storage would be simpler but made ingest about 5x slower.)
+// The value word is an index into the value table, or NUMBER for a plain number, which is kept in
+// a Float64Array column instead: no table entry per distinct float. Bit 31 (MIXED) marks a sample
+// standing for a merged stretch that held more than one value.
 const STRIDE = 5;
 const NO_STAMP = 0xffffffff;
 const NEGATIVE = 0x80000000;
 const U32 = 0x100000000;
+const MIXED = 0x80000000;
+const NUMBER = 0x7fffffff;
 const INITIAL_CAPACITY = 1024;
 /** Recently seen values checked before the value maps. */
 const RECENT = 4;
 const INVALID: SampleValue = { count: 1, value: undefined, constantName: undefined };
 
 /**
- * Writes a time if it has a 32-bit form; a bigint (int64 schemas) is converted. Returns false for
- * anything else (out of range, not a number), which the caller treats as no time.
+ * Writes a time if it is a valid one with a 32-bit form; a bigint (int64 schemas) is converted.
+ * Returns false for anything else, which the caller treats as no time.
  */
 function writeTime(data: Uint32Array, at: number, time: Time): boolean {
   const sec = typeof time.sec === "bigint" ? Number(time.sec) : time.sec;
   const nsec = typeof time.nsec === "bigint" ? Number(time.nsec) : time.nsec;
-  if (!(sec >= -NEGATIVE && sec < U32 && nsec >= 0 && nsec < NEGATIVE)) {
+  if (!(Number.isInteger(sec) && sec >= -NEGATIVE && sec < U32 && nsec >= 0 && nsec < 1e9)) {
     return false;
   }
   data[at] = sec;
@@ -73,8 +78,8 @@ function readTime(data: Uint32Array, at: number): Time {
 }
 
 /**
- * Samples of one message path, oldest first, in 20 bytes each: timestamps in a typed array and
- * each distinct value stored once.
+ * Samples of one message path, oldest first, in 20 bytes each (28 for plain numbers): timestamps
+ * in a typed array, numbers in another, and each other distinct value stored once.
  *
  * At most `maxSamples` are kept. Each time the budget is reached, the history is thinned one level
  * further, and from then on new samples are thinned the same way as they arrive:
@@ -82,13 +87,17 @@ function readTime(data: Uint32Array, at: number): Time {
  *    of a value keeps its first and last sample.
  * 2. Also drop the last sample of a run unless a gap (null) follows: the next run's start ends it.
  *    Every value change is still kept exactly.
- * 3. Keep every other sample across the whole history; from then on only every `stride`-th new one
- *    (plus always the newest). The span stays whole at a lower resolution, but changes can merge
- *    in these samples, so from here on every change is also kept apart, exactly (`changes()`).
+ * 3. Merge neighbouring samples in pairs across the whole history, and from then on every
+ *    `stride` new ones. A merged sample that saw more than one value is marked (`isMixed`) and
+ *    drawn as a dense stretch, so a fast signal never aliases into a wrong steady state. The span
+ *    stays whole at a lower resolution. With `trackChanges()`, the changes are kept apart from here
+ *    on (`changes()`), so where a condition starts to hold stays exact.
  */
 export class PathSampleColumns {
   public readonly maxSamples: number;
   #data = new Uint32Array(INITIAL_CAPACITY * STRIDE);
+  /** Values of NUMBER samples; allocated with the first one. */
+  #numbers: Float64Array | undefined;
   #length = 0;
   #values: SampleValue[] = [];
   /** Index into #values of each value without a constant name. */
@@ -107,10 +116,16 @@ export class PathSampleColumns {
   /** How far thinning has gone (see the class comment); 0 keeps every sample. */
   #level = 0;
   #stride = 1;
-  /** Samples pushed since the last one kept for good. */
+  /** Samples since the newest kept one, while merging (level 3). */
   #sinceKept = 0;
-  /** Every value change, from level 3 on. */
+  /** Whether the newest sample is only held until the next one, which merges it into the kept one. */
+  #provisional = false;
+  #trackChanges = false;
+  /** Every value change, from level 3 on, when tracking changes. */
   #changes: PathSampleColumns | undefined;
+  /** Set on a changes record: past its budget it forgets its oldest changes instead of merging. */
+  #isChangesRecord = false;
+  #forgotChanges = false;
 
   public constructor(maxSamples: number) {
     if (!Number.isInteger(maxSamples) || maxSamples < 4) {
@@ -136,12 +151,23 @@ export class PathSampleColumns {
     return this.#values.length;
   }
 
+  /** Keep the exact value changes apart once thinning starts merging (for condition matches). */
+  public trackChanges(): void {
+    this.#trackChanges = true;
+  }
+
   /**
    * Samples with every value change kept exactly, for finding where a condition starts to hold:
-   * these columns, or once they are thinned past that, a separate record of only the changes.
+   * these columns, or once they merge samples, the separate record of changes (see trackChanges).
    */
   public changes(): PathSampleColumns {
     return this.#changes ?? this;
+  }
+
+  /** False once the changes record went over its budget and forgot its oldest changes. */
+  public hasAllChanges(): boolean {
+    const changes = this.#changes;
+    return changes == undefined || !changes.#forgotChanges;
   }
 
   /** Appends a message's decoded value; samples must arrive in message order. */
@@ -179,6 +205,11 @@ export class PathSampleColumns {
       const grown = new Uint32Array(capacity * STRIDE);
       grown.set(this.#data);
       this.#data = grown;
+      if (this.#numbers) {
+        const numbers = new Float64Array(capacity);
+        numbers.set(this.#numbers);
+        this.#numbers = numbers;
+      }
     }
     const n = this.#length;
     const data = this.#data;
@@ -188,23 +219,37 @@ export class PathSampleColumns {
     if (!headerStamp || !writeTime(data, n * STRIDE + 2, headerStamp)) {
       data[n * STRIDE + 3] = NO_STAMP;
     }
-    data[n * STRIDE + 4] = this.#valueIndex(value, constantName, count);
+    if (typeof value === "number" && count === 1 && constantName == undefined) {
+      this.#numbers ??= new Float64Array(data.length / STRIDE);
+      this.#numbers[n] = value;
+      data[n * STRIDE + 4] = NUMBER;
+    } else {
+      data[n * STRIDE + 4] = this.#valueIndex(value, constantName, count);
+    }
     this.#length++;
     if (this.#changes) {
       this.#changes.#append(receiveTime, headerStamp, count, value, constantName);
     }
 
-    // The previous newest sample was held provisionally until it was the stride-th one, or is
-    // one the current thinning level drops.
-    if (this.#sinceKept > 0 || (this.#level > 0 && n >= 2 && this.#canDrop(n - 2, n - 1, n))) {
-      data.copyWithin((n - 1) * STRIDE, n * STRIDE, (n + 1) * STRIDE);
+    if (this.#provisional) {
+      // Merging (level 3): the kept sample before also stands for the previous newest one, which
+      // this one replaces as the newest (so the chart still reaches the latest time).
+      if (!this.sameValue(n - 2, n - 1)) {
+        this.#setMixed(n - 2);
+      }
+      this.#move(n - 1, n);
       this.#length--;
+    } else if (this.#level > 0 && n >= 2 && this.#canDrop(n - 2, n - 1, n)) {
+      this.#move(n - 1, n);
+      this.#length--;
+    }
+    if (this.#stride > 1) {
+      // Every `stride`-th sample is kept; the ones in between are merged into it.
+      this.#provisional = this.#sinceKept !== 0;
+      this.#sinceKept = (this.#sinceKept + 1) % this.#stride;
     }
     if (this.#length > this.maxSamples) {
       this.#thin();
-    }
-    if (this.#stride > 1) {
-      this.#sinceKept = (this.#sinceKept + 1) % this.#stride;
     }
   }
 
@@ -216,17 +261,30 @@ export class PathSampleColumns {
     return this.hasHeaderStamp(i) ? readTime(this.#data, i * STRIDE + 2) : undefined;
   }
 
-  /** Equal for two samples exactly when their SampleValue is the same. */
-  public valueId(i: number): number {
-    return this.#data[i * STRIDE + 4]!;
-  }
-
   public hasHeaderStamp(i: number): boolean {
     return this.#data[i * STRIDE + 3] !== NO_STAMP;
   }
 
+  /** Whether samples i and j have the same SampleValue (and are both merged or both not). */
+  public sameValue(i: number, j: number): boolean {
+    const word = this.#data[i * STRIDE + 4]!;
+    return (
+      word === this.#data[j * STRIDE + 4] &&
+      ((word & NUMBER) !== NUMBER || this.#numbers![i] === this.#numbers![j])
+    );
+  }
+
+  /** Whether sample i stands for a merged stretch that held more than one value (level 3). */
+  public isMixed(i: number): boolean {
+    return this.#data[i * STRIDE + 4]! >= MIXED;
+  }
+
   public sampleValue(i: number): SampleValue {
-    return this.#values[this.#data[i * STRIDE + 4]!]!;
+    const index = this.#data[i * STRIDE + 4]! & NUMBER;
+    if (index === NUMBER) {
+      return { count: 1, value: this.#numbers![i], constantName: undefined };
+    }
+    return this.#values[index]!;
   }
 
   public at(i: number): PathSample | undefined {
@@ -242,6 +300,26 @@ export class PathSampleColumns {
 
   public toArray(): PathSample[] {
     return Array.from({ length: this.#length }, (_, i) => this.at(i)!);
+  }
+
+  #move(to: number, from: number): void {
+    this.#data.copyWithin(to * STRIDE, from * STRIDE, (from + 1) * STRIDE);
+    if (this.#numbers) {
+      this.#numbers[to] = this.#numbers[from]!;
+    }
+  }
+
+  #setMixed(i: number): void {
+    const word = this.#data[i * STRIDE + 4]!;
+    if (word < MIXED) {
+      this.#data[i * STRIDE + 4] = word + MIXED;
+    }
+  }
+
+  #isGap(i: number): boolean {
+    const index = this.#data[i * STRIDE + 4]! & NUMBER;
+    // eslint-disable-next-line @lichtblick/strict-equality
+    return index !== NUMBER && this.#values[index]!.value === null;
   }
 
   #valueIndex(value: unknown, constantName: string | undefined, count: number): number {
@@ -312,22 +390,30 @@ export class PathSampleColumns {
 
   /** Whether sample `i` can go at the current level, given the kept one before and the next. */
   #canDrop(prev: number, i: number, next: number): boolean {
-    const id = this.valueId(i);
     const stamped = this.hasHeaderStamp(i);
-    if (id !== this.valueId(prev) || stamped !== this.hasHeaderStamp(prev)) {
+    if (!this.sameValue(prev, i) || stamped !== this.hasHeaderStamp(prev)) {
       return false; // i starts a run
     }
-    if (id === this.valueId(next) && stamped === this.hasHeaderStamp(next)) {
+    if (this.sameValue(i, next) && stamped === this.hasHeaderStamp(next)) {
       return true; // i is inside a run
     }
     // At level 2 a run's last sample is only kept to end it before a gap.
-    // eslint-disable-next-line @lichtblick/strict-equality
-    return this.#level >= 2 && this.sampleValue(next).value !== null;
+    return this.#level >= 2 && !this.#isGap(next);
   }
 
   #thin(): void {
-    const data = this.#data;
     const target = Math.floor((this.maxSamples * 3) / 4);
+
+    if (this.#isChangesRecord) {
+      // Forget the oldest changes; the merged chart samples still cover that time.
+      const drop = this.#length - target;
+      this.#data.copyWithin(0, drop * STRIDE, this.#length * STRIDE);
+      this.#numbers?.copyWithin(0, drop, this.#length);
+      this.#length = target;
+      this.#forgotChanges = true;
+      this.#compactValues();
+      return;
+    }
 
     while (this.#level < 2 && this.#length > target) {
       this.#level++;
@@ -335,17 +421,17 @@ export class PathSampleColumns {
       let kept = 1;
       for (let i = 1; i < n; i++) {
         if (i === n - 1 || !this.#canDrop(kept - 1, i, i + 1)) {
-          data.copyWithin(kept * STRIDE, i * STRIDE, (i + 1) * STRIDE);
+          this.#move(kept, i);
           kept++;
         }
       }
       this.#length = kept;
     }
 
-    if (this.#length > target && !this.#changes) {
-      // Every sample left is a change: keep them apart before halving merges some.
-      // ponytail: the changes record has no budget; it grows 20 bytes per value change.
-      const changes = new PathSampleColumns(Number.MAX_SAFE_INTEGER);
+    if (this.#length > target && this.#trackChanges && !this.#changes) {
+      // Every sample left is a change: keep them apart before merging blurs some.
+      const changes = new PathSampleColumns(this.maxSamples);
+      changes.#isChangesRecord = true;
       changes.#level = 2;
       for (let i = 0; i < this.#length; i++) {
         changes.push(this.at(i)!);
@@ -353,21 +439,23 @@ export class PathSampleColumns {
       this.#changes = changes;
     }
 
-    // Still too dense: keep every other sample (and the newest) until there is room.
+    // Still too dense: merge neighbours in pairs until there is room.
     let kept = this.#length;
     while (kept > target) {
       this.#level = 3;
       let half = 0;
       for (let i = 0; i < kept; i += 2) {
-        data.copyWithin(half * STRIDE, i * STRIDE, (i + 1) * STRIDE);
-        half++;
-      }
-      if (kept % 2 === 0) {
-        data.copyWithin(half * STRIDE, (kept - 1) * STRIDE, kept * STRIDE);
+        const mixed = i + 1 < kept && !this.sameValue(i, i + 1);
+        this.#move(half, i);
+        if (mixed) {
+          this.#setMixed(half);
+        }
         half++;
       }
       kept = half;
       this.#stride *= 2;
+      this.#sinceKept = 0;
+      this.#provisional = false;
     }
     this.#length = kept;
     this.#compactValues();
@@ -385,12 +473,16 @@ export class PathSampleColumns {
     this.#recentIndex.fill(-1);
     for (let i = 0; i < this.#length; i++) {
       const at = i * STRIDE + 4;
-      const old = this.#data[at]!;
+      const word = this.#data[at]!;
+      const old = word & NUMBER;
+      if (old === NUMBER) {
+        continue;
+      }
       if (remap[old] === -1) {
         const { value, constantName, count } = oldValues[old]!;
         remap[old] = this.#lookUpValueIndex(value, constantName, count);
       }
-      this.#data[at] = remap[old]!;
+      this.#data[at] = remap[old]! + (word >= MIXED ? MIXED : 0);
     }
   }
 }

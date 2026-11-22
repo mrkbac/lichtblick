@@ -80,16 +80,64 @@ describe("PathSampleColumns", () => {
     expect(columns.changes()).toBe(columns);
   });
 
-  it("keeps every change apart once halving merges them", () => {
+  it("keeps every change apart once merging starts, when tracking changes", () => {
     const columns = new PathSampleColumns(100);
+    columns.trackChanges();
     for (let i = 0; i < 1000; i++) {
       columns.push(sample(i, i % 3));
     }
     expect(columns.size()).toBeLessThanOrEqual(100);
     const changes = columns.changes().toArray();
+    // The record keeps the newest changes, each one exactly.
+    expect(changes.length).toBeGreaterThanOrEqual(75);
+    const first = changes[0]!.receiveTime.sec;
     expect(changes.map((s) => [s.receiveTime.sec, s.value])).toEqual(
-      Array.from({ length: 1000 }, (_, i) => [i, i % 3]),
+      Array.from({ length: 1000 - first }, (_, i) => [first + i, (first + i) % 3]),
     );
+  });
+
+  it("bounds the changes record by forgetting its oldest changes", () => {
+    const columns = new PathSampleColumns(100);
+    columns.trackChanges();
+    for (let i = 0; i < 10_000; i++) {
+      columns.push(sample(i, i % 2));
+    }
+    const changes = columns.changes();
+    expect(changes.size()).toBeLessThanOrEqual(100);
+    expect(changes.at(changes.size() - 1)?.receiveTime.sec).toBe(9_999);
+    expect(columns.hasAllChanges()).toBe(false);
+  });
+
+  it("keeps no changes record unless asked to", () => {
+    const columns = new PathSampleColumns(100);
+    for (let i = 0; i < 10_000; i++) {
+      columns.push(sample(i, i % 2));
+    }
+    expect(columns.changes()).toBe(columns);
+  });
+
+  it("marks merged stretches that held several values instead of aliasing", () => {
+    const columns = new PathSampleColumns(100);
+    for (let i = 0; i < 10_000; i++) {
+      columns.push(sample(i, i % 2));
+    }
+    expect(columns.size()).toBeLessThanOrEqual(100);
+    const mixed = Array.from({ length: columns.size() }, (_, i) => columns.isMixed(i));
+    // All but the newest group, which has nothing merged into it yet.
+    expect(mixed.filter(Boolean).length).toBeGreaterThanOrEqual(columns.size() - 2);
+  });
+
+  it("stores plain numbers without the value table", () => {
+    const values = [0.5, -1.25, 3, Number.MAX_VALUE, 0.5];
+    const columns = PathSampleColumns.from(values.map((value, i) => sample(i, value)));
+    expect(columns.toArray().map((s) => s.value)).toEqual(values);
+    expect(columns.distinctValues()).toBe(0);
+    expect(columns.sameValue(0, 4)).toBe(true);
+    expect(columns.sameValue(0, 1)).toBe(false);
+    // An enum keeps its constant name, so it goes through the table.
+    const named = PathSampleColumns.from([sample(0, 2, { constantName: "TWO" })]);
+    expect(named.at(0)?.constantName).toBe("TWO");
+    expect(named.distinctValues()).toBe(1);
   });
 
   it("thins runs of null like any other value", () => {
@@ -110,9 +158,13 @@ describe("PathSampleColumns", () => {
       sample(2, 1, { headerStamp: { sec: 2 ** 32, nsec: 0 } }),
       sample(3, 1, { headerStamp: { sec: 2 ** 40, nsec: 0 } }),
       sample(4, 1, { headerStamp: { sec: 1, nsec: Number.NaN } }),
+      sample(5, 1, { headerStamp: { sec: 1, nsec: 1e9 } }),
+      sample(6, 1, { headerStamp: { sec: 1.5, nsec: 0 } }),
     ]);
     expect(columns.toArray().map((s) => s.headerStamp)).toEqual([
       { sec: 5, nsec: 6 },
+      undefined,
+      undefined,
       undefined,
       undefined,
       undefined,

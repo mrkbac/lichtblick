@@ -12,6 +12,7 @@ import { PathSampleColumns } from "@lichtblick/suite-base/components/MessagePath
 import { ChartDataset } from "@lichtblick/suite-base/components/TimeBasedChart/types";
 import { hashString } from "@lichtblick/suite-base/util/hashString";
 import { expandedLineColors } from "@lichtblick/suite-base/util/plotColors";
+import { grey } from "@lichtblick/suite-base/util/toolsColorScheme";
 
 import { conditionMatches, parseCondition } from "./condition";
 import positiveModulo from "./positiveModulo";
@@ -52,8 +53,8 @@ export function messagesToDataset(args: MessageDatasetArgs): ChartDataset {
   let lastValue: string | number | bigint | boolean | undefined = undefined;
   let lastDatum: ChartDataset["data"][0] | undefined = undefined;
   // With points hidden, a repeat of the last drawn sample's value only moves where its segment
-  // ends, so it is just remembered here (an integer compare) and drawn when the segment ends.
-  let lastId = -1;
+  // ends, so it is just remembered here (a typed-array compare) and drawn when the segment ends.
+  let lastIndex = -1;
   let repeatBlock: PathSampleColumns | undefined;
   let repeatIndex = 0;
   let segment: ChartDataset["data"][0] | undefined;
@@ -77,12 +78,11 @@ export function messagesToDataset(args: MessageDatasetArgs): ChartDataset {
     if (!messages) {
       continue;
     }
-    // Value ids are per block.
-    lastId = -1;
+    // Samples are only compared within a block.
+    lastIndex = -1;
 
     for (let i = 0; i < messages.size(); i++) {
-      const id = messages.valueId(i);
-      if (!showPoints && id === lastId) {
+      if (!showPoints && lastIndex !== -1 && messages.sameValue(lastIndex, i)) {
         if (!useHeaderStamp || messages.hasHeaderStamp(i)) {
           repeatBlock = messages;
           repeatIndex = i;
@@ -101,6 +101,16 @@ export function messagesToDataset(args: MessageDatasetArgs): ChartDataset {
         continue;
       }
 
+      // A thinned stretch that held several values: draw it as one, like the chart's own [...].
+      if (messages.isMixed(i)) {
+        flush();
+        dataset.data.push({ x, y, label: "[...]", labelColor: grey, value: undefined });
+        lastValue = undefined;
+        lastIndex = i;
+        segment = undefined;
+        continue;
+      }
+
       const { constantName: rawConstantName, value: rawValue } = sample;
 
       // A null value marks a gap: break the line here and start a fresh segment once data resumes.
@@ -109,7 +119,7 @@ export function messagesToDataset(args: MessageDatasetArgs): ChartDataset {
         flush();
         dataset.data.push({ x, y: Number.NaN });
         lastValue = undefined;
-        lastId = -1;
+        lastIndex = -1;
         continue;
       }
 
@@ -128,7 +138,7 @@ export function messagesToDataset(args: MessageDatasetArgs): ChartDataset {
 
       takeRepeat();
       lastValue = value;
-      lastId = id;
+      lastIndex = i;
       lastDatum = {
         x,
         y,

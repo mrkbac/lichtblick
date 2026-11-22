@@ -559,3 +559,32 @@ describe("messagesToDataset", () => {
     ]);
   });
 });
+
+describe("messagesToDataset of thinned samples", () => {
+  it("draws a fast signal merged by thinning as a dense stretch, not a steady state", () => {
+    const columns = new PathSampleColumns(100);
+    for (let i = 0; i < 10_000; i++) {
+      columns.push({
+        receiveTime: { sec: i, nsec: 0 },
+        headerStamp: undefined,
+        count: 1,
+        value: i % 2,
+        constantName: undefined,
+      });
+    }
+    const dataset = messagesToDataset({
+      path: { value: "/a.b", timestampMethod: "receiveTime" },
+      startTime: { sec: 0, nsec: 0 },
+      y: 0,
+      pathIndex: 0,
+      blocks: [columns],
+      showPoints: false,
+    });
+    const labels = dataset.data.map((datum) => datum?.label).filter((label) => label != undefined);
+    // One dense band (merged stretches in a row continue it); at most the newest, unmerged
+    // samples show a plain state.
+    expect(labels[0]).toBe("[...]");
+    expect(labels.filter((label) => label !== "[...]").length).toBeLessThanOrEqual(2);
+    expect(dataset.data.at(-1)?.x).toBe(9_999);
+  });
+});
