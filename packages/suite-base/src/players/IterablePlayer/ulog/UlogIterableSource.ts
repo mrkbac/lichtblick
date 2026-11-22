@@ -20,7 +20,7 @@ import {
 } from "@lichtblick/suite-base/players/types";
 import { RosDatatypes } from "@lichtblick/suite-base/types/RosDatatypes";
 
-import { messageIdToTopic, messageDefinitionToRos, logLevelToRosout } from "./support";
+import { messageDefinitionToRos, logLevelToRosout } from "./support";
 import {
   IIterableSource,
   IteratorResult,
@@ -41,6 +41,8 @@ const log = Logger.getLogger(__filename);
 export class UlogIterableSource implements IIterableSource {
   #options: UlogOptions;
   #ulog?: ULog;
+  #logTopic = LOG_TOPIC;
+  #idsByTopic = new Map<string, Set<number>>();
   #start?: Time;
   #end?: Time;
 
@@ -72,32 +74,44 @@ export class UlogIterableSource implements IIterableSource {
     const parsedMessageDefinitionsByTopic: ParsedMessageDefinitionsByTopic = {};
     const header = this.#ulog.header!;
 
-    topics.push({ name: LOG_TOPIC, schemaName: "rosgraph_msgs/Log" });
-    topicStats.set(LOG_TOPIC, { numMessages: this.#ulog.logCount() ?? 0 });
+    const dataNames = new Set(Array.from(this.#ulog.subscriptions.values(), (sub) => sub.name));
+    this.#logTopic = LOG_TOPIC;
+    for (let suffix = 2; dataNames.has(this.#logTopic); suffix++) {
+      this.#logTopic = `${LOG_TOPIC}_${suffix}`;
+    }
+    this.#idsByTopic.clear();
+    const logCount = this.#ulog.logCount() ?? 0;
+    topics.push({ name: this.#logTopic, schemaName: "rosgraph_msgs/Log" });
+    topicStats.set(this.#logTopic, { numMessages: logCount });
+    if (logCount > 0) {
+      this.#idsByTopic.set(this.#logTopic, new Set([LOG_MSG_ID]));
+    }
     datatypes.set("rosgraph_msgs/Log", ros1["rosgraph_msgs/Log"]);
 
     for (const msgDef of header.definitions.values()) {
       datatypes.set(msgDef.name, messageDefinitionToRos(msgDef));
     }
 
-    const topicNames = new Set<string>();
     for (const [msgId, msgDef] of this.#ulog.subscriptions.entries()) {
       const count = counts.get(msgId);
       if (count == undefined || count === 0) {
         continue;
       }
 
-      const name = messageIdToTopic(msgId, this.#ulog);
-      if (name && !topicNames.has(name)) {
-        topicNames.add(name);
-        topics.push({ name, schemaName: msgDef.name });
-        topicStats.set(name, { numMessages: count });
+      const name = msgDef.name;
+      let ids = this.#idsByTopic.get(name);
+      if (!ids) {
+        ids = new Set();
+        this.#idsByTopic.set(name, ids);
+        topics.push({ name, schemaName: name });
         messageDefinitionsByTopic[name] = msgDef.format;
         const messageDefinition = datatypes.get(msgDef.name);
         if (messageDefinition) {
           parsedMessageDefinitionsByTopic[name] = [messageDefinition];
         }
       }
+      ids.add(msgId);
+      topicStats.set(name, { numMessages: (topicStats.get(name)?.numMessages ?? 0) + count });
     }
 
     const parameters = new Map<string, ParameterValue>();
@@ -137,7 +151,8 @@ export class UlogIterableSource implements IIterableSource {
       throw new Error(`UlogDataProvider is not initialized`);
     }
 
-    if (topics.size === 0) {
+    const msgIds = this.#msgIds(topics.keys());
+    if (msgIds.size === 0) {
       return;
     }
 
@@ -146,8 +161,8 @@ export class UlogIterableSource implements IIterableSource {
     for await (const msg of this.#ulog.readMessages({
       startTime,
       endTime,
-      msgIds: this.#msgIds(topics.keys()),
-      includeLogs: topics.has(LOG_TOPIC),
+      msgIds,
+      includeLogs: false,
     })) {
       const msgEvent = this.#toMessageEvent(msg);
       if (
@@ -170,16 +185,11 @@ export class UlogIterableSource implements IIterableSource {
     }
     // One reverse pass for all topics. A topic's ids leave the set once it has its message, so the
     // reader skips its older messages in the index without reading them.
-    // Logs go through the id set too, so they also stop once the latest one is found.
     const msgIds = this.#msgIds(topics.keys());
-    const hasLogs = topics.has(LOG_TOPIC) && (this.#ulog.logCount() ?? 0) > 0;
-    if (hasLogs) {
-      msgIds.add(LOG_MSG_ID);
+    if (msgIds.size === 0) {
+      return [];
     }
     const latest = new Map<string, MessageEvent>();
-    // Requested topics the file has: stop once each has its message
-    const names = new Set([...this.#ulog.subscriptions.values()].map((sub) => sub.name));
-    const wanted = [...topics.keys()].filter((t) => names.has(t)).length + (hasLogs ? 1 : 0);
     for await (const msg of this.#ulog.readMessages({
       endTime: toMicros(time, "floor"),
       msgIds,
@@ -195,14 +205,10 @@ export class UlogIterableSource implements IIterableSource {
         continue;
       }
       latest.set(msgEvent.topic, msgEvent);
-      if (msg.type === MessageType.Data) {
-        for (const id of this.#msgIds([msgEvent.topic])) {
-          msgIds.delete(id);
-        }
-      } else {
-        msgIds.delete(LOG_MSG_ID);
+      for (const id of this.#idsByTopic.get(msgEvent.topic) ?? []) {
+        msgIds.delete(id);
       }
-      if (latest.size === wanted) {
+      if (msgIds.size === 0) {
         break;
       }
     }
@@ -211,11 +217,10 @@ export class UlogIterableSource implements IIterableSource {
 
   /** ULog message ids of the topics: only these are read and parsed */
   #msgIds(topics: Iterable<string>): Set<number> {
-    const names = new Set(topics);
     const msgIds = new Set<number>();
-    for (const [msgId, sub] of this.#ulog?.subscriptions ?? []) {
-      if (names.has(sub.name)) {
-        msgIds.add(msgId);
+    for (const topic of topics) {
+      for (const id of this.#idsByTopic.get(topic) ?? []) {
+        msgIds.add(id);
       }
     }
     return msgIds;
@@ -238,7 +243,7 @@ export class UlogIterableSource implements IIterableSource {
     } else if (msg.type === MessageType.Log || msg.type === MessageType.LogTagged) {
       const receiveTime = fromMicros(Number(msg.timestamp));
       return {
-        topic: LOG_TOPIC,
+        topic: this.#logTopic,
         receiveTime,
         message: {
           file: "",
