@@ -8,6 +8,7 @@ import {
   TempBuffer,
   openCachedMcapReader,
 } from "@lichtblick/mcap-core";
+import { McapIterableSource } from "@lichtblick/suite-base/players/IterablePlayer/Mcap/McapIterableSource";
 
 import { AttachmentInfo, attachmentData, formatText, hexDump, previewKind } from "./attachments";
 
@@ -55,11 +56,18 @@ describe("attachments", () => {
     expect(texts).toEqual(attachments.map((attachment) => attachment.data));
   });
 
-  it("reads attachments of a file without a summary, as listed for a recovered recording", async () => {
+  it("opens the attachment at the byte offset listed for an unindexed recording", async () => {
     const { bytes, infos } = await recording();
-    // Cut off like an interrupted recording: no footer or summary left.
-    const file = new Blob([bytes.slice(0, Number(infos.at(-1)!.offset) + 64)]);
-    expect(await (await attachmentData(file, infos[0]!))?.text()).toBe(attachments[0]!.data);
+    // Cut off like an interrupted recording: no complete second attachment, footer or summary.
+    const file = new Blob([bytes.slice(0, infos[1]!.offset + 9)]);
+    const source = new McapIterableSource({ type: "file", file });
+    const { recordingFiles } = await source.initialize();
+    expect(recordingFiles?.[0]?.footerIndexed).toBe(false);
+    const listed = recordingFiles?.[0]?.attachments;
+    expect(listed).toEqual([infos[0]]);
+    const data = await attachmentData(file, listed![0]!);
+    expect(data?.type).toBe(attachments[0]!.mediaType);
+    expect(await data?.text()).toBe(attachments[0]!.data);
   });
 
   it("finds nothing where the file no longer has the attachment", async () => {

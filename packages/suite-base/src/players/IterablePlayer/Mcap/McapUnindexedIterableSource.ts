@@ -28,7 +28,7 @@ import {
   MessageIteratorArgs,
   TopicWithDecodingInfo,
 } from "@lichtblick/suite-base/players/IterablePlayer/IIterableSource";
-import { PlayerAlert, TopicStats } from "@lichtblick/suite-base/players/types";
+import { PlayerAlert, RecordingFileInfo, TopicStats } from "@lichtblick/suite-base/players/types";
 import { RosDatatypes } from "@lichtblick/suite-base/types/RosDatatypes";
 import { toError } from "@lichtblick/suite-base/util/toError";
 
@@ -115,6 +115,9 @@ export class McapUnindexedIterableSource implements ISerializedIterableSource {
     const channelInfoById = this.#channelInfoById;
     const columns = new IndexBuilder();
     let profile: string | undefined;
+    let library = "";
+    const attachments: RecordingFileInfo["attachments"] = [];
+    const compression = new Map<string, RecordingFileInfo["compression"][number]>();
     let corruptChunks = 0;
     let firstChunkError: string | undefined;
     let corruptRecords = 0;
@@ -125,6 +128,7 @@ export class McapUnindexedIterableSource implements ISerializedIterableSource {
       switch (record.type) {
         case "Header":
           profile = record.profile;
+          library = record.library;
           break;
         case "Metadata":
           metadata.push({ name: record.name, metadata: Object.fromEntries(record.metadata) });
@@ -223,6 +227,14 @@ export class McapUnindexedIterableSource implements ISerializedIterableSource {
       definitions.forEach(processRecord);
       this.#chunkOffsets.push(offset);
       this.#chunkLengths.push(bytes.byteLength);
+      const format = chunk.compression || "none";
+      let group = compression.get(format);
+      if (!group) {
+        group = { format, compressedBytes: 0, uncompressedBytes: 0 };
+        compression.set(format, group);
+      }
+      group.compressedBytes += chunk.records.byteLength;
+      group.uncompressedBytes += Number(chunk.uncompressedSize);
     };
 
     const magic = await reader.read(0, MCAP_MAGIC.length);
@@ -280,6 +292,15 @@ export class McapUnindexedIterableSource implements ISerializedIterableSource {
           }
           break;
         }
+        case Opcode.ATTACHMENT: {
+          const attachment = await readAttachmentInfo(reader, offset, length);
+          if (attachment) {
+            attachments.push(attachment);
+          } else {
+            corruptRecords++;
+          }
+          break;
+        }
         case Opcode.HEADER:
         case Opcode.SCHEMA:
         case Opcode.CHANNEL:
@@ -297,7 +318,7 @@ export class McapUnindexedIterableSource implements ISerializedIterableSource {
           break;
         }
         default:
-          break; // attachments, indexes: not needed, and not read
+          break; // indexes: not needed, and not read
       }
       offset += length;
     }
@@ -404,6 +425,25 @@ export class McapUnindexedIterableSource implements ISerializedIterableSource {
       publishersByTopic,
       topicStats,
       metadata,
+      recordingFiles: [
+        {
+          library,
+          footerIndexed: false,
+          channels: [...channelInfoById.values()].map(
+            ({ channel, schemaName, schemaEncoding }) => ({
+              id: channel.id,
+              topic: channel.topic,
+              schemaName,
+              schemaEncoding,
+              messageEncoding: channel.messageEncoding,
+              metadata: Object.fromEntries(channel.metadata),
+            }),
+          ),
+          schemaCount: schemasById.size,
+          compression: [...compression.values()],
+          attachments,
+        },
+      ],
     };
   }
 
@@ -757,6 +797,42 @@ class WindowedReader {
     this.#buffered = { offset, bytes };
     return bytes.subarray(0, length);
   }
+}
+
+/** Read only the attachment's header; the payload can be several gigabytes. */
+async function readAttachmentInfo(
+  reader: WindowedReader,
+  offset: number,
+  length: number,
+): Promise<RecordingFileInfo["attachments"][number] | undefined> {
+  const nameLengthAt = RECORD_PREFIX_BYTES + 16; // log time and create time
+  const nameAt = nameLengthAt + 4;
+  const trailerBytes = 8 + 4; // data size and CRC
+  // File-provided string lengths must not turn reading the header into a payload-sized transfer.
+  const headerLimit = Math.min(length, READ_WINDOW_BYTES);
+  if (headerLimit < nameAt + 4 + trailerBytes) {
+    return undefined;
+  }
+  const nameLength = byteReader(await reader.read(offset + nameLengthAt, 4)).uint32();
+  if (nameAt + nameLength + 4 + trailerBytes > headerLimit) {
+    return undefined;
+  }
+  const nameHeader = byteReader(await reader.read(offset + nameLengthAt, 4 + nameLength + 4));
+  const name = nameHeader.string();
+  const mediaTypeLength = nameHeader.uint32();
+  const mediaTypeAt = nameAt + nameLength + 4;
+  if (mediaTypeAt + mediaTypeLength + trailerBytes > headerLimit) {
+    return undefined;
+  }
+  const mediaHeader = byteReader(
+    await reader.read(offset + mediaTypeAt - 4, 4 + mediaTypeLength + 8),
+  );
+  const mediaType = mediaHeader.string();
+  const sizeBytes = Number(mediaHeader.uint64());
+  if (sizeBytes !== length - mediaTypeAt - mediaTypeLength - trailerBytes) {
+    return undefined;
+  }
+  return { offset, name, mediaType, sizeBytes };
 }
 
 /** First message at or after `time` */
