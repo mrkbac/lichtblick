@@ -532,4 +532,30 @@ describe("messagesToDataset", () => {
       { x: expect.any(Number), y: NaN },
     ]);
   });
+
+  it("draws the end of a repeated state and doesn't mix up values across blocks", () => {
+    const at = (sec: number, value: unknown): PathSample => ({
+      receiveTime: { sec, nsec: 0 },
+      headerStamp: undefined,
+      count: 1,
+      value,
+      constantName: undefined,
+    });
+    const result = messagesToDataset({
+      ...args,
+      startTime: { sec: 0, nsec: 0 },
+      path: { ...args.path, timestampMethod: "receiveTime", condition: undefined },
+      showPoints: false,
+      // Both blocks start with their own first value, so ids alone would say "repeat".
+      blocks: [
+        PathSampleColumns.from([at(0, 3), at(1, 3), at(2, 3)]),
+        PathSampleColumns.from([at(3, "x"), at(4, "x")]),
+      ],
+    });
+    expect(result.data.map((datum) => [datum?.x, datum?.value, datum?.label])).toEqual([
+      [0, 3, "3"],
+      [3, "x", "x"],
+      [4, "x", undefined],
+    ]);
+  });
 });

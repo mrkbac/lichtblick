@@ -41,6 +41,8 @@ export function toPathSample(
 const STRIDE = 5;
 const NO_STAMP = 0xffffffff;
 const INITIAL_CAPACITY = 1024;
+/** Recently seen values checked before the value maps. */
+const RECENT = 4;
 const INVALID: SampleValue = { count: 1, value: undefined, constantName: undefined };
 
 /**
@@ -58,10 +60,17 @@ export class PathSampleColumns {
   #data = new Uint32Array(INITIAL_CAPACITY * STRIDE);
   #length = 0;
   #values: SampleValue[] = [];
-  /** value -> constantName -> index into #values */
-  #indexByValue = new Map<unknown, Map<string | undefined, number>>();
+  /** Index into #values of each value without a constant name. */
+  #indexByValue = new Map<unknown, number>();
+  /** constantName -> value -> index into #values */
+  #indexByNamedValue = new Map<string, Map<unknown, number>>();
   #indexByCount = new Map<number, number>();
   #invalidIndex: number | undefined;
+  #recentValue: unknown[] = new Array(RECENT).fill(undefined);
+  #recentConstantName: (string | undefined)[] = new Array(RECENT).fill(undefined);
+  #recentCount = new Int32Array(RECENT);
+  #recentIndex = new Int32Array(RECENT).fill(-1);
+  #nextRecent = 0;
   #stride = 1;
   /** Samples pushed since the last one kept for good. */
   #sinceKept = 0;
@@ -112,7 +121,9 @@ export class PathSampleColumns {
     data[at + 3] = sample.headerStamp?.nsec ?? NO_STAMP;
     data[at + 4] = this.#valueIndex(sample);
     this.#length++;
-    this.#sinceKept = (this.#sinceKept + 1) % this.#stride;
+    if (this.#stride > 1) {
+      this.#sinceKept = (this.#sinceKept + 1) % this.#stride;
+    }
   }
 
   public receiveTime(i: number): Time {
@@ -122,6 +133,15 @@ export class PathSampleColumns {
   public headerStamp(i: number): Time | undefined {
     const nsec = this.#data[i * STRIDE + 3]!;
     return nsec === NO_STAMP ? undefined : { sec: this.#data[i * STRIDE + 2]!, nsec };
+  }
+
+  /** Equal for two samples exactly when their SampleValue is the same. */
+  public valueId(i: number): number {
+    return this.#data[i * STRIDE + 4]!;
+  }
+
+  public hasHeaderStamp(i: number): boolean {
+    return this.#data[i * STRIDE + 3] !== NO_STAMP;
   }
 
   public sampleValue(i: number): SampleValue {
@@ -143,7 +163,30 @@ export class PathSampleColumns {
     return Array.from({ length: this.#length }, (_, i) => this.at(i)!);
   }
 
-  #valueIndex({ count, value, constantName }: SampleValue): number {
+  #valueIndex(sample: SampleValue): number {
+    // States mostly repeat or alternate between a few values: check the recent ones before the maps.
+    const { value, constantName, count } = sample;
+    for (let slot = 0; slot < RECENT; slot++) {
+      if (
+        this.#recentIndex[slot] !== -1 &&
+        value === this.#recentValue[slot] &&
+        constantName === this.#recentConstantName[slot] &&
+        count === this.#recentCount[slot]
+      ) {
+        return this.#recentIndex[slot]!;
+      }
+    }
+    const index = this.#lookUpValueIndex(sample);
+    const slot = this.#nextRecent;
+    this.#nextRecent = (slot + 1) % RECENT;
+    this.#recentValue[slot] = value;
+    this.#recentConstantName[slot] = constantName;
+    this.#recentCount[slot] = count;
+    this.#recentIndex[slot] = index;
+    return index;
+  }
+
+  #lookUpValueIndex({ count, value, constantName }: SampleValue): number {
     if (count !== 1) {
       let index = this.#indexByCount.get(count);
       if (index == undefined) {
@@ -157,15 +200,15 @@ export class PathSampleColumns {
     if (value === undefined || (typeof value === "object" && value !== null)) {
       return (this.#invalidIndex ??= this.#values.push(INVALID) - 1);
     }
-    let byName = this.#indexByValue.get(value);
-    if (!byName) {
-      byName = new Map();
-      this.#indexByValue.set(value, byName);
+    let byValue = this.#indexByValue;
+    if (constantName != undefined) {
+      byValue = this.#indexByNamedValue.get(constantName) ?? new Map();
+      this.#indexByNamedValue.set(constantName, byValue);
     }
-    let index = byName.get(constantName);
+    let index = byValue.get(value);
     if (index == undefined) {
       index = this.#values.push({ count, value, constantName }) - 1;
-      byName.set(constantName, index);
+      byValue.set(value, index);
     }
     return index;
   }
@@ -214,8 +257,10 @@ export class PathSampleColumns {
     const remap = new Int32Array(oldValues.length).fill(-1);
     this.#values = [];
     this.#indexByValue.clear();
+    this.#indexByNamedValue.clear();
     this.#indexByCount.clear();
     this.#invalidIndex = undefined;
+    this.#recentIndex.fill(-1);
     for (let i = 0; i < this.#length; i++) {
       const at = i * STRIDE + 4;
       const old = this.#data[at]!;

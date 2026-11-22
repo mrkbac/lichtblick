@@ -8,6 +8,7 @@
 import { subtract as subtractTimes, toSec } from "@foxglove/rostime";
 import { darken } from "@mui/material";
 
+import { PathSampleColumns } from "@lichtblick/suite-base/components/MessagePathSyntax/PathSampleColumns";
 import { ChartDataset } from "@lichtblick/suite-base/components/TimeBasedChart/types";
 import { hashString } from "@lichtblick/suite-base/util/hashString";
 import { expandedLineColors } from "@lichtblick/suite-base/util/plotColors";
@@ -42,39 +43,73 @@ export function messagesToDataset(args: MessageDatasetArgs): ChartDataset {
 
   const condition = parseCondition(path.condition);
 
+  const useHeaderStamp = path.timestampMethod === "headerStamp";
+  const xOf = (messages: PathSampleColumns, i: number) => {
+    const timestamp = useHeaderStamp ? messages.headerStamp(i) : messages.receiveTime(i);
+    return timestamp ? toSec(subtractTimes(timestamp, startTime)) : undefined;
+  };
+
   let lastValue: string | number | bigint | boolean | undefined = undefined;
   let lastDatum: ChartDataset["data"][0] | undefined = undefined;
+  // With points hidden, a repeat of the last drawn sample's value only moves where its segment
+  // ends, so it is just remembered here (an integer compare) and drawn when the segment ends.
+  let lastId = -1;
+  let repeatBlock: PathSampleColumns | undefined;
+  let repeatIndex = 0;
+  let segment: ChartDataset["data"][0] | undefined;
+  const takeRepeat = () => {
+    if (repeatBlock && segment) {
+      const { labelColor, value, constantName } = segment;
+      const x = xOf(repeatBlock, repeatIndex)!;
+      lastDatum = { x, y, label: undefined, labelColor, value, constantName };
+    }
+    repeatBlock = undefined;
+  };
+  const flush = () => {
+    takeRepeat();
+    if (lastDatum != undefined) {
+      dataset.data.push(lastDatum);
+    }
+    lastDatum = undefined;
+  };
 
   for (const messages of blocks) {
     if (!messages) {
       continue;
     }
+    // Value ids are per block.
+    lastId = -1;
 
     for (let i = 0; i < messages.size(); i++) {
+      const id = messages.valueId(i);
+      if (!showPoints && id === lastId) {
+        if (!useHeaderStamp || messages.hasHeaderStamp(i)) {
+          repeatBlock = messages;
+          repeatIndex = i;
+        }
+        continue;
+      }
+
       const sample = messages.sampleValue(i);
       // A path matching several values is invalid input (see datasetContainsArray)
       if (sample.count !== 1) {
         continue;
       }
 
-      const timestamp =
-        path.timestampMethod === "headerStamp" ? messages.headerStamp(i) : messages.receiveTime(i);
-      if (!timestamp) {
+      const x = xOf(messages, i);
+      if (x == undefined) {
         continue;
       }
 
       const { constantName: rawConstantName, value: rawValue } = sample;
-      const x = toSec(subtractTimes(timestamp, startTime));
 
       // A null value marks a gap: break the line here and start a fresh segment once data resumes.
       // eslint-disable-next-line @lichtblick/strict-equality
       if (rawValue === null) {
-        if (lastDatum != undefined) {
-          dataset.data.push(lastDatum);
-        }
+        flush();
         dataset.data.push({ x, y: Number.NaN });
         lastValue = undefined;
-        lastDatum = undefined;
+        lastId = -1;
         continue;
       }
 
@@ -91,7 +126,9 @@ export function messagesToDataset(args: MessageDatasetArgs): ChartDataset {
 
       const isNewSegment = lastValue !== value;
 
+      takeRepeat();
       lastValue = value;
+      lastId = id;
       lastDatum = {
         x,
         y,
@@ -101,6 +138,7 @@ export function messagesToDataset(args: MessageDatasetArgs): ChartDataset {
         value,
         constantName,
       };
+      segment = lastDatum;
 
       if (isNewSegment || showPoints) {
         dataset.data.push(lastDatum);
@@ -113,9 +151,7 @@ export function messagesToDataset(args: MessageDatasetArgs): ChartDataset {
 
   // If we never added the last datum (maybe because it was the same state as before), we add
   // it to the data so the user sees the state going until this point.
-  if (lastDatum != undefined) {
-    dataset.data.push(lastDatum);
-  }
+  flush();
 
   return dataset;
 }
