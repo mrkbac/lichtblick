@@ -1,0 +1,40 @@
+name: Perf budget
+
+# Compares speed, memory, bytes read and startup bundle size against the PR's merge base
+# (ci/perf-budget.ts) and fails when a metric regresses past its budget. The table is in the job
+# summary. A deliberate trade-off can be accepted with the `perf-budget-accepted` label.
+
+on:
+  push:
+    branches: [licht]
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  perf-budget:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # The merge base must be in the clone
+          fetch-depth: 0
+
+      - uses: ./.github/actions/setup
+
+      - name: Run perf budget
+        env:
+          # On licht, compare each merge with the commit before it
+          BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+          PERF_BUDGET_ACCEPTED: ${{ contains(github.event.pull_request.labels.*.name, 'perf-budget-accepted') }}
+        run: pnpm perf:budget --base "$(git merge-base HEAD "$BASE")"
