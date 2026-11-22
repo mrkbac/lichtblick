@@ -160,6 +160,26 @@ describe("TimestampDatasetsBuilderImpl", () => {
       expect(new Set(data.slice(1).map((item) => item.y))).toEqual(new Set([1]));
     });
 
+    it("keeps gaps of derived values when halving", () => {
+      // GIVEN a derivative series where two samples share an x, so its derivative is a gap
+      const builder = new TimestampDatasetsBuilderImpl(4);
+      builder.applyAction({
+        type: "update-series-config",
+        seriesItems: [seriesItem("0", { path: "/topic.value.@derivative" })],
+      });
+      const xs = [0, 1, 2, 2, 3, 4];
+      builder.applyAction({
+        type: "append-current",
+        series: key,
+        items: xs.map((x, i) => ({ ...items([x])[0]!, y: i, value: i })),
+      });
+
+      // THEN the gap survives thinning
+      const ys = builder.getCsvData()[0]!.data.map((item) => item.y);
+      expect(ys.length).toBeLessThan(xs.length);
+      expect(ys.slice(1).some(Number.isNaN)).toBe(true);
+    });
+
     it("starts unthinned again after current data is reset", () => {
       const builder = new TimestampDatasetsBuilderImpl(100);
       builder.applyAction({ type: "update-series-config", seriesItems: [seriesItem("0")] });

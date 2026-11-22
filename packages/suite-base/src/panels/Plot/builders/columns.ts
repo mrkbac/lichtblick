@@ -182,7 +182,8 @@ export class PointColumns {
 
   /**
    * Halve rows [start, length) by dropping every other row; the first and the last row and gaps
-   * (NaN) stay. Rows of `extra` columns move the same way. Returns the number of rows removed.
+   * (NaN in y or in an `extra` column) stay. Rows of `extra` columns move the same way. Returns
+   * the number of rows removed.
    */
   public halve(start: number, extra: readonly Float64Array[] = []): number {
     const end = this.length;
@@ -192,7 +193,9 @@ export class PointColumns {
     let write = start;
     for (let read = start; read < end; read++) {
       // gaps (NaN) stay so lines still break where the data does
-      if ((read - start) % 2 === 0 || read === end - 1 || Number.isNaN(this.y[read]!)) {
+      const gap =
+        Number.isNaN(this.y[read]!) || extra.some((column) => Number.isNaN(column[read]!));
+      if ((read - start) % 2 === 0 || read === end - 1 || gap) {
         for (const column of extra) {
           column[write] = column[read]!;
         }
