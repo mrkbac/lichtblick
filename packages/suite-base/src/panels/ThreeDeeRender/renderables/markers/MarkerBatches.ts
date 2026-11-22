@@ -85,9 +85,22 @@ type Batch = {
   outline: InstancedLineSegments | undefined;
   meshCount: number;
   outlineCount: number;
+  /**
+   * The first instance's position this fill; instances are stored relative to it, since float32
+   * instance coordinates at map scale (e.g. 1e6 m) would flatten small markers
+   */
+  origin: THREE.Vector3;
 };
 
+/** Uploads only the instances in use */
+function markUsed(attribute: THREE.BufferAttribute, count: number): void {
+  attribute.clearUpdateRanges();
+  attribute.addUpdateRange(0, count * attribute.itemSize);
+  attribute.needsUpdate = true;
+}
+
 const tempMatrix = new THREE.Matrix4();
+const tempPosition = new THREE.Vector3();
 const tempColor = new THREE.Color();
 
 /**
@@ -114,8 +127,8 @@ export class MarkerBatches extends THREE.Object3D {
     }
   }
 
-  /** Draws `marker` through a batch if it can be, or on its own otherwise. `capacity` bounds the adds. */
-  public addMarker(marker: BatchableMarker, capacity: number): void {
+  /** Draws `marker` through a batch if it can be, or on its own otherwise */
+  public addMarker(marker: BatchableMarker): void {
     const { mesh, outline } = marker;
     const opaque = marker.userData.marker.color.a >= 1;
     setPickOnly(mesh, { pickOnly: opaque });
@@ -127,9 +140,14 @@ export class MarkerBatches extends THREE.Object3D {
     }
 
     const batch = this.#batchFor(mesh, outline);
-    // The mesh (and its outline) sit at the marker's origin, so the marker's local matrix places them
-    tempMatrix.compose(marker.position, marker.quaternion, marker.scale);
-    reserve(batch.mesh, capacity);
+    if (batch.meshCount === 0) {
+      batch.origin.copy(marker.position);
+    }
+    // The mesh (and its outline) sit at the marker's origin, so the marker's local matrix places
+    // them, relative to the batch origin
+    tempPosition.subVectors(marker.position, batch.origin);
+    tempMatrix.compose(tempPosition, marker.quaternion, marker.scale);
+    reserve(batch.mesh, batch.meshCount + 1);
     batch.mesh.setMatrixAt(batch.meshCount, tempMatrix);
     batch.mesh.setColorAt(
       batch.meshCount,
@@ -137,7 +155,7 @@ export class MarkerBatches extends THREE.Object3D {
     );
     batch.meshCount++;
     if (outline?.visible === true && batch.outline) {
-      reserve(batch.outline, capacity);
+      reserve(batch.outline, batch.outlineCount + 1);
       tempMatrix.toArray(batch.outline.instanceMatrix.array, batch.outlineCount * 16);
       batch.outlineCount++;
     }
@@ -146,13 +164,15 @@ export class MarkerBatches extends THREE.Object3D {
   public end(): void {
     for (const batch of this.#batches.values()) {
       batch.mesh.count = batch.meshCount;
-      batch.mesh.instanceMatrix.needsUpdate = true;
+      batch.mesh.position.copy(batch.origin);
+      markUsed(batch.mesh.instanceMatrix, batch.meshCount);
       if (batch.mesh.instanceColor) {
-        batch.mesh.instanceColor.needsUpdate = true;
+        markUsed(batch.mesh.instanceColor, batch.meshCount);
       }
       if (batch.outline) {
         batch.outline.count = batch.outlineCount;
-        batch.outline.instanceMatrix.needsUpdate = true;
+        batch.outline.position.copy(batch.origin);
+        markUsed(batch.outline.instanceMatrix, batch.outlineCount);
       }
     }
   }
@@ -189,7 +209,13 @@ export class MarkerBatches extends THREE.Object3D {
         instancedOutline.userData.picking = false;
         this.add(instancedOutline);
       }
-      batch = { mesh: instanced, outline: instancedOutline, meshCount: 0, outlineCount: 0 };
+      batch = {
+        mesh: instanced,
+        outline: instancedOutline,
+        meshCount: 0,
+        outlineCount: 0,
+        origin: new THREE.Vector3(),
+      };
       this.#batches.set(mesh.geometry, batch);
     }
     return batch;

@@ -139,17 +139,37 @@ describe("MarkerBatches", () => {
     // A transparent marker draws on its own, sorted with the other transparent objects
     expect((byId(5) as RenderableCube).mesh.layers.mask).toBe(1 << LAYER_DEFAULT);
 
-    // The instance carries the marker's pose and scale
+    // The instance carries the marker's pose and scale, relative to the batch origin (marker 1)
     const cubes = instanced().find(
       (object) => (object as THREE.InstancedMesh).count === 2 && object instanceof THREE.Mesh,
     ) as THREE.InstancedMesh;
     const matrix = new THREE.Matrix4();
     cubes.getMatrixAt(1, matrix);
+    expect(cubes.position.toArray()).toEqual([1, 0, 0]);
     expect(matrix.toArray()).toEqual(
       new THREE.Matrix4()
-        .compose(new THREE.Vector3(2, 0, 0), new THREE.Quaternion(), new THREE.Vector3(1, 2, 3))
+        .compose(new THREE.Vector3(1, 0, 0), new THREE.Quaternion(), new THREE.Vector3(1, 2, 3))
         .toArray(),
     );
+  });
+
+  it("stores instances relative to the batch origin, so map-scale coordinates keep precision", () => {
+    const far = (id: number, x: number) => ({
+      ...marker(id, MarkerType.CUBE),
+      pose: { position: { x, y: 0, z: 0 }, orientation: { x: 0, y: 0, z: 0, w: 1 } },
+    });
+    topic.addMarkerMessage(far(1, 1_000_000), 0n);
+    topic.addMarkerMessage(far(2, 1_000_000.01), 0n);
+    topic.startFrame(0n, "map", "map");
+
+    const cubes = instanced().find(
+      (object) => object instanceof THREE.Mesh && (object as THREE.InstancedMesh).count === 2,
+    ) as THREE.InstancedMesh;
+    expect(cubes.position.x).toBe(1_000_000);
+    const matrix = new THREE.Matrix4();
+    cubes.getMatrixAt(1, matrix);
+    // float32 at 1e6 has a 0.06 m step; relative to the origin the 1 cm offset survives
+    expect(new THREE.Vector3().setFromMatrixPosition(matrix).x).toBeCloseTo(0.01, 5);
   });
 
   it("restores a deleted marker's own draw before the pool hands it out", () => {

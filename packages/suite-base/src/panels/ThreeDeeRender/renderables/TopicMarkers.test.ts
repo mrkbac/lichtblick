@@ -163,6 +163,16 @@ describe("TopicMarkers.startFrame", () => {
     }
   });
 
+  it("normalizes the composed orientation of a marker with a non-unit quaternion", () => {
+    const topic = makeTopic();
+    const marker = cube(1, "arm", 2);
+    marker.pose.orientation = { x: 0, y: 0, z: 0.6, w: 1.6 };
+    topic.addMarkerMessage(marker, 2_000_000_000n);
+    topic.startFrame(2_000_000_000n, "map", "map");
+    const renderable = topic.namespaces.get("ns")!.markersById.get(1)!;
+    expect(renderable.quaternion.length()).toBeCloseTo(1, 12);
+  });
+
   it("hides markers whose frame has no transform and reports it", () => {
     const topic = makeTopic();
     topic.addMarkerMessage(cube(1, "unknown", 2), 2_000_000_000n);

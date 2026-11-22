@@ -189,10 +189,6 @@ export class TopicMarkers extends Renderable<MarkerTopicUserData> {
     // settings tree) once per marker whenever a topic mixes resolvable and unresolvable frames
     let missingTransform: string | undefined;
     let anyUpdated = false;
-    let markerCount = 0;
-    for (const ns of this.namespaces.values()) {
-      markerCount += ns.markersById.size;
-    }
     this.#batches.begin();
     for (const ns of this.namespaces.values()) {
       for (const renderable of ns.markersById.values()) {
@@ -231,9 +227,9 @@ export class TopicMarkers extends Renderable<MarkerTopicUserData> {
           .applyQuaternion(tempQuaternion);
         renderable.position.set(p.x + tempPosition.x, p.y + tempPosition.y, p.z + tempPosition.z);
         const o = pose.orientation;
-        renderable.quaternion.set(o.x, o.y, o.z, o.w).premultiply(tempQuaternion);
+        renderable.quaternion.set(o.x, o.y, o.z, o.w).premultiply(tempQuaternion).normalize();
         if (isBatchable(renderable)) {
-          this.#batches.addMarker(renderable, markerCount);
+          this.#batches.addMarker(renderable);
         }
       }
     }
