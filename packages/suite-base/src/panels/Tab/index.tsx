@@ -3,7 +3,7 @@
 
 import { ButtonBase } from "@mui/material";
 import { getPanelData } from "dockview-react";
-import { DragEvent, useCallback, useContext, useMemo, useState } from "react";
+import { DragEvent, useCallback, useContext, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { makeStyles } from "tss-react/mui";
 
@@ -22,6 +22,7 @@ import {
   useDragHoverActivation,
 } from "@lichtblick/suite-base/components/PanelTab";
 import PanelToolbar from "@lichtblick/suite-base/components/PanelToolbar";
+import { TabOverflowMenu } from "@lichtblick/suite-base/components/TabOverflowMenu";
 import {
   LayoutState,
   useCurrentLayoutActions,
@@ -213,6 +214,8 @@ function TabButton(props: TabButtonProps): React.JSX.Element {
       aria-selected={isActive}
       aria-controls={contentId}
       tabIndex={0}
+      aria-label={title}
+      // Read as the tab's description, after its name
       title={t("doubleClickToRename")}
       data-testid="tab-panel-tab"
       className={cx(classes.tab, { [classes.active]: isActive, [classes.dropOver]: isOver })}
@@ -329,6 +332,7 @@ function TabPanel({ config, saveConfig }: Props): React.JSX.Element {
   const activeIdx = getActiveTabIndex(config);
   const visible = useContext(PanelVisibleContext);
   const contentId = `${panelId}-tabpanel`;
+  const stripRef = useRef<HTMLDivElement>(null);
 
   const select = useCallback(
     (index: number) => {
@@ -408,6 +412,7 @@ function TabPanel({ config, saveConfig }: Props): React.JSX.Element {
         }
       >
         <div
+          ref={stripRef}
           className={classes.strip}
           role="tablist"
           // The outer layout leaves drags over the tab strip to it.
@@ -442,6 +447,7 @@ function TabPanel({ config, saveConfig }: Props): React.JSX.Element {
             />
           ))}
         </div>
+        <TabOverflowMenu stripRef={stripRef} />
       </PanelToolbar>
       <div className={classes.content} role="tabpanel" id={contentId}>
         {/* Every tab stays mounted, so switching tabs is instant and keeps panels' data. */}
