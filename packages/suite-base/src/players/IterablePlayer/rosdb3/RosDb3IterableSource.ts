@@ -8,7 +8,7 @@
 import { MessageDefinition } from "@foxglove/message-definition";
 import { ROS2_TO_DEFINITIONS, Rosbag2, SqliteSqljs } from "@foxglove/rosbag2-web";
 import { stringify } from "@foxglove/rosmsg";
-import { Time, add as addTime, compare, subtract as subtractTime } from "@foxglove/rostime";
+import { Time, add as addTime, compare } from "@foxglove/rostime";
 
 import { MessageEvent } from "@lichtblick/suite";
 import { APP_CONFIG } from "@lichtblick/suite-base/constants/config";
@@ -26,10 +26,8 @@ import {
 } from "../IIterableSource";
 import { BlockCachedFile } from "./BlockCachedFile";
 
-/** Backfill rows read between yields to the event loop */
-const BACKFILL_YIELD_ROWS = 256;
-/** Longest backfill window, which bounds the rows SQLite scans between two yields */
-const BACKFILL_MAX_WINDOW_SEC = 64;
+/** Rows of any topic a backfill page scans: bounds the synchronous SQLite work between yields */
+const BACKFILL_PAGE_ROWS = 4096;
 
 /** Lets the worker take a superseding seek's abort message: sql.js reads synchronously */
 async function yieldToWorker(): Promise<void> {
@@ -47,6 +45,7 @@ function dataTypeToFullName(dataType: string): string {
 export class RosDb3IterableSource implements ISerializedIterableSource {
   #files: File[];
   #bag?: Rosbag2;
+  #dbs: SqliteSqljs[] = [];
   #start: Time = { sec: 0, nsec: 0 };
   #end: Time = { sec: 0, nsec: 0 };
   #messageCounts = new Map<string, number>();
@@ -66,6 +65,7 @@ export class RosDb3IterableSource implements ISerializedIterableSource {
     await SqliteSqljs.Initialize({ wasmBinary: sqlWasm });
 
     const dbs = this.#files.map((file) => new SqliteSqljs(new BlockCachedFile(file)));
+    this.#dbs = dbs;
     const bag = new Rosbag2(dbs);
     await bag.open();
     this.#bag = bag;
@@ -203,41 +203,30 @@ export class RosDb3IterableSource implements ISerializedIterableSource {
     if (this.#bag == undefined) {
       throw new Error(`Rosbag2DataProvider is not initialized`);
     }
-    // .db3 files only index time, so read back from `time` in windows that double in length until
-    // every topic has a message or the recording's start is reached
+    // .db3 files only index time: read back from `time` in pages of rows until every topic has a
+    // message or the file's start is reached, yielding between pages even when none matched
     const latest = new Map<string, MessageEvent<Uint8Array>>();
-    let windowEnd = addTime(time, { sec: 0, nsec: 1 });
-    let rows = 0;
-    for (
-      let windowSec = 1;
-      compare(windowEnd, this.#start) > 0;
-      windowSec = Math.min(windowSec * 2, BACKFILL_MAX_WINDOW_SEC)
-    ) {
-      // Topics without messages would only make every window scan to the start
-      const missing = [...topics.keys()].filter(
-        (topic) => !latest.has(topic) && (this.#messageCounts.get(topic) ?? 0) > 0,
-      );
-      if (missing.length === 0) {
-        break;
-      }
-      // Also between windows: a sparse topic can leave many windows without a matching row
-      await yieldToWorker();
-      abortSignal?.throwIfAborted();
-      const back = subtractTime(windowEnd, { sec: windowSec, nsec: 0 });
-      const windowStart = compare(back, this.#start) > 0 ? back : this.#start;
-      for await (const msg of this.#bag.readMessages({
-        startTime: windowStart,
-        endTime: windowEnd,
-        topics: missing,
-        rawMessages: true,
-      })) {
-        if (++rows % BACKFILL_YIELD_ROWS === 0) {
-          await yieldToWorker();
+    for (const db of this.#dbs) {
+      // Per file: a split recording's files may overlap in time
+      const found = new Set<string>();
+      let next: Time | undefined = time;
+      while (next != undefined) {
+        // Topics without messages would only make the scan read to the start
+        const missing = [...topics.keys()].filter(
+          (topic) => !found.has(topic) && (this.#messageCounts.get(topic) ?? 0) > 0,
+        );
+        if (missing.length === 0) {
+          break;
         }
-        // Leaving the loop frees the window's statement
+        await yieldToWorker();
         abortSignal?.throwIfAborted();
-        const prev = latest.get(msg.topic.name);
-        if (!prev || compare(msg.timestamp, prev.receiveTime) >= 0) {
+        const page = db.backfillPage(next, missing, BACKFILL_PAGE_ROWS);
+        for (const msg of page.found) {
+          found.add(msg.topic.name);
+          const prev = latest.get(msg.topic.name);
+          if (prev && compare(prev.receiveTime, msg.timestamp) > 0) {
+            continue;
+          }
           latest.set(msg.topic.name, {
             topic: msg.topic.name,
             receiveTime: msg.timestamp,
@@ -246,8 +235,8 @@ export class RosDb3IterableSource implements ISerializedIterableSource {
             schemaName: msg.topic.type,
           });
         }
+        next = page.next;
       }
-      windowEnd = windowStart;
     }
     return [...latest.values()].sort((a, b) => compare(a.receiveTime, b.receiveTime));
   }

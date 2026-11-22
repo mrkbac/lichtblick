@@ -1,8 +1,24 @@
+diff --git a/dist/SqliteSqljs.d.ts b/dist/SqliteSqljs.d.ts
+index a8265819b621d4b34009641d094fa6bf1cae9c7d..1c717eb777c2ded18db64da4a313f03e469425ca 100644
+--- a/dist/SqliteSqljs.d.ts
++++ b/dist/SqliteSqljs.d.ts
+@@ -12,5 +12,10 @@ export declare class SqliteSqljs implements SqliteDb {
+     readMessages(opts?: MessageReadOptions): AsyncIterableIterator<RawMessage>;
+     timeRange(): Promise<[min: Time, max: Time]>;
+     messageCounts(): Promise<Map<string, number>>;
++    /** Newest message per topic among up to `limit` rows at or before `endTime`; `next` continues */
++    backfillPage(endTime: Time, topics: string[], limit: number): {
++        found: RawMessage[];
++        next: Time | undefined;
++    };
+ }
+ //# sourceMappingURL=SqliteSqljs.d.ts.map
+\ No newline at end of file
 diff --git a/dist/SqliteSqljs.js b/dist/SqliteSqljs.js
-index c7e424e49f519e40f15629d272c563077f3f5222..ae45e08c192474c7fb0c173fde4f0697d47792b1 100644
+index c7e424e49f519e40f15629d272c563077f3f5222..20fff82783eb51857cc7d6809fb28c9b03a1c9c8 100644
 --- a/dist/SqliteSqljs.js
 +++ b/dist/SqliteSqljs.js
-@@ -143,7 +143,10 @@ class SqliteSqljs {
+@@ -143,10 +143,63 @@ class SqliteSqljs {
              throw new Error(`Call open() before retrieving the time range`);
          }
          const db = __classPrivateFieldGet(this, _SqliteSqljs_context, "f").db;
@@ -14,7 +30,60 @@ index c7e424e49f519e40f15629d272c563077f3f5222..ae45e08c192474c7fb0c173fde4f0697
          const [minNsec, maxNsec] = res;
          return [(0, rostime_1.fromNanoSec)(BigInt(minNsec ?? 0n)), (0, rostime_1.fromNanoSec)(BigInt(maxNsec ?? 0n))];
      }
-@@ -175,9 +178,13 @@ class SqlJsMessageRowIterator {
++    /**
++     * Read back from `endTime` (inclusive) over at most `limit` rows of any topic, newest first,
++     * and return the newest message of each of `topics` among them. Bounded by rows, so a sparse
++     * topic can't make one call scan the whole file. `oldest` is where the next page continues
++     * (exclusive); undefined once the start was reached.
++     */
++    backfillPage(endTime, topics, limit) {
++        if (__classPrivateFieldGet(this, _SqliteSqljs_context, "f") == undefined) {
++            throw new Error(`Call open() before reading messages`);
++        }
++        const { db, topicNameToId, idToTopic } = __classPrivateFieldGet(this, _SqliteSqljs_context, "f");
++        const wanted = new Set(topics.map((name) => topicNameToId.get(name)).filter((id) => id != undefined));
++        const latestRowId = new Map();
++        let rows = 0;
++        let oldest;
++        // ponytail: rows tied at the page's oldest timestamp past the limit are skipped
++        const scan = db.prepare("select id, topic_id, cast(timestamp as TEXT) from messages where timestamp <= cast(? as INTEGER) order by timestamp desc limit ?", [(0, rostime_1.toNanoSec)(endTime).toString(), limit]);
++        try {
++            while (scan.step()) {
++                const [id, topicId, timestamp] = scan.get();
++                rows++;
++                oldest = timestamp;
++                const key = BigInt(topicId);
++                if (wanted.has(key) && !latestRowId.has(key)) {
++                    latestRowId.set(key, [id, timestamp]);
++                }
++            }
++        }
++        finally {
++            scan.free();
++        }
++        const found = [];
++        if (latestRowId.size > 0) {
++            const read = db.prepare("select data from messages where id = ?");
++            try {
++                for (const [topicId, [id, timestamp]] of latestRowId) {
++                    read.bind([id]);
++                    if (read.step()) {
++                        found.push({ topic: idToTopic.get(topicId), timestamp: (0, rostime_1.fromNanoSec)(BigInt(timestamp)), data: read.get()[0] });
++                    }
++                    read.reset();
++                }
++            }
++            finally {
++                read.free();
++            }
++        }
++        const next = rows < limit || oldest == undefined ? undefined : (0, rostime_1.fromNanoSec)(BigInt(oldest) - 1n);
++        return { found, next };
++    }
+     async messageCounts() {
+         if (__classPrivateFieldGet(this, _SqliteSqljs_context, "f") == undefined) {
+             throw new Error(`Call open() before retrieving message counts`);
+@@ -175,9 +228,13 @@ class SqlJsMessageRowIterator {
          return this;
      }
      next() {
@@ -29,7 +98,7 @@ index c7e424e49f519e40f15629d272c563077f3f5222..ae45e08c192474c7fb0c173fde4f0697
          const [topic_id, timestamp, data] = this.statement.get();
          return {
              value: { topic_id: BigInt(topic_id), timestamp: BigInt(timestamp), data },
-@@ -185,6 +192,10 @@ class SqlJsMessageRowIterator {
+@@ -185,6 +242,10 @@ class SqlJsMessageRowIterator {
          };
      }
      return() {
