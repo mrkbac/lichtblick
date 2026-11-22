@@ -7,8 +7,12 @@
 
 export const addPanel = {
   addPanel: "Add panel",
+  allPanels: "All panels",
   noLayoutSelected: "<selectLayoutLink>Select a layout</selectLayoutLink> to get started!",
   noPanelsMatchSearchCriteria: "No panels match search criteria.",
   searchPanels: "Search panels",
   selectPanelToAddToLayout: "Select a panel below to add it to your layout.",
+  suggestedForThisData: "Suggested for this data",
+  topicCount_one: "{{count}} topic",
+  topicCount_other: "{{count}} topics",
 };

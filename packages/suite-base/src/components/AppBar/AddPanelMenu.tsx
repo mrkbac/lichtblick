@@ -9,6 +9,8 @@ import { Menu, PaperProps, PopoverPosition, PopoverReference } from "@mui/materi
 import { useState } from "react";
 import { makeStyles } from "tss-react/mui";
 
+import { useMessagePipeline } from "@lichtblick/suite-base/components/MessagePipeline";
+import { selectSortedTopics } from "@lichtblick/suite-base/components/MessagePipeline/selectors";
 import { PanelCatalog } from "@lichtblick/suite-base/components/PanelCatalog";
 import useAddPanel from "@lichtblick/suite-base/hooks/useAddPanel";
 
@@ -35,6 +37,7 @@ export function AddPanelMenu(props: AddPanelProps): React.JSX.Element {
   const { classes } = useStyles();
   const { anchorEl, anchorPosition, anchorReference, disablePortal, handleClose, open } = props;
   const addPanel = useAddPanel();
+  const topics = useMessagePipeline(selectSortedTopics);
   // While a panel is dragged out of the menu, the menu stays mounted (removing the drag source ends
   // the drag in Chrome) but is hidden so its backdrop doesn't cover the layout's drop targets.
   const [dragging, setDragging] = useState(false);
@@ -75,6 +78,7 @@ export function AddPanelMenu(props: AddPanelProps): React.JSX.Element {
     >
       <PanelCatalog
         isMenu
+        topics={topics}
         onDragStart={() => {
           setDragging(true);
         }}
