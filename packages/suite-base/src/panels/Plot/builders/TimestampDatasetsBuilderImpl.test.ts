@@ -141,7 +141,25 @@ describe("TimestampDatasetsBuilderImpl", () => {
         items: items([0, 1, 2, 3], (x) => (x === 1 ? NaN : x)),
       });
       const ys = builder.getCsvData()[0]!.data.map((item) => item.y);
-      expect(ys).toEqual([0, NaN, 2, 3]);
+      expect(ys).toEqual([0, NaN, 3]);
+    });
+
+    it("keeps gaps within the budget when many samples are gaps", () => {
+      // GIVEN every other sample is a gap and the budget is 4 rows
+      const builder = new TimestampDatasetsBuilderImpl(4);
+      builder.applyAction({ type: "update-series-config", seriesItems: [seriesItem("0")] });
+      appendLive(builder, "0", range(0, 40), 10);
+      builder.applyAction({
+        type: "append-current",
+        series: key,
+        items: items(range(40, 80), (x) => (x % 2 === 0 ? x : NaN)),
+      });
+
+      // THEN the budget holds, a gap is still plotted, and the newest value is kept
+      const data = builder.getCsvData()[0]!.data;
+      expect(data.length).toBeLessThanOrEqual(4);
+      expect(data.some((item) => Number.isNaN(item.y))).toBe(true);
+      expect(data.at(-1)!.x).toBe(79);
     });
 
     it("computes stream modifiers over every sample, not the thinned ones", () => {

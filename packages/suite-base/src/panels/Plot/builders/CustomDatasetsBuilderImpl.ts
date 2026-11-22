@@ -243,8 +243,20 @@ export class CustomDatasetsBuilderImpl {
   }
 
   public updateData(actions: Immutable<UpdateDataAction[]>): void {
+    // First current row each stream got in this batch. Thinning waits until every action of the
+    // batch is in, so x and y values of the same messages are paired before anything is thinned.
+    const appended = new Map<Stream, number>();
     for (const action of actions) {
-      this.#applyAction(action);
+      const changed = this.#applyAction(action);
+      if (changed) {
+        appended.set(
+          changed.stream,
+          Math.min(changed.from, appended.get(changed.stream) ?? Infinity),
+        );
+      }
+    }
+    if (appended.size > 0) {
+      this.#thinCurrent(appended);
     }
   }
 
@@ -408,7 +420,7 @@ export class CustomDatasetsBuilderImpl {
    * bucket only grows (doubles), and later messages are kept at the same rate. Rows are paired
    * before thinning and keep their pairs, so thinning the x-axis does not move retained y values.
    */
-  #thinCurrent(stream: Stream, from: number): void {
+  #thinCurrent(appended: ReadonlyMap<Stream, number>): void {
     const currentRows = () =>
       this.#streams().reduce((sum, s) => sum + s.points.length - s.fullLength, 0);
     let total = currentRows();
@@ -418,14 +430,19 @@ export class CustomDatasetsBuilderImpl {
     for (const series of this.#seriesByKey.values()) {
       this.#pair(series);
     }
-    const floor = stream.fullLength;
-    if (this.#bucket > 0 && from > floor && from < stream.points.length) {
-      // Only the newest message may break the bucket rule. Re-check from the message before the
-      // one that was newest; it is first in its bucket, and older ones are settled.
-      const prevStart = messageStart(stream.points, from, floor);
-      this.#thin(stream, prevStart > floor ? messageStart(stream.points, prevStart, floor) : floor);
-      total = currentRows();
+    for (const [stream, from] of this.#bucket > 0 ? appended : []) {
+      const floor = stream.fullLength;
+      if (from > floor && from < stream.points.length) {
+        // Only the newest message may break the bucket rule. Re-check from the message before
+        // the one that was newest; it is first in its bucket, and older ones are settled.
+        const prevStart = messageStart(stream.points, from, floor);
+        this.#thin(
+          stream,
+          prevStart > floor ? messageStart(stream.points, prevStart, floor) : floor,
+        );
+      }
     }
+    total = currentRows();
     if (total <= this.#currentRowsBudget()) {
       return;
     }
@@ -494,7 +511,8 @@ export class CustomDatasetsBuilderImpl {
     series.pairedUpTo = Math.min(series.pairedUpTo, row);
   }
 
-  #applyAction(action: Immutable<UpdateDataAction>): void {
+  /** Returns the stream that got current rows, and the first of them */
+  #applyAction(action: Immutable<UpdateDataAction>): { stream: Stream; from: number } | undefined {
     switch (action.type) {
       case "reset-current-x":
         this.#x.points.truncate(this.#x.fullLength);
@@ -530,8 +548,7 @@ export class CustomDatasetsBuilderImpl {
       case "append-current-x": {
         const changed = appendCurrent(this.#x, action.items);
         this.#rowsChanged(this.#x, changed);
-        this.#thinCurrent(this.#x, changed);
-        break;
+        return { stream: this.#x, from: changed };
       }
       case "append-full": {
         const series = this.#seriesByKey.get(action.series);
@@ -545,7 +562,7 @@ export class CustomDatasetsBuilderImpl {
         if (series) {
           const changed = appendCurrent(series, action.items);
           this.#rowsChanged(series, changed);
-          this.#thinCurrent(series, changed);
+          return { stream: series, from: changed };
         }
         break;
       }
@@ -568,6 +585,7 @@ export class CustomDatasetsBuilderImpl {
         break;
       }
     }
+    return undefined;
   }
 }
 

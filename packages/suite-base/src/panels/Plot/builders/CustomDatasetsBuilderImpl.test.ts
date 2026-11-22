@@ -43,6 +43,8 @@ const values = (times: number[], value: (t: number) => number): ValueItem[] =>
     receiveTime: { sec: Math.floor(t), nsec: Math.round((t % 1) * 1e9) },
   }));
 
+const range40 = (): number[] => Array.from({ length: 40 }, (_, i) => i);
+
 const viewport = { size: { width: 1000, height: 500 }, bounds: {} };
 const pairs = (builder: CustomDatasetsBuilderImpl) =>
   builder.getViewportDatasets(viewport).datasetsByConfigIndex[0]!.data.map(({ x, y }) => [x, y]);
@@ -160,6 +162,37 @@ describe("CustomDatasetsBuilderImpl", () => {
       { type: "append-current", series: key, items: [xy(1), xy(5.5), xy(7)] },
     ]);
     expect(pairs(builder).map(([x]) => x)).toEqual([1, 5, 5.5, 6, 7]);
+  });
+
+  it("pairs the x and y values of one batch before thinning either", () => {
+    // GIVEN a budget of 1 row per stream and one batch with x and y for six messages
+    const builder = build({}, 1);
+    const times = [0, 1, 2, 3, 4, 5];
+    builder.updateData([
+      { type: "append-current-x", items: values(times, (t) => t) },
+      { type: "append-current", series: key, items: values(times, (t) => 10 * t) },
+    ]);
+
+    // THEN every kept y value pairs with the x value of its own message
+    const data = builder.getCsvData()[0]!.data;
+    expect(data.length).toBeGreaterThan(0);
+    for (const { x, y } of data) {
+      expect(y).toBe(10 * x);
+    }
+  });
+
+  it("keeps gaps within the budget when many messages are gaps", () => {
+    const builder = build({ xParsed: unwrap(parseMessagePath("/b.x")) }, 2);
+    builder.updateData([
+      {
+        type: "append-current",
+        series: key,
+        items: range40().map((t) => ({ ...values([t], () => (t % 2 === 0 ? t : NaN))[0]!, x: t })),
+      },
+    ]);
+    const ys = builder.getCsvData()[0]!.data.map((datum) => datum.y);
+    expect(ys.length).toBeLessThanOrEqual(4);
+    expect(ys.some(Number.isNaN)).toBe(true);
   });
 
   it("keeps gaps when thinning live data", () => {
