@@ -14,7 +14,7 @@ const MCAP_FILENAME = "example.mcap";
  * THEN it should play roughly twice as fast
  */
 
-test("should double playback speed after choosing 2x", { tag: "@regression" }, async ({
+test("should double playback speed after choosing 2x", { tag: "@smoke" }, async ({
   mainWindow,
 }) => {
   const player = new PlayerControls(mainWindow);
@@ -50,7 +50,7 @@ test("should double playback speed after choosing 2x", { tag: "@regression" }, a
  * THEN it should play roughly one-tenth as fast
  */
 
-test("should playback at one-tenth speed after choosing 0.1x", { tag: "@regression" }, async ({
+test("should playback at one-tenth speed after choosing 0.1x", { tag: "@smoke" }, async ({
   mainWindow,
 }) => {
   const player = new PlayerControls(mainWindow);

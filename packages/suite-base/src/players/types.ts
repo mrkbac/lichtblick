@@ -325,7 +325,13 @@ export type RecordingFileInfo = {
     compressedBytes: number;
     uncompressedBytes: number;
   }[];
-  attachments: { name: string; mediaType: string; sizeBytes: number }[];
+  attachments: {
+    name: string;
+    mediaType: string;
+    sizeBytes: number;
+    /** Byte offset of the attachment's record in the file, to read it without the summary */
+    offset: number;
+  }[];
 };
 
 export type TopicStats = {

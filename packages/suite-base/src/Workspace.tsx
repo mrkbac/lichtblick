@@ -26,6 +26,7 @@ import McapBundleAPI from "@lichtblick/suite-base/api/mcapBundle/McapBundleAPI";
 import { AlertsList } from "@lichtblick/suite-base/components/AlertList/AlertsList";
 import { AppBar } from "@lichtblick/suite-base/components/AppBar";
 import { AttachmentList } from "@lichtblick/suite-base/components/Attachments/AttachmentList";
+import { useToggleColorScheme } from "@lichtblick/suite-base/components/ColorSchemeThemeProvider";
 import { CommandPalette } from "@lichtblick/suite-base/components/CommandPalette/CommandPalette";
 import { LayoutShortcutListener } from "@lichtblick/suite-base/components/CommandPalette/layoutShortcuts";
 import { CompareDialog } from "@lichtblick/suite-base/components/Compare/CompareDialog";
@@ -412,9 +413,11 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
     return items;
   }, [enableDebugMode, showEventsTab]);
 
+  const toggleColorScheme = useToggleColorScheme();
   const keyDownHandlers = useMemo(
     () =>
       shortcutKeyHandlers(APP_SHORTCUTS, {
+        "app.toggleTheme": toggleColorScheme,
         "app.toggleLeftSidebar": () => {
           sidebarActions.left.setOpen((oldValue) => !oldValue);
         },
@@ -446,6 +449,7 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
       leftSidebarOpen,
       sidebarActions.left,
       sidebarActions.right,
+      toggleColorScheme,
     ],
   );
 

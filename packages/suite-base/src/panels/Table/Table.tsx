@@ -248,9 +248,16 @@ export default function Table({
     [pageIndex, pageSize],
   );
 
-  const data = React.useMemo(() => {
-    return Array.isArray(value) ? value : isTypedArray(value) ? Array.from(value) : [value];
-  }, [value]);
+  const rowCount = Array.isArray(value) || isTypedArray(value) ? value.length : 1;
+  // Only the shown page of a typed array becomes regular numbers, not all of a point cloud's bytes
+  const pageRows = React.useMemo(() => {
+    const start = pageIndex * pageSize;
+    const end = start + pageSize;
+    if (Array.isArray(value)) {
+      return value.slice(start, end);
+    }
+    return isTypedArray(value) ? Array.from(value.subarray(start, end)) : [value].slice(start, end);
+  }, [value, pageIndex, pageSize]);
 
   const [expanded, setExpanded] = React.useState<ExpandedState>({});
 
@@ -259,11 +266,11 @@ export default function Table({
     autoResetExpanded: false,
     getRowCanExpand: () => true,
     columns,
-    data: data.slice(pageIndex * pageSize, (pageIndex + 1) * pageSize),
+    data: pageRows,
     initialState: { pagination },
     onExpandedChange: setExpanded,
     manualPagination: true,
-    pageCount: Math.ceil(data.length / pagination.pageSize),
+    pageCount: Math.ceil(rowCount / pagination.pageSize),
     onPaginationChange: setPagination,
     state: {
       expanded,

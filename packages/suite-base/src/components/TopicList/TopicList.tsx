@@ -28,10 +28,11 @@ import { PlayerPresence } from "@lichtblick/suite-base/players/types";
 import { MessagePathSelectionProvider } from "@lichtblick/suite-base/services/messagePathDragging/MessagePathSelectionProvider";
 
 import { MessagePathRow } from "./MessagePathRow";
+import { SelectedTopicKeys } from "./SelectedTopicKeys";
 import { useStyles } from "./TopicList.style";
 import { TopicRow } from "./TopicRow";
 import { useMultiSelection } from "./useMultiSelection";
-import { useOpenMessagePathsInPanel } from "./useOpenMessagePathsInPanel";
+import { useOpenMessagePathsInPanel, usePrefetchOpenInSchemas } from "./useOpenMessagePathsInPanel";
 import { useTopicListSearch } from "./useTopicListSearch";
 
 export function TopicList(): React.JSX.Element {
@@ -54,6 +55,10 @@ export function TopicList(): React.JSX.Element {
     filterText: debouncedFilterText,
   });
   const { selectedIndexes, onSelect, getSelectedIndexes } = useMultiSelection(treeItems);
+  const soleSelectedItem =
+    selectedIndexes.size === 1 ? treeItems[selectedIndexes.values().next().value!] : undefined;
+  const soleSelectedTopic =
+    soleSelectedItem?.type === "topic" ? soleSelectedItem.item.item.name : undefined;
 
   // The virtualizer re-reads row heights only when the keys change, so they include the row type
   const getItemKey = useCallback(
@@ -84,28 +89,43 @@ export function TopicList(): React.JSX.Element {
     );
   }, [getSelectedIndexes, latestTreeItems]);
 
-  const handleContextMenu = useCallback(
-    (event: MouseEvent, index: number) => {
-      event.preventDefault();
-
+  const openMenu = useCallback(
+    (position: PopoverPosition, index: number) => {
       const latestSelectedIndexes = getSelectedIndexes();
       // Select only the clicked item if it was not already selected
       if (!latestSelectedIndexes.has(index)) {
         onSelect({ index, modKey: false, shiftKey: false });
       }
-      setContextMenuState({
-        position: { left: event.clientX, top: event.clientY },
-        items: getSelectedItemsAsDraggedMessagePaths(),
-      });
+      setContextMenuState({ position, items: getSelectedItemsAsDraggedMessagePaths() });
     },
     [getSelectedIndexes, getSelectedItemsAsDraggedMessagePaths, onSelect],
+  );
+
+  const handleContextMenu = useCallback(
+    (event: MouseEvent, index: number) => {
+      event.preventDefault();
+      openMenu({ left: event.clientX, top: event.clientY }, index);
+    },
+    [openMenu],
+  );
+
+  const handleOpenInPanelClick = useCallback(
+    (event: MouseEvent<HTMLElement>, index: number) => {
+      event.stopPropagation();
+      const rect = event.currentTarget.getBoundingClientRect();
+      openMenu({ left: rect.left, top: rect.bottom }, index);
+    },
+    [openMenu],
   );
 
   const openMessagePathsInPanel = useOpenMessagePathsInPanel();
   const handleDoubleClick = useCallback(() => {
     // The two clicks before the double-click already updated the selection
-    openMessagePathsInPanel(getSelectedItemsAsDraggedMessagePaths());
+    void openMessagePathsInPanel(getSelectedItemsAsDraggedMessagePaths());
   }, [getSelectedItemsAsDraggedMessagePaths, openMessagePathsInPanel]);
+
+  // Load the panels' schemas before the first right-click or double-click needs them
+  const prefetchOpenInSchemas = usePrefetchOpenInSchemas();
 
   const handleContextMenuClose = useCallback(() => {
     setContextMenuState(undefined);
@@ -136,6 +156,9 @@ export function TopicList(): React.JSX.Element {
               onContextMenu={(event) => {
                 handleContextMenu(event, index);
               }}
+              onOpenInPanelClick={(event) => {
+                handleOpenInPanelClick(event, index);
+              }}
             />
           );
         case "schema":
@@ -155,7 +178,14 @@ export function TopicList(): React.JSX.Element {
       }
       return null;
     },
-    [handleContextMenu, handleDoubleClick, onSelect, selectedIndexes, treeItems],
+    [
+      handleContextMenu,
+      handleDoubleClick,
+      handleOpenInPanelClick,
+      onSelect,
+      selectedIndexes,
+      treeItems,
+    ],
   );
 
   if (playerPresence === PlayerPresence.NOT_PRESENT) {
@@ -201,7 +231,7 @@ export function TopicList(): React.JSX.Element {
 
   return (
     <MessagePathSelectionProvider getSelectedItems={getSelectedItemsAsDraggedMessagePaths}>
-      <div className={classes.root}>
+      <div className={classes.root} onPointerEnter={prefetchOpenInSchemas}>
         <SearchBar
           id="topic-filter"
           placeholder={t("searchBarPlaceholder")}
@@ -214,7 +244,12 @@ export function TopicList(): React.JSX.Element {
           onClear={onClear}
         />
         {treeItems.length > 0 ? (
-          <div ref={scrollRef} style={{ flex: "1 1 100%", overflowY: "auto" }}>
+          // Focusable, so clicking a row focuses the list and its keys (N / Shift+N) apply
+          <div
+            ref={scrollRef}
+            tabIndex={-1}
+            style={{ flex: "1 1 100%", overflowY: "auto", outline: "none" }}
+          >
             <div style={{ height: virtualizer.getTotalSize(), position: "relative" }}>
               {virtualizer.getVirtualItems().map((virtualRow) =>
                 renderRow(virtualRow.index, virtualRow.key, {
@@ -235,6 +270,9 @@ export function TopicList(): React.JSX.Element {
             {playerPresence === PlayerPresence.RECONNECTING && t("waitingForConnection")}
           </EmptyState>
         )}
+        {soleSelectedTopic != undefined && (
+          <SelectedTopicKeys topicName={soleSelectedTopic} containerRef={scrollRef} />
+        )}
         <DirectTopicStatsUpdater interval={6} />
       </div>
       {contextMenuState && (
@@ -242,6 +280,7 @@ export function TopicList(): React.JSX.Element {
           onClose={handleContextMenuClose}
           anchorPosition={contextMenuState.position}
           messagePaths={contextMenuState.items}
+          doubleClickOpens
         />
       )}
     </MessagePathSelectionProvider>
