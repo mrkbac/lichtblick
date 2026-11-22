@@ -158,15 +158,11 @@ export type HistoryLimits = {
   maxPoints: number;
 };
 
-/** ~1000 Hz for 1 s or 10 Hz for 100 s; 10 M points is a few hundred MB of GPU buffers. */
-export const DECAY_HISTORY_LIMITS: HistoryLimits = { maxEntries: 1_000, maxPoints: 10_000_000 };
-
 /**
- * Limits of a point decay ring: 20 Hz for 100 s at full density. Past them it thins evenly, so this
- * only sets how dense the history can be. Each scan costs one transform lookup per frame (~1 ms for
- * all 2048).
+ * ~1000 Hz for 1 s or 10 Hz for 100 s; 10 M points is a few hundred MB of GPU buffers. A point decay
+ * ring past these thins evenly, so for it they only set how dense the history can be.
  */
-export const DECAY_RING_LIMITS: HistoryLimits = { ...DECAY_HISTORY_LIMITS, maxEntries: 2_048 };
+export const DECAY_HISTORY_LIMITS: HistoryLimits = { maxEntries: 1_000, maxPoints: 10_000_000 };
 
 type HistoryEntry<TRenderable extends HistoryRenderable> = {
   receiveTime: bigint;

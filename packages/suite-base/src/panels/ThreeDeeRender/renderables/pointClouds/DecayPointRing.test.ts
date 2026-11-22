@@ -203,6 +203,42 @@ describe("DecayPointRing", () => {
     expect(ring.stride()).toBe(1);
   });
 
+  it("recomputes no pose rows until the transforms change, then rechecks them", () => {
+    const { ring, points } = makeRing();
+    push(ring, 1n, 1);
+    push(ring, 2n, 1);
+    const tree = {
+      apply: (...args: Parameters<Renderer["transformTree"]["apply"]>) =>
+        transformTree.apply(...args),
+      version: 1,
+    } as unknown as Renderer["transformTree"];
+    const apply = vi.spyOn(tree, "apply");
+    ring.updatePoses(tree, 0n, "map", "map");
+    points.poseAttribute()!.clearUpdateRanges();
+    apply.mockClear();
+
+    ring.updatePoses(tree, 0n, "map", "map");
+    expect(apply).toHaveBeenCalledTimes(1); // render <- fixed only
+    expect(points.poseAttribute()!.updateRanges).toEqual([]);
+
+    (tree as { version: number }).version = 2;
+    ring.updatePoses(tree, 0n, "map", "map");
+    expect(apply).toHaveBeenCalledTimes(1 + 2 + 1);
+    expect(points.poseAttribute()!.updateRanges).toEqual([{ start: 0, count: 2 * 12 }]);
+  });
+
+  it("places the whole ring by the render frame's transform", () => {
+    const { ring, poseRow } = makeRing();
+    push(ring, 10n, 1);
+    push(ring, 20n, 1);
+    ring.updatePoses(transformTree, 5n, "map", "odom"); // render <- fixed: x + 5
+
+    // Rows are relative to the first placed scan (the newest) in the fixed frame
+    expect(poseRow(1)).toEqual(rows(new THREE.Matrix4()));
+    expect(poseRow(0)).toEqual(rows(new THREE.Matrix4().makeTranslation(-10, 0, 0)));
+    expect(ring.position.x).toBe(25);
+  });
+
   it("uploads only the poses of slots in use", () => {
     const { ring, points } = makeRing();
     push(ring, 1n, 1);

@@ -16,7 +16,6 @@ import {
   createGeometry,
   pointStyle,
   DECAY_HISTORY_LIMITS,
-  DECAY_RING_LIMITS,
   RenderObjectHistory,
   PointsRenderable,
 } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/pointExtensionUtils";
@@ -411,7 +410,7 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
     if (latestCount > 0) {
       if (!this.#decayRing) {
         this.#decayRing = new DecayPointRing(topic, pointStyle(settings), {
-          maxEntries: DECAY_RING_LIMITS.maxEntries,
+          maxEntries: DECAY_HISTORY_LIMITS.maxEntries,
           maxPoints: decayMaxPoints(settings),
         });
         this.add(this.#decayRing);
@@ -491,7 +490,7 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
         this.#decayNoticeKey = key;
         const values = {
           maxPoints: maxPoints.toLocaleString(locale),
-          maxScans: DECAY_RING_LIMITS.maxEntries.toLocaleString(locale),
+          maxScans: DECAY_HISTORY_LIMITS.maxEntries.toLocaleString(locale),
           stride: ring.stride().toLocaleString(locale),
         };
         this.renderer.settings.errors.add(

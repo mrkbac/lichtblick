@@ -14,7 +14,6 @@ import {
   createGeometry,
   PointsRenderable,
   DECAY_HISTORY_LIMITS,
-  DECAY_RING_LIMITS,
   pointStyle,
   RenderObjectHistory,
 } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/pointExtensionUtils";
@@ -191,7 +190,7 @@ class LaserScanHistoryRenderable extends Renderable<LaserScanHistoryUserData> {
     const previousCount = latest.geometry.drawRange.count;
     if (settings.decayTime > 0 && previousCount > 0 && laserScan !== latest.userData.laserScan) {
       if (!this.#decayRing) {
-        this.#decayRing = new DecayPointRing(topic, style, DECAY_RING_LIMITS);
+        this.#decayRing = new DecayPointRing(topic, style, DECAY_HISTORY_LIMITS);
         this.add(this.#decayRing);
       }
       const { position, color } = latest.geometry.attributes;
