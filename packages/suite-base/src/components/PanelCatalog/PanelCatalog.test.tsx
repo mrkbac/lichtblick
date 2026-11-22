@@ -33,11 +33,15 @@ const catalog = {
   getPanelByType: (type: string) => panels.find((p) => p.type === type),
 } as unknown as PanelCatalogType;
 
-function renderCatalog(topics: { name: string; schemaName: string }[]) {
+function renderCatalog(
+  topics: { name: string; schemaName: string }[],
+  onPanelSelect: (selection: { type: string }) => void = vi.fn(),
+  value: PanelCatalogType = catalog,
+) {
   return render(
     <ThemeProvider isDark={false}>
-      <PanelCatalogContext.Provider value={catalog}>
-        <PanelCatalog onPanelSelect={vi.fn()} topics={topics} />
+      <PanelCatalogContext.Provider value={value}>
+        <PanelCatalog onPanelSelect={onPanelSelect} topics={topics} />
       </PanelCatalogContext.Provider>
     </ThemeProvider>,
   );
@@ -75,5 +79,38 @@ describe("PanelCatalog suggestions", () => {
     });
     expect(screen.queryByText("Suggested for this data")).toBeNull();
     expect(itemTitles()).toEqual(["Audio", "Log", "Plot"]);
+  });
+
+  it("keeps the highlighted panel when suggestions load and reorder the list", async () => {
+    // Fresh panels whose schemas load only when released (loaded schemas are cached per panel)
+    let release = () => {};
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const slowPanels = [
+      panel("Audio"),
+      panel("Log", {
+        openIn: { kind: "topic" },
+        docs: async () => {
+          await gate;
+          return { default: { intro: "", schemas: ["pkg/Log"] } };
+        },
+      }),
+    ];
+    const slowCatalog = {
+      getPanels: () => slowPanels,
+      getPanelByType: (type: string) => slowPanels.find((p) => p.type === type),
+    } as unknown as PanelCatalogType;
+    const onPanelSelect = vi.fn();
+    renderCatalog([{ name: "/log", schemaName: "pkg/Log" }], onPanelSelect, slowCatalog);
+    const search = screen.getByPlaceholderText("Search panels");
+
+    // Highlight the first panel (Audio) before the suggestions move Log to the top
+    await userEvent.type(search, "{ArrowDown}");
+    release();
+    await screen.findByText("Suggested for this data");
+    await userEvent.type(search, "{Enter}");
+
+    expect(onPanelSelect).toHaveBeenCalledWith(expect.objectContaining({ type: "Audio" }));
   });
 });

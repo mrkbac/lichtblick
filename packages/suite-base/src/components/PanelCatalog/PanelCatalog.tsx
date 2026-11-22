@@ -137,7 +137,8 @@ export function PanelCatalog(props: Props): React.JSX.Element {
   const { t } = useTranslation("addPanel");
 
   const [searchQuery, setSearchQuery] = useState("");
-  const [highlightedPanelIdx, setHighlightedPanelIdx] = useState<number | undefined>();
+  // The panel itself, not its index: suggestions load later and move panels around
+  const [highlight, setHighlight] = useState<PanelInfo | "first" | undefined>();
 
   // Not `autoFocus`: a surrounding MUI Menu focuses its list in a layout effect right after mount,
   // which takes focus back from the field. A passive effect runs after that.
@@ -152,7 +153,7 @@ export function PanelCatalog(props: Props): React.JSX.Element {
 
     // When there is a search query, automatically highlight the first (0th) item.
     // When the user erases the query, remove the highlight.
-    setHighlightedPanelIdx(query ? 0 : undefined);
+    setHighlight(query ? "first" : undefined);
   }, []);
 
   const panelCatalog = usePanelCatalog();
@@ -245,9 +246,15 @@ export function PanelCatalog(props: Props): React.JSX.Element {
     [filteredPreconfiguredPanels, filteredRegularPanels, suggestedPanels],
   );
 
-  const highlightedPanel = useMemo(() => {
-    return highlightedPanelIdx != undefined ? allFilteredPanels[highlightedPanelIdx] : undefined;
-  }, [allFilteredPanels, highlightedPanelIdx]);
+  const highlightedPanel =
+    highlight === "first"
+      ? allFilteredPanels[0]
+      : highlight && allFilteredPanels.includes(highlight)
+        ? highlight
+        : undefined;
+  const highlightedPanelIdx = highlightedPanel
+    ? allFilteredPanels.indexOf(highlightedPanel)
+    : undefined;
 
   const noResults = allFilteredPanels.length === 0;
 
@@ -262,25 +269,19 @@ export function PanelCatalog(props: Props): React.JSX.Element {
         return;
       }
 
+      const count = allFilteredPanels.length;
       if (e.key === "ArrowDown") {
-        setHighlightedPanelIdx((existing) => {
-          if (existing == undefined) {
-            return 0;
-          }
-          return (existing + 1) % allFilteredPanels.length;
-        });
+        setHighlight(
+          allFilteredPanels[
+            highlightedPanelIdx == undefined ? 0 : (highlightedPanelIdx + 1) % count
+          ],
+        );
       } else if (e.key === "ArrowUp") {
-        setHighlightedPanelIdx((existing) => {
-          // nothing to highlight if there are no entries
-          if (allFilteredPanels.length <= 0) {
-            return undefined;
-          }
-
-          if (existing == undefined) {
-            return allFilteredPanels.length - 1;
-          }
-          return (existing - 1 + allFilteredPanels.length) % allFilteredPanels.length;
-        });
+        setHighlight(
+          allFilteredPanels[
+            highlightedPanelIdx == undefined ? count - 1 : (highlightedPanelIdx - 1 + count) % count
+          ],
+        );
       } else if (e.key === "Enter" && highlightedPanel) {
         onPanelSelect({
           type: highlightedPanel.type,
@@ -288,7 +289,7 @@ export function PanelCatalog(props: Props): React.JSX.Element {
         });
       }
     },
-    [allFilteredPanels.length, highlightedPanel, mode, onPanelSelect],
+    [allFilteredPanels, highlightedPanel, highlightedPanelIdx, mode, onPanelSelect],
   );
 
   return (
