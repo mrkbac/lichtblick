@@ -821,7 +821,7 @@ describe("TimestampDatasetsBuilder", () => {
     });
   });
 
-  it("should cull current messages after threshold is reached", async () => {
+  it("keeps all current messages while under the memory budget", async () => {
     const builder = new TimestampDatasetsBuilder();
 
     builder.setSeries(
@@ -869,7 +869,7 @@ describe("TimestampDatasetsBuilder", () => {
       });
     }
 
-    // Next batch goes over the limit so some of the previous will be culled
+    // Next batch passes the old fixed cap of 50k; nothing is dropped
     {
       builder.handlePlayerState(
         buildPlayerState({
@@ -882,13 +882,9 @@ describe("TimestampDatasetsBuilder", () => {
         bounds: {},
       });
 
-      expect(result.datasetsByConfigIndex[0]!.data.length).toEqual(37500);
-      expect(result.datasetsByConfigIndex[0]!.data[0]).toEqual({
-        x: 22_500,
-        y: 22_500,
-        value: 22_500,
-      });
-      expect(result.datasetsByConfigIndex[0]!.data[37_499]).toEqual({
+      expect(result.datasetsByConfigIndex[0]!.data.length).toEqual(60_000);
+      expect(result.datasetsByConfigIndex[0]!.data[0]).toEqual({ x: 0, y: 0, value: 0 });
+      expect(result.datasetsByConfigIndex[0]!.data[59_999]).toEqual({
         x: 59_999,
         y: 59_999,
         value: 59_999,
