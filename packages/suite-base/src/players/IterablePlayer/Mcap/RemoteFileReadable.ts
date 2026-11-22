@@ -81,7 +81,9 @@ export class RemoteFileReadable {
    * cached, and the chunk read that follows needs no second round trip.
    */
   public setChunks(chunks: readonly McapTypes.ChunkIndex[]): void {
-    const maxBytes = BigInt(Math.min(MAX_CHUNK_WITH_INDEX_BYTES, Math.floor(this.#cacheSizeInBytes / 4)));
+    const maxBytes = BigInt(
+      Math.min(MAX_CHUNK_WITH_INDEX_BYTES, Math.floor(this.#cacheSizeInBytes / 4)),
+    );
     const adjacent = chunks
       .filter(
         (chunk) =>
