@@ -4,7 +4,10 @@
 
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 
-import { setSaveSessionBeforeReload } from "@lichtblick/suite-base/hooks/useServiceWorkerUpdate";
+import {
+  setSaveSessionBeforeReload,
+  takeResumePlayback,
+} from "@lichtblick/suite-base/hooks/useServiceWorkerUpdate";
 import ThemeProvider from "@lichtblick/suite-base/theme/ThemeProvider";
 
 import { UpdateIndicator } from "./UpdateIndicator";
@@ -66,6 +69,7 @@ describe("UpdateIndicator", () => {
       await new Promise<void>((resolve) => {
         finishSave = resolve;
       });
+      return undefined;
     });
     const waiting = fakeWorker();
     mockRegistration({ active: fakeWorker(), waiting });
@@ -99,12 +103,40 @@ describe("UpdateIndicator", () => {
     });
   });
 
-  it("saves the session before updating", async () => {
+  it("updates to a newer version that replaced the waiting one during the save", async () => {
     let finishSave = () => {};
     const unregister = setSaveSessionBeforeReload(async () => {
       await new Promise<void>((resolve) => {
         finishSave = resolve;
       });
+      return undefined;
+    });
+    const waiting = fakeWorker();
+    const registration = { active: fakeWorker(), waiting };
+    mockRegistration(registration);
+    renderIndicator();
+
+    fireEvent.click(await screen.findByTestId("update-indicator"));
+    const newer = fakeWorker();
+    waiting.state = "redundant";
+    registration.waiting = newer;
+    finishSave();
+    await waitFor(() => {
+      expect(newer.postMessage).toHaveBeenCalledWith({ type: "SKIP_WAITING" });
+    });
+    expect(waiting.postMessage).not.toHaveBeenCalled();
+    unregister();
+  });
+
+  it("saves the session before updating, and stores what to resume only when reloading", async () => {
+    const reload = vi.fn();
+    vi.spyOn(window, "location", "get").mockReturnValue({ reload } as unknown as Location);
+    let finishSave = () => {};
+    const unregister = setSaveSessionBeforeReload(async () => {
+      await new Promise<void>((resolve) => {
+        finishSave = resolve;
+      });
+      return "source";
     });
     const waiting = fakeWorker();
     mockRegistration({ active: fakeWorker(), waiting });
@@ -117,7 +149,15 @@ describe("UpdateIndicator", () => {
     await waitFor(() => {
       expect(waiting.postMessage).toHaveBeenCalledWith({ type: "SKIP_WAITING" });
     });
+    // the activation may still fail: a manual reload now must not resume playback
+    expect(sessionStorage.length).toBe(0);
+    act(() => {
+      navigator.serviceWorker.dispatchEvent(new Event("controllerchange"));
+    });
+    expect(reload).toHaveBeenCalledTimes(1);
+    expect(takeResumePlayback()).toBe("source");
     unregister();
+    vi.restoreAllMocks();
   });
 
   it("stays hidden on the very first install", async () => {

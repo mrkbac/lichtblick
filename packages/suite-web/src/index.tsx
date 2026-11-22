@@ -11,7 +11,10 @@ import { createRoot } from "react-dom/client";
 import Logger from "@lichtblick/log";
 import type { IDataSourceFactory } from "@lichtblick/suite-base";
 import CssBaseline from "@lichtblick/suite-base/components/CssBaseline";
-import { reloadToLatestVersion } from "@lichtblick/suite-base/hooks/useServiceWorkerUpdate";
+import {
+  recoverFromMissingAssets,
+  reloadToLatestVersion,
+} from "@lichtblick/suite-base/hooks/useServiceWorkerUpdate";
 import waitForFonts from "@lichtblick/suite-base/util/waitForFonts";
 
 import { CompatibilityBanner } from "./CompatibilityBanner";
@@ -154,6 +157,7 @@ export async function main(getParams: () => Promise<MainParams> = async () => ({
     navigator.serviceWorker.register("sw.js").catch((err: unknown) => {
       log.error("Service worker registration failed", err);
     });
+    recoverFromMissingAssets();
     if (!navigator.serviceWorker.controller) {
       cacheLoadedAssets();
     }

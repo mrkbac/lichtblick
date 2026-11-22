@@ -8,7 +8,6 @@ import { useMessagePipelineGetter } from "@lichtblick/suite-base/components/Mess
 import { useLayoutManager } from "@lichtblick/suite-base/context/LayoutManagerContext";
 import {
   playerSourceKey,
-  rememberPlaybackForReload,
   setSaveSessionBeforeReload,
 } from "@lichtblick/suite-base/hooks/useServiceWorkerUpdate";
 import { updateUrl } from "@lichtblick/suite-base/hooks/useStateToURLSynchronization";
@@ -21,7 +20,7 @@ const MAX_SAVE_WAIT_MS = 3000;
 /**
  * Before an update reloads this window, save what the reload would otherwise lose: the last layout
  * edit (debounced, then written asynchronously), the exact playback time (the URL lags by up to
- * half a second) and whether the recording was playing (recordings open paused).
+ * half a second) and which recording was playing (recordings open paused).
  */
 export function useSaveSessionBeforeReload(): void {
   const getMessagePipeline = useMessagePipelineGetter();
@@ -38,12 +37,12 @@ export function useSaveSessionBeforeReload(): void {
         // read last: playback kept going while the layout saved
         const { playerState } = getMessagePipeline();
         const activeData = playerState.activeData;
-        if (activeData && isRecordingSource(playerState.capabilities)) {
-          updateUrl({ time: activeData.currentTime });
-          rememberPlaybackForReload(
-            activeData.isPlaying ? playerSourceKey(playerState) : undefined,
-          );
+        if (!activeData || !isRecordingSource(playerState.capabilities)) {
+          return undefined;
         }
+        updateUrl({ time: activeData.currentTime });
+        // stored right before the reload, see reloadPage
+        return activeData.isPlaying ? playerSourceKey(playerState) : undefined;
       }),
     [getMessagePipeline, layoutManager],
   );

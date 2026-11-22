@@ -45,13 +45,20 @@ export async function checkForServiceWorkerUpdate(): Promise<boolean> {
 /** Set when this window asked for the update; only then does controllerchange reload it. */
 let updateRequestedHere = false;
 
-let saveSession: (() => Promise<void>) | undefined;
+/**
+ * Saves the session and returns the playerSourceKey of the recording to resume, if it was playing.
+ */
+type SaveSession = () => Promise<string | undefined>;
+
+let saveSession: SaveSession | undefined;
+/** What the next reload resumes; stored only right before it (see reloadPage) */
+let pendingResumeSource: string | undefined;
 
 /**
  * The workspace registers how to save what a reload would otherwise lose (see
  * useSaveSessionBeforeReload). Every update reload awaits it first. Returns the unregister function.
  */
-export function setSaveSessionBeforeReload(save: () => Promise<void>): () => void {
+export function setSaveSessionBeforeReload(save: SaveSession): () => void {
   saveSession = save;
   return () => {
     if (saveSession === save) {
@@ -62,10 +69,19 @@ export function setSaveSessionBeforeReload(save: () => Promise<void>): () => voi
 
 async function saveSessionBeforeReload(): Promise<void> {
   try {
-    await saveSession?.();
+    pendingResumeSource = await saveSession?.();
   } catch (error: unknown) {
     log.warn("Saving the session before reload failed", error);
   }
+}
+
+/**
+ * Every reload of this module goes through here. The resume key is written only now, when the
+ * reload is certain: an activation that never happens must not make a later manual reload play.
+ */
+function reloadPage(): void {
+  rememberPlaybackForReload(pendingResumeSource);
+  window.location.reload();
 }
 
 const RESUME_PLAYBACK_KEY = "lichtblick.resumePlaybackAfterReload";
@@ -73,6 +89,8 @@ const RESUME_PLAYBACK_KEY = "lichtblick.resumePlaybackAfterReload";
 /**
  * Identifies the recording a player plays, across a reload (the player id is new each load).
  * Undefined while the player has no source.
+ * ponytail: source type + player name (the file names, or the URL's), so a different file with the
+ * same name would resume too. Players report no size or mtime; add one to PlayerState if that bites.
  */
 export function playerSourceKey(
   playerState: Pick<PlayerState, "urlState" | "name">,
@@ -120,7 +138,7 @@ export function applyServiceWorkerUpdate(worker: ServiceWorker): void {
   updateRequestedHere = true;
   worker.addEventListener("statechange", () => {
     if (worker.state === "activated" && !navigator.serviceWorker.controller) {
-      window.location.reload();
+      reloadPage();
     }
   });
   worker.postMessage({ type: "SKIP_WAITING" });
@@ -132,7 +150,7 @@ const STALE_RELOAD_COOLDOWN_MS = 30_000;
 /**
  * A lazy chunk failed to load, most likely because a newer deploy replaced this build's files.
  * Switch to the newest version: activate the updated service worker if there is one (that reloads
- * every window), else reload. Does nothing if it already tried recently, so a chunk that fails for
+ * this window), else reload. Does nothing if it already tried recently, so a chunk that fails for
  * another reason (offline, still missing after the reload) can't cause a reload loop.
  * Returns whether it started a reload.
  */
@@ -151,14 +169,61 @@ export async function reloadToLatestVersion(): Promise<boolean> {
   });
   const waiting = hasUpdate ? (await container?.getRegistration())?.waiting : undefined;
   if (container && waiting) {
-    container.addEventListener("controllerchange", () => {
-      window.location.reload();
-    });
+    container.addEventListener("controllerchange", reloadPage);
     applyServiceWorkerUpdate(waiting);
   } else {
-    window.location.reload();
+    reloadPage();
   }
   return true;
+}
+
+/** Set when another window switched this page's service worker to a newer build. */
+let controllerChangedElsewhere = false;
+
+/** Same literal in the service worker's runtime cache plugin (rspackConfigs.ts). */
+const MISSING_ASSET_MESSAGE = "lichtblick.missingAsset";
+
+type MissingAssetMessage = { type: typeof MISSING_ASSET_MESSAGE; url: string; direct: boolean };
+
+function isMissingAssetMessage(data: unknown): data is MissingAssetMessage {
+  return (
+    typeof data === "object" &&
+    data != undefined &&
+    "type" in data &&
+    data.type === MISSING_ASSET_MESSAGE &&
+    "direct" in data &&
+    typeof data.direct === "boolean"
+  );
+}
+
+/**
+ * A window left on an older build keeps running until the user updates it, but a file it loads
+ * later (a lazy chunk, a worker, a wasm module, a fetched asset) may be gone from the host. The
+ * service worker sees every such request and reports a missing file: to the window that asked
+ * (`direct`), or, when a worker asked, to every window. Switch to the latest version then (the
+ * session is saved first). A broadcast only switches windows that are known to be stale, so a
+ * window on the current build is never interrupted.
+ * The script `error` listener in suite-web's index.tsx covers pages without a service worker.
+ */
+export function recoverFromMissingAssets(): void {
+  const container = navigator.serviceWorker as ServiceWorkerContainer | undefined;
+  if (!container) {
+    return;
+  }
+  container.addEventListener("controllerchange", () => {
+    if (!updateRequestedHere) {
+      controllerChangedElsewhere = true;
+    }
+  });
+  container.addEventListener("message", (event: MessageEvent) => {
+    const data = event.data as unknown;
+    if (isMissingAssetMessage(data) && (data.direct || controllerChangedElsewhere)) {
+      log.warn("A file of this build is gone, switching to the latest version", data.url);
+      void reloadToLatestVersion();
+    }
+  });
+  // messages sent before the listener existed are queued until this
+  container.startMessages();
 }
 
 export type ServiceWorkerUpdate = {
@@ -197,7 +262,7 @@ export function useServiceWorkerUpdate(): ServiceWorkerUpdate | undefined {
         setActivatedElsewhere(true);
       } else if (!reloading) {
         reloading = true;
-        window.location.reload();
+        reloadPage();
       }
     };
     container.addEventListener("controllerchange", onControllerChange);
@@ -242,9 +307,7 @@ export function useServiceWorkerUpdate(): ServiceWorkerUpdate | undefined {
     return {
       kind: "activated",
       update: () => {
-        void saveSessionBeforeReload().then(() => {
-          window.location.reload();
-        });
+        void saveSessionBeforeReload().then(reloadPage);
       },
     };
   }
@@ -252,13 +315,18 @@ export function useServiceWorkerUpdate(): ServiceWorkerUpdate | undefined {
     ? {
         kind: "waiting",
         update: () => {
-          void saveSessionBeforeReload().then(() => {
+          void saveSessionBeforeReload().then(async () => {
+            let worker: ServiceWorker | null | undefined = waiting;
+            // A newer deploy may have replaced it during the save: update to that one instead
+            if (worker.state === "redundant") {
+              worker = (await navigator.serviceWorker.getRegistration())?.waiting;
+            }
             // Another window may have activated it during the save: it no longer waits, and
             // SKIP_WAITING would change nothing, so no controllerchange would reload this one
-            if (waiting.state === "installed") {
-              applyServiceWorkerUpdate(waiting);
+            if (worker?.state === "installed") {
+              applyServiceWorkerUpdate(worker);
             } else {
-              window.location.reload();
+              reloadPage();
             }
           });
         },

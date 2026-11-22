@@ -215,6 +215,39 @@ export const mainConfig =
                           response.headers.get("content-type")?.startsWith("text/html") !== true
                             ? response
                             : null,
+                        // That index.html means the asking page runs an older build whose file is
+                        // gone. Tell it, so it switches (recoverFromMissingAssets); a worker can't
+                        // reload, so a request from one is reported to every window. Self-contained:
+                        // workbox copies this source into sw.js.
+                        fetchDidSucceed: async ({ request, response, event }) => {
+                          if (
+                            response.headers.get("content-type")?.startsWith("text/html") !== true
+                          ) {
+                            return response;
+                          }
+                          type Client = { type: string; postMessage: (message: unknown) => void };
+                          const { clients } = self as unknown as {
+                            clients: {
+                              get: (id: string) => Promise<Client | undefined>;
+                              matchAll: (options: { type: string }) => Promise<Client[]>;
+                            };
+                          };
+                          const clientId = (event as { clientId?: string } | undefined)?.clientId;
+                          const client = clientId ? await clients.get(clientId) : undefined;
+                          const direct = client?.type === "window";
+                          const targets =
+                            client && direct
+                              ? [client]
+                              : await clients.matchAll({ type: "window" });
+                          for (const target of targets) {
+                            target.postMessage({
+                              type: "lichtblick.missingAsset",
+                              url: request.url,
+                              direct,
+                            });
+                          }
+                          return response;
+                        },
                       },
                     ],
                   },

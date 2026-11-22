@@ -10,11 +10,11 @@ import { useSaveSessionBeforeReload } from "./useSaveSessionBeforeReload";
 import { takeResumePlayback } from "./useServiceWorkerUpdate";
 
 let busy = true;
-let saveSession: (() => Promise<void>) | undefined;
+let saveSession: (() => Promise<string | undefined>) | undefined;
 
 vi.mock("@lichtblick/suite-base/hooks/useServiceWorkerUpdate", async (importOriginal) => ({
   ...(await importOriginal<object>()),
-  setSaveSessionBeforeReload: (save: () => Promise<void>) => {
+  setSaveSessionBeforeReload: (save: () => Promise<string | undefined>) => {
     saveSession = save;
     return () => {};
   },
@@ -34,14 +34,16 @@ vi.mock("@lichtblick/suite-base/components/MessagePipeline", () => ({
 }));
 
 describe("useSaveSessionBeforeReload", () => {
-  it("waits for the layout save, then writes the exact time and the playing state", async () => {
+  it("waits for the layout save, then writes the exact time and returns what was playing", async () => {
     vi.useFakeTimers();
     renderHook(() => {
       useSaveSessionBeforeReload();
     });
     let saved = false;
-    void saveSession!().then(() => {
+    let resumeSource: string | undefined;
+    void saveSession!().then((source) => {
       saved = true;
+      resumeSource = source;
     });
 
     await vi.advanceTimersByTimeAsync(1000);
@@ -52,7 +54,9 @@ describe("useSaveSessionBeforeReload", () => {
     expect(new URL(window.location.href).searchParams.get("time")).toBe(
       "1970-01-01T00:00:12.345000000Z",
     );
-    expect(takeResumePlayback()).toBe(JSON.stringify(["mcap-local-file", "example.mcap"]));
+    expect(resumeSource).toBe(JSON.stringify(["mcap-local-file", "example.mcap"]));
+    // stored only right before the reload
+    expect(takeResumePlayback()).toBeUndefined();
     vi.useRealTimers();
   });
 });
