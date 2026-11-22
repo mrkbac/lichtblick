@@ -3,6 +3,7 @@
 
 import { Time } from "@foxglove/rostime";
 
+import { VecQueue } from "@lichtblick/den/collection";
 import { TopicSelection } from "@lichtblick/suite-base/players/types";
 import { toError } from "@lichtblick/suite-base/util/toError";
 
@@ -60,11 +61,11 @@ function timeKey(time: Time | undefined): string {
 
 class Reader implements AsyncIterableIterator<Readonly<ReadResult>> {
   public readonly topic: string;
-  public queue: Readonly<ReadResult>[] = [];
-  public queuedBytes = 0;
+  readonly #queue = new VecQueue<Readonly<ReadResult>>();
+  #queuedBytes = 0;
   #ended = false;
   #error?: Error;
-  #wake?: () => void;
+  #ready?: PromiseWithResolvers<void>;
   readonly #onPull: () => void;
   readonly #onLeave: (reader: Reader) => void;
 
@@ -74,31 +75,36 @@ class Reader implements AsyncIterableIterator<Readonly<ReadResult>> {
     this.#onLeave = onLeave;
   }
 
+  public isFull(): boolean {
+    // Progress and zero-byte messages also occupy queue entries.
+    return this.#queuedBytes > MAX_QUEUED_BYTES || this.#queue.size() >= 4096;
+  }
+
   public push(result: Readonly<ReadResult>): void {
-    this.queue.push(result);
+    this.#queue.enqueue(result);
     if (result.type === "message-event") {
-      this.queuedBytes += result.msgEvent.sizeInBytes;
+      this.#queuedBytes += result.msgEvent.sizeInBytes;
     }
-    this.#wake?.();
+    this.#ready?.resolve();
+    this.#ready = undefined;
   }
 
   public end(error?: unknown): void {
     this.#ended = true;
     this.#error = error == undefined ? undefined : toError(error);
-    this.#wake?.();
+    this.#ready?.resolve();
+    this.#ready = undefined;
   }
 
   public async next(): Promise<IteratorResult<Readonly<ReadResult>>> {
-    while (this.queue.length === 0 && !this.#ended) {
-      await new Promise<void>((resolve) => {
-        this.#wake = resolve;
-      });
-      this.#wake = undefined;
+    while (this.#queue.size() === 0 && !this.#ended) {
+      this.#ready ??= Promise.withResolvers<void>();
+      await this.#ready.promise;
     }
-    const result = this.queue.shift();
+    const result = this.#queue.dequeue();
     if (result) {
       if (result.type === "message-event") {
-        this.queuedBytes -= result.msgEvent.sizeInBytes;
+        this.#queuedBytes -= result.msgEvent.sizeInBytes;
       }
       this.#onPull();
       return { done: false, value: result };
@@ -111,10 +117,11 @@ class Reader implements AsyncIterableIterator<Readonly<ReadResult>> {
 
   public async return(): Promise<IteratorResult<Readonly<ReadResult>>> {
     this.#ended = true;
-    this.queue = [];
-    this.queuedBytes = 0;
+    this.#queue.clear();
+    this.#queuedBytes = 0;
     this.#onLeave(this);
-    this.#wake?.();
+    this.#ready?.resolve();
+    this.#ready = undefined;
     return { done: true, value: undefined };
   }
 
@@ -154,19 +161,15 @@ class SharedRead {
     const topics: TopicSelection = new Map(
       [...this.#readers].map((reader) => [reader.topic, { topic: reader.topic }]),
     );
-    const iterator = this.#readRange(topics, this.#range);
     try {
-      for await (const result of iterator) {
+      for await (const result of this.#readRange(topics, this.#range)) {
         for (const reader of this.#readers) {
           if (result.type !== "message-event" || result.msgEvent.topic === reader.topic) {
             reader.push(result);
           }
         }
         // The slowest reader sets the pace, so what waits for it stays bounded
-        while (
-          this.#readers.size > 0 &&
-          [...this.#readers].some((reader) => reader.queuedBytes > MAX_QUEUED_BYTES)
-        ) {
+        while (this.#readers.values().some((reader) => reader.isFull())) {
           await new Promise<void>((resolve) => {
             this.#pulled = resolve;
           });
@@ -183,8 +186,6 @@ class SharedRead {
       for (const reader of this.#readers) {
         reader.end(error);
       }
-    } finally {
-      await iterator.return?.();
     }
   }
 }

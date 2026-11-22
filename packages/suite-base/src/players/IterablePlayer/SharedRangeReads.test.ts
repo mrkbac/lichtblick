@@ -81,6 +81,22 @@ describe("SharedRangeReads", () => {
     expect((await stopping.next()).done).toBe(true);
   });
 
+  it("resolves overlapping pulls in order", async () => {
+    const { shared } = setup();
+    const reader = shared.read("a", {});
+    const [first, second] = await Promise.all([reader.next(), reader.next()]);
+    expect(first.value).toMatchObject({ msgEvent: { receiveTime: { sec: 0 } } });
+    expect(second.value).toMatchObject({ msgEvent: { receiveTime: { sec: 1 } } });
+    await reader.return?.();
+  });
+
+  it("reports an error thrown while opening the iterator", async () => {
+    const shared = new SharedRangeReads(() => {
+      throw new Error("open failed");
+    });
+    await expect(collect(shared.read("a", {}))).rejects.toThrow("open failed");
+  });
+
   it("hands a read error to every reader", async () => {
     const shared = new SharedRangeReads(async function* () {
       yield* [];
