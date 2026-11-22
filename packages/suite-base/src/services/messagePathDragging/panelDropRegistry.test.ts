@@ -7,6 +7,7 @@ import {
 } from "@lichtblick/suite-base/components/PanelExtensionAdapter";
 
 import {
+  anyPanelAccepts,
   clearPanelDrop,
   dropOnFirstAcceptingPanel,
   queuePanelDrop,
@@ -41,6 +42,15 @@ describe("panelDropRegistry", () => {
     expect(dropOnFirstAcceptingPanel(["a", "b"], paths)).toBe("b");
     expect(rejecting.handleDrop).not.toHaveBeenCalled();
     expect(accepting.handleDrop).toHaveBeenCalledWith(paths);
+  });
+
+  it("tells whether a panel would accept the paths without dropping", () => {
+    const accepting = makeConfig({ canDrop: true });
+    setPanelDropConfig("a", makeConfig({ canDrop: false }));
+    expect(anyPanelAccepts(["a"], paths)).toBe(false);
+    setPanelDropConfig("b", accepting);
+    expect(anyPanelAccepts(["a", "b"], paths)).toBe(true);
+    expect(accepting.handleDrop).not.toHaveBeenCalled();
   });
 
   it("returns undefined when no panel accepts the paths", () => {

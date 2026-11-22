@@ -1,7 +1,7 @@
 name: E2E Regression
 
 # Runs the full E2E test suite (all @smoke + @regression tests).
-# Triggered nightly and on every push to the long-lived branches.
+# Triggered nightly, on every push to licht, and by hand (workflow_dispatch).
 # PR CI only runs @smoke tests (see ci.yml).
 
 on:
@@ -9,6 +9,7 @@ on:
     - cron: "0 2 * * *" # Daily at 02:00 UTC
   push:
     branches: [licht]
+  workflow_dispatch:
 
 permissions:
   contents: read

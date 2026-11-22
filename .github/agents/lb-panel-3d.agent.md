@@ -121,7 +121,7 @@ class TransformTree {
 }
 ```
 
-- `CoordinateFrame`: stores history of transforms (max 10,000 per frame)
+- `CoordinateFrame`: stores history of transforms (300 s window live, whole recording preloaded; thinned evenly past a sample budget)
 - Time interpolation between stored transforms for smooth visualization
 - Cycle detection on frame insertion
 - `ObjectPool<Transform>` to avoid allocation during frame updates

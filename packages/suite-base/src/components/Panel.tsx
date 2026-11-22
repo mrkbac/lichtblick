@@ -26,7 +26,8 @@ import React, {
 } from "react";
 import { Transition } from "react-transition-group";
 
-import { useMountedState, useShallowMemo } from "@lichtblick/hooks";
+import { useLatest, useMountedState, useShallowMemo } from "@lichtblick/hooks";
+import { Time } from "@lichtblick/suite";
 import { useConfigById } from "@lichtblick/suite-base/PanelAPI";
 import { useCompare } from "@lichtblick/suite-base/components/Compare/CompareContext";
 import { ComparedPanel } from "@lichtblick/suite-base/components/Compare/ComparedPanel";
@@ -38,6 +39,7 @@ import {
 import { DockPanelContext } from "@lichtblick/suite-base/components/DockPanelContext";
 import KeyListener from "@lichtblick/suite-base/components/KeyListener";
 import { APP_SHORTCUTS } from "@lichtblick/suite-base/components/KeyboardShortcuts/appShortcuts";
+import { useMessagePipelineGetter } from "@lichtblick/suite-base/components/MessagePipeline";
 import { useStyles } from "@lichtblick/suite-base/components/Panel.style";
 import PanelContext from "@lichtblick/suite-base/components/PanelContext";
 import PanelErrorBoundary from "@lichtblick/suite-base/components/PanelErrorBoundary";
@@ -45,6 +47,7 @@ import { MessagePathDropConfig } from "@lichtblick/suite-base/components/PanelEx
 import PanelLogs from "@lichtblick/suite-base/components/PanelLogs";
 import { PanelOverlay, PanelOverlayProps } from "@lichtblick/suite-base/components/PanelOverlay";
 import { PanelRoot } from "@lichtblick/suite-base/components/PanelRoot";
+import { PanelPlayerState } from "@lichtblick/suite-base/components/PlayerStatus/PanelPlayerState";
 import {
   loadPanelLogsHeight,
   savePanelLogsHeight,
@@ -65,6 +68,7 @@ import {
   useWorkspaceStore,
   WorkspaceStoreSelectors,
 } from "@lichtblick/suite-base/context/Workspace/WorkspaceContext";
+import { useAppTimeFormat } from "@lichtblick/suite-base/hooks/useAppTimeFormat";
 import { useInteractionCapture } from "@lichtblick/suite-base/hooks/useInteractionCapture";
 import { usePanelDragHandle } from "@lichtblick/suite-base/hooks/usePanelDragHandle";
 import { AppEvent } from "@lichtblick/suite-base/services/IAnalytics";
@@ -117,26 +121,37 @@ export default function Panel<
     const [showLogs, setShowLogs] = useState(false);
 
     const nextLogId = useRef(0);
-    const addLog = useCallback((level: PanelLogLevel, message: string, error?: Error) => {
-      // Keep only the newest entries: an unbounded log copies an ever-growing array per append
-      const timestamp = new Date().toLocaleTimeString();
-      setLogs((prev) => {
-        const last = prev.at(-1);
-        // Fold an identical repeat into the previous row so a noisy source can't flood the log
-        if (
-          last?.level === level &&
-          last.message === message &&
-          last.error == undefined &&
-          !error
-        ) {
-          return [...prev.slice(0, -1), { ...last, timestamp, count: (last.count ?? 1) + 1 }];
-        }
-        return [
-          ...prev.slice(-(MAX_PANEL_LOGS - 1)),
-          { id: nextLogId.current++, timestamp, level, message, error },
-        ];
-      });
-    }, []);
+    const getMessagePipeline = useMessagePipelineGetter();
+    // Latest formatter without changing addLog's identity: panels re-initialize when it changes
+    const formatTime = useLatest(useAppTimeFormat().formatTime);
+    const addLog = useCallback(
+      (level: PanelLogLevel, message: string, error?: Error, time?: Time) => {
+        // Stamp entries with the recording time, so they line up with the data and the timeline
+        const recordingTime = time ?? getMessagePipeline().playerState.activeData?.currentTime;
+        const timestamp =
+          recordingTime != undefined
+            ? formatTime.current(recordingTime)
+            : new Date().toLocaleTimeString();
+        setLogs((prev) => {
+          const last = prev.at(-1);
+          // Fold an identical repeat into the previous row so a noisy source can't flood the log
+          if (
+            last?.level === level &&
+            last.message === message &&
+            last.error == undefined &&
+            !error
+          ) {
+            return [...prev.slice(0, -1), { ...last, timestamp, count: (last.count ?? 1) + 1 }];
+          }
+          // Keep only the newest entries: an unbounded log copies an ever-growing array per append
+          return [
+            ...prev.slice(-(MAX_PANEL_LOGS - 1)),
+            { id: nextLogId.current++, timestamp, level, message, error },
+          ];
+        });
+      },
+      [formatTime, getMessagePipeline],
+    );
     const logSeverity = useMemo(() => {
       let severity: PanelLogLevel | undefined;
       for (const { level } of logs) {
@@ -197,6 +212,9 @@ export default function Panel<
     const parentPanelContext = useContext(PanelContext);
 
     const type = PanelComponent.panelType;
+    const needsPlayer =
+      !isContainerPanel(childId) &&
+      !["Notes", "GlobalVariableSliderPanel", "NodePlayground", "3D"].includes(type);
     const title = useMemo(
       () => panelCatalog.getPanelByType(type)?.title ?? "",
       [panelCatalog, type],
@@ -707,6 +725,8 @@ export default function Panel<
                 >
                   {panelBody}
                 </PanelErrorBoundary>
+                {/* Containers hold panels that show it themselves */}
+                {needsPlayer && <PanelPlayerState />}
                 {process.env.NODE_ENV !== "production" && (
                   <div className={classes.perfInfo} ref={perfInfo} />
                 )}

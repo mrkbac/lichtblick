@@ -98,8 +98,12 @@ export function namespaceTotals(
   complete: boolean;
   buckets: number[];
 } {
-  const counts = topics.map(countFor);
-  const measured = topics.flatMap((topic) => {
+  // Aliases share their recorded topic's payload: count each recorded topic once.
+  const unique = [
+    ...new Map(topics.map((topic) => [topic.aliasedFromName ?? topic.name, topic])).values(),
+  ];
+  const counts = unique.map(countFor);
+  const measured = unique.flatMap((topic) => {
     const data = inspections.get(topic.name);
     return data ? [data] : [];
   });
@@ -110,7 +114,7 @@ export function namespaceTotals(
     bytes: measured.reduce((sum, data) => sum + data.bytes, 0),
     estimatedBytes: measured.some((data) => data.estimatedBytes),
     scanned: measured.length,
-    complete: measured.length === topics.length,
+    complete: measured.length === unique.length,
     buckets: aggregateBuckets(measured),
   };
 }
