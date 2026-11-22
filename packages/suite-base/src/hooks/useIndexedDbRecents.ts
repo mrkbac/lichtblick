@@ -51,7 +51,8 @@ type RecentConnectionRecord = RecentRecordCommon & {
 
 type RecentFileRecord = RecentRecordCommon & {
   type: "file";
-  handles: FileSystemFileHandle[];
+  // A string is a remote URL, in a comparison that mixes them with local files
+  handles: (FileSystemFileHandle | string)[];
   // Side name of each of `handles` when they were compared side by side (see
   // FileDataSourceArgs.compare). A file in several sides repeats its handle. Missing: merged.
   compare?: string[];
@@ -101,7 +102,7 @@ export function isSameRecent(a: UnsavedRecentRecord, b: UnsavedRecentRecord): bo
       _.isEqual(_.omit(a.extra, "name"), _.omit(b.extra, "name"))
     );
   }
-  const names = (r: typeof a) => r.handles.map((h) => h.name);
+  const names = (r: typeof a) => r.handles.map((h) => (typeof h === "string" ? h : h.name));
   return (
     a.title === b.title &&
     _.isEqual(a.compare, b.compare) &&

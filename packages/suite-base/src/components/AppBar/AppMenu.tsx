@@ -13,7 +13,7 @@ import { useTranslation } from "react-i18next";
 import { useStyles } from "@lichtblick/suite-base/components/AppBar/AppMenu.style";
 import { useCommandPaletteStore } from "@lichtblick/suite-base/components/CommandPalette/CommandPalette";
 import { LAYOUT_SHORTCUTS } from "@lichtblick/suite-base/components/CommandPalette/layoutShortcuts";
-import { useShowCompareDialog } from "@lichtblick/suite-base/components/Compare/CompareDialog";
+import { useShowCompareDialog } from "@lichtblick/suite-base/components/Compare/compareDialogStore";
 import { useExportSource } from "@lichtblick/suite-base/components/ExportRecordingDialog/exportRecording";
 import { useTrimStore } from "@lichtblick/suite-base/components/ExportRecordingDialog/trimStore";
 import { useKeyboardShortcutsStore } from "@lichtblick/suite-base/components/KeyboardShortcuts/KeyboardShortcuts";

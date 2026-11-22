@@ -16,7 +16,16 @@
 import { Time } from "@foxglove/rostime";
 import { t } from "i18next";
 import { useSnackbar } from "notistack";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  Suspense,
+  lazy,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
 import { pushAll } from "@lichtblick/den/collection";
 import Logger from "@lichtblick/log";
@@ -29,7 +38,7 @@ import { AttachmentList } from "@lichtblick/suite-base/components/Attachments/At
 import { useToggleColorScheme } from "@lichtblick/suite-base/components/ColorSchemeThemeProvider";
 import { CommandPalette } from "@lichtblick/suite-base/components/CommandPalette/CommandPalette";
 import { LayoutShortcutListener } from "@lichtblick/suite-base/components/CommandPalette/layoutShortcuts";
-import { CompareDialog } from "@lichtblick/suite-base/components/Compare/CompareDialog";
+import { useCompareDialog } from "@lichtblick/suite-base/components/Compare/compareDialogStore";
 import {
   DataSourceDialog,
   DataSourceDialogItem,
@@ -117,6 +126,11 @@ import { severityToBadgeColor } from "./utils";
 
 const log = Logger.getLogger(__filename);
 
+// Loaded once a comparison is edited, so it costs nothing at startup
+const CompareDialog = lazy(async () => ({
+  default: (await import("@lichtblick/suite-base/components/Compare/CompareDialog")).CompareDialog,
+}));
+
 const selectPlayerIsPresent = ({ playerState }: MessagePipelineContext) =>
   playerState.presence !== PlayerPresence.NOT_PRESENT;
 const selectPlayUntil = (ctx: MessagePipelineContext) => ctx.playUntil;
@@ -140,6 +154,7 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
   const { alertCount, highestSeverity } = useAlertCount();
 
   const dataSourceDialog = useWorkspaceStore(selectWorkspaceDataSourceDialog);
+  const comparing = useCompareDialog((state) => state.draft != undefined);
   const leftSidebarItem = useWorkspaceStore(selectWorkspaceLeftSidebarItem);
   const leftSidebarOpen = useWorkspaceStore(selectWorkspaceLeftSidebarOpen);
   const leftSidebarSize = useWorkspaceStore(selectWorkspaceLeftSidebarSize);
@@ -824,7 +839,11 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
       <KeyboardShortcuts />
       <PanelGuide />
       <LiveRecordingsDialog />
-      <CompareDialog />
+      {comparing && (
+        <Suspense fallback={undefined}>
+          <CompareDialog />
+        </Suspense>
+      )}
       <div
         className={classes.container}
         ref={containerRef}

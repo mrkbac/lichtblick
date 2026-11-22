@@ -47,7 +47,8 @@ type MultiSourceHydrationOptions = {
 export type MultiSource = (
   | ({
       type: "files";
-      files: Blob[];
+      // Local files; a string is a remote URL, so a comparison can mix both
+      files: (Blob | string)[];
     } & MultiSourceHydrationOptions)
   | ({
       type: "urls";

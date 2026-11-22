@@ -11,8 +11,15 @@ import {
   PlayerSelection,
   usePlayerSelection,
 } from "@lichtblick/suite-base/context/PlayerSelectionContext";
+import type { RecentRecord } from "@lichtblick/suite-base/hooks/useIndexedDbRecents";
+import { useSourcePick } from "@lichtblick/suite-base/util/sourcePick";
 
 import PlayerManager from "./PlayerManager";
+
+const storedRecents = vi.hoisted(() => ({
+  recents: [] as RecentRecord[],
+  recentsLoaded: false,
+}));
 
 vi.mock("notistack", () => ({
   useSnackbar: () => ({ enqueueSnackbar: vi.fn(), closeSnackbar: vi.fn() }),
@@ -32,8 +39,8 @@ vi.mock("@lichtblick/suite-base/context/UserScriptStateContext", () => ({
 }));
 vi.mock("@lichtblick/suite-base/hooks/useIndexedDbRecents", () => ({
   default: () => ({
-    recents: [],
-    recentsLoaded: false,
+    recents: storedRecents.recents,
+    recentsLoaded: storedRecents.recentsLoaded,
     addRecent: vi.fn(),
     removeRecent: vi.fn(),
     togglePinRecent: vi.fn(),
@@ -76,12 +83,55 @@ describe("PlayerManager", () => {
       selection!.selectSource("ok", { type: "file", files });
     });
     expect(selection!.selectedSource).toBe(ok);
-    expect(selection!.selectedFiles).toBe(files);
+    expect(selection!.selectedRecordings).toBe(files);
 
     await act(async () => {
       selection!.selectSource("failing", { type: "connection", params: { url: "x" } });
     });
     expect(selection!.selectedSource).toBe(ok);
-    expect(selection!.selectedFiles).toBe(files);
+    expect(selection!.selectedRecordings).toBe(files);
+  });
+
+  it("restores the last file as itself, not into a pending comparison pick", async () => {
+    const file = new File(["a"], "r.bag");
+    const handle = {
+      name: "r.bag",
+      queryPermission: async () => "granted",
+      getFile: async () => file,
+    } as unknown as FileSystemFileHandle;
+    storedRecents.recents = [
+      { id: "r1", type: "file", sourceId: "ok", title: "r.bag", handles: [handle] },
+    ];
+    storedRecents.recentsLoaded = true;
+    sessionStorage.setItem(
+      "lichtblick.lastFileSource",
+      '{"sourceId":"ok","title":"r.bag","recentId":"r1"}',
+    );
+    const deliver = vi.fn();
+    useSourcePick.setState({ pick: { label: "recording B", deliver } });
+    const ok = source("ok", () => undefined);
+    let selection: PlayerSelection | undefined;
+    function Probe() {
+      selection = usePlayerSelection();
+      return <></>;
+    }
+    try {
+      render(
+        <PlayerManager playerSources={[ok]}>
+          <Probe />
+        </PlayerManager>,
+      );
+      await act(async () => {});
+
+      expect(deliver).not.toHaveBeenCalled();
+      expect(useSourcePick.getState().pick).toBeDefined();
+      expect(selection!.selectedSource).toBe(ok);
+      expect(selection!.selectedRecordings).toEqual([file]);
+    } finally {
+      useSourcePick.setState({ pick: undefined });
+      storedRecents.recents = [];
+      storedRecents.recentsLoaded = false;
+      sessionStorage.clear();
+    }
   });
 });

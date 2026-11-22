@@ -9,7 +9,7 @@ import { pushAll } from "@lichtblick/den/collection";
 import Logger from "@lichtblick/log";
 import { MessagePathStructureItem } from "@lichtblick/message-path";
 import { useToggleColorScheme } from "@lichtblick/suite-base/components/ColorSchemeThemeProvider";
-import { useShowCompareDialog } from "@lichtblick/suite-base/components/Compare/CompareDialog";
+import { useShowCompareDialog } from "@lichtblick/suite-base/components/Compare/compareDialogStore";
 import { useKeyboardShortcutsStore } from "@lichtblick/suite-base/components/KeyboardShortcuts/KeyboardShortcuts";
 import {
   APP_SHORTCUTS,

@@ -178,7 +178,7 @@ describe("useIndexedDbRecents", () => {
       throw new Error("expected a file recent");
     }
     expect(recent.compare).toEqual(["A", "A", "B", "B"]);
-    expect(recent.handles.map((h) => h.name)).toEqual([
+    expect(recent.handles.map((h) => (typeof h === "string" ? h : h.name))).toEqual([
       "base.mcap",
       "a.mcap",
       "base.mcap",

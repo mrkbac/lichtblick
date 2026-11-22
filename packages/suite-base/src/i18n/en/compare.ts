@@ -32,19 +32,33 @@ export const compare = {
   // Compare dialog
   dialogTitle: "Compare recordings",
   dialogHint:
-    "Each row is one recording, shown under its own topic prefix (/a, /b, …) with all starting together. Put several files in a row to merge them into that recording.",
-  shared: "In every recording",
-  sharedHint: "Added to each row, e.g. a base recording the rows add their own topics to",
+    "Each row is one recording. Its topics get their own prefix (/a, /b, …) and all recordings start at the same moment. Several files in one row are merged into one recording.",
+  shared: "Added to every recording",
+  sharedHint: "For data every recording needs but doesn't contain, e.g. a map or calibration file",
   sharedEmpty: "Optional",
   sideName: "Recording {{label}}",
   sideNameLabel: "Recording name",
   sideEmpty: "Drop files here",
-  addFiles: "Add files",
+  addFiles: "Local files",
+  addFrom: "URL, recent or catalog",
+  addFromHint:
+    "Pick a recording the way you'd open one: a recent, a URL, the catalog or the samples",
+  pickBanner: "Pick a recording to add to {{label}} in the comparison.",
+  sharedPick: "every recording",
+  pickCancel: "Back to the comparison",
+  notComparable:
+    "{{name}} can't be compared. Comparing works with {{types}} recordings, local or remote.",
+  thisSource: "This source",
+  cookiesConflict:
+    "{{name}} is already in the comparison with a different cookie setting. Remove it first to add it this way.",
+  cookiesMixed:
+    "Recordings opened with cookies (signed-in links) can only be compared with other remote recordings that also use cookies.",
   addRecording: "Add recording",
-  addRecordings: "Add files as recordings…",
+  addRecordings: "Add several files, one row each…",
   addRecordingsHint: "Each picked file becomes a recording of its own",
   removeRecording: "Remove recording",
-  mixedTypes: "All files must be of a type one data source reads.",
+  mixedTypes:
+    "Some of these can't be compared. Comparing works with {{types}} recordings, local or remote.",
   cancel: "Cancel",
   compare: "Compare",
   compareCount: "Compare {{count}} recordings",
