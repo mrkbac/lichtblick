@@ -26,6 +26,7 @@ export class ColumnStore<K extends string> {
   /** Changes when existing rows move or go away (clear, thinning); appending keeps it. */
   public version = 0;
   public readonly columns: Record<K, ColumnArray>;
+  readonly #keys: K[];
   #stride = 1;
   /** Rows received since the last row kept at the stride. */
   #sinceKept = 0;
@@ -36,6 +37,7 @@ export class ColumnStore<K extends string> {
     private readonly spec: Record<K, Column>,
     private readonly limit: number,
   ) {
+    this.#keys = Object.keys(spec) as K[];
     this.columns = this.#allocate(16);
   }
 
@@ -62,9 +64,9 @@ export class ColumnStore<K extends string> {
     if (replaceTail) {
       return this.length - 1;
     }
-    if (this.length === this.columns[this.#keys()[0]!].length) {
+    if (this.length === this.columns[this.#keys[0]!].length) {
       const next = this.#allocate(this.length * 2);
-      for (const key of this.#keys()) {
+      for (const key of this.#keys) {
         next[key].set(this.columns[key]);
       }
       Object.assign(this.columns, next);
@@ -76,7 +78,7 @@ export class ColumnStore<K extends string> {
     this.version++;
     // Keep rows 0, 2, 4, ...; the next kept row follows a full new stride after the last one.
     const kept = Math.ceil(this.length / 2);
-    for (const key of this.#keys()) {
+    for (const key of this.#keys) {
       const column = this.columns[key];
       for (let i = 1; i < kept; i++) {
         column[i] = column[2 * i]!;
@@ -87,13 +89,9 @@ export class ColumnStore<K extends string> {
     this.length = kept;
   }
 
-  #keys(): K[] {
-    return Object.keys(this.spec) as K[];
-  }
-
   #allocate(capacity: number): Record<K, ColumnArray> {
     const result = {} as Record<K, ColumnArray>;
-    for (const key of this.#keys()) {
+    for (const key of this.#keys) {
       result[key] = new this.spec[key](capacity);
     }
     return result;
