@@ -6,17 +6,21 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 export const openDialog = {
+  tailscaleProfileLogin: "Open the profile menu to sign in to Tailscale or approve this device.",
   tailscaleFailed: "Could not start the Tailscale connection.",
   tailscaleStorageError: "Could not save the Tailscale device identity in this browser.",
   tailscaleLogout: "Sign out of Tailscale",
-  tailscaleSignedOut: "Signed out of Tailscale on this browser.",
   tailscaleConnect: "Connect via Tailscale",
   tailscaleLogin: "Sign in to Tailscale",
   tailscaleStarting: "Connecting to Tailscale…",
   tailscaleApproval: "Waiting for device approval in Tailscale…",
   tailscaleAddress: "Foxglove bridge URL",
-  tailscalePeers: "Tailnet device",
-  tailscaleCancel: "Cancel",
+  tailscaleFilter: "Filter devices",
+  tailscaleNoMatches: "No matching devices",
+  tailscaleDevices: "Tailscale devices",
+  tailscaleNoDevices: "No devices visible",
+  tailscaleCustomAddress: "Custom bridge address…",
+  tailscaleRetry: "Retry Tailscale connection",
   canBeShared: "Share data files, visualization layouts, and custom extensions with teammates",
   collaborateTitle: "Accelerate development with {{appName}} Data Platform",
   convenientWebInterface:

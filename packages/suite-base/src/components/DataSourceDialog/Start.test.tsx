@@ -122,7 +122,7 @@ describe("Start Component", () => {
           ...wsSource,
           id: "custom",
           displayName: "Custom connection",
-          ConnectionDialog: () => <div />,
+          hidden: true,
         },
       ],
       selectRecent: mockSelectRecent,
@@ -209,15 +209,19 @@ describe("Start Component", () => {
     });
   });
 
-  it("opens an interactive connection dialog with the address already entered", () => {
+  it("reopens a typed account-backed recent through its original transport", () => {
+    const url = "ws://example:8765";
+    setup([{ id: "saved", title: url, type: "connection", sourceId: "custom" }]);
+    typeUrl(url);
+    fireEvent.click(screen.getByText("open"));
+    expect(mockSelectRecent).toHaveBeenCalledWith("saved");
+  });
+
+  it("keeps hidden account-backed sources out of the connection type menu", () => {
     setup();
-    typeUrl("localhost:8765");
     fireEvent.click(screen.getByRole("button", { name: "connectionType" }));
-    fireEvent.click(screen.getByRole("menuitem", { name: "Custom connection" }));
-    expect(mockSelectSource).toHaveBeenCalledWith("custom", {
-      type: "connection",
-      params: { url: "ws://localhost:8765" },
-    });
+    expect(screen.queryByRole("menuitem", { name: "Custom connection" })).toBeNull();
+    expect(screen.getByRole("menuitem", { name: "Foxglove WebSocket" })).toBeDefined();
   });
 
   it("replaces a prefilled default URL when switching connection types", () => {

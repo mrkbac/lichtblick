@@ -73,7 +73,6 @@ import { rememberHandle } from "@lichtblick/suite-base/util/compareSides";
 import { recentArgs, recentFileTitle } from "@lichtblick/suite-base/util/recentSources";
 import { toError } from "@lichtblick/suite-base/util/toError";
 
-import { useConnectionDialog } from "./useConnectionDialog";
 import { useTrustedUserScripts } from "./useTrustedUserScripts";
 
 const log = Logger.getLogger(__filename);
@@ -250,14 +249,14 @@ export default function PlayerManager(
   // Bumped on every selectSource/closeSource call, so a slow earlier selection can tell it was
   // superseded and won't apply its player or layout late.
   const selectionSeq = useRef(0);
-  const { dialog: connectionDialog, prompt, dismiss } = useConnectionDialog();
+  const pendingTransport = useRef<AbortController | undefined>(undefined);
+  useEffect(() => () => pendingTransport.current?.abort(), []);
 
   const selectSource = useCallback(
-    async (sourceId: string, initialArgs?: DataSourceArgs) => {
-      let args = initialArgs;
+    async (sourceId: string, args?: DataSourceArgs) => {
       log.debug(`Select Source: ${sourceId}`);
       const seq = ++selectionSeq.current;
-      dismiss();
+      pendingTransport.current?.abort();
 
       const foundSource = playerSources.find(
         (source) => (source.id === sourceId || source.legacyIds?.includes(sourceId)) ?? false,
@@ -277,17 +276,25 @@ export default function PlayerManager(
         return newPlayer;
       };
       let transport: DataSourceFactoryInitializeArgs["transport"];
-      if (args?.type === "connection" && foundSource.ConnectionDialog) {
-        const result = await prompt(foundSource.ConnectionDialog, args.params?.url);
-        if (!result) {
+      if (args?.type === "connection" && foundSource.prepareTransport) {
+        const controller = new AbortController();
+        pendingTransport.current = controller;
+        try {
+          transport = await foundSource.prepareTransport(controller.signal);
+          if (controller.signal.aborted) {
+            transport.dispose?.();
+            return;
+          }
+        } catch (error) {
+          if (!controller.signal.aborted) {
+            enqueueSnackbar(toError(error).message, { variant: "error" });
+          }
           return;
+        } finally {
+          if (pendingTransport.current === controller) {
+            pendingTransport.current = undefined;
+          }
         }
-        if (!isMounted() || seq !== selectionSeq.current) {
-          result.transport.dispose?.();
-          return;
-        }
-        transport = result.transport;
-        args = { ...args, params: { ...args.params, url: result.url } };
       }
       setCurrentRecentId(undefined);
 
@@ -485,8 +492,6 @@ export default function PlayerManager(
     },
     [
       playerSources,
-      dismiss,
-      prompt,
       analytics,
       enqueueSnackbar,
       isMounted,
@@ -566,7 +571,7 @@ export default function PlayerManager(
 
   const closeSource = useCallback(() => {
     selectionSeq.current++;
-    dismiss();
+    pendingTransport.current?.abort();
     // Dropping the player makes MessagePipelineProvider close() it (e.g. closes the websocket).
     setBasePlayer(undefined);
     setSelectedSource(undefined);
@@ -583,7 +588,7 @@ export default function PlayerManager(
     });
     url.searchParams.delete("mcap-bundle");
     window.history.replaceState(undefined, "", url.href);
-  }, [dismiss]);
+  }, []);
 
   // Make a RecentSources array for the PlayerSelectionContext
   const recentSources = useMemo(() => {
@@ -635,7 +640,6 @@ export default function PlayerManager(
   return (
     <>
       {userScriptsPrompt}
-      {connectionDialog}
       <PlayerSelectionContext.Provider value={value}>
         <MessagePipelineProvider player={player}>
           <CompareProvider>{children}</CompareProvider>

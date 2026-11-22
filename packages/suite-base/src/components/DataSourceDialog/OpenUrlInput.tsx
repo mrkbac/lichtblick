@@ -106,10 +106,21 @@ export function OpenUrlInput({
     s?.formConfig?.fields.find((field) => field.id === "url")?.defaultValue;
   const hasUrlField = (s: IDataSourceFactory) =>
     s.formConfig?.fields.some((field) => field.id === "url") ?? false;
-  const sourceId = recentMatch?.sourceId ?? detected?.sourceId;
+  // Account-backed connections can be reopened even when their factory is hidden from the menu.
+  const previous =
+    recentMatch &&
+    availableSources.find(
+      (s) =>
+        s.id === recentMatch.sourceId &&
+        s.type === "connection" &&
+        s.disabledReason == undefined &&
+        hasUrlField(s),
+    );
   const source =
     picked ??
-    (isUrl ? connectionSources.find((s) => s.id === sourceId && hasUrlField(s)) : undefined);
+    (isUrl
+      ? (previous ?? connectionSources.find((s) => s.id === detected?.sourceId && hasUrlField(s)))
+      : undefined);
   const connects = picked != undefined || isUrl;
   // A .json URL lists recordings: a catalog (see Catalog/catalogUrl.ts)
   const isCatalog =
@@ -294,12 +305,7 @@ export function OpenUrlInput({
               key={s.id}
               selected={s === picked}
               onClick={() => {
-                if (s.ConnectionDialog) {
-                  setMenuAnchor(undefined);
-                  selectSource(s.id, { type: "connection", params: isUrl ? { url } : {} });
-                } else {
-                  pick(s);
-                }
+                pick(s);
               }}
             >
               {s.displayName}

@@ -59,11 +59,10 @@ export interface IDataSourceFactory {
   hidden?: boolean;
   warning?: string | React.JSX.Element;
 
-  ConnectionDialog?: React.ComponentType<{
-    initialUrl?: string;
-    onCancel: () => void;
-    onConnect: (url: string, transport: LiveConnectionBackend) => void;
-  }>;
+  /** Account actions supplied by this source in the avatar menu. */
+  AccountMenuItems?: React.ComponentType<{ onClose: () => void }>;
+  /** Prepare an authenticated transport before initializing this source. */
+  prepareTransport?: (signal: AbortSignal) => Promise<LiveConnectionBackend>;
 
   sampleLayout?: LayoutData;
   /**

@@ -28,6 +28,7 @@ import {
   useCurrentLayoutSelector,
 } from "@lichtblick/suite-base/context/CurrentLayoutContext";
 import { useOrganization } from "@lichtblick/suite-base/context/OrganizationContext";
+import { usePlayerSelection } from "@lichtblick/suite-base/context/PlayerSelectionContext";
 import {
   WorkspaceContextStore,
   useWorkspaceStore,
@@ -199,7 +200,10 @@ export function AppBar(props: AppBarProps): React.JSX.Element {
 
   const organization = useOrganization();
   const user = organization.status === "authenticated" ? organization.session.user : undefined;
-  const showUserMenu = hasUserMenu(organization);
+  const { availableSources } = usePlayerSelection();
+  const accountSources = availableSources.filter((source) => source.AccountMenuItems != undefined);
+  const loadingAccount = organization.status === "loading" && accountSources.length === 0;
+  const showUserMenu = accountSources.length > 0 || hasUserMenu(organization);
 
   const appMenuOpen = Boolean(appMenuEl);
   const userMenuOpen = Boolean(userAnchorEl);
@@ -308,17 +312,13 @@ export function AppBar(props: AppBarProps): React.JSX.Element {
                   classes={{ tooltip: classes.tooltip }}
                   // The button has its own aria-label; the tooltip (e.g. "Loading account…") describes it
                   describeChild
-                  title={
-                    organization.status === "loading"
-                      ? t("loadingAccount")
-                      : (user?.displayName ?? "Profile")
-                  }
+                  title={loadingAccount ? t("loadingAccount") : (user?.displayName ?? "Profile")}
                   arrow={false}
                 >
                   <IconButton
                     className={cx(classes.iconButton, { "Mui-selected": userMenuOpen })}
                     aria-label="User profile menu button"
-                    aria-disabled={organization.status === "loading"}
+                    aria-disabled={loadingAccount}
                     color="inherit"
                     id="user-button"
                     data-tourid="user-button"
@@ -327,7 +327,7 @@ export function AppBar(props: AppBarProps): React.JSX.Element {
                     aria-expanded={userMenuOpen ? "true" : undefined}
                     onClick={(event) => {
                       // Shown while the session loads only to hold its place; nothing to open yet
-                      if (organization.status !== "loading") {
+                      if (!loadingAccount) {
                         setUserAnchorEl(event.currentTarget);
                       }
                     }}
@@ -369,6 +369,7 @@ export function AppBar(props: AppBarProps): React.JSX.Element {
         }}
       />
       <UserMenu
+        accountSources={accountSources}
         anchorEl={userAnchorEl}
         open={userMenuOpen && showUserMenu}
         handleClose={() => {

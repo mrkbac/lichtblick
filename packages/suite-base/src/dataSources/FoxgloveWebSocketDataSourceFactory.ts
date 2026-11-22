@@ -42,15 +42,18 @@ export default class FoxgloveWebSocketDataSourceFactory implements IDataSourceFa
     ],
   };
 
-  public ConnectionDialog?: IDataSourceFactory["ConnectionDialog"];
+  public hidden?: boolean;
+  public prepareTransport?: IDataSourceFactory["prepareTransport"];
+  public AccountMenuItems?: IDataSourceFactory["AccountMenuItems"];
 
   public constructor(
-    options?: Pick<IDataSourceFactory, "id" | "displayName" | "ConnectionDialog">,
+    options?: Pick<
+      IDataSourceFactory,
+      "id" | "displayName" | "hidden" | "prepareTransport" | "AccountMenuItems"
+    >,
   ) {
     if (options) {
-      this.id = options.id;
-      this.displayName = options.displayName;
-      this.ConnectionDialog = options.ConnectionDialog;
+      Object.assign(this, options);
     }
   }
 

@@ -35,7 +35,7 @@ export class TailscaleBackend implements LiveConnectionBackend {
       receive(data);
     };
     this.#worker.port.postMessage("start");
-    window.addEventListener("pagehide", this.dispose);
+    window.addEventListener("pagehide", this.#onPageHide);
   }
   public open(address: string, protocols: string[]): WorkerMessageSocket {
     const { port1, port2 } = new MessageChannel();
@@ -57,12 +57,17 @@ export class TailscaleBackend implements LiveConnectionBackend {
   public logout(): void {
     this.#worker.port.postMessage("logout");
   }
+  #onPageHide = (event: PageTransitionEvent) => {
+    if (!event.persisted) {
+      this.dispose();
+    }
+  };
   public dispose = (): void => {
     if (this.#disposed) {
       return;
     }
     this.#disposed = true;
-    window.removeEventListener("pagehide", this.dispose);
+    window.removeEventListener("pagehide", this.#onPageHide);
     this.#worker.port.onmessage = null;
     this.#worker.port.postMessage("release");
     this.#worker.port.close();

@@ -32,7 +32,7 @@ import { sharedI18nObject } from "@lichtblick/suite-base/i18n";
 
 import LocalStorageAppConfiguration from "./services/LocalStorageAppConfiguration";
 
-const TailscaleDialog = lazy(async () => await import("./tailscale/TailscaleDialog"));
+const TailscaleMenu = lazy(async () => await import("./tailscale/TailscaleMenu"));
 
 const isDevelopment = process.env.NODE_ENV === "development";
 
@@ -83,9 +83,14 @@ export function WebRoot(props: {
       new FoxgloveWebSocketDataSourceFactory({
         id: "tailscale",
         displayName: sharedI18nObject.t("openDialog:tailscaleConnect"),
-        ConnectionDialog: (dialogProps) => (
+        hidden: true,
+        prepareTransport: async (signal) => {
+          const { prepareTailscaleTransport } = await import("./tailscale/TailscaleAccount");
+          return await prepareTailscaleTransport(signal);
+        },
+        AccountMenuItems: (menuProps) => (
           <Suspense fallback={null}>
-            <TailscaleDialog {...dialogProps} />
+            <TailscaleMenu {...menuProps} />
           </Suspense>
         ),
       }),
