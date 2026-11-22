@@ -16,7 +16,7 @@ import {
   Tooltip,
   useTheme,
 } from "@mui/material";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { makeStyles } from "tss-react/mui";
 
@@ -244,8 +244,13 @@ function RendererHoverTooltip({ canvas }: { canvas: HTMLCanvasElement | null }):
 
 /**
  * Provides DOM overlay elements on top of the 3D scene (e.g. stats, debug GUI).
+ *
+ * Memoized: the panel re-renders on every frame, and the overlay's toolbars and hover tooltip
+ * (MUI buttons and tooltips) change only with their own props and renderer events.
  */
-export function RendererOverlay(props: Readonly<Props>): React.JSX.Element {
+export const RendererOverlay = memo(function RendererOverlay(
+  props: Readonly<Props>,
+): React.JSX.Element {
   const { t } = useTranslation("threeDee");
   const { classes } = useStyles();
   const [clickedPosition, setClickedPosition] = useState<{
@@ -650,4 +655,4 @@ export function RendererOverlay(props: Readonly<Props>): React.JSX.Element {
       {resetViewButton}
     </>
   );
-}
+});

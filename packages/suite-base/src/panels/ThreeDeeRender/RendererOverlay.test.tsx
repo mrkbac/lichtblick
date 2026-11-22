@@ -127,6 +127,44 @@ describe("<RendererOverlay /> hover wiring", () => {
     );
   }
 
+  it("does not re-render when the panel re-renders with the same props", () => {
+    // Given
+    const props = {
+      addPanel: vi.fn() as any,
+      canPublish: false,
+      canvas: document.createElement("canvas"),
+      enableStats: false,
+      hoverInspector: true,
+      interfaceMode: "3d" as const,
+      measureActive: false,
+      onChangePublishClickType: vi.fn(),
+      onClickMeasure: vi.fn(),
+      onClickPublish: vi.fn(),
+      onShowTopicSettings: vi.fn(),
+      onTogglePerspective: vi.fn(),
+      perspective: false,
+      publishActive: false,
+      publishClickType: "point" as const,
+      timezone: undefined,
+    };
+    const ui = (frame: number) => (
+      <ThemeProvider isDark={false}>
+        <div data-frame={frame}>
+          <RendererOverlay {...props} />
+        </div>
+      </ThemeProvider>
+    );
+    const { rerender } = render(ui(0));
+    const rendersBefore = mockHoverTooltipRenders;
+
+    // When: the panel renders its next frames
+    rerender(ui(1));
+    rerender(ui(2));
+
+    // Then
+    expect(mockHoverTooltipRenders).toBe(rendersBefore);
+  });
+
   it("zooms to data from the 3D toolbar", () => {
     renderOverlay(document.createElement("canvas"));
     fireEvent.click(document.querySelector('[aria-label="Zoom to data"]')!);
