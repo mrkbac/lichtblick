@@ -13,6 +13,7 @@ import {
 } from "@foxglove/rostime";
 import ArrowDropDownIcon from "@mui/icons-material/ArrowDropDown";
 import CheckIcon from "@mui/icons-material/Check";
+import LinkIcon from "@mui/icons-material/Link";
 import WarningIcon from "@mui/icons-material/Warning";
 import {
   TextField,
@@ -54,6 +55,8 @@ type PlaybackTimeDisplayMethodProps = {
   onSeek: (arg0: Time) => void;
   onPause: () => void;
   isPlaying: boolean;
+  /** "Copy link to this moment" in the menu; disabled with a reason for local files */
+  shareLink?: { local: boolean; copy: () => void };
 };
 
 const useStyles = makeStyles()((theme) => ({
@@ -160,10 +163,12 @@ function PlaybackTimeMethodMenu({
   timeFormat,
   rows,
   setTimeFormat,
+  shareLink,
 }: {
   timeFormat: TimeDisplayMethod;
   rows: TimeFormatRow[];
   setTimeFormat: (format: TimeDisplayMethod) => Promise<void>;
+  shareLink?: PlaybackTimeDisplayMethodProps["shareLink"];
 }): React.JSX.Element {
   const { classes } = useStyles();
   const { t } = useTranslation("playbackTime");
@@ -292,6 +297,25 @@ function PlaybackTimeMethodMenu({
           // Separate the selectable display formats from the copy-only ones.
           return row.key === "SEC" ? [item, <Divider key="divider" />] : [item];
         })}
+        {shareLink && <Divider />}
+        {shareLink && (
+          <MenuItem
+            data-testid="playback-time-display-copy-link"
+            disabled={shareLink.local}
+            onClick={() => {
+              shareLink.copy();
+              handleClose();
+            }}
+          >
+            <ListItemIcon>
+              <LinkIcon fontSize="small" />
+            </ListItemIcon>
+            <ListItemText
+              primary={t("copyLink")}
+              secondary={shareLink.local ? t("copyLinkLocal") : undefined}
+            />
+          </MenuItem>
+        )}
       </Menu>
     </>
   );
@@ -306,6 +330,7 @@ export function UnconnectedPlaybackTimeDisplay({
   onSeek,
   onPause,
   isPlaying,
+  shareLink,
 }: PlaybackTimeDisplayMethodProps): React.JSX.Element {
   const { classes, cx } = useStyles();
   const { t } = useTranslation("playbackTime");
@@ -411,6 +436,7 @@ export function UnconnectedPlaybackTimeDisplay({
                     <PlaybackTimeMethodMenu
                       timeFormat={appTimeFormat.timeFormat}
                       setTimeFormat={appTimeFormat.setTimeFormat}
+                      shareLink={shareLink}
                       rows={timeFormatRows(
                         currentTime,
                         startTime,

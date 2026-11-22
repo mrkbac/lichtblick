@@ -15,6 +15,7 @@
 //   You may not use this file except in compliance with the License.
 
 import { Time } from "@foxglove/rostime";
+import { useMemo } from "react";
 
 import { AppSetting } from "@lichtblick/suite-base/AppSetting";
 import { useMessagePipeline } from "@lichtblick/suite-base/components/MessagePipeline";
@@ -26,6 +27,7 @@ import {
 } from "@lichtblick/suite-base/components/MessagePipeline/selectors";
 import { useAppTimeFormat } from "@lichtblick/suite-base/hooks";
 import { useAppConfigurationValue } from "@lichtblick/suite-base/hooks/useAppConfigurationValue";
+import { useShareLink } from "@lichtblick/suite-base/hooks/useShareLink";
 
 import { UnconnectedPlaybackTimeDisplay } from "./UnconnectedPlaybackTimeDisplay";
 
@@ -42,6 +44,19 @@ export default function PlaybackTimeDisplay(props: Props): React.JSX.Element {
   const endTime = useMessagePipeline(selectEndTime);
   const currentTime = useMessagePipeline(selectCurrentTime);
   const appTimeFormat = useAppTimeFormat();
+  const { availability, copyLink } = useShareLink();
+  const shareLink = useMemo(
+    () =>
+      availability === "none"
+        ? undefined
+        : {
+            local: availability === "local",
+            copy: () => {
+              void copyLink();
+            },
+          },
+    [availability, copyLink],
+  );
 
   return (
     <UnconnectedPlaybackTimeDisplay
@@ -53,6 +68,7 @@ export default function PlaybackTimeDisplay(props: Props): React.JSX.Element {
       onPause={props.onPause}
       isPlaying={isPlaying}
       timezone={timezone}
+      shareLink={shareLink}
     />
   );
 }

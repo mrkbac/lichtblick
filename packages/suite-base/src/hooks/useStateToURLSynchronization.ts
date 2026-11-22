@@ -16,9 +16,16 @@ import {
 } from "@lichtblick/suite-base/components/MessagePipeline";
 import { selectCurrentTime } from "@lichtblick/suite-base/components/MessagePipeline/selectors";
 import { EventsStore, useEvents } from "@lichtblick/suite-base/context/EventsContext";
-import { usePlayerSelection } from "@lichtblick/suite-base/context/PlayerSelectionContext";
+import {
+  IDataSourceFactory,
+  usePlayerSelection,
+} from "@lichtblick/suite-base/context/PlayerSelectionContext";
 import { isRecordingSource } from "@lichtblick/suite-base/players/constants";
-import { AppURLState, updateAppURLState } from "@lichtblick/suite-base/util/appURLState";
+import {
+  AppURLState,
+  readableHref,
+  updateAppURLState,
+} from "@lichtblick/suite-base/util/appURLState";
 
 const selectCanSeek = (ctx: MessagePipelineContext) =>
   isRecordingSource(ctx.playerState.capabilities);
@@ -27,11 +34,18 @@ const selectSelectedEventId = (store: EventsStore) => store.selectedEventId;
 
 function updateUrl(newState: AppURLState) {
   const newStateUrl = updateAppURLState(new URL(window.location.href), newState);
-  // Never decodeURIComponent the whole href: a data-source URL with its own query string
-  // (e.g. a presigned URL) would spill its `&…` params into ours and break on reload.
-  // Only unescape `:`, `/` and `,`, which are literal in a query and keep times/URLs readable.
-  newStateUrl.search = newStateUrl.search.replace(/%(3A|2F|2C)/gi, (m) => decodeURIComponent(m));
-  window.history.replaceState(undefined, "", newStateUrl.href);
+  window.history.replaceState(undefined, "", readableHref(newStateUrl));
+}
+
+/** Whether the source opens local files, which a URL can't reopen. */
+export function isLocalFileSource(
+  sourceId: string,
+  availableSources: readonly IDataSourceFactory[],
+): boolean {
+  const source = availableSources.find(
+    (candidate) => candidate.id === sourceId || candidate.legacyIds?.includes(sourceId) === true,
+  );
+  return source?.type === "file";
 }
 
 /**
@@ -75,11 +89,7 @@ export function useStateToURLSynchronization(): void {
 
     // Local files can't be reopened from the URL; a `ds` for them would only make a reload fail and
     // skip reopening the file from recents (see PlayerManager).
-    const sourceId = stablePlayerUrlState.sourceId;
-    const source = availableSources.find(
-      (candidate) => candidate.id === sourceId || candidate.legacyIds?.includes(sourceId) === true,
-    );
-    if (source?.type === "file") {
+    if (isLocalFileSource(stablePlayerUrlState.sourceId, availableSources)) {
       updateUrl({ ds: undefined, dsParams: {} });
       return;
     }

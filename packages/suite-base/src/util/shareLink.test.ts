@@ -1,0 +1,57 @@
+// SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
+// SPDX-License-Identifier: MPL-2.0
+
+import {
+  MAX_SHARED_LAYOUT_LENGTH,
+  buildShareLink,
+  decodeSharedLayout,
+  encodeSharedLayout,
+  sharedLayoutFromHash,
+} from "./shareLink";
+
+const BASE =
+  "https://app.example/?ds=remote-file&ds.url=https://data.example/run.mcap&time=2024-01-01T00:00:00.000000000Z";
+
+describe("shareLink", () => {
+  it("round-trips a layout through a link fragment", async () => {
+    const layout = { configById: { "Plot!1": { paths: [{ value: "/a.b" }] } }, layout: "Plot!1" };
+    const encoded = await encodeSharedLayout(layout);
+    expect(encoded).toMatch(/^[A-Za-z0-9_-]+$/);
+
+    const { link, layoutIncluded } = buildShareLink(BASE, { sec: 1700000000, nsec: 5 }, encoded);
+    expect(layoutIncluded).toBe(true);
+    const url = new URL(link);
+    expect(url.searchParams.get("time")).toBe("2023-11-14T22:13:20.000000005Z");
+    expect(url.searchParams.get("ds.url")).toBe("https://data.example/run.mcap");
+    expect(link).toContain("ds.url=https://data.example/run.mcap");
+
+    const fromHash = sharedLayoutFromHash(url.hash);
+    expect(JSON.parse(await decodeSharedLayout(fromHash!))).toEqual(layout);
+  });
+
+  it("leaves out a layout that is too large and drops time for live sources", () => {
+    const { link, layoutIncluded } = buildShareLink(
+      `${BASE}#layout=old`,
+      undefined,
+      "x".repeat(MAX_SHARED_LAYOUT_LENGTH + 1),
+    );
+    expect(layoutIncluded).toBe(false);
+    const url = new URL(link);
+    expect(url.hash).toBe("");
+    expect(url.searchParams.has("time")).toBe(false);
+  });
+
+  it("replaces a layoutUrl with the embedded layout", () => {
+    const { link } = buildShareLink(`${BASE}&layoutUrl=https://x.example/l.json`, undefined, "abc");
+    expect(new URL(link).searchParams.has("layoutUrl")).toBe(false);
+  });
+
+  it("ignores other or oversized fragments", () => {
+    expect(sharedLayoutFromHash("")).toBeUndefined();
+    expect(sharedLayoutFromHash("#other=1")).toBeUndefined();
+    expect(sharedLayoutFromHash("#layout=")).toBeUndefined();
+    expect(sharedLayoutFromHash(`#layout=${"x".repeat(MAX_SHARED_LAYOUT_LENGTH + 1)}`)).toBe(
+      undefined,
+    );
+  });
+});

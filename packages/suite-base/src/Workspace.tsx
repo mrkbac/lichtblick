@@ -104,6 +104,7 @@ import useBroadcast from "@lichtblick/suite-base/util/broadcast/useBroadcast";
 import isDesktopApp from "@lichtblick/suite-base/util/isDesktopApp";
 import { shortcutKeyHandlers } from "@lichtblick/suite-base/util/keyboardShortcuts";
 import { pwaProtocolUrl } from "@lichtblick/suite-base/util/pwaProtocolUrl";
+import { decodeSharedLayout, sharedLayoutFromHash } from "@lichtblick/suite-base/util/shareLink";
 
 import { useWorkspaceActions } from "./context/Workspace/useWorkspaceActions";
 import { severityToBadgeColor } from "./utils";
@@ -554,6 +555,65 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
 
   const selectEvent = useEvents(selectSelectEvent);
 
+  /**
+   * Saves and selects a layout opened from a link, replacing earlier copies with the same name so
+   * reopening links doesn't pile up layouts.
+   */
+  const installLayoutText = useCallback(
+    async (text: string, filename: string, signal: AbortSignal) => {
+      const dotIndex = filename.lastIndexOf(".");
+      const layoutName = dotIndex > 0 ? filename.slice(0, dotIndex) : filename;
+
+      // Find existing layouts with the same name before saving (safe deduplication)
+      const existingLayouts = await layoutManager.getLayouts();
+      const matchingLayouts = existingLayouts.filter((layout) => layout.name === layoutName);
+
+      // Delegate JSON parsing, saving, and selection to parseAndInstallLayout
+      const file = new File([text], filename, { type: "application/json" });
+      const newLayout = await parseAndInstallLayout(file, "local", signal);
+
+      // Only delete old layouts after successful save to avoid data loss
+      if (newLayout) {
+        for (const layout of matchingLayouts) {
+          signal.throwIfAborted();
+          await layoutManager.deleteLayout({ id: layout.id });
+        }
+      }
+    },
+    [layoutManager, parseAndInstallLayout],
+  );
+
+  // A share link carries its layout in the fragment (see util/shareLink). Install it once, then
+  // drop the fragment so a reload or a newly copied link doesn't reinstall a stale copy.
+  useEffect(() => {
+    const encoded = sharedLayoutFromHash(window.location.hash);
+    if (encoded == undefined) {
+      return;
+    }
+    const url = new URL(window.location.href);
+    url.hash = "";
+    window.history.replaceState(undefined, "", url.href);
+
+    layoutRequest.current?.abort();
+    const controller = new AbortController();
+    layoutRequest.current = controller;
+    void (async () => {
+      try {
+        const text = await decodeSharedLayout(encoded);
+        controller.signal.throwIfAborted();
+        await installLayoutText(text, "Shared layout.json", controller.signal);
+      } catch (error) {
+        if (controller.signal.aborted) {
+          return;
+        }
+        log.error("Could not open the layout from the link", error);
+        enqueueSnackbar("Could not open the layout from the link", { variant: "error" });
+      }
+    })();
+    // Only the link the app was opened with carries a layout.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   /** Only the current launch may install a downloaded layout or replace saved copies. */
   const fetchLayoutFromUrl = useCallback(
     async (layoutUrl: string) => {
@@ -595,26 +655,9 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
         const rawFilename = parsedUrl.pathname.split("/").pop();
         const filename =
           rawFilename != undefined && rawFilename !== "" ? rawFilename : "layout.json";
-        const dotIndex = filename.lastIndexOf(".");
-        const layoutName = dotIndex > 0 ? filename.slice(0, dotIndex) : filename;
-
-        // Find existing layouts with the same name before saving (safe deduplication)
-        const existingLayouts = await layoutManager.getLayouts();
-        const matchingLayouts = existingLayouts.filter((layout) => layout.name === layoutName);
-
-        // Delegate JSON parsing, saving, and selection to parseAndInstallLayout
         const text = await response.text();
         signal.throwIfAborted();
-        const file = new File([text], filename, { type: "application/json" });
-        const newLayout = await parseAndInstallLayout(file, "local", signal);
-
-        // Only delete old layouts after successful save to avoid data loss
-        if (newLayout) {
-          for (const layout of matchingLayouts) {
-            signal.throwIfAborted();
-            await layoutManager.deleteLayout({ id: layout.id });
-          }
-        }
+        await installLayoutText(text, filename, signal);
       } catch (error) {
         if (signal.aborted) {
           return;
@@ -623,7 +666,7 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
         enqueueSnackbar("Failed to load layout from URL", { variant: "error" });
       }
     },
-    [layoutManager, parseAndInstallLayout, enqueueSnackbar],
+    [installLayoutText, enqueueSnackbar],
   );
 
   // Load data source from URL.

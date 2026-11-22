@@ -3,6 +3,8 @@
 export const playbackTime = {
   copied: "Copied",
   copyCurrentTime: "Copy current time",
+  copyLink: "Copy link to this moment",
+  copyLinkLocal: "Not available for local files",
   copyValue: "Copy {{label}}",
   isoUtc: "UTC (ISO 8601)",
   nanoseconds: "Nanoseconds",
