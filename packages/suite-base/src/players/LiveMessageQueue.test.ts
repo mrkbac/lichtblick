@@ -112,4 +112,38 @@ describe("LiveMessageQueue", () => {
     expect(queue.drain().map((m) => m.receiveTime.sec)).toEqual([42, 43, 44, 45, 46, 47, 48, 49]);
     (console.warn as Mock).mockClear();
   });
+
+  it("drops a kept message once a newer one is queued, to make room for a one-shot map", () => {
+    const queue = new LiveMessageQueue(1000, new PlayerAlertManager());
+    let t = 0;
+    queue.push(msg(t++, 30, "/latched"));
+    queue.push(msg(t++, 30, "/camera")); // kept by the first drop, replaced below
+    while (t < 100) {
+      queue.push(msg(t++, 10));
+    }
+    const map = msg(t++, 200, "/map"); // one-shot, needs the room the old camera message holds
+    queue.push(map);
+    for (let i = 0; i < 20; i++) {
+      queue.push(msg(t++, 10));
+    }
+    queue.push(msg(t++, 30, "/camera"));
+    while (t < 400) {
+      queue.push(msg(t++, 10));
+      expect(queue.sizeInBytes()).toBeLessThanOrEqual(1000);
+    }
+    const kept = queue.drain();
+    expect(kept).toContain(map);
+    expect(kept.map((m) => m.topic)).toContain("/latched");
+    expect(queue.sizeInBytes()).toBe(0);
+    (console.warn as Mock).mockClear();
+  });
+
+  it("ignores malformed transform-like messages", () => {
+    const queue = new LiveMessageQueue(100, new PlayerAlertManager());
+    for (let i = 0; i < 50; i++) {
+      queue.push(msg(i, 10, "/json", { transforms: [null] }));
+    }
+    expect(queue.drain().at(-1)!.receiveTime.sec).toBe(49);
+    (console.warn as Mock).mockClear();
+  });
 });

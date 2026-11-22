@@ -275,6 +275,52 @@ describe("LiveHistoryBuffer", () => {
     expect(mismatches).toEqual([]);
   });
 
+  it("orders messages received at the same time by arrival, on every seek", () => {
+    const buffer = new LiveHistoryBuffer({ windowNs: 100_000n * SEC, maxBytes: 1e12 });
+    const first = tf(1, "a");
+    const second = tf(1, "b");
+    buffer.add(first);
+    buffer.add(second);
+    const last = 3 * CHECKPOINT_INTERVAL;
+    for (let t = 2; t <= last; t++) {
+      buffer.add(msg("/a", t));
+    }
+    const topics = new Set(["/tf"]);
+    const seeks = [last, last - 1, last - 2].map((t) => buffer.backfill(fromSec(t), topics));
+    for (const result of seeks) {
+      expect(result).toEqual([first, second]);
+    }
+  });
+
+  it("backfills correctly when every transform has a new frame", () => {
+    const buffer = new LiveHistoryBuffer({
+      windowNs: BigInt(2 * CHECKPOINT_INTERVAL) * SEC,
+      maxBytes: 1e12,
+    });
+    const last = 4 * CHECKPOINT_INTERVAL;
+    for (let t = 1; t <= last; t++) {
+      buffer.add(tf(t, `frame${t}`));
+    }
+    const topics = new Set(["/tf"]);
+    for (const at of [last, last - 10, last - 5000]) {
+      const result = buffer.backfill(fromSec(at), topics);
+      expect(result).toHaveLength(at); // one message per frame, from the window and the seeds
+      expect(result.at(-1)!.receiveTime.sec).toBe(at);
+    }
+  });
+
+  it("ignores malformed transform-like messages on other topics while scrubbing", () => {
+    const buffer = new LiveHistoryBuffer({ windowNs: 100_000n * SEC, maxBytes: 1e12 });
+    const last = 3 * CHECKPOINT_INTERVAL;
+    for (let t = 1; t <= last; t++) {
+      buffer.add(t % 2 === 0 ? msg("/json", t, { transforms: [null] }) : tf(t, "base"));
+    }
+    const topics = new Set(["/tf"]);
+    for (const at of [last, last - 1, last - 2]) {
+      expect(buffer.backfill(fromSec(at), topics).map((e) => e.topic)).toEqual(["/tf"]);
+    }
+  });
+
   it("clears everything, including seeds, e.g. on a clock reset", () => {
     const buffer = new LiveHistoryBuffer({ windowNs: 1n * SEC, maxBytes: 1e9 });
     buffer.add(msg("/a", 1));
@@ -299,6 +345,8 @@ describe("transformChildFrames", () => {
     expect(transformChildFrames({ child_frame_id: "c", pose: {} })).toBeUndefined();
     expect(transformChildFrames({ transforms: [{ x: 1 }] })).toBeUndefined();
     expect(transformChildFrames(undefined)).toBeUndefined();
+    expect(transformChildFrames({ transforms: [null] })).toBeUndefined();
+    expect(transformChildFrames({ transforms: ["a"] })).toBeUndefined();
   });
 });
 

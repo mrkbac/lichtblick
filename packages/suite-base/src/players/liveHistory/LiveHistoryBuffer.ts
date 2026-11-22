@@ -36,9 +36,13 @@ export function transformEntries(
     parent_frame_id?: unknown;
   };
   if (Array.isArray(msg.transforms)) {
-    const transforms = msg.transforms as { child_frame_id?: unknown }[];
+    const transforms = msg.transforms as unknown[];
     for (const tf of transforms) {
-      if (typeof tf.child_frame_id !== "string") {
+      if (
+        tf == undefined ||
+        typeof tf !== "object" ||
+        typeof (tf as { child_frame_id?: unknown }).child_frame_id !== "string"
+      ) {
         return undefined;
       }
     }
@@ -64,7 +68,8 @@ export class LiveHistoryBuffer {
   /** Index of the oldest retained message; dropped entries before it are compacted lazily. */
   #head = 0;
   #bytes = 0;
-  #seeds = new Map<string, Map<string, MessageEvent>>();
+  /** Per topic and seed key, the last evicted message and its sequence number. */
+  #seeds = new Map<string, Map<string, Seed>>();
   /** Sequence number of the message at `#head`: how many messages were ever evicted. */
   #headSeq = 0;
   /**
@@ -76,6 +81,8 @@ export class LiveHistoryBuffer {
   #checkpointsValidFrom = Infinity;
   /** Messages added before the last seek; seeks in quick succession (scrubbing) use checkpoints. */
   #lastSeekSeq = -Infinity;
+  /** After a checkpoint grew too big (many distinct keys), none are built until this is evicted. */
+  #noCheckpointsBeforeSeq = 0;
   /**
    * The history holds every message received since this time: the first trim after `clear()`,
    * advanced by each age cutoff and memory-cap eviction. Enlarging the window can't move it back.
@@ -222,10 +229,10 @@ export class LiveHistoryBuffer {
    */
   public backfill(at: Time, topics: ReadonlySet<string>): MessageEvent[] {
     const found = new Map<string, Set<string>>();
-    const result = new Set<MessageEvent>();
+    const result = new Map<MessageEvent, number>(); // with its sequence number, to order ties
     // Topics whose whole-message state is found; transform topics never are, as frames vary.
     let complete = 0;
-    const take = (msg: MessageEvent, keys: readonly string[]) => {
+    const take = (msg: MessageEvent, seq: number, keys: readonly string[]) => {
       let seen = found.get(msg.topic);
       if (!seen) {
         seen = new Set();
@@ -242,7 +249,7 @@ export class LiveHistoryBuffer {
         }
       }
       if (isNew) {
-        result.add(msg);
+        result.set(msg, seq);
       }
     };
     // Walking back to the oldest message is what a transform or silent topic costs. While scrubbing,
@@ -255,40 +262,43 @@ export class LiveHistoryBuffer {
     const added = this.#seqOf(this.#messages.length);
     const scrubbing = added - this.#lastSeekSeq < CHECKPOINT_INTERVAL;
     this.#lastSeekSeq = added;
-    const useCheckpoint = scrubbing && blockStart > this.#head;
-    const stop = useCheckpoint ? blockStart : this.#head;
+    const checkpoint =
+      scrubbing && blockStart > this.#head && this.#headSeq >= this.#noCheckpointsBeforeSeq
+        ? this.#checkpoint(block)
+        : undefined;
+    const stop = checkpoint ? blockStart : this.#head;
     for (let i = end - 1; i >= stop && complete < topics.size; i--) {
       const msg = this.#messages[i]!;
       if (topics.has(msg.topic) && found.get(msg.topic)?.has(WHOLE_MESSAGE) !== true) {
-        take(msg, seedKeys(msg));
+        take(msg, this.#seqOf(i), seedKeys(msg));
       }
     }
-    if (useCheckpoint && complete < topics.size) {
+    if (checkpoint && complete < topics.size) {
       // Entries older than the oldest message were evicted; the seed for their key is that message.
-      const retained = (seq: number | undefined) =>
-        seq != undefined && seq >= this.#headSeq ? this.#messages[this.#indexOf(seq)] : undefined;
-      const checkpoint = this.#checkpoint(block);
-      for (const topic of topics) {
-        const whole = retained(checkpoint.whole.get(topic));
-        if (whole && found.get(topic)?.has(WHOLE_MESSAGE) !== true) {
-          take(whole, WHOLE_MESSAGE_KEYS);
+      const takeRetained = (seq: number | undefined, keys: readonly string[], topic: string) => {
+        if (
+          seq != undefined &&
+          seq >= this.#headSeq &&
+          found.get(topic)?.has(WHOLE_MESSAGE) !== true
+        ) {
+          take(this.#messages[this.#indexOf(seq)]!, seq, keys);
         }
+      };
+      for (const topic of topics) {
+        takeRetained(checkpoint.whole.get(topic), WHOLE_MESSAGE_KEYS, topic);
         for (const [key, seq] of checkpoint.frames.get(topic) ?? []) {
-          const latest = retained(seq);
-          if (latest && found.get(topic)?.has(WHOLE_MESSAGE) !== true) {
-            take(latest, [key]);
-          }
+          takeRetained(seq, [key], topic);
         }
       }
     }
     for (const topic of topics) {
       for (const [key, seed] of this.#seeds.get(topic) ?? []) {
         if (found.get(topic)?.has(WHOLE_MESSAGE) !== true) {
-          take(seed, [key]);
+          take(seed.event, seed.seq, [key]);
         }
       }
     }
-    return [...result].sort((a, b) => compare(a.receiveTime, b.receiveTime));
+    return [...result].sort(byTimeThenSeq).map(([msg]) => msg);
   }
 
   /**
@@ -296,14 +306,14 @@ export class LiveHistoryBuffer {
    * window, then the retained messages.
    */
   public snapshot(): MessageEvent[] {
-    const seeds = new Set<MessageEvent>();
+    const seeds = new Map<MessageEvent, number>();
     for (const byKey of this.#seeds.values()) {
-      for (const seed of byKey.values()) {
-        seeds.add(seed);
+      for (const { event, seq } of byKey.values()) {
+        seeds.set(event, seq);
       }
     }
     return [
-      ...[...seeds].sort((a, b) => compare(a.receiveTime, b.receiveTime)),
+      ...[...seeds].sort(byTimeThenSeq).map(([event]) => event),
       ...this.#messages.slice(this.#head),
     ];
   }
@@ -315,6 +325,7 @@ export class LiveHistoryBuffer {
     this.#seeds.clear();
     this.#checkpoints.clear();
     this.#checkpointsValidFrom = Infinity;
+    this.#noCheckpointsBeforeSeq = 0;
     this.#completeFromNs = undefined;
     this.#capLimited = false;
   }
@@ -322,6 +333,7 @@ export class LiveHistoryBuffer {
   #evictOldest(): void {
     const msg = this.#messages[this.#head]!;
     this.#messages[this.#head] = undefined as unknown as MessageEvent; // release for GC
+    const seed: Seed = { event: msg, seq: this.#headSeq };
     this.#head++;
     this.#headSeq++;
     this.#bytes -= msg.sizeInBytes;
@@ -331,7 +343,7 @@ export class LiveHistoryBuffer {
       this.#seeds.set(msg.topic, seeds);
     }
     for (const key of seedKeys(msg)) {
-      seeds.set(key, msg);
+      seeds.set(key, seed);
     }
   }
 
@@ -357,8 +369,11 @@ export class LiveHistoryBuffer {
     return this.#head + (seq - this.#headSeq);
   }
 
-  /** The checkpoint of `block`, whose start must be a retained message. */
-  #checkpoint(block: number): Checkpoint {
+  /**
+   * The checkpoint of `block`, whose start must be a retained message, or undefined if it would
+   * hold more keys than a block has messages (then walking is cheaper than keeping it).
+   */
+  #checkpoint(block: number): Checkpoint | undefined {
     const cached = this.#checkpoints.get(block);
     if (cached) {
       return cached;
@@ -371,7 +386,7 @@ export class LiveHistoryBuffer {
     const base = this.#checkpoints.get(from);
     const start = base ? from * CHECKPOINT_INTERVAL : this.#headSeq;
     const state: Checkpoint = base
-      ? cloneCheckpoint(base)
+      ? cloneCheckpoint(base, this.#headSeq)
       : { whole: new Map<string, number>(), frames: new Map<string, Map<string, number>>() };
     let seq = start;
     for (let b = from + 1; b <= block; b++) {
@@ -391,7 +406,11 @@ export class LiveHistoryBuffer {
           latest.set(tf.child_frame_id, seq);
         }
       }
-      this.#checkpoints.set(b, b === block ? state : cloneCheckpoint(state));
+      if (checkpointSize(state) > CHECKPOINT_INTERVAL) {
+        this.#noCheckpointsBeforeSeq = this.#seqOf(this.#messages.length);
+        return undefined;
+      }
+      this.#checkpoints.set(b, b === block ? state : cloneCheckpoint(state, this.#headSeq));
       this.#checkpointsValidFrom = Math.min(this.#checkpointsValidFrom, b * CHECKPOINT_INTERVAL);
     }
     return state;
@@ -420,12 +439,45 @@ function seedKeys(msg: MessageEvent): readonly string[] {
 /** Per topic, the sequence number of the latest whole message and of the latest message per frame. */
 type Checkpoint = { whole: Map<string, number>; frames: Map<string, Map<string, number>> };
 
-function cloneCheckpoint({ whole, frames }: Checkpoint): Checkpoint {
-  const clone: Checkpoint = { whole: new Map(whole), frames: new Map() };
+/** Without entries older than `minSeq`: those messages were evicted and are in the seeds. */
+function cloneCheckpoint({ whole, frames }: Checkpoint, minSeq: number): Checkpoint {
+  const clone: Checkpoint = { whole: new Map(), frames: new Map() };
+  for (const [topic, seq] of whole) {
+    if (seq >= minSeq) {
+      clone.whole.set(topic, seq);
+    }
+  }
   for (const [topic, latest] of frames) {
-    clone.frames.set(topic, new Map(latest));
+    const kept = new Map<string, number>();
+    for (const [frame, seq] of latest) {
+      if (seq >= minSeq) {
+        kept.set(frame, seq);
+      }
+    }
+    if (kept.size > 0) {
+      clone.frames.set(topic, kept);
+    }
   }
   return clone;
+}
+
+function checkpointSize({ whole, frames }: Checkpoint): number {
+  let size = whole.size;
+  for (const latest of frames.values()) {
+    size += latest.size;
+  }
+  return size;
+}
+
+type Seed = { event: MessageEvent; seq: number };
+
+/** Receive-time order, ties in arrival order. */
+function byTimeThenSeq(
+  [a, aSeq]: [MessageEvent, number],
+  [b, bSeq]: [MessageEvent, number],
+): number {
+  const order = compare(a.receiveTime, b.receiveTime);
+  return order !== 0 ? order : aSeq - bSeq;
 }
 
 /** Browser JS heap use (fraction of its limit) above which the history gives memory back. */
