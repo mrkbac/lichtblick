@@ -46,7 +46,11 @@ export const panelButtons = {
   plotToggleSeries: { title: "Toggle visibility", help: "Hides or shows a series." },
   plotAddSeries: {
     title: "Add series",
-    help: "Shown while the plot has no series: opens the settings of a first series.",
+    help: "Type a field to plot, with suggestions. A message (e.g. a vector) adds one series per numeric field. You can also drop fields or topics onto the plot.",
+  },
+  plotSeriesSettings: {
+    title: "Series settings",
+    help: "Opens the series in the settings sidebar: label, color, line style, timestamp.",
   },
   plotDeleteSeries: { title: "Delete series", help: "Removes the series from the plot." },
   publishRepeat: {

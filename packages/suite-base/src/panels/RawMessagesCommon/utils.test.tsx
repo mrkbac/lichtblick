@@ -47,6 +47,27 @@ describe("getMessageDocumentationLink", () => {
 });
 
 describe("toggleNodeExpansion", () => {
+  it("forgets the expanded elements of a collapsed index range", () => {
+    // Given elements and a nested range open under range @100+100 of `values`
+    const expansion = {
+      values: NodeState.Expanded,
+      "@100+100~values": NodeState.Expanded,
+      "150~values": NodeState.Expanded,
+      "x~150~values": NodeState.Expanded,
+      "250~values": NodeState.Expanded,
+    };
+
+    // When the range is collapsed
+    const next = toggleNodeExpansion(expansion, new Set(), "@100+100~values", undefined);
+
+    // Then only what was inside it is forgotten
+    expect(next).toEqual({
+      values: NodeState.Expanded,
+      "@100+100~values": NodeState.Collapsed,
+      "250~values": NodeState.Expanded,
+    });
+  });
+
   const paths = new Set(["key1", "key2", "child~key1"]);
 
   it("collapses a node from 'all' and keeps the rest expanded", () => {

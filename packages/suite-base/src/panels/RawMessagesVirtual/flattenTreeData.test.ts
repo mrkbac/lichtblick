@@ -5,7 +5,9 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+import { PATH_NAME_AGGREGATOR } from "@lichtblick/suite-base/panels/RawMessagesCommon/constants";
 import { diffLabels } from "@lichtblick/suite-base/panels/RawMessagesCommon/types";
+import { isNodeExpanded } from "@lichtblick/suite-base/panels/RawMessagesCommon/utils";
 import { BasicBuilder } from "@lichtblick/test-builders";
 
 import { flattenTreeData, searchTreeData } from "./flattenTreeData";
@@ -722,7 +724,7 @@ describe("flattenTreeData", () => {
       expect(result[0]?.key).toBe("normalKey");
     });
 
-    it("should handle very large arrays efficiently", () => {
+    it("lists index ranges instead of the elements of long arrays", () => {
       // Given
       const data = Array.from({ length: 1000 }, (_, i) => i);
 
@@ -730,9 +732,78 @@ describe("flattenTreeData", () => {
       const result = flattenTreeData(data, (key) => expandedNodes.has(key));
 
       // Then
-      expect(result).toHaveLength(1000);
-      expect(result[0]?.value).toBe(0);
-      expect(result[999]?.value).toBe(999);
+      expect(result).toHaveLength(10);
+      expect(result[0]).toMatchObject({ key: "@0+100", label: "[0 … 99]", isRange: true });
+      expect(result[9]).toMatchObject({ key: "@900+100", label: "[900 … 999]" });
+    });
+
+    it("shows the elements of an expanded range under their usual keys", () => {
+      // Given
+      const values = new Float32Array(1000).map((_, i) => i);
+      expandedNodes.add("values");
+      expandedNodes.add(`@100+100${PATH_NAME_AGGREGATOR}values`);
+
+      // When
+      const result = flattenTreeData({ values }, (key) => expandedNodes.has(key));
+
+      // Then: the array, its 10 ranges and the 100 elements of one of them
+      expect(result).toHaveLength(111);
+      const element = result.find((node) => node.key === `150${PATH_NAME_AGGREGATOR}values`);
+      expect(element).toMatchObject({
+        label: "150",
+        value: 150,
+        depth: 2,
+        keyPath: [150, "values"],
+        parentPath: `@100+100${PATH_NAME_AGGREGATOR}values`,
+      });
+    });
+
+    it("keeps a range's key when the array length changes", () => {
+      // Given an open last range
+      expandedNodes.add(`@900+100${PATH_NAME_AGGREGATOR}values`);
+      expandedNodes.add("values");
+      const flatten = (length: number) =>
+        flattenTreeData({ values: new Float32Array(length) }, (key) => expandedNodes.has(key));
+
+      // When the array shrinks
+      const result = flatten(950);
+
+      // Then the range stays open with its new bounds
+      expect(result.find((node) => node.label === "[900 … 949]")?.key).toBe(
+        `@900+100${PATH_NAME_AGGREGATOR}values`,
+      );
+      expect(result.at(-1)?.key).toBe(`949${PATH_NAME_AGGREGATOR}values`);
+    });
+
+    it("keeps ranges collapsed when everything is expanded", () => {
+      // Given "expand all", which skips long arrays
+      const data = new Uint8Array(3_200_000);
+
+      // When
+      const result = flattenTreeData(data, (key, value) => isNodeExpanded("all", key, value));
+
+      // Then
+      expect(result).toHaveLength(4);
+    });
+
+    it("nests ranges so huge arrays stay at most a hundred rows per level", () => {
+      // Given
+      const data = new Uint8Array(3_200_000);
+      expandedNodes.add("@1000000+1000000");
+      expandedNodes.add(`@1000000+10000${PATH_NAME_AGGREGATOR}@1000000+1000000`);
+
+      // When
+      const result = flattenTreeData(data, (key) => expandedNodes.has(key));
+
+      // Then: 4 ranges of a million, one split into 100 ranges of 10,000, one of those into 100
+      expect(result).toHaveLength(204);
+      expect(result.map((node) => node.label).slice(0, 3)).toEqual([
+        "[0 … 999999]",
+        "[1000000 … 1999999]",
+        "[1000000 … 1009999]",
+      ]);
+      // Each range is keyed under the one enclosing it, for the breadcrumb
+      expect(result[3]?.parentPath).toBe(`@1000000+10000${PATH_NAME_AGGREGATOR}@1000000+1000000`);
     });
   });
 

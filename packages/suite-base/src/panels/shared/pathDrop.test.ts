@@ -71,4 +71,20 @@ describe("addPathsDrop", () => {
       { value: "/cam.data", enabled: true, timestampMethod: "receiveTime" },
     ]);
   });
+
+  it("adds the fields of a whole message when given fieldsOf", () => {
+    const add = vi.fn();
+    const config = addPathsDrop(add, (item) =>
+      item.path === "/cam" ? ["/cam.width", "/cam.height"] : undefined,
+    );
+
+    expect(config.getDropStatus([image])).toEqual({ canDrop: true, effect: "add" });
+    expect(config.getDropStatus([other])).toEqual({ canDrop: false });
+
+    config.handleDrop([image]);
+    expect(add).toHaveBeenCalledWith([
+      { value: "/cam.width", enabled: true, timestampMethod: "receiveTime" },
+      { value: "/cam.height", enabled: true, timestampMethod: "receiveTime" },
+    ]);
+  });
 });

@@ -19,8 +19,8 @@ import { DEFAULT_CAMERA_STATE } from "@lichtblick/suite-base/panels/ThreeDeeRend
 import { DEFAULT_PUBLISH_SETTINGS } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/PublishSettings";
 
 import { RendererConfig } from "../IRenderer";
-import { Transform } from "../transforms";
-import { FrameAxes } from "./FrameAxes";
+import { Transform, TransformTree } from "../transforms";
+import { FrameAxes, setFrameOffsets } from "./FrameAxes";
 import {
   rpyDegreesToQuat,
   TRANSFORM_OFFSETS_VARIABLE,
@@ -606,5 +606,21 @@ describe("FrameAxes", () => {
       expect(node.fields?.resultXyz?.label).toBe("Translation");
       expect(node.fields?.resultXyz?.readonly).toBe(false);
     });
+  });
+});
+
+describe("setFrameOffsets", () => {
+  it("bumps the tree version only when an offset changes, so cached poses are recomputed", () => {
+    const tree = new TransformTree();
+    tree.addTransform("child", "parent", 0n, new Transform([0, 0, 0], [0, 0, 0, 1]));
+    const frame = tree.frame("child")!;
+    const version = tree.version;
+
+    setFrameOffsets(tree, frame, [1, 2, 3], undefined);
+    expect(tree.version).toBe(version + 1);
+    setFrameOffsets(tree, frame, [1, 2, 3], undefined); // same values in a new array
+    expect(tree.version).toBe(version + 1);
+    setFrameOffsets(tree, frame, [1, 2, 3], [0, 0, 90]);
+    expect(tree.version).toBe(version + 2);
   });
 });

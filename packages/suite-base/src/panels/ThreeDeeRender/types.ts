@@ -7,6 +7,7 @@
 
 import { CameraModelsMap } from "@lichtblick/den/image/types";
 import { useCrash } from "@lichtblick/hooks";
+import { Time } from "@lichtblick/suite";
 import { ForwardedAnalytics } from "@lichtblick/suite-base/components/ForwardAnalyticsContextProvider";
 import { BuiltinPanelExtensionContext } from "@lichtblick/suite-base/components/PanelExtensionAdapter";
 import { FollowMode, TestOptions } from "@lichtblick/suite-base/panels/ThreeDeeRender/IRenderer";
@@ -31,7 +32,7 @@ export type ThreeDeeRenderProps = {
     variant?: "default" | "error" | "success" | "warning" | "info",
   ) => void;
   /** Allow for logging errors to panel logs */
-  logError?: (message: string, error?: Error) => void;
+  logError?: (message: string, error?: Error, time?: Time) => void;
 };
 
 export type InitPanelArgs = {
@@ -44,5 +45,5 @@ export type InitPanelArgs = {
     message: string,
     variant?: "default" | "error" | "success" | "warning" | "info",
   ) => void;
-  logError?: (message: string, error?: Error) => void;
+  logError?: (message: string, error?: Error, time?: Time) => void;
 };
