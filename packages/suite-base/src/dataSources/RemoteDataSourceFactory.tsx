@@ -19,7 +19,7 @@ import {
 } from "@lichtblick/suite-base/players/IterablePlayer/shared/multiFileHydrationOptions";
 import { expandVideoSeekBackfill } from "@lichtblick/suite-base/players/IterablePlayer/videoSeekBackfill";
 import { Player } from "@lichtblick/suite-base/players/types";
-import { compareNamesOf, uniqueNames } from "@lichtblick/suite-base/util/compareSides";
+import { compareNamesOf, splitUrls, uniqueNames } from "@lichtblick/suite-base/util/compareSides";
 import { basename, extname } from "@lichtblick/suite-base/util/path";
 
 const initWorkers: Record<string, () => Worker> = {
@@ -81,7 +81,7 @@ class RemoteDataSourceFactory implements IDataSourceFactory {
     if (args.params?.url == undefined) {
       return;
     }
-    const urls = args.params.url.split(",");
+    const urls = splitUrls(args.params.url);
     // Same meaning as Foxglove's `ds.includeCredentials`: send cookies with the file requests
     const includeCredentials = args.params.includeCredentials === "true";
     const credentials: RequestCredentials | undefined = includeCredentials ? "include" : undefined;

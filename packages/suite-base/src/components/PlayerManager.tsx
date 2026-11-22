@@ -75,6 +75,7 @@ import {
   compareNamesOf,
   recordingName,
   rememberHandle,
+  splitUrls,
 } from "@lichtblick/suite-base/util/compareSides";
 import { recentArgs, recentFileTitle } from "@lichtblick/suite-base/util/recentSources";
 import { takeSourcePick } from "@lichtblick/suite-base/util/sourcePick";
@@ -382,11 +383,11 @@ export default function PlayerManager(
             const withCookies = args.params?.includeCredentials === "true";
             // One remote file can also be exported
             const remoteFile: RemoteFileSelection | undefined =
-              foundSource.id === "remote-file" && url != undefined && !url.includes(",")
+              foundSource.id === "remote-file" && url != undefined && splitUrls(url).length === 1
                 ? { url, credentials: withCookies ? "include" : undefined }
                 : undefined;
             if (url != undefined && foundSource.supportedFileTypes != undefined) {
-              const urls = url.split(",");
+              const urls = splitUrls(url);
               const compare = compareNamesOf(args.params);
               commitSelection(urls, compare?.length === urls.length ? compare : undefined, {
                 withCookies,

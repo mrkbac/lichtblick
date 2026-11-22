@@ -332,4 +332,16 @@ describe("CompareDialog", () => {
     const chips = [...document.querySelectorAll(".MuiChip-label")].map((chip) => chip.textContent);
     expect(chips).toEqual(["race.mcap"]);
   });
+
+  it("adds a picked URL with a comma in it as one recording", async () => {
+    renderDialog();
+    act(() => {
+      useCompareDialog.getState().show({ shared: [], sides: [] });
+    });
+    await pickElsewhere(1, "remote", "https://example.com/run,1.mcap");
+
+    const chips = [...document.querySelectorAll(".MuiChip-label")].map((chip) => chip.textContent);
+    expect(chips).toEqual(["run,1.mcap"]);
+    expect(screen.queryByText(/can't be compared/)).toBeNull();
+  });
 });

@@ -65,6 +65,23 @@ export function joinUrls(urls: readonly string[]): string {
 }
 
 /**
+ * The URLs in a `ds.url` list. A comma starts a new URL only where a scheme (`https://`) follows,
+ * so a URL with a comma of its own stays whole, escaped by joinUrls or not.
+ */
+export function splitUrls(value: string): string[] {
+  const urls: string[] = [];
+  for (const part of value.split(",")) {
+    const last = urls.at(-1);
+    if (last != undefined && !/^[a-z][a-z\d+.-]*:\/\//i.test(part)) {
+      urls[urls.length - 1] = `${last},${part}`;
+    } else {
+      urls.push(part);
+    }
+  }
+  return urls;
+}
+
+/**
  * The `ds.compareNames` value for side names: joined by commas, with commas (and `%`) in a name
  * escaped so names keep them. A new param rather than `ds.compare`, whose older plain lists keep
  * meaning what they did (e.g. `%41` stays `%41`).

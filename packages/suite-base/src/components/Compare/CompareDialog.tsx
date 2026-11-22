@@ -37,6 +37,7 @@ import {
   encodeCompareNames,
   handlesOf,
   joinUrls,
+  splitUrls,
   recordingExtension,
   recordingName,
   rememberHandle,
@@ -57,10 +58,11 @@ async function recordingsOf(
 ): Promise<{ recordings: Recording[]; withCookies: boolean }> {
   if (args?.type === "connection") {
     // Only sources that read recording files (not live connections, whatever their URL ends with)
-    const urls = source?.supportedFileTypes != undefined ? args.params?.url?.split(",") : undefined;
-    const isHttp = (url: string) => /^https?:\/\//i.test(url);
+    const url = source?.supportedFileTypes != undefined ? args.params?.url : undefined;
+    const urls = url != undefined ? splitUrls(url) : [];
+    const isHttp = (each: string) => /^https?:\/\//i.test(each);
     return {
-      recordings: urls?.every(isHttp) === true ? urls : [],
+      recordings: urls.every(isHttp) ? urls : [],
       withCookies: args.params?.includeCredentials === "true",
     };
   }
