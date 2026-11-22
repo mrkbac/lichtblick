@@ -714,13 +714,11 @@ export class Renderer extends EventEmitter<RendererEvents> {
       }
     });
     this.#touchedFrameIds = undefined;
-    // A complete tree hides transforms received after the current time, so a batch that starts
-    // later changes nothing on screen (a paused panel loading its history stays idle)
-    const first = messageEvents[0];
-    if (first == undefined || toNanoSec(first.receiveTime) > this.currentTime) {
-      return;
+    // A batch can replace or thin samples that are on screen, even one received after the current
+    // time, so every non-empty batch repaints, throttled
+    if (messageEvents.length > 0) {
+      this.#queueHistoryRepaint();
     }
-    this.#queueHistoryRepaint();
   }
 
   /**

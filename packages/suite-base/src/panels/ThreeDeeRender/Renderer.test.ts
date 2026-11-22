@@ -2160,26 +2160,26 @@ describe("Renderer.addTransformMessages", () => {
     expect(updates).toHaveBeenCalledTimes(1);
   });
 
-  it("repaints only for batches that reach the current time, at most every 250 ms", () => {
+  it("repaints for history batches at most every 250 ms, plus once after the last", () => {
     vi.useFakeTimers();
     const renderer = new Renderer({ ...defaultRendererProps, canvas });
     const queue = vi.spyOn(renderer, "queueAnimationFrame").mockImplementation(() => {});
     renderer.currentTime = 10n;
 
-    // Received after the current time: hidden by the complete tree, nothing to repaint
+    // Any batch can change what is on screen, also one received after the current time
     renderer.addTransformMessages([createTFMessageEvent("root", "a", 11n, [11n])]);
-    expect(queue).not.toHaveBeenCalled();
-
-    // Reaches the current time: one repaint now, later batches wait for the window
     renderer.addTransformMessages([createTFMessageEvent("root", "a", 5n, [5n])]);
     renderer.addTransformMessages([createTFMessageEvent("root", "a", 6n, [6n])]);
-    renderer.addTransformMessages([createTFMessageEvent("root", "a", 7n, [7n])]);
     expect(queue).toHaveBeenCalledTimes(1);
 
     // One trailing repaint shows the batches that waited
     vi.advanceTimersByTime(250);
     expect(queue).toHaveBeenCalledTimes(2);
     vi.advanceTimersByTime(1000);
+    expect(queue).toHaveBeenCalledTimes(2);
+
+    // An empty batch changes nothing
+    renderer.addTransformMessages([]);
     expect(queue).toHaveBeenCalledTimes(2);
 
     renderer.dispose();
