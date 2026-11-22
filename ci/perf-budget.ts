@@ -21,7 +21,7 @@ import zlib from "node:zlib";
 type Metrics = Record<string, number>;
 type Bundle = {
   generateMcap: () => Promise<Uint8Array>;
-  cases: Record<string, (ctx: { mcap: Blob }) => Promise<Metrics>>;
+  cases: Record<string, (ctx: { mcap: Blob; measureHeap?: boolean }) => Promise<Metrics>>;
 };
 type Variant = "base" | "head";
 
@@ -93,8 +93,8 @@ async function loadBundle(dir: string): Promise<Bundle> {
 /** Child process mode: one heap measurement in a fresh process */
 async function childMain(dir: string, mcapPath: string): Promise<void> {
   const bundle = await loadBundle(dir);
-  const metrics = await bundle.cases[HEAP_CASE]!({ mcap: await fs.openAsBlob(mcapPath) });
-  const heap = Object.fromEntries(Object.entries(metrics).filter(([k]) => unitOf(k) === "heap"));
+  const mcap = await fs.openAsBlob(mcapPath);
+  const heap = await bundle.cases[HEAP_CASE]!({ mcap, measureHeap: true });
   // maxRSS is in KiB
   heap["max RSS (heap)"] = process.resourceUsage().maxRSS * 1024;
   process.stdout.write(JSON.stringify(heap));
@@ -226,11 +226,7 @@ async function main(): Promise<void> {
       gc();
       const metrics = await testCase({ mcap });
       if (round > 0) {
-        // Heap figures from this shared process are polluted by the other build
-        record(
-          variant,
-          Object.fromEntries(Object.entries(metrics).filter(([k]) => unitOf(k) !== "heap")),
-        );
+        record(variant, metrics);
       }
     }
     console.error(`round ${round}/${ROUNDS} done`);

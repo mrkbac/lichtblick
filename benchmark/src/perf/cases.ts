@@ -172,12 +172,20 @@ async function openSource(blob: Blob): Promise<SourceCtx & { ttfmMs: number }> {
   return { source, bytesRead, topics, start: init.start, end: init.end, ttfmMs };
 }
 
-function heapBytes(): number {
+/** Live JS heap plus ArrayBuffers right after a full GC: what the reader holds on to */
+function liveHeapBytes(): number {
+  (globalThis as { gc?: () => void }).gc?.();
   const { heapUsed, arrayBuffers } = process.memoryUsage();
   return heapUsed + arrayBuffers;
 }
 
-export const cases: Record<string, (ctx: { mcap: Blob }) => Promise<Metrics>> = {
+type CaseContext = {
+  mcap: Blob;
+  /** Sample the live heap (forces GCs, so only for the untimed run in a fresh process) */
+  measureHeap?: boolean;
+};
+
+export const cases: Record<string, (ctx: CaseContext) => Promise<Metrics>> = {
   "mcap open": async ({ mcap }) => {
     const { source, bytesRead, ttfmMs } = await openSource(mcap);
     const opened = bytesRead();
@@ -188,26 +196,23 @@ export const cases: Record<string, (ctx: { mcap: Blob }) => Promise<Metrics>> = 
     };
   },
 
-  "mcap full pass": async ({ mcap }) => {
+  "mcap full pass": async ({ mcap, measureHeap = false }): Promise<Metrics> => {
     const { source, bytesRead, topics } = await openSource(mcap);
     const before = bytesRead();
-    let peak = heapBytes();
+    let peak = 0;
     let count = 0;
     const t0 = performance.now();
     for await (const result of source.messageIterator({ topics, consumptionType: "full" })) {
-      if (result.type === "message-event" && ++count % 2000 === 0) {
-        peak = Math.max(peak, heapBytes());
+      if (measureHeap && result.type === "message-event" && ++count % 2000 === 0) {
+        peak = Math.max(peak, liveHeapBytes());
       }
     }
     const ms = performance.now() - t0;
     const read = bytesRead() - before;
     await source.terminate();
-    return {
-      "full pass (ms)": ms,
-      "full pass bytes read (bytes)": read,
-      // Only meaningful in a fresh process; ci/perf-budget.ts measures it there
-      "full pass peak heap (heap)": peak,
-    };
+    return measureHeap
+      ? { "full pass peak live heap (heap)": peak }
+      : { "full pass (ms)": ms, "full pass bytes read (bytes)": read };
   },
 
   "mcap seek": async ({ mcap }) => {
