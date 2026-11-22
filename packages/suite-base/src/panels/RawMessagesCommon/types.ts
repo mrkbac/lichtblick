@@ -55,7 +55,7 @@ export type TreeNode = {
   parentPath: string;
   /** Set in diff mode for added/changed/deleted nodes. */
   diffStatus?: DiffStatus;
-  /** An index range of a long array (`[0 … 99]`); it has no value of its own. */
+  /** An index range of a long array (`[0 … 99]`); its value is the whole array. */
   isRange?: boolean;
 };
 

@@ -7,6 +7,7 @@
 
 import { PATH_NAME_AGGREGATOR } from "@lichtblick/suite-base/panels/RawMessagesCommon/constants";
 import { diffLabels } from "@lichtblick/suite-base/panels/RawMessagesCommon/types";
+import { isNodeExpanded } from "@lichtblick/suite-base/panels/RawMessagesCommon/utils";
 import { BasicBuilder } from "@lichtblick/test-builders";
 
 import { flattenTreeData, searchTreeData } from "./flattenTreeData";
@@ -755,6 +756,17 @@ describe("flattenTreeData", () => {
         keyPath: [150, "values"],
         parentPath: `[100 … 199]${PATH_NAME_AGGREGATOR}values`,
       });
+    });
+
+    it("keeps ranges collapsed when everything is expanded", () => {
+      // Given "expand all", which skips long arrays
+      const data = new Uint8Array(3_200_000);
+
+      // When
+      const result = flattenTreeData(data, (key, value) => isNodeExpanded("all", key, value));
+
+      // Then
+      expect(result).toHaveLength(4);
     });
 
     it("nests ranges so huge arrays stay at most a hundred rows per level", () => {

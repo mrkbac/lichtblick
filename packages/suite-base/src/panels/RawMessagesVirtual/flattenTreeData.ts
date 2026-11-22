@@ -185,7 +185,8 @@ export function flattenTreeData(
       nodes.push({
         key,
         label,
-        value: undefined,
+        // The whole array, so "expand all" (which skips long arrays) leaves the range collapsed
+        value: array,
         depth: rowDepth,
         isExpandable: true,
         isRange: true,
@@ -193,7 +194,7 @@ export function flattenTreeData(
         parentPath: rowParent,
         ...(status && status !== "changed" ? { diffStatus: status } : undefined),
       });
-      if (isExpanded(key, undefined)) {
+      if (isExpanded(key, array)) {
         walkRange(array, rangeStart, rangeEnd, path, key, rowDepth + 1, arrayKeyPath, status);
       }
     }
