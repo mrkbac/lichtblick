@@ -17,43 +17,17 @@ import { Pose } from "./geometry";
 import { Duration, Time } from "./time";
 
 /**
- * Defines the maximum number of transforms across time stored in a single
- * `CoordinateFrame`.
- * We store a history of transforms received so that Markers and other 3D elements
- * can reference the state of a CoordinateFrame transform at a particular time rather than
- * only storing the most recent frame.
- * Considerations for the setting of this value are:
- *  - the larger the value, the more memory is used per panel
- *  - the larger the value, the longer it can take to set transforms within the history
- *  - the larger the value, the more likely it is that objects will be able to reference transforms at older times.
- *    Note that this is highly dependent on the frequency transforms for a given frame are published.
- *    For example, for 50Hz transforms for a single frame and a value of 5,000 max capacity. The transform
- *    history will contain 100 seconds of history for this frame.
- *    For 1kHz transforms for a single frame and a value of 5,000 max capacity. The transform history would
- *    only store 5 seconds of history for this frame.
- *    If the object references a transform at a time older than the history, it will simply use the oldest transform for that frame
- *    which is not guaranteed to be accurate.
- *
- * We generally want to keep this higher to allow for larger transform histories, but
- * also want to be mindful to memory and performance concerns when doing so
- *
- * This number is mentioned in the docs. If changed docs must be updated.
- */
-export const DEFAULT_MAX_CAPACITY_PER_FRAME = 10_000;
-
-/**
- * How far back each frame keeps transforms, relative to its newest one. Bounds slow frames, which
- * would otherwise take a long session to reach {@link DEFAULT_MAX_CAPACITY_PER_FRAME}. Long enough
- * for long decay times; lookups older than this use the oldest kept transform.
+ * How far back each frame of a live (not complete) tree keeps transforms, relative to its newest
+ * one. Long enough for long decay times; lookups older than this use the oldest kept transform.
  */
 export const DEFAULT_MAX_STORAGE_TIME: Duration = 300n * BigInt(1e9);
 
 /**
- * Sample budget across all frames of a complete tree (see {@link TransformTree.setComplete}), about
- * 128 MB at 64 bytes per sample. Past it, every frame's history is halved, so long recordings lose
- * time resolution evenly instead of losing their end.
+ * Sample budget across all frames, about 144 MB at 72 bytes per sample. Past it, every frame's
+ * history is halved, so long recordings and fast live frames lose time resolution evenly instead of
+ * losing their oldest transforms.
  */
-export const MAX_COMPLETE_TRANSFORM_SAMPLES = 2_000_000;
+export const MAX_TRANSFORM_SAMPLES = 2_000_000;
 
 export enum AddTransformResult {
   NOT_UPDATED,
@@ -73,7 +47,6 @@ export class TransformTree {
   /** Bumped whenever transforms are added, removed or cleared, so readers can skip unchanged trees */
   public version = 0;
   #maxStorageTime: Duration;
-  #maxCapacityPerFrame: number;
   #complete = false;
   #receivedUntil: Time | undefined;
   #visibility: TransformVisibility = { complete: false, receivedUntil: undefined };
@@ -86,17 +59,14 @@ export class TransformTree {
 
   public constructor(
     maxStorageTime = DEFAULT_MAX_STORAGE_TIME,
-    maxCapacityPerFrame = DEFAULT_MAX_CAPACITY_PER_FRAME,
-    sampleBudget = MAX_COMPLETE_TRANSFORM_SAMPLES,
+    sampleBudget = MAX_TRANSFORM_SAMPLES,
   ) {
     this.#maxStorageTime = maxStorageTime;
-    this.#maxCapacityPerFrame = maxCapacityPerFrame;
     this.#sampleBudget = sampleBudget;
     this.defaultRootFrame = new CoordinateFrame(
       CoordinateFrame.FALLBACK_FRAME_ID,
       undefined,
       this.#maxStorageTime,
-      this.#maxCapacityPerFrame,
       this.#visibility,
     );
     this.defaultRootFrame.addTransform(0n, Transform.Identity());
@@ -129,7 +99,7 @@ export class TransformTree {
       frame.addTransform(time, transform, receiveTime);
     }
     this.#sampleCount += frame.transformsSize() - sizeBefore;
-    if (this.#complete && this.#sampleCount > this.#sampleBudget) {
+    if (this.#sampleCount > this.#sampleBudget) {
       this.#decimate();
     }
 
@@ -224,7 +194,7 @@ export class TransformTree {
 
   /**
    * A complete tree holds the whole transform history of a recording: frames keep every transform
-   * (within the sample budget) instead of a bounded window, and lookups only see the transforms
+   * (within the sample budget) instead of a time window, and lookups only see the transforms
    * received by the time set with {@link setReceivedUntil}. Turning it off clears the tree, since
    * the history would exceed the bounds.
    */
@@ -257,14 +227,14 @@ export class TransformTree {
   }
 
   #applyLimits(frame: CoordinateFrame): void {
-    frame.maxCapacity = this.#complete ? Infinity : this.#maxCapacityPerFrame;
     frame.maxStorageTime = this.#complete ? MAX_DURATION : this.#maxStorageTime;
     frame.setKeepEvery(2 ** this.decimations);
   }
 
   #decimate(): void {
     // ponytail: halves every frame, also sparse ones; per-frame budgets if a dense frame starves
-    // slow ones of resolution.
+    // slow ones of resolution. A live tree stays thinned until it is cleared (seek or topic change),
+    // even once old transforms age out of its window.
     this.decimations++;
     for (const frame of this.#frames.values()) {
       this.#sampleCount -= frame.decimate(2 ** this.decimations);
@@ -288,13 +258,7 @@ export class TransformTree {
   public getOrCreateFrame(id: string): CoordinateFrame {
     let frame = this.#frames.get(id);
     if (!frame) {
-      frame = new CoordinateFrame(
-        id,
-        undefined,
-        this.#maxStorageTime,
-        this.#maxCapacityPerFrame,
-        this.#visibility,
-      );
+      frame = new CoordinateFrame(id, undefined, this.#maxStorageTime, this.#visibility);
       this.#applyLimits(frame);
       this.#frames.set(id, frame);
     }
@@ -425,11 +389,7 @@ export class TransformTree {
   }
 
   public static Clone(tree: TransformTree): TransformTree {
-    const newTree = new TransformTree(
-      tree.#maxStorageTime,
-      tree.#maxCapacityPerFrame,
-      tree.#sampleBudget,
-    );
+    const newTree = new TransformTree(tree.#maxStorageTime, tree.#sampleBudget);
     newTree.#frames = tree.#frames;
     newTree.version = tree.version;
     newTree.#complete = tree.#complete;

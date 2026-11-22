@@ -126,7 +126,6 @@ const LAYER_SELECTED = 1;
 const FOLLOW_TF_PATH = ["general", "followTf"];
 /** Expected until the first transform arrives, so it is not reported in the panel log. */
 export const NO_FRAME_SELECTED = "NO_FRAME_SELECTED";
-const TF_OVERFLOW = "TF_OVERFLOW";
 const CYCLE_DETECTED = "CYCLE_DETECTED";
 const FOLLOW_FRAME_NOT_FOUND = "FOLLOW_FRAME_NOT_FOUND";
 const ADD_TRANSFORM_ERROR = "ADD_TRANSFORM_ERROR";
@@ -1635,6 +1634,7 @@ export class Renderer extends EventEmitter<RendererEvents> {
     tempQuat[3] = q.w;
 
     tempTransform.setPositionRotation(tempVec3, tempQuat);
+    const decimations = this.transformTree.decimations;
     const status = this.transformTree.addTransform(
       childFrameId,
       parentFrameId,
@@ -1643,7 +1643,8 @@ export class Renderer extends EventEmitter<RendererEvents> {
       receiveTime,
     );
 
-    if (status === AddTransformResult.UPDATED) {
+    // Thinning to fit the sample budget is announced too, so the panel can say so
+    if (status === AddTransformResult.UPDATED || this.transformTree.decimations !== decimations) {
       this.#transformTreeUpdated();
     }
     if (status !== AddTransformResult.CYCLE_DETECTED) {
@@ -1665,16 +1666,6 @@ export class Renderer extends EventEmitter<RendererEvents> {
       }
     }
 
-    // Check if the transform history for this frame is at capacity and show an error if so. This
-    // error can't be cleared until the scene is reloaded
-    const frame = this.transformTree.getOrCreateFrame(childFrameId);
-    if (frame.transformsSize() === frame.maxCapacity) {
-      this.settings.errors.add(
-        ["transforms", `frame:${childFrameId}`],
-        TF_OVERFLOW,
-        `[Warning] Transform history is at capacity (${frame.maxCapacity}), old TFs will be dropped`,
-      );
-    }
     return status;
   }
 

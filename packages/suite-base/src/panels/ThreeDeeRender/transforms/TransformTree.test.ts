@@ -81,10 +81,10 @@ describe("TransformTree", () => {
     expect(tfTree.frame("d")).toBeUndefined();
   });
 
-  it("keeps only maxStorageTime of history per frame, well below the capacity cap", () => {
+  it("keeps only maxStorageTime of history per frame", () => {
     const sec = BigInt(1e9);
-    const tfTree = new TransformTree(10n * sec, 10_000);
-    // 10 Hz for 1000 s: the old capacity-only trim would keep all 10_000 transforms.
+    const tfTree = new TransformTree(10n * sec);
+    // 10 Hz for 1000 s
     for (let i = 0n; i < 10_000n; i++) {
       tfTree.addTransform(
         "b",
@@ -99,9 +99,39 @@ describe("TransformTree", () => {
     expect(size).toBeLessThanOrEqual(126);
   });
 
+  it("keeps the whole storage window of a fast live frame", () => {
+    // 200 Hz for 120 s: 24k transforms, more than a per-frame cap used to keep
+    const sec = BigInt(1e9);
+    const tfTree = new TransformTree();
+    const step = sec / 200n;
+    for (let i = 0; i < 200 * 120; i++) {
+      tfTree.addTransform("b", "a", BigInt(i) * step, new Transform([i, 0, 0], [0, 0, 0, 1]));
+    }
+    const lower: [bigint, Transform] = [0n, Transform.Empty()];
+    const upper: [bigint, Transform] = [0n, Transform.Empty()];
+    // 100 s before the newest transform
+    const time = 20n * sec;
+    expect(tfTree.frame("b")!.findClosestTransforms(lower, upper, time, 0n)).toBe(true);
+    expect(lower[0]).toBe(time);
+    expect(lower[1].position()[0]).toBe(20 * 200);
+  });
+
+  it("thins a live tree evenly past the sample budget instead of dropping old transforms", () => {
+    const sec = BigInt(1e9);
+    const tfTree = new TransformTree(300n * sec, 100);
+    for (let i = 0; i <= 300; i++) {
+      tfTree.addTransform("b", "a", BigInt(i) * sec, new Transform([i, 0, 0], [0, 0, 0, 1]));
+    }
+    const frame = tfTree.frame("b")!;
+    expect(tfTree.decimations).toBeGreaterThan(0);
+    expect(frame.transformsSize()).toBeLessThanOrEqual(100);
+    expect(frame.latestTimeAtOrBefore(0n)).toBe(0n);
+    expect(frame.latestTimeAtOrBefore(1000n * sec)).toBe(300n * sec);
+  });
+
   it("keeps the transform just before the storage window for interpolation", () => {
     const sec = BigInt(1e9);
-    const tfTree = new TransformTree(300n * sec, 10_000);
+    const tfTree = new TransformTree(300n * sec);
     tfTree.addTransform("b", "a", 0n, new Transform([0, 0, 0], [0, 0, 0, 1]));
     tfTree.addTransform("b", "a", 400n * sec, new Transform([400, 0, 0], [0, 0, 0, 1]));
     const lower: [bigint, Transform] = [0n, Transform.Empty()];
@@ -117,8 +147,8 @@ describe("TransformTree", () => {
     const sec = BigInt(1e9);
     const at = (x: number) => new Transform([x, 0, 0], [0, 0, 0, 1]);
 
-    it("keeps every transform beyond the storage window and capacity", () => {
-      const tfTree = new TransformTree(10n * sec, 100);
+    it("keeps every transform beyond the storage window", () => {
+      const tfTree = new TransformTree(10n * sec);
       tfTree.setComplete(true);
       for (let i = 0; i < 1000; i++) {
         tfTree.addTransform("b", "a", BigInt(i) * sec, at(i));
@@ -166,7 +196,7 @@ describe("TransformTree", () => {
     });
 
     it("halves every frame's history past the sample budget, keeping both ends", () => {
-      const tfTree = new TransformTree(undefined, undefined, 100);
+      const tfTree = new TransformTree(undefined, 100);
       tfTree.setComplete(true);
       for (let i = 0; i <= 100; i++) {
         tfTree.addTransform("b", "a", BigInt(i) * sec, at(i));
@@ -179,7 +209,7 @@ describe("TransformTree", () => {
     });
 
     it("keeps the thinned density for transforms added after thinning", () => {
-      const tfTree = new TransformTree(undefined, undefined, 100);
+      const tfTree = new TransformTree(undefined, 100);
       tfTree.setComplete(true);
       for (let i = 0; i <= 300; i++) {
         tfTree.addTransform("b", "a", BigInt(i) * sec, at(i));
