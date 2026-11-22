@@ -50,7 +50,7 @@ import { findShortcut } from "@lichtblick/suite-base/util/keyboardShortcuts";
 import { localResourceFolders } from "@lichtblick/suite-base/util/localResourceFolders";
 
 import type { ImageModeConfig, RendererConfig, RendererSubscription } from "./IRenderer";
-import type { Path } from "./LayerErrors";
+import { reportPersistentErrors, type Path } from "./LayerErrors";
 import type { PickedRenderable } from "./Picker";
 import { NO_FRAME_SELECTED, Renderer } from "./Renderer";
 import { RendererContext, useRendererEvent, useRendererProperty } from "./RendererContext";
@@ -75,6 +75,8 @@ import { Shared3DPanelState, ThreeDeeRenderProps } from "./types";
 import { useGpuRecovery } from "./useGpuRecovery";
 
 import "maplibre-gl/dist/maplibre-gl.css";
+
+const LAYER_ERROR_LOG_GRACE_MS = 3000;
 
 const log = Logger.getLogger(__filename);
 
@@ -445,18 +447,17 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
     [logError],
   );
 
-  // Subscribe to LayerErrors events
+  // Log layer errors that outlive the moment it takes a good recording to deliver its transforms
+  // and camera info; transient ones only show in the settings tree while active.
   useEffect(() => {
     if (!renderer?.settings.errors) {
       return;
     }
-
-    const errors = renderer.settings.errors;
-    errors.on("update", handleLayerErrorUpdate);
-
-    return () => {
-      errors.off("update", handleLayerErrorUpdate);
-    };
+    return reportPersistentErrors(
+      renderer.settings.errors,
+      handleLayerErrorUpdate,
+      LAYER_ERROR_LOG_GRACE_MS,
+    );
   }, [renderer, handleLayerErrorUpdate]);
 
   const [focusedSettingsPath, setFocusedSettingsPath] = useState<undefined | readonly string[]>();

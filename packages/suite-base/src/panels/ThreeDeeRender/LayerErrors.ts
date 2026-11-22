@@ -169,3 +169,38 @@ export class LayerErrors extends EventEmitter<LayerErrorEvents> {
     return node;
   }
 }
+
+/**
+ * Report errors that are still active `graceMs` after they were raised. Most layer errors on a good
+ * recording are transient (a transform, camera info or frame that arrives a moment after the first
+ * message) and resolve on their own, so they stay in the settings tree but never reach the log.
+ * @returns unsubscribe
+ */
+export function reportPersistentErrors(
+  errors: LayerErrors,
+  report: (path: Path, errorId: string, errorMessage: string) => void,
+  graceMs: number,
+): () => void {
+  const pending = new Map<string, ReturnType<typeof setTimeout>>();
+  const onUpdate = (path: Path, errorId: string, errorMessage: string) => {
+    const pathCopy = [...path]; // callers reuse path arrays
+    const key = `${pathCopy.join("\0")}\0${errorId}`;
+    clearTimeout(pending.get(key));
+    pending.set(
+      key,
+      setTimeout(() => {
+        pending.delete(key);
+        if (errors.hasError(pathCopy, errorId)) {
+          report(pathCopy, errorId, errorMessage);
+        }
+      }, graceMs),
+    );
+  };
+  errors.on("update", onUpdate);
+  return () => {
+    errors.off("update", onUpdate);
+    for (const timeout of pending.values()) {
+      clearTimeout(timeout);
+    }
+  };
+}

@@ -5,7 +5,7 @@ import type { Mock } from "vitest";
 
 import { BasicBuilder } from "@lichtblick/test-builders";
 
-import { LayerErrors } from "./LayerErrors";
+import { LayerErrors, reportPersistentErrors } from "./LayerErrors";
 
 describe("LayerErrors", () => {
   let layerErrors: LayerErrors;
@@ -136,5 +136,33 @@ describe("LayerErrors", () => {
 
       expect(removeHandler).toHaveBeenCalledWith(path, errorId);
     });
+  });
+});
+
+describe("reportPersistentErrors", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    (console.warn as Mock).mockClear(); // LayerErrors warns once per new error
+  });
+
+  it("reports only errors still active after the grace period", () => {
+    vi.useFakeTimers();
+    const errors = new LayerErrors();
+    const report = vi.fn();
+    const unsubscribe = reportPersistentErrors(errors, report, 1000);
+
+    errors.addToTopic("/transient", "missing", "Missing transform");
+    errors.addToTopic("/persistent", "missing", "Missing transform");
+    vi.advanceTimersByTime(500);
+    errors.removeFromTopic("/transient", "missing");
+    vi.advanceTimersByTime(500);
+
+    expect(report).toHaveBeenCalledTimes(1);
+    expect(report).toHaveBeenCalledWith(["topics", "/persistent"], "missing", "Missing transform");
+
+    errors.addToTopic("/late", "missing", "Missing transform");
+    unsubscribe();
+    vi.advanceTimersByTime(1000);
+    expect(report).toHaveBeenCalledTimes(1);
   });
 });
