@@ -8,6 +8,7 @@ import userEvent from "@testing-library/user-event";
 import { webcrypto } from "node:crypto";
 
 import LayoutManagerContext from "@lichtblick/suite-base/context/LayoutManagerContext";
+import { initI18n } from "@lichtblick/suite-base/i18n";
 import { ILayoutManager } from "@lichtblick/suite-base/services/ILayoutManager";
 import { Layout, LayoutPermission } from "@lichtblick/suite-base/services/ILayoutStorage";
 import { UserScripts } from "@lichtblick/suite-base/types/panels";
@@ -17,9 +18,9 @@ import { useTrustedUserScripts } from "./useTrustedUserScripts";
 const scripts: UserScripts = { a: { name: "Speed", sourceCode: "export default () => 1;" } };
 const changed: UserScripts = { a: { name: "Speed", sourceCode: "export default () => 2;" } };
 
-function setup(permission: LayoutPermission) {
+function setup(permission: LayoutPermission, extra: Partial<Layout> = {}) {
   const layoutManager = {
-    getLayout: async (id: string) => ({ id, permission }) as unknown as Layout,
+    getLayout: async (id: string) => ({ id, permission, ...extra }) as unknown as Layout,
   } as unknown as ILayoutManager;
   type Props = { userScripts: UserScripts; edited: boolean };
   const hook = renderHook(
@@ -43,6 +44,10 @@ function setup(permission: LayoutPermission) {
 Object.defineProperty(globalThis, "crypto", { value: webcrypto, configurable: true });
 
 describe("useTrustedUserScripts", () => {
+  beforeAll(async () => {
+    await initI18n();
+  });
+
   beforeEach(() => {
     localStorage.clear();
   });
@@ -95,6 +100,20 @@ describe("useTrustedUserScripts", () => {
       expect(hook.result.current.prompt).toBeDefined();
     });
     expect(hook.result.current.scripts).toEqual({});
+  });
+
+  it("asks before running scripts of a layout opened from a link", async () => {
+    const { hook, showPrompt } = setup("CREATOR_WRITE", { untrusted: true });
+    await waitFor(() => {
+      expect(hook.result.current.prompt).toBeDefined();
+    });
+    expect(hook.result.current.scripts).toEqual({});
+
+    showPrompt();
+    expect(screen.getByText("Run user scripts from this imported layout?")).toBeTruthy();
+    expect(screen.getByText(/This layout contains a user script: Speed/)).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: "Run scripts" }));
+    expect(hook.result.current.scripts).toBe(scripts);
   });
 
   it("keeps scripts off after Don't run", async () => {

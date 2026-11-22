@@ -5,6 +5,7 @@ import { fromSec } from "@foxglove/rostime";
 import { MessageEvent } from "@lichtblick/suite-base/players/types";
 
 import {
+  CHECKPOINT_INTERVAL,
   HEAP_MIN_HISTORY_BYTES,
   heapLimitBytes,
   LiveHistoryBuffer,
@@ -192,6 +193,177 @@ describe("LiveHistoryBuffer", () => {
     expect(times(result)).toEqual([1, 2, 16]);
   });
 
+  it("seeks without walking the history of other topics or frames", () => {
+    const buffer = new LiveHistoryBuffer({ windowNs: 100_000n * SEC, maxBytes: 1e12 });
+    let reads = 0;
+    const counted = (event: MessageEvent): MessageEvent => {
+      const { message } = event;
+      return Object.defineProperty({ ...event }, "message", {
+        get: () => {
+          reads++;
+          return message;
+        },
+      });
+    };
+    buffer.add(counted(tf(1, "static")));
+    const last = 4 * CHECKPOINT_INTERVAL;
+    for (let t = 2; t <= last; t++) {
+      buffer.add(counted(t % 2 === 0 ? tf(t, "base") : msg("/a", t)));
+    }
+    // A subscribed topic with no messages and a transform topic used to walk the whole history on
+    // every seek. While scrubbing, the second seek builds checkpoints; later ones read at most
+    // one block.
+    const topics = new Set(["/tf", "/a", "/empty"]);
+    buffer.backfill(fromSec(last), topics);
+    buffer.backfill(fromSec(last - 5000), topics);
+    reads = 0;
+    const result = buffer.backfill(fromSec(last - 1001), topics);
+    expect(result.map((e) => [e.topic, e.receiveTime.sec])).toEqual([
+      ["/tf", 1],
+      ["/tf", last - 1002],
+      ["/a", last - 1001],
+    ]);
+    expect(reads).toBeLessThanOrEqual(CHECKPOINT_INTERVAL);
+  });
+
+  it("backfills the same as a full scan, across checkpoints and evictions", () => {
+    const windowSec = 3 * CHECKPOINT_INTERVAL;
+    const buffer = new LiveHistoryBuffer({ windowNs: BigInt(windowSec) * SEC, maxBytes: 1e12 });
+    const all: MessageEvent[] = [];
+    let seed = 1;
+    const random = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+    const frames = ["a", "b", "c", "d"];
+    const topics = new Set(["/tf", "/x", "/y", "/rare", "/empty"]);
+    const expected = (at: number) => {
+      const latest = new Map<string, MessageEvent>();
+      for (const m of all) {
+        if (m.receiveTime.sec <= at) {
+          for (const key of transformChildFrames(m.message) ?? [""]) {
+            latest.set(`${m.topic}/${key}`, m);
+          }
+        }
+      }
+      return times(
+        [...new Set(latest.values())].sort((p, q) => p.receiveTime.sec - q.receiveTime.sec),
+      );
+    };
+    const mismatches: number[] = [];
+    for (let t = 1; t <= 10 * CHECKPOINT_INTERVAL; t++) {
+      const r = random();
+      const m =
+        r < 0.4
+          ? tf(t, ...frames.filter(() => random() < 0.5))
+          : r < 0.7
+            ? msg("/x", t)
+            : r < 0.9999
+              ? msg("/y", t)
+              : msg("/rare", t);
+      all.push(m);
+      buffer.add(m);
+      if (t % 5000 === 0) {
+        for (let k = 0; k < 3; k++) {
+          const at = t - Math.floor(random() * Math.min(t, windowSec));
+          if (
+            JSON.stringify(times(buffer.backfill(fromSec(at), topics))) !==
+            JSON.stringify(expected(at))
+          ) {
+            mismatches.push(at);
+          }
+        }
+      }
+    }
+    expect(mismatches).toEqual([]);
+  });
+
+  it("orders messages received at the same time by arrival, on every seek", () => {
+    const buffer = new LiveHistoryBuffer({ windowNs: 100_000n * SEC, maxBytes: 1e12 });
+    const first = tf(1, "a");
+    const second = tf(1, "b");
+    buffer.add(first);
+    buffer.add(second);
+    const last = 3 * CHECKPOINT_INTERVAL;
+    for (let t = 2; t <= last; t++) {
+      buffer.add(msg("/a", t));
+    }
+    const topics = new Set(["/tf"]);
+    const seeks = [last, last - 1, last - 2].map((t) => buffer.backfill(fromSec(t), topics));
+    for (const result of seeks) {
+      expect(result).toEqual([first, second]);
+    }
+  });
+
+  it("backfills correctly when every transform has a new frame", () => {
+    const buffer = new LiveHistoryBuffer({
+      windowNs: BigInt(2 * CHECKPOINT_INTERVAL) * SEC,
+      maxBytes: 1e12,
+    });
+    const last = 4 * CHECKPOINT_INTERVAL;
+    for (let t = 1; t <= last; t++) {
+      buffer.add(tf(t, `frame${t}`));
+    }
+    const topics = new Set(["/tf"]);
+    for (const at of [last, last - 10, last - 5000]) {
+      const result = buffer.backfill(fromSec(at), topics);
+      expect(result).toHaveLength(at); // one message per frame, from the window and the seeds
+      expect(result.at(-1)!.receiveTime.sec).toBe(at);
+    }
+  });
+
+  it("ignores malformed transform-like messages on other topics while scrubbing", () => {
+    const buffer = new LiveHistoryBuffer({ windowNs: 100_000n * SEC, maxBytes: 1e12 });
+    const last = 3 * CHECKPOINT_INTERVAL;
+    for (let t = 1; t <= last; t++) {
+      buffer.add(t % 2 === 0 ? msg("/json", t, { transforms: [null] }) : tf(t, "base"));
+    }
+    const topics = new Set(["/tf"]);
+    for (const at of [last, last - 1, last - 2]) {
+      expect(buffer.backfill(fromSec(at), topics).map((e) => e.topic)).toEqual(["/tf"]);
+    }
+  });
+
+  it("takes newer frames than a whole message on a mixed topic while scrubbing", () => {
+    const buffer = new LiveHistoryBuffer({ windowNs: 100_000n * SEC, maxBytes: 1e12 });
+    const frame = (sec: number, child: string) =>
+      msg("/mixed", sec, { transforms: [{ child_frame_id: child }] });
+    buffer.add(frame(1, "a")); // hidden by the whole message after it
+    buffer.add(msg("/mixed", 2));
+    buffer.add(frame(3, "b"));
+    const last = 3 * CHECKPOINT_INTERVAL;
+    for (let t = 4; t <= last; t++) {
+      buffer.add(msg("/a", t));
+    }
+    const topics = new Set(["/mixed"]);
+    for (const at of [last, last - 1, last - 2]) {
+      expect(times(buffer.backfill(fromSec(at), topics))).toEqual([2, 3]);
+    }
+  });
+
+  it("doesn't build a checkpoint when the current block has everything", () => {
+    const buffer = new LiveHistoryBuffer({ windowNs: 100_000n * SEC, maxBytes: 1e12 });
+    const reads = { count: 0 };
+    const counted = (event: MessageEvent): MessageEvent => {
+      const { message } = event;
+      return Object.defineProperty({ ...event }, "message", {
+        get: () => {
+          reads.count++;
+          return message;
+        },
+      });
+    };
+    const last = 4 * CHECKPOINT_INTERVAL;
+    for (let t = 1; t <= last; t++) {
+      buffer.add(counted(msg("/a", t)));
+    }
+    const topics = new Set(["/a"]);
+    buffer.backfill(fromSec(last), topics);
+    // Including a seek that ends exactly at a block boundary.
+    for (const at of [last - 1, 2 * CHECKPOINT_INTERVAL]) {
+      reads.count = 0;
+      expect(times(buffer.backfill(fromSec(at), topics))).toEqual([at]);
+      expect(reads.count).toBeLessThan(10);
+    }
+  });
+
   it("clears everything, including seeds, e.g. on a clock reset", () => {
     const buffer = new LiveHistoryBuffer({ windowNs: 1n * SEC, maxBytes: 1e9 });
     buffer.add(msg("/a", 1));
@@ -216,6 +388,8 @@ describe("transformChildFrames", () => {
     expect(transformChildFrames({ child_frame_id: "c", pose: {} })).toBeUndefined();
     expect(transformChildFrames({ transforms: [{ x: 1 }] })).toBeUndefined();
     expect(transformChildFrames(undefined)).toBeUndefined();
+    expect(transformChildFrames({ transforms: [null] })).toBeUndefined();
+    expect(transformChildFrames({ transforms: ["a"] })).toBeUndefined();
   });
 });
 

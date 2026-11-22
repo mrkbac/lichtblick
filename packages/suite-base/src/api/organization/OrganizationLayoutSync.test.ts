@@ -107,6 +107,46 @@ class StoredLayoutStorage extends MockLayoutStorage {
 }
 
 describe("organization layouts through LayoutManager", () => {
+  it("preserves script approval across devices, updates, and personal copies", async () => {
+    const server = fakeServer();
+    globalThis.fetch = (async (input: Request) => await server.handle(input)) as typeof fetch;
+    const open = () => {
+      const remote = new OrganizationLayoutStorage(
+        createOrganizationApiClient("https://api.example.com", async () => "token"),
+        session,
+      );
+      const local = new StoredLayoutStorage(LayoutManager.LOCAL_STORAGE_NAMESPACE, []);
+      const manager = new LayoutManager({ local, remote });
+      manager.setOnline({ online: true });
+      return manager;
+    };
+
+    const firstDevice = open();
+    const shared = await firstDevice.saveNewLayout({
+      name: "Shared",
+      data: LayoutBuilder.data(),
+      permission: "ORG_WRITE",
+      organizationId: "team",
+      untrusted: true,
+    });
+    expect(shared.untrusted).toBe(true);
+    expect(server.layouts.get(shared.id)?.data.untrusted).toBe(true);
+
+    const secondDevice = open();
+    await secondDevice.syncWithRemote(new AbortController().signal);
+    expect((await secondDevice.getLayout(shared.id))?.untrusted).toBe(true);
+    await secondDevice.updateLayout({ id: shared.id, name: "Renamed", data: LayoutBuilder.data() });
+    await secondDevice.overwriteLayout({ id: shared.id });
+    expect(server.layouts.get(shared.id)?.data.untrusted).toBe(true);
+
+    const thirdDevice = open();
+    const fetched = await thirdDevice.getLayout(shared.id);
+    expect(fetched?.untrusted).toBe(true);
+    expect(fetched?.baseline.data).not.toHaveProperty("untrusted");
+    const personal = await thirdDevice.makePersonalCopy({ id: shared.id, name: "Personal" });
+    expect(personal.untrusted).toBe(true);
+  });
+
   it("keeps a shared and renamed layout after a reload", async () => {
     const server = fakeServer();
     globalThis.fetch = (async (input: Request) => await server.handle(input)) as typeof fetch;

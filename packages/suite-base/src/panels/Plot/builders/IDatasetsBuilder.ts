@@ -91,6 +91,15 @@ export type CsvDataset = {
   data: CsvDatum[];
 };
 
+export type MessageRangeOptions = {
+  /** First batch of a new range read: replaces what earlier reads loaded */
+  isReset: boolean;
+  /** Only these series read this batch (a read started for newly added series) */
+  seriesKeys?: ReadonlySet<SeriesConfigKey>;
+  /** Whether this read also feeds the panel's x-axis path; defaults to true */
+  readsXAxis?: boolean;
+};
+
 export type GetViewportDatasetsResult = {
   /**
    * Indices correspond to original indices of series in `config.paths`. Array may be sparse if
@@ -98,6 +107,8 @@ export type GetViewportDatasetsResult = {
    */
   datasetsByConfigIndex: readonly (Dataset | undefined)[];
   pathsWithMismatchedDataLengths: ReadonlySet<string>;
+  /** Config indices of enabled series whose values were recomputed from thinned live history. */
+  approximateSeries?: readonly number[];
 };
 
 export type HandlePlayerStateResult = {
@@ -133,7 +144,7 @@ interface IDatasetsBuilder {
    */
   handleMessageRange?(
     messages: Immutable<MessageEvent[]>,
-    options: { isReset: boolean },
+    options: MessageRangeOptions,
     startTime?: Immutable<Time>,
   ): void;
 

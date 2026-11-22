@@ -821,7 +821,7 @@ describe("TimestampDatasetsBuilder", () => {
     });
   });
 
-  it("should cull current messages after threshold is reached", async () => {
+  it("thins current messages past the budget instead of dropping the oldest", async () => {
     const builder = new TimestampDatasetsBuilder();
 
     builder.setSeries(
@@ -869,7 +869,7 @@ describe("TimestampDatasetsBuilder", () => {
       });
     }
 
-    // Next batch goes over the limit so some of the previous will be culled
+    // Next batch passes the budget of 40k rows: older data is thinned, the whole range stays
     {
       builder.handlePlayerState(
         buildPlayerState({
@@ -882,13 +882,10 @@ describe("TimestampDatasetsBuilder", () => {
         bounds: {},
       });
 
-      expect(result.datasetsByConfigIndex[0]!.data.length).toEqual(37500);
-      expect(result.datasetsByConfigIndex[0]!.data[0]).toEqual({
-        x: 22_500,
-        y: 22_500,
-        value: 22_500,
-      });
-      expect(result.datasetsByConfigIndex[0]!.data[37_499]).toEqual({
+      const data = result.datasetsByConfigIndex[0]!.data;
+      expect(data.length).toBeLessThanOrEqual(40_000);
+      expect(data[0]).toEqual({ x: 0, y: 0, value: 0 });
+      expect(data.at(-1)).toEqual({
         x: 59_999,
         y: 59_999,
         value: 59_999,

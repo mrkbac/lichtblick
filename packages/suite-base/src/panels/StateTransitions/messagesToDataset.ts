@@ -5,12 +5,14 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { subtract as subtractTimes, toSec } from "@foxglove/rostime";
+import { Time, subtract as subtractTimes, toSec } from "@foxglove/rostime";
 import { darken } from "@mui/material";
 
+import { PathSampleColumns } from "@lichtblick/suite-base/components/MessagePathSyntax/PathSampleColumns";
 import { ChartDataset } from "@lichtblick/suite-base/components/TimeBasedChart/types";
 import { hashString } from "@lichtblick/suite-base/util/hashString";
 import { expandedLineColors } from "@lichtblick/suite-base/util/plotColors";
+import { grey } from "@lichtblick/suite-base/util/toolsColorScheme";
 
 import { conditionMatches, parseCondition } from "./condition";
 import positiveModulo from "./positiveModulo";
@@ -21,11 +23,39 @@ const baseColorsLength = Object.values(baseColors).length;
 // Muted so the "true" bands of a condition stand out.
 const CONDITION_FALSE_COLOR = "rgba(128, 128, 128, 0.35)";
 
+type Datum = ChartDataset["data"][0];
+
+type ConversionState = {
+  lastValue?: string | number | bigint | boolean;
+  lastDatum?: Datum;
+  lastDatumIndex: number;
+  lastIndex: number;
+  repeatBlock?: PathSampleColumns;
+  repeatIndex: number;
+  segment?: Datum;
+};
+
+export type LiveDatasetCache = {
+  checkpoint?: {
+    args: MessageDatasetArgs;
+    block: PathSampleColumns;
+    revision: number;
+    end: number;
+    data: ChartDataset["data"];
+    pointIndices: number[];
+    origin: Time;
+    state: ConversionState;
+  };
+};
+
 /**
  * Processes messages into datasets. For performance reasons all values are condensed into a single
  * dataset with different labels and colors applied per-point.
  */
-export function messagesToDataset(args: MessageDatasetArgs): ChartDataset {
+export function messagesToDataset(
+  args: MessageDatasetArgs,
+  liveCache?: LiveDatasetCache,
+): ChartDataset {
   const { path, startTime, y, blocks, showPoints, darkenLabels = false } = args;
 
   const dataset: ChartDataset = {
@@ -42,38 +72,92 @@ export function messagesToDataset(args: MessageDatasetArgs): ChartDataset {
 
   const condition = parseCondition(path.condition);
 
-  let lastValue: string | number | bigint | boolean | undefined = undefined;
-  let lastDatum: ChartDataset["data"][0] | undefined = undefined;
+  const liveBlock = liveCache != undefined && blocks.length === 1 ? blocks[0] : undefined;
+  const cached = liveCache?.checkpoint;
+  const checkpoint =
+    liveBlock != undefined &&
+    cached?.block === liveBlock &&
+    cached.revision === liveBlock.prefixRevision() &&
+    cached.args.path === path &&
+    cached.args.y === y &&
+    cached.args.showPoints === showPoints &&
+    (cached.args.darkenLabels ?? false) === darkenLabels
+      ? cached
+      : undefined;
+  const origin = checkpoint?.origin ?? startTime;
+  const useHeaderStamp = path.timestampMethod === "headerStamp";
+  const xOf = (messages: PathSampleColumns, i: number, zero = origin) => {
+    const timestamp = useHeaderStamp ? messages.headerStamp(i) : messages.receiveTime(i);
+    return timestamp ? toSec(subtractTimes(timestamp, zero)) : undefined;
+  };
 
-  for (const messages of blocks) {
-    if (!messages) {
-      continue;
+  // A repeat with hidden points updates the segment end only, so hold it until the segment ends.
+  const state: ConversionState = checkpoint
+    ? { ...checkpoint.state }
+    : { lastDatumIndex: -1, lastIndex: -1, repeatIndex: 0 };
+  const data = checkpoint?.data ?? dataset.data;
+  const pointIndices = liveBlock ? (checkpoint?.pointIndices ?? []) : undefined;
+  const pushPoint = (point: NonNullable<Datum>, index: number) => {
+    data.push(point);
+    pointIndices?.push(index);
+  };
+  const takeRepeat = () => {
+    if (state.repeatBlock && state.segment) {
+      const { labelColor, value, constantName } = state.segment;
+      const x = xOf(state.repeatBlock, state.repeatIndex)!;
+      state.lastDatum = { x, y, label: undefined, labelColor, value, constantName };
+      state.lastDatumIndex = state.repeatIndex;
     }
+    state.repeatBlock = undefined;
+  };
+  const flush = () => {
+    takeRepeat();
+    if (state.lastDatum != undefined) {
+      pushPoint(state.lastDatum, state.lastDatumIndex);
+    }
+    state.lastDatum = undefined;
+  };
 
-    for (const itemByPath of messages) {
-      const timestamp =
-        path.timestampMethod === "headerStamp" ? itemByPath.headerStamp : itemByPath.receiveTime;
-      if (!timestamp) {
+  const append = (messages: PathSampleColumns, start: number, end: number) => {
+    for (let i = start; i < end; i++) {
+      if (!showPoints && state.lastIndex !== -1 && messages.sameValue(state.lastIndex, i)) {
+        if (!useHeaderStamp || messages.hasHeaderStamp(i)) {
+          state.repeatBlock = messages;
+          state.repeatIndex = i;
+        }
         continue;
       }
 
+      const sample = messages.sampleValue(i);
       // A path matching several values is invalid input (see datasetContainsArray)
-      if (itemByPath.count !== 1) {
+      if (sample.count !== 1) {
         continue;
       }
 
-      const { constantName: rawConstantName, value: rawValue } = itemByPath;
-      const x = toSec(subtractTimes(timestamp, startTime));
+      const x = xOf(messages, i);
+      if (x == undefined) {
+        continue;
+      }
+
+      // A thinned stretch that held several values: draw it as one, like the chart's own [...].
+      if (messages.isMixed(i)) {
+        flush();
+        pushPoint({ x, y, label: "[...]", labelColor: grey, value: undefined }, i);
+        state.lastValue = undefined;
+        state.lastIndex = i;
+        state.segment = undefined;
+        continue;
+      }
+
+      const { constantName: rawConstantName, value: rawValue } = sample;
 
       // A null value marks a gap: break the line here and start a fresh segment once data resumes.
       // eslint-disable-next-line @lichtblick/strict-equality
       if (rawValue === null) {
-        if (lastDatum != undefined) {
-          dataset.data.push(lastDatum);
-        }
-        dataset.data.push({ x, y: Number.NaN });
-        lastValue = undefined;
-        lastDatum = undefined;
+        flush();
+        pushPoint({ x, y: Number.NaN }, i);
+        state.lastValue = undefined;
+        state.lastIndex = -1;
         continue;
       }
 
@@ -85,13 +169,22 @@ export function messagesToDataset(args: MessageDatasetArgs): ChartDataset {
       const value = condition ? conditionMatches(condition, rawValue, rawConstantName) : rawValue;
       const constantName = condition ? undefined : rawConstantName;
 
+      if (i === 0 && messages.startsWithContext()) {
+        // Only the state before the first kept change: carry it, don't draw it as a change.
+        state.lastValue = value;
+        state.lastIndex = i;
+        continue;
+      }
+
       const color = condition && value === false ? CONDITION_FALSE_COLOR : getColor(value);
       const label = createLabel(constantName, value);
 
-      const isNewSegment = lastValue !== value;
+      const isNewSegment = state.lastValue !== value;
 
-      lastValue = value;
-      lastDatum = {
+      takeRepeat();
+      state.lastValue = value;
+      state.lastIndex = i;
+      state.lastDatum = {
         x,
         y,
         label: isNewSegment ? label : undefined,
@@ -100,21 +193,60 @@ export function messagesToDataset(args: MessageDatasetArgs): ChartDataset {
         value,
         constantName,
       };
+      state.lastDatumIndex = i;
+      state.segment = state.lastDatum;
 
       if (isNewSegment || showPoints) {
-        dataset.data.push(lastDatum);
+        pushPoint(state.lastDatum, i);
 
         // after we add a datum we clear the last datum so we don't try to add it again at the end
-        lastDatum = undefined;
+        state.lastDatum = undefined;
       }
     }
+  };
+
+  if (liveCache && liveBlock && pointIndices) {
+    // Appends can overwrite the last two rows. Cache only the stable prefix and rewind the
+    // temporary tail once the chart has its own data array.
+    const stableEnd = Math.max(0, liveBlock.size() - 2);
+    append(liveBlock, checkpoint?.end ?? 0, stableEnd);
+    liveCache.checkpoint = {
+      args,
+      block: liveBlock,
+      revision: liveBlock.prefixRevision(),
+      end: stableEnd,
+      data,
+      pointIndices,
+      origin,
+      state: { ...state },
+    };
+    const stableLength = data.length;
+    append(liveBlock, stableEnd, liveBlock.size());
+    flush();
+    // Live players can move the playback start forward as their rewind buffer fills. Keep the
+    // cached band values and project row timestamps onto the current axis without rounding offsets.
+    dataset.data =
+      origin.sec === startTime.sec && origin.nsec === startTime.nsec
+        ? data.slice()
+        : data.map((point, index) => ({
+            ...point!,
+            x: xOf(liveBlock, pointIndices[index]!, startTime)!,
+          }));
+    data.length = stableLength;
+    pointIndices.length = stableLength;
+    return dataset;
   }
 
+  for (const messages of blocks) {
+    if (messages) {
+      // Samples are only compared within a block.
+      state.lastIndex = -1;
+      append(messages, 0, messages.size());
+    }
+  }
   // If we never added the last datum (maybe because it was the same state as before), we add
   // it to the data so the user sees the state going until this point.
-  if (lastDatum != undefined) {
-    dataset.data.push(lastDatum);
-  }
+  flush();
 
   return dataset;
 }

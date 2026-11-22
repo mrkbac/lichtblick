@@ -5,6 +5,23 @@ import type { RecentRecord } from "@lichtblick/suite-base/hooks/useIndexedDbRece
 
 type FileRecent = Extract<RecentRecord, { type: "file" }>;
 
+type ConnectionRecent = Pick<
+  Extract<RecentRecord, { type: "connection" }>,
+  "sourceId" | "extra" | "urls"
+>;
+
+export function connectionRecentArgs(
+  recent: ConnectionRecent,
+): Extract<DataSourceArgs, { type: "connection" }> {
+  if (!["remote-file", "mcap-remote-file", "ros1-remote-bagfile"].includes(recent.sourceId)) {
+    return { type: "connection", params: recent.extra, urls: recent.urls };
+  }
+  const { url, ...params } = recent.extra ?? {};
+  // Only older recents saved a comma-joined list. New inputs and stored lists stay untouched.
+  const urls = recent.urls ?? url?.split(/,(?=[a-z][a-z\d+.-]*:\/\/)/i);
+  return { type: "connection", params, urls };
+}
+
 /** Reopens a file recent as it was opened: compared side by side when it was */
 export function recentArgs(recent: FileRecent): Extract<DataSourceArgs, { type: "file" }> {
   return { type: "file", handles: recent.handles, compare: recent.compare };
@@ -61,25 +78,26 @@ export function splitRecentTitle(title: string): { primary: string; location?: s
   return { primary: [url.host, ...segments].join("/") };
 }
 
-const RELATIVE_TIME_UNITS: [Intl.RelativeTimeFormatUnit, number][] = [
-  ["year", 365 * 24 * 60 * 60],
-  ["month", 30 * 24 * 60 * 60],
-  ["week", 7 * 24 * 60 * 60],
-  ["day", 24 * 60 * 60],
-  ["hour", 60 * 60],
-  ["minute", 60],
-  ["second", 1],
+// [unit, seconds, how many units it takes before the unit is used]. Long units wait for two, so
+// 17 months reads "17 months ago" rather than rounding to "last year".
+const RELATIVE_TIME_UNITS: [Intl.RelativeTimeFormatUnit, number, number][] = [
+  ["year", 365 * 24 * 60 * 60, 2],
+  ["month", 30 * 24 * 60 * 60, 2],
+  ["week", 7 * 24 * 60 * 60, 2],
+  ["day", 24 * 60 * 60, 1],
+  ["hour", 60 * 60, 1],
+  ["minute", 60, 1],
 ];
 
 /**
- * Format a past timestamp as e.g. "2 hours ago". Uses the largest unit that fits at least twice,
- * so 17 months reads "17 months ago" rather than rounding to "last year".
+ * Format a past timestamp as e.g. "2 minutes ago" or "yesterday". Under 45 seconds is "now";
+ * seconds aren't shown, so 117 seconds reads "2 minutes ago".
  */
 export function formatTimeAgo(timestamp: number, now: number, locale?: string): string {
-  const seconds = Math.round((timestamp - now) / 1000);
+  const seconds = (timestamp - now) / 1000;
   const format = new Intl.RelativeTimeFormat(locale, { numeric: "auto" });
-  for (const [unit, unitSeconds] of RELATIVE_TIME_UNITS) {
-    if (Math.abs(seconds) >= 2 * unitSeconds) {
+  for (const [unit, unitSeconds, minUnits] of RELATIVE_TIME_UNITS) {
+    if (Math.abs(seconds) >= minUnits * unitSeconds - (unit === "minute" ? 15 : 0)) {
       return format.format(Math.round(seconds / unitSeconds), unit);
     }
   }
@@ -128,8 +146,7 @@ export function detectConnection(input: string): { sourceId: string; url: string
   const url = trimmed.includes("://") ? trimmed : `ws://${trimmed}`;
   let parsed: URL;
   try {
-    // Remote files may be a comma separated list; detect on the first one
-    parsed = new URL(url.split(",")[0]!);
+    parsed = new URL(url);
   } catch {
     return undefined;
   }

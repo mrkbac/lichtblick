@@ -55,6 +55,161 @@ const key = "0" as SeriesConfigKey;
 const viewport = { size: { width: 1000, height: 500 }, bounds: {} };
 
 describe("TimestampDatasetsBuilderImpl", () => {
+  describe("live data budget", () => {
+    const appendLive = (
+      builder: TimestampDatasetsBuilderImpl,
+      series: string,
+      xs: number[],
+      batch = 100,
+    ) => {
+      for (let i = 0; i < xs.length; i += batch) {
+        builder.applyAction({
+          type: "append-current",
+          series: series as SeriesConfigKey,
+          items: items(xs.slice(i, i + batch)),
+        });
+      }
+    };
+
+    it("thins old live data evenly instead of dropping it once over budget", () => {
+      // GIVEN a budget of 1000 current rows
+      const builder = new TimestampDatasetsBuilderImpl(1000);
+      builder.applyAction({ type: "update-series-config", seriesItems: [seriesItem("0")] });
+
+      // WHEN 20x the budget streams in
+      appendLive(builder, "0", range(0, 20_000));
+
+      // THEN the whole time range is kept within budget, evenly spaced, newest sample included
+      const xs = builder.getCsvData()[0]!.data.map((item) => item.x);
+      expect(xs.length).toBeLessThanOrEqual(1000);
+      expect(xs.length).toBeGreaterThan(250);
+      expect(xs[0]).toBe(0);
+      expect(xs.at(-1)).toBe(19_999);
+      const gaps = xs.slice(1).map((x, i) => x - xs[i]!);
+      expect(Math.max(...gaps.slice(0, -1))).toBeLessThanOrEqual(
+        2 * Math.min(...gaps.slice(0, -1)),
+      );
+    });
+
+    it("thins the busiest series and leaves sparse ones intact", () => {
+      // GIVEN a fast and a slow series sharing a budget of 1000 rows
+      const builder = new TimestampDatasetsBuilderImpl(500);
+      builder.applyAction({
+        type: "update-series-config",
+        seriesItems: [seriesItem("0"), seriesItem("1")],
+      });
+
+      // WHEN the fast one overflows the budget
+      appendLive(builder, "0", range(0, 5000));
+      appendLive(
+        builder,
+        "1",
+        range(0, 100).map((x) => x * 50),
+      );
+
+      // THEN only the fast one lost resolution
+      const [fast, slow] = builder.getCsvData();
+      expect(slow!.data).toHaveLength(100);
+      expect(fast!.data.length + slow!.data.length).toBeLessThanOrEqual(1000);
+      expect(fast!.data.at(-1)!.x).toBe(4999);
+    });
+
+    it("keeps line breaks in thinned live data", () => {
+      // GIVEN thinning is active
+      const builder = new TimestampDatasetsBuilderImpl(100);
+      builder.applyAction({ type: "update-series-config", seriesItems: [seriesItem("0")] });
+      appendLive(builder, "0", range(0, 1000));
+
+      // WHEN a gap arrives
+      builder.applyAction({
+        type: "append-current",
+        series: key,
+        items: [{ ...items([1000])[0]!, y: NaN, value: null }, ...items([1001])],
+      });
+
+      // THEN the gap is plotted
+      const ys = builder.getCsvData()[0]!.data.map((item) => item.y);
+      expect(ys.some(Number.isNaN)).toBe(true);
+    });
+
+    it("keeps line breaks when halving", () => {
+      const builder = new TimestampDatasetsBuilderImpl(3);
+      builder.applyAction({ type: "update-series-config", seriesItems: [seriesItem("0")] });
+      builder.applyAction({
+        type: "append-current",
+        series: key,
+        items: items([0, 1, 2, 3], (x) => (x === 1 ? NaN : x)),
+      });
+      const ys = builder.getCsvData()[0]!.data.map((item) => item.y);
+      expect(ys).toEqual([0, NaN, 3]);
+    });
+
+    it("keeps gaps within the budget when many samples are gaps", () => {
+      // GIVEN every other sample is a gap and the budget is 4 rows
+      const builder = new TimestampDatasetsBuilderImpl(4);
+      builder.applyAction({ type: "update-series-config", seriesItems: [seriesItem("0")] });
+      appendLive(builder, "0", range(0, 40), 10);
+      builder.applyAction({
+        type: "append-current",
+        series: key,
+        items: items(range(40, 80), (x) => (x % 2 === 0 ? x : NaN)),
+      });
+
+      // THEN the budget holds, a gap is still plotted, and the newest value is kept
+      const data = builder.getCsvData()[0]!.data;
+      expect(data.length).toBeLessThanOrEqual(4);
+      expect(data.some((item) => Number.isNaN(item.y))).toBe(true);
+      expect(data.at(-1)!.x).toBe(79);
+    });
+
+    it("computes stream modifiers over every sample, not the thinned ones", () => {
+      // GIVEN a live delta series of samples 1 apart, thinned many times over
+      const builder = new TimestampDatasetsBuilderImpl(100);
+      builder.applyAction({
+        type: "update-series-config",
+        seriesItems: [seriesItem("0", { path: "/topic.value.@delta" })],
+      });
+      appendLive(builder, "0", range(0, 5000));
+
+      // THEN every plotted delta is still 1
+      const data = builder.getCsvData()[0]!.data;
+      expect(data.length).toBeLessThanOrEqual(100);
+      expect(data.at(-1)!.x).toBe(4999);
+      expect(new Set(data.slice(1).map((item) => item.y))).toEqual(new Set([1]));
+    });
+
+    it("keeps gaps of derived values when halving", () => {
+      // GIVEN a derivative series where two samples share an x, so its derivative is a gap
+      const builder = new TimestampDatasetsBuilderImpl(4);
+      builder.applyAction({
+        type: "update-series-config",
+        seriesItems: [seriesItem("0", { path: "/topic.value.@derivative" })],
+      });
+      const xs = [0, 1, 2, 2, 3, 4];
+      builder.applyAction({
+        type: "append-current",
+        series: key,
+        items: xs.map((x, i) => ({ ...items([x])[0]!, y: i, value: i })),
+      });
+
+      // THEN the gap survives thinning
+      const ys = builder.getCsvData()[0]!.data.map((item) => item.y);
+      expect(ys.length).toBeLessThan(xs.length);
+      expect(ys.slice(1).some(Number.isNaN)).toBe(true);
+    });
+
+    it("starts unthinned again after current data is reset", () => {
+      const builder = new TimestampDatasetsBuilderImpl(100);
+      builder.applyAction({ type: "update-series-config", seriesItems: [seriesItem("0")] });
+      appendLive(builder, "0", range(0, 1000));
+      builder.applyAction({ type: "reset-current", series: key });
+
+      appendLive(builder, "0", range(0, 50));
+
+      expect(builder.getCsvData()[0]!.data.map((item) => item.x)).toEqual(range(0, 50));
+    });
+  });
+
   it("averages each sample with the samples before it", () => {
     // GIVEN five samples smoothed over 3 samples
     const builder = build([seriesItem("0", { smoothing: 3 })]);
@@ -202,6 +357,46 @@ describe("TimestampDatasetsBuilderImpl", () => {
     // THEN current rows it covers are dropped
     builder.applyAction({ type: "append-full", series: key, items: items([0, 6, 3]) });
     expect(builder.getCsvData()[0]!.data.map((item) => item.x)).toEqual([0, 3, 6, 7, 8]);
+  });
+
+  it("flags derived values when a late header stamp forces recomputation after thinning", () => {
+    const builder = new TimestampDatasetsBuilderImpl(6);
+    const derived = seriesItem("0", {
+      timestampMethod: "headerStamp",
+      path: "/topic.value.@delta",
+    });
+    const plain = seriesItem("1", { timestampMethod: "headerStamp" });
+    builder.applyAction({ type: "update-series-config", seriesItems: [derived, plain] });
+    const firstBatch = items(range(0, 16));
+    builder.applyAction({ type: "append-current", series: key, items: firstBatch });
+    expect(builder.getCsvData()[0]!.data.length).toBeLessThan(firstBatch.length);
+    expect(builder.getViewportResult(viewport).approximateSeries).toEqual([]);
+
+    builder.applyAction({ type: "append-current", series: key, items: items([5.5]) });
+    expect(builder.getViewportResult(viewport).approximateSeries).toEqual([0]);
+
+    builder.applyAction({
+      type: "update-series-config",
+      seriesItems: [{ ...derived, configIndex: 1 }],
+    });
+    expect(builder.getViewportResult(viewport).approximateSeries).toEqual([1]);
+
+    builder.applyAction({ type: "reset-current", series: key });
+    expect(builder.getViewportResult(viewport).approximateSeries).toEqual([]);
+  });
+
+  it("flags smoothing enabled after live samples have already been thinned", () => {
+    const builder = new TimestampDatasetsBuilderImpl(6);
+    const config = seriesItem("0");
+    builder.applyAction({ type: "update-series-config", seriesItems: [config] });
+    builder.applyAction({ type: "append-current", series: key, items: items(range(0, 12)) });
+    expect(builder.getViewportResult(viewport).approximateSeries).toEqual([]);
+
+    builder.applyAction({
+      type: "update-series-config",
+      seriesItems: [{ ...config, smoothing: 3 }],
+    });
+    expect(builder.getViewportResult(viewport).approximateSeries).toEqual([0]);
   });
 
   it("keeps original values that are not the plotted number", () => {

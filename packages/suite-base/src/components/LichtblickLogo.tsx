@@ -28,7 +28,7 @@ export function TraceMark(): React.JSX.Element {
           <path d="M23 4V77M39 4V77M55 4V77" stroke="black" strokeWidth="3.2" />
         </mask>
       </defs>
-      <path d="M9 7H42A33 33 0 0 1 42 73H9Z" mask={`url(#${maskId})`} />
+      <path fill="#F57E29" d="M9 7H42A33 33 0 0 1 42 73H9Z" mask={`url(#${maskId})`} />
     </>
   );
 }

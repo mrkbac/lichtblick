@@ -13,7 +13,6 @@ import { ComlinkTransferIteratorCursor } from "./ComlinkTransferIteratorCursor";
 import type {
   GetBackfillMessagesArgs,
   IIterableSource,
-  IMessageCursor,
   Initialization,
   IteratorResult,
   MessageIteratorArgs,
@@ -23,11 +22,10 @@ import { abortSignalTransferHandler } from "./abortSignalTransferHandler";
 
 /**
  * Worker-side half of WorkerIterableSource. Serialized (Uint8Array) message buffers are
- * transferred to the main thread instead of being structured-cloned.
+ * transferred to the main thread instead of being structured-cloned. Not an IIterableSource: its
+ * cursors return packed batches, which WorkerIterableSource unpacks.
  */
-export class WorkerIterableSourceWorker<MessageType = unknown>
-  implements IIterableSource<MessageType>
-{
+export class WorkerIterableSourceWorker<MessageType = unknown> {
   #source: IIterableSource<MessageType>;
 
   public constructor(source: IIterableSource<MessageType>) {
@@ -75,8 +73,8 @@ export class WorkerIterableSourceWorker<MessageType = unknown>
   public getMessageCursor(
     args: Omit<Immutable<MessageIteratorArgs>, "abort">,
     abort?: AbortSignal,
-  ): IMessageCursor<MessageType> & Comlink.ProxyMarked {
-    const iter = this.#source.messageIterator(args);
+  ): ComlinkTransferIteratorCursor<MessageType> & Comlink.ProxyMarked {
+    const iter = this.#source.messageIterator({ ...args, abort });
     const cursor = new ComlinkTransferIteratorCursor(new IteratorCursor<MessageType>(iter, abort));
     return Comlink.proxy(cursor);
   }

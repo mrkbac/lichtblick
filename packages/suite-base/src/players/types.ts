@@ -40,6 +40,8 @@ import { NotificationSeverity } from "@lichtblick/suite-base/util/sendNotificati
 export type MessageEvent<T = unknown> = SuiteMessageEvent<T> & {
   /** Exact serialized payload size before decoding, when supplied by the data source. */
   serializedSizeInBytes?: number;
+  /** Opaque identifier of a recording record, stable across reads in the same player. */
+  recordId?: string;
 };
 
 export type MessageDefinitionsByTopic = {
@@ -95,7 +97,11 @@ export interface Player {
     topic: string,
     options?: { start?: Time; end?: Time },
   ) => AsyncIterableIterator<Readonly<IteratorResult>> | undefined;
-  /** Inspect topics in one pass without decoding; returned events omit message payloads. */
+  /**
+   * Inspect topics in one pass without decoding; returned events omit message payloads. Returns
+   * undefined when any topic has no stored records, e.g. a user-script or converter output: only
+   * recorded (physical) topics can be inspected. Creating the iterator reads nothing.
+   */
   getInspectionIterator?: (
     topics: readonly string[],
     options?: { start?: Time; end?: Time },
@@ -127,7 +133,12 @@ export type PlayerAlert = {
   message: string;
   error?: Error;
   tip?: string;
+  /** Actionable help the UI renders in place of the plain-text tip. */
+  guide?: PlayerAlertGuide;
 };
+
+/** A browser blocked a ws:// connection from this https page (mixed content). */
+export type PlayerAlertGuide = { type: "wsMixedContent"; url: string };
 
 export type PlayerURLState = Immutable<{
   sourceId: string;
@@ -309,6 +320,8 @@ export type RecordingFileInfo = {
   start?: Time;
   end?: Time;
   library: string;
+  /** Read through the file's own complete index (not rebuilt, not still being written) */
+  footerIndexed?: boolean;
   channels: {
     id: number;
     topic: string;

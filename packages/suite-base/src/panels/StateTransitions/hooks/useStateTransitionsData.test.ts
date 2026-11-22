@@ -7,6 +7,7 @@ import { Time } from "@foxglove/rostime";
 import { renderHook } from "@testing-library/react";
 import type { Mock } from "vitest";
 
+import { PathSampleColumns } from "@lichtblick/suite-base/components/MessagePathSyntax/PathSampleColumns";
 import { messagesToDataset } from "@lichtblick/suite-base/panels/StateTransitions/messagesToDataset";
 import { datasetContainsArray } from "@lichtblick/suite-base/panels/StateTransitions/shared";
 import {
@@ -36,6 +37,7 @@ describe("useStateTransitionsData", () => {
       minY: undefined,
       pathState: [],
       matchStarts: [],
+      matchesApproximate: false,
     });
   });
 
@@ -46,10 +48,10 @@ describe("useStateTransitionsData", () => {
     ];
     const startTime: Readonly<Time> = RosTimeBuilder.time();
     const itemsByPath: SamplesByPath = {
-      path1: [],
-      path2: [],
+      path1: PathSampleColumns.from([]),
+      path2: PathSampleColumns.from([]),
     };
-    const decodedBlocks: SamplesByPath[] = [{ path1: [] }];
+    const decodedBlocks: SamplesByPath[] = [{ path1: PathSampleColumns.from([]) }];
     const showPoints = true;
 
     mockMessagesToDataset.mockImplementation(({ path }) => ({ label: path.value }));

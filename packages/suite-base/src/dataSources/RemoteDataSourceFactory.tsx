@@ -10,16 +10,15 @@ import {
   IDataSourceFactory,
   DataSourceFactoryInitializeArgs,
 } from "@lichtblick/suite-base/context/PlayerSelectionContext";
-import { IterablePlayer } from "@lichtblick/suite-base/players/IterablePlayer";
-import { WorkerSerializedIterableSource } from "@lichtblick/suite-base/players/IterablePlayer/WorkerIterableSource";
+import { loadIterablePlayer, prefetch } from "@lichtblick/suite-base/dataSources/playerModules";
+import { createMcapSourceWorker } from "@lichtblick/suite-base/players/IterablePlayer/Mcap/createMcapSourceWorker";
 import {
   MultiFileHydrationOverrides,
   addMultiFileHydrationOverrides,
 } from "@lichtblick/suite-base/players/IterablePlayer/shared/multiFileHydrationOptions";
-import { expandVideoSeekBackfill } from "@lichtblick/suite-base/players/IterablePlayer/videoSeekBackfill";
 import { Player } from "@lichtblick/suite-base/players/types";
-import { uniqueNames } from "@lichtblick/suite-base/util/compareSides";
-import { basename, extname } from "@lichtblick/suite-base/util/path";
+import { remoteCompareNames } from "@lichtblick/suite-base/util/compareSides";
+import { extname } from "@lichtblick/suite-base/util/path";
 
 const initWorkers: Record<string, () => Worker> = {
   ".bag": () => {
@@ -30,20 +29,27 @@ const initWorkers: Record<string, () => Worker> = {
       ),
     );
   },
-  ".mcap": () => {
-    return new Worker(
-      new URL(
-        "@lichtblick/suite-base/players/IterablePlayer/Mcap/McapIterableSourceWorker.worker",
-        import.meta.url,
-      ),
-    );
-  },
+  ".mcap": createMcapSourceWorker,
 };
 
 const fileTypesAllowed: AllowedFileExtensions[] = [
   AllowedFileExtensions.BAG,
   AllowedFileExtensions.MCAP,
 ];
+
+function parseCompareOffsets(value: string | undefined, sideCount: number): number[] | undefined {
+  if (value == undefined || sideCount < 2) {
+    return undefined;
+  }
+  const entries = value.split(",");
+  if (entries.length !== sideCount || entries.some((entry) => entry.trim() === "")) {
+    return undefined;
+  }
+  const offsets = entries.map(Number);
+  return offsets.every((offset) => Number.isSafeInteger(Math.round(offset * 1e9)))
+    ? offsets
+    : undefined;
+}
 
 class RemoteDataSourceFactory implements IDataSourceFactory {
   private readonly multiFileHydrationOverrides?: MultiFileHydrationOverrides;
@@ -83,13 +89,21 @@ class RemoteDataSourceFactory implements IDataSourceFactory {
     this.multiFileHydrationOverrides = multiFileHydrationOverrides;
   }
 
-  public initialize(args: DataSourceFactoryInitializeArgs): Player | undefined {
-    if (args.params?.url == undefined) {
+  public prefetch = (): void => {
+    prefetch(loadIterablePlayer);
+  };
+
+  public async initialize(args: DataSourceFactoryInitializeArgs): Promise<Player | undefined> {
+    const { IterablePlayer, WorkerSerializedIterableSource, expandVideoSeekBackfill } =
+      await loadIterablePlayer();
+    const typedUrl = args.params?.url;
+    const urls = args.urls ?? (typedUrl == undefined ? [] : [typedUrl]);
+    if (urls.length === 0) {
       return;
     }
-    const urls = args.params.url.split(",");
+    const params = args.params ?? {};
     // Same meaning as Foxglove's `ds.includeCredentials`: send cookies with the file requests
-    const includeCredentials = args.params.includeCredentials === "true";
+    const includeCredentials = params.includeCredentials === "true";
     const credentials: RequestCredentials | undefined = includeCredentials ? "include" : undefined;
 
     let nextExtension: string | undefined = undefined;
@@ -100,36 +114,48 @@ class RemoteDataSourceFactory implements IDataSourceFactory {
       nextExtension = this.checkExtensionMatch(extension, nextExtension);
     });
 
-    const initWorker = initWorkers[extension]!;
+    const initWorker = initWorkers[extension];
+    if (initWorker == undefined) {
+      throw new Error(
+        `${extension === "" ? "Files without an extension" : `${extension} files`} can't be opened from a URL yet. Open .bag or .mcap files from a URL, or open the file from disk.`,
+      );
+    }
 
     // `ds.compare=true` compares the files side by side, one side per file; a comma list names the
-    // side of each file instead (files with the same name are merged into that side)
-    const compareParam = args.params.compare;
-    const compare =
-      urls.length < 2 || compareParam == undefined || compareParam === ""
+    // side of each file instead (files with the same name are merged into that side).
+    // `ds.compareNames` is that list with commas in names escaped (see encodeCompareNames).
+    const { compare: compareParam, compareNames } = params;
+    const compare = remoteCompareNames(urls, params);
+    const compareOffsets =
+      compare == undefined
         ? undefined
-        : compareParam === "true"
-          ? uniqueNames(urls.map((url) => basename(new URL(url).pathname)))
-          : compareParam.split(",");
-    const validCompare = compare?.length === urls.length ? compare : undefined;
+        : parseCompareOffsets(params.compareOffsets, new Set(compare).size);
 
     const initArgs =
       urls.length === 1
         ? { url: urls[0], credentials }
         : addMultiFileHydrationOverrides(
-            { urls, credentials, compare: validCompare },
+            {
+              urls: [...urls],
+              credentials,
+              compare,
+              ...(compareOffsets != undefined && { compareOffsets }),
+            },
             this.multiFileHydrationOverrides,
           );
     const source = new WorkerSerializedIterableSource({ initWorker, initArgs });
 
     return new IterablePlayer({
       source,
-      name: urls.join(),
+      // A catalog passes the recording's name, so the title bar shows it instead of the URL
+      name: params.name ?? urls.join(),
       // Keep includeCredentials in the app URL so reloads and shared links still send cookies
       urlParams: {
-        urls,
+        urls: [...urls],
         ...(includeCredentials && { includeCredentials: "true" }),
-        ...(validCompare && { compare: compareParam! }),
+        ...(params.name != undefined && { name: params.name }),
+        ...(compareOffsets != undefined && { compareOffsets: compareOffsets.join() }),
+        ...(compare && (compareNames != undefined ? { compareNames } : { compare: compareParam! })),
       },
       sourceId: this.id,
       readAheadDuration: { sec: 10, nsec: 0 },

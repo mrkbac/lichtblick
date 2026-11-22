@@ -25,6 +25,7 @@ vi.mock("@lichtblick/suite-base/components/MessagePipeline");
 vi.mock("./useTopicListSearch");
 vi.mock("./useOpenMessagePathsInPanel", () => ({
   useOpenMessagePathsInPanel: () => vi.fn(),
+  usePrefetchOpenInSchemas: () => vi.fn(),
 }));
 vi.mock("./useMultiSelection", () => ({
   useMultiSelection: vi.fn().mockReturnValue({
@@ -195,7 +196,7 @@ describe("TopicList Component", () => {
     expect(onSelect).toHaveBeenCalledWith({ index: 0, modKey: false, shiftKey: false });
   });
 
-  it("opens context menu on right-click of a topic row", () => {
+  it("opens context menu on right-click of a topic row", async () => {
     const topicItem: TopicListItem = {
       type: "topic",
       item: {
@@ -211,10 +212,11 @@ describe("TopicList Component", () => {
 
     fireEvent.contextMenu(screen.getByTestId("topic-row"));
 
-    expect(screen.getByTestId("context-menu")).toBeInTheDocument();
+    // Loaded on first use
+    expect(await screen.findByTestId("context-menu")).toBeInTheDocument();
   });
 
-  it("closes context menu when onClose is triggered", () => {
+  it("closes context menu when onClose is triggered", async () => {
     const topicItem: TopicListItem = {
       type: "topic",
       item: {
@@ -229,7 +231,7 @@ describe("TopicList Component", () => {
     setup(PlayerPresence.PRESENT);
 
     fireEvent.contextMenu(screen.getByTestId("topic-row"));
-    expect(screen.getByTestId("context-menu")).toBeInTheDocument();
+    expect(await screen.findByTestId("context-menu")).toBeInTheDocument();
 
     fireEvent.click(screen.getByText("close"));
     expect(screen.queryByTestId("context-menu")).not.toBeInTheDocument();

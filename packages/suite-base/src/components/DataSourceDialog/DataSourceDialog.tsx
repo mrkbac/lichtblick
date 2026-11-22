@@ -5,8 +5,9 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { Dialog } from "@mui/material";
+import { Alert, Button, Dialog } from "@mui/material";
 import { useCallback, useLayoutEffect, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import { makeStyles } from "tss-react/mui";
 
 import { useMountedState } from "@lichtblick/hooks";
@@ -20,6 +21,7 @@ import {
 import { useWorkspaceActions } from "@lichtblick/suite-base/context/Workspace/useWorkspaceActions";
 import { SAMPLES_CATALOG_URL } from "@lichtblick/suite-base/dataSources/constants";
 import { AppEvent } from "@lichtblick/suite-base/services/IAnalytics";
+import { useSourcePick } from "@lichtblick/suite-base/util/sourcePick";
 
 import { CatalogUrlView } from "./CatalogUrlView";
 import Start from "./Start";
@@ -50,6 +52,9 @@ export function DataSourceDialog(): React.JSX.Element {
   } = useWorkspaceStore(selectDataSourceDialog);
 
   const isMounted = useMountedState();
+  const { t } = useTranslation("compare");
+  // Opened to pick a recording for something else (e.g. a comparison) rather than to open it
+  const pickLabel = useSourcePick((state) => state.pick?.label);
 
   const analytics = useAnalytics();
 
@@ -102,6 +107,19 @@ export function DataSourceDialog(): React.JSX.Element {
     >
       {/* The full-page start screen is left by opening something (or Escape), not a close button. */}
       <Stack flexGrow={1} fullHeight justifyContent="space-between" overflow="hidden">
+        {pickLabel != undefined && (
+          <Alert
+            severity="info"
+            square
+            action={
+              <Button color="inherit" size="small" onClick={onModalClose}>
+                {t("pickCancel")}
+              </Button>
+            }
+          >
+            {t("pickBanner", { label: pickLabel })}
+          </Alert>
+        )}
         {activeView === "demo" ? (
           <CatalogUrlView
             url={catalogUrl ?? SAMPLES_CATALOG_URL}

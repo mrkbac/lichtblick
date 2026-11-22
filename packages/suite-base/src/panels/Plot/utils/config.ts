@@ -65,7 +65,8 @@ export type PlotXAxisVal =
   // "index" of the item and y-axis is the item value
   | "index"
   // The x-axis are values from message path items (accumulated). Each series produces y-values from
-  // its message path items. The x/y values are paired by their respective array index locations.
+  // its message path items. Each y-value pairs with the x-axis message received last at or before it
+  // (the same message when both paths share a topic), by its index within that message.
   | "custom"
   // Similar to "index" mode except the x-axis the message path item values and the y-axis are the
   // correspondible series message path value at the same array index. Only the latest message is used

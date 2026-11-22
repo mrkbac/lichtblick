@@ -8,14 +8,14 @@
 import { SvgIcon, SvgIconProps } from "@mui/material";
 
 import { APP_CONFIG } from "@lichtblick/suite-base/constants/config";
-import { fontSansSerif, palette } from "@lichtblick/theme";
+import { fontSansSerif } from "@lichtblick/theme";
 
 import { TraceMark } from "./LichtblickLogo";
 
 export default function LichtblickLogoText(props: SvgIconProps): React.JSX.Element {
   return (
     <SvgIcon viewBox="0 0 136 34" {...props}>
-      <g transform="translate(1 0) scale(0.425)" fill={palette.ACCENT}>
+      <g transform="translate(1 0) scale(0.425)">
         <TraceMark />
       </g>
       <text

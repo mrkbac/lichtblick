@@ -209,6 +209,26 @@ describe("IterablePlayer", () => {
     await player.isClosed;
   });
 
+  it("advertises indexed backfill only when the source reports it", async () => {
+    for (const indexedBackfill of [true, undefined]) {
+      const source = new TestSource();
+      const init = await source.initialize();
+      vi.spyOn(source, "initialize").mockResolvedValue({ ...init, indexedBackfill });
+      const player = new IterablePlayer({ source, enablePreload: false, sourceId: "test" });
+      const store = new PlayerStateStore(2);
+      player.setListener(async (state) => {
+        await store.add(state);
+      });
+      const states = await store.done;
+
+      expect(states.at(-1)!.capabilities.includes(PLAYER_CAPABILITIES.indexedBackfill)).toBe(
+        indexedBackfill === true,
+      );
+      player.close();
+      await player.isClosed;
+    }
+  });
+
   it("applies the updates of a source that grows after initialize", async () => {
     // Given a source that grows once after initialize, e.g. while its index is rebuilt
     const source = new TestSource();
@@ -1289,11 +1309,36 @@ describe("IterablePlayer", () => {
         {
           start: { sec: 0, nsec: 99000001 },
           end: { sec: 1, nsec: 0 },
-          topics: mockTopicSelection(secondTopic, topic),
+          // The first topic is cached already: only the new one is read
+          topics: mockTopicSelection(secondTopic),
           consumptionType: "partial",
         },
       ],
     ]);
+
+    player.close();
+    await player.isClosed;
+  });
+
+  it("preloads from the playhead, not from the start", async () => {
+    const source = new TestSource();
+    const topic = BasicBuilder.string();
+    const player = new IterablePlayer({ source, enablePreload: true, sourceId: "test" });
+    const messageIteratorSpy = vi.spyOn(source, "messageIterator");
+
+    player.setSubscriptions([{ topic, preloadType: "full" }]);
+    player.seekPlayback({ sec: 0, nsec: 800e6 });
+    player.setListener(async () => {});
+
+    await vi.waitFor(() => {
+      expect(messageIteratorSpy.mock.calls.some(([args]) => args.consumptionType === "full")).toBe(
+        true,
+      );
+    });
+    const firstPreload = messageIteratorSpy.mock.calls.find(
+      ([args]) => args.consumptionType === "full",
+    );
+    expect(firstPreload?.[0].start).toEqual({ sec: 0, nsec: 800e6 });
 
     player.close();
     await player.isClosed;
@@ -1608,6 +1653,7 @@ describe("IterablePlayer", () => {
       expect(mockMessageIterator).toHaveBeenCalledWith({
         topics: new Map([["test_topic", { topic: "test_topic" }]]),
         consumptionType: "full",
+        abort: expect.any(AbortSignal),
       });
     });
 
@@ -1652,24 +1698,35 @@ describe("IterablePlayer", () => {
       });
       await store.done;
 
-      // Test getBatchIterator for topic1
+      // Range reads that start together share one read of the recording
       const iterator1 = player.getBatchIterator("topic1");
-      expect(iterator1).toBeDefined();
-
-      // Test getBatchIterator for topic2
       const iterator2 = player.getBatchIterator("topic2");
-      expect(iterator2).toBeDefined();
+      const topics = async (iterator: AsyncIterableIterator<Readonly<IteratorResult>>) => {
+        const read: string[] = [];
+        for await (const result of iterator) {
+          if (result.type === "message-event") {
+            read.push(result.msgEvent.topic);
+          }
+        }
+        return read;
+      };
 
-      // Verify calls with different topics
-      expect(mockMessageIterator).toHaveBeenCalledWith({
-        topics: new Map([["topic1", { topic: "topic1" }]]),
-        consumptionType: "full",
-      });
-
-      expect(mockMessageIterator).toHaveBeenCalledWith({
-        topics: new Map([["topic2", { topic: "topic2" }]]),
-        consumptionType: "full",
-      });
+      expect(await Promise.all([topics(iterator1!), topics(iterator2!)])).toEqual([
+        ["topic1"],
+        ["topic2"],
+      ]);
+      expect(mockMessageIterator.mock.calls).toEqual([
+        [
+          {
+            topics: new Map([
+              ["topic1", { topic: "topic1" }],
+              ["topic2", { topic: "topic2" }],
+            ]),
+            consumptionType: "full",
+            abort: expect.any(AbortSignal),
+          },
+        ],
+      ]);
     });
 
     it("should handle iterator that yields different result types", async () => {
@@ -1830,12 +1887,13 @@ describe("IterablePlayer", () => {
       });
       await store.done;
 
-      player.getBatchIterator("test_topic");
+      await player.getBatchIterator("test_topic")?.next();
 
       // Verify that consumptionType is "full"
       expect(mockMessageIterator).toHaveBeenCalledWith({
         topics: expect.any(Map),
         consumptionType: "full",
+        abort: expect.any(AbortSignal),
       });
     });
   });

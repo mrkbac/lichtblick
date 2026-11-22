@@ -14,7 +14,7 @@ import { useTranslation } from "react-i18next";
 
 import { CompareSidePicker } from "@lichtblick/suite-base/components/Compare/CompareSidePicker";
 import PanelContext from "@lichtblick/suite-base/components/PanelContext";
-import { usePanelGuideStore } from "@lichtblick/suite-base/components/PanelDocs/PanelDocs";
+import { usePanelGuideStore } from "@lichtblick/suite-base/components/PanelDocs/PanelGuide";
 import { useStyles } from "@lichtblick/suite-base/components/PanelToolbar/PanelToolbarControls.style";
 import ToolbarIconButton from "@lichtblick/suite-base/components/PanelToolbar/ToolbarIconButton";
 import { PanelToolbarControlsProps } from "@lichtblick/suite-base/components/PanelToolbar/types";

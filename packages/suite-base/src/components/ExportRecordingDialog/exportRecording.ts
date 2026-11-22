@@ -9,18 +9,12 @@ import * as Comlink from "@foxglove/comlink";
 
 import { IWritable, type McapIndexedReader } from "@lichtblick/mcap-core";
 import { ChunkJob, ExportMcapOptions, ExportTopicOptions } from "@lichtblick/mcap-support";
-import { usePlayerSelection } from "@lichtblick/suite-base/context/PlayerSelectionContext";
 import { downloadFiles } from "@lichtblick/suite-base/util/download";
 
 import type { ExportChunkWorker } from "./exportChunk.worker";
 
-/** The opened file, if it can be exported: currently a single local MCAP file. */
-export function useExportableFile(): File | undefined {
-  const { selectedFiles } = usePlayerSelection();
-  // ponytail: single file only; merging several open files is a later step.
-  const file = selectedFiles?.length === 1 ? selectedFiles[0] : undefined;
-  return file && /\.mcap$/i.test(file.name) ? file : undefined;
-}
+export { remoteFileName } from "./exportSource";
+export type { ExportReadable, ExportSource } from "./exportSource";
 
 /**
  * Runs chunk rewrites (decompress, filter, recompress) on all but one core.
@@ -93,6 +87,15 @@ export function getTopicRows(reader: McapIndexedReader): TopicRow[] {
     rows.set(channel.topic, row);
   }
   return [...rows.values()].sort((a, b) => a.topic.localeCompare(b.topic));
+}
+
+/** A case-insensitive regex for the topic filter; text that isn't a valid regex matches literally */
+export function topicFilterPattern(filter: string): RegExp {
+  try {
+    return new RegExp(filter, "i");
+  } catch {
+    return new RegExp(filter.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
+  }
 }
 
 /** Topic options for `exportMcap`, containing only kept topics. */

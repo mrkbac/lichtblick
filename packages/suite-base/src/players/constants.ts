@@ -57,6 +57,10 @@ export const PLAYER_CAPABILITIES = {
 
   // Set values for configuration key/value pairs
   setParameters: "setParameters",
+
+  // getMessageAtTime finds a topic's latest message through an index: its cost doesn't grow with
+  // the data before the requested time, so it suits interactive lookups.
+  indexedBackfill: "indexedBackfill",
 };
 
 /**

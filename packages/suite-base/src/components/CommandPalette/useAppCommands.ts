@@ -8,7 +8,8 @@ import { useTranslation } from "react-i18next";
 import { pushAll } from "@lichtblick/den/collection";
 import Logger from "@lichtblick/log";
 import { MessagePathStructureItem } from "@lichtblick/message-path";
-import { useShowCompareDialog } from "@lichtblick/suite-base/components/Compare/CompareDialog";
+import { useToggleColorScheme } from "@lichtblick/suite-base/components/ColorSchemeThemeProvider";
+import { useShowCompareDialog } from "@lichtblick/suite-base/components/Compare/compareDialogStore";
 import { useKeyboardShortcutsStore } from "@lichtblick/suite-base/components/KeyboardShortcuts/KeyboardShortcuts";
 import {
   APP_SHORTCUTS,
@@ -29,7 +30,7 @@ import {
   selectStartPlayback,
   selectStartTime,
 } from "@lichtblick/suite-base/components/MessagePipeline/selectors";
-import { usePanelGuideStore } from "@lichtblick/suite-base/components/PanelDocs/PanelDocs";
+import { usePanelGuideStore } from "@lichtblick/suite-base/components/PanelDocs/PanelGuide";
 import { PLAYBACK_SPEED_OPTIONS } from "@lichtblick/suite-base/components/PlaybackSpeedControls";
 import { APP_CONFIG } from "@lichtblick/suite-base/constants/config";
 import {
@@ -49,11 +50,13 @@ import {
 import { useWorkspaceActions } from "@lichtblick/suite-base/context/Workspace/useWorkspaceActions";
 import useAddPanel from "@lichtblick/suite-base/hooks/useAddPanel";
 import { useLayoutTransfer } from "@lichtblick/suite-base/hooks/useLayoutTransfer";
+import { useShareLink } from "@lichtblick/suite-base/hooks/useShareLink";
 import { DEFAULT_PLOT_PATH } from "@lichtblick/suite-base/panels/Plot/constants";
 import { newRow } from "@lichtblick/suite-base/panels/Watch/config";
 import { PLOTABLE_ROS_TYPES } from "@lichtblick/suite-base/panels/shared/constants";
 import { PlayerPresence, Topic } from "@lichtblick/suite-base/players/types";
 import { PanelConfig } from "@lichtblick/suite-base/types/panels";
+import clipboard from "@lichtblick/suite-base/util/clipboard";
 import isDesktopApp from "@lichtblick/suite-base/util/isDesktopApp";
 import { shortcutLabel } from "@lichtblick/suite-base/util/keyboardShortcuts";
 import {
@@ -216,6 +219,7 @@ export function useAppCommands(): {
 } {
   const { t } = useTranslation("commandPalette");
   const showShortcuts = useKeyboardShortcutsStore((state) => state.show);
+  const toggleColorScheme = useToggleColorScheme();
   const showCompare = useShowCompareDialog();
   const { recentSources, selectRecent } = usePlayerSelection();
   const { dialogActions, sidebarActions, openPanelSettings } = useWorkspaceActions();
@@ -250,6 +254,7 @@ export function useAppCommands(): {
   const setSpeed = useMessagePipeline(selectSetSpeed);
   // Read the current time lazily so the palette does not re-render on every frame.
   const getPipeline = useMessagePipelineGetter();
+  const { availability: shareAvailability, copyLink: copyShareLink } = useShareLink();
 
   const commands = useMemo(() => {
     const list: Command[] = [];
@@ -686,6 +691,30 @@ export function useAppCommands(): {
       });
     }
 
+    // ---- Share ----
+    if (shareAvailability !== "none") {
+      push(t("groupShare"), {
+        id: "share.link",
+        title: t("copyLink"),
+        detail: shareAvailability === "local" ? t("copyLinkLocalDetail") : t("copyLinkDetail"),
+        keywords: ["share", "url", "permalink"],
+        run: catchErrors(copyShareLink),
+      });
+    }
+    if (hasPlayer) {
+      push(t("groupShare"), {
+        id: "share.timestamp",
+        title: t("copyTimestamp"),
+        keywords: ["time", "stamp", "copy"],
+        run: catchErrors(async () => {
+          const current = getPipeline().playerState.activeData?.currentTime;
+          if (current) {
+            await clipboard.copy(formatTimeRaw(current));
+          }
+        }),
+      });
+    }
+
     // ---- View ----
     push(
       t("groupView"),
@@ -714,6 +743,13 @@ export function useAppCommands(): {
             leftSidebarOpen && leftSidebarItem === "panel-settings" ? undefined : "panel-settings",
           );
         },
+      },
+      {
+        id: "view.toggle-theme",
+        title: t("toggleTheme"),
+        keywords: ["theme", "dark", "light", "color scheme"],
+        shortcut: shortcutLabel(APP_SHORTCUTS, "app.toggleTheme"),
+        run: toggleColorScheme,
       },
       {
         id: "view.settings",
@@ -779,14 +815,18 @@ export function useAppCommands(): {
     setPlaybackConfig,
     changePanelLayout,
     closePanel,
+    copyShareLink,
     getCurrentLayoutState,
+    getPipeline,
     savePanelConfigs,
     splitPanel,
     swapPanel,
     setSelectedLayoutId,
     setSelectedPanelIds,
     setSpeed,
+    shareAvailability,
     showShortcuts,
+    toggleColorScheme,
     sidebarActions,
     startTime,
     t,

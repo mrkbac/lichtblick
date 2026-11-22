@@ -11,7 +11,7 @@ import { makeStyles } from "tss-react/mui";
 
 import { useAsync } from "@lichtblick/hooks";
 import Stack from "@lichtblick/suite-base/components/Stack";
-import { formatDuration } from "@lichtblick/suite-base/util/formatTime";
+import { formatDurationCompact } from "@lichtblick/suite-base/util/formatTime";
 
 import { PREVIEW_FPS, PreviewFrame } from "./preview";
 import { isCompressedImageSchema } from "./thumbnail";
@@ -156,7 +156,7 @@ export function PreviewPlayer({ recording, loadPreview }: Props): React.JSX.Elem
             }}
           />
           <Typography variant="caption" className={classes.time} color="textSecondary">
-            {frame ? formatDuration(fromSec(frame.offsetSec)) : ""}
+            {frame ? formatDurationCompact(fromSec(frame.offsetSec)) : ""}
             {speedUp != undefined && ` · ${t("speedUp", { factor: Math.round(speedUp) })}`}
           </Typography>
         </Stack>

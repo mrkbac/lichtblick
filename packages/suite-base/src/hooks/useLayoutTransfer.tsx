@@ -14,7 +14,7 @@ import { useLayoutNavigation } from "@lichtblick/suite-base/hooks/useLayoutNavig
 import { Layout } from "@lichtblick/suite-base/services/ILayoutStorage";
 import { Namespace } from "@lichtblick/suite-base/types";
 import { downloadTextFile } from "@lichtblick/suite-base/util/download";
-import { validateLayoutData } from "@lichtblick/suite-base/util/layout";
+import { decodeLayoutTrust, validateLayoutData } from "@lichtblick/suite-base/util/layout";
 import { basename, extname } from "@lichtblick/suite-base/util/path";
 import showOpenFilePicker from "@lichtblick/suite-base/util/showOpenFilePicker";
 import { toError } from "@lichtblick/suite-base/util/toError";
@@ -26,11 +26,15 @@ import { AppEvent } from "../services/IAnalytics";
 type UseLayoutTransfer = {
   importLayout: () => Promise<void>;
   exportLayout: () => Promise<void>;
-  /** Saves and selects a layout; rejects with AbortError if the optional signal is cancelled. */
+  /**
+   * Saves and selects a layout; rejects with AbortError if the optional signal is cancelled.
+   * `untrusted` also marks linked layouts that contain no user scripts yet.
+   */
   parseAndInstallLayout: (
     file: File,
     namespace: Namespace,
     signal?: AbortSignal,
+    options?: { untrusted?: boolean },
   ) => Promise<Layout | undefined>;
 };
 
@@ -43,7 +47,12 @@ export function useLayoutTransfer(): UseLayoutTransfer {
   const { getCurrentLayoutState } = useCurrentLayoutActions();
 
   const parseAndInstallLayout = useCallback(
-    async (file: File, namespace: Namespace = "local", signal?: AbortSignal) => {
+    async (
+      file: File,
+      namespace: Namespace = "local",
+      signal?: AbortSignal,
+      options?: { untrusted?: boolean },
+    ) => {
       const layoutName = basename(file.name, extname(file.name));
       const content = await file.text();
 
@@ -67,9 +76,9 @@ export function useLayoutTransfer(): UseLayoutTransfer {
         return;
       }
 
-      let data: LayoutData;
+      let parsedLayout: LayoutData;
       try {
-        data = validateLayoutData(parsedState);
+        parsedLayout = validateLayoutData(parsedState);
       } catch (err: unknown) {
         const errorMessage = err instanceof Error ? err.message : String(err);
         enqueueSnackbar(`${file.name} is not a valid layout: ${errorMessage}`, {
@@ -78,10 +87,15 @@ export function useLayoutTransfer(): UseLayoutTransfer {
         return;
       }
 
+      const { data, untrusted } = decodeLayoutTrust(parsedLayout);
       const newLayout = await layoutManager.saveNewLayout({
         name: layoutName,
         data,
         permission: namespace === "org" ? "ORG_WRITE" : "CREATOR_WRITE",
+        untrusted:
+          options?.untrusted === true ||
+          untrusted === true ||
+          Object.keys(data.userNodes ?? {}).length > 0,
       });
 
       signal?.throwIfAborted();

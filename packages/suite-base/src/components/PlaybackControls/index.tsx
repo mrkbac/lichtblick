@@ -29,11 +29,10 @@ import {
   Previous20Regular,
 } from "@fluentui/react-icons";
 import { Time, compare, fromNanoSec, toNanoSec } from "@foxglove/rostime";
-import { useCallback, useEffect, useMemo } from "react";
+import { Suspense, lazy, useCallback, useEffect, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 
-import { ExportRecordingDialog } from "@lichtblick/suite-base/components/ExportRecordingDialog/ExportRecordingDialog";
-import { useExportableFile } from "@lichtblick/suite-base/components/ExportRecordingDialog/exportRecording";
+import { useExportSource } from "@lichtblick/suite-base/components/ExportRecordingDialog/exportSource";
 import {
   clampTimeToCut,
   useTrimStore,
@@ -69,6 +68,13 @@ import { ScrubPreviewMenu } from "./ScrubPreviewMenu";
 import Scrubber from "./Scrubber";
 import { TrimBar, useTrimKeyHandlers } from "./TrimRange";
 
+// Only loads when an export is started: the export code stays out of the startup bundle
+const ExportRecordingDialog = lazy(async () => ({
+  default: (
+    await import("@lichtblick/suite-base/components/ExportRecordingDialog/ExportRecordingDialog")
+  ).ExportRecordingDialog,
+}));
+
 const selectHasLiveHistory = (ctx: MessagePipelineContext) =>
   ctx.playerState.capabilities.includes(PLAYER_CAPABILITIES.liveHistory);
 const selectPlaybackRepeat = (store: WorkspaceContextStore) => store.playbackControls.repeat;
@@ -96,7 +102,7 @@ export default function PlaybackControls({
 
   const { classes } = useStyles();
   const repeat = useWorkspaceStore(selectPlaybackRepeat);
-  const exportableFile = useExportableFile();
+  const exportSource = useExportSource();
   const cutActive = useTrimStore((state) => state.start != undefined);
   const editingCut = useTrimStore((state) => state.editing);
   const startEditingCut = useTrimStore((state) => state.startEditing);
@@ -109,7 +115,7 @@ export default function PlaybackControls({
   // A cut belongs to the file it was made on.
   useEffect(() => {
     clearCut();
-  }, [exportableFile, clearCut]);
+  }, [exportSource, clearCut]);
 
   // While a cut is set, seeking outside it lands on its nearest edge.
   const seekInCut = useCallback(
@@ -236,11 +242,11 @@ export default function PlaybackControls({
         <div className={classes.scrubberWrapper}>
           <Scrubber onSeek={seekInCut} />
         </div>
-        {exportableFile && <TrimBar />}
+        {exportSource && <TrimBar />}
         <Stack direction="row" alignItems="center" flex={1} gap={1}>
           <Stack direction="row" alignItems="center" flex={1} gap={0.5}>
             <DataSourceInfoButton disabled={disableControls} />
-            {exportableFile && (
+            {exportSource && (
               <HoverableIconButton
                 size="small"
                 title={editingCut ? t("hideCutHandles") : t("cutRecording")}
@@ -302,8 +308,10 @@ export default function PlaybackControls({
             <PlaybackSpeedControls />
           </Stack>
         </Stack>
-        {exportOpen && exportableFile && (
-          <ExportRecordingDialog file={exportableFile} onClose={closeExport} />
+        {exportOpen && exportSource && (
+          <Suspense fallback={undefined}>
+            <ExportRecordingDialog source={exportSource} onClose={closeExport} />
+          </Suspense>
         )}
       </div>
     </>

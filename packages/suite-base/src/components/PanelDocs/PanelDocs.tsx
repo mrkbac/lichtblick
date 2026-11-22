@@ -15,7 +15,6 @@ import {
 import { Fragment, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { makeStyles } from "tss-react/mui";
-import { create } from "zustand";
 
 import { useAsync } from "@lichtblick/hooks";
 import Log from "@lichtblick/log";
@@ -24,6 +23,8 @@ import { PanelInfo, usePanelCatalog } from "@lichtblick/suite-base/context/Panel
 import type { DocumentedNodes } from "@lichtblick/suite-base/panels/shared/documentedSettings";
 import { shortcutRows } from "@lichtblick/suite-base/util/keyboardShortcuts";
 import { customTypography } from "@lichtblick/theme";
+
+import { usePanelGuideStore } from "./PanelGuide";
 
 const log = Log.getLogger(__filename);
 
@@ -48,6 +49,8 @@ export type PanelDocs = {
   intro: string;
   /** Schemas the panel reads, from the panel's own constants. */
   schemas?: Iterable<string>;
+  /** Schemas a topic needs to be opened in a new panel of this kind ("Open in"); else `schemas`. */
+  openInSchemas?: Iterable<string>;
   /** The panel's declared buttons, in the order it draws them. */
   buttons?: readonly PanelButton[];
   /** The panel's settings tree for its default config, built by the panel's own builder. */
@@ -101,23 +104,6 @@ export function schemaDisplayNames(names: Iterable<string>): string[] {
   }
   return [...out].sort();
 }
-
-/** Whether the panel guide is open, and at which panel. */
-export const usePanelGuideStore = create<{
-  open: boolean;
-  panelType: string | undefined;
-  show: (panelType?: string) => void;
-  hide: () => void;
-}>()((set) => ({
-  open: false,
-  panelType: undefined,
-  show: (panelType) => {
-    set((state) => ({ open: true, panelType: panelType ?? state.panelType }));
-  },
-  hide: () => {
-    set({ open: false });
-  },
-}));
 
 type Row = {
   term: string;
@@ -308,7 +294,7 @@ function PanelDocsView(props: { entry: LoadedDocs; words: string[] }): React.JSX
   );
 }
 
-function PanelGuideDialog(): React.JSX.Element {
+export function PanelGuideDialog(): React.JSX.Element {
   const { classes } = useStyles();
   const { t } = useTranslation("panelToolbar");
   const { t: tButtons } = useTranslation("panelButtons");
@@ -446,10 +432,4 @@ function PanelGuideDialog(): React.JSX.Element {
       </main>
     </Dialog>
   );
-}
-
-/** Mounts the panel guide; it only renders while open. */
-export function PanelGuide(): React.JSX.Element {
-  const open = usePanelGuideStore((state) => state.open);
-  return <>{open && <PanelGuideDialog />}</>;
 }

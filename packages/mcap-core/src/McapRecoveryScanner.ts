@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import { crc32 } from "@foxglove/crc";
+import * as _ from "lodash-es";
 
 import type { ChunkCache } from "./ChunkCache.ts";
 import McapByteReader from "./McapByteReader.ts";
@@ -14,7 +15,7 @@ import type * as McapTypes from "./types.ts";
 
 const RECORD_PREFIX_LENGTH = 9n; // opcode + content length
 const READ_WINDOW_BYTES = 8n * 1024n * 1024n;
-const SNAPSHOT_VERSION = 2;
+const SNAPSHOT_VERSION = 3; // 3: keeps the first of conflicting definitions
 // Where the readers built from the index (see #readable) find the message indexes and the summary:
 // far past any real file offset, so neither moves as the file and its index grow. Chunk i's message
 // indexes are at LIVE_INDEX_AT + i * INDEX_STRIDE; they aren't stored but rebuilt from the chunk
@@ -36,6 +37,8 @@ export type LiveReader = {
 };
 
 /** What a recovery scan dropped, see `McapRecoveryScanner.losses` */
+export type RecoveryConflict = { kind: "Schema" | "Channel"; id: number };
+
 export type RecoveryLosses = {
   /** Records that failed to parse, decompress or pass their CRC */
   corruptRecords: number;
@@ -52,6 +55,7 @@ type SnapshotHeader = {
   chunkCount: number;
   corruptRecords: number;
   unchunkedMessageCount: number;
+  conflicts?: RecoveryConflict[];
 };
 
 /**
@@ -76,6 +80,8 @@ export class McapRecoveryScanner {
   public unchunkedMessageCount = 0;
   /** Bytes after the last complete record that could not be read */
   public unreadableBytes = 0n;
+  /** Ids defined again with different content; the first definition is kept */
+  public conflicts: RecoveryConflict[] = [];
 
   #decompressHandlers: McapTypes.DecompressHandlers;
   #schemas = new Map<number, McapTypes.Schema>();
@@ -130,6 +136,7 @@ export class McapRecoveryScanner {
         chunkCount: this.chunkCount,
         corruptRecords: this.corruptRecords,
         unchunkedMessageCount: this.unchunkedMessageCount,
+        conflicts: this.conflicts,
       } satisfies SnapshotHeader),
     );
     const out = new Uint8Array(4 + header.byteLength + tail.byteLength);
@@ -158,6 +165,7 @@ export class McapRecoveryScanner {
     scanner.chunkCount = header.chunkCount;
     scanner.corruptRecords = header.corruptRecords;
     scanner.unchunkedMessageCount = header.unchunkedMessageCount;
+    scanner.conflicts = header.conflicts ?? [];
 
     const summary = reader(snapshot.slice(4 + headerLength));
     for (;;) {
@@ -475,10 +483,8 @@ export class McapRecoveryScanner {
         this.#addChunk(record, offset, BigInt(bytes.byteLength));
         break;
       case "Schema":
-        this.#schemas.set(record.id, record);
-        break;
       case "Channel":
-        this.#channels.set(record.id, record);
+        this.#define(record.type, record);
         break;
       case "Message":
         this.unchunkedMessageCount++;
@@ -499,6 +505,24 @@ export class McapRecoveryScanner {
         break;
       default:
         throw new Error("Unreadable record");
+    }
+  }
+
+  /**
+   * Keeps the first definition of an id, so messages read earlier don't move to a topic defined
+   * later, and notes an id defined again with different content
+   */
+  #define(kind: RecoveryConflict["kind"], record: McapTypes.Schema | McapTypes.Channel): void {
+    const definitions: Map<number, McapTypes.Schema | McapTypes.Channel> =
+      kind === "Schema" ? this.#schemas : this.#channels;
+    const existing = definitions.get(record.id);
+    if (!existing) {
+      definitions.set(record.id, record);
+    } else if (
+      !_.isEqual(existing, record) &&
+      !this.conflicts.some((conflict) => conflict.kind === kind && conflict.id === record.id)
+    ) {
+      this.conflicts.push({ kind, id: record.id });
     }
   }
 
@@ -542,10 +566,10 @@ export class McapRecoveryScanner {
 
     this.chunkCount++;
     for (const schema of schemas) {
-      this.#schemas.set(schema.id, schema);
+      this.#define("Schema", schema);
     }
     for (const channel of channels) {
-      this.#channels.set(channel.id, channel);
+      this.#define("Channel", channel);
     }
     let start: bigint | undefined;
     let end: bigint | undefined;

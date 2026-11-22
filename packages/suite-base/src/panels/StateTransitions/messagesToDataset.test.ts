@@ -4,11 +4,12 @@
 import { darken } from "@mui/material";
 
 import { MessageEvent } from "@lichtblick/suite";
-import { MessagePathDataItem } from "@lichtblick/suite-base/components/MessagePathSyntax/useCachedGetMessagePathDataItems";
 import {
   PathSample,
+  PathSampleColumns,
   toPathSample,
-} from "@lichtblick/suite-base/components/MessagePathSyntax/usePathSampleHistory";
+} from "@lichtblick/suite-base/components/MessagePathSyntax/PathSampleColumns";
+import { MessagePathDataItem } from "@lichtblick/suite-base/components/MessagePathSyntax/useCachedGetMessagePathDataItems";
 import MessageEventBuilder from "@lichtblick/suite-base/testing/builders/MessageEventBuilder";
 import RosTimeBuilder from "@lichtblick/suite-base/testing/builders/RosTimeBuilder";
 import { TimestampMethod } from "@lichtblick/suite-base/util/time";
@@ -19,6 +20,7 @@ import {
   getColor,
   createLabel,
   baseColors,
+  LiveDatasetCache,
   messagesToDataset,
 } from "./messagesToDataset";
 import { MessageDatasetArgs, StateTransitionPath } from "./types";
@@ -71,6 +73,114 @@ let queriedDataValue: number;
 let queriedDataName: string;
 let queriedDataPath: string;
 let constName: string | undefined;
+
+describe("incremental live datasets", () => {
+  it.each([false, true])("matches a full rebuild with showPoints=%s", (showPoints) => {
+    const active = new PathSampleColumns(16);
+    active.trackChanges();
+    const drawnCache: LiveDatasetCache = {};
+    const exactCache: LiveDatasetCache = {};
+    const args = {
+      startTime: { sec: 100, nsec: 0 },
+      pathIndex: 0,
+      path: { value: "/topic.state", condition: "== 1", timestampMethod: "headerStamp" as const },
+      y: -9,
+      showPoints,
+    };
+
+    for (let next = 0; next < 380; next += 3) {
+      for (let i = next; i < next + 3; i++) {
+        active.push({
+          receiveTime: { sec: 100 + i, nsec: 0 },
+          headerStamp: i % 5 === 0 ? undefined : { sec: 100 + i, nsec: 0 },
+          count: i % 11 === 0 ? 2 : 1,
+          value: i % 7 < 2 ? null : i % 3,
+          constantName: undefined,
+        });
+      }
+      for (const [block, cache] of [
+        [active, drawnCache],
+        [active.changes(), exactCache],
+      ] as const) {
+        const input = { ...args, blocks: [block] };
+        expect(messagesToDataset(input, cache)).toEqual(messagesToDataset(input));
+      }
+    }
+    expect(active.hasAllChanges()).toBe(false);
+  });
+
+  it("keeps cached segments aligned as the live playback start moves", () => {
+    const active = new PathSampleColumns(1000);
+    const append = (i: number) => {
+      active.push({
+        receiveTime: { sec: 1_800_000_000 + i, nsec: i * 123_456 },
+        headerStamp: undefined,
+        count: 1,
+        value: Math.floor(i / 3) % 2,
+        constantName: undefined,
+      });
+    };
+    for (let i = 0; i < 900; i++) {
+      append(i);
+    }
+    const args = {
+      startTime: { sec: 1_800_000_000, nsec: 123 },
+      pathIndex: 0,
+      path: { value: "/topic.state", condition: "== 1", timestampMethod: "receiveTime" as const },
+      y: -9,
+      blocks: [active],
+      showPoints: false,
+    };
+    const cache: LiveDatasetCache = {};
+    const first = messagesToDataset(args, cache);
+    append(900);
+    append(901);
+    const shifted = { ...args, startTime: { sec: 1_800_000_150, nsec: 123_456_789 } };
+    const sampleValue = vi.spyOn(active, "sampleValue");
+    const next = messagesToDataset(shifted, cache);
+
+    expect(sampleValue.mock.calls.length).toBeLessThanOrEqual(4);
+    expect(first.data[0]?.x).toBeLessThan(0);
+    expect(next.data[0]?.x).toBeLessThan(-150);
+    expect(next).toEqual(messagesToDataset(shifted));
+  });
+
+  it("converts only new samples and the mutable tail on a dense live redraw", () => {
+    const active = new PathSampleColumns(100_000);
+    const append = (i: number) => {
+      active.push({
+        receiveTime: { sec: i, nsec: 0 },
+        headerStamp: undefined,
+        count: 1,
+        value: i % 2,
+        constantName: undefined,
+      });
+    };
+    for (let i = 0; i < 99_990; i++) {
+      append(i);
+    }
+    const args = {
+      startTime: { sec: 0, nsec: 0 },
+      pathIndex: 0,
+      path: { value: "/topic.state", timestampMethod: "receiveTime" as const },
+      y: -9,
+      blocks: [active],
+      showPoints: false,
+    };
+    const cache: LiveDatasetCache = {};
+    const first = messagesToDataset(args, cache);
+
+    const sampleValue = vi.spyOn(active, "sampleValue");
+    for (let i = 99_990; i < 99_995; i++) {
+      append(i);
+    }
+
+    const second = messagesToDataset(args, cache);
+    expect(sampleValue).toHaveBeenCalledTimes(7);
+    expect(first.data).toHaveLength(99_990);
+    expect(second.data).toHaveLength(99_995);
+  });
+});
 
 describe("messagesToDataset helper functions", () => {
   beforeEach(() => {
@@ -236,7 +346,7 @@ describe("messagesToDataset", () => {
     const argsDataset: MessageDatasetArgs = {
       ...args,
       path: { ...args.path, timestampMethod: "receiveTime" },
-      blocks,
+      blocks: blocks.map((block) => PathSampleColumns.from(block)),
     };
 
     const result = messagesToDataset(argsDataset);
@@ -259,7 +369,7 @@ describe("messagesToDataset", () => {
     const [datum] = messagesToDataset({
       ...args,
       path: { ...args.path, timestampMethod: "receiveTime" },
-      blocks,
+      blocks: blocks.map((block) => PathSampleColumns.from(block)),
       darkenLabels: true,
     }).data;
 
@@ -283,7 +393,7 @@ describe("messagesToDataset", () => {
     const argsDataset: MessageDatasetArgs = {
       ...args,
       path: { ...args.path, timestampMethod: "headerStamp" },
-      blocks,
+      blocks: blocks.map((block) => PathSampleColumns.from(block)),
     };
 
     const result = messagesToDataset(argsDataset);
@@ -307,7 +417,7 @@ describe("messagesToDataset", () => {
     const argsDataset: MessageDatasetArgs = {
       ...args,
       path: { ...args.path, timestampMethod: "headerStamp", label: undefined },
-      blocks,
+      blocks: blocks.map((block) => PathSampleColumns.from(block)),
     };
 
     const result = messagesToDataset(argsDataset);
@@ -340,7 +450,7 @@ describe("messagesToDataset", () => {
     const argsDataset: MessageDatasetArgs = {
       ...args,
       path: { ...args.path, timestampMethod: "receiveTime" },
-      blocks,
+      blocks: blocks.map((block) => PathSampleColumns.from(block)),
     };
 
     const result = messagesToDataset(argsDataset);
@@ -363,7 +473,7 @@ describe("messagesToDataset", () => {
     const argsDataset: MessageDatasetArgs = {
       ...args,
       path: { ...args.path, timestampMethod: "receiveTime" },
-      blocks,
+      blocks: blocks.map((block) => PathSampleColumns.from(block)),
     };
 
     const result = messagesToDataset(argsDataset);
@@ -383,7 +493,7 @@ describe("messagesToDataset", () => {
     const argsDataset: MessageDatasetArgs = {
       ...args,
       path: { ...args.path, timestampMethod: "receiveTime" },
-      blocks,
+      blocks: blocks.map((block) => PathSampleColumns.from(block)),
     };
 
     const result = messagesToDataset(argsDataset);
@@ -403,7 +513,7 @@ describe("messagesToDataset", () => {
     const argsDataset: MessageDatasetArgs = {
       ...args,
       path: { ...args.path, timestampMethod: "receiveTime" },
-      blocks,
+      blocks: blocks.map((block) => PathSampleColumns.from(block)),
     };
 
     const result = messagesToDataset(argsDataset);
@@ -421,7 +531,7 @@ describe("messagesToDataset", () => {
 
     const result = messagesToDataset({
       ...args,
-      blocks,
+      blocks: blocks.map((block) => PathSampleColumns.from(block)),
       path: { ...args.path, timestampMethod: "receiveTime" },
     });
 
@@ -441,7 +551,7 @@ describe("messagesToDataset", () => {
 
     const result = messagesToDataset({
       ...args,
-      blocks,
+      blocks: blocks.map((block) => block && PathSampleColumns.from(block)),
       path: { ...args.path, timestampMethod: "receiveTime" },
     });
 
@@ -462,7 +572,7 @@ describe("messagesToDataset", () => {
 
     const result = messagesToDataset({
       ...args,
-      blocks,
+      blocks: blocks.map((block) => PathSampleColumns.from(block)),
       path: { ...args.path, timestampMethod: "receiveTime" },
       showPoints: true,
     });
@@ -482,7 +592,7 @@ describe("messagesToDataset", () => {
 
     const result = messagesToDataset({
       ...args,
-      blocks,
+      blocks: blocks.map((block) => PathSampleColumns.from(block)),
       path: { ...args.path, timestampMethod: "receiveTime" },
     });
 
@@ -499,7 +609,7 @@ describe("messagesToDataset", () => {
 
     const result = messagesToDataset({
       ...args,
-      blocks,
+      blocks: blocks.map((block) => PathSampleColumns.from(block)),
       path: { ...args.path, timestampMethod: "receiveTime" },
       showPoints: false,
     });
@@ -520,7 +630,7 @@ describe("messagesToDataset", () => {
 
     const result = messagesToDataset({
       ...args,
-      blocks: [[messageAndData, messageAndData, gap]],
+      blocks: [PathSampleColumns.from([messageAndData, messageAndData, gap])],
       path: { ...args.path, timestampMethod: "receiveTime" },
       showPoints: false,
     });
@@ -530,5 +640,60 @@ describe("messagesToDataset", () => {
       expect.objectContaining({ value: repeatedValue }),
       { x: expect.any(Number), y: NaN },
     ]);
+  });
+
+  it("draws the end of a repeated state and doesn't mix up values across blocks", () => {
+    const at = (sec: number, value: unknown): PathSample => ({
+      receiveTime: { sec, nsec: 0 },
+      headerStamp: undefined,
+      count: 1,
+      value,
+      constantName: undefined,
+    });
+    const result = messagesToDataset({
+      ...args,
+      startTime: { sec: 0, nsec: 0 },
+      path: { ...args.path, timestampMethod: "receiveTime", condition: undefined },
+      showPoints: false,
+      // Both blocks start with their own first value, so ids alone would say "repeat".
+      blocks: [
+        PathSampleColumns.from([at(0, 3), at(1, 3), at(2, 3)]),
+        PathSampleColumns.from([at(3, "x"), at(4, "x")]),
+      ],
+    });
+    expect(result.data.map((datum) => [datum?.x, datum?.value, datum?.label])).toEqual([
+      [0, 3, "3"],
+      [3, "x", "x"],
+      [4, "x", undefined],
+    ]);
+  });
+});
+
+describe("messagesToDataset of thinned samples", () => {
+  it("draws a fast signal merged by thinning as a dense stretch, not a steady state", () => {
+    const columns = new PathSampleColumns(100);
+    for (let i = 0; i < 10_000; i++) {
+      columns.push({
+        receiveTime: { sec: i, nsec: 0 },
+        headerStamp: undefined,
+        count: 1,
+        value: i % 2,
+        constantName: undefined,
+      });
+    }
+    const dataset = messagesToDataset({
+      path: { value: "/a.b", timestampMethod: "receiveTime" },
+      startTime: { sec: 0, nsec: 0 },
+      y: 0,
+      pathIndex: 0,
+      blocks: [columns],
+      showPoints: false,
+    });
+    const labels = dataset.data.map((datum) => datum?.label).filter((label) => label != undefined);
+    // One dense band (merged stretches in a row continue it); at most the newest, unmerged
+    // samples show a plain state.
+    expect(labels[0]).toBe("[...]");
+    expect(labels.filter((label) => label !== "[...]").length).toBeLessThanOrEqual(2);
+    expect(dataset.data.at(-1)?.x).toBe(9_999);
   });
 });

@@ -182,7 +182,7 @@ export class ImageAnnotations extends THREE.Object3D {
         "Waiting for annotation message with timestamp matching image. Turn off “Sync annotations” to display annotations regardless of timestamp.",
       );
     }
-    if (newState.missingAnnotationTopics) {
+    if (newState.missingAnnotationTopics || newState.waitingForImage === true) {
       this.removeAllRenderables();
     }
   };

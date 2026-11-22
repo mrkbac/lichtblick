@@ -9,11 +9,15 @@ import { Time, toNanoSec } from "@foxglove/rostime";
 import { LaserScan as FoxgloveLaserScan } from "@foxglove/schemas";
 import * as THREE from "three/webgpu";
 
-import { SettingsTreeAction, MessageEvent } from "@lichtblick/suite";
+import { SettingsTreeAction } from "@lichtblick/suite";
 import {
   createGeometry,
   PointsRenderable,
   DECAY_HISTORY_LIMITS,
+  DECAY_LIMITED,
+  payloadFingerprint,
+  pointDecayTime,
+  updateDecayNotice,
   pointStyle,
   RenderObjectHistory,
 } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/pointExtensionUtils";
@@ -21,10 +25,11 @@ import {
   DEFAULT_POINT_SETTINGS,
   LayerSettingsPointExtension,
 } from "@lichtblick/suite-base/panels/ThreeDeeRender/settingsNodes/topics";
-import type { RosObject, RosValue } from "@lichtblick/suite-base/players/types";
+import type { MessageEvent, RosObject, RosValue } from "@lichtblick/suite-base/players/types";
 import { emptyPose } from "@lichtblick/suite-base/util/Pose";
 
 import { getColorConverter } from "./colorMode";
+import type { DynamicBufferGeometry } from "../DynamicBufferGeometry";
 import type { AnyRendererSubscription } from "../IRenderer";
 import { BaseUserData, Renderable } from "../Renderable";
 import type { Renderer } from "../Renderer";
@@ -36,7 +41,7 @@ import { LASERSCAN_DATATYPES as ROS_LASERSCAN_DATATYPES, LaserScan as RosLaserSc
 import { laserScanSettingsNode } from "../settingsNodes/topics";
 import { topicIsConvertibleToSchema } from "../topicIsConvertibleToSchema";
 import { Pose } from "../transforms";
-import { DecayPointRing } from "./pointClouds/DecayPointRing";
+import { DecayPointRing, type RingStyle } from "./pointClouds/DecayPointRing";
 import { MISSING_TRANSFORM, missingTransformMessage } from "./transforms";
 
 type LayerSettingsLaserScan = LayerSettingsPointExtension;
@@ -58,6 +63,8 @@ type LaserScanHistoryUserData = BaseUserData & {
   settings: LayerSettingsLaserScan;
   topic: string;
   latestLaserScan: NormalizedLaserScan;
+  historyOnly?: boolean;
+  recordId?: string;
   latestOriginalMessage: Record<string, RosValue> | undefined;
 };
 
@@ -66,6 +73,7 @@ const ALL_LASERSCAN_DATATYPES = new Set<string>([
   ...ROS_LASERSCAN_DATATYPES,
 ]);
 
+const EMPTY_RANGES = new Float32Array(0);
 const INVALID_LASERSCAN = "INVALID_LASERSCAN";
 
 const tempColor = { r: 0, g: 0, b: 0, a: 0 };
@@ -108,11 +116,16 @@ class LaserScanHistoryRenderable extends Renderable<LaserScanHistoryUserData> {
   #pointsHistory: RenderObjectHistory<LaserScanRenderable>;
   /** With a decay time, scans older than the latest accumulate here */
   #decayRing: DecayPointRing | undefined;
+  /** Decodes scans older than the latest before they are copied into the ring */
+  #scratch: DynamicBufferGeometry | undefined;
+  /** Key of the shown decay limit notice, see updateDecayNotice */
+  #decayNoticeKey: string | undefined;
 
   public constructor(topic: string, renderer: Renderer, userData: LaserScanHistoryUserData) {
     super(topic, renderer, userData);
 
     const geometry = createGeometry(topic, THREE.DynamicDrawUsage);
+    geometry.resize(0);
     const points = new LaserScanRenderable(
       topic,
       {
@@ -145,6 +158,8 @@ class LaserScanHistoryRenderable extends Renderable<LaserScanHistoryUserData> {
     this.userData.latestOriginalMessage = undefined;
     this.#pointsHistory.dispose();
     this.#decayRing?.dispose();
+    this.#scratch?.dispose();
+    this.renderer.settings.errors.remove(this.userData.settingsPath, DECAY_LIMITED);
     super.dispose();
   }
 
@@ -162,22 +177,12 @@ class LaserScanHistoryRenderable extends Renderable<LaserScanHistoryUserData> {
     this.userData.latestOriginalMessage = originalMessage;
 
     this.userData.settings = settings;
-    const { colorField } = settings;
-    const { intensities, ranges } = laserScan;
-
-    // Invalid laser scan checks
-    if (intensities.length !== 0 && intensities.length !== ranges.length) {
-      const message = `LaserScan intensities length (${intensities.length}) does not match ranges length (${ranges.length})`;
-      invalidLaserScanError(this.renderer, this, message);
-      return;
-    }
-    if (colorField !== "intensity" && colorField !== "range") {
-      const message = `LaserScan color field must be either 'intensity' or 'range', found '${colorField}'`;
-      invalidLaserScanError(this.renderer, this, message);
+    const invalid = laserScanError(laserScan, settings);
+    if (invalid != undefined) {
+      invalidLaserScanError(this.renderer, this, invalid);
       return;
     }
 
-    const topic = this.userData.topic;
     const pointsHistory = this.#pointsHistory;
     const latestEntry = pointsHistory.latest();
     const latest = latestEntry.renderable;
@@ -188,16 +193,22 @@ class LaserScanHistoryRenderable extends Renderable<LaserScanHistoryUserData> {
     // With a decay time, the previous scan moves into the ring before it is overwritten. A settings
     // change redraws the same scan, which must not add it to the history
     const previousCount = latest.geometry.drawRange.count;
-    if (settings.decayTime > 0 && previousCount > 0 && laserScan !== latest.userData.laserScan) {
-      if (!this.#decayRing) {
-        this.#decayRing = new DecayPointRing(topic, style, DECAY_HISTORY_LIMITS);
-        this.add(this.#decayRing);
-      }
+    // (the same message read back after a seek and played counts as the same scan)
+    const sameScan =
+      laserScan === latest.userData.laserScan ||
+      (this.userData.recordId != undefined && latestEntry.recordId != undefined
+        ? this.userData.recordId === latestEntry.recordId
+        : latestEntry.receiveTime === receiveTime &&
+          latestEntry.messageTime === messageTime &&
+          payloadFingerprint(laserScan.ranges) ===
+            payloadFingerprint(latest.userData.laserScan?.ranges ?? EMPTY_RANGES));
+    if (settings.decayTime > 0 && previousCount > 0 && !sameScan) {
       const { position, color } = latest.geometry.attributes;
-      this.#decayRing.push(
+      this.#ring(style).push(
         {
           receiveTime: latestEntry.receiveTime,
           messageTime: latestEntry.messageTime,
+          recordId: latestEntry.recordId,
           frameId: latest.userData.frameId,
           pose: latest.userData.pose,
         },
@@ -206,62 +217,60 @@ class LaserScanHistoryRenderable extends Renderable<LaserScanHistoryUserData> {
       );
     }
 
+    if (this.userData.recordId != undefined) {
+      this.#decayRing?.removeRecord(this.userData.recordId);
+    }
     latestEntry.receiveTime = receiveTime;
     latestEntry.messageTime = messageTime;
+    latestEntry.recordId = this.userData.recordId;
     latest.userData.frameId = this.userData.frameId;
     latest.userData.pose = laserScan.pose;
     latest.userData.laserScan = laserScan;
     latest.userData.originalMessage = originalMessage;
 
-    const geometry = latest.geometry;
-    geometry.resize(ranges.length);
-    const positions = geometry.attributes.position!.array as Float32Array;
-    const colorAttribute = geometry.attributes.color!;
+    decodeLaserScan(laserScan, settings, latest.geometry);
+  }
 
-    // Determine min/max color values (if needed)
-    let minColorValue = settings.minValue ?? Number.POSITIVE_INFINITY;
-    let maxColorValue = settings.maxValue ?? Number.NEGATIVE_INFINITY;
-    if (settings.minValue == undefined || settings.maxValue == undefined) {
-      for (let i = 0; i < ranges.length; i++) {
-        const colorValue = colorField === "range" ? ranges[i] : intensities[i];
-        if (Number.isFinite(colorValue)) {
-          minColorValue = Math.min(minColorValue, colorValue!);
-          maxColorValue = Math.max(maxColorValue, colorValue!);
-        }
-      }
-      minColorValue = settings.minValue ?? minColorValue;
-      maxColorValue = settings.maxValue ?? maxColorValue;
+  /**
+   * Decodes a scan older than the latest one (e.g. read back after a seek) straight into the decay
+   * ring, leaving the latest scan as it is
+   */
+  public addOlderScan(
+    laserScan: NormalizedLaserScan,
+    settings: LayerSettingsLaserScan,
+    receiveTime: bigint,
+    recordId?: string,
+  ): void {
+    if (recordId != undefined && this.#decayRing?.holdsRecord(recordId) === true) {
+      return;
     }
-
-    // Build a method to convert raw color field values to RGBA
-    const colorConverter =
-      settings.colorMode === "rgba-fields"
-        ? () => NaN // should never happen: rgba-fields is not supported for LaserScans
-        : getColorConverter(
-            settings as typeof settings & { colorMode: typeof settings.colorMode },
-            minColorValue,
-            maxColorValue,
-          );
-
-    // Ranges to points in the scan plane; out-of-range returns are NaN, which is never drawn
-    const { start_angle: angleMin, range_min: rangeMin, range_max: rangeMax } = laserScan;
-    // A single beam is at the start angle (and would divide 0 by 0)
-    const angleIncrement =
-      ranges.length > 1 ? (laserScan.end_angle - angleMin) / (ranges.length - 1) : 0;
-    for (let i = 0; i < ranges.length; i++) {
-      const range = ranges[i]!;
-      const inRange = range >= rangeMin && range <= rangeMax;
-      const angle = angleMin + angleIncrement * i;
-      positions[i * 3] = inRange ? range * Math.cos(angle) : NaN;
-      positions[i * 3 + 1] = inRange ? range * Math.sin(angle) : NaN;
-      positions[i * 3 + 2] = 0;
-      const colorValue = colorField === "range" ? range : (intensities[i] ?? 0);
-      colorConverter(tempColor, colorValue);
-      colorAttribute.setXYZW(i, tempColor.r, tempColor.g, tempColor.b, tempColor.a);
+    // (a scan the ring already holds, e.g. played and then read back, is skipped by its push)
+    if (laserScanError(laserScan, settings) != undefined) {
+      return;
     }
+    this.#scratch ??= createGeometry(`${this.userData.topic}:older`, THREE.StaticDrawUsage);
+    decodeLaserScan(laserScan, settings, this.#scratch);
+    const { position, color } = this.#scratch.attributes;
+    const count = laserScan.ranges.length;
+    this.#ring(pointStyle(settings)).push(
+      {
+        receiveTime,
+        messageTime: toNanoSec(laserScan.timestamp),
+        recordId,
+        frameId: this.renderer.normalizeFrameId(laserScan.frame_id),
+        pose: laserScan.pose,
+      },
+      (position!.array as Float32Array).subarray(0, count * 3),
+      (color!.array as Uint8Array).subarray(0, count * 4),
+    );
+  }
 
-    geometry.attributes.position!.needsUpdate = true;
-    colorAttribute.needsUpdate = true;
+  #ring(style: RingStyle): DecayPointRing {
+    if (!this.#decayRing) {
+      this.#decayRing = new DecayPointRing(this.userData.topic, style, DECAY_HISTORY_LIMITS);
+      this.add(this.#decayRing);
+    }
+    return this.#decayRing;
   }
 
   public invalidateLastEntry() {
@@ -270,7 +279,9 @@ class LaserScanHistoryRenderable extends Renderable<LaserScanHistoryUserData> {
   }
 
   public startFrame(currentTime: bigint, renderFrameId: string, fixedFrameId: string): void {
-    let resolved = this.#pointsHistory.updatePoses(currentTime, renderFrameId, fixedFrameId);
+    let resolved = this.#pointsHistory.updatePoses(currentTime, renderFrameId, fixedFrameId, {
+      skipLatest: this.userData.historyOnly,
+    });
     this.#pointsHistory.forEach((entry) => {
       entry.renderable.syncPoints();
     });
@@ -291,12 +302,24 @@ class LaserScanHistoryRenderable extends Renderable<LaserScanHistoryUserData> {
       ring.removeFromParent();
       ring.dispose();
       this.#decayRing = undefined;
+      this.renderer.settings.errors.remove(settingsPath, DECAY_LIMITED);
       return true;
     }
-    ring.expire(currentTime - BigInt(Math.round(settings.decayTime * 1e9)));
-    ring.enforceLimits({
+    const windowStart = currentTime - BigInt(Math.round(settings.decayTime * 1e9));
+    ring.expire(windowStart);
+    if (this.userData.historyOnly === true) {
+      ring.setStyle(pointStyle(settings));
+    }
+    const latestPoints = this.#pointsHistory.latest().renderable.geometry.drawRange.count;
+    ring.enforceLimits({ maxPoints: DECAY_HISTORY_LIMITS.maxPoints, reservePoints: latestPoints });
+    this.#decayNoticeKey = updateDecayNotice({
+      renderer: this.renderer,
+      settingsPath,
+      ring,
       maxPoints: DECAY_HISTORY_LIMITS.maxPoints,
-      reservePoints: this.#pointsHistory.latest().renderable.geometry.drawRange.count,
+      latestPoints,
+      windowStart,
+      shownKey: this.#decayNoticeKey,
     });
     const missingFrame = ring.updatePoses(
       this.renderer.transformTree,
@@ -304,11 +327,22 @@ class LaserScanHistoryRenderable extends Renderable<LaserScanHistoryUserData> {
       renderFrameId,
       fixedFrameId,
     );
+    if (ring.posesPending()) {
+      // Paused redraws stop on their own: draw again until every scan is placed
+      this.renderer.queueAnimationFrame();
+    }
     if (missingFrame != undefined) {
       this.renderer.settings.errors.add(
         settingsPath,
         MISSING_TRANSFORM,
-        missingTransformMessage(renderFrameId, fixedFrameId, missingFrame),
+        missingTransformMessage(
+          this.renderer.transformTree,
+          renderFrameId,
+          fixedFrameId,
+          missingFrame.frameId,
+          currentTime,
+          missingFrame.messageTime,
+        ),
       );
       return false;
     }
@@ -419,25 +453,43 @@ export class LaserScans extends SceneExtension<LaserScanHistoryRenderable> {
       const prevSettings = this.renderer.config.topics[topicName];
       const settings = { ...DEFAULT_SETTINGS, ...prevSettings };
 
-      renderable.updateLaserScan(
-        renderable.userData.latestLaserScan,
-        renderable.userData.latestOriginalMessage,
-        settings,
-        renderable.userData.receiveTime,
-      );
+      if (renderable.userData.historyOnly === true) {
+        renderable.userData.settings = settings;
+      } else {
+        renderable.updateLaserScan(
+          renderable.userData.latestLaserScan,
+          renderable.userData.latestOriginalMessage,
+          settings,
+          renderable.userData.receiveTime,
+        );
+      }
     }
   };
 
   #handleLaserScan = (
     messageEvent: PartialMessageEvent<RosLaserScan | FoxgloveLaserScan>,
   ): void => {
-    const topic = messageEvent.topic;
     const laserScan =
       "header" in messageEvent.message
         ? normalizeRosLaserScan(messageEvent.message)
         : normalizeFoxgloveLaserScan(messageEvent.message as PartialMessage<FoxgloveLaserScan>);
     const receiveTime = toNanoSec(messageEvent.receiveTime);
+    const renderable = this.#getOrCreateRenderable(messageEvent, laserScan);
+    renderable.userData.historyOnly = undefined;
+    renderable.userData.recordId = messageEvent.recordId;
+    renderable.updateLaserScan(
+      laserScan,
+      messageEvent.message as RosObject,
+      renderable.userData.settings,
+      receiveTime,
+    );
+  };
 
+  #getOrCreateRenderable(
+    messageEvent: MessageEvent,
+    laserScan: NormalizedLaserScan,
+  ): LaserScanHistoryRenderable {
+    const { topic, receiveTime } = messageEvent;
     let renderable = this.renderables.get(topic);
     if (!renderable) {
       // Set the initial settings from default values merged with any user settings
@@ -461,7 +513,7 @@ export class LaserScans extends SceneExtension<LaserScanHistoryRenderable> {
 
       const messageTime = toNanoSec(laserScan.timestamp);
       renderable = new LaserScanHistoryRenderable(topic, this.renderer, {
-        receiveTime,
+        receiveTime: toNanoSec(receiveTime),
         messageTime,
         frameId: this.renderer.normalizeFrameId(laserScan.frame_id),
         pose: laserScan.pose,
@@ -476,13 +528,128 @@ export class LaserScans extends SceneExtension<LaserScanHistoryRenderable> {
       this.renderables.set(topic, renderable);
     }
 
-    renderable.updateLaserScan(
-      laserScan,
-      messageEvent.message as RosObject,
-      renderable.userData.settings,
-      receiveTime,
-    );
-  };
+    return renderable;
+  }
+
+  public readonly historySchemas: ReadonlySet<string> = new Set([
+    ...ROS_LASERSCAN_DATATYPES,
+    ...FOXGLOVE_LASERSCAN_DATATYPES,
+  ]);
+
+  /** See {@link DecayHistoryIngest} */
+  public addHistoricalMessage(messageEvent: MessageEvent): bigint | undefined {
+    let renderable = this.renderables.get(messageEvent.topic);
+    const receiveTime = toNanoSec(messageEvent.receiveTime);
+    const { recordId } = messageEvent;
+    if (!renderable && pointDecayTime(this.renderer.config.topics[messageEvent.topic]) <= 0) {
+      return undefined;
+    }
+    // Playback owns anything newer than a drawn scan, if the seek drew one.
+    if (
+      renderable &&
+      renderable.userData.historyOnly !== true &&
+      receiveTime > renderable.userData.receiveTime
+    ) {
+      return undefined;
+    }
+    const message = messageEvent.message as PartialMessage<RosLaserScan | FoxgloveLaserScan>;
+    const laserScan =
+      "header" in message
+        ? normalizeRosLaserScan(message)
+        : normalizeFoxgloveLaserScan(message as PartialMessage<FoxgloveLaserScan>);
+    if (!renderable) {
+      renderable = this.#getOrCreateRenderable(messageEvent, laserScan);
+      renderable.userData.historyOnly = true;
+    }
+    const { settings, messageTime, historyOnly } = renderable.userData;
+    const sameAsDrawn =
+      historyOnly !== true &&
+      (recordId != undefined && renderable.userData.recordId != undefined
+        ? recordId === renderable.userData.recordId
+        : receiveTime === renderable.userData.receiveTime &&
+          toNanoSec(laserScan.timestamp) === messageTime &&
+          payloadFingerprint(laserScan.ranges) ===
+            payloadFingerprint(renderable.userData.latestLaserScan.ranges));
+    if (settings.decayTime <= 0 || sameAsDrawn) {
+      return undefined;
+    }
+    renderable.addOlderScan(laserScan, settings, receiveTime, recordId);
+    return toNanoSec(laserScan.timestamp);
+  }
+}
+
+/** Why a scan can't be drawn with these settings, or undefined if it can */
+function laserScanError(
+  laserScan: NormalizedLaserScan,
+  settings: LayerSettingsLaserScan,
+): string | undefined {
+  const { intensities, ranges } = laserScan;
+  if (intensities.length !== 0 && intensities.length !== ranges.length) {
+    return `LaserScan intensities length (${intensities.length}) does not match ranges length (${ranges.length})`;
+  }
+  const { colorField } = settings;
+  if (colorField !== "intensity" && colorField !== "range") {
+    return `LaserScan color field must be either 'intensity' or 'range', found '${colorField}'`;
+  }
+  return undefined;
+}
+
+/** Writes a scan's points and colors into `geometry` */
+function decodeLaserScan(
+  laserScan: NormalizedLaserScan,
+  settings: LayerSettingsLaserScan,
+  geometry: DynamicBufferGeometry,
+): void {
+  const { colorField } = settings;
+  const { intensities, ranges } = laserScan;
+  geometry.resize(ranges.length);
+  const positions = geometry.attributes.position!.array as Float32Array;
+  const colorAttribute = geometry.attributes.color!;
+
+  // Determine min/max color values (if needed)
+  let minColorValue = settings.minValue ?? Number.POSITIVE_INFINITY;
+  let maxColorValue = settings.maxValue ?? Number.NEGATIVE_INFINITY;
+  if (settings.minValue == undefined || settings.maxValue == undefined) {
+    for (let i = 0; i < ranges.length; i++) {
+      const colorValue = colorField === "range" ? ranges[i] : intensities[i];
+      if (Number.isFinite(colorValue)) {
+        minColorValue = Math.min(minColorValue, colorValue!);
+        maxColorValue = Math.max(maxColorValue, colorValue!);
+      }
+    }
+    minColorValue = settings.minValue ?? minColorValue;
+    maxColorValue = settings.maxValue ?? maxColorValue;
+  }
+
+  // Build a method to convert raw color field values to RGBA
+  const colorConverter =
+    settings.colorMode === "rgba-fields"
+      ? () => NaN // should never happen: rgba-fields is not supported for LaserScans
+      : getColorConverter(
+          settings as typeof settings & { colorMode: typeof settings.colorMode },
+          minColorValue,
+          maxColorValue,
+        );
+
+  // Ranges to points in the scan plane; out-of-range returns are NaN, which is never drawn
+  const { start_angle: angleMin, range_min: rangeMin, range_max: rangeMax } = laserScan;
+  // A single beam is at the start angle (and would divide 0 by 0)
+  const angleIncrement =
+    ranges.length > 1 ? (laserScan.end_angle - angleMin) / (ranges.length - 1) : 0;
+  for (let i = 0; i < ranges.length; i++) {
+    const range = ranges[i]!;
+    const inRange = range >= rangeMin && range <= rangeMax;
+    const angle = angleMin + angleIncrement * i;
+    positions[i * 3] = inRange ? range * Math.cos(angle) : NaN;
+    positions[i * 3 + 1] = inRange ? range * Math.sin(angle) : NaN;
+    positions[i * 3 + 2] = 0;
+    const colorValue = colorField === "range" ? range : (intensities[i] ?? 0);
+    colorConverter(tempColor, colorValue);
+    colorAttribute.setXYZW(i, tempColor.r, tempColor.g, tempColor.b, tempColor.a);
+  }
+
+  geometry.attributes.position!.needsUpdate = true;
+  colorAttribute.needsUpdate = true;
 }
 
 function invalidLaserScanError(

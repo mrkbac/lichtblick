@@ -16,7 +16,9 @@ import { makeStyles } from "tss-react/mui";
 
 import EmptyState from "@lichtblick/suite-base/components/EmptyState";
 import Stack from "@lichtblick/suite-base/components/Stack";
+import { loadOpenInSchemas } from "@lichtblick/suite-base/components/TopicList/useOpenMessagePathsInPanel";
 import { PanelInfo, usePanelCatalog } from "@lichtblick/suite-base/context/PanelCatalogContext";
+import { Topic } from "@lichtblick/suite-base/players/types";
 import { mightActuallyBePartial } from "@lichtblick/suite-base/util/mightActuallyBePartial";
 
 import { PanelGrid } from "./PanelGrid";
@@ -71,6 +73,45 @@ function verifyPanels(panels: readonly PanelInfo[]): void {
   }
 }
 
+const MAX_SUGGESTIONS = 8;
+
+/** How many of `topics` each panel can show, by panel type, from the schemas in the panels' docs. */
+function useTopicCountsByPanelType(
+  topics: readonly Topic[] | undefined,
+): ReadonlyMap<string, number> {
+  const panelCatalog = usePanelCatalog();
+  const [counts, setCounts] = useState<ReadonlyMap<string, number>>(new Map());
+  useEffect(() => {
+    if (topics == undefined || topics.length === 0) {
+      setCounts(new Map());
+      return;
+    }
+    let cancelled = false;
+    void loadOpenInSchemas(panelCatalog.getPanels()).then((schemasByType) => {
+      if (cancelled) {
+        return;
+      }
+      const newCounts = new Map<string, number>();
+      for (const [type, schemas] of schemasByType) {
+        let count = 0;
+        for (const topic of topics) {
+          if (topic.schemaName != undefined && schemas.has(topic.schemaName)) {
+            count++;
+          }
+        }
+        if (count > 0) {
+          newCounts.set(type, count);
+        }
+      }
+      setCounts(newCounts);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [panelCatalog, topics]);
+  return counts;
+}
+
 type Props = {
   onPanelSelect: (arg0: PanelSelection) => void;
   onDragStart?: () => void;
@@ -78,6 +119,8 @@ type Props = {
   mode?: "grid" | "list";
   isMenu?: boolean;
   ref?: Ref<HTMLDivElement>;
+  /** Topics of the open data; panels that can show them are suggested first. */
+  topics?: readonly Topic[];
 };
 
 export function PanelCatalog(props: Props): React.JSX.Element {
@@ -88,12 +131,14 @@ export function PanelCatalog(props: Props): React.JSX.Element {
     selectedPanelType,
     mode = "list",
     ref,
+    topics,
   } = props;
   const { classes, cx } = useStyles();
   const { t } = useTranslation("addPanel");
 
   const [searchQuery, setSearchQuery] = useState("");
-  const [highlightedPanelIdx, setHighlightedPanelIdx] = useState<number | undefined>();
+  // The panel itself, not its index: suggestions load later and move panels around
+  const [highlight, setHighlight] = useState<PanelInfo | "first" | undefined>();
 
   // Not `autoFocus`: a surrounding MUI Menu focuses its list in a layout effect right after mount,
   // which takes focus back from the field. A passive effect runs after that.
@@ -108,7 +153,7 @@ export function PanelCatalog(props: Props): React.JSX.Element {
 
     // When there is a search query, automatically highlight the first (0th) item.
     // When the user erases the query, remove the highlight.
-    setHighlightedPanelIdx(query ? 0 : undefined);
+    setHighlight(query ? "first" : undefined);
   }, []);
 
   const panelCatalog = usePanelCatalog();
@@ -179,14 +224,37 @@ export function PanelCatalog(props: Props): React.JSX.Element {
     [getFilteredPanels, allRegularPanels, allPreconfiguredPanels],
   );
 
-  const allFilteredPanels = useMemo(
-    () => [...filteredPreconfiguredPanels, ...filteredRegularPanels],
-    [filteredPreconfiguredPanels, filteredRegularPanels],
+  // Without a search, panels for the open data's schemas come first, most topics first
+  const topicCountsByPanelType = useTopicCountsByPanelType(topics);
+  const suggestedPanels = useMemo(
+    () =>
+      searchQuery.length > 0
+        ? []
+        : _.sortBy(
+            allRegularPanels.filter((panel) => topicCountsByPanelType.has(panel.type)),
+            (panel) => -(topicCountsByPanelType.get(panel.type) ?? 0),
+          ).slice(0, MAX_SUGGESTIONS),
+    [allRegularPanels, searchQuery, topicCountsByPanelType],
   );
 
-  const highlightedPanel = useMemo(() => {
-    return highlightedPanelIdx != undefined ? allFilteredPanels[highlightedPanelIdx] : undefined;
-  }, [allFilteredPanels, highlightedPanelIdx]);
+  const allFilteredPanels = useMemo(
+    () => [
+      ...suggestedPanels,
+      ...filteredPreconfiguredPanels,
+      ...filteredRegularPanels.filter((panel) => !suggestedPanels.includes(panel)),
+    ],
+    [filteredPreconfiguredPanels, filteredRegularPanels, suggestedPanels],
+  );
+
+  const highlightedPanel =
+    highlight === "first"
+      ? allFilteredPanels[0]
+      : highlight && allFilteredPanels.includes(highlight)
+        ? highlight
+        : undefined;
+  const highlightedPanelIdx = highlightedPanel
+    ? allFilteredPanels.indexOf(highlightedPanel)
+    : undefined;
 
   const noResults = allFilteredPanels.length === 0;
 
@@ -201,25 +269,19 @@ export function PanelCatalog(props: Props): React.JSX.Element {
         return;
       }
 
+      const count = allFilteredPanels.length;
       if (e.key === "ArrowDown") {
-        setHighlightedPanelIdx((existing) => {
-          if (existing == undefined) {
-            return 0;
-          }
-          return (existing + 1) % allFilteredPanels.length;
-        });
+        setHighlight(
+          allFilteredPanels[
+            highlightedPanelIdx == undefined ? 0 : (highlightedPanelIdx + 1) % count
+          ],
+        );
       } else if (e.key === "ArrowUp") {
-        setHighlightedPanelIdx((existing) => {
-          // nothing to highlight if there are no entries
-          if (allFilteredPanels.length <= 0) {
-            return undefined;
-          }
-
-          if (existing == undefined) {
-            return allFilteredPanels.length - 1;
-          }
-          return (existing - 1 + allFilteredPanels.length) % allFilteredPanels.length;
-        });
+        setHighlight(
+          allFilteredPanels[
+            highlightedPanelIdx == undefined ? count - 1 : (highlightedPanelIdx - 1 + count) % count
+          ],
+        );
       } else if (e.key === "Enter" && highlightedPanel) {
         onPanelSelect({
           type: highlightedPanel.type,
@@ -227,7 +289,7 @@ export function PanelCatalog(props: Props): React.JSX.Element {
         });
       }
     },
-    [allFilteredPanels.length, highlightedPanel, mode, onPanelSelect],
+    [allFilteredPanels, highlightedPanel, highlightedPanelIdx, mode, onPanelSelect],
   );
 
   return (
@@ -281,6 +343,8 @@ export function PanelCatalog(props: Props): React.JSX.Element {
           filteredPanels={allFilteredPanels}
           selectedPanelType={selectedPanelType}
           highlightedPanelIdx={highlightedPanelIdx}
+          suggestedCount={suggestedPanels.length}
+          topicCountsByPanelType={topicCountsByPanelType}
           onDragStart={onDragStart}
           onPanelSelect={onPanelSelect}
         />

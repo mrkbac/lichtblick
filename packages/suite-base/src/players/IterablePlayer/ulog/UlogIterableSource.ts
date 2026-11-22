@@ -5,8 +5,8 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 import { ros1 } from "@foxglove/rosmsg-msgs-common";
-import { Time, fromMicros, isTimeInRangeInclusive, toMicroSec } from "@foxglove/rostime";
-import { MessageType, ULog } from "@foxglove/ulog";
+import { Time, compare, fromMicros, isTimeInRangeInclusive } from "@foxglove/rostime";
+import { DataSectionMessage, MessageType, ULog } from "@foxglove/ulog";
 import { BlobReader } from "@foxglove/ulog/web";
 
 import Logger from "@lichtblick/log";
@@ -33,6 +33,8 @@ type UlogOptions = { type: "file"; file: File };
 
 const CHUNK_SIZE = 1024 * 1024;
 const LOG_TOPIC = "Log";
+/** @foxglove/ulog's index id for log messages */
+const LOG_MSG_ID = -1;
 
 const log = Logger.getLogger(__filename);
 
@@ -139,54 +141,125 @@ export class UlogIterableSource implements IIterableSource {
       return;
     }
 
-    const startTime = BigInt(Math.floor(toMicroSec(start)));
-    const endTime = BigInt(Math.floor(toMicroSec(end)));
-
-    for await (const msg of this.#ulog.readMessages({ startTime, endTime })) {
-      if (msg.type === MessageType.Data) {
-        const timestamp = (msg.value as { timestamp: bigint }).timestamp;
-        const receiveTime = fromMicros(Number(timestamp));
-        const sub = this.#ulog.subscriptions.get(msg.msgId);
-        const topic = sub?.name;
-        if (topic && topics.has(topic) && isTimeInRangeInclusive(receiveTime, start, end)) {
-          yield {
-            type: "message-event",
-            msgEvent: {
-              topic,
-              receiveTime,
-              message: msg.value,
-              sizeInBytes: msg.data.byteLength,
-              schemaName: sub.name,
-            },
-          };
-        }
-      } else if (msg.type === MessageType.Log || msg.type === MessageType.LogTagged) {
-        const receiveTime = fromMicros(Number(msg.timestamp));
-        if (topics.has(LOG_TOPIC) && isTimeInRangeInclusive(receiveTime, start, end)) {
-          yield {
-            type: "message-event",
-            msgEvent: {
-              topic: LOG_TOPIC,
-              receiveTime,
-              message: {
-                file: "",
-                function: "",
-                header: { stamp: receiveTime },
-                level: logLevelToRosout(msg.logLevel),
-                line: 0,
-                msg: msg.message,
-                name: "",
-              },
-              schemaName: "rosgraph_msgs/Log",
-              sizeInBytes: msg.size,
-            },
-          };
-        }
+    const startTime = toMicros(start, "ceil");
+    const endTime = toMicros(end, "floor");
+    for await (const msg of this.#ulog.readMessages({
+      signal: args.abort,
+      startTime,
+      endTime,
+      msgIds: this.#msgIds(topics.keys()),
+      includeLogs: topics.has(LOG_TOPIC),
+    })) {
+      const msgEvent = this.#toMessageEvent(msg);
+      if (
+        msgEvent &&
+        topics.has(msgEvent.topic) &&
+        isTimeInRangeInclusive(msgEvent.receiveTime, start, end)
+      ) {
+        yield { type: "message-event", msgEvent };
       }
     }
   }
 
-  public async getBackfillMessages(_args: GetBackfillMessagesArgs): Promise<MessageEvent[]> {
-    return [];
+  public async getBackfillMessages({
+    topics,
+    time,
+    abortSignal,
+  }: GetBackfillMessagesArgs): Promise<MessageEvent[]> {
+    if (this.#ulog == undefined) {
+      throw new Error(`UlogDataProvider is not initialized`);
+    }
+    // One reverse pass for all topics. A topic's ids leave the set once it has its message, so the
+    // reader skips its older messages in the index without reading them.
+    // Logs go through the id set too, so they also stop once the latest one is found.
+    const msgIds = this.#msgIds(topics.keys());
+    const hasLogs = topics.has(LOG_TOPIC) && (this.#ulog.logCount() ?? 0) > 0;
+    if (hasLogs) {
+      msgIds.add(LOG_MSG_ID);
+    }
+    const latest = new Map<string, MessageEvent>();
+    // Requested topics the file has: stop once each has its message
+    const names = new Set([...this.#ulog.subscriptions.values()].map((sub) => sub.name));
+    const wanted = [...topics.keys()].filter((t) => names.has(t)).length + (hasLogs ? 1 : 0);
+    for await (const msg of this.#ulog.readMessages({
+      endTime: toMicros(time, "floor"),
+      msgIds,
+      includeLogs: false,
+      reverse: true,
+      signal: abortSignal,
+    })) {
+      if (abortSignal?.aborted === true) {
+        break;
+      }
+      const msgEvent = this.#toMessageEvent(msg);
+      if (!msgEvent || !topics.has(msgEvent.topic) || latest.has(msgEvent.topic)) {
+        continue;
+      }
+      latest.set(msgEvent.topic, msgEvent);
+      if (msg.type === MessageType.Data) {
+        for (const id of this.#msgIds([msgEvent.topic])) {
+          msgIds.delete(id);
+        }
+      } else {
+        msgIds.delete(LOG_MSG_ID);
+      }
+      if (latest.size === wanted) {
+        break;
+      }
+    }
+    return [...latest.values()].sort((a, b) => compare(a.receiveTime, b.receiveTime));
   }
+
+  /** ULog message ids of the topics: only these are read and parsed */
+  #msgIds(topics: Iterable<string>): Set<number> {
+    const names = new Set(topics);
+    const msgIds = new Set<number>();
+    for (const [msgId, sub] of this.#ulog?.subscriptions ?? []) {
+      if (names.has(sub.name)) {
+        msgIds.add(msgId);
+      }
+    }
+    return msgIds;
+  }
+
+  #toMessageEvent(msg: DataSectionMessage): MessageEvent | undefined {
+    if (msg.type === MessageType.Data) {
+      const timestamp = (msg.value as { timestamp: bigint }).timestamp;
+      const sub = this.#ulog?.subscriptions.get(msg.msgId);
+      if (!sub) {
+        return undefined;
+      }
+      return {
+        topic: sub.name,
+        receiveTime: fromMicros(Number(timestamp)),
+        message: msg.value,
+        sizeInBytes: msg.data.byteLength,
+        schemaName: sub.name,
+      };
+    } else if (msg.type === MessageType.Log || msg.type === MessageType.LogTagged) {
+      const receiveTime = fromMicros(Number(msg.timestamp));
+      return {
+        topic: LOG_TOPIC,
+        receiveTime,
+        message: {
+          file: "",
+          function: "",
+          header: { stamp: receiveTime },
+          level: logLevelToRosout(msg.logLevel),
+          line: 0,
+          msg: msg.message,
+          name: "",
+        },
+        schemaName: "rosgraph_msgs/Log",
+        sizeInBytes: msg.size,
+      };
+    }
+    return undefined;
+  }
+}
+
+/** A Time in whole microseconds, without float rounding */
+function toMicros(time: Time, round: "floor" | "ceil"): bigint {
+  const micros = BigInt(time.sec) * 1_000_000n + BigInt(Math.floor(time.nsec / 1000));
+  return round === "ceil" && time.nsec % 1000 !== 0 ? micros + 1n : micros;
 }

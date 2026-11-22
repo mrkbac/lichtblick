@@ -2,18 +2,25 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import { AccordionDetails } from "@mui/material";
-import { useMemo } from "react";
+import { lazy, Suspense, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 
+import { PlayerAlertGuide } from "@lichtblick/suite-base/players/types";
 import { DetailsType } from "@lichtblick/suite-base/util/sendNotification";
 
 import { useStyles } from "./AlertsList.style";
 
+// Loaded on demand: it's only needed after the browser blocked a ws:// connection
+const WsMixedContentHelp = lazy(async () => ({
+  default: (await import("@lichtblick/suite-base/components/WsMixedContentHelp"))
+    .WsMixedContentHelp,
+}));
+
 export function AlertDetails(
-  props: Readonly<{ details: DetailsType; tip?: string }>,
+  props: Readonly<{ details: DetailsType; tip?: string; guide?: PlayerAlertGuide }>,
 ): React.JSX.Element {
   const { t } = useTranslation("alertsList");
-  const { details, tip } = props;
+  const { details, tip, guide } = props;
   const { classes } = useStyles();
 
   const content = useMemo((): React.ReactNode => {
@@ -28,9 +35,15 @@ export function AlertDetails(
   const hasContent = content != undefined;
   return (
     <AccordionDetails className={classes.accordionDetails}>
-      {hasTip && <div className={classes.detailsText}>{tip}</div>}
+      {guide?.type === "wsMixedContent" ? (
+        <Suspense>
+          <WsMixedContentHelp url={guide.url} />
+        </Suspense>
+      ) : (
+        hasTip && <div className={classes.detailsText}>{tip}</div>
+      )}
       {hasContent && <div className={classes.detailsText}>{content}</div>}
-      {!hasTip && !hasContent && t("noDetailsProvided")}
+      {guide == undefined && !hasTip && !hasContent && t("noDetailsProvided")}
     </AccordionDetails>
   );
 }

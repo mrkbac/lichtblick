@@ -12,6 +12,7 @@ import {
 } from "@lichtblick/suite-base/players/types";
 import { buildContributionPoints } from "@lichtblick/suite-base/providers/helpers/buildContributionPoints";
 import ExtensionBuilder from "@lichtblick/suite-base/testing/builders/ExtensionBuilder";
+import delay from "@lichtblick/suite-base/util/delay";
 
 import UserScriptPlayer from ".";
 import { schemaDescriptionToDatatypes } from "./topicConverters";
@@ -401,16 +402,257 @@ describe("UserScriptPlayer topic converter preloading", () => {
     await fakePlayer.emit({ activeData: activeData([]), progress: { messageCache } });
     expect(create).toHaveBeenCalledTimes(2);
 
-    // A seek clears converter alerts; only the failed block is converted again, raising it again.
+    // A seek clears converter alerts. Its state comes out right away with the failed block's last
+    // result; only the failed block is converted again afterwards, raising the alert again.
     await fakePlayer.emit({
       activeData: { ...activeData([]), lastSeekTime: 1 },
       progress: { messageCache },
     });
-    expect(failedAlert()).toBe(true);
-    expect(create).toHaveBeenCalledTimes(3);
+    expect(create).toHaveBeenCalledTimes(2);
     expect(
       values(states.at(-1)!.progress.messageCache!.blocks[0]!.messagesByTopic["/out"]!, "/out"),
     ).toEqual(["good"]);
+    await vi.waitFor(() => {
+      expect(create).toHaveBeenCalledTimes(3);
+      expect(failedAlert()).toBe(true);
+    });
+  });
+
+  it("emits a block that converts on the retry after a seek", async () => {
+    let failing = true;
+    const create = vi.fn(() => (event: { message: unknown }) => {
+      if (failing) {
+        throw new Error("not ready");
+      }
+      return { value: (event.message as { value: string }).value };
+    });
+    const { fakePlayer, states } = await setup(converterArgs({ create }), [
+      { topic: "/out", preloadType: "full" },
+    ]);
+    const messageCache = { startTime: { sec: 0, nsec: 0 }, blocks: [block([input("one", 1)])] };
+    const outputs = () =>
+      values(states.at(-1)!.progress.messageCache!.blocks[0]!.messagesByTopic["/out"]!, "/out");
+
+    await fakePlayer.emit({ activeData: activeData([]), progress: { messageCache } });
+    expect(outputs()).toEqual([]);
+
+    failing = false;
+    await fakePlayer.emit({
+      activeData: { ...activeData([]), lastSeekTime: 1 },
+      progress: { messageCache },
+    });
+    await vi.waitFor(() => {
+      expect(outputs()).toEqual(["one"]);
+    });
+  });
+
+  const failOnBad = () =>
+    vi.fn(() => (event: { message: unknown }) => {
+      const { value } = event.message as { value: string };
+      if (value === "bad") {
+        throw new Error("bad input");
+      }
+      return { value };
+    });
+
+  it("does not retry an unchanged failed block when another block loads", async () => {
+    const create = failOnBad();
+    const { fakePlayer } = await setup(converterArgs({ create }), [
+      { topic: "/out", preloadType: "full" },
+    ]);
+    const bad = block([input("bad", 1)]);
+    const startTime = { sec: 0, nsec: 0 };
+    await fakePlayer.emit({
+      activeData: activeData([]),
+      progress: { messageCache: { startTime, blocks: [bad, undefined] } },
+    });
+    expect(create).toHaveBeenCalledTimes(1);
+
+    await fakePlayer.emit({
+      activeData: activeData([]),
+      progress: { messageCache: { startTime, blocks: [bad, block([input("good", 2)])] } },
+    });
+    expect(create).toHaveBeenCalledTimes(2);
+  });
+
+  it("caches a healthy block while a converter fails elsewhere at the same time", async () => {
+    // The backfill's failing conversion is released from inside the block's first stage, so it
+    // runs while the block's second (chained) stage is still awaited.
+    const blockConverting = Promise.withResolvers<void>();
+    const create = vi.fn(() => (event: { message: unknown }) => {
+      const { value } = event.message as { value: string };
+      if (value === "bad") {
+        throw new Error("bad input");
+      }
+      blockConverting.resolve();
+      return { value };
+    });
+    const { fakePlayer, player } = await setup(
+      [converterArgs({ create }), chainedArgs],
+      [{ topic: "/chained", preloadType: "full" }],
+    );
+    const good = block([input("good", 1)]);
+    const startTime = { sec: 0, nsec: 0 };
+    Object.assign(fakePlayer, {
+      getBackfillMessages: async () => {
+        await blockConverting.promise;
+        return [input("bad", 0)];
+      },
+    });
+    await fakePlayer.emit({ activeData: activeData([]) }); // registers the converters
+
+    await Promise.all([
+      player.getBackfillMessages({
+        topics: new Map([["/out", { topic: "/out" }]]),
+        time: { sec: 0, nsec: 0 },
+      }),
+      fakePlayer.emit({
+        activeData: activeData([]),
+        progress: { messageCache: { startTime, blocks: [good] } },
+      }),
+    ]);
+    create.mockClear();
+
+    await fakePlayer.emit({
+      activeData: activeData([]),
+      progress: { messageCache: { startTime, blocks: [good, undefined] } },
+    });
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it("rejects a converter with malformed names without breaking the others", async () => {
+    const malformed = converterArgs({
+      outputTopic: "/broken",
+      watchVariables: "scale" as unknown as string[],
+    });
+    const { fakePlayer, states } = await setup(
+      [converterArgs(), malformed],
+      [
+        { topic: "/out", preloadType: "full" },
+        { topic: "/broken", preloadType: "full" },
+      ],
+    );
+    const messageCache = { startTime: { sec: 0, nsec: 0 }, blocks: [block([input("one", 1)])] };
+
+    await fakePlayer.emit({ activeData: activeData([]), progress: { messageCache } });
+
+    const state = states.at(-1)!;
+    const converted = state.progress.messageCache!.blocks[0]!.messagesByTopic;
+    expect(values(converted["/out"]!, "/out")).toEqual(["one"]);
+    expect(converted["/broken"]).toBeUndefined();
+    expect(state.alerts?.map(({ message }) => message)).toContainEqual(
+      expect.stringContaining("needs inputTopics and watchVariables to be lists of names"),
+    );
+  });
+
+  it("drops a retry whose watched variable changed before it ran", async () => {
+    let failing = true;
+    const create = vi.fn((variables: Readonly<Record<string, unknown>>) => {
+      return (event: { message: unknown }) => {
+        if (failing) {
+          throw new Error("not ready");
+        }
+        return { value: `${(event.message as { value: string }).value}:${String(variables.v)}` };
+      };
+    });
+    const { fakePlayer, player, states } = await setup(
+      converterArgs({ create, watchVariables: ["v"] }),
+      [{ topic: "/out", preloadType: "full" }],
+    );
+    const messageCache = { startTime: { sec: 0, nsec: 0 }, blocks: [block([input("one", 1)])] };
+    const outputs = () =>
+      values(states.at(-1)!.progress.messageCache!.blocks[0]!.messagesByTopic["/out"]!, "/out");
+    player.setGlobalVariables({ v: 1 });
+    await fakePlayer.emit({ activeData: activeData([]), progress: { messageCache } });
+
+    failing = false;
+    // The seek schedules a retry under v = 1; v changes before it runs.
+    await fakePlayer.emit({
+      activeData: { ...activeData([]), lastSeekTime: 1 },
+      progress: { messageCache },
+    });
+    player.setGlobalVariables({ v: 2 });
+    await fakePlayer.emit({
+      activeData: { ...activeData([]), lastSeekTime: 1 },
+      progress: { messageCache },
+    });
+    expect(outputs()).toEqual(["one:2"]);
+    await delay(20);
+
+    expect(outputs()).toEqual(["one:2"]);
+  });
+
+  it("publishes a retry that recovers part of a block that still fails", async () => {
+    let flaky = true;
+    const create = vi.fn(() => (event: { message: unknown }) => {
+      const { value } = event.message as { value: string };
+      if (value === "bad" || (value === "flaky" && flaky)) {
+        throw new Error("bad input");
+      }
+      return { value };
+    });
+    const { fakePlayer, states } = await setup(converterArgs({ create }), [
+      { topic: "/out", preloadType: "full" },
+    ]);
+    // The converter stops at the first error, so the first attempt converts nothing.
+    const messageCache = {
+      startTime: { sec: 0, nsec: 0 },
+      blocks: [block([input("flaky", 1), input("bad", 2)])],
+    };
+    const outputs = () =>
+      values(states.at(-1)!.progress.messageCache!.blocks[0]!.messagesByTopic["/out"]!, "/out");
+    await fakePlayer.emit({ activeData: activeData([]), progress: { messageCache } });
+    expect(outputs()).toEqual([]);
+
+    flaky = false;
+    await fakePlayer.emit({
+      activeData: { ...activeData([]), lastSeekTime: 1 },
+      progress: { messageCache },
+    });
+
+    // "bad" still fails, but the retry recovered "flaky".
+    await vi.waitFor(() => {
+      expect(outputs()).toEqual(["flaky"]);
+    });
+  });
+
+  describe("drops a queued retry", () => {
+    async function failedThenSeeked() {
+      const create = vi.fn(() => () => {
+        throw new Error("bad input");
+      });
+      const env = await setup(converterArgs({ create }), [{ topic: "/out", preloadType: "full" }]);
+      const messageCache = { startTime: { sec: 0, nsec: 0 }, blocks: [block([input("one", 1)])] };
+      await env.fakePlayer.emit({ activeData: activeData([]), progress: { messageCache } });
+      // The seek clears the alert and queues a retry of the failed block.
+      await env.fakePlayer.emit({
+        activeData: { ...activeData([]), lastSeekTime: 1 },
+        progress: { messageCache },
+      });
+      expect(create).toHaveBeenCalledTimes(1);
+      return { ...env, create, messageCache };
+    }
+    const failedAlert = (states: PlayerState[]) =>
+      states.at(-1)!.alerts?.some(({ message }) => message.includes("failed")) === true;
+
+    it("when the output is no longer preloaded", async () => {
+      const { fakePlayer, player, states, create, messageCache } = await failedThenSeeked();
+      player.setSubscriptions([{ topic: "/out" }]);
+      await Promise.resolve();
+      await fakePlayer.emit({ activeData: activeData([]), progress: { messageCache } });
+      await delay(20);
+
+      expect(create).toHaveBeenCalledTimes(1);
+      expect(failedAlert(states)).toBe(false);
+    });
+
+    it("when the player closes", async () => {
+      const { player, create } = await failedThenSeeked();
+      player.close();
+      await delay(20);
+
+      expect(create).toHaveBeenCalledTimes(1);
+    });
   });
 
   it("stops adding converter outputs once the output is no longer preloaded", async () => {

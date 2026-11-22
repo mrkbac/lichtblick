@@ -17,7 +17,7 @@ export const exportRecording = {
   export: "Export",
   exportEllipsis: "Export…",
   exporting: "Exporting…",
-  filterTopics: "Filter topics",
+  filterTopics: "Filter topics (regex)",
   hideCutHandles: "Hide cut handles",
   includeAttachments: "Include attachments",
   includeMetadata: "Include metadata",

@@ -15,9 +15,9 @@ import {
   SAMPLE_BOREAS_DATA_SOURCE_TYPE,
   SAMPLE_BOREAS_DATA_SOURCE_URL,
 } from "@lichtblick/suite-base/dataSources/constants";
-import { IterablePlayer } from "@lichtblick/suite-base/players/IterablePlayer";
-import { WorkerSerializedIterableSource } from "@lichtblick/suite-base/players/IterablePlayer/WorkerIterableSource";
-import { expandVideoSeekBackfill } from "@lichtblick/suite-base/players/IterablePlayer/videoSeekBackfill";
+import { loadIterablePlayer, prefetch } from "@lichtblick/suite-base/dataSources/playerModules";
+import { createMcapSourceWorker } from "@lichtblick/suite-base/players/IterablePlayer/Mcap/createMcapSourceWorker";
+import { Player } from "@lichtblick/suite-base/players/types";
 
 import SampleBoreasLayout from "./SampleBoreasLayout.json";
 
@@ -33,18 +33,17 @@ class SampleBoreasDataSourceFactory implements IDataSourceFactory {
   // Bump when SampleBoreasLayout.json changes so saved copies are replaced. 2: acceleration slider.
   public sampleLayoutVersion = 2;
 
-  public initialize(): ReturnType<IDataSourceFactory["initialize"]> {
+  public prefetch = (): void => {
+    prefetch(loadIterablePlayer);
+  };
+
+  public async initialize(): Promise<Player | undefined> {
+    const { IterablePlayer, WorkerSerializedIterableSource, expandVideoSeekBackfill } =
+      await loadIterablePlayer();
     const bagUrl = SAMPLE_BOREAS_DATA_SOURCE_URL;
 
     const source = new WorkerSerializedIterableSource({
-      initWorker: () => {
-        return new Worker(
-          new URL(
-            "@lichtblick/suite-base/players/IterablePlayer/Mcap/McapIterableSourceWorker.worker",
-            import.meta.url,
-          ),
-        );
-      },
+      initWorker: createMcapSourceWorker,
       initArgs: { url: bagUrl },
     });
 

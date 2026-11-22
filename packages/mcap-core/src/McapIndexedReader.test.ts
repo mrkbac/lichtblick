@@ -853,6 +853,80 @@ describe("McapIndexedReader", () => {
     ]);
   });
 
+  it("merges many overlapping chunks in any file order like a full sort", async () => {
+    // Deterministic pseudo-random layout: chunks overlap, repeat log times and come out of order
+    let seed = 7;
+    const random = (n: number) => {
+      seed = (seed * 1103515245 + 12345) % 2 ** 31;
+      return Math.floor(seed / 2 ** 16) % n;
+    };
+    const channels = [1, 2].map((id): TypedMcapRecords["Channel"] => ({
+      type: "Channel",
+      id,
+      schemaId: 0,
+      topic: `t${id}`,
+      messageEncoding: "utf12",
+      metadata: new Map(),
+    }));
+    const builder = new McapRecordBuilder();
+    builder.writeMagic();
+    builder.writeHeader({ profile: "", library: "" });
+    const chunkIndexes: TypedMcapRecords["ChunkIndex"][] = [];
+    // File order of every message, the full sort's last tie-breaker
+    const written: TypedMcapRecords["Message"][] = [];
+    for (let c = 0; c < 40; c++) {
+      const chunk = new ChunkBuilder({ useMessageIndex: true });
+      channels.forEach((channel) => {
+        chunk.addChannel(channel);
+      });
+      const base = random(80);
+      for (let m = 0, count = 1 + random(5); m < count; m++) {
+        const message: TypedMcapRecords["Message"] = {
+          type: "Message",
+          channelId: channels[random(2)]!.id,
+          sequence: written.length,
+          logTime: BigInt(base + random(20)),
+          publishTime: 0n,
+          data: new Uint8Array(),
+        };
+        chunk.addMessage(message);
+        written.push(message);
+      }
+      chunkIndexes.push(writeChunkWithMessageIndexes(builder, chunk));
+    }
+    builder.writeDataEnd({ dataSectionCrc: 0 });
+    const summaryStart = BigInt(builder.length);
+    channels.forEach((channel) => builder.writeChannel(channel));
+    for (const index of chunkIndexes) {
+      builder.writeChunkIndex(index);
+    }
+    builder.writeFooter({ summaryStart, summaryOffsetStart: 0n, summaryCrc: 0 });
+    builder.writeMagic();
+    const reader = await McapIndexedReader.Initialize({ readable: makeReadable(builder.buffer) });
+
+    // By log time, then file order (chunks and the messages in them are written in file order)
+    const sorted = [...written].sort((a, b) => Number(a.logTime - b.logTime));
+    const ranges: { startingAt?: bigint; endingAt?: bigint; topics?: string[] }[] = [
+      {},
+      { startingAt: 30n, endingAt: 60n },
+      { startingAt: 50n, topics: ["t2"] },
+      { endingAt: 20n, topics: ["t1"] },
+    ];
+    for (const args of ranges) {
+      const expected = sorted.filter(
+        (message) =>
+          message.logTime >= (args.startingAt ?? 0n) &&
+          message.logTime <= (args.endingAt ?? 1000n) &&
+          (args.topics?.includes(`t${message.channelId}`) ?? true),
+      );
+      expect(expected.length).toBeGreaterThan(0);
+      await expect(collect(reader.readMessages(args))).resolves.toEqual(expected);
+      await expect(collect(reader.readMessages({ ...args, reverse: true }))).resolves.toEqual(
+        [...expected].reverse(),
+      );
+    }
+  });
+
   it("supports reading topics that only occur in some chunks", async () => {
     const channel1: TypedMcapRecords["Channel"] = {
       type: "Channel",

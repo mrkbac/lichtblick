@@ -31,7 +31,7 @@ vi.mock("@lichtblick/suite-base/PanelAPI", () => ({
 vi.mock("@lichtblick/suite-base/components/MessagePipeline", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@lichtblick/suite-base/components/MessagePipeline")>()),
   useMessagePipeline: vi.fn((selector: (ctx: unknown) => unknown) =>
-    selector({ playerState: { presence: mockPresence.current } }),
+    selector({ playerState: { presence: mockPresence.current, capabilities: [] } }),
   ),
 }));
 

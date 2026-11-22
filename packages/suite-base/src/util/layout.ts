@@ -38,6 +38,22 @@ export function isPlainObject(value: unknown): value is Record<string, unknown> 
   return typeof value === "object" && value != undefined && !Array.isArray(value);
 }
 
+/** Layout files and the organization API store the approval requirement alongside panel data. */
+export function encodeLayoutTrust(
+  data: LayoutData,
+  { untrusted }: { untrusted?: true },
+): LayoutData & { untrusted?: true } {
+  return untrusted === true ? { ...data, untrusted: true } : data;
+}
+
+/** Keep storage metadata out of the editable panel data. */
+export function decodeLayoutTrust({ untrusted, ...data }: LayoutData & { untrusted?: unknown }): {
+  data: LayoutData;
+  untrusted?: true;
+} {
+  return { data, ...(untrusted === true && { untrusted: true }) };
+}
+
 /**
  * Validates that a parsed value has the shape required by {@link LayoutData} before it is
  * installed. Throws an Error whose message lists every missing or invalid field so the caller can
@@ -66,8 +82,20 @@ export function validateLayoutData(data: unknown): LayoutData {
     errors.push(`missing or invalid fields: ${quotedFields}`);
   }
 
-  if ("userNodes" in data && !isPlainObject(data.userNodes)) {
-    errors.push(`invalid "userNodes"`);
+  if ("userNodes" in data) {
+    // Each script is rendered and run (after approval) as {name, sourceCode}; a bad entry would
+    // crash the app before the user is ever asked.
+    const valid =
+      isPlainObject(data.userNodes) &&
+      Object.values(data.userNodes).every(
+        (script) =>
+          isPlainObject(script) &&
+          typeof script.name === "string" &&
+          typeof script.sourceCode === "string",
+      );
+    if (!valid) {
+      errors.push(`invalid "userNodes"`);
+    }
   }
 
   // Older files store the react-mosaic-component tree, which is converted when loaded

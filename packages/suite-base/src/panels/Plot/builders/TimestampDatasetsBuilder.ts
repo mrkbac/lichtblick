@@ -21,6 +21,7 @@ import {
   GetViewportDatasetsResult,
   HandlePlayerStateResult,
   IDatasetsBuilder,
+  MessageRangeOptions,
   SeriesItem,
   Viewport,
 } from "./IDatasetsBuilder";
@@ -184,7 +185,7 @@ export class TimestampDatasetsBuilder implements IDatasetsBuilder {
 
   public handleMessageRange(
     messages: Immutable<MessageEvent[]>,
-    options: { isReset: boolean },
+    options: MessageRangeOptions,
     startTime: Immutable<Time>,
   ): void {
     this.#hasRangeSource = true;
@@ -212,8 +213,13 @@ export class TimestampDatasetsBuilder implements IDatasetsBuilder {
   ): Promise<GetViewportDatasetsResult> {
     await this.#flushPendingDispatch();
 
-    const datasets = await this.#datasetsBuilderRemote.getViewportDatasets(viewport);
-    return { datasetsByConfigIndex: datasets, pathsWithMismatchedDataLengths: emptyPaths };
+    const { datasetsByConfigIndex, approximateSeries } =
+      await this.#datasetsBuilderRemote.getViewportResult(viewport);
+    return {
+      datasetsByConfigIndex,
+      pathsWithMismatchedDataLengths: emptyPaths,
+      ...(approximateSeries.length > 0 && { approximateSeries }),
+    };
   }
 
   public async getDerivedValuesAt(x: number): Promise<readonly unknown[]> {

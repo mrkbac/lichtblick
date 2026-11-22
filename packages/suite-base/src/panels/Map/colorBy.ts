@@ -1,11 +1,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
-import * as _ from "lodash-es";
-
-import { distanceMeters, LngLat, Units } from "./geo";
-
-/** A numeric value at a time (seconds), e.g. from a message path on another topic. */
-export type Sample = { time: number; value: number };
+import { haversineMeters, Units } from "./geo";
+import { lastIndexAtOrBefore, SampleStore, TrackStore } from "./track";
 
 const SPEED_UNITS: Record<Units, { label: string; perMps: number }> = {
   metric: { label: "km/h", perMps: 3.6 },
@@ -18,45 +14,72 @@ export function speedUnitLabel(units: Units): string {
 }
 
 /**
- * Ground speed at each fix in display units, over at least `windowSeconds` so GNSS jitter between
- * consecutive fixes doesn't dominate. The first fix takes the speed of the next one.
+ * Ground speed at each fix in display units (NaN where unknown), over at least `windowSeconds` so
+ * GNSS jitter between consecutive fixes doesn't dominate. The first fix takes the speed of the
+ * next one.
  */
-export function speedValues(
-  fixes: readonly { time: number; position: LngLat }[],
-  units: Units,
-  windowSeconds = 0.5,
-): (number | undefined)[] {
-  const values: (number | undefined)[] = [];
-  let from = 0;
-  for (let i = 0; i < fixes.length; i++) {
-    const current = fixes[i]!;
+export function speedValues(track: TrackStore, units: Units, windowSeconds = 0.5): Float64Array {
+  const { time, lon, lat } = track.columns;
+  const values = new Float64Array(track.length);
+  // Rows appended since the last call are all that's new: reuse the rest. The newest row can be
+  // replaced in place while thinned, and the first takes the second's speed, so redo both.
+  const cached = speedCache.get(track);
+  let start = 0;
+  if (
+    cached?.version === track.version &&
+    cached.units === units &&
+    cached.windowSeconds === windowSeconds &&
+    cached.values.length > 2 &&
+    cached.values.length <= track.length
+  ) {
+    start = cached.values.length - 1;
+    values.set(cached.values.subarray(0, start));
+  }
+  let from = Math.max(0, lastIndexAtOrBefore(time, start, time[start]! - windowSeconds));
+  for (let i = start; i < track.length; i++) {
+    const t = time[i]!;
     // Advance `from` to the latest fix still at least `windowSeconds` back.
-    while (from + 1 < i && current.time - fixes[from + 1]!.time >= windowSeconds) {
+    while (from + 1 < i && t - time[from + 1]! >= windowSeconds) {
       from++;
     }
-    const start = fixes[from]!;
-    const dt = current.time - start.time;
-    values.push(
+    const dt = t - time[from]!;
+    values[i] =
       dt > 0
-        ? (distanceMeters(start.position, current.position) / dt) * SPEED_UNITS[units].perMps
-        : undefined,
-    );
+        ? (haversineMeters(lon[from]!, lat[from]!, lon[i]!, lat[i]!) / dt) *
+          SPEED_UNITS[units].perMps
+        : NaN;
   }
-  if (values.length > 1 && values[0] == undefined) {
-    values[0] = values[1];
+  if (start === 0 && values.length > 1 && isNaN(values[0]!)) {
+    values[0] = values[1]!;
   }
+  speedCache.set(track, { version: track.version, units, windowSeconds, values });
   return values;
 }
 
-/** For each time, the latest sample at or before it (samples sorted by time). */
-export function sampleAt(
-  samples: readonly Sample[],
-  times: readonly number[],
-): (number | undefined)[] {
-  return times.map((time) => {
-    const index = _.sortedLastIndexBy(samples, { time, value: 0 }, (s) => s.time) - 1;
-    return samples[index]?.value;
-  });
+const speedCache = new WeakMap<
+  TrackStore,
+  { version: number; units: Units; windowSeconds: number; values: Float64Array }
+>();
+
+/** For each fix, the latest sample at or before it (NaN if none). */
+export function sampleAt(samples: SampleStore | undefined, track: TrackStore): Float64Array {
+  const values = new Float64Array(track.length).fill(NaN);
+  if (!samples) {
+    return values;
+  }
+  const { time, value } = samples.columns;
+  // Both are sorted by time: walk them together.
+  let j = -1;
+  for (let i = 0; i < track.length; i++) {
+    const t = track.columns.time[i]!;
+    while (j + 1 < samples.length && time[j + 1]! <= t) {
+      j++;
+    }
+    if (j >= 0) {
+      values[i] = value[j]!;
+    }
+  }
+  return values;
 }
 
 /**
@@ -64,13 +87,19 @@ export function sampleAt(
  * (GNSS jumps, sensor spikes) don't wash out the gradient.
  */
 export function valueRange(
-  values: readonly (number | undefined)[],
+  values: ArrayLike<number>,
   min: number | undefined,
   max: number | undefined,
 ): [number, number] | undefined {
-  const sorted = values
-    .filter((v): v is number => v != undefined && isFinite(v))
-    .sort((a, b) => a - b);
+  // A percentile of an even sample is as good for a color scale, and sorting stays cheap.
+  const stride = Math.max(1, Math.ceil(values.length / 100_000));
+  const sample: number[] = [];
+  for (let i = 0; i < values.length; i += stride) {
+    if (isFinite(values[i]!)) {
+      sample.push(values[i]!);
+    }
+  }
+  const sorted = Float64Array.from(sample).sort();
   if (sorted.length === 0) {
     return undefined;
   }

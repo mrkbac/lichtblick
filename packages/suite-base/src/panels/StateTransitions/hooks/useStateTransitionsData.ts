@@ -4,6 +4,7 @@
 import { Time } from "@foxglove/rostime";
 import { useMemo } from "react";
 
+import { PathSampleColumns } from "@lichtblick/suite-base/components/MessagePathSyntax/PathSampleColumns";
 import {
   ChartDataset,
   ChartDatasets,
@@ -14,21 +15,60 @@ import {
   ROW_SPACING,
 } from "@lichtblick/suite-base/panels/StateTransitions/hooks/constants";
 import { UseStateTransitionsData } from "@lichtblick/suite-base/panels/StateTransitions/hooks/types";
-import { messagesToDataset } from "@lichtblick/suite-base/panels/StateTransitions/messagesToDataset";
+import {
+  LiveDatasetCache,
+  messagesToDataset,
+} from "@lichtblick/suite-base/panels/StateTransitions/messagesToDataset";
 import { datasetContainsArray } from "@lichtblick/suite-base/panels/StateTransitions/shared";
 import {
+  MessageDatasetArgs,
   PathState,
   SamplesByPath,
   StateTransitionPath,
 } from "@lichtblick/suite-base/panels/StateTransitions/types";
 
-/** Collects the x of every segment where a condition series turns true. */
-export function addMatchStarts(dataset: ChartDataset, out: Set<number>): void {
+/** Collects the x of every segment where a condition series turns true (within `keep`). */
+export function addMatchStarts(
+  dataset: ChartDataset,
+  out: Set<number>,
+  keep: (x: number) => boolean = () => true,
+): void {
   for (const datum of dataset.data) {
-    if (datum?.value === true && datum.label != undefined) {
+    if (datum?.value === true && datum.label != undefined && keep(datum.x)) {
       out.add(datum.x);
     }
   }
+}
+
+/**
+ * Adds the matches in `blocks`, whose chart is `drawn`. Thinned samples can merge matches, so
+ * they come from the exact record of changes; where that record forgot its oldest changes, the
+ * drawn samples fill in before it.
+ */
+function addMatches(
+  blocks: readonly (PathSampleColumns | undefined)[],
+  drawn: ChartDataset,
+  args: Omit<MessageDatasetArgs, "blocks">,
+  out: Set<number>,
+  liveCache?: LiveDatasetCache,
+): boolean {
+  const approximate = blocks.some((samples) => samples?.hasAllChanges() === false);
+  const changeBlocks = blocks.map((samples) => samples?.changes());
+  if (changeBlocks.every((changes, i) => changes === blocks[i])) {
+    addMatchStarts(drawn, out);
+    return approximate;
+  }
+  const exact = messagesToDataset({ ...args, blocks: changeBlocks, showPoints: false }, liveCache);
+  if (!approximate) {
+    addMatchStarts(exact, out);
+    return false;
+  }
+  // The record only starts at its oldest kept change: matches before it come from the drawn
+  // samples. (Its first sample carries the state from before the cut and is never a match.)
+  const firstChangeX = exact.data.find((datum) => datum != undefined)?.x ?? Infinity;
+  addMatchStarts(exact, out);
+  addMatchStarts(drawn, out, (x) => x < firstChangeX);
+  return true;
 }
 
 function useStateTransitionsData(
@@ -42,6 +82,10 @@ function useStateTransitionsData(
 ): UseStateTransitionsData {
   // Light segment colors need darker label text on a light background.
   const darkenLabels = colorScheme === "light";
+  const liveCaches = useMemo<{ drawn: LiveDatasetCache; exact: LiveDatasetCache }[]>(
+    () => paths.map(() => ({ drawn: {}, exact: {} })),
+    [paths],
+  );
   return useMemo(() => {
     // ignore all data when we don't have a start time
     if (!startTime) {
@@ -50,6 +94,7 @@ function useStateTransitionsData(
         minY: undefined,
         pathState: [],
         matchStarts: [],
+        matchesApproximate: false,
       };
     }
 
@@ -57,6 +102,7 @@ function useStateTransitionsData(
     const outDatasets: ChartDatasets = [];
     const outPathState: PathState[] = [];
     const matchStarts = new Set<number>();
+    let matchesApproximate = false;
 
     paths.forEach((path, pathIndex) => {
       const y = -(pathIndex + 1) * ROW_SPACING;
@@ -65,15 +111,8 @@ function useStateTransitionsData(
       const hasCondition = parseCondition(path.condition) != undefined;
       const blocksForPath = decodedBlocks.map((decodedBlock) => decodedBlock[path.value]);
 
-      const newBlockDataSet = messagesToDataset({
-        blocks: blocksForPath,
-        path,
-        pathIndex,
-        startTime,
-        y,
-        showPoints,
-        darkenLabels,
-      });
+      const datasetArgs = { path, pathIndex, startTime, y, showPoints, darkenLabels };
+      const newBlockDataSet = messagesToDataset({ ...datasetArgs, blocks: blocksForPath });
 
       const items = itemsByPath[path.value];
       const isArray = datasetContainsArray([...blocksForPath, items]);
@@ -84,25 +123,24 @@ function useStateTransitionsData(
       });
       outDatasets.push(newBlockDataSet);
       if (hasCondition) {
-        addMatchStarts(newBlockDataSet, matchStarts);
+        matchesApproximate =
+          addMatches(blocksForPath, newBlockDataSet, datasetArgs, matchStarts) ||
+          matchesApproximate;
       }
 
+      const cache = liveCaches[pathIndex]!;
       if (items == undefined) {
+        cache.drawn.checkpoint = undefined;
+        cache.exact.checkpoint = undefined;
         return;
       }
 
-      const newPathDataSet = messagesToDataset({
-        blocks: [items],
-        path,
-        pathIndex,
-        startTime,
-        y,
-        showPoints,
-        darkenLabels,
-      });
+      const newPathDataSet = messagesToDataset({ ...datasetArgs, blocks: [items] }, cache.drawn);
       outDatasets.push(newPathDataSet);
       if (hasCondition) {
-        addMatchStarts(newPathDataSet, matchStarts);
+        matchesApproximate =
+          addMatches([items], newPathDataSet, datasetArgs, matchStarts, cache.exact) ||
+          matchesApproximate;
       }
     });
 
@@ -111,8 +149,9 @@ function useStateTransitionsData(
       minY: outMinY,
       pathState: outPathState,
       matchStarts: [...matchStarts].sort((a, b) => a - b),
+      matchesApproximate,
     };
-  }, [decodedBlocks, itemsByPath, paths, startTime, showPoints, darkenLabels]);
+  }, [decodedBlocks, itemsByPath, paths, startTime, showPoints, darkenLabels, liveCaches]);
 }
 
 export default useStateTransitionsData;

@@ -17,6 +17,7 @@ import {
   usePlayerSelection,
 } from "@lichtblick/suite-base/context/PlayerSelectionContext";
 import { useWorkspaceActions } from "@lichtblick/suite-base/context/Workspace/useWorkspaceActions";
+import { useSourcePick } from "@lichtblick/suite-base/util/sourcePick";
 
 import Start from "./Start";
 
@@ -225,6 +226,26 @@ describe("Start Component", () => {
 
     expect(mockSelectRecent).toHaveBeenCalledWith("recent-1");
     expect(mockSelectSource).not.toHaveBeenCalled();
+  });
+
+  it("picks a typed URL for a comparison without the matching recent's stored settings", () => {
+    setup();
+    useSourcePick.setState({ pick: { label: "recording B", deliver: () => {} } });
+    try {
+      typeUrl("ws://localhost:8766/dir/example.mcap");
+      fireEvent.click(screen.getByText("open"));
+
+      expect(mockSelectRecent).not.toHaveBeenCalled();
+      expect(mockSelectSource).toHaveBeenCalledWith(
+        "foxglove-websocket",
+        expect.objectContaining({
+          type: "connection",
+          params: expect.objectContaining({ url: "ws://localhost:8766/dir/example.mcap" }),
+        }),
+      );
+    } finally {
+      useSourcePick.setState({ pick: undefined });
+    }
   });
 
   it("disables open for URLs without a matching source", () => {

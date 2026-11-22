@@ -32,7 +32,7 @@ import DontShowThisAgainCheckbox from "@lichtblick/suite-base/components/DataSou
 import { OpenUrlInput } from "@lichtblick/suite-base/components/DataSourceDialog/OpenUrlInput";
 import { useStyles } from "@lichtblick/suite-base/components/DataSourceDialog/index.style";
 import { LiveRecordingsList } from "@lichtblick/suite-base/components/LiveRecordingsList";
-import { usePanelGuideStore } from "@lichtblick/suite-base/components/PanelDocs/PanelDocs";
+import { usePanelGuideStore } from "@lichtblick/suite-base/components/PanelDocs/PanelGuide";
 import { RecentSourceLabel } from "@lichtblick/suite-base/components/RecentSourceLabel";
 import Stack from "@lichtblick/suite-base/components/Stack";
 import { APP_CONFIG } from "@lichtblick/suite-base/constants/config";
@@ -116,7 +116,7 @@ export default function Start(): React.JSX.Element {
       (recent): CatalogRecording => ({
         ...catalogMatch(recent, catalogByName),
         id: recent.id,
-        name: splitRecentTitle(recent.title).primary,
+        name: recent.name ?? splitRecentTitle(recent.title).primary,
         source: { type: "remote-file", url: recent.title },
       }),
     );
@@ -141,7 +141,9 @@ export default function Start(): React.JSX.Element {
     !topRecent && showCatalog && query.trim() !== ""
       ? filterRecordings(folder.recordings, query)[0]
       : undefined;
-  const topMatch = topRecent ? splitRecentTitle(topRecent.title).primary : topRecording?.name;
+  const topMatch = topRecent
+    ? (topRecent.name ?? splitRecentTitle(topRecent.title).primary)
+    : topRecording?.name;
   const openTopMatch = () => {
     if (topRecent) {
       selectRecent(topRecent.id);

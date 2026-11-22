@@ -360,3 +360,95 @@ export function downsampleScatter(points: Iterable<Point>, view: PlotViewport): 
 
   return indices;
 }
+
+/**
+ * Downsample a line through columnar x/y rows [start, end) in drawing order, where x need not be
+ * sorted (e.g. an x/y trajectory). Returns absolute row indices of at most about `maxPoints` rows:
+ * - inside the view, a row is dropped while it stays within `distance` pixels of the last kept
+ *   row; the distance grows until the result fits `maxPoints`
+ * - outside the view, a run of rows beyond the same edge is reduced to its first and last row
+ *   (the line between them stays beyond that edge, so it cannot cross the view)
+ * - gaps (NaN) and the last row are always kept
+ */
+export function downsamplePathColumns(
+  xs: Float64Array,
+  ys: Float64Array,
+  start: number,
+  end: number,
+  view: PlotViewport,
+  maxPoints = MAX_POINTS,
+): number[] {
+  const { bounds, width, height } = view;
+  const pixelsPerValue = (pixels: number, range: number) => (range !== 0 ? pixels / range : 0);
+  const pixelPerX = pixelsPerValue(width, bounds.x.max - bounds.x.min);
+  const pixelPerY = pixelsPerValue(height, bounds.y.max - bounds.y.min);
+  const xMin = Math.min(bounds.x.min, bounds.x.max);
+  const xMax = Math.max(bounds.x.min, bounds.x.max);
+  const yMin = Math.min(bounds.y.min, bounds.y.max);
+  const yMax = Math.max(bounds.y.min, bounds.y.max);
+  // Which edges each row is beyond: 1 left, 2 right, 4 below, 8 above; NaN rows are gaps (-1).
+  // Computed once and shared by the passes below.
+  const codes = new Int8Array(Math.max(0, end - start));
+  for (let i = start; i < end; i++) {
+    const x = xs[i]!;
+    const y = ys[i]!;
+    codes[i - start] =
+      Number.isNaN(x) || Number.isNaN(y)
+        ? -1
+        : (x < xMin ? 1 : 0) | (x > xMax ? 2 : 0) | (y < yMin ? 4 : 0) | (y > yMax ? 8 : 0);
+  }
+
+  for (let distance = 1; ; ) {
+    const indices: number[] = [];
+    let lastPx = Number.NaN;
+    let lastPy = Number.NaN;
+    // edges shared by every row since the last kept one
+    let mask = 0;
+    let prevCode = -1;
+    for (let i = start; i < end; i++) {
+      const code = codes[i - start]!;
+      const nextCode = i + 1 < end ? codes[i + 1 - start]! : -1;
+      if (code === -1 && prevCode === -1 && i > start && i < end - 1) {
+        continue; // One marker breaks the line across a run of missing values.
+      }
+      let keep = code === -1 || i === start || i === end - 1 || nextCode === -1;
+      if (!keep && code !== 0) {
+        const shared = mask & code & nextCode;
+        keep = shared === 0;
+        mask = keep ? code : shared;
+      } else if (!keep) {
+        // rows where the line enters or leaves the view stay, so it is drawn up to the edge
+        keep = prevCode !== 0 || nextCode !== 0;
+        if (!keep) {
+          const px = xs[i]! * pixelPerX;
+          const py = ys[i]! * pixelPerY;
+          keep = !(Math.abs(px - lastPx) < distance && Math.abs(py - lastPy) < distance);
+        }
+      }
+      if (keep) {
+        indices.push(i);
+        mask = code === -1 ? 0 : code;
+        lastPx = xs[i]! * pixelPerX;
+        lastPy = ys[i]! * pixelPerY;
+      }
+      prevCode = code;
+    }
+    if (indices.length <= maxPoints) {
+      return indices;
+    }
+    if (distance > Math.max(width, height)) {
+      // ponytail: a line crossing the view more often than it has pixels (e.g. noise around an
+      // edge) keeps evenly spaced rows. Gaps and the last row stay so lines still break at gaps.
+      const stride = Math.ceil(indices.length / maxPoints);
+      return indices.filter(
+        (index, j) =>
+          j % stride === 0 ||
+          j === indices.length - 1 ||
+          Number.isNaN(xs[index]!) ||
+          Number.isNaN(ys[index]!),
+      );
+    }
+    // A line keeps about one row per `distance` pixels of its length: jump close to the cap
+    distance *= Math.max(2, (1.2 * indices.length) / maxPoints);
+  }
+}

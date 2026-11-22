@@ -5,34 +5,38 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { useLatest } from "@lichtblick/hooks";
 import { parseMessagePath } from "@lichtblick/message-path";
+import { PathSampleColumns } from "@lichtblick/suite-base/components/MessagePathSyntax/PathSampleColumns";
 import { useCachedGetMessagePathDataItems } from "@lichtblick/suite-base/components/MessagePathSyntax/useCachedGetMessagePathDataItems";
-import {
-  PathSample,
-  toPathSample,
-} from "@lichtblick/suite-base/components/MessagePathSyntax/usePathSampleHistory";
 import { useSubscribeMessageRange } from "@lichtblick/suite-base/components/PanelExtensionAdapter";
 import useGlobalVariables from "@lichtblick/suite-base/hooks/useGlobalVariables";
+import { MAX_SAMPLES_PER_PATH } from "@lichtblick/suite-base/panels/StateTransitions/constants";
 
 /** Decoded samples of each path over the whole recording, oldest first. */
-export type PathSamplesByPath = Readonly<Record<string, readonly PathSample[]>>;
+export type PathSamplesByPath = Readonly<Record<string, PathSampleColumns>>;
 
 const FLUSH_INTERVAL_MS = 250;
 
 type TopicRequest = { paths: string[]; key: string };
 
+const NO_PATHS: readonly string[] = [];
+
 /**
  * Loads `pathStrings` over the whole recording. Each batch is decoded as it arrives and only the
- * decoded samples are kept, so memory doesn't depend on message size and a flush never re-reads
- * earlier batches.
+ * decoded samples are kept, compactly and thinned past MAX_SAMPLES_PER_PATH, so memory doesn't
+ * depend on message size or recording length and a flush never re-reads earlier batches.
  *
  * A topic is reloaded when the paths reading it change (or, for paths using `$variables`, when
- * global variables change), since the messages themselves are not kept.
+ * global variables change, or when a path gains or loses a condition), since the messages
+ * themselves are not kept.
  */
 export function useDecodedMessageRange(
   topics: readonly string[],
   pathStrings: readonly string[],
+  /** Paths whose exact value changes are kept for condition matches (see trackChanges). */
+  changesPaths: readonly string[] = NO_PATHS,
 ): PathSamplesByPath[] {
   const subscribeMessageRange = useSubscribeMessageRange();
+  const changesPathsRef = useLatest(changesPaths);
   const decodeRef = useLatest(useCachedGetMessagePathDataItems(pathStrings));
   const pathsRef = useLatest(pathStrings);
   const { globalVariables } = useGlobalVariables();
@@ -51,14 +55,16 @@ export function useDecodedMessageRange(
       const variables = paths.some((path) => path.includes("$"))
         ? JSON.stringify(globalVariables)
         : "";
-      result.set(topic, { paths, key: JSON.stringify([paths, variables]) ?? "" });
+      // A path that gains a condition reloads, so its exact changes are kept from the start.
+      const tracked = paths.filter((path) => changesPaths.includes(path));
+      result.set(topic, { paths, key: JSON.stringify([paths, variables, tracked]) ?? "" });
     }
     return result;
-  }, [globalVariables, pathStrings, topics]);
+  }, [changesPaths, globalVariables, pathStrings, topics]);
 
   const [samplesByPath, setSamplesByPath] = useState<PathSamplesByPath>({});
   // Mutated in place while loading; published as a new outer object on each flush.
-  const accRef = useRef<Record<string, PathSample[]>>({});
+  const accRef = useRef<Record<string, PathSampleColumns>>({});
   const flushRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   // Never replace .current, only mutate: the unmount cleanup captures it at mount.
   const subsRef = useRef(new Map<string, TopicRequest & { cancel: () => void }>());
@@ -92,7 +98,7 @@ export function useDecodedMessageRange(
         onNewRangeIterator: async (batchIterator) => {
           // A new iterator replaces the topic's data (e.g. an edited user script).
           for (const path of request.paths) {
-            acc[path] = [];
+            acc[path] = new PathSampleColumns(MAX_SAMPLES_PER_PATH);
           }
           publish();
           for await (const batch of batchIterator) {
@@ -101,11 +107,14 @@ export function useDecodedMessageRange(
               return;
             }
             for (const path of request.paths) {
-              const out = (acc[path] ??= []);
+              const out = (acc[path] ??= new PathSampleColumns(MAX_SAMPLES_PER_PATH));
+              if (changesPathsRef.current.includes(path)) {
+                out.trackChanges();
+              }
               for (const message of batch) {
                 const queriedData = decodeRef.current(path, message);
                 if (queriedData) {
-                  out.push(toPathSample(message, queriedData));
+                  out.pushMessage(message, queriedData);
                 }
               }
             }
@@ -132,7 +141,7 @@ export function useDecodedMessageRange(
     if (removed) {
       publish();
     }
-  }, [decodeRef, pathsRef, requestByTopic, subscribeMessageRange]);
+  }, [changesPathsRef, decodeRef, pathsRef, requestByTopic, subscribeMessageRange]);
 
   // Clean up all subscriptions on unmount.
   useEffect(() => {

@@ -50,6 +50,8 @@ export type SaveNewLayout = {
   data: LayoutData;
   permission: LayoutPermission;
   from?: string;
+  /** See Layout.untrusted */
+  untrusted?: boolean;
   /** Organization to save a shared layout in (organization API only). */
   organizationId?: string;
 };
@@ -234,6 +236,7 @@ export default class LayoutManager implements ILayoutManager {
         externalId: remoteLayout.externalId,
         permission: remoteLayout.permission,
         organizationId: remoteLayout.organizationId,
+        ...(remoteLayout.untrusted && { untrusted: true }),
         baseline: { data: remoteLayout.data, savedAt: remoteLayout.savedAt },
         working: undefined,
         syncInfo: layoutPermissionIsShared(remoteLayout.permission)
@@ -248,6 +251,7 @@ export default class LayoutManager implements ILayoutManager {
     data: unmigratedData,
     permission,
     from,
+    untrusted,
     organizationId,
   }: SaveNewLayout): Promise<Layout> {
     const data = migratePanelsState(unmigratedData);
@@ -264,6 +268,7 @@ export default class LayoutManager implements ILayoutManager {
         data,
         permission,
         organizationId,
+        ...(untrusted === true && { untrusted: true }),
       });
       const localLayoutData = {
         id: newLayout.id,
@@ -271,6 +276,7 @@ export default class LayoutManager implements ILayoutManager {
         externalId: newLayout.externalId,
         permission: newLayout.permission,
         organizationId: newLayout.organizationId,
+        ...((untrusted === true || newLayout.untrusted) && { untrusted: true as const }),
         baseline: { data: newLayout.data, savedAt: newLayout.savedAt },
         working: undefined,
         syncInfo: { status: "tracked" as const, lastRemoteSavedAt: newLayout.savedAt },
@@ -290,6 +296,7 @@ export default class LayoutManager implements ILayoutManager {
           name,
           from,
           permission,
+          ...(untrusted === true && { untrusted: true }),
           baseline: { data, savedAt: new Date().toISOString() as ISO8601Timestamp },
           working: undefined,
           syncInfo: undefined, // Personal layouts should NEVER have syncInfo
@@ -339,12 +346,14 @@ export default class LayoutManager implements ILayoutManager {
         id,
         externalId: localLayout.externalId,
         name,
+        ...(localLayout.untrusted && { untrusted: true }),
         savedAt: now,
       });
       const result = await this.local.runExclusive(
         async (local) =>
           await local.put({
             ...localLayout,
+            ...(updatedBaseline.untrusted && { untrusted: true }),
             name: updatedBaseline.name,
             baseline: { data: updatedBaseline.data, savedAt: updatedBaseline.savedAt },
             working: newWorking,
@@ -443,12 +452,14 @@ export default class LayoutManager implements ILayoutManager {
         id,
         externalId: localLayout.externalId,
         data: localLayout.working?.data ?? localLayout.baseline.data,
+        ...(localLayout.untrusted && { untrusted: true }),
         savedAt: now,
       });
       const result = await this.local.runExclusive(
         async (local) =>
           await local.put({
             ...localLayout,
+            ...(updatedBaseline.untrusted && { untrusted: true }),
             baseline: { data: updatedBaseline.data, savedAt: updatedBaseline.savedAt },
             working: undefined,
             syncInfo: { status: "tracked", lastRemoteSavedAt: updatedBaseline.savedAt },
@@ -500,6 +511,7 @@ export default class LayoutManager implements ILayoutManager {
         id: randomUUID() as LayoutID,
         name,
         permission: "CREATOR_WRITE",
+        ...(layout.untrusted && { untrusted: true }),
         baseline: { data: layout.working?.data ?? layout.baseline.data, savedAt: now },
         working: undefined,
         syncInfo: { status: "new", lastRemoteSavedAt: now },
@@ -758,6 +770,7 @@ export default class LayoutManager implements ILayoutManager {
               externalId: remoteLayout.externalId,
               permission: remoteLayout.permission,
               organizationId: remoteLayout.organizationId,
+              ...(remoteLayout.untrusted && { untrusted: true }),
               baseline: { data: remoteLayout.data, savedAt: remoteLayout.savedAt },
               working: undefined,
               syncInfo: layoutPermissionIsShared(remoteLayout.permission)
@@ -776,6 +789,7 @@ export default class LayoutManager implements ILayoutManager {
               name: remoteLayout.name,
               permission: remoteLayout.permission,
               organizationId: remoteLayout.organizationId,
+              ...((remoteLayout.untrusted ?? localLayout.untrusted) && { untrusted: true }),
               baseline: { data: remoteLayout.data, savedAt: remoteLayout.savedAt },
               working: localLayout.working,
               syncInfo: {
@@ -832,11 +846,13 @@ export default class LayoutManager implements ILayoutManager {
               name: localLayout.name,
               data: localLayout.baseline.data,
               permission: localLayout.permission,
+              ...(localLayout.untrusted && { untrusted: true }),
             });
             return async (local) => {
               // Don't check abortSignal; we need the cache to be updated to show the layout is tracked
               await local.put({
                 ...localLayout,
+                ...(newBaseline.untrusted && { untrusted: true }),
                 baseline: { ...localLayout.baseline, savedAt: newBaseline.savedAt },
                 syncInfo: { status: "tracked", lastRemoteSavedAt: newBaseline.savedAt },
               });
@@ -856,6 +872,7 @@ export default class LayoutManager implements ILayoutManager {
               externalId: localLayout.externalId,
               name: localLayout.name,
               data: localLayout.baseline.data,
+              ...(localLayout.untrusted && { untrusted: true }),
               savedAt:
                 localLayout.baseline.savedAt ?? (new Date().toISOString() as ISO8601Timestamp),
             });
@@ -863,6 +880,7 @@ export default class LayoutManager implements ILayoutManager {
               // Don't check abortSignal; we need the cache to be updated to show the layout is tracked
               await local.put({
                 ...localLayout,
+                ...(newBaseline.untrusted && { untrusted: true }),
                 name: newBaseline.name,
                 baseline: { ...localLayout.baseline, savedAt: newBaseline.savedAt },
                 syncInfo: { status: "tracked", lastRemoteSavedAt: newBaseline.savedAt },

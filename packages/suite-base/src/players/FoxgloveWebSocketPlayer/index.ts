@@ -78,6 +78,7 @@ import rosDatatypesToMessageDefinition from "@lichtblick/suite-base/util/rosData
 import { toError } from "@lichtblick/suite-base/util/toError";
 
 import ExtensionProxySocket, {
+  isMixedContentWs,
   needsExtensionProxy,
   PROXY_MISSING_REASON,
 } from "./ExtensionProxySocket";
@@ -110,6 +111,9 @@ import {
   ResolvedChannel,
   ResolvedService,
 } from "./types";
+
+// FoxgloveClient emits this for an error event that carries no error
+const OPAQUE_SOCKET_ERROR = "WebSocket error";
 
 const log = Log.getLogger(__dirname);
 const textEncoder = new TextEncoder();
@@ -332,22 +336,26 @@ export default class FoxgloveWebSocketPlayer implements Player {
       this.#parameters = new Map();
     });
 
+    // Browsers reject a mixed-content socket with an error before closing it: Chrome and Firefox
+    // say "insecure" ("An insecure WebSocket connection may not be initiated…", "The operation is
+    // insecure."); Safari's error carries no message. Chrome and Firefox also fail unreachable
+    // servers without a message, so a bare error only means "blocked" in other browsers.
+    let opened = false;
+    let blockedAsMixedContent = false;
+    this.#client.on("open", () => {
+      opened = true;
+    });
     this.#client.on("error", (err) => {
       log.error(err);
-
-      if (
-        (err as unknown as undefined | { message?: string })?.message != undefined &&
-        err.message.includes("insecure WebSocket connection")
-      ) {
-        this.#alerts.addAlert("ws:connection-failed", {
-          severity: "error",
-          message: "Insecure WebSocket connection",
-          tip: `Check that the WebSocket server at ${
-            this.#url
-          } is reachable and supports protocol version one of: ${subprotocols.join(", ")}.`,
-        });
-        this.#emitState();
+      if (opened || !isMixedContentWs(this.#url)) {
+        return;
       }
+      const message = (err as unknown as undefined | { message?: unknown })?.message;
+      // FoxgloveClient turns an error event without payload into Error("WebSocket error")
+      blockedAsMixedContent =
+        typeof message === "string" && message !== OPAQUE_SOCKET_ERROR
+          ? /insecure/i.test(message)
+          : !/\b(Chrome|Chromium|Firefox)\//.test(navigator.userAgent);
     });
 
     // Note: We've observed closed being called not only when an already open connection is closed
@@ -374,16 +382,31 @@ export default class FoxgloveWebSocketPlayer implements Player {
       this.#client = undefined;
       this.#serverControlsPlayback = false;
 
-      this.#alerts.addAlert("ws:connection-failed", {
-        severity: "error",
-        message: "Connection failed",
-        tip:
-          (event as { reason?: unknown } | undefined)?.reason === PROXY_MISSING_REASON
-            ? `Browsers block ws:// from an https page. Install the WebSocket proxy extension (chrome-extension/ in the app repository) and reload the page, or use wss://.`
-            : `Check that the WebSocket server at ${
-                this.#url
-              } is reachable and supports protocol version one of: ${subprotocols.join(", ")}.`,
-      });
+      const reason = (event as { reason?: unknown } | undefined)?.reason;
+      if (reason === PROXY_MISSING_REASON) {
+        // No extension: try the browser's own connection first. It works when the site may load
+        // insecure content, and Chrome may first ask for local network access. Only explain the
+        // block if that fails too.
+        this.#emitState();
+        this.#openTimeout = setTimeout(this.#open, 0);
+        return;
+      }
+      if (blockedAsMixedContent) {
+        this.#alerts.addAlert("ws:connection-failed", {
+          severity: "error",
+          message: "Your browser blocked ws:// from this https page",
+          tip: `Browsers only allow unencrypted ws:// connections from an https page to localhost. Install the Licht WebSocket proxy extension (chrome-extension/ in the repository), allow "Insecure content" in this site's settings, or serve ${this.#url} over wss://. Then reload the page.`,
+          guide: { type: "wsMixedContent", url: this.#url },
+        });
+      } else {
+        this.#alerts.addAlert("ws:connection-failed", {
+          severity: "error",
+          message: "Connection failed",
+          tip: `Check that the WebSocket server at ${
+            this.#url
+          } is reachable and supports protocol version one of: ${subprotocols.join(", ")}.`,
+        });
+      }
 
       this.#emitState();
       this.#openTimeout = setTimeout(this.#open, 3000);
@@ -638,7 +661,8 @@ export default class FoxgloveWebSocketPlayer implements Player {
           if (channel.id === id) {
             this.#resolvedSubscriptionsById.delete(subId);
             this.#resolvedSubscriptionsByTopic.delete(channel.topic);
-            this.#client?.unsubscribe(subId);
+            // No unsubscribe: unadvertising a channel ends its subscriptions on the server, which
+            // answers an unsubscribe for one with a "did not exist" warning.
             this.#unresolvedSubscriptions.add(channel.topic);
           }
         }
@@ -993,7 +1017,7 @@ export default class FoxgloveWebSocketPlayer implements Player {
         );
       }
       responseCallback(response);
-      this.#serviceResponseCbs.delete(response.requestId);
+      this.#fetchAssetRequests.delete(response.requestId);
     });
   };
 

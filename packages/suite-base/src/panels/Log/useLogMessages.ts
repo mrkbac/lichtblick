@@ -17,7 +17,7 @@ import {
 import { useSubscribeMessageRange } from "@lichtblick/suite-base/components/PanelExtensionAdapter";
 import { PlayerPresence } from "@lichtblick/suite-base/players/types";
 
-import { normalizeLogEvent } from "./conversion";
+import { logStrings, normalizeLogEvent } from "./conversion";
 import { searchByTime } from "./timeIndex";
 import { NormalizedLogMessage } from "./types";
 
@@ -265,6 +265,7 @@ export function useLogMessages(topics: readonly string[]): {
       });
       subs.clear();
       acc.clear();
+      logStrings.clear();
       if (flushTimerRef.current != undefined) {
         clearTimeout(flushTimerRef.current);
         flushTimerRef.current = undefined;

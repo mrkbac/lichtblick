@@ -3,6 +3,7 @@
 import {
   detectConnection,
   formatTimeAgo,
+  connectionRecentArgs,
   splitRecentTitle,
   hostUrl,
   looksLikeHost,
@@ -73,13 +74,17 @@ describe("splitRecentTitle", () => {
 describe("formatTimeAgo", () => {
   const now = 1_700_000_000_000;
   const day = 24 * 60 * 60 * 1000;
-  it("picks the largest unit that fits at least twice", () => {
+  it("picks the largest unit that fits, waiting for two of the long ones", () => {
+    expect(formatTimeAgo(now - 117 * 1000, now, "en")).toBe("2 minutes ago");
+    expect(formatTimeAgo(now - 50 * 1000, now, "en")).toBe("1 minute ago");
     expect(formatTimeAgo(now - 3 * 60 * 60 * 1000, now, "en")).toBe("3 hours ago");
-    expect(formatTimeAgo(now - day, now, "en")).toBe("24 hours ago");
+    expect(formatTimeAgo(now - day, now, "en")).toBe("yesterday");
+    expect(formatTimeAgo(now - 10 * day, now, "en")).toBe("10 days ago");
     expect(formatTimeAgo(now - 2 * day, now, "en")).toBe("2 days ago");
     expect(formatTimeAgo(now - 17 * 30 * day, now, "en")).toBe("17 months ago");
     expect(formatTimeAgo(now - 3 * 365 * day, now, "en")).toBe("3 years ago");
     expect(formatTimeAgo(now - 1000, now, "en")).toBe("now");
+    expect(formatTimeAgo(now - 40 * 1000, now, "en")).toBe("now");
     expect(formatTimeAgo(now, now, "en")).toBe("now");
   });
 });
@@ -129,5 +134,26 @@ describe("looksLikeHost", () => {
     expect(hostUrl("robot.local", "foxglove-websocket")).toBe("ws://robot.local:8765");
     expect(hostUrl("robot.local", "rosbridge-websocket")).toBe("ws://robot.local:9090");
     expect(hostUrl("robot.local", "ros1-socket")).toBe("http://robot.local:11311");
+  });
+});
+
+describe("connection recent arguments", () => {
+  it("reopens older joined URL lists with their comparison settings", () => {
+    const urls = ["https://example.com/run,1.mcap", "https://example.com/run2.mcap"];
+    expect(
+      connectionRecentArgs({
+        sourceId: "remote-file",
+        extra: { url: urls.join(), compareNames: "A,B" },
+      }),
+    ).toEqual({ type: "connection", params: { compareNames: "A,B" }, urls });
+  });
+
+  it("preserves the contents of a new remote recent's URL list", () => {
+    const urls = ["https://example.com/run.mcap?tag=a,https://example.com/b.mcap"];
+    expect(connectionRecentArgs({ sourceId: "remote-file", urls })).toEqual({
+      type: "connection",
+      params: {},
+      urls,
+    });
   });
 });

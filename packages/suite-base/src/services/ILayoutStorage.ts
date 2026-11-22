@@ -39,6 +39,10 @@ export type Layout = {
   name: string;
   from?: string;
   permission: LayoutPermission;
+  /**
+   * Imported or copied from a source whose user scripts require approval.
+   */
+  untrusted?: true;
 
   /** @deprecated old field name, migrated to working/baseline */
   data?: LayoutData;
@@ -79,6 +83,22 @@ export function layoutPermissionIsShared(
   permission: LayoutPermission,
 ): permission is Exclude<LayoutPermission, "CREATOR_WRITE"> {
   return permission !== "CREATOR_WRITE";
+}
+
+/**
+ * What saveNewLayout needs to copy `layout` as a personal layout named `name`. Every copy goes
+ * through here so a copy keeps a layout's script approval requirement (see Layout.untrusted).
+ */
+export function personalLayoutCopy(
+  layout: Layout,
+  name: string,
+): { name: string; data: LayoutData; permission: "CREATOR_WRITE"; untrusted?: boolean } {
+  return {
+    name,
+    data: layout.working?.data ?? layout.baseline.data,
+    permission: "CREATOR_WRITE",
+    ...(layout.untrusted && { untrusted: true }),
+  };
 }
 
 export function layoutIsShared(

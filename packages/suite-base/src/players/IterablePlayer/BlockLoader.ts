@@ -36,6 +36,7 @@ import {
 } from "@lichtblick/suite-base/players/types";
 
 import { IDeserializedIterableSource, MessageIteratorArgs } from "./IIterableSource";
+import { selectPreloadTopics } from "./selectPreloadTopics";
 
 const log = Log.getLogger(__filename);
 
@@ -82,11 +83,19 @@ export class BlockLoader {
   #stopped: boolean = false;
   #activeChangeCondvar: Condvar = new Condvar();
   #abortController: AbortController;
+  /** Loading and eviction order around it; see #distance */
+  #playhead: Time;
+  /** Bumped when what to load changes (topics, playhead block), so a finished load runs again */
+  #generation = 0;
+  #arrayBytes = new WeakMap<readonly MessageEvent[], number>();
+  /** The blocks the running read goes over */
+  #reading?: { start: number; end: number };
 
   public constructor(args: BlockLoaderArgs) {
     this.#source = args.source;
     this.#start = args.start;
     this.#end = args.end;
+    this.#playhead = args.start;
     this.#budget = new ByteBudget(args.cacheSizeBytes);
     this.#alertManager = args.alertManager;
     this.#abortController = new AbortController();
@@ -181,11 +190,7 @@ export class BlockLoader {
       blocks.push({
         messagesByTopic,
         sizeInBytes,
-        needTopics: new Map(
-          [...this.#topics].filter(
-            ([topic, subscription]) => !subscriptionCovers(loaded[topic], subscription),
-          ),
-        ),
+        needTopics: this.#needTopics(this.#topics, loaded),
       });
       loadedSubscriptions.push(loaded);
     }
@@ -200,6 +205,7 @@ export class BlockLoader {
     }
 
     this.#abortController.abort();
+    this.#generation++;
     this.#activeChangeCondvar.notifyAll();
     log.debug(`Preloaded topics: ${Array.from(topics.keys()).join(", ")}`);
 
@@ -216,11 +222,7 @@ export class BlockLoader {
       // A new block, not a change to it: consumers reuse work per block reference
       this.#blocks[index] = {
         ...block,
-        needTopics: new Map(
-          [...topics].filter(
-            ([topic, subscription]) => !subscriptionCovers(loaded[topic], subscription),
-          ),
-        ),
+        needTopics: this.#needTopics(topics, loaded),
       };
     }
 
@@ -311,6 +313,28 @@ export class BlockLoader {
     return { messages, missing };
   }
 
+  /**
+   * Moves the playhead that loading and eviction are ordered around. If the new playhead block
+   * still needs loading and the running read doesn't go over it (e.g. a seek), that read stops so
+   * loading starts over around the playhead. Otherwise (e.g. playing over loaded data) it goes on,
+   * and a load that ran out of budget runs again, now that blocks behind count farther.
+   */
+  public setPlayhead(time: Time): void {
+    const previous = this.#playheadBlock();
+    this.#playhead = time;
+    const current = this.#playheadBlock();
+    if (current === previous) {
+      return;
+    }
+    const needed = (this.#blocks[current]?.needTopics.size ?? this.#topics.size) > 0;
+    const reading = this.#reading;
+    if (needed && !(reading && reading.start <= current && current <= reading.end)) {
+      this.#abortController.abort();
+    }
+    this.#generation++;
+    this.#activeChangeCondvar.notifyAll();
+  }
+
   public async stopLoading(): Promise<void> {
     log.debug("Stop loading blocks");
     this.#stopped = true;
@@ -326,22 +350,29 @@ export class BlockLoader {
     while (!this.#stopped) {
       this.#abortController = new AbortController();
 
-      const topics = this.#topics;
+      const generation = this.#generation;
 
       await this.#load({ progress: args.progress });
+      this.#reading = undefined;
 
       // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
       if (this.#stopped) {
         break;
       }
 
-      // Wait for topics to possibly change.
-      if (this.#topics === topics) {
+      // Wait for topics or the playhead to change
+      if (this.#generation === generation) {
         await this.#activeChangeCondvar.wait();
       }
     }
   }
 
+  /**
+   * Loads what the blocks still need, nearest to the playhead first (see #distance). When the
+   * budget runs out, the loaded data farthest from the playhead makes room, taken from topics that
+   * hold at least their fair share of the budget, so one heavy topic can't push out the others. A
+   * topic that can't grow any further stops there for this pass, while the other topics load on.
+   */
   async #load(args: { progress: LoadArgs["progress"] }): Promise<void> {
     const topics = new Map(this.#topics);
 
@@ -362,41 +393,73 @@ export class BlockLoader {
     const budget = this.#budget;
     budget.reset();
     budget.add(this.#cacheSize());
-    // "cache-full" is only added right before returning, so clearing it once per load is enough
-    let cacheFullCleared = false;
+    // Per topic, the distance from the playhead at which it ran out of budget in this pass
+    const cappedAt = new Map<string, number>();
+    // Per block, the topics evicted in this pass: not loaded again before the playhead moves, so
+    // two topics can't take room from each other back and forth
+    const evicted = new Map<number, Set<string>>();
 
-    for (let blockId = 0; blockId < this.#blocks.length; ++blockId) {
-      // Topics we will fetch for this range
-      let topicsToFetch: Immutable<TopicSelection>;
+    for (;;) {
+      const playhead = this.#playheadBlock();
+      const fetchTopics = (id: number): Immutable<TopicSelection> => {
+        const need = this.#blocks[id]?.needTopics ?? topics;
+        const evictedHere = evicted.get(id);
+        if (cappedAt.size === 0 && !evictedHere) {
+          return need;
+        }
+        const distance = this.#distance(id, playhead);
+        return new Map(
+          [...need].filter(
+            ([topic]) =>
+              distance < (cappedAt.get(topic) ?? Infinity) && evictedHere?.has(topic) !== true,
+          ),
+        );
+      };
 
-      // Keep looking for a block that needs loading
-      {
-        const existingBlock = this.#blocks[blockId];
-
-        // The current block has everything, so we can move to the next block
-        if (existingBlock?.needTopics.size === 0) {
+      // The nearest block that needs loading, and the nearest one on the other side of the playhead
+      let blockId = -1;
+      let topicsToFetch: Immutable<TopicSelection> = new Map();
+      for (let id = 0; id < this.#blocks.length; id++) {
+        if (blockId >= 0 && this.#distance(id, playhead) >= this.#distance(blockId, playhead)) {
           continue;
         }
-
-        // The current block needs some topics so those will be come the topics we need to fetch
-        topicsToFetch = existingBlock?.needTopics ?? topics;
-      }
-
-      // blockId is the first block that needs loading
-      // Now we look for the last block. We do this by finding blocks that need the same topics to fetch.
-      // This creates a continuous span of the same topics to fetch
-      let endBlockId = blockId;
-      for (let endIdx = blockId + 1; endIdx < this.#blocks.length; ++endIdx) {
-        // if needtopics is undefined cause there's no block, then needTopics is all topics
-        const needTopics = this.#blocks[endIdx]?.needTopics ?? topics;
-
-        // The topics we need to fetch no longer match the topics we need so we stop the range
-        if (!_.isEqual(topicsToFetch, needTopics)) {
-          break;
+        const fetch = fetchTopics(id);
+        if (fetch.size > 0) {
+          blockId = id;
+          topicsToFetch = fetch;
         }
-
-        endBlockId = endIdx;
       }
+      if (blockId < 0) {
+        break;
+      }
+
+      // Read the neighboring blocks that need the same topics in the same read, as many as the
+      // budget likely holds (each read reopens the source, decompressing the chunks at its ends
+      // again): forward, and behind the playhead also backward, farthest block first
+      const loadedBlocks = this.#blocks.filter((block) => (block?.sizeInBytes ?? 0) > 0).length;
+      let room =
+        loadedBlocks > 0
+          ? Math.floor((budget.capacity - budget.used()) / (budget.used() / loadedBlocks))
+          : Infinity;
+      let endBlockId = blockId;
+      while (
+        room > 1 &&
+        endBlockId + 1 < this.#blocks.length &&
+        _.isEqual(fetchTopics(endBlockId + 1), topicsToFetch)
+      ) {
+        endBlockId++;
+        room--;
+      }
+      while (
+        room > 1 &&
+        blockId < playhead &&
+        blockId > 0 &&
+        _.isEqual(fetchTopics(blockId - 1), topicsToFetch)
+      ) {
+        blockId--;
+        room--;
+      }
+      this.#reading = { start: blockId, end: endBlockId };
 
       // Compute the cursor start/end time from the range of blocks we need to load
       const cursorStartTime = this.#blockIdToStartTime(blockId);
@@ -436,6 +499,7 @@ export class BlockLoader {
         // Check whether the topics are changed and abort this loading instance because the results
         // may no longer be valid for the data we should be loading.
         if (!sameTopicSelection(topics, this.#topics)) {
+          await cursor.end();
           return;
         }
 
@@ -482,30 +546,43 @@ export class BlockLoader {
           arr.push(iterResult.msgEvent);
 
           sizeInBytes += messageSizeInBytes;
+        }
 
-          if (budget.used() < budget.capacity) {
-            if (!cacheFullCleared) {
-              cacheFullCleared = true;
-              this.#alertManager.removeAlert("cache-full");
-            }
-            continue;
+        // Over budget with the whole block (already read): drop topics no longer wanted, then make
+        // room from other data, planned against the whole block so nothing is evicted for a block
+        // that doesn't fit after all
+        if (!budget.fits(0)) {
+          budget.release(this.#removeUnusedBlockTopics());
+        }
+        if (!budget.fits(0)) {
+          this.#evict(
+            this.#distance(currentBlockId, this.#playheadBlock()),
+            messagesByTopic,
+            budget,
+            evicted,
+          );
+        }
+        const full = !budget.fits(0);
+
+        if (full) {
+          // Retry this block with the best subset that can fit. Keep the stopped topics capped
+          // for this pass so that their history ends here.
+          budget.release(sizeInBytes);
+          const distance = this.#distance(currentBlockId, this.#playheadBlock());
+          const selected = this.#selectTopics(distance, messagesByTopic, budget);
+          for (const topic of [...topicsToFetch.keys()].filter(
+            (candidate) => !selected.has(candidate),
+          )) {
+            cappedAt.set(topic, this.#distance(currentBlockId, playhead));
           }
-          // cache over capacity, try removing unused topics
-          const removedSize = this.#removeUnusedBlockTopics();
-          budget.release(removedSize);
-          if (!budget.fits(0)) {
-            this.#alertManager.addAlert("cache-full", {
-              severity: "error",
-              message: `Cache is full. Preloading for topics [${Array.from(
-                topicsToFetch.keys(),
-              ).join(", ")}] has stopped on block ${currentBlockId + 1}/${this.#blocks.length}.`,
-              tip: "Try reducing the number of topics that require preloading at a given time (e.g. in plots), or try to reduce the time range of the file.",
-            });
-            // We need to emit progress here so the player will emit a new state
-            // containing the problem.
-            progress(this.#calculateProgress(topics, budget.used()));
-            return;
-          }
+          this.#alertManager.addAlert("cache-full", {
+            severity: "warn",
+            message: `Preloading of [${[...cappedAt.keys()].join(", ")}] is limited to the data around the playhead: the preload cache is full.`,
+            tip: "Fewer preloaded topics (e.g. in plots) cover more of the recording.",
+          });
+          // Emit progress so the player emits a new state with the alert
+          progress(this.#calculateProgress(topics, budget.used()));
+          break;
         }
 
         const existingBlock = this.#blocks[currentBlockId];
@@ -516,25 +593,25 @@ export class BlockLoader {
         for (const topic of Object.keys(messagesByTopic)) {
           const messages = existingBlock?.messagesByTopic[topic];
           if (messages) {
-            overridenBlockMessagesSize += messages.reduce((acc, msg) => acc + msg.sizeInBytes, 0);
+            overridenBlockMessagesSize += this.#bytesOf(messages);
           }
         }
         const newBlockSizeInBytes =
           (existingBlock?.sizeInBytes ?? 0) - overridenBlockMessagesSize + sizeInBytes;
 
+        const loaded = {
+          ...this.#loadedSubscriptions[currentBlockId],
+          ...Object.fromEntries(topicsToFetch),
+        };
+        this.#loadedSubscriptions[currentBlockId] = loaded;
         this.#blocks[currentBlockId] = {
-          needTopics: new Map(),
+          needTopics: this.#needTopics(topics, loaded),
           messagesByTopic: {
             ...existingBlock?.messagesByTopic,
             // Any new topics override the same previous topic
             ...messagesByTopic,
           },
           sizeInBytes: newBlockSizeInBytes,
-        };
-
-        this.#loadedSubscriptions[currentBlockId] = {
-          ...this.#loadedSubscriptions[currentBlockId],
-          ...Object.fromEntries(topicsToFetch),
         };
 
         // Subtract the size of overridden messages from the the total size of all blocks.
@@ -545,8 +622,214 @@ export class BlockLoader {
       }
 
       await cursor.end();
-      blockId = endBlockId;
     }
+
+    if (cappedAt.size === 0) {
+      this.#alertManager.removeAlert("cache-full");
+    }
+  }
+
+  /**
+   * Frees loaded messages until `budget` fits, farthest from the playhead first, from topics holding
+   * more than their fair share of the budget (counting `loading`, the block being read): of the
+   * topics being loaded only what is farther than `distance`, of the others anything but the
+   * playhead block, so a topic under its share takes room from one over it.
+   */
+  #evict(
+    distance: number,
+    loading: Record<string, MessageEvent[]>,
+    budget: ByteBudget,
+    evicted: Map<number, Set<string>>,
+  ): void {
+    const { plan, fits } = this.#planEviction(distance, loading, budget.used(), budget.capacity);
+    if (!fits) {
+      return;
+    }
+    for (const { id, topic } of plan) {
+      const block = this.#blocks[id];
+      const messages = block?.messagesByTopic[topic];
+      if (!block || !messages) {
+        continue;
+      }
+      const bytes = this.#bytesOf(messages);
+      const { [topic]: _evicted, ...messagesByTopic } = block.messagesByTopic;
+      const loaded = { ...this.#loadedSubscriptions[id] };
+      delete loaded[topic];
+      this.#loadedSubscriptions[id] = loaded;
+      this.#blocks[id] = {
+        messagesByTopic,
+        sizeInBytes: block.sizeInBytes - bytes,
+        needTopics: this.#needTopics(this.#topics, loaded),
+      };
+      budget.release(bytes);
+      const evictedHere = evicted.get(id) ?? new Set();
+      evictedHere.add(topic);
+      evicted.set(id, evictedHere);
+    }
+  }
+
+  /**
+   * What #evict would free to bring `used` bytes (counting `loading`) down to `capacity`, and
+   * whether that is enough.
+   */
+  #planEviction(
+    distance: number,
+    loading: Record<string, MessageEvent[]>,
+    used: number,
+    capacity: number,
+  ): { plan: { id: number; topic: string }[]; fits: boolean } {
+    const topicBytes = this.#topicBytes();
+    for (const [topic, messages] of Object.entries(loading)) {
+      const bytes = messages.reduce((sum, message) => sum + message.sizeInBytes, 0);
+      topicBytes.set(topic, (topicBytes.get(topic) ?? 0) + bytes);
+    }
+    const fairShare = capacity / Math.max(1, this.#topics.size);
+    const playhead = this.#playheadBlock();
+    const victims: { id: number; topic: string; distance: number }[] = [];
+    for (const [id, block] of this.#blocks.entries()) {
+      const blockDistance = this.#distance(id, playhead);
+      if (!block) {
+        continue;
+      }
+      for (const topic of Object.keys(block.messagesByTopic)) {
+        if (
+          (topicBytes.get(topic) ?? 0) > fairShare &&
+          blockDistance > this.#evictionThreshold(topic, loading, distance)
+        ) {
+          victims.push({ id, topic, distance: blockDistance });
+        }
+      }
+    }
+    victims.sort((a, b) => b.distance - a.distance);
+    // Evict only if that makes room: otherwise the block being read is dropped anyway and the
+    // evicted data would be lost for nothing
+    const plan: typeof victims = [];
+    let freed = 0;
+    for (const victim of victims) {
+      if (used - freed <= capacity) {
+        break;
+      }
+      const messages = this.#blocks[victim.id]?.messagesByTopic[victim.topic];
+      if (!messages || (topicBytes.get(victim.topic) ?? 0) <= fairShare) {
+        continue;
+      }
+      const bytes = this.#bytesOf(messages);
+      topicBytes.set(victim.topic, (topicBytes.get(victim.topic) ?? 0) - bytes);
+      freed += bytes;
+      plan.push(victim);
+    }
+    return { plan, fits: used - freed <= capacity };
+  }
+
+  #selectTopics(
+    distance: number,
+    loading: Record<string, MessageEvent[]>,
+    budget: ByteBudget,
+  ): Set<string> {
+    const held = this.#topicBytes();
+    const playhead = this.#playheadBlock();
+    const fairShare = budget.capacity / Math.max(1, this.#topics.size);
+    const cached = this.#blocks
+      .flatMap((block, id) => {
+        const blockDistance = this.#distance(id, playhead);
+        return blockDistance > 0 && block ? [{ block, distance: blockDistance }] : [];
+      })
+      .sort((a, b) => b.distance - a.distance);
+
+    // A topic's eviction room depends only on its own bytes and whether we admit its new slice.
+    // Calculate that room using the same farthest-first rule as #planEviction.
+    const released = (topicBytes: Map<string, number>, nextDistance: number) => {
+      const result = new Map<string, number>();
+      for (const entry of cached) {
+        for (const [topic, messages] of Object.entries(entry.block.messagesByTopic)) {
+          const remaining = topicBytes.get(topic) ?? 0;
+          if (
+            remaining > fairShare &&
+            entry.distance > this.#evictionThreshold(topic, loading, nextDistance)
+          ) {
+            const bytes = this.#bytesOf(messages);
+            topicBytes.set(topic, remaining - bytes);
+            result.set(topic, (result.get(topic) ?? 0) + bytes);
+          }
+        }
+      }
+      return result;
+    };
+    const admittedBytes = new Map(held);
+    for (const [topic, messages] of Object.entries(loading)) {
+      admittedBytes.set(topic, (held.get(topic) ?? 0) + this.#bytesOf(messages));
+    }
+    const ifSkipped = released(new Map(held), 0);
+    const ifAdmitted = released(new Map(admittedBytes), distance);
+    const available =
+      budget.capacity -
+      budget.used() +
+      [...ifSkipped.values()].reduce((sum, bytes) => sum + bytes, 0);
+    const costs = Object.entries(loading).map(([topic, messages]) => ({
+      topic,
+      cost: this.#bytesOf(messages) + (ifSkipped.get(topic) ?? 0) - (ifAdmitted.get(topic) ?? 0),
+      projectedBytes: admittedBytes.get(topic) ?? 0,
+    }));
+    return selectPreloadTopics(costs, available);
+  }
+
+  #evictionThreshold(
+    topic: string,
+    loading: Record<string, MessageEvent[]>,
+    distance: number,
+  ): number {
+    // Admitted topics can only lose farther slices. The playhead is protected for every topic.
+    return Object.hasOwn(loading, topic) ? distance : 0;
+  }
+
+  /** Loaded bytes per topic, across all blocks */
+  #topicBytes(): Map<string, number> {
+    const bytes = new Map<string, number>();
+    for (const block of this.#blocks) {
+      for (const [topic, messages] of Object.entries(block?.messagesByTopic ?? {})) {
+        bytes.set(topic, (bytes.get(topic) ?? 0) + this.#bytesOf(messages));
+      }
+    }
+    return bytes;
+  }
+
+  /** Byte size of a block's messages for a topic, summed once per array (they don't change) */
+  #bytesOf(messages: readonly MessageEvent[]): number {
+    let bytes = this.#arrayBytes.get(messages);
+    if (bytes == undefined) {
+      bytes = messages.reduce((sum, message) => sum + message.sizeInBytes, 0);
+      this.#arrayBytes.set(messages, bytes);
+    }
+    return bytes;
+  }
+
+  /** The topics a block still needs, given what its messages were loaded with */
+  #needTopics(topics: TopicSelection, loaded: LoadedSubscriptions): TopicSelection {
+    return new Map(
+      [...topics].filter(
+        ([topic, subscription]) => !subscriptionCovers(loaded[topic], subscription),
+      ),
+    );
+  }
+
+  /**
+   * How far a block is from the playhead block, for load order and eviction. Blocks behind the
+   * playhead count double: playback reads forward.
+   */
+  #distance(id: number, playhead: number): number {
+    return id >= playhead ? id - playhead : (playhead - id) * 2;
+  }
+
+  #playheadBlock(): number {
+    return this.#blockOf(this.#playhead);
+  }
+
+  #blockOf(time: Time): number {
+    const offsetNs = Number(toNanoSec(time) - toNanoSec(this.#start));
+    return Math.min(
+      this.#blocks.length - 1,
+      Math.max(0, Math.floor(offsetNs / this.#blockDurationNanos)),
+    );
   }
 
   #calculateProgress(topics: TopicSelection, currentCacheSize: number): Progress {

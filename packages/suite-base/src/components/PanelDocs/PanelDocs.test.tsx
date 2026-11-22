@@ -8,10 +8,12 @@ import "@testing-library/jest-dom/vitest";
 
 import {
   PanelDocs,
-  PanelGuide,
   schemaDisplayNames,
-  usePanelGuideStore,
 } from "@lichtblick/suite-base/components/PanelDocs/PanelDocs";
+import {
+  PanelGuide,
+  usePanelGuideStore,
+} from "@lichtblick/suite-base/components/PanelDocs/PanelGuide";
 import PanelCatalogContext, { PanelInfo } from "@lichtblick/suite-base/context/PanelCatalogContext";
 import ThemeProvider from "@lichtblick/suite-base/theme/ThemeProvider";
 

@@ -35,6 +35,7 @@ export const stateTransitions = {
   },
   markerA: "P1",
   markerB: "P2",
+  matchesApproximate: "Older history was thinned. The count and match navigation may miss matches.",
   max: "Max",
   maxHelp: "Fixed end of the time axis, in seconds from the start. Clears the range.",
   maxXError: "X max must be greater than X min.",

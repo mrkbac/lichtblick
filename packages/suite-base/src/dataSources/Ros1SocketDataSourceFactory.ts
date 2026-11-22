@@ -12,7 +12,7 @@ import {
   IDataSourceFactory,
   DataSourceFactoryInitializeArgs,
 } from "@lichtblick/suite-base/context/PlayerSelectionContext";
-import Ros1Player from "@lichtblick/suite-base/players/Ros1Player";
+import { loadRos1Player, prefetch } from "@lichtblick/suite-base/dataSources/playerModules";
 import { Player } from "@lichtblick/suite-base/players/types";
 
 class Ros1SocketDataSourceFactory implements IDataSourceFactory {
@@ -46,7 +46,12 @@ class Ros1SocketDataSourceFactory implements IDataSourceFactory {
     ],
   };
 
-  public initialize(args: DataSourceFactoryInitializeArgs): Player | undefined {
+  public prefetch = (): void => {
+    prefetch(loadRos1Player);
+  };
+
+  public async initialize(args: DataSourceFactoryInitializeArgs): Promise<Player | undefined> {
+    const Ros1Player = await loadRos1Player();
     const url = args.params?.url;
     if (!url) {
       return;

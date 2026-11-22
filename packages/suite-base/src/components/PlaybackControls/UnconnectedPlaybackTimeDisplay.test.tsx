@@ -94,6 +94,20 @@ describe("blur", () => {
     fireEvent.change(input, { target: { value: "2.5" } });
     fireEvent.blur(input);
     expect(onSeek).toHaveBeenCalledWith({ sec: 2, nsec: 500_000_000 });
+
+    vi.useFakeTimers();
+    try {
+      fireEvent.focus(input);
+      fireEvent.change(input, { target: { value: "invalid" } });
+      fireEvent.blur(input);
+      expect(input.getAttribute("aria-invalid")).toBe("true");
+      act(() => {
+        vi.advanceTimersByTime(600);
+      });
+      expect(input.getAttribute("aria-invalid")).toBe("false");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 

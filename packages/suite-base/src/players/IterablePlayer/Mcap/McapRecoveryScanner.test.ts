@@ -145,6 +145,25 @@ describe("McapRecoveryScanner", () => {
     });
   });
 
+  it("refuses snapshots saved before it kept the first of conflicting definitions", async () => {
+    const scanner = await scan(await makeMcap({ finish: false }));
+    const snapshot = scanner.toSnapshot();
+    const handlers = await loadDecompressHandlers();
+    expect(McapRecoveryScanner.fromSnapshot(snapshot, handlers).messageCount).toBe(
+      scanner.messageCount,
+    );
+
+    // A version 2 snapshot may hold the later of two conflicting definitions
+    const headerLength = new DataView(snapshot.buffer).getUint32(0, true);
+    const header = new TextDecoder().decode(snapshot.subarray(4, 4 + headerLength));
+    const old = snapshot.slice();
+    old.set(new TextEncoder().encode(header.replace('"version":3', '"version":2')), 4);
+
+    expect(() => McapRecoveryScanner.fromSnapshot(old, handlers)).toThrow(
+      "Unknown snapshot version",
+    );
+  });
+
   it("serves the rebuilt index to McapIndexedReader, including metadata", async () => {
     // Given
     const bytes = await makeMcap({ finish: false });

@@ -10,25 +10,30 @@ import { Time, fromNanoSec, toNanoSec, toRFC3339String, compare } from "@foxglov
 import Logger from "@lichtblick/log";
 import { type McapIndexedReader, McapTypes } from "@lichtblick/mcap-core";
 import { ParsedChannel, parseChannel } from "@lichtblick/mcap-support";
-import { MessageEvent, Metadata } from "@lichtblick/suite";
+import { Metadata } from "@lichtblick/suite";
 import {
   GetBackfillMessagesArgs,
   Initialization,
   ISerializedIterableSource,
   IteratorResult,
   MessageIteratorArgs,
+  SKIM_TAIL_NS,
   TopicWithDecodingInfo,
 } from "@lichtblick/suite-base/players/IterablePlayer/IIterableSource";
-import { PlayerAlert, RecordingFileInfo, TopicStats } from "@lichtblick/suite-base/players/types";
+import {
+  MessageEvent,
+  PlayerAlert,
+  RecordingFileInfo,
+  TopicStats,
+} from "@lichtblick/suite-base/players/types";
 import { RosDatatypes } from "@lichtblick/suite-base/types/RosDatatypes";
 import type { ReadOptions } from "@lichtblick/suite-base/util/CachedFilelike.types";
 import { toError } from "@lichtblick/suite-base/util/toError";
 
+import type { PrefetchOptions } from "./RemoteFileReadable.types";
+
 const log = Logger.getLogger(__filename);
 
-// Skim reads the last 50ms of each window: enough for every fast topic (and every publisher on
-// a shared topic) to show up, while skipping the rest of the window's chunks.
-const SKIM_TAIL_NS = 50_000_000n;
 // How many chunks skimming prefetches ahead of the window it is reading
 const SKIM_PREFETCH_AHEAD_CHUNKS = 24;
 
@@ -45,10 +50,12 @@ export type RecoverReader = (
  */
 export type CheckChunk = (chunk: McapTypes.ChunkIndex) => Promise<Error | undefined>;
 
+type LocatedMessage = McapTypes.Message & { recordOffset?: string };
+
 type ReadMessagesArgs = Omit<
   NonNullable<Parameters<McapIndexedReader["readMessages"]>[0]>,
-  "validateCrcs"
->;
+  "validateCrcs" | "readOptions"
+> & { readOptions?: ReadOptions; abort?: AbortSignal };
 
 const FULL_READ_OPTIONS: ReadOptions = { background: true };
 
@@ -65,6 +72,7 @@ const SKIM_MIN_CHUNKS_PER_WINDOW = 4n;
 
 export class McapIndexedIterableSource implements ISerializedIterableSource {
   #reader: McapIndexedReader;
+  readonly #recordIdPrefix?: string;
   #channelInfoById = new Map<
     number,
     {
@@ -76,7 +84,7 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
   #start?: Time;
   #end?: Time;
   #avgChunkDurationNs = 0n;
-  #prefetch?: (ranges: ByteRange[]) => void;
+  #prefetch?: (ranges: ByteRange[], options?: PrefetchOptions) => void;
   #recover?: RecoverReader;
   #recovering?: Promise<void>;
   #checkChunk?: CheckChunk;
@@ -107,7 +115,7 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
 
   /**
    * @param options.prefetch Fetches byte ranges ahead of time so the reader later hits a local
-   * copy. Remote sources pass it so skimming can fetch upcoming chunks in parallel.
+   * copy. Remote sources pass it so skimming and backfill can fetch the chunks they need in parallel.
    * @param options.checkChunk Checks the chunks around a read that keeps failing: a corrupt one
    * is dropped from the index (and added to `options.corruptChunks`) and reading resumes, without
    * scanning the file.
@@ -117,13 +125,15 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
   public constructor(
     reader: McapIndexedReader,
     options?: {
-      prefetch?: (ranges: ByteRange[]) => void;
+      prefetch?: (ranges: ByteRange[], options?: PrefetchOptions) => void;
       recover?: RecoverReader;
       checkChunk?: CheckChunk;
       corruptChunks?: Set<bigint>;
+      recordIdPrefix?: string;
     },
   ) {
     this.#reader = reader;
+    this.#recordIdPrefix = options?.recordIdPrefix;
     this.#prefetch = options?.prefetch;
     this.#recover = options?.recover;
     this.#checkChunk = options?.checkChunk;
@@ -194,12 +204,13 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
    * recovered reader, once) and resumes after the last message already yielded, so consumers see
    * one uninterrupted stream.
    */
-  async *#readMessages(args: ReadMessagesArgs): AsyncGenerator<McapTypes.Message> {
+  async *#readMessages(args: ReadMessagesArgs): AsyncGenerator<LocatedMessage> {
     // Resume point: the last yielded logTime and how many messages at that logTime were yielded
     let lastTime: bigint | undefined;
     let yieldedAtLastTime = 0;
     let retried = false;
-    for (;;) {
+    const isAborted = () => args.abort?.aborted === true;
+    while (!isAborted()) {
       const resumeArgs: ReadMessagesArgs =
         lastTime == undefined
           ? args
@@ -209,13 +220,23 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
       let skip = yieldedAtLastTime;
       const reader = this.#reader;
       const chunkIndexes = reader.chunkIndexes;
-      const messages = reader.readMessages({ ...resumeArgs, validateCrcs: false });
+      const messages = reader.readMessages({
+        ...resumeArgs,
+        validateCrcs: false,
+        readOptions: args.abort
+          ? { ...resumeArgs.readOptions, signal: args.abort }
+          : resumeArgs.readOptions,
+        includeRecordOffsets: this.#recordIdPrefix != undefined,
+      });
       try {
         for (;;) {
           let result;
           try {
             result = await messages.next();
           } catch (err: unknown) {
+            if (isAborted()) {
+              return;
+            }
             // Retry once first: a transient error (e.g. the network) needs no scan. Then, unless
             // another read already dropped a chunk or swapped the reader meanwhile, look for the
             // corrupt chunk around the read position and drop it. Only if there is none, recover
@@ -251,7 +272,7 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
             }
             break;
           }
-          if (result.done === true) {
+          if (result.done === true || isAborted()) {
             return;
           }
           const message = result.value;
@@ -289,7 +310,8 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
   public async initialize(): Promise<Initialization> {
     const reader = this.#reader;
     const index = this.#index;
-    for (const chunk of reader.chunkIndexes.slice(index.chunks)) {
+    const newChunks = reader.chunkIndexes.slice(index.chunks);
+    for (const chunk of newChunks) {
       if (index.startTime == undefined || chunk.messageStartTime < index.startTime) {
         index.startTime = chunk.messageStartTime;
       }
@@ -397,6 +419,7 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
         [...index.publishersByTopic].map(([topic, publishers]) => [topic, new Set(publishers)]),
       ),
       topicStats,
+      indexedBackfill: true,
       // What the caller reports as changed is only its new chunks, unless earlier ones changed too
       updatedRanges: revived ? undefined : [],
     };
@@ -466,6 +489,7 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
     }
 
     for await (const message of this.#readMessages({
+      abort: args.abort,
       startingAt: toNanoSec(start),
       endingAt: toNanoSec(end),
       topics: topicNames,
@@ -682,7 +706,7 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
     return [...chunks];
   }
 
-  #toResult(message: McapTypes.Message): Readonly<IteratorResult<Uint8Array>> {
+  #toResult(message: LocatedMessage): Readonly<IteratorResult<Uint8Array>> {
     const channelInfo = this.#channelInfoById.get(message.channelId);
     if (!channelInfo) {
       return {
@@ -703,6 +727,9 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
         message: message.data,
         sizeInBytes: message.data.byteLength,
         schemaName: channelInfo.schemaName ?? "",
+        ...(message.recordOffset != undefined && {
+          recordId: `${this.#recordIdPrefix}:${message.recordOffset}`,
+        }),
       },
     };
   }
@@ -711,6 +738,22 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
     args: GetBackfillMessagesArgs,
   ): Promise<MessageEvent<Uint8Array>[]> {
     const { topics, time } = args;
+    const end = toNanoSec(time);
+    // The topics are read one after the other; fetch each one's latest chunks (and the chunks
+    // spanning `time`, which every topic's reverse read looks at first) at once up front
+    if (this.#prefetch) {
+      const topicNames = new Set(topics.keys());
+      const channels = new Set<number>();
+      for (const [id, { channel }] of this.#channelInfoById) {
+        if (topicNames.has(channel.topic)) {
+          channels.add(id);
+        }
+      }
+      const chunks = this.#skimChunks(topicNames, 0n, end, end + 1n).filter((chunk) =>
+        [...chunk.messageIndexOffsets.keys()].some((id) => channels.has(id)),
+      );
+      this.#prefetch(chunks.map(chunkByteRange), { skim: false });
+    }
 
     const messages: MessageEvent<Uint8Array>[] = [];
     for (const topic of topics.keys()) {
@@ -720,7 +763,7 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
       for await (const message of this.#readMessages({
         // Explicit: a live reader's default lower bound is the start when it was opened
         startingAt: 0n,
-        endingAt: toNanoSec(time),
+        endingAt: end,
         topics: [topic],
         reverse: true,
       })) {
@@ -737,6 +780,9 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
           message: message.data,
           sizeInBytes: message.data.byteLength,
           schemaName: channelInfo.schemaName ?? "",
+          ...(message.recordOffset != undefined && {
+            recordId: `${this.#recordIdPrefix}:${message.recordOffset}`,
+          }),
         });
 
         break;

@@ -14,6 +14,7 @@ import Logger from "@lichtblick/log";
 import { KEY_WORKSPACE_PREFIX } from "@lichtblick/suite-base/constants/browserStorageKeys";
 import { createKeyValueStore } from "@lichtblick/suite-base/util/idbKeyValueStore";
 import { randomUUID } from "@lichtblick/suite-base/util/randomUUID";
+import { connectionRecentArgs } from "@lichtblick/suite-base/util/recentSources";
 
 const log = Logger.getLogger(__filename);
 
@@ -47,11 +48,13 @@ type RecentConnectionRecord = RecentRecordCommon & {
   type: "connection";
   // Optional arguments stored with the recent entry
   extra?: Record<string, string | undefined>;
+  urls?: readonly string[];
 };
 
 type RecentFileRecord = RecentRecordCommon & {
   type: "file";
-  handles: FileSystemFileHandle[];
+  // A string is a remote URL, in a comparison that mixes them with local files
+  handles: (FileSystemFileHandle | string)[];
   // Side name of each of `handles` when they were compared side by side (see
   // FileDataSourceArgs.compare). A file in several sides repeats its handle. Missing: merged.
   compare?: string[];
@@ -94,9 +97,18 @@ export function isSameRecent(a: UnsavedRecentRecord, b: UnsavedRecentRecord): bo
   // Connections are identified by their arguments, files by name. A comparison also by which
   // file is in which side, since its title lists each file once.
   if (a.type === "connection" || b.type === "connection") {
-    return a.type === "connection" && b.type === "connection" && _.isEqual(a.extra, b.extra);
+    // The display name (`name`) isn't identity: a catalog name or a renamed entry reuses the row.
+    if (a.type !== "connection" || b.type !== "connection") {
+      return false;
+    }
+    const left = connectionRecentArgs(a);
+    const right = connectionRecentArgs(b);
+    return (
+      _.isEqual(left.urls, right.urls) &&
+      _.isEqual(_.omit(left.params, "name"), _.omit(right.params, "name"))
+    );
   }
-  const names = (r: typeof a) => r.handles.map((h) => h.name);
+  const names = (r: typeof a) => r.handles.map((h) => (typeof h === "string" ? h : h.name));
   return (
     a.title === b.title &&
     _.isEqual(a.compare, b.compare) &&

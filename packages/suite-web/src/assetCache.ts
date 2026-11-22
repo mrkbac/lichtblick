@@ -16,3 +16,10 @@ export type AssetList = {
   version: string;
   files: string[];
 };
+
+/**
+ * Marks this page's own prefetches of build files: a file missing then isn't something the page
+ * needs, so the service worker doesn't report it (see fetchDidSucceed in rspackConfigs.ts, which
+ * repeats the literal).
+ */
+export const PREFETCH_HEADER = "x-lichtblick-prefetch";

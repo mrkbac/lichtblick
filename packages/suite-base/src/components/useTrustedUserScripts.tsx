@@ -10,6 +10,7 @@ import {
   DialogTitle,
 } from "@mui/material";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 import Logger from "@lichtblick/log";
 import { useLayoutManager } from "@lichtblick/suite-base/context/LayoutManagerContext";
@@ -75,8 +76,9 @@ type Decision = { layoutId: string; scripts: string };
 
 /**
  * User scripts run code from the layout. Scripts in a shared layout can come from anyone who can
- * edit it, so they only run after the user agrees, once per version of the scripts. Scripts in
- * local layouts, and the user's own edits to scripts they already allowed, run as before.
+ * edit it. Scripts from outside the app can come from anyone who provided a link or file. They
+ * run after the user agrees, once per version of the scripts. Scripts in the user's own layouts,
+ * and the user's own edits to scripts they already allowed, run as before.
  *
  * Returns the scripts to run (none until allowed) and the dialog to render.
  */
@@ -90,11 +92,13 @@ export function useTrustedUserScripts({
   /** Whether the open layout has unsaved local changes. */
   edited: boolean;
 }): { scripts: UserScripts; prompt: React.JSX.Element | undefined } {
+  const { t } = useTranslation("workspace");
   const layoutManager = useLayoutManager();
   const scriptsText = useMemo(() => canonical(userScripts), [userScripts]);
   const hasScripts = Object.keys(userScripts).length > 0;
 
-  const [layoutInfo, setLayoutInfo] = useState<{ id: string; shared: boolean }>();
+  /** `source` is why the layout's scripts need approval, if they do. */
+  const [layoutInfo, setLayoutInfo] = useState<{ id: string; source?: "shared" | "imported" }>();
   const [allowed, setAllowed] = useState<Decision>();
   const [declined, setDeclined] = useState<Decision>();
   const [pending, setPending] = useState<Decision & { names: string[] }>();
@@ -108,7 +112,17 @@ export function useTrustedUserScripts({
     const controller = new AbortController();
     void layoutManager.getLayout(layoutId as never).then((layout) => {
       if (!controller.signal.aborted) {
-        setLayoutInfo({ id: layoutId, shared: layout != undefined && layoutIsShared(layout) });
+        setLayoutInfo({
+          id: layoutId,
+          source:
+            layout == undefined
+              ? undefined
+              : layoutIsShared(layout)
+                ? "shared"
+                : layout.untrusted === true
+                  ? "imported"
+                  : undefined,
+        });
       }
     });
     return () => {
@@ -117,7 +131,7 @@ export function useTrustedUserScripts({
   }, [layoutId, layoutManager]);
 
   const known = layoutId != undefined && layoutInfo?.id === layoutId;
-  const needsTrust = hasScripts && known && layoutInfo.shared;
+  const needsTrust = hasScripts && known && layoutInfo.source != undefined;
   const isAllowed =
     allowed != undefined && allowed.layoutId === layoutId && allowed.scripts === scriptsText;
   const isDeclined =
@@ -158,19 +172,26 @@ export function useTrustedUserScripts({
   }, [edited, isAllowed, isDeclined, layoutId, needsTrust, scriptsText, userScripts]);
 
   let scripts = NO_SCRIPTS;
-  if (hasScripts && known && (!layoutInfo.shared || isAllowed)) {
+  if (hasScripts && known && (layoutInfo.source == undefined || isAllowed)) {
     scripts = userScripts;
   }
 
   const prompt = pending?.layoutId === layoutId && pending != undefined && (
     <Dialog open maxWidth="sm" fullWidth data-testid="trust-user-scripts">
-      <DialogTitle>Run user scripts from this shared layout?</DialogTitle>
+      <DialogTitle>
+        {layoutInfo?.source === "imported"
+          ? t("trustImportedScriptsTitle")
+          : t("trustSharedScriptsTitle")}
+      </DialogTitle>
       <DialogContent>
         <DialogContentText>
-          This layout contains {pending.names.length === 1 ? "a user script" : "user scripts"}:{" "}
-          {pending.names.join(", ")}. User scripts run code in your browser and can change the data
-          you see. Anyone who can edit this layout in your organization can change them. Only run
-          them if you trust those people.
+          {t("trustScriptsDescription", {
+            count: pending.names.length,
+            names: pending.names.join(", "),
+          })}{" "}
+          {layoutInfo?.source === "imported"
+            ? t("trustImportedScriptsDescription")
+            : t("trustSharedScriptsDescription")}
         </DialogContentText>
       </DialogContent>
       <DialogActions>
@@ -182,7 +203,7 @@ export function useTrustedUserScripts({
             setPending(undefined);
           }}
         >
-          Don’t run
+          {t("declineUserScripts")}
         </Button>
         <Button
           variant="contained"
@@ -194,7 +215,7 @@ export function useTrustedUserScripts({
             setPending(undefined);
           }}
         >
-          Run scripts
+          {t("allowUserScripts")}
         </Button>
       </DialogActions>
     </Dialog>

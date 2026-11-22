@@ -24,10 +24,13 @@
 /*.ttf
     Cache-Control: public, max-age=31536000, immutable
 
-# The only unhashed scripts: the service worker and the script it imports must pick up new deploys
+# The only unhashed scripts: the service worker and the scripts it imports must pick up new deploys
 /sw.js
     ! Cache-Control
     Cache-Control: no-cache
 /view-link-redirect.js
+    ! Cache-Control
+    Cache-Control: no-cache
+/sw-worker-owners.js
     ! Cache-Control
     Cache-Control: no-cache

@@ -121,7 +121,7 @@ export default defineConfig({
       ...["den", "oxlint-plugin"].map((name) =>
         project(name, { root: `packages/${name}`, include: ["**/*.test.{ts,tsx}"] }),
       ),
-      ...["mcap-core", "mcap-support", "message-path", "theme"].map((name) =>
+      ...["mcap-core", "mcap-support", "message-path"].map((name) =>
         project(name, { root: `packages/${name}`, include: ["src/**/*.test.{ts,tsx}"] }),
       ),
       project("benchmark", {
