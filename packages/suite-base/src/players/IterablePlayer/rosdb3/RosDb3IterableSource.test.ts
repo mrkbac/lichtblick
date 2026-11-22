@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
+import { SqliteSqljs } from "@foxglove/rosbag2-web";
 import initSqlJs from "@foxglove/sql.js";
 import fs from "node:fs";
 import { createRequire } from "node:module";
@@ -52,7 +53,7 @@ async function makeDb3(): Promise<Uint8Array<ArrayBuffer>> {
     CREATE INDEX timestamp_idx ON messages (timestamp ASC);
     INSERT INTO topics VALUES (1, '/fast', 'std_msgs/msg/String', 'cdr', '[]');
     INSERT INTO topics VALUES (2, '/rare', 'std_msgs/msg/String', 'cdr', '[]');
-    INSERT INTO topics VALUES (3, '/burst', 'std_msgs/msg/String', 'cdr', '[]');
+    INSERT INTO topics VALUES (3, '/dense', 'std_msgs/msg/String', 'cdr', '[]');
   `);
   const insert = db.prepare("INSERT INTO messages (topic_id, timestamp, data) VALUES (?, ?, ?)");
   for (let i = 0; i <= 1000; i++) {
@@ -60,9 +61,9 @@ async function makeDb3(): Promise<Uint8Array<ArrayBuffer>> {
     insert.run([1, (ns(100) + BigInt(i) * 100_000_000n).toString(), new Uint8Array(5000).fill(i)]);
   }
   insert.run([2, ns(101).toString(), new Uint8Array([1])]);
-  // 300 rows within 0.3 s, long before the end: one backfill window reads them all
-  for (let i = 0; i < 300; i++) {
-    insert.run([3, (ns(100) + BigInt(i) * 1_000_000n).toString(), new Uint8Array([3])]);
+  // 10,000 rows from 120 s to 130 s: several backfill pages without another topic
+  for (let i = 0; i < 10_000; i++) {
+    insert.run([3, (ns(120) + BigInt(i) * 1_000_000n).toString(), new Uint8Array([3])]);
   }
   insert.run([2, ns(150).toString(), new Uint8Array([2])]);
   insert.free();
@@ -129,55 +130,45 @@ describe("RosDb3IterableSource", () => {
     expect(none).toEqual([]);
   });
 
-  it("stops a backfill when the seek is superseded between windows without matches", async () => {
+  it("pages a backfill by rows and stops when the seek is superseded", async () => {
     const { source } = await open();
-    const abort = new AbortController();
     const realSetTimeout = globalThis.setTimeout;
     let yields = 0;
+    let abortAt = Infinity;
+    const abort = new AbortController();
     vi.spyOn(globalThis, "setTimeout").mockImplementation(((fn: () => void, ms?: number) => {
-      // /rare's latest is 50 s back: the first windows match no row
-      if (++yields === 2) {
+      if (++yields === abortAt) {
         abort.abort();
       }
       return realSetTimeout(fn, ms);
     }) as typeof setTimeout);
+    // 10,000 /dense rows lie between 135 s and /rare's message at 101 s
+    const args = {
+      topics: new Map([["/rare", { topic: "/rare" }]]),
+      time: { sec: 135, nsec: 0 },
+    };
+
+    const messages = await source.getBackfillMessages(args);
+    expect(messages.map((m) => m.receiveTime)).toEqual([{ sec: 101, nsec: 0 }]);
+    // Pages without a match still yield to the worker
+    expect(yields).toBeGreaterThanOrEqual(3);
+
+    yields = 0;
+    abortAt = 2;
     await expect(
-      source.getBackfillMessages({
-        topics: new Map([["/rare", { topic: "/rare" }]]),
-        time: { sec: 200, nsec: 0 },
-        abortSignal: abort.signal,
-      }),
+      source.getBackfillMessages({ ...args, abortSignal: abort.signal }),
     ).rejects.toThrow();
   });
 
-  it("stops a backfill when the seek is superseded mid-window", async () => {
-    const { source } = await open();
-    const abort = new AbortController();
-    const realSetTimeout = globalThis.setTimeout;
-    // Six windows (one yield each) reach the burst; its 256th row yields again, mid-window, and
-    // the superseding seek's abort lands then
-    let yields = 0;
-    vi.spyOn(globalThis, "setTimeout").mockImplementation(((fn: () => void, ms?: number) => {
-      if (++yields === 7) {
-        abort.abort();
-      }
-      return realSetTimeout(fn, ms);
-    }) as typeof setTimeout);
-    await expect(
-      source.getBackfillMessages({
-        topics: new Map([["/burst", { topic: "/burst" }]]),
-        time: { sec: 150, nsec: 0 },
-        abortSignal: abort.signal,
-      }),
-    ).rejects.toThrow();
-    vi.mocked(globalThis.setTimeout).mockRestore();
-
-    // The aborted window's statement is freed: the next backfill reads normally
-    const messages = await source.getBackfillMessages({
-      topics: new Map([["/burst", { topic: "/burst" }]]),
-      time: { sec: 150, nsec: 0 },
-    });
-    expect(messages.map((m) => m.receiveTime)).toEqual([{ sec: 100, nsec: 299_000_000 }]);
+  it("bounds each backfill page by rows, matching or not", async () => {
+    await SqliteSqljs.Initialize({ wasmBinary: wasm });
+    const db = new SqliteSqljs(new BlockCachedFile(new BytesFile(db3)));
+    await db.open();
+    // The 100 rows back from 135 s (51 /fast, 49 /dense) hold no /rare: the page ends anyway
+    const page = db.backfillPage({ sec: 135, nsec: 0 }, ["/rare"], 100);
+    expect(page.found).toEqual([]);
+    expect(page.next).toEqual({ sec: 129, nsec: 950_999_999 });
+    await db.close();
   });
 
   it("reads the file in blocks", async () => {
