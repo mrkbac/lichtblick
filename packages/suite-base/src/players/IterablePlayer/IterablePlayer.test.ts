@@ -10,6 +10,7 @@ import { compare, fromSec, toSec } from "@foxglove/rostime";
 import * as _ from "lodash-es";
 import type { Mock, MockInstance } from "vitest";
 
+import { mergeSubscriptions } from "@lichtblick/suite-base/components/MessagePipeline/subscriptions";
 import { PLAYER_CAPABILITIES } from "@lichtblick/suite-base/players/constants";
 import {
   InternalSubscribePayload,
@@ -1350,7 +1351,10 @@ describe("IterablePlayer", () => {
     player.setListener(async (state) => {
       states.push(state);
     });
-    player.setSubscriptions([{ topic: "preloaded", preloadType: "full" }, { topic: "live" }]);
+    // As the message pipeline subscribes: a preloaded topic gets a full and a partial payload
+    player.setSubscriptions(
+      mergeSubscriptions([{ topic: "preloaded", preloadType: "full" }, { topic: "live" }]),
+    );
 
     // Wait for the whole recording to be preloaded
     await vi.waitFor(() => {

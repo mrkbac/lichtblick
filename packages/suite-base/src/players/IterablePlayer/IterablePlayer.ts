@@ -957,12 +957,13 @@ export class IterablePlayer implements Player {
     if (!this.#blockLoader || this.#playbackSkimInterval) {
       return new Map();
     }
+    // Playback's own subscription of each preloaded topic: the blocks must hold what it asks for
+    // (the pipeline subscribes a preloaded topic with a separate payload for playback)
     const candidates: TopicSelection = new Map(
-      filterMap([...this.#preloadTopics], ([topic, subscription]) =>
-        this.#allTopics.get(topic) === subscription && !subscription.samplingRequest
-          ? [topic, subscription]
-          : undefined,
-      ),
+      filterMap([...this.#preloadTopics.keys()], (topic) => {
+        const playback = this.#allTopics.get(topic);
+        return playback && !playback.samplingRequest ? [topic, playback] : undefined;
+      }),
     );
     return this.#blockLoader.topicsHeldFrom(candidates, time);
   }
