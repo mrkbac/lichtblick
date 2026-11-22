@@ -313,7 +313,7 @@ describe("DecayPointRing", () => {
       push(ring, BigInt(i), 1, "missing"); // the newest, so they are tried first
     }
 
-    expect(ring.updatePoses(transformTree, 0n, "map", "map")).toBe("missing");
+    expect(ring.updatePoses(transformTree, 0n, "map", "map")?.frameId).toBe("missing");
     expect(ring.posesPending()).toBe(true); // the per-frame budget ran out
     ring.updatePoses(transformTree, 0n, "map", "map");
 
@@ -321,7 +321,7 @@ describe("DecayPointRing", () => {
     for (let slot = 0; slot < 60; slot++) {
       expect(poseRow(slot)).not.toEqual(Array(12).fill(0));
     }
-    expect(ring.updatePoses(transformTree, 0n, "map", "map")).toBe("missing");
+    expect(ring.updatePoses(transformTree, 0n, "map", "map")?.frameId).toBe("missing");
   });
 
   it("corrects the newest outdated rows first, and retries only a few scans missing a transform", () => {
@@ -423,7 +423,7 @@ describe("DecayPointRing", () => {
 
     for (let frame = 0; frame < 5; frame++) {
       tree.version++;
-      expect(ring.updatePoses(tree, 0n, "map", "map")).toBe("missing");
+      expect(ring.updatePoses(tree, 0n, "map", "map")?.frameId).toBe("missing");
     }
   });
 
@@ -497,7 +497,7 @@ describe("DecayPointRing", () => {
       version: 0,
     } as unknown as Renderer["transformTree"];
 
-    expect(ring.updatePoses(tree, 0n, "map", "odom")).toBe("odom");
+    expect(ring.updatePoses(tree, 0n, "map", "odom")).toEqual({ frameId: "odom", messageTime: 0n });
   });
 
   it("frees only about as much as the budget needs", () => {
@@ -675,7 +675,10 @@ describe("DecayPointRing", () => {
     push(ring, 20n, 1, "missing");
     push(ring, 30n, 1);
 
-    expect(ring.updatePoses(transformTree, 0n, "map", "map")).toBe("missing");
+    expect(ring.updatePoses(transformTree, 0n, "map", "map")).toEqual({
+      frameId: "missing",
+      messageTime: 20n,
+    });
     // Origin is the newest resolved scan; its own matrix is the identity
     expect(ring.position.x).toBe(30);
     expect(poseRow(2)).toEqual(rows(new THREE.Matrix4()));

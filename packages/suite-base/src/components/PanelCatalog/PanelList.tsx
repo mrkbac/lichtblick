@@ -5,8 +5,10 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { List } from "@mui/material";
-import { useCallback, useMemo } from "react";
+import { List, ListSubheader } from "@mui/material";
+import { Fragment, useCallback, useMemo } from "react";
+import { useTranslation } from "react-i18next";
+import { makeStyles } from "tss-react/mui";
 
 import { PanelInfo } from "@lichtblick/suite-base/context/PanelCatalogContext";
 
@@ -20,7 +22,17 @@ type Props = {
   selectedPanelType?: string;
   highlightedPanelIdx?: number;
   searchQuery?: string;
+  /** The first panels are suggested for the open data */
+  suggestedCount?: number;
+  topicCountsByPanelType?: ReadonlyMap<string, number>;
 };
+
+const useStyles = makeStyles()((theme) => ({
+  subheader: {
+    lineHeight: 2.5,
+    backgroundColor: theme.palette.background.menu,
+  },
+}));
 
 function blurActiveElement() {
   // Clear focus from the panel menu button so that spacebar doesn't trigger
@@ -38,7 +50,11 @@ export function PanelList(props: Props): React.JSX.Element {
     onPanelSelect,
     selectedPanelType,
     searchQuery = "",
+    suggestedCount = 0,
+    topicCountsByPanelType,
   } = props;
+  const { t } = useTranslation("addPanel");
+  const { classes } = useStyles();
 
   const highlightedPanel = useMemo(() => {
     return highlightedPanelIdx != undefined ? filteredPanels[highlightedPanelIdx] : undefined;
@@ -59,15 +75,33 @@ export function PanelList(props: Props): React.JSX.Element {
           checked={type === selectedPanelType}
           highlighted={highlightedPanel?.title === title}
           searchQuery={searchQuery}
+          topicCount={topicCountsByPanelType?.get(type)}
         />
       );
     },
-    [highlightedPanel?.title, onDragStart, onPanelSelect, searchQuery, selectedPanelType],
+    [
+      highlightedPanel?.title,
+      onDragStart,
+      onPanelSelect,
+      searchQuery,
+      selectedPanelType,
+      topicCountsByPanelType,
+    ],
   );
 
   return (
     <List dense disablePadding>
-      {filteredPanels.map(displayPanelListItem)}
+      {filteredPanels.map((panel, index) => (
+        <Fragment key={`${panel.type}-${panel.title}`}>
+          {suggestedCount > 0 && index === 0 && (
+            <ListSubheader className={classes.subheader}>{t("suggestedForThisData")}</ListSubheader>
+          )}
+          {suggestedCount > 0 && index === suggestedCount && (
+            <ListSubheader className={classes.subheader}>{t("allPanels")}</ListSubheader>
+          )}
+          {displayPanelListItem(panel)}
+        </Fragment>
+      ))}
     </List>
   );
 }

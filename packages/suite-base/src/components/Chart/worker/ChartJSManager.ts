@@ -119,9 +119,12 @@ export default class ChartJSManager {
   #fakeDocumentEvents = new EventEmitter();
   #lastDatalabelClickContext?: DatalabelContext;
 
+  /** Resolves once the chart exists; updates sent before then would be dropped. */
+  public readonly ready: Promise<void>;
+
   public constructor(initOpts: InitOpts) {
     log.info(`new ChartJSManager(id=${initOpts.id})`);
-    void this.init(initOpts);
+    this.ready = this.init(initOpts);
   }
 
   public async init({

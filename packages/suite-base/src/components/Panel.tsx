@@ -47,6 +47,7 @@ import { MessagePathDropConfig } from "@lichtblick/suite-base/components/PanelEx
 import PanelLogs from "@lichtblick/suite-base/components/PanelLogs";
 import { PanelOverlay, PanelOverlayProps } from "@lichtblick/suite-base/components/PanelOverlay";
 import { PanelRoot } from "@lichtblick/suite-base/components/PanelRoot";
+import { PanelPlayerState } from "@lichtblick/suite-base/components/PlayerStatus/PanelPlayerState";
 import {
   loadPanelLogsHeight,
   savePanelLogsHeight,
@@ -211,6 +212,9 @@ export default function Panel<
     const parentPanelContext = useContext(PanelContext);
 
     const type = PanelComponent.panelType;
+    const needsPlayer =
+      !isContainerPanel(childId) &&
+      !["Notes", "GlobalVariableSliderPanel", "NodePlayground", "3D"].includes(type);
     const title = useMemo(
       () => panelCatalog.getPanelByType(type)?.title ?? "",
       [panelCatalog, type],
@@ -721,6 +725,8 @@ export default function Panel<
                 >
                   {panelBody}
                 </PanelErrorBoundary>
+                {/* Containers hold panels that show it themselves */}
+                {needsPlayer && <PanelPlayerState />}
                 {process.env.NODE_ENV !== "production" && (
                   <div className={classes.perfInfo} ref={perfInfo} />
                 )}

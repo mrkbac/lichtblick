@@ -439,10 +439,10 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
     shortcuts: USER_SCRIPTS_SHORTCUTS,
   },
   {
-    title: t("studioPlaybackPerformance"),
+    title: t("playbackPerformance"),
     type: "PlaybackPerformance",
     icon: TopSpeed20Regular,
-    description: t("studioPlaybackPerformanceDescription"),
+    description: t("playbackPerformanceDescription"),
     module: async () => await import("./PlaybackPerformance"),
     docs: async () => await import("./PlaybackPerformance/docs"),
   },
