@@ -957,6 +957,98 @@ describe("BlockLoader", () => {
       consoleWarnMock.mockClear();
     });
 
+    // Loads `messages` (one second per block, 10 blocks) and returns per block the topics held once
+    // loading settles
+    async function loadSettled(
+      messages: MessageEvent[],
+      cacheSizeBytes: number,
+      playheadSec: number,
+    ) {
+      const source = new TestSource();
+      source.messageIterator = async function* (args) {
+        for (const msgEvent of messages) {
+          if (
+            args.topics.has(msgEvent.topic) &&
+            (!args.start || compare(msgEvent.receiveTime, args.start) >= 0) &&
+            (!args.end || compare(msgEvent.receiveTime, args.end) <= 0)
+          ) {
+            yield { type: "message-event", msgEvent };
+          }
+        }
+      };
+      const loader = new BlockLoader({
+        maxBlocks: 10,
+        cacheSizeBytes,
+        minBlockDurationNs: 1,
+        source,
+        start: { sec: 0, nsec: 0 },
+        end: { sec: 9, nsec: 999_999_999 },
+        alertManager: new PlayerAlertManager(),
+      });
+      loader.setPlayhead({ sec: playheadSec, nsec: 0 });
+      loader.setTopics(
+        new Map([...new Set(messages.map((m) => m.topic))].map((t) => [t, { topic: t }])),
+      );
+      let blocks: Immutable<(MessageBlock | undefined)[]> = [];
+      const loading = loader.startLoading({
+        progress: async (progress) => {
+          blocks = progress.messageCache?.blocks ?? [];
+        },
+      });
+      let last = "";
+      await vi.waitFor(() => {
+        const now = JSON.stringify(blocks.map((block) => block?.messagesByTopic)) ?? "";
+        const same = now === last;
+        last = now;
+        expect(same).toBe(true);
+      });
+      await loader.stopLoading();
+      await loading;
+      consoleWarnMock.mockClear();
+      return blocks.map((block) =>
+        Object.keys(block?.messagesByTopic ?? {})
+          .sort()
+          .join(","),
+      );
+    }
+    const sized = (topic: string, sec: number, sizeInBytes: number): MessageEvent => ({
+      topic,
+      receiveTime: { sec, nsec: 0 },
+      message: undefined,
+      sizeInBytes,
+      schemaName: "foo",
+    });
+
+    it("evicts nothing for a block that doesn't fit even with the room it could make", async () => {
+      // 1 byte per block, but 15 in block 5: more than the budget holds with anything evicted
+      const messages = Array.from({ length: 10 }, (_, sec) => sized("a", sec, sec === 5 ? 5 : 1));
+      messages.splice(6, 0, sized("a", 5, 5), sized("a", 5, 5));
+
+      expect(await loadSettled(messages, 12, 6)).toEqual([
+        "a",
+        "a",
+        "a",
+        "a",
+        "a",
+        "",
+        "a",
+        "a",
+        "a",
+        "a",
+      ]);
+    });
+
+    it("doesn't evict another topic at the playhead to load one farther away", async () => {
+      // "heavy" has one big message at the playhead, "light" one byte per block
+      const messages = [
+        sized("heavy", 0, 8),
+        ...Array.from({ length: 10 }, (_, sec) => sized("light", sec, 1)),
+      ].sort((a, b) => compare(a.receiveTime, b.receiveTime));
+
+      const blocks = await loadSettled(messages, 12, 0);
+      expect(blocks[0]).toEqual("heavy,light");
+    });
+
     it("settles when several topics each want more than their share", async () => {
       const { loader, loading, settled } = setup({ a: 10, b: 10, c: 3 }, 100);
       loader.setPlayhead({ sec: 5, nsec: 0 });
