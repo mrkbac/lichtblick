@@ -82,3 +82,42 @@ describe("pointCloudSettingsNode decay point limit", () => {
     ).toBeUndefined();
   });
 });
+
+describe("pointCloudSettingsNode camera color mode", () => {
+  const cloud = { name: "/points", schemaName: "sensor_msgs/msg/PointCloud2" };
+  const sources = { cameraTopics: ["/camera/color"] };
+
+  it("offers Camera as a color mode and displays the camera and fallback settings when active", () => {
+    const inactive = pointCloudSettingsNode(cloud, ["intensity"], {}, sources).fields!;
+    expect(inactive.colorMode).toMatchObject({
+      value: "flat",
+      options: expect.arrayContaining([expect.objectContaining({ value: "camera" })]),
+    });
+    expect(inactive.colorCameraTopic).toBeUndefined();
+
+    const active = pointCloudSettingsNode(
+      cloud,
+      ["intensity"],
+      { colorFromCamera: true, colorCameraTopic: "/camera/color", colorMode: "colormap" },
+      sources,
+    ).fields!;
+    expect(active.colorMode?.value).toBe("camera");
+    expect(active.colorCameraTopic?.value).toBe("/camera/color");
+    expect(active.cameraFallbackColorMode?.value).toBe("colormap");
+  });
+  it("offers Hide unpainted points as a camera fallback", () => {
+    const fields = pointCloudSettingsNode(
+      cloud,
+      ["intensity"],
+      {
+        colorFromCamera: true,
+        hideUnpaintedCameraPoints: true,
+      },
+      sources,
+    ).fields!;
+    expect(fields.cameraFallbackColorMode).toMatchObject({
+      value: "hide",
+      options: expect.arrayContaining([expect.objectContaining({ value: "hide" })]),
+    });
+  });
+});

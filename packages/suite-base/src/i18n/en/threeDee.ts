@@ -235,6 +235,13 @@ export const threeDee = {
   frameLockHelp:
     "Moves the data with its frame. Off keeps it where it was when the message arrived.",
   cameraInfoHelp: "Calibration that places the image in the scene.",
+  colorModeCamera: "Camera",
+  colorCameraTopic: "Camera topic",
+  cameraFallbackColorMode: "Fallback color mode",
+  cameraFallbackColorModeHelp: "Controls points that have no matching camera pixel.",
+  cameraFallbackHide: "Hide unpainted points",
+  colorCameraTopicHelp:
+    "Paints points using a calibrated image near the scan time. The fallback controls points without a matching pixel. Decay retains the sampled colors.",
   imageDistanceHelp: "Distance from the camera at which the image is drawn, in meters.",
   frustumDistanceHelp: "Length of the drawn camera frustum, in meters.",
   planarProjectionFactorHelp:

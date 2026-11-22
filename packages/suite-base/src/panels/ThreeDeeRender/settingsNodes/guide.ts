@@ -110,6 +110,7 @@ function topicNodes(): DocumentedNodes {
       "Point cloud",
       ...COLOR_MODES.map((colorMode) => pointCloudSettingsNode(pointCloud, fields, { colorMode })),
       pointCloudSettingsNode(pointCloud, fields, { pointShape: "cube" }),
+      pointCloudSettingsNode(pointCloud, fields, { colorFromCamera: true }),
     ),
     laserScan: { ...laserScanSettingsNode(topic(""), {}), label: "Laser scan" },
     marker: markerSettingsNode({ name: "Marker" }, {}),

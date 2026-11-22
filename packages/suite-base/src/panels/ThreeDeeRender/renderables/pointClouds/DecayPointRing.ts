@@ -7,6 +7,7 @@ import type { RosValue } from "@lichtblick/suite-base/players/types";
 
 import { MAX_SET_POINTS } from "./PointRaster";
 import { POSE_FLOATS, PointColorEncoding, PointShape, RasterPoints } from "./RasterPoints";
+import { applyCameraFallback } from "./cameraColor";
 import { BaseUserData, Renderable } from "../../Renderable";
 import type { Renderer } from "../../Renderer";
 import { makePose, Pose } from "../../transforms";
@@ -23,6 +24,9 @@ type RingScan = {
   slot: number;
   start: number;
   count: number;
+  /** Layer colors before camera paint, held only for scans that are painted. */
+  unpaintedColors?: Uint8Array;
+  paintedPoints?: Uint8Array;
   /** Transforms epoch its pose row was computed at; undefined while it has no row */
   posedAt: number | undefined;
   /** Transforms epoch its placement last failed at (no transform), so it waits for a change */
@@ -247,7 +251,11 @@ export class DecayPointRing extends Renderable<BaseUserData, /*TRenderer=*/ unde
           this.#positions.subarray(scan.start * 3, (scan.start + scan.count) * 3),
           positions,
         ) &&
-        sameBytes(this.#colors.subarray(scan.start * 4, (scan.start + scan.count) * 4), colors),
+        sameBytes(
+          scan.unpaintedColors ??
+            this.#colors.subarray(scan.start * 4, (scan.start + scan.count) * 4),
+          colors,
+        ),
     );
   }
 
@@ -301,7 +309,13 @@ export class DecayPointRing extends Renderable<BaseUserData, /*TRenderer=*/ unde
    * growing up to the point budget. A scan older than the newest (read back after a seek) is placed
    * in age order.
    */
-  public push(info: RingScanInfo, positions: Float32Array, colors: Uint8Array): void {
+  public push(
+    info: RingScanInfo,
+    positions: Float32Array,
+    colors: Uint8Array,
+    unpaintedColors?: Uint8Array,
+    paintedPoints?: Uint8Array,
+  ): void {
     const count = positions.length / 3;
     // One point set can't address more; such a scan is only ever drawn as the latest
     if (count === 0 || count > MAX_SET_POINTS) {
@@ -311,7 +325,7 @@ export class DecayPointRing extends Renderable<BaseUserData, /*TRenderer=*/ unde
     if (
       info.recordId != undefined
         ? this.holdsRecord(info.recordId)
-        : this.holds(info.receiveTime, info.messageTime, positions, colors)
+        : this.holds(info.receiveTime, info.messageTime, positions, unpaintedColors ?? colors)
     ) {
       return;
     }
@@ -341,6 +355,8 @@ export class DecayPointRing extends Renderable<BaseUserData, /*TRenderer=*/ unde
       slot,
       start,
       count,
+      unpaintedColors,
+      paintedPoints,
       posedAt: undefined,
       failedAt: undefined,
       stride: this.#stride,
@@ -355,6 +371,68 @@ export class DecayPointRing extends Renderable<BaseUserData, /*TRenderer=*/ unde
     this.#colors.set(colors, start * 4);
     this.#slots.fill(slot, start, start + count);
     this.#points.markRange(start, count);
+  }
+
+  /** Restore the layer colors, then optionally paint the currently visible part of each scan. */
+  public recolor(
+    paint?: (
+      scan: RingScanInfo,
+      positions: Float32Array,
+      colors: Uint8Array,
+      count: number,
+      paintedPoints: Uint8Array,
+    ) => void,
+    { hideUnpainted = false }: { hideUnpainted?: boolean } = {},
+  ): void {
+    let edited = false;
+    for (const scan of this.#scans) {
+      if (!paint && !scan.unpaintedColors) {
+        continue;
+      }
+      const { start, count } = scan;
+      const colors = this.#colors.subarray(start * 4, (start + count) * 4);
+      if (scan.unpaintedColors) {
+        colors.set(scan.unpaintedColors);
+      }
+      if (paint) {
+        scan.unpaintedColors ??= colors.slice();
+        const paintedPoints = (scan.paintedPoints ??= new Uint8Array(count));
+        paintedPoints.fill(0);
+        paint(
+          scan,
+          this.#positions.subarray(start * 3, (start + count) * 3),
+          colors,
+          count,
+          paintedPoints,
+        );
+        if (hideUnpainted) {
+          applyCameraFallback(colors, scan.unpaintedColors, paintedPoints, { hide: true });
+        }
+      } else {
+        scan.unpaintedColors = undefined;
+        scan.paintedPoints = undefined;
+      }
+      edited = true;
+    }
+    if (edited) {
+      this.#points.markAllColors();
+    }
+  }
+
+  /** Changes visibility without losing the colors sampled when scans arrived. */
+  public updateCameraFallback({ hide }: { hide: boolean }): void {
+    for (const scan of this.#scans) {
+      if (!hide && !scan.unpaintedColors) {
+        continue;
+      }
+      const colors = this.#colors.subarray(scan.start * 4, (scan.start + scan.count) * 4);
+      scan.unpaintedColors ??= colors.slice();
+      applyCameraFallback(colors, scan.unpaintedColors, scan.paintedPoints, { hide });
+      if (!hide && !scan.paintedPoints) {
+        scan.unpaintedColors = undefined;
+      }
+    }
+    this.#points.markAllColors();
   }
 
   /**

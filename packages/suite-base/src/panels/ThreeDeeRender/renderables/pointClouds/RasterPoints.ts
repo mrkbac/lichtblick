@@ -187,6 +187,11 @@ export class RasterPoints extends THREE.Object3D {
     this.markSlots(start, count);
   }
 
+  /** Queues a color-only upload after a history edit. */
+  public markAllColors(): void {
+    markWhole(this.#colors);
+  }
+
   /** Queues an upload of all points */
   public markAll(): void {
     for (const attribute of [this.#positions, this.#colors, this.#slots]) {
@@ -353,8 +358,10 @@ export class RasterPoints extends THREE.Object3D {
       float(c.shiftRight(16).bitAnd(255)),
     ).div(255);
     const linear = this.encoding === "srgb" ? (sRGBTransferEOTF(rgb) as THREE.Node<"vec3">) : rgb;
-    const color = vec4(linear, float(c.shiftRight(24)).div(255));
-    return { position, color, hidden };
+    const alpha = c.shiftRight(24);
+    const color = vec4(linear, float(alpha).div(255));
+    hidden = hidden.or(alpha.equal(0));
+    return { position: select(hidden, vec3(0), position), color, hidden };
   }
 }
 

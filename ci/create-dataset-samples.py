@@ -498,6 +498,19 @@ def png_depth(rec: Recording, t: int, topic: str, frame: str, mm: np.ndarray) ->
     )
 
 
+def grandtour_static_pose(
+    xyz: list[float], xyzw: list[float]
+) -> tuple[np.ndarray, np.ndarray]:
+    # The publisher's extrinsics map parent coordinates into the sensor.
+    # FrameTransform stores the sensor pose in the parent, so invert both R and t.
+    inverse = np.asarray(xyzw, dtype=float) * [-1, -1, -1, 1]
+    inverse /= np.linalg.norm(inverse)
+    axis = inverse[:3]
+    translation = np.asarray(xyz, dtype=float)
+    cross = 2 * np.cross(axis, translation)
+    return -(translation + inverse[3] * cross + np.cross(axis, cross)), inverse
+
+
 def grandtour(source: Path, rec: Recording, lidar: Recording, preview: Path) -> str:
     def group(name: str):
         return zarr.open_group(source / name, mode="r")
@@ -583,25 +596,25 @@ def grandtour(source: Path, rec: Recording, lidar: Recording, preview: Path) -> 
             size,
         )
 
-    static = [
-        frame_transform(
-            GT_START,
-            tf["base_frame_id"],
-            tf["child_frame_id"],
+    sensor_frames = {
+        "hdr_front",
+        "zed2i_left",
+        "zed2i_right",
+        "anymal_imu",
+        "livox_lidar",
+        "box_base",
+    }
+    static = []
+    for name, tf in group("tf").attrs["tf"].items():
+        if name not in sensor_frames:
+            continue
+        xyz, xyzw = grandtour_static_pose(
             [tf["translation"][axis] for axis in "xyz"],
             [tf["rotation"][axis] for axis in "xyzw"],
         )
-        for name, tf in group("tf").attrs["tf"].items()
-        if name
-        in {
-            "hdr_front",
-            "zed2i_left",
-            "zed2i_right",
-            "anymal_imu",
-            "livox_lidar",
-            "box_base",
-        }
-    ]
+        static.append(
+            frame_transform(GT_START, tf["base_frame_id"], tf["child_frame_id"], xyz, xyzw)
+        )
     rec.proto(GT_START, "/tf_static", FrameTransforms(transforms=static))
     g = group("livox_points")
     samples = timed(g)
@@ -738,8 +751,8 @@ def grandtour(source: Path, rec: Recording, lidar: Recording, preview: Path) -> 
     return (
         "ETH-1 (Polyterrasse), 2024-10-01-11-29-55. 60-second excerpt. The HDR camera was rectified using the published equidistant calibration. Cameras resized and "
         "re-encoded as H.265; published ZED SDK depth resized and saved as 16-bit PNG. "
-        "Livox XYZ and intensity encoded with Cloudini. Static calibration retained for "
-        "selected sensors. ANYmal and DLIO positions shifted to their own local origins. "
+        "Livox XYZ and intensity encoded with Cloudini. Static extrinsics inverted into "
+        "parent-frame sensor poses for selected sensors. ANYmal and DLIO positions shifted to their own local origins. "
         "Leica prism and post-processed tightly coupled GNSS included. IMU, joint and GNSS "
         "streams downsampled to 100, 100 and 20 Hz."
     )

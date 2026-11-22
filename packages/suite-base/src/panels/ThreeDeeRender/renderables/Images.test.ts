@@ -12,7 +12,10 @@ function hiddenRenderable() {
     userData: { topic: "hidden", settings: { visible: false }, settingsPath: ["topics", "hidden"] },
     dispose: vi.fn(),
     flushPendingDecodes: vi.fn(),
-  }) as unknown as ImageRenderable & { dispose: ReturnType<typeof vi.fn> };
+  }) as unknown as ImageRenderable & {
+    dispose: ReturnType<typeof vi.fn>;
+    flushPendingDecodes: ReturnType<typeof vi.fn>;
+  };
 }
 
 describe("Images", () => {
@@ -35,6 +38,42 @@ describe("Images", () => {
     expect(hidden.dispose).toHaveBeenCalledTimes(1);
     expect(images.renderables.size).toBe(0);
     expect(hidden.parent).toBeNull();
+  });
+
+  it("keeps a hidden paint camera subscribed and decoding, with its calibration", () => {
+    const renderer = {
+      on: vi.fn(),
+      off: vi.fn(),
+      topics: [{ name: "/camera/color/camera_info", schemaName: "sensor_msgs/CameraInfo" }],
+      customCameraModels: new Map(),
+      config: {
+        topics: {
+          "/cloud": { visible: true, colorCameraTopic: "/camera/color" },
+          "/camera/color": { visible: false },
+        },
+      },
+      settings: { errors: { clearPath: vi.fn() }, setNodesForKey: vi.fn() },
+    } as unknown as Renderer;
+    const images = new Images(renderer);
+    const subscriptions = images.getSubscriptions();
+    const calibration = subscriptions.find(
+      (sub) => sub.type === "schema" && sub.schemaNames.has("sensor_msgs/CameraInfo"),
+    )!;
+    const video = subscriptions.find(
+      (sub) => sub.type === "schema" && sub.schemaNames.has("foxglove.CompressedVideo"),
+    )!;
+    expect(video.subscription.shouldSubscribe?.("/camera/color")).toBe(true);
+    expect(calibration.subscription.shouldSubscribe?.("/camera/color/camera_info")).toBe(true);
+
+    const hidden = hiddenRenderable();
+    hidden.userData.topic = "/camera/color";
+    images.renderables.set("/camera/color", hidden);
+    images.add(hidden);
+    images.startFrame(0n, "frame", "frame");
+
+    expect(hidden.dispose).not.toHaveBeenCalled();
+    expect(hidden.flushPendingDecodes).toHaveBeenCalledTimes(1);
+    expect(hidden.visible).toBe(false);
   });
 
   describe("depth map RGB topic", () => {

@@ -1017,13 +1017,27 @@ export function pointSettingsNode(
  * Point clouds and velodyne scans: the point settings plus stixels. `decayLimit` adds the decay
  * point limit, for topics whose history goes through the decay ring.
  */
+export type PointCloudCameraSettings = {
+  colorFromCamera?: boolean;
+  colorCameraTopic?: string;
+  hideUnpaintedCameraPoints?: boolean;
+};
+
+export function pointCloudColorCamera(settings: PointCloudCameraSettings): string | undefined {
+  return settings.colorFromCamera === false ? undefined : settings.colorCameraTopic;
+}
+
 export function pointCloudSettingsNode(
   topic: Pick<Topic, "name" | "schemaName" | "convertibleTo">,
   messageFields: string[],
   config: Partial<
-    LayerSettingsPointExtension & { stixelsEnabled: boolean; decayMaxPoints: number }
+    LayerSettingsPointExtension &
+      PointCloudCameraSettings & {
+        stixelsEnabled: boolean;
+        decayMaxPoints: number;
+      }
   >,
-  { decayLimit = false }: { decayLimit?: boolean } = {},
+  { decayLimit = false, cameraTopics = [] }: { decayLimit?: boolean; cameraTopics?: string[] } = {},
 ): DocumentedNode {
   const node = pointSettingsNode(topic, messageFields, config);
   if (decayLimit && (config.decayTime ?? 0) > 0) {
@@ -1047,6 +1061,68 @@ export function pointCloudSettingsNode(
               ["decayMaxPoints", limitField],
             ]
           : [[key, field]],
+      ),
+    );
+  }
+  const fallbackMode = node.fields.colorMode;
+  if (fallbackMode?.input === "select") {
+    const cameraMode = config.colorFromCamera ?? config.colorCameraTopic != undefined;
+    node.fields = Object.fromEntries(
+      Object.entries(node.fields).flatMap(
+        ([key, field]): [string, DocumentedField | undefined][] => {
+          if (key !== "colorMode") {
+            return [[key, field]];
+          }
+          const colorMode: DocumentedField = {
+            ...fallbackMode,
+            value: cameraMode ? "camera" : (config.colorMode ?? "flat"),
+            options: [
+              ...fallbackMode.options.map((option) =>
+                typeof option === "string"
+                  ? { label: option, value: option }
+                  : { ...option, value: option.value?.toString() },
+              ),
+              { label: t("threeDee:colorModeCamera"), value: "camera" },
+            ],
+          };
+          if (!cameraMode) {
+            return [[key, colorMode]];
+          }
+          return [
+            [key, colorMode],
+            [
+              "colorCameraTopic",
+              {
+                label: t("threeDee:colorCameraTopic"),
+                help: t("threeDee:colorCameraTopicHelp"),
+                input: "select",
+                options: [
+                  { label: t("threeDee:rgbTopicNone"), value: undefined },
+                  ...cameraTopics.map((value) => ({ label: value, value })),
+                ],
+                value: config.colorCameraTopic,
+              },
+            ],
+            [
+              "cameraFallbackColorMode",
+              {
+                ...fallbackMode,
+                label: t("threeDee:cameraFallbackColorMode"),
+                help: t("threeDee:cameraFallbackColorModeHelp"),
+                value:
+                  config.hideUnpaintedCameraPoints === true ? "hide" : (config.colorMode ?? "flat"),
+                options: [
+                  { label: t("threeDee:cameraFallbackHide"), value: "hide" },
+                  ...fallbackMode.options.map((option) =>
+                    typeof option === "string"
+                      ? { label: option, value: option }
+                      : { ...option, value: option.value?.toString() },
+                  ),
+                ],
+              },
+            ],
+          ];
+        },
       ),
     );
   }
