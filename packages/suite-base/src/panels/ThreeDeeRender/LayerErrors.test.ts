@@ -155,10 +155,12 @@ describe("reportPersistentErrors", () => {
     errors.addToTopic("/persistent", "missing", "Missing transform");
     vi.advanceTimersByTime(500);
     errors.removeFromTopic("/transient", "missing");
+    errors.addToTopic("/transient", "missing", "New occurrence");
+    errors.addToTopic("/persistent", "missing", "Still missing");
     vi.advanceTimersByTime(500);
 
     expect(report).toHaveBeenCalledTimes(1);
-    expect(report).toHaveBeenCalledWith(["topics", "/persistent"], "missing", "Missing transform");
+    expect(report).toHaveBeenCalledWith(["topics", "/persistent"], "missing", "Still missing");
 
     errors.addToTopic("/late", "missing", "Missing transform");
     unsubscribe();

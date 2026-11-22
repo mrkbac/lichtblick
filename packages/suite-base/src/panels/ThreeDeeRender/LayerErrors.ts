@@ -52,6 +52,7 @@ export class NodeError {
 }
 
 export type LayerErrorEvents = {
+  add: (path: Path, errorId: string) => void;
   update: (path: Path, errorId: string, errorMessage: string) => void;
   remove: (path: Path, errorId: string) => void;
   clear: (path: Path) => void;
@@ -78,9 +79,10 @@ export class LayerErrors extends EventEmitter<LayerErrorEvents> {
     // Create the error map if it does not already exist
     node.errorsById ??= new Map();
 
-    // Onlu log the first error message per path+id for performance
+    // Log the first error message per path+id.
     const prevErrorMessage = node.errorsById.get(errorId);
     if (prevErrorMessage == undefined) {
+      this.emit("add", path, errorId);
       log.warn(`[${path.join(" > ")}] ${errorMessage}`);
     }
 
@@ -96,9 +98,12 @@ export class LayerErrors extends EventEmitter<LayerErrorEvents> {
     this.add(TOPIC_PATH, errorId, errorMessage);
   }
 
+  public getError(path: Path, errorId: string): string | undefined {
+    return this.#getNode(path)?.errorsById?.get(errorId);
+  }
+
   public hasError(path: Path, errorId: string): boolean {
-    const node = this.#getNode(path);
-    return node?.errorsById?.has(errorId) === true;
+    return this.getError(path, errorId) != undefined;
   }
 
   public remove(path: Path, errorId: string): void {
@@ -182,7 +187,7 @@ export function reportPersistentErrors(
   graceMs: number,
 ): () => void {
   const pending = new Map<string, ReturnType<typeof setTimeout>>();
-  const onUpdate = (path: Path, errorId: string, errorMessage: string) => {
+  const onAdd = (path: Path, errorId: string) => {
     const pathCopy = [...path]; // callers reuse path arrays
     const key = `${pathCopy.join("\0")}\0${errorId}`;
     clearTimeout(pending.get(key));
@@ -190,15 +195,16 @@ export function reportPersistentErrors(
       key,
       setTimeout(() => {
         pending.delete(key);
-        if (errors.hasError(pathCopy, errorId)) {
-          report(pathCopy, errorId, errorMessage);
+        const message = errors.getError(pathCopy, errorId);
+        if (message != undefined) {
+          report(pathCopy, errorId, message);
         }
       }, graceMs),
     );
   };
-  errors.on("update", onUpdate);
+  errors.on("add", onAdd);
   return () => {
-    errors.off("update", onUpdate);
+    errors.off("add", onAdd);
     for (const timeout of pending.values()) {
       clearTimeout(timeout);
     }
