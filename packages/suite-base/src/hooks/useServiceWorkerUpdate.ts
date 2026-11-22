@@ -74,7 +74,9 @@ const RESUME_PLAYBACK_KEY = "lichtblick.resumePlaybackAfterReload";
  * Identifies the recording a player plays, across a reload (the player id is new each load).
  * Undefined while the player has no source.
  */
-export function playerSourceKey(playerState: Pick<PlayerState, "urlState" | "name">): string | undefined {
+export function playerSourceKey(
+  playerState: Pick<PlayerState, "urlState" | "name">,
+): string | undefined {
   const sourceId = playerState.urlState?.sourceId;
   return sourceId == undefined ? undefined : JSON.stringify([sourceId, playerState.name ?? ""]);
 }
