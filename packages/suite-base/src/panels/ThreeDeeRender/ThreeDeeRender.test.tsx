@@ -59,6 +59,7 @@ const createMockRenderer = (overrides?: Record<string, any>) => {
     handleSeek: vi.fn(),
     setColorScheme: vi.fn(),
     addTransformMessages: vi.fn(),
+    resetTransformHistory: vi.fn(),
     transformTree: {
       setComplete: vi.fn(),
       isComplete: vi.fn().mockReturnValue(false),
@@ -101,7 +102,7 @@ const createMockRenderer = (overrides?: Record<string, any>) => {
     setCameraSyncError: vi.fn(),
     followFrameId: "base_link",
     ros: false,
-    currentTime: undefined,
+    currentTime: 0n,
     measurementTool: {
       addEventListener: vi.fn(),
       removeEventListener: vi.fn(),
@@ -1169,6 +1170,54 @@ describe("ThreeDeeRender", () => {
       });
     });
 
+    it("starts the transform history over when transform topics go away, with preloading off", async () => {
+      // Given: a tree filled from /tf and /tf_static
+      const tf = RenderStateBuilder.topic({ name: "/tf", schemaName: "tf2_msgs/TFMessage" });
+      const tfStatic = RenderStateBuilder.topic({
+        name: "/tf_static",
+        schemaName: "tf2_msgs/TFMessage",
+      });
+      const customRendererInstance = createMockRenderer({
+        schemaSubscriptions: new Map([["tf2_msgs/TFMessage", [{ preload: true }]]]),
+        transformTree: {
+          setComplete: vi.fn(),
+          isComplete: vi.fn().mockReturnValue(false),
+          frames: vi.fn().mockReturnValue(new Map([["s", { id: "s", parent: () => undefined }]])),
+          frame: vi.fn(),
+          decimations: 0,
+        },
+        currentTime: 0n,
+        resetTransformHistory: vi.fn(),
+      });
+      vi.mocked(Renderer).mockImplementationOnce(function () {
+        return customRendererInstance as any;
+      });
+      const mockContext = createPreloadingContext({
+        initialState: {
+          scene: { transforms: { enablePreloading: false } },
+          topics: { "/tf": { visible: true }, "/tf_static": { visible: true } },
+        },
+      });
+      render(<ThreeDeeRender {...setup({}, mockContext)} />);
+      await waitFor(() => {
+        expect(mockContext.onRender).toBeDefined();
+      });
+      act(() => {
+        mockContext.onRender!({ topics: [tf, tfStatic], currentFrame: [] }, vi.fn());
+      });
+      customRendererInstance.resetTransformHistory.mockClear();
+
+      // When: /tf_static goes away
+      act(() => {
+        mockContext.onRender!({ topics: [tf], currentFrame: [] }, vi.fn());
+      });
+
+      // Then: cached transforms of /tf_static are dropped, /tf ones kept
+      await waitFor(() => {
+        expect(customRendererInstance.resetTransformHistory).toHaveBeenCalledWith(new Set(["/tf"]));
+      });
+    });
+
     it("keeps widening the seek read until it refreshes every known frame", async () => {
       // Given: frames A and B are known; a cached transform must not count as refreshed. The first
       // window only gives B a transform, the second one gives A one.
@@ -1180,12 +1229,8 @@ describe("ThreeDeeRender", () => {
         transformTree: {
           setComplete: vi.fn(),
           isComplete: vi.fn().mockReturnValue(false),
-          frames: vi.fn().mockReturnValue(
-            new Map([
-              ["A", frame("A")],
-              ["B", frame("B")],
-            ]),
-          ),
+          // Empty until the frames arrive, right before the seek
+          frames: vi.fn().mockReturnValue(new Map()),
           frame: vi.fn(),
           decimations: 0,
         },
@@ -1218,6 +1263,12 @@ describe("ThreeDeeRender", () => {
       act(() => {
         mockContext.onRender!({ topics, currentFrame: [] }, vi.fn());
       });
+      customRendererInstance.transformTree.frames.mockReturnValue(
+        new Map([
+          ["A", frame("A")],
+          ["B", frame("B")],
+        ]),
+      );
 
       // When
       act(() => {

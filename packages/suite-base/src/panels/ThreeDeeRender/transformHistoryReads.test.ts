@@ -145,6 +145,32 @@ describe("readTransformsBefore", () => {
     ]);
   });
 
+  it("stops widening and reports failure when a window read fails", async () => {
+    const subscribeRange = vi.fn(
+      (args: SubscribeMessageRangeArgs & { rethrowErrors?: boolean }) => {
+        void args.onNewRangeIterator(
+          // oxlint-disable-next-line require-yield -- an iterator that fails before any batch
+          (async function* () {
+            throw new Error("read failed");
+          })(),
+        );
+        return () => {};
+      },
+    );
+    const ok = await readTransformsBefore({
+      subscribeRange,
+      topics: [{ topic: "/tf" }],
+      time: 500n * sec,
+      floor: -1n,
+      isMissing: () => true,
+      onBatch: vi.fn(),
+      signal: new AbortController().signal,
+    });
+    expect(ok).toBe(false);
+    expect(subscribeRange).toHaveBeenCalledTimes(1);
+    (console.error as ReturnType<typeof vi.fn>).mockClear();
+  });
+
   it("never reads before the complete history", async () => {
     const { subscribeRange, reads } = fakeSource();
     await readTransformsBefore({

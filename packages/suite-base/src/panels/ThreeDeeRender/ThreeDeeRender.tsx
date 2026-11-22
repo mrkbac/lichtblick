@@ -328,6 +328,8 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
   // Times of the transform history the tree holds completely, in ns; -1n when none
   const transformsCompleteUntilRef = useRef(-1n);
   const seekReadRef = useRef<AbortController | undefined>(undefined);
+  // Transform topic names the transform tree was filled from
+  const transformTopicNamesRef = useRef<string | undefined>(undefined);
 
   const renderRef = useRef({ needsRender: false });
   // Marks that the frame currently being processed resulted from a seek. On such frames the panel
@@ -587,6 +589,11 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
         // Static frames are published once and restored from their cache, so they never block.
         isMissing: () =>
           knownFrameIds.some((id) => !refreshed.has(id) && !renderer.isStaticTransformFrame(id)),
+      }).then((ok) => {
+        if (!ok && !abort.signal.aborted) {
+          // Older windows cannot stand in for the part that failed; the frames keep what they had
+          log.warn("Reading transforms around the seek time failed; some frames may be stale");
+        }
       });
     },
     // context is static, we're just using it to subscribe
@@ -603,11 +610,17 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
     transformsCompleteUntilRef.current = -1n;
     setIsLoadingTransforms(false);
     setLoadedTransformCount(0);
-    if (renderer.transformTree.isComplete()) {
-      // The history came from the previous topics (or preloading is turning off): start over from
-      // the current ones, and read the transforms around the current time again right away
+    const topicNames = new Set(transformTopics.map(({ topic }) => topic));
+    const topicsChanged = [...topicNames].sort().join("\n") !== transformTopicNamesRef.current;
+    transformTopicNamesRef.current = [...topicNames].sort().join("\n");
+    if (
+      renderer.transformTree.isComplete() ||
+      (topicsChanged && renderer.transformTree.frames().size > 0)
+    ) {
+      // The history came from other topics (or preloading is turning off): start over from the
+      // current ones, and read the transforms around the current time again right away
       const knownFrameIds = [...renderer.transformTree.frames().keys()];
-      renderer.resetTransformHistory(new Set(transformTopics.map(({ topic }) => topic)));
+      renderer.resetTransformHistory(topicNames);
       readTransformsAfterSeek(renderer.currentTime, knownFrameIds);
     }
     setTransformDecimations(renderer.transformTree.decimations);

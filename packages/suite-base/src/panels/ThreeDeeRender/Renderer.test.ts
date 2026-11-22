@@ -2214,6 +2214,16 @@ describe("Renderer.addTransformMessages", () => {
     expect([...touched]).toEqual(["a"]);
   });
 
+  it("does not report a frame whose transform was rejected as a cycle", () => {
+    const renderer = new Renderer({ ...defaultRendererProps, canvas });
+    renderer.addTransformMessages([createTFMessageEvent("a", "b", 1n, [1n])]);
+    const touched = new Set<string>();
+    // a under b would close a cycle with b under a; the stamp also differs from the receive time
+    renderer.addTransformMessages([createTFMessageEvent("b", "a", 97n, [99n])], touched);
+    renderer.addTransformMessages([createTFMessageEvent("a", "c", 98n, [95n])], touched);
+    expect([...touched]).toEqual(["c"]);
+  });
+
   it("drops cached static transforms of removed topics when the history starts over", () => {
     const renderer = new Renderer({ ...defaultRendererProps, canvas });
     renderer.setCurrentTime(100n);

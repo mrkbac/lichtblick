@@ -1635,7 +1635,6 @@ export class Renderer extends EventEmitter<RendererEvents> {
     tempQuat[3] = q.w;
 
     tempTransform.setPositionRotation(tempVec3, tempQuat);
-    this.#touchedFrameIds?.add(childFrameId);
     const status = this.transformTree.addTransform(
       childFrameId,
       parentFrameId,
@@ -1646,6 +1645,9 @@ export class Renderer extends EventEmitter<RendererEvents> {
 
     if (status === AddTransformResult.UPDATED) {
       this.#transformTreeUpdated();
+    }
+    if (status !== AddTransformResult.CYCLE_DETECTED) {
+      this.#touchedFrameIds?.add(childFrameId);
     }
 
     if (status === AddTransformResult.CYCLE_DETECTED) {
