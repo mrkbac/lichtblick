@@ -113,6 +113,8 @@ export type CustomLayerAction = {
 
 // Maximum number of objects to present as selection options in a single click
 const MAX_SELECTIONS = 10;
+/** Longest wait between repaints while transform history batches arrive */
+const HISTORY_REPAINT_MS = 250;
 
 // NOTE: These do not use .convertSRGBToLinear() since background color is not
 // affected by gamma correction
@@ -126,7 +128,6 @@ const LAYER_SELECTED = 1;
 const FOLLOW_TF_PATH = ["general", "followTf"];
 /** Expected until the first transform arrives, so it is not reported in the panel log. */
 export const NO_FRAME_SELECTED = "NO_FRAME_SELECTED";
-const TF_OVERFLOW = "TF_OVERFLOW";
 const CYCLE_DETECTED = "CYCLE_DETECTED";
 const FOLLOW_FRAME_NOT_FOUND = "FOLLOW_FRAME_NOT_FOUND";
 const ADD_TRANSFORM_ERROR = "ADD_TRANSFORM_ERROR";
@@ -286,6 +287,8 @@ export class Renderer extends EventEmitter<RendererEvents> {
   #rendering = false;
   #disposed = false;
   #animationFrame?: number;
+  #historyRepaintTimer: ReturnType<typeof setTimeout> | undefined;
+  #historyRepaintPending = false;
   #cameraSyncError: undefined | string;
   #devicePixelRatioMediaQuery?: MediaQueryList;
   #fetchAsset: BuiltinPanelExtensionContext["unstable_fetchAsset"];
@@ -371,6 +374,9 @@ export class Renderer extends EventEmitter<RendererEvents> {
     });
 
     this.#scene = new THREE.Scene();
+    // Every draw and pick of the scene updates its world matrices first (the point raster needs
+    // them before render()); render() would walk the whole graph a second time
+    this.#scene.matrixWorldAutoUpdate = false;
 
     this.#dirLight = new THREE.DirectionalLight(0xffffff, Math.PI);
     this.#dirLight.position.set(1, 1, 1);
@@ -614,6 +620,7 @@ export class Renderer extends EventEmitter<RendererEvents> {
       this.#ownerWindow.cancelAnimationFrame(this.#animationFrame);
       this.#animationFrame = undefined;
     }
+    clearTimeout(this.#historyRepaintTimer);
     log.warn(`Disposing renderer`);
     this.#devicePixelRatioMediaQuery?.removeEventListener("change", this.#onDevicePixelRatioChange);
     this.#canvas.ownerDocument.removeEventListener("visibilitychange", this.#onVisibilityChange);
@@ -681,10 +688,13 @@ export class Renderer extends EventEmitter<RendererEvents> {
     // from the future of the new time must go.
     const movedBack = this.currentTime < oldTimeNs && !this.transformTree.isComplete();
 
-    this.clear({ clearTransforms: movedBack, preserveStaticTransforms: movedBack });
-    if (movedBack) {
-      this.#reapplyStaticTransforms();
-    }
+    // One tree update for the clear and the static transforms put back
+    this.#batchTransformTreeUpdates(() => {
+      this.clear({ clearTransforms: movedBack, preserveStaticTransforms: movedBack });
+      if (movedBack) {
+        this.#reapplyStaticTransforms();
+      }
+    });
   }
 
   /**
@@ -707,7 +717,30 @@ export class Renderer extends EventEmitter<RendererEvents> {
       }
     });
     this.#touchedFrameIds = undefined;
+    // A batch can replace or thin samples that are on screen, even one received after the current
+    // time, so every non-empty batch repaints, throttled
+    if (messageEvents.length > 0) {
+      this.#queueHistoryRepaint();
+    }
+  }
+
+  /**
+   * Repaints for history reads at most every HISTORY_REPAINT_MS, plus once after the last batch:
+   * a full frame per batch would hold the main thread and slow the read down
+   */
+  #queueHistoryRepaint(): void {
+    if (this.#historyRepaintTimer != undefined) {
+      this.#historyRepaintPending = true;
+      return;
+    }
     this.queueAnimationFrame();
+    this.#historyRepaintTimer = setTimeout(() => {
+      this.#historyRepaintTimer = undefined;
+      if (this.#historyRepaintPending) {
+        this.#historyRepaintPending = false;
+        this.#queueHistoryRepaint();
+      }
+    }, HISTORY_REPAINT_MS);
   }
 
   /**
@@ -847,6 +880,8 @@ export class Renderer extends EventEmitter<RendererEvents> {
     if (preserveStaticTransforms !== true) {
       this.#staticTransformCache.clear();
     }
+    // Listeners (the frame list, the thinned-history alert) must see the empty tree
+    this.#transformTreeUpdated();
   };
 
   // Call on scene extensions to add subscriptions to the renderer
@@ -1635,6 +1670,7 @@ export class Renderer extends EventEmitter<RendererEvents> {
     tempQuat[3] = q.w;
 
     tempTransform.setPositionRotation(tempVec3, tempQuat);
+    const decimations = this.transformTree.decimations;
     const status = this.transformTree.addTransform(
       childFrameId,
       parentFrameId,
@@ -1643,7 +1679,8 @@ export class Renderer extends EventEmitter<RendererEvents> {
       receiveTime,
     );
 
-    if (status === AddTransformResult.UPDATED) {
+    // Thinning to fit the sample budget is announced too, so the panel can say so
+    if (status === AddTransformResult.UPDATED || this.transformTree.decimations !== decimations) {
       this.#transformTreeUpdated();
     }
     if (status !== AddTransformResult.CYCLE_DETECTED) {
@@ -1665,16 +1702,6 @@ export class Renderer extends EventEmitter<RendererEvents> {
       }
     }
 
-    // Check if the transform history for this frame is at capacity and show an error if so. This
-    // error can't be cleared until the scene is reloaded
-    const frame = this.transformTree.getOrCreateFrame(childFrameId);
-    if (frame.transformsSize() === frame.maxCapacity) {
-      this.settings.errors.add(
-        ["transforms", `frame:${childFrameId}`],
-        TF_OVERFLOW,
-        `[Warning] Transform history is at capacity (${frame.maxCapacity}), old TFs will be dropped`,
-      );
-    }
     return status;
   }
 

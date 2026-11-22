@@ -10,9 +10,10 @@ import { ColorModeSettings } from "@lichtblick/suite-base/panels/ThreeDeeRender/
 import { DEFAULT_POINT_SETTINGS } from "@lichtblick/suite-base/panels/ThreeDeeRender/settingsNodes/topics";
 import { updatePose } from "@lichtblick/suite-base/panels/ThreeDeeRender/updatePose";
 
-import { createStixelMaterial, DECAY_LIMITED, PointCloudHistoryRenderable } from "./PointClouds";
+import { createStixelMaterial, PointCloudHistoryRenderable } from "./PointClouds";
 import { getColorConverter } from "./colorMode";
 import { DecayPointRing } from "./pointClouds/DecayPointRing";
+import { DECAY_LIMITED } from "./pointExtensionUtils";
 
 vi.mock("@lichtblick/suite-base/panels/ThreeDeeRender/updatePose", () => ({
   updatePose: vi.fn(),
@@ -246,35 +247,43 @@ describe("PointCloudHistoryRenderable decay", () => {
   it("drops the ring and its limit notice when the decay time is turned off", () => {
     const errors = new LayerErrors();
     const path = ["topics", "/points"];
-    const { renderable, settings } = decode(makeCloud(), { decayTime: 10 }, {
+    // 4-point clouds and a 10-point budget: the history thins at the third scan
+    const { renderable, settings } = decode(makeCloud(), { decayTime: 10, decayMaxPoints: 1e-5 }, {
       ...rendererMock,
-      transformTree: { apply: (out: unknown) => out },
+      transformTree: {
+        apply: (out: unknown) => out,
+        frames: () => new Map(),
+        isComplete: () => false,
+      },
       settings: { errors },
     } as unknown as Renderer);
     vi.mocked(updatePose).mockReturnValue(true);
-    // One more scan than the 1,000-scan limit allows next to the latest
-    for (let i = 1; i <= 1001; i++) {
+    for (let i = 1; i <= 4; i++) {
       renderable.pushHistory(makeCloud(), settings, BigInt(i));
       renderable.updatePointCloud(makeCloud(), undefined, settings, BigInt(i));
     }
-    renderable.startFrame(1001n, "map", "map");
+    renderable.startFrame(4n, "map", "map");
     expect(errors.hasError(path, DECAY_LIMITED)).toBe(true);
     vi.mocked(console.warn).mockClear(); // the limit notice is logged once
 
-    renderable.updatePointCloud(makeCloud(), undefined, { ...settings, decayTime: 0 }, 1002n);
-    renderable.startFrame(1002n, "map", "map");
+    renderable.updatePointCloud(makeCloud(), undefined, { ...settings, decayTime: 0 }, 5n);
+    renderable.startFrame(5n, "map", "map");
 
     expect(renderable.children.some((child) => child instanceof DecayPointRing)).toBe(false);
     expect(errors.hasError(path, DECAY_LIMITED)).toBe(false);
   });
 
-  it("keeps the limit notice when the latest scan alone fills the point budget", () => {
+  it("shows the limit notice when no history fits next to the latest scan", () => {
     const errors = new LayerErrors();
     const path = ["topics", "/points"];
     // 6 points: one 4-point cloud fits, two don't
     const { renderable, settings } = decode(makeCloud(), { decayTime: 10, decayMaxPoints: 6e-6 }, {
       ...rendererMock,
-      transformTree: { apply: (out: unknown) => out },
+      transformTree: {
+        apply: (out: unknown) => out,
+        frames: () => new Map(),
+        isComplete: () => false,
+      },
       settings: { errors },
     } as unknown as Renderer);
     vi.mocked(updatePose).mockReturnValue(true);
@@ -286,5 +295,9 @@ describe("PointCloudHistoryRenderable decay", () => {
     expect(renderable.children.some((child) => child instanceof DecayPointRing)).toBe(true);
     expect(errors.hasError(path, DECAY_LIMITED)).toBe(true);
     vi.mocked(console.warn).mockClear(); // the limit notice is logged once
+
+    // Long after: the history is empty because its window passed, not because of the budget
+    renderable.startFrame(100_000_000_000n, "map", "map");
+    expect(errors.hasError(path, DECAY_LIMITED)).toBe(false);
   });
 });

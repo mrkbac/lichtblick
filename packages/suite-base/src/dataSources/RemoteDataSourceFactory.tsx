@@ -11,6 +11,7 @@ import {
   DataSourceFactoryInitializeArgs,
 } from "@lichtblick/suite-base/context/PlayerSelectionContext";
 import { IterablePlayer } from "@lichtblick/suite-base/players/IterablePlayer";
+import { createMcapSourceWorker } from "@lichtblick/suite-base/players/IterablePlayer/Mcap/createMcapSourceWorker";
 import { WorkerSerializedIterableSource } from "@lichtblick/suite-base/players/IterablePlayer/WorkerIterableSource";
 import {
   MultiFileHydrationOverrides,
@@ -30,14 +31,7 @@ const initWorkers: Record<string, () => Worker> = {
       ),
     );
   },
-  ".mcap": () => {
-    return new Worker(
-      new URL(
-        "@lichtblick/suite-base/players/IterablePlayer/Mcap/McapIterableSourceWorker.worker",
-        import.meta.url,
-      ),
-    );
-  },
+  ".mcap": createMcapSourceWorker,
 };
 
 const fileTypesAllowed: AllowedFileExtensions[] = [

@@ -68,6 +68,11 @@ export class VideoPlayer extends EventEmitter<VideoPlayerEventTypes> {
   #hasUnclaimedLateFrame = false;
   /** Last decoded frame as an ImageBitmap; populated by callers after they paint a frame. */
   public lastImageBitmap: ImageBitmap | undefined;
+  /**
+   * Timestamp of the frame `lastImageBitmap` was made from. Callers that skip bitmaps for some
+   * frames compare it with `lastVideoFrame.timestamp` before reusing the bitmap.
+   */
+  public lastImageBitmapTimestampMicros: number | undefined;
   /** Owned clone of the last frame returned to the caller, used to redraw without redecoding. */
   public lastVideoFrame: VideoFrame | undefined;
 
@@ -400,6 +405,7 @@ export class VideoPlayer extends EventEmitter<VideoPlayerEventTypes> {
     this.lastVideoFrame = undefined;
     this.lastImageBitmap?.close();
     this.lastImageBitmap = undefined;
+    this.lastImageBitmapTimestampMicros = undefined;
     this.#decoderConfig = undefined;
   }
 

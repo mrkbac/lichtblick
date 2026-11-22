@@ -20,7 +20,10 @@ import {
   plotPathDisplayName,
   yBound,
 } from "@lichtblick/suite-base/panels/Plot/utils/config";
-import { PLOTABLE_ROS_TYPES } from "@lichtblick/suite-base/panels/shared/constants";
+import {
+  PLOTABLE_ROS_TYPES,
+  ROS2_TIME_TYPES,
+} from "@lichtblick/suite-base/panels/shared/constants";
 import type {
   DocumentedFields,
   DocumentedNode,
@@ -253,6 +256,7 @@ function referenceLineFields(
 
 /** Field types a custom timestamp can be read from */
 const TIMESTAMP_FIELD_TYPES = [
+  ...ROS2_TIME_TYPES,
   "time",
   "duration",
   "float32",

@@ -5,7 +5,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { Time, toNanoSec } from "@foxglove/rostime";
+import { fromNanoSec, Time, toNanoSec } from "@foxglove/rostime";
 import { Button } from "@mui/material";
 import * as _ from "lodash-es";
 import React, {
@@ -50,7 +50,7 @@ import { findShortcut } from "@lichtblick/suite-base/util/keyboardShortcuts";
 import { localResourceFolders } from "@lichtblick/suite-base/util/localResourceFolders";
 
 import type { ImageModeConfig, RendererConfig, RendererSubscription } from "./IRenderer";
-import type { Path } from "./LayerErrors";
+import { reportPersistentErrors, type Path } from "./LayerErrors";
 import type { PickedRenderable } from "./Picker";
 import { NO_FRAME_SELECTED, Renderer } from "./Renderer";
 import { RendererContext, useRendererEvent, useRendererProperty } from "./RendererContext";
@@ -67,7 +67,7 @@ import {
   makePoseMessage,
 } from "./publish";
 import type { LayerSettingsTransform } from "./renderables/FrameAxes";
-import { PublishClickEventMap } from "./renderables/PublishClickTool";
+import { PublishClickEventMap, PublishClickType } from "./renderables/PublishClickTool";
 import { DEFAULT_PUBLISH_SETTINGS } from "./renderables/PublishSettings";
 import { THREE_DEE_SHORTCUTS } from "./shortcuts";
 import { readTransformRange, readTransformsBefore, TransformTopic } from "./transformHistoryReads";
@@ -75,6 +75,8 @@ import { Shared3DPanelState, ThreeDeeRenderProps } from "./types";
 import { useGpuRecovery } from "./useGpuRecovery";
 
 import "maplibre-gl/dist/maplibre-gl.css";
+
+const LAYER_ERROR_LOG_GRACE_MS = 3000;
 
 const log = Logger.getLogger(__filename);
 
@@ -434,29 +436,30 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
 
   // Log LayerErrors to PanelLogs
   const handleLayerErrorUpdate = useCallback(
-    (path: Path, errorId: string, errorMessage: string) => {
+    (path: Path, errorId: string, errorMessage: string, raisedAt: bigint) => {
       // Every panel starts without frames; logging that floods the log after each seek
       if (logError != undefined && errorId !== NO_FRAME_SELECTED) {
         const pathString = path.join(" > ");
         const fullMessage = `[${pathString}] ${errorMessage}`;
-        logError(fullMessage);
+        // 0n: no frame rendered yet, so the panel uses the playback time
+        logError(fullMessage, undefined, raisedAt === 0n ? undefined : fromNanoSec(raisedAt));
       }
     },
     [logError],
   );
 
-  // Subscribe to LayerErrors events
+  // Log layer errors that outlive the moment it takes a good recording to deliver its transforms
+  // and camera info; transient ones only show in the settings tree while active.
   useEffect(() => {
     if (!renderer?.settings.errors) {
       return;
     }
-
-    const errors = renderer.settings.errors;
-    errors.on("update", handleLayerErrorUpdate);
-
-    return () => {
-      errors.off("update", handleLayerErrorUpdate);
-    };
+    return reportPersistentErrors(
+      renderer.settings.errors,
+      handleLayerErrorUpdate,
+      LAYER_ERROR_LOG_GRACE_MS,
+      () => renderer.currentTime,
+    );
   }, [renderer, handleLayerErrorUpdate]);
 
   const [focusedSettingsPath, setFocusedSettingsPath] = useState<undefined | readonly string[]>();
@@ -527,6 +530,19 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
   const isPreloadingEnabled = isTransformPreloadEnabled(config);
   // How many times the preloaded transform history was halved to fit the sample budget
   const [transformDecimations, setTransformDecimations] = useState(0);
+  // Live transforms are thinned too, without a preload read to report it
+  useEffect(() => {
+    if (!renderer) {
+      return;
+    }
+    const onUpdate = () => {
+      setTransformDecimations(renderer.transformTree.decimations);
+    };
+    renderer.addListener("transformTreeUpdated", onUpdate);
+    return () => {
+      renderer.removeListener("transformTreeUpdated", onUpdate);
+    };
+  }, [renderer]);
   useEffect(() => {
     setPanelAlert?.(
       "transform-preload",
@@ -1128,6 +1144,14 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
     }
   }, [publishActive, renderer]);
 
+  const onChangePublishClickType = useCallback(
+    (type: PublishClickType) => {
+      renderer?.publishClickTool.setPublishClickType(type);
+      renderer?.publishClickTool.start();
+    },
+    [renderer],
+  );
+
   const onTogglePerspective = useCallback(() => {
     const currentState = renderer?.getCameraState()?.perspective ?? false;
     actionHandler({
@@ -1233,10 +1257,7 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
             onClickPublish={onClickPublish}
             onShowTopicSettings={onShowTopicSettings}
             publishClickType={renderer?.publishClickTool.publishClickType ?? "point"}
-            onChangePublishClickType={(type) => {
-              renderer?.publishClickTool.setPublishClickType(type);
-              renderer?.publishClickTool.start();
-            }}
+            onChangePublishClickType={onChangePublishClickType}
             timezone={timezone}
           />
         </RendererContext.Provider>

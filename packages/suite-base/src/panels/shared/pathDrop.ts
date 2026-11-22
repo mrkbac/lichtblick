@@ -43,19 +43,21 @@ export function addTopicsDrop(
   };
 }
 
-/** For a series panel: adds each dropped field as an enabled series; whole messages are skipped. */
+/**
+ * For a series panel: adds each dropped field as an enabled series. A whole message adds the
+ * fields `fieldsOf` returns for it, if any.
+ */
 export function addPathsDrop(
   add: (paths: { value: string; enabled: true; timestampMethod: "receiveTime" }[]) => void,
+  fieldsOf: (item: DraggedMessagePath) => readonly string[] | undefined = () => undefined,
 ): MessagePathDropConfig {
+  const values = (items: readonly DraggedMessagePath[]) =>
+    items.flatMap((item) => (item.isLeaf ? [item.path] : (fieldsOf(item) ?? [])));
   return {
     getDropStatus: (items) =>
-      items.some((item) => item.isLeaf) ? { canDrop: true, effect: "add" } : { canDrop: false },
+      values(items).length > 0 ? { canDrop: true, effect: "add" } : { canDrop: false },
     handleDrop: (items) => {
-      add(
-        items
-          .filter((item) => item.isLeaf)
-          .map((item) => ({ value: item.path, enabled: true, timestampMethod: "receiveTime" })),
-      );
+      add(values(items).map((value) => ({ value, enabled: true, timestampMethod: "receiveTime" })));
     },
   };
 }

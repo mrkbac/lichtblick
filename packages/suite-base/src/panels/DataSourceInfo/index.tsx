@@ -18,6 +18,7 @@ import {
   InputAdornment,
   LinearProgress,
   MenuItem,
+  PopoverPosition,
   Tab,
   TableSortLabel,
   Tabs,
@@ -31,6 +32,7 @@ import { Fragment, useContext, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { formatByteSize } from "@lichtblick/den/format";
+import { quoteTopicNameIfNeeded } from "@lichtblick/message-path";
 import CopyButton from "@lichtblick/suite-base/components/CopyButton";
 import { PanelVisibleContext } from "@lichtblick/suite-base/components/DockPanelContext";
 import EmptyState from "@lichtblick/suite-base/components/EmptyState";
@@ -60,6 +62,7 @@ import {
 } from "@lichtblick/suite-base/components/PanelButton";
 import PanelToolbar from "@lichtblick/suite-base/components/PanelToolbar";
 import Stack from "@lichtblick/suite-base/components/Stack";
+import { ContextMenu } from "@lichtblick/suite-base/components/TopicList/ContextMenu";
 import { isRecordingSource, PLAYER_CAPABILITIES } from "@lichtblick/suite-base/players/constants";
 import { Topic } from "@lichtblick/suite-base/players/types";
 import {
@@ -181,6 +184,7 @@ export function RecordingInspector(): React.JSX.Element {
   const tab = selectedTab === "compare" && !comparing ? "topics" : selectedTab;
   const [inspections, setInspections] = useState(new Map<string, TopicInspection>());
   const [selected, setSelected] = useState<string>();
+  const [topicMenu, setTopicMenu] = useState<{ topic: Topic; position: PopoverPosition }>();
   const [scanning, setScanning] = useState<string>();
   const [progress, setProgress] = useState("");
   const [error, setError] = useState<string>();
@@ -767,7 +771,16 @@ export function RecordingInspector(): React.JSX.Element {
                       .join(", ");
                     return (
                       <Fragment key={topic.name}>
-                        <tr data-selected={selected === topic.name}>
+                        <tr
+                          data-selected={selected === topic.name}
+                          onContextMenu={(event) => {
+                            event.preventDefault();
+                            setTopicMenu({
+                              topic,
+                              position: { left: event.clientX, top: event.clientY },
+                            });
+                          }}
+                        >
                           <td
                             className={classes.topic}
                             style={{ paddingLeft: 12 + row.depth * 16 }}
@@ -1160,6 +1173,23 @@ export function RecordingInspector(): React.JSX.Element {
           </Stack>
         )}
       </div>
+      {topicMenu && (
+        <ContextMenu
+          anchorPosition={topicMenu.position}
+          messagePaths={[
+            {
+              path: quoteTopicNameIfNeeded(topicMenu.topic.name),
+              rootSchemaName: topicMenu.topic.schemaName,
+              isTopic: true,
+              isLeaf: false,
+              topicName: topicMenu.topic.name,
+            },
+          ]}
+          onClose={() => {
+            setTopicMenu(undefined);
+          }}
+        />
+      )}
     </>
   );
 }

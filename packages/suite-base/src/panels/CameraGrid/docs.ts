@@ -11,6 +11,7 @@ import { DEFAULT_CONFIG, makeTile } from "./types";
 const docs: PanelDocs = {
   intro: "Shows many camera topics side by side in one grid, with optional annotations.",
   schemas: [...IMAGE_SCHEMAS, ...ALL_SUPPORTED_ANNOTATION_SCHEMAS],
+  openInSchemas: IMAGE_SCHEMAS,
   // One example camera, so the per-camera fields are listed too.
   settings: () =>
     buildSettingsTree(

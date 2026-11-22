@@ -8,6 +8,8 @@
 import type { Time } from "@foxglove/rostime";
 import { FrameTransform, FrameTransforms, NumericType } from "@foxglove/schemas";
 
+import { stampToTime } from "@lichtblick/suite-base/util/time";
+
 import type { PartialMessage } from "./SceneExtension";
 import {
   ColorRGBA,
@@ -36,11 +38,12 @@ export type LegacyFrameTransform = {
   transform: LegacyTransform;
 };
 
-export function normalizeTime(time: Partial<Time> | undefined): Time {
-  if (!time) {
-    return { sec: 0, nsec: 0 };
-  }
-  return { sec: time.sec ?? 0, nsec: time.nsec ?? 0 };
+/**
+ * A stamp or duration as `Time` (see `stampToTime`), with missing parts as 0: a duration such as a
+ * marker `lifetime` may carry only nanoseconds.
+ */
+export function normalizeTime(time: (Partial<Time> & { nanosec?: number }) | undefined): Time {
+  return stampToTime(time) ?? { sec: time?.sec ?? 0, nsec: time?.nsec ?? time?.nanosec ?? 0 };
 }
 
 export function normalizeByteArray(byteArray: unknown): Uint8Array {
