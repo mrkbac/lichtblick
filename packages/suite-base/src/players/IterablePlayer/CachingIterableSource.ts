@@ -28,13 +28,15 @@ const log = Log.getLogger(__filename);
 
 /**
  * Thins full-density results for a skimmed read like a skimmed source read: per skim window
- * (windows start at the read's start), every result in its last SKIM_TAIL_NS, plus the latest
- * message before that for each topic with none in the tail, then a stamp at the window end.
+ * (windows start at the read's start; the last one ends at the read's end), every result in its
+ * last SKIM_TAIL_NS, plus the latest message before that for each topic with none in the tail,
+ * then a stamp at the window end.
  * Otherwise skimming would still send every cached message to the panels.
  */
 class SkimThinner<MessageType> {
   #startNs: bigint;
   #skimNs: bigint;
+  #endNs: bigint;
   #windowEndNs?: bigint;
   #tailStartNs = 0n;
   // Every result in the tail (alerts anywhere in the window too, to keep them in order)
@@ -43,9 +45,14 @@ class SkimThinner<MessageType> {
   // The latest message per topic before the tail
   #before = new Map<string, [bigint, Readonly<IteratorResult<MessageType>>]>();
 
-  public constructor(startNs: bigint, skimNs: bigint) {
+  public constructor(startNs: bigint, skimNs: bigint, endNs: bigint) {
     this.#startNs = startNs;
     this.#skimNs = skimNs;
+    this.#endNs = endNs;
+  }
+
+  public endNs(): bigint {
+    return this.#endNs;
   }
 
   public hasPending(): boolean {
@@ -66,7 +73,9 @@ class SkimThinner<MessageType> {
     if (this.#windowEndNs == undefined) {
       const windowStartNs =
         this.#startNs + ((timeNs - this.#startNs) / this.#skimNs) * this.#skimNs;
-      this.#windowEndNs = windowStartNs + this.#skimNs - 1n;
+      const windowEndNs = windowStartNs + this.#skimNs - 1n;
+      // The last window ends at the read's end, as in a skimmed source read
+      this.#windowEndNs = windowEndNs < this.#endNs ? windowEndNs : this.#endNs;
       const tailStartNs = this.#windowEndNs - SKIM_TAIL_NS;
       this.#tailStartNs = tailStartNs > windowStartNs ? tailStartNs : windowStartNs;
     }
@@ -85,6 +94,27 @@ class SkimThinner<MessageType> {
   public flush(): Readonly<IteratorResult<MessageType>>[] {
     this.#windowEndNs = undefined;
     return this.#take();
+  }
+
+  /** Ends the window read to its end: its results and a stamp at its end */
+  public finish(): Readonly<IteratorResult<MessageType>>[] {
+    const results = this.#take();
+    if (this.#windowEndNs != undefined) {
+      results.push({ type: "stamp", stamp: fromNanoSec(this.#windowEndNs) });
+    }
+    this.#windowEndNs = undefined;
+    return results;
+  }
+
+  /**
+   * Ends the window like flush() and continues with windows from startNs to endNs: a skimmed
+   * source read from startNs picks with these, so thinning its results changes nothing
+   */
+  public realign(startNs: bigint, endNs: bigint): Readonly<IteratorResult<MessageType>>[] {
+    const results = this.flush();
+    this.#startNs = startNs;
+    this.#endNs = endNs;
+    return results;
   }
 
   #take(): Readonly<IteratorResult<MessageType>>[] {
@@ -291,7 +321,7 @@ class CachingIterableSource<MessageType = unknown>
     // A skimmed read served from full blocks gets what a skimmed source read returns (one local:
     // each yield of this generator saves all its locals)
     const thinner = args.skimInterval
-      ? new SkimThinner<MessageType>(toNanoSec(readHead), toNanoSec(args.skimInterval))
+      ? new SkimThinner<MessageType>(toNanoSec(readHead), toNanoSec(args.skimInterval), maxEndNanos)
       : undefined;
 
     for (;;) {
@@ -523,7 +553,7 @@ class CachingIterableSource<MessageType = unknown>
       readHead = add(sourceReadEnd, { sec: 0, nsec: 1 });
     }
     if (thinner?.hasPending() === true) {
-      for (const result of thinner.flush()) {
+      for (const result of thinner.finish()) {
         yield result;
       }
     }
@@ -993,7 +1023,12 @@ class CachingIterableSource<MessageType = unknown>
     if (thinner && !block.skimInterval) {
       // Filling a full block would read the new topic at full density: read the range skimmed
       // instead, uncached, and keep the block for full-speed playback. Thinned like cached
-      // results: a source may ignore the skim interval and return every message.
+      // results: a source may ignore the skim interval and return every message. The windows
+      // align with the source's (they start at this read's start), so one selection applies.
+      const readEndNs = thinner.endNs();
+      for (const result of thinner.realign(toNanoSec(readHead), toNanoSec(end))) {
+        yield result;
+      }
       let lastNs = toNanoSec(readHead);
       for await (const result of this.#source.messageIterator({
         topics: args.topics,
@@ -1016,6 +1051,11 @@ class CachingIterableSource<MessageType = unknown>
           }
         }
       }
+      // The source read to `end`: its last window is complete; on from there with the read's end
+      for (const result of thinner.finish()) {
+        yield result;
+      }
+      thinner.realign(toNanoSec(end) + 1n, readEndNs);
       return;
     }
     if (compare(block.start, readHead) < 0) {

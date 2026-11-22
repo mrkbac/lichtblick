@@ -17,6 +17,7 @@ import {
   Initialization,
   IteratorResult,
   MessageIteratorArgs,
+  SKIM_TAIL_NS,
 } from "./IIterableSource";
 
 const TEST_CACHE_BYTES = 600 * 1024 * 1024;
@@ -76,6 +77,77 @@ async function readTopics(
     }
   }
   return topics;
+}
+
+type Published = { topic: string; sec: number; nsec: number; publisher: string };
+
+/**
+ * A source of `messages` (sorted) that skims like the MCAP source: windows from the read's start,
+ * the last one ending at the read's end; every message in a window's tail, plus the latest earlier
+ * one for topics without one in the tail
+ */
+function skimmingSource(messages: Published[]): TestSource {
+  const source = new TestSource();
+  const toResult = ({ topic, sec, nsec, publisher }: Published) => ({
+    type: "message-event" as const,
+    msgEvent: {
+      topic,
+      receiveTime: { sec, nsec },
+      message: publisher,
+      sizeInBytes: 1,
+      schemaName: "foo",
+    },
+  });
+  const ns = ({ sec, nsec }: { sec: number; nsec: number }) =>
+    BigInt(sec) * 1_000_000_000n + BigInt(nsec);
+  source.messageIterator = async function* (args: MessageIteratorArgs) {
+    const startNs = args.start ? ns(args.start) : 0n;
+    const endNs = args.end ? ns(args.end) : 10_000_000_000n;
+    const inRange = messages.filter(
+      (m) => args.topics.has(m.topic) && ns(m) >= startNs && ns(m) <= endNs,
+    );
+    if (!args.skimInterval) {
+      yield* inRange.map(toResult);
+      return;
+    }
+    const skimNs = ns(args.skimInterval);
+    for (let windowStart = startNs; windowStart <= endNs; windowStart += skimNs) {
+      const windowEnd = windowStart + skimNs - 1n < endNs ? windowStart + skimNs - 1n : endNs;
+      const tailStart =
+        windowEnd - SKIM_TAIL_NS > windowStart ? windowEnd - SKIM_TAIL_NS : windowStart;
+      const inWindow = inRange.filter((m) => ns(m) >= windowStart && ns(m) <= windowEnd);
+      const tail = inWindow.filter((m) => ns(m) >= tailStart);
+      const before = new Map(
+        inWindow.filter((m) => ns(m) < tailStart).map((m) => [m.topic, m] as const),
+      );
+      const picked = [
+        ...[...before.values()].filter((m) => !tail.some((t) => t.topic === m.topic)),
+        ...tail,
+      ].sort((a, b) => (ns(a) < ns(b) ? -1 : ns(a) > ns(b) ? 1 : 0));
+      yield* picked.map(toResult);
+      yield {
+        type: "stamp",
+        stamp: {
+          sec: Number(windowEnd / 1_000_000_000n),
+          nsec: Number(windowEnd % 1_000_000_000n),
+        },
+      };
+    }
+  };
+  return source;
+}
+
+/** Message topics and publishers of a read, with their second */
+async function readPublishers(iterator: AsyncIterableIterator<Readonly<IteratorResult>>) {
+  const results: string[] = [];
+  for await (const result of iterator) {
+    if (result.type === "message-event") {
+      results.push(
+        `${result.msgEvent.topic}:${result.msgEvent.message as string}@${result.msgEvent.receiveTime.sec}`,
+      );
+    }
+  }
+  return results;
 }
 
 class TestSource implements IIterableSource {
@@ -1650,7 +1722,8 @@ describe("CachingIterableSource", () => {
         ...["a3", "b3", "stamp3"],
         ...["a5", "b5", "stamp5"],
         ...["a7", "b7", "stamp7"],
-        ...["a9", "b9"],
+        // The last window ends at the read's end
+        ...["a9", "b9", "stamp9"],
       ]);
     });
 
@@ -1694,6 +1767,66 @@ describe("CachingIterableSource", () => {
       expect(results).toEqual(["s@0", "p1@1", "p2@1", "s@2", "p1@3", "p2@3"]);
     });
 
+    it("ends the last thinned window at the read's end", async () => {
+      // Given two publishers on one topic at x.98 s, cached at full density
+      const messages = [0, 1, 2, 3].flatMap((sec) =>
+        ["p1", "p2"].map((publisher) => ({ topic: "tf", sec, nsec: 980_000_000, publisher })),
+      );
+      const source = skimmingSource(messages);
+      const cache = new CachingIterableSource(source, { maxTotalSize: TEST_CACHE_BYTES });
+      await cache.initialize();
+      await readTopics(cache.messageIterator({ topics: mockTopicSelection("tf") }));
+
+      // When a skimmed read ends at 3 s, partway through its second 2 s window
+      const args = {
+        topics: mockTopicSelection("tf"),
+        end: { sec: 3, nsec: 0 },
+        skimInterval: { sec: 2, nsec: 0 },
+      };
+      const results = await readPublishers(cache.messageIterator(args));
+
+      // Then its tail is the 50 ms before 3 s, so both publishers at 2.98 s stay, as in a source read
+      expect(results).toEqual(["tf:p1@1", "tf:p2@1", "tf:p1@2", "tf:p2@2"]);
+      expect(await readPublishers(source.messageIterator(args))).toEqual(results);
+    });
+
+    it("selects once, with the source's windows, when reading a missing topic skimmed", async () => {
+      // Given a at 0-0.999 s cached with tf, and a from 1 s cached without it
+      const messages = [0, 1, 2, 3].flatMap((sec) => [
+        { topic: "a", sec, nsec: 980_000_000, publisher: "a" },
+        { topic: "tf", sec, nsec: 980_000_000, publisher: "p1" },
+        { topic: "tf", sec, nsec: 980_000_000, publisher: "p2" },
+      ]);
+      const source = skimmingSource(messages);
+      const cache = new CachingIterableSource(source, { maxTotalSize: TEST_CACHE_BYTES });
+      await cache.initialize();
+      await readTopics(
+        cache.messageIterator({
+          topics: mockTopicSelection("a", "tf"),
+          end: { sec: 0, nsec: 999_999_999 },
+        }),
+      );
+      await readTopics(
+        cache.messageIterator({ topics: mockTopicSelection("a"), start: { sec: 1, nsec: 0 } }),
+      );
+
+      // When skimming from 0 s, tf is read skimmed from 1 s, with windows starting there
+      const results = await readPublishers(
+        cache.messageIterator({
+          topics: mockTopicSelection("a", "tf"),
+          skimInterval: { sec: 2, nsec: 0 },
+        }),
+      );
+
+      // Then that range is what the source's skim picked (both publishers at 2.98 s), not
+      // thinned again with windows from 0 s, which would drop them
+      expect(results).toEqual([
+        ...["a:a@0", "tf:p2@0"],
+        ...["a:a@2", "tf:p1@2", "tf:p2@2"],
+        ...["a:a@3", "tf:p2@3"],
+      ]);
+    });
+
     it("keeps alerts in order with the thinned messages", async () => {
       const source = new TestSource();
       const cache = new CachingIterableSource(source, { maxTotalSize: TEST_CACHE_BYTES });
@@ -1734,7 +1867,7 @@ describe("CachingIterableSource", () => {
         );
       }
 
-      expect(results).toEqual(["a1", "alert", "stamp", "a3"]);
+      expect(results).toEqual(["a1", "alert", "stamp", "a3", "stamp"]);
     });
 
     it("reads a range skimmed instead of filling a full block during a skimmed read", async () => {
