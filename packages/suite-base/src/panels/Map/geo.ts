@@ -9,10 +9,15 @@ const EARTH_RADIUS = 6371008.8;
 const DEG = Math.PI / 180;
 
 export function distanceMeters(a: LngLat, b: LngLat): number {
-  const dLat = (b[1] - a[1]) * DEG;
-  const dLon = (b[0] - a[0]) * DEG;
+  return haversineMeters(a[0], a[1], b[0], b[1]);
+}
+
+/** `distanceMeters` on plain numbers, for loops over typed arrays. */
+export function haversineMeters(lon1: number, lat1: number, lon2: number, lat2: number): number {
+  const dLat = (lat2 - lat1) * DEG;
+  const dLon = (lon2 - lon1) * DEG;
   const h =
-    Math.sin(dLat / 2) ** 2 + Math.cos(a[1] * DEG) * Math.cos(b[1] * DEG) * Math.sin(dLon / 2) ** 2;
+    Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * DEG) * Math.cos(lat2 * DEG) * Math.sin(dLon / 2) ** 2;
   return 2 * EARTH_RADIUS * Math.asin(Math.min(1, Math.sqrt(h)));
 }
 
