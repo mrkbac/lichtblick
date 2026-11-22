@@ -1,17 +1,12 @@
 # CodeRabbit configuration for Lichtblick
 # https://docs.coderabbit.ai/guides/configure-coderabbit
 
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
 language: "en-US"
+tone_instructions: "Prioritize concrete, measurable performance regressions in players, rendering, message pipelines, and workers. Explain the impact of allocations, copies, or main-thread work in hot paths."
 
 reviews:
   profile: "chill"
-  tone_instructions: |
-    Pay special attention to performance in hot paths — players, MessagePipeline, 3D and Plot
-    rendering, Web Workers, and frequently re-rendering React components. Flag allocations in
-    render/tick loops, lost reference stability or missing memoization, main-thread work that
-    belongs in a Worker, and buffer copies that should be zero-copy transfers. Follow "measure
-    before you optimize": raise performance concerns only with concrete, high-confidence impact and
-    avoid speculative micro-optimizations.
   request_changes_workflow: false
   high_level_summary: true
   high_level_summary_placeholder: "@coderabbitai summary"
@@ -36,16 +31,16 @@ reviews:
   path_instructions:
     - path: "packages/**"
       instructions: |
-        This is a shared package used by both the desktop (Electron) and web app.
-        Ensure changes are compatible with both targets and do not introduce platform-specific APIs.
+        Check compatibility with each package’s consumers. Shared packages must support both
+        the desktop and web apps. Keep platform-specific APIs in their respective packages.
         Pay attention to exports — breaking changes affect all consumers.
 
-    - path: "desktop/**"
+    - path: "{desktop,packages/suite-desktop}/**"
       instructions: |
         Electron desktop app code. Check for security issues common in Electron (contextIsolation,
         nodeIntegration, remote module usage). Ensure IPC communication is properly validated.
 
-    - path: "web/**"
+    - path: "{web,packages/suite-web}/**"
       instructions: |
         Web app code. Flag any Node.js-only APIs or Electron-specific imports.
 
@@ -54,9 +49,9 @@ reviews:
         Playwright end-to-end tests. Ensure tests follow the GWT (Given/When/Then) pattern,
         use stable selectors (data-testid or accessible roles), and avoid arbitrary timeouts.
 
-    - path: "**/*.test.ts"
+    - path: "**/*.test.{ts,tsx}"
       instructions: |
-        Jest unit tests. Ensure tests are meaningful, not just coverage padding.
+        Vitest unit tests. Ensure tests are meaningful, not just coverage padding.
         Avoid mocking internals — prefer testing behavior over implementation.
         Ensure tests follow the GWT pattern and use descriptive test names.
 

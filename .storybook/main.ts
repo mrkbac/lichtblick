@@ -6,15 +6,14 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { mergeRsbuildConfig } from "@rsbuild/core";
-import { StorybookConfig } from "storybook-react-rsbuild";
+import type { StorybookConfig } from "storybook-react-rsbuild";
 
 import { makeConfig, productInfo } from "../packages/suite-base/rspack.ts";
 
-import packageJson from "../package.json";
+import packageJson from "../package.json" with { type: "json" };
 
 const storybookConfig: StorybookConfig = {
-  // Workaround for https://github.com/storybookjs/storybook/issues/19446
-  stories: ["../packages/**/!(node_modules)**/*.stories.tsx"],
+  stories: ["../packages/*/src/**/*.stories.tsx"],
   framework: {
     name: "storybook-react-rsbuild",
     options: {},

@@ -186,22 +186,10 @@ describe("PlotCoordinator", () => {
 
       const wheel: InteractionEvent = {
         type: "wheel",
-        cancelable: false,
-        deltaX: 0,
         deltaY: -100,
         clientX: 250,
         clientY: 250,
-        boundingClientRect: {
-          x: 0,
-          y: 0,
-          width: 500,
-          height: 500,
-          top: 0,
-          left: 0,
-          right: 500,
-          bottom: 500,
-          toJSON: () => ({}),
-        },
+        boundingClientRect: { top: 0, left: 0 },
       };
 
       it("should render the x-axis window ending at the new time when playback advances in follow mode", async () => {

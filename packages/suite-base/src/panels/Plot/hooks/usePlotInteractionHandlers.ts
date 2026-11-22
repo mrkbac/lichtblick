@@ -212,13 +212,11 @@ const usePlotInteractionHandlers = ({
       coordinator.addInteractionEvent({
         type: "wheel",
         zoomMode: zoomModeForModifiers(event),
-        cancelable: false,
         // Shift+wheel scrolls horizontally on some platforms, so the delta can arrive as deltaX.
         deltaY: event.deltaY !== 0 ? event.deltaY : event.deltaX,
-        deltaX: event.deltaX,
         clientX: event.clientX,
         clientY: event.clientY,
-        boundingClientRect: boundingRect.toJSON(),
+        boundingClientRect: { left: boundingRect.left, top: boundingRect.top },
       });
     },
     [coordinator],

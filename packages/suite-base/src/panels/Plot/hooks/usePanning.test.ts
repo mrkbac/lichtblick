@@ -22,16 +22,8 @@ function pointer(
 }
 
 describe("usePanning", () => {
-  const boundingClientRect = { x: 0, y: 0, width: 800, height: 600 };
-
   function setup({ withCanvas = true, withCoordinator = true } = {}) {
     const canvasDiv = withCanvas ? document.createElement("div") : null;
-    if (canvasDiv) {
-      canvasDiv.getBoundingClientRect = () =>
-        ({
-          toJSON: () => boundingClientRect,
-        }) as DOMRect;
-    }
     const addInteractionEvent = vi.fn();
     const coordinator = withCoordinator
       ? ({ addInteractionEvent } as unknown as PlotCoordinator)
@@ -65,16 +57,9 @@ describe("usePanning", () => {
     pointer(canvasDiv, "pointerup", 140, 70);
 
     expect(addInteractionEvent.mock.calls.map(([event]) => event)).toEqual([
-      {
-        type: "panstart",
-        cancelable: false,
-        deltaX: 20,
-        deltaY: -10,
-        center: { x: 120, y: 90 },
-        boundingClientRect,
-      },
-      { type: "panmove", cancelable: false, deltaX: 30, deltaY: -20, boundingClientRect },
-      { type: "panend", cancelable: false, deltaX: 40, deltaY: -30, boundingClientRect },
+      { type: "panstart", deltaX: 20, deltaY: -10 },
+      { type: "panmove", deltaX: 30, deltaY: -20 },
+      { type: "panend" },
     ]);
 
     // Reset after the click handler had a chance to see the drag

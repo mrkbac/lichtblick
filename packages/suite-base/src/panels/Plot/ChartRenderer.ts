@@ -5,17 +5,12 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { Zoom as ZoomPlugin } from "@foxglove/chartjs-plugin-zoom";
 import { Chart, Scale as ChartScale, Ticks } from "chart.js";
 import { AnnotationOptions } from "chartjs-plugin-annotation";
-import EventEmitter from "eventemitter3";
 
 import { unwrap } from "@lichtblick/den/monads";
 import { Immutable } from "@lichtblick/suite";
-import {
-  addEventListener,
-  removeEventListener,
-} from "@lichtblick/suite-base/components/Chart/worker/eventHandler";
+import { ChartViewport } from "@lichtblick/suite-base/components/Chart/worker/ChartViewport";
 import { DEFAULT_ANNOTATION } from "@lichtblick/suite-base/panels/Plot/constants";
 import { getChartOptions } from "@lichtblick/suite-base/panels/Plot/utils/getChartOptions";
 import { buildThresholdFills } from "@lichtblick/suite-base/panels/Plot/utils/thresholdFill";
@@ -32,14 +27,11 @@ import {
   Datum,
   HoverElement,
   InteractionEvent,
-  MutableContext,
   PixelRect,
   ReferenceLine,
   Scale,
   UpdateAction,
-  WheelInteractionEvent,
   YScale,
-  ZoomableChart,
   ZoomMode,
 } from "./types";
 
@@ -108,9 +100,8 @@ export function alignTicksTo(
 }
 
 export class ChartRenderer {
-  #chartInstance: ChartType & Pick<ZoomableChart, "$zoom">;
-  #fakeNodeEvents = new EventEmitter();
-  #fakeDocumentEvents = new EventEmitter();
+  #chartInstance: ChartType;
+  #viewport: ChartViewport;
   readonly #titleColor: string;
   #absoluteStartSec?: number;
   #xPadding: XPadding = { span: Number.NaN, left: 0, right: 0 };
@@ -127,15 +118,6 @@ export class ChartRenderer {
   #heldYRange: Partial<Record<"y" | "y2", Bounds1D>> = {};
 
   public constructor(args: ChartRendererProps) {
-    const fakeNode = {
-      addEventListener: addEventListener(this.#fakeNodeEvents),
-      removeEventListener: removeEventListener(this.#fakeNodeEvents),
-      ownerDocument: {
-        addEventListener: addEventListener(this.#fakeDocumentEvents),
-        removeEventListener: removeEventListener(this.#fakeDocumentEvents),
-      },
-    };
-
     this.#titleColor = args.titleColor;
 
     const chartOptions = getChartOptions({
@@ -183,35 +165,19 @@ export class ChartRenderer {
       };
     }
 
-    const origZoomStart = ZoomPlugin.start?.bind(ZoomPlugin);
-    ZoomPlugin.start = (chartInstance: MutableContext<unknown>, startArgs, pluginOptions) => {
-      // swap the canvas with our fake dom node canvas to support zoom plugin addEventListener
-      const ctx = chartInstance.ctx;
-      chartInstance.ctx = {
-        canvas: fakeNode,
-      };
-      const res = origZoomStart?.(chartInstance as Chart, startArgs, pluginOptions);
-      chartInstance.ctx = ctx;
-      return res;
-    };
-
     // ChartJS supports offscreen canvas however the type definitions do not so we need to cast and
     // fool the constructor.
     //
     // https://www.chartjs.org/docs/latest/general/performance.html#parallel-rendering-with-web-workers-chromium-only
     const canvas = args.canvas as unknown as HTMLCanvasElement;
-    const chartInstance = new Chart<"scatter", Datum[]>(canvas, {
+    this.#chartInstance = new Chart<"scatter", Datum[]>(canvas, {
       type: "scatter",
       data: {
         datasets: [],
       },
       options: chartOptions,
-      plugins: [ZoomPlugin],
     });
-
-    ZoomPlugin.start = origZoomStart;
-    // The zoom plugin's start hook (run by the constructor) adds `$zoom`; chart.js types don't know it.
-    this.#chartInstance = chartInstance as ChartType & Pick<ZoomableChart, "$zoom">;
+    this.#viewport = new ChartViewport(this.#chartInstance, { axisUnderCursor: true });
   }
 
   public update(action: Immutable<UpdateAction>): Bounds | undefined {
@@ -663,76 +629,19 @@ export class ChartRenderer {
   }
 
   #applyInteractionEvent(event: Immutable<InteractionEvent>): void {
-    const { type, boundingClientRect, ...rest } = event;
-    switch (type) {
+    switch (event.type) {
       case "wheel":
-        this.#withWheelZoomMode(event, () => {
-          this.#fakeNodeEvents.emit("wheel", {
-            ...rest,
-            target: {
-              getBoundingClientRect() {
-                return boundingClientRect;
-              },
-            },
-          });
-        });
+        this.#viewport.wheel(event);
         break;
       case "panstart":
-        this.#chartInstance.$zoom.panStartHandler({
-          center: event.center,
-          deltaX: event.deltaX,
-          deltaY: event.deltaY,
-          target: {
-            getBoundingClientRect() {
-              return boundingClientRect;
-            },
-          },
-        });
+        this.#viewport.panstart(event);
         break;
       case "panmove":
-        this.#chartInstance.$zoom.panHandler(event);
+        this.#viewport.panmove(event);
         break;
       case "panend":
-        this.#chartInstance.$zoom.panEndHandler();
+        this.#viewport.panend();
         break;
-    }
-  }
-
-  /**
-   * Run a wheel zoom with the event's zoom mode. Over an axis (outside the chart area) only that
-   * axis zooms.
-   */
-  #withWheelZoomMode(event: Immutable<WheelInteractionEvent>, zoom: () => void): void {
-    // eslint-disable-next-line no-underscore-dangle -- the zoom plugin's resolved options
-    const zoomOptions = this.#chartInstance.$zoom._options?.zoom;
-    if (!zoomOptions) {
-      zoom();
-      return;
-    }
-
-    const x = event.clientX - event.boundingClientRect.left;
-    const y = event.clientY - event.boundingClientRect.top;
-    const { chartArea } = this.#chartInstance;
-    const insideChartArea =
-      x >= chartArea.left && x <= chartArea.right && y >= chartArea.top && y <= chartArea.bottom;
-    const axisUnderCursor = insideChartArea
-      ? undefined
-      : Object.values(this.#chartInstance.scales).find(
-          (scale) => x >= scale.left && x <= scale.right && y >= scale.top && y <= scale.bottom,
-        )?.axis;
-
-    const { mode, overScaleMode } = zoomOptions;
-    if (axisUnderCursor === "x" || axisUnderCursor === "y") {
-      zoomOptions.mode = axisUnderCursor;
-      zoomOptions.overScaleMode = axisUnderCursor;
-    } else if (event.zoomMode) {
-      zoomOptions.mode = event.zoomMode;
-    }
-    try {
-      zoom();
-    } finally {
-      zoomOptions.mode = mode;
-      zoomOptions.overScaleMode = overScaleMode;
     }
   }
 
@@ -783,13 +692,5 @@ export class ChartRenderer {
    */
   protected getChartInstance(): ChartType {
     return this.#chartInstance;
-  }
-
-  /**
-   * Exposed as protected for unit testing strictly private fields.
-   * Developers are encouraged to avoid using these methods in production logic.
-   */
-  protected getFakeNodeEvents(): EventEmitter {
-    return this.#fakeNodeEvents;
   }
 }

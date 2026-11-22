@@ -15,12 +15,12 @@
   "devDependencies": {
     "@emotion/react": "11.14.0",
     "@emotion/styled": "11.14.1",
-    "@fluentui/react-icons": "2.0.345",
+    "@fluentui/react-icons": "2.0.347",
     "@mui/icons-material": "9.5.0",
     "@mui/material": "9.5.0",
     "@types/react": "19.3.0",
     "react": "19.3.1",
-    "storybook-react-rsbuild": "3.6.2",
+    "storybook-react-rsbuild": "3.6.4",
     "typescript": "6.0.3"
   }
 }

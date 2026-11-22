@@ -6,7 +6,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { MessageDefinition } from "@foxglove/message-definition";
-import { ROS2_TO_DEFINITIONS, Rosbag2, SqliteSqljs } from "@foxglove/rosbag2-web";
+import { ROS2_TO_DEFINITIONS, Rosbag2 } from "@foxglove/rosbag2";
 import { stringify } from "@foxglove/rosmsg";
 import { Time, add as addTime, compare, toNanoSec } from "@foxglove/rostime";
 
@@ -24,12 +24,12 @@ import {
   MessageIteratorArgs,
   TopicWithDecodingInfo,
 } from "../IIterableSource";
-import { BlockCachedFile } from "./BlockCachedFile";
+import { SqliteRosDb3 } from "./SqliteRosDb3";
 
 /** Rows of any topic a backfill page scans: bounds the synchronous SQLite work between yields */
 const BACKFILL_PAGE_ROWS = 4096;
 
-/** Lets the worker take a superseding seek's abort message: sql.js reads synchronously */
+/** Lets the worker take a superseding seek's abort message: SQLite reads synchronously */
 async function yieldToWorker(): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, 0));
 }
@@ -42,11 +42,13 @@ function dataTypeToFullName(dataType: string): string {
   return dataType;
 }
 
+type BagFile = { db: SqliteRosDb3; counts: Map<string, number> };
+
 export class RosDb3IterableSource implements ISerializedIterableSource {
   #files: File[];
   #bag?: Rosbag2;
   /** Each file with its message count per topic */
-  #dbs: { db: SqliteSqljs; counts: Map<string, number> }[] = [];
+  #dbs: BagFile[] = [];
   #start: Time = { sec: 0, nsec: 0 };
   #end: Time = { sec: 0, nsec: 0 };
   #textEncoder = new TextEncoder();
@@ -58,25 +60,26 @@ export class RosDb3IterableSource implements ISerializedIterableSource {
   }
 
   public async initialize(): Promise<Initialization> {
-    const res = await fetch(
-      new URL("@foxglove/sql.js/dist/sql-wasm.wasm", import.meta.url).toString(),
-    );
-    const sqlWasm = await (await res.blob()).arrayBuffer();
-    await SqliteSqljs.Initialize({ wasmBinary: sqlWasm });
-
-    const dbs = this.#files.map((file) => new SqliteSqljs(new BlockCachedFile(file)));
+    const dbs = this.#files.map((file) => new SqliteRosDb3(file));
     const bag = new Rosbag2(dbs);
-    await bag.open();
-    this.#bag = bag;
+    try {
+      await bag.open();
+      return await this.#initializeBag(bag, dbs);
+    } catch (error) {
+      await bag.close();
+      throw error;
+    }
+  }
 
-    const [start, end] = await this.#bag.timeRange();
-    const topicDefs = await this.#bag.readTopics();
+  async #initializeBag(bag: Rosbag2, dbs: SqliteRosDb3[]): Promise<Initialization> {
+    const [start, end] = await bag.timeRange();
+    const topicDefs = await bag.readTopics();
     // Per file, so a backfill skips files without the topics it looks for
     const messageCounts = new Map<string, number>();
-    this.#dbs = [];
+    const databases: BagFile[] = [];
     for (const db of dbs) {
       const counts = await db.messageCounts();
-      this.#dbs.push({ db, counts });
+      databases.push({ db, counts });
       for (const [topic, count] of counts) {
         messageCounts.set(topic, (messageCounts.get(topic) ?? 0) + count);
       }
@@ -149,6 +152,8 @@ export class RosDb3IterableSource implements ISerializedIterableSource {
       }
     }
 
+    this.#bag = bag;
+    this.#dbs = databases;
     this.#start = start;
     this.#end = end;
 
@@ -182,24 +187,33 @@ export class RosDb3IterableSource implements ISerializedIterableSource {
     // Add 1 nsec to the end time because rosbag2 treats the time range as non-inclusive
     // of the exact end time.
     const inclusiveEndTime = addTime(end, { sec: 0, nsec: 1 });
-    const msgIterator = this.#bag.readMessages({
-      startTime: start,
-      endTime: inclusiveEndTime,
-      topics: Array.from(topics.keys()),
-      rawMessages: true,
-    });
-    for await (const msg of msgIterator) {
-      yield {
-        type: "message-event",
-        msgEvent: {
-          topic: msg.topic.name,
-          receiveTime: msg.timestamp,
-          message: msg.data,
-          sizeInBytes: msg.data.byteLength,
-          schemaName: msg.topic.type,
-        },
-      };
+    const topicNames = Array.from(topics.keys());
+    for (const { db } of this.#dbs) {
+      // Iterate the files in selection order, like Rosbag2, with iterator cleanup on early return.
+      for await (const msg of db.readMessages({
+        startTime: start,
+        endTime: inclusiveEndTime,
+        topics: topicNames,
+      })) {
+        yield {
+          type: "message-event",
+          msgEvent: {
+            topic: msg.topic.name,
+            receiveTime: msg.timestamp,
+            message: msg.data,
+            sizeInBytes: msg.data.byteLength,
+            schemaName: msg.topic.type,
+          },
+        };
+      }
     }
+  }
+
+  public async terminate(): Promise<void> {
+    const bag = this.#bag;
+    this.#bag = undefined;
+    this.#dbs = [];
+    await bag?.close();
   }
 
   public async getBackfillMessages({
@@ -216,7 +230,7 @@ export class RosDb3IterableSource implements ISerializedIterableSource {
     for (const { db, counts } of this.#dbs) {
       // Per file: a split recording's files may overlap in time
       const found = new Set<string>();
-      let next: { timestamp: bigint; id?: number } | undefined = { timestamp: toNanoSec(time) };
+      let next: { timestamp: bigint; id?: bigint } | undefined = { timestamp: toNanoSec(time) };
       while (next != undefined) {
         // A topic this file has no messages for would only make the scan read to its start
         const missing = [...topics.keys()].filter(

@@ -8,7 +8,9 @@
 import { parse as parseRosmsg } from "@foxglove/rosmsg";
 import { MessageWriter as Ros1Writer } from "@foxglove/rosmsg-serialization";
 import { MessageWriter as Ros2Writer } from "@foxglove/rosmsg2-serialization";
-import { Encoder as CborEncoder } from "cbor-x";
+// The Node entry enables a native extractor on the shared decoder. Generate fixtures without
+// changing the browser decoder that this benchmark measures.
+import { Encoder as CborEncoder } from "cbor-x/encode";
 import zlib from "node:zlib";
 import { FileDescriptorSet } from "protobufjs/ext/descriptor";
 
