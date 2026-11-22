@@ -151,13 +151,19 @@ export async function decodeCompressedVideoToBitmap(
     if (!frameToRender) {
       return videoPlayer.lastImageBitmap ?? (await emptyVideoFrame(videoPlayer, resizeWidth));
     }
-    // Skip re-encoding the same frame when the decoder produced nothing new.
-    if (!videoFrame && videoPlayer.lastImageBitmap) {
+    // Skip re-encoding the same frame when the decoder produced nothing new. Frames decoded with
+    // `skipBitmap` move `lastVideoFrame` ahead of `lastImageBitmap`, so check they match.
+    if (
+      !videoFrame &&
+      videoPlayer.lastImageBitmap &&
+      videoPlayer.lastImageBitmapTimestampMicros === frameToRender.timestamp
+    ) {
       return videoPlayer.lastImageBitmap;
     }
     const imageBitmap = await globalThis.createImageBitmap(frameToRender, { resizeWidth });
     videoPlayer.lastImageBitmap?.close();
     videoPlayer.lastImageBitmap = imageBitmap;
+    videoPlayer.lastImageBitmapTimestampMicros = frameToRender.timestamp;
     return imageBitmap;
   } finally {
     videoFrame?.close();

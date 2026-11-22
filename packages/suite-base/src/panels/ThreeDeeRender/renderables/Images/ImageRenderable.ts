@@ -870,6 +870,7 @@ export class ImageRenderable extends Renderable<ImageUserData> {
       const imageBitmap = await globalThis.createImageBitmap(result.frame, { resizeWidth });
       this.videoPlayer.lastImageBitmap?.close();
       this.videoPlayer.lastImageBitmap = imageBitmap;
+      this.videoPlayer.lastImageBitmapTimestampMicros = result.frame.timestamp;
       this.#waitingForVideoKeyframe = false;
       this.#canReplayVideoGop = false;
       return imageBitmap;

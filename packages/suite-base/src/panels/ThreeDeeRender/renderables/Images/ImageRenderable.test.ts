@@ -973,6 +973,47 @@ describe("ImageRenderable error handling", () => {
     self.createImageBitmap = originalCreateImageBitmap;
   });
 
+  it("paints the newest decoded frame, not a stale bitmap, when the burst's last frame times out", async () => {
+    const renderable = new ImageRenderable(mockUserData.topic, mockRenderer, { ...mockUserData });
+    const staleBitmap = new ImageBitmap(); // painted before the seek
+    const player = {
+      isInitialized: vi.fn().mockReturnValue(true),
+      init: vi.fn().mockResolvedValue(undefined),
+      codedSize: vi.fn(),
+      resetForSeek: vi.fn(),
+      lastImageBitmap: staleBitmap,
+      lastImageBitmapTimestampMicros: 999_000,
+      lastVideoFrame: undefined as VideoFrame | undefined,
+      // Like VideoPlayer: every output is cached as lastVideoFrame; the last one times out.
+      decode: vi.fn(async (_data: Uint8Array, timestampMicros: number) => {
+        if (timestampMicros === 33333) {
+          return undefined;
+        }
+        const frame = createDecodedVideoFrame(timestampMicros);
+        player.lastVideoFrame = frame;
+        return frame;
+      }),
+    };
+    renderable.videoPlayer = player as unknown as ImageRenderable["videoPlayer"];
+    const originalCreateImageBitmap = self.createImageBitmap;
+    const shown = new ImageBitmap();
+    const createImageBitmapSpy = vi.fn().mockResolvedValue(shown);
+    self.createImageBitmap = createImageBitmapSpy;
+
+    renderable.setImage(createH265Frame(h265Keyframe, { sec: 0, nsec: 0 }));
+    renderable.setImage(createH265Frame(h265DeltaFrame, { sec: 0, nsec: 16666666 }));
+    renderable.setImage(createH265Frame(h265DeltaFrame, { sec: 0, nsec: 33333333 }));
+    renderable.flushPendingDecodes();
+    await renderable.settleVideoDecodes();
+
+    // The frame at 16666 µs was decoded without a bitmap; it is the newest picture there is.
+    expect(createImageBitmapSpy).toHaveBeenCalledTimes(1);
+    expect((createImageBitmapSpy.mock.calls[0]![0] as VideoFrame).timestamp).toBe(16666);
+    expect(renderable.getDecodedImage()).toBe(shown);
+    expect(player.lastImageBitmapTimestampMicros).toBe(16666);
+    self.createImageBitmap = originalCreateImageBitmap;
+  });
+
   it("should replay h265 GOP when seeking to a P frame", async () => {
     const renderable = new ImageRenderable(mockUserData.topic, mockRenderer, { ...mockUserData });
     const replayFrame = createDecodedVideoFrame(33333);
