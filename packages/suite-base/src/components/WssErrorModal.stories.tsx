@@ -21,7 +21,13 @@ export const Default: StoryObj = {
   render: () => {
     return (
       <WssErrorModal
-        playerAlerts={[{ severity: "error", message: "Insecure WebSocket connection" }]}
+        playerAlerts={[
+          {
+            severity: "error",
+            message: "Your browser blocked ws:// from this https page",
+            guide: { type: "wsMixedContent", url: "ws://robot.example:8765" },
+          },
+        ]}
       />
     );
   },

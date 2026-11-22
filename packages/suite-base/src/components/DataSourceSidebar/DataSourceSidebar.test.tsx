@@ -48,11 +48,6 @@ vi.mock("@lichtblick/suite-base/components/TopicList/TopicList", () => ({
   TopicList: () => <div data-testid="topic-list" />,
 }));
 
-vi.mock("@lichtblick/suite-base/components/WssErrorModal", () => ({
-  __esModule: true,
-  default: () => <div data-testid="wss-error-modal" />,
-}));
-
 vi.mock("../AlertList/AlertsList", () => ({
   AlertsList: () => <div data-testid="alerts-list" />,
 }));

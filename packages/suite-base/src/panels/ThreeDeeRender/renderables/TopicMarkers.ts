@@ -7,6 +7,7 @@
 
 import * as THREE from "three";
 
+import { MarkerBatches, isBatchable, unbatch } from "./markers/MarkerBatches";
 import { RenderableMarker, getMarkerId } from "./markers/RenderableMarker";
 import { RenderableMeshResource } from "./markers/RenderableMeshResource";
 import { missingTransformMessage, MISSING_TRANSFORM } from "./transforms";
@@ -77,13 +78,22 @@ export class TopicMarkers extends Renderable<MarkerTopicUserData> {
   public namespaces = new Map<string, MarkersNamespace>();
   /** Inputs of the last pose update; cleared whenever a marker is added, changed or removed */
   #posedWith: PoseInputs | undefined;
+  readonly #batches: MarkerBatches;
+
+  public constructor(name: string, renderer: Renderer, userData: MarkerTopicUserData) {
+    super(name, renderer, userData);
+    this.#batches = new MarkerBatches(renderer.outlineMaterial);
+    this.add(this.#batches);
+  }
 
   public override dispose(): void {
     for (const ns of this.namespaces.values()) {
       for (const marker of ns.markersById.values()) {
+        unbatch(marker);
         this.renderer.markerPool.release(marker);
       }
     }
+    this.#batches.dispose();
     this.children.length = 0;
     this.namespaces.clear();
   }
@@ -179,6 +189,7 @@ export class TopicMarkers extends Renderable<MarkerTopicUserData> {
     // settings tree) once per marker whenever a topic mixes resolvable and unresolvable frames
     let missingTransform: string | undefined;
     let anyUpdated = false;
+    this.#batches.begin();
     for (const ns of this.namespaces.values()) {
       for (const renderable of ns.markersById.values()) {
         renderable.visible = ns.settings.visible;
@@ -224,8 +235,12 @@ export class TopicMarkers extends Renderable<MarkerTopicUserData> {
         renderable.position.set(p.x + tempPosition.x, p.y + tempPosition.y, p.z + tempPosition.z);
         const o = pose.orientation;
         renderable.quaternion.set(o.x, o.y, o.z, o.w).premultiply(tempQuaternion).normalize();
+        if (isBatchable(renderable)) {
+          this.#batches.addMarker(renderable);
+        }
       }
     }
+    this.#batches.end();
     if (missingTransform != undefined) {
       this.renderer.settings.errors.addToTopic(this.topic, MISSING_TRANSFORM, missingTransform);
     } else if (anyUpdated) {
@@ -275,6 +290,7 @@ export class TopicMarkers extends Renderable<MarkerTopicUserData> {
       const renderable = namespace.markersById.get(id);
       if (renderable) {
         this.remove(renderable);
+        unbatch(renderable);
         this.renderer.markerPool.release(renderable);
         namespace.markersById.delete(id);
         return true;
@@ -288,6 +304,7 @@ export class TopicMarkers extends Renderable<MarkerTopicUserData> {
     const clearNamespace = (namespace: MarkersNamespace): void => {
       for (const renderable of namespace.markersById.values()) {
         this.remove(renderable);
+        unbatch(renderable);
         this.renderer.markerPool.release(renderable);
       }
       namespace.markersById.clear();

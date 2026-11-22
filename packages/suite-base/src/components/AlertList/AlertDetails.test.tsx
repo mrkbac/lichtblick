@@ -18,6 +18,23 @@ function renderAlertDetails(details: unknown, tip?: string) {
 }
 
 describe("AlertDetails", () => {
+  it("renders the blocked-ws:// guide with its inline code, not the raw translation markup", async () => {
+    render(
+      <ThemeProvider isDark={false}>
+        <AlertDetails
+          details={undefined}
+          tip="plain tip"
+          guide={{ type: "wsMixedContent", url: "ws://robot.example:8765" }}
+        />
+      </ThemeProvider>,
+    );
+
+    expect(await screen.findByText("ws://robot.example:8765")).toBeInTheDocument();
+    expect(screen.getByText("Reload and retry")).toBeInTheDocument();
+    expect(screen.queryByText(/<url\/>/)).not.toBeInTheDocument();
+    expect(screen.queryByText("plain tip")).not.toBeInTheDocument();
+  });
+
   it("shows a fallback message when details and tip are both empty", () => {
     // Given
     const details = undefined;

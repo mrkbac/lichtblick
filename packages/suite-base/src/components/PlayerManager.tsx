@@ -51,6 +51,7 @@ import PlayerSelectionContext, {
   IDataSourceFactory,
   PlayerSelection,
   RecentSource,
+  RemoteFileSelection,
 } from "@lichtblick/suite-base/context/PlayerSelectionContext";
 import {
   UserScriptStore,
@@ -248,6 +249,7 @@ export default function PlayerManager(
 
   const [selectedSource, setSelectedSource] = useState<IDataSourceFactory | undefined>();
   const [selectedRecordings, setSelectedRecordings] = useState<readonly Recording[] | undefined>();
+  const [selectedRemoteFile, setSelectedRemoteFile] = useState<RemoteFileSelection | undefined>();
   const [selectedCompare, setSelectedCompare] = useState<readonly string[] | undefined>();
   const [selectedWithCookies, setSelectedWithCookies] = useState(false);
 
@@ -284,11 +286,15 @@ export default function PlayerManager(
       const commitSelection = (
         recordings?: readonly Recording[],
         compare?: readonly string[],
-        { withCookies = false }: { withCookies?: boolean } = {},
+        {
+          withCookies = false,
+          remoteFile,
+        }: { withCookies?: boolean; remoteFile?: RemoteFileSelection } = {},
       ) => {
         setCurrentRecentId(undefined);
         setSelectedSource(foundSource);
         setSelectedRecordings(recordings);
+        setSelectedRemoteFile(remoteFile);
         setSelectedCompare(compare);
         setSelectedWithCookies(withCookies);
       };
@@ -373,14 +379,21 @@ export default function PlayerManager(
             });
             // Remote recordings (not live connections) can be compared like local files
             const url = args.params?.url;
+            const withCookies = args.params?.includeCredentials === "true";
+            // One remote file can also be exported
+            const remoteFile: RemoteFileSelection | undefined =
+              foundSource.id === "remote-file" && url != undefined && !url.includes(",")
+                ? { url, credentials: withCookies ? "include" : undefined }
+                : undefined;
             if (url != undefined && foundSource.supportedFileTypes != undefined) {
               const urls = url.split(",");
               const compare = compareNamesOf(args.params);
               commitSelection(urls, compare?.length === urls.length ? compare : undefined, {
-                withCookies: args.params?.includeCredentials === "true",
+                withCookies,
+                remoteFile,
               });
             } else {
-              commitSelection();
+              commitSelection(undefined, undefined, { remoteFile });
             }
             setBasePlayer(newPlayer);
             writeLastFile(undefined);
@@ -599,6 +612,7 @@ export default function PlayerManager(
     setBasePlayer(undefined);
     setSelectedSource(undefined);
     setSelectedRecordings(undefined);
+    setSelectedRemoteFile(undefined);
     setSelectedCompare(undefined);
     setSelectedWithCookies(false);
     setCurrentRecentId(undefined);
@@ -643,6 +657,7 @@ export default function PlayerManager(
       clearRecents,
       selectedSource,
       selectedRecordings,
+      selectedRemoteFile,
       selectedCompare,
       selectedWithCookies,
       availableSources: playerSources,
@@ -657,6 +672,7 @@ export default function PlayerManager(
       clearRecents,
       selectedSource,
       selectedRecordings,
+      selectedRemoteFile,
       selectedCompare,
       selectedWithCookies,
       playerSources,
