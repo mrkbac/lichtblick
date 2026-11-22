@@ -564,14 +564,31 @@ export class BlockLoader {
         const full = !budget.fits(0);
 
         if (full) {
-          // Drop this block's read. The topic with the most data in it stops here for this pass;
-          // the block is read again for the others, which may fit without it.
+          // Drop this block's read. The topics whose part of it can't fit even on its own stop
+          // here for this pass; if each would fit on its own, the one that would then hold the most
+          // stops. The block is read again for the others.
           budget.release(sizeInBytes);
-          const heaviest = _.maxBy([...topicsToFetch.keys()], (topic) =>
-            this.#bytesOf(messagesByTopic[topic] ?? []),
-          );
-          if (heaviest != undefined) {
-            cappedAt.set(heaviest, this.#distance(currentBlockId, playhead));
+          const distance = this.#distance(currentBlockId, this.#playheadBlock());
+          const slice = (topic: string) => messagesByTopic[topic] ?? [];
+          const fitsAlone = (topic: string) => {
+            const used = budget.used() + this.#bytesOf(slice(topic));
+            return (
+              used <= budget.capacity ||
+              this.#planEviction(distance, { [topic]: slice(topic) }, used, budget.capacity).fits
+            );
+          };
+          const fetched = [...topicsToFetch.keys()];
+          let stop = fetched.filter((topic) => !fitsAlone(topic));
+          if (stop.length === 0) {
+            const loadedBytes = this.#topicBytes();
+            const most = _.maxBy(
+              fetched,
+              (topic) => (loadedBytes.get(topic) ?? 0) + this.#bytesOf(slice(topic)),
+            );
+            stop = most != undefined ? [most] : [];
+          }
+          for (const topic of stop) {
+            cappedAt.set(topic, this.#distance(currentBlockId, playhead));
           }
           this.#alertManager.addAlert("cache-full", {
             severity: "warn",
@@ -639,48 +656,8 @@ export class BlockLoader {
     budget: ByteBudget,
     evicted: Map<number, Set<string>>,
   ): void {
-    const topicBytes = this.#topicBytes();
-    for (const [topic, messages] of Object.entries(loading)) {
-      const bytes = messages.reduce((sum, message) => sum + message.sizeInBytes, 0);
-      topicBytes.set(topic, (topicBytes.get(topic) ?? 0) + bytes);
-    }
-    const fairShare = budget.capacity / Math.max(1, this.#topics.size);
-    const playhead = this.#playheadBlock();
-    const victims: { id: number; topic: string; distance: number }[] = [];
-    for (const [id, block] of this.#blocks.entries()) {
-      const blockDistance = this.#distance(id, playhead);
-      if (!block) {
-        continue;
-      }
-      for (const topic of Object.keys(block.messagesByTopic)) {
-        if (
-          (topicBytes.get(topic) ?? 0) > fairShare &&
-          // Nearer data only of other topics, and never at the playhead
-          (blockDistance > distance || (!(topic in loading) && blockDistance > 0))
-        ) {
-          victims.push({ id, topic, distance: blockDistance });
-        }
-      }
-    }
-    victims.sort((a, b) => b.distance - a.distance);
-    // Evict only if that makes room: otherwise the block being read is dropped anyway and the
-    // evicted data would be lost for nothing
-    const plan: typeof victims = [];
-    let freed = 0;
-    for (const victim of victims) {
-      if (budget.used() - freed <= budget.capacity) {
-        break;
-      }
-      const messages = this.#blocks[victim.id]?.messagesByTopic[victim.topic];
-      if (!messages || (topicBytes.get(victim.topic) ?? 0) <= fairShare) {
-        continue;
-      }
-      const bytes = this.#bytesOf(messages);
-      topicBytes.set(victim.topic, (topicBytes.get(victim.topic) ?? 0) - bytes);
-      freed += bytes;
-      plan.push(victim);
-    }
-    if (budget.used() - freed > budget.capacity) {
+    const { plan, fits } = this.#planEviction(distance, loading, budget.used(), budget.capacity);
+    if (!fits) {
       return;
     }
     for (const { id, topic } of plan) {
@@ -704,6 +681,60 @@ export class BlockLoader {
       evictedHere.add(topic);
       evicted.set(id, evictedHere);
     }
+  }
+
+  /**
+   * What #evict would free to bring `used` bytes (counting `loading`) down to `capacity`, and
+   * whether that is enough.
+   */
+  #planEviction(
+    distance: number,
+    loading: Record<string, MessageEvent[]>,
+    used: number,
+    capacity: number,
+  ): { plan: { id: number; topic: string }[]; fits: boolean } {
+    const topicBytes = this.#topicBytes();
+    for (const [topic, messages] of Object.entries(loading)) {
+      const bytes = messages.reduce((sum, message) => sum + message.sizeInBytes, 0);
+      topicBytes.set(topic, (topicBytes.get(topic) ?? 0) + bytes);
+    }
+    const fairShare = capacity / Math.max(1, this.#topics.size);
+    const playhead = this.#playheadBlock();
+    const victims: { id: number; topic: string; distance: number }[] = [];
+    for (const [id, block] of this.#blocks.entries()) {
+      const blockDistance = this.#distance(id, playhead);
+      if (!block) {
+        continue;
+      }
+      for (const topic of Object.keys(block.messagesByTopic)) {
+        if (
+          (topicBytes.get(topic) ?? 0) > fairShare &&
+          // Nearer data only of other topics, and never at the playhead
+          (blockDistance > distance || (!(topic in loading) && blockDistance > 0))
+        ) {
+          victims.push({ id, topic, distance: blockDistance });
+        }
+      }
+    }
+    victims.sort((a, b) => b.distance - a.distance);
+    // Evict only if that makes room: otherwise the block being read is dropped anyway and the
+    // evicted data would be lost for nothing
+    const plan: typeof victims = [];
+    let freed = 0;
+    for (const victim of victims) {
+      if (used - freed <= capacity) {
+        break;
+      }
+      const messages = this.#blocks[victim.id]?.messagesByTopic[victim.topic];
+      if (!messages || (topicBytes.get(victim.topic) ?? 0) <= fairShare) {
+        continue;
+      }
+      const bytes = this.#bytesOf(messages);
+      topicBytes.set(victim.topic, (topicBytes.get(victim.topic) ?? 0) - bytes);
+      freed += bytes;
+      plan.push(victim);
+    }
+    return { plan, fits: used - freed <= capacity };
   }
 
   /** Loaded bytes per topic, across all blocks */

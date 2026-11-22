@@ -1038,6 +1038,42 @@ describe("BlockLoader", () => {
       expect((await loadSettled(messages, 12, 0)).slice(0, 2)).toEqual(["a,b", "a"]);
     });
 
+    it("stops the topic that would hold the most when each part of a block fits alone", async () => {
+      // "b": 6 bytes at the playhead and 2 farther away; block 1 has 6 bytes of "a" and 5 of "b".
+      // "a" fits by taking "b"'s 2 far bytes, leaving each topic 6.
+      const messages = [sized("b", 0, 6), sized("a", 1, 6), sized("b", 1, 5), sized("b", 5, 2)];
+
+      const blocks = await loadSettled(messages, 12, 0);
+      expect(blocks[0]).toContain("b");
+      expect(blocks[1]).toContain("a");
+    });
+
+    it("never goes over budget and always loads the playhead block when it fits", async () => {
+      // Random layouts of three topics; deterministic so a failure reproduces
+      let seed = 1;
+      const random = () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646;
+      for (let round = 0; round < 25; round++) {
+        const messages = ["a", "b", "c"]
+          .flatMap((topic) =>
+            Array.from({ length: 10 }, (_, sec) => sized(topic, sec, 1 + Math.floor(random() * 6))),
+          )
+          .sort((x, y) => compare(x.receiveTime, y.receiveTime));
+        const budget = 6 + Math.floor(random() * 40);
+        const playhead = Math.floor(random() * 10);
+        const blocks = await loadSettled(messages, budget, playhead);
+
+        const held = messages.filter((m) =>
+          (blocks[m.receiveTime.sec] ?? "").split(",").includes(m.topic),
+        );
+        expect(held.reduce((sum, m) => sum + m.sizeInBytes, 0)).toBeLessThanOrEqual(budget);
+        const atPlayhead = messages.filter((m) => m.receiveTime.sec === playhead);
+        if (atPlayhead.reduce((sum, m) => sum + m.sizeInBytes, 0) <= budget) {
+          // oxlint-disable-next-line vitest/no-conditional-expect
+          expect(blocks[playhead]).toEqual("a,b,c");
+        }
+      }
+    });
+
     it("settles when several topics each want more than their share", async () => {
       const { loader, loading, settled } = setup({ a: 10, b: 10, c: 3 }, 100);
       loader.setPlayhead({ sec: 5, nsec: 0 });
