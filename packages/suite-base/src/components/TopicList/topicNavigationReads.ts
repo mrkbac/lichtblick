@@ -12,8 +12,8 @@
  * - Previous message / last message: see findMessageAtOrBefore. The read is proportional to the
  *   distance to the message, never the whole prefix.
  * - Boundaries: per-topic first/last times come from topicStats when the source reports them.
- *   Otherwise only the first message is read, and the last one is looked up backwards from the
- *   end time. The topic is never read in full.
+ *   Otherwise only the first message is read, and for recorded topics the last one is looked up
+ *   backwards from the end time. The topic is never read in full.
  */
 
 import { Time, add as addTime, compare } from "@foxglove/rostime";
@@ -192,7 +192,10 @@ export async function discoverTopicBoundaries(
     }
   }
 
-  if (first && !last && known.end) {
+  // Virtual topics (user-script or converter outputs) keep an unknown end: a lookup back from the
+  // end runs a fresh converter on a range, and a stateful one can name a false last message
+  // there. "Next" then falls back to the recording's end time.
+  if (first && !last && known.end && reads.isRecorded(topic)) {
     const windowMs = initialWindowMs(known.stats?.numMessages ?? 0, first, known.end);
     last = await findMessageAtOrBefore(reads, signal, topic, known.end, first, windowMs);
   }

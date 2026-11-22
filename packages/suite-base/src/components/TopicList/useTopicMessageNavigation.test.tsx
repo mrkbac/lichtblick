@@ -139,9 +139,11 @@ function setup(options: SetupOptions = {}) {
           consumption.yielded++;
         }),
       );
-  const inspect = createMockBatchIterator(messages, topicName, () => {
-    consumption.yielded++;
-  });
+  const inspect =
+    customIterator ??
+    createMockBatchIterator(messages, topicName, () => {
+      consumption.yielded++;
+    });
   const getInspectionIterator = supportsInspection
     ? vi.fn((topics: readonly string[], opts?: { start?: Time; end?: Time }) =>
         inspect(topics[0]!, opts),
@@ -1082,6 +1084,7 @@ describe("useTopicMessageNavigation", () => {
           endTime: { sec: 100, nsec: 500_000_000 },
           topicStats: new Map([[topicName, { numMessages: 100 }]]),
           messages,
+          supportsInspection: true,
         },
       });
 
@@ -1105,6 +1108,7 @@ describe("useTopicMessageNavigation", () => {
           endTime: { sec: 3, nsec: 500_000_000 },
           topicStats: new Map([[topicName, { numMessages: 3 }]]),
           messages,
+          supportsInspection: true,
         },
       });
       await act(async () => {
@@ -1149,6 +1153,31 @@ describe("useTopicMessageNavigation", () => {
       expect(result.current.canNavigatePrevious).toBe(false);
     });
 
+    it("leaves the end of a virtual topic unknown, so a converter can't end next early", async () => {
+      // Given - a virtual topic (the player can't inspect it): a lookup back from the end would
+      // run a fresh converter on a range and could name a false last message
+      const messages: Time[] = [1, 2, 3].map((sec) => ({ sec, nsec: 0 }));
+      const topicName = `/${BasicBuilder.string()}`;
+      const { result, getBatchIterator } = setup({
+        topicName,
+        selected: true,
+        pipelineData: {
+          currentTime: messages[2],
+          endTime: { sec: 10, nsec: 0 },
+          topicStats: new Map([[topicName, { numMessages: 3 }]]),
+          messages,
+        },
+      });
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+
+      // Then - only the first message was read, and "next" stays available up to the end time
+      expect(getBatchIterator).toHaveBeenCalledTimes(1);
+      expect(getBatchIterator).toHaveBeenCalledWith(topicName, undefined);
+      expect(result.current.canNavigateNext).toBe(true);
+    });
+
     it("does not restart discovery when the end time advances", async () => {
       // Given - a growing source: the end time changes on every tick
       const messages: Time[] = [1, 2, 3].map((sec) => ({ sec, nsec: 0 }));
@@ -1185,20 +1214,24 @@ describe("useTopicMessageNavigation", () => {
       // Given
       const messages: Time[] = [1, 2, 3].map((sec) => ({ sec, nsec: 0 }));
       const topicName = `/${BasicBuilder.string()}`;
-      const { result, rerender, live, getBatchIterator } = setup({
+      const { result, rerender, live, getInspectionIterator } = setup({
         topicName,
         selected: true,
         pipelineData: {
           currentTime: messages[2],
           topicStats: new Map([[topicName, { numMessages: 3 }]]),
           messages,
+          supportsInspection: true,
         },
       });
       await act(async () => {
         await new Promise((resolve) => setTimeout(resolve, 0));
       });
       // Only the first message was read; nothing was cached without an end time
-      expect(getBatchIterator).toHaveBeenCalledTimes(1);
+      expect(getInspectionIterator).toHaveBeenCalledWith([topicName], undefined);
+      expect(
+        getInspectionIterator!.mock.calls.filter(([, opts]) => opts?.end != undefined),
+      ).toHaveLength(0);
       expect(result.current.canNavigateNext).toBe(false);
 
       // When
@@ -1207,7 +1240,7 @@ describe("useTopicMessageNavigation", () => {
 
       // Then - the last message (3) is found, so "next" turns off at it
       await waitFor(() => {
-        expect(getBatchIterator).toHaveBeenCalledWith(topicName, {
+        expect(getInspectionIterator).toHaveBeenCalledWith([topicName], {
           start: expect.anything(),
           end: { sec: 10, nsec: 0 },
         });
@@ -1231,6 +1264,7 @@ describe("useTopicMessageNavigation", () => {
           endTime: { sec: 5, nsec: 0 },
           topicStats: new Map([[topicName, { numMessages: 1 }]]),
           // The first-message read succeeds; the end window read fails
+          supportsInspection: true,
           customIterator: createThrowingIterator(new Error("read failed"), topicName),
         },
       });
