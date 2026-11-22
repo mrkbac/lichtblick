@@ -103,6 +103,16 @@ export class OccupancyGrids extends SceneExtension<OccupancyGridRenderable> {
     return entries;
   }
 
+  public override gpuReady(): void {
+    for (const renderable of this.renderables.values()) {
+      this.#updateOccupancyGridRenderable(
+        renderable,
+        renderable.userData.occupancyGrid,
+        renderable.userData.receiveTime,
+      );
+    }
+  }
+
   public override handleSettingsAction = (action: SettingsTreeAction): void => {
     const path = action.payload.path;
     if (action.action !== "update" || path.length !== 3) {
@@ -199,6 +209,15 @@ export class OccupancyGrids extends SceneExtension<OccupancyGridRenderable> {
     const width = occupancyGrid.info.width;
     const height = occupancyGrid.info.height;
     const resolution = occupancyGrid.info.resolution;
+
+    renderable.userData.mesh.visible = this.renderer.checkTextureSize(
+      renderable.userData.topic,
+      width,
+      height,
+    );
+    if (!renderable.userData.mesh.visible) {
+      return;
+    }
 
     if (width !== texture.image.width || height !== texture.image.height) {
       // The image dimensions changed, regenerate the texture

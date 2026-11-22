@@ -183,6 +183,12 @@ export class GridMaps extends SceneExtension<GridMapRenderable> {
     return entries;
   }
 
+  public override gpuReady(): void {
+    for (const renderable of this.renderables.values()) {
+      this.#update(renderable);
+    }
+  }
+
   public override handleSettingsAction = (action: SettingsTreeAction): void => {
     const path = action.payload.path;
     if (action.action !== "update" || path.length !== 3) {
@@ -248,9 +254,10 @@ export class GridMaps extends SceneExtension<GridMapRenderable> {
     const { gridMap, settings, topic, mesh, uniforms } = renderable.userData;
     const size = gridMapSize(gridMap);
     const { sizeX, sizeY } = size;
+    // The mesh, since startFrame sets the renderable's visibility from its settings every frame
     const error = (message: string) => {
       this.renderer.settings.errors.addToTopic(topic, INVALID_GRID_MAP, message);
-      renderable.visible = false;
+      mesh.visible = false;
     };
     if (sizeX <= 0 || sizeY <= 0) {
       error(
@@ -290,7 +297,10 @@ export class GridMaps extends SceneExtension<GridMapRenderable> {
       return;
     }
     this.renderer.settings.errors.removeFromTopic(topic, INVALID_GRID_MAP);
-    renderable.visible = settings.visible;
+    mesh.visible = this.renderer.checkTextureSize(topic, sizeX, sizeY);
+    if (!mesh.visible) {
+      return;
+    }
 
     const { resolution } = gridMap.info;
     const material = mesh.material;
