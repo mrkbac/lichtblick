@@ -33,6 +33,8 @@ type UlogOptions = { type: "file"; file: File };
 
 const CHUNK_SIZE = 1024 * 1024;
 const LOG_TOPIC = "Log";
+/** @foxglove/ulog's index id for log messages */
+const LOG_MSG_ID = -1;
 
 const log = Logger.getLogger(__filename);
 
@@ -168,16 +170,22 @@ export class UlogIterableSource implements IIterableSource {
     }
     // One reverse pass for all topics. A topic's ids leave the set once it has its message, so the
     // reader skips its older messages in the index without reading them.
+    // Logs go through the id set too, so they also stop once the latest one is found.
     const msgIds = this.#msgIds(topics.keys());
+    const hasLogs = topics.has(LOG_TOPIC) && (this.#ulog.logCount() ?? 0) > 0;
+    if (hasLogs) {
+      msgIds.add(LOG_MSG_ID);
+    }
     const latest = new Map<string, MessageEvent>();
     // Requested topics the file has: stop once each has its message
     const names = new Set([...this.#ulog.subscriptions.values()].map((sub) => sub.name));
-    const wanted = [...topics.keys()].filter((t) => t === LOG_TOPIC || names.has(t)).length;
+    const wanted = [...topics.keys()].filter((t) => names.has(t)).length + (hasLogs ? 1 : 0);
     for await (const msg of this.#ulog.readMessages({
       endTime: toMicros(time, "floor"),
       msgIds,
-      includeLogs: topics.has(LOG_TOPIC),
+      includeLogs: false,
       reverse: true,
+      signal: abortSignal,
     })) {
       if (abortSignal?.aborted === true) {
         break;
@@ -191,6 +199,8 @@ export class UlogIterableSource implements IIterableSource {
         for (const id of this.#msgIds([msgEvent.topic])) {
           msgIds.delete(id);
         }
+      } else {
+        msgIds.delete(LOG_MSG_ID);
       }
       if (latest.size === wanted) {
         break;

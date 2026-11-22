@@ -19,7 +19,7 @@ patchedDependencies:
     hash: a05249625d5e99f9147be96e9ef6c877d8f88dfe4780fb0bb87b304070346ca9
     path: patches/@foxglove__rosbag2@6.0.0.patch
   '@foxglove/ulog@2.3.2':
-    hash: b98cc1e98d01c6fbb959f3aadb54a5ed479cd065e5438141c0cac119f140785c
+    hash: a0e41ee7471d62292e44e84f8c45e7090552c3d2fa2d217ea33f9677c3e88c6b
     path: patches/@foxglove__ulog@2.3.2.patch
 
 importers:
@@ -504,7 +504,7 @@ importers:
         version: 0.6.1(three@0.187.0)
       '@foxglove/ulog':
         specifier: 2.3.2
-        version: 2.3.2(patch_hash=b98cc1e98d01c6fbb959f3aadb54a5ed479cd065e5438141c0cac119f140785c)
+        version: 2.3.2(patch_hash=a0e41ee7471d62292e44e84f8c45e7090552c3d2fa2d217ea33f9677c3e88c6b)
       '@foxglove/velodyne-cloud':
         specifier: 1.0.1
         version: 1.0.1
@@ -9493,7 +9493,7 @@ snapshots:
       '@mapbox/tiny-sdf': 2.0.6
       three: 0.187.0
 
-  '@foxglove/ulog@2.3.2(patch_hash=b98cc1e98d01c6fbb959f3aadb54a5ed479cd065e5438141c0cac119f140785c)': {}
+  '@foxglove/ulog@2.3.2(patch_hash=a0e41ee7471d62292e44e84f8c45e7090552c3d2fa2d217ea33f9677c3e88c6b)': {}
 
   '@foxglove/velodyne-cloud@1.0.1': {}
 

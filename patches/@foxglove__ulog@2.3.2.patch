@@ -1,5 +1,18 @@
+diff --git a/dist/ULog.d.ts b/dist/ULog.d.ts
+index be91e3ecb7c18e64558cb855029c68d42e72a12a..1ae1970357000afb737d80de647a3d7f94b30be7 100644
+--- a/dist/ULog.d.ts
++++ b/dist/ULog.d.ts
+@@ -34,6 +34,8 @@ export declare class ULog {
+         msgIds?: Set<number>;
+         /** If true, the messages are yielded in reverse order (default false). */
+         reverse?: boolean;
++        /** Stop reading once aborted */
++        signal?: AbortSignal;
+     }): AsyncIterableIterator<DataSectionMessage>;
+     messageCount(): number | undefined;
+     dataMessageCounts(): ReadonlyMap<number, number> | undefined;
 diff --git a/dist/ULog.js b/dist/ULog.js
-index 705fb92178b273ef1ee8848968656accba028e2e..a5b772aae96920eb09690d1432bdaa4645627299 100644
+index 705fb92178b273ef1ee8848968656accba028e2e..e72a7ff0365339eb3fdace896f4e3078fa279050 100644
 --- a/dist/ULog.js
 +++ b/dist/ULog.js
 @@ -5,7 +5,6 @@ exports.computeTimetampOffset = computeTimetampOffset;
@@ -121,18 +134,27 @@ index 705fb92178b273ef1ee8848968656accba028e2e..a5b772aae96920eb09690d1432bdaa46
          if (range == undefined) {
              return;
          }
-@@ -179,7 +269,9 @@ class ULog {
+@@ -178,8 +268,18 @@ class ULog {
+         // When reading in reverse we will start reading at endIndex and decrement towards startIndex
          const increment = opts.reverse === true ? -1 : 1;
          let idx = opts.reverse === true ? endIndex : startIndex;
++        const signal = opts.signal;
          for (let i = 0; i <= diffIndex; i++, idx += increment) {
 -            const [_timestamp, offset, msgId] = timeIndex[idx];
++            // Skipped entries don't await: give an abort a chance every so often
++            if (signal != undefined && (i & 0xffff) === 0xffff) {
++                await new Promise((resolve) => setTimeout(resolve, 0));
++            }
++            if (signal?.aborted === true) {
++                return;
++            }
 +            const offset = timeIndex.offsets[idx];
 +            const indexMsgId = timeIndex.msgIds[idx];
 +            const msgId = indexMsgId === NoMessageId ? undefined : indexMsgId;
              if (includeLogs && msgId === LogMessageId) {
                  reader.seekTo(offset);
                  const msg = await this.#readParsedMessage(reader);
-@@ -218,7 +310,7 @@ class ULog {
+@@ -218,7 +318,7 @@ class ULog {
              throw new Error(`Cannot read before open`);
          }
          const dataEnd = this.#dataEnd;
@@ -141,7 +163,7 @@ index 705fb92178b273ef1ee8848968656accba028e2e..a5b772aae96920eb09690d1432bdaa46
          const dataCounts = new Map();
          let minTimestamp;
          let maxTimestamp = 0n;
-@@ -242,7 +334,7 @@ class ULog {
+@@ -242,7 +342,7 @@ class ULog {
                  // read the AddLogged message from the reader data
                  const addLogged = await (0, readMessage_1.readMessageAddLogged)(reader, header);
                  this.#handleSubscription(addLogged);
@@ -150,7 +172,7 @@ index 705fb92178b273ef1ee8848968656accba028e2e..a5b772aae96920eb09690d1432bdaa46
              }
              else if (type === enums_1.MessageType.Log) {
                  const logMsg = await (0, readMessage_1.readMessageLog)(reader, header);
-@@ -252,7 +344,7 @@ class ULog {
+@@ -252,7 +352,7 @@ class ULog {
                  if (logMsg.timestamp > maxTimestamp) {
                      maxTimestamp = logMsg.timestamp;
                  }
@@ -159,7 +181,7 @@ index 705fb92178b273ef1ee8848968656accba028e2e..a5b772aae96920eb09690d1432bdaa46
                  logMessageCount++;
              }
              else if (type === enums_1.MessageType.LogTagged) {
-@@ -263,7 +355,7 @@ class ULog {
+@@ -263,7 +363,7 @@ class ULog {
                  if (logMsg.timestamp > maxTimestamp) {
                      maxTimestamp = logMsg.timestamp;
                  }
@@ -168,7 +190,7 @@ index 705fb92178b273ef1ee8848968656accba028e2e..a5b772aae96920eb09690d1432bdaa46
                  logMessageCount++;
              }
              else if (type === enums_1.MessageType.Data) {
-@@ -288,16 +380,17 @@ class ULog {
+@@ -288,16 +388,17 @@ class ULog {
                  if (timestamp > maxTimestamp) {
                      maxTimestamp = timestamp;
                  }
@@ -189,7 +211,7 @@ index 705fb92178b273ef1ee8848968656accba028e2e..a5b772aae96920eb09690d1432bdaa46
          this.#dataMessageCounts = dataCounts;
          this.#logMessageCount = logMessageCount;
          this.#dataTimeRange = minTimestamp != undefined ? [minTimestamp, maxTimestamp] : undefined;
-@@ -366,17 +459,6 @@ function isValidInfoField(field) {
+@@ -366,17 +467,6 @@ function isValidInfoField(field) {
  function isValidParameter(field) {
      return Boolean(field && (field.type === "int32_t" || field.type === "float") && field.arrayLength == undefined);
  }

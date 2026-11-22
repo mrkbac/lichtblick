@@ -143,3 +143,57 @@ describe("UlogIterableSource backfill cutoff", () => {
     expect(messages).toEqual([]);
   });
 });
+
+/** Topic "b" once at the start, then `count` messages of "a" and a log line every 10 */
+function makeLongUlog(count: number): File {
+  const header = new Uint8Array(16);
+  header.set([0x55, 0x4c, 0x6f, 0x67, 0x01, 0x12, 0x35, 1]);
+  const parts = [
+    header,
+    record("B", new Uint8Array(40)),
+    record("F", text("a:uint64_t timestamp;float x;")),
+    record("F", text("b:uint64_t timestamp;float x;")),
+    addLogged(0, "a"),
+    addLogged(1, "b"),
+    data(1, 1_000_000, 1),
+  ];
+  for (let i = 1; i <= count; i++) {
+    parts.push(data(0, 1_000_000 + i * 10, i));
+    if (i % 10 === 0) {
+      parts.push(log(1_000_000 + i * 10, "tick"));
+    }
+  }
+  return new File(parts, "long.ulg");
+}
+
+describe("UlogIterableSource backfill reads", () => {
+  it("stops reading logs once the latest one is found", async () => {
+    const source = new UlogIterableSource({ type: "file", file: makeLongUlog(1000) });
+    await source.initialize();
+    const readLogs = vi.spyOn(TextDecoder.prototype, "decode");
+    const messages = await source.getBackfillMessages({
+      topics: new Map(["Log", "b"].map((topic) => [topic, { topic }])),
+      time: { sec: 2, nsec: 0 },
+    });
+    expect(messages.map((m) => m.topic)).toEqual(["b", "Log"]);
+    // Log text is decoded per log read: only the latest one
+    expect(readLogs).toHaveBeenCalledTimes(1);
+  });
+
+  it("takes an abort before the first match of a long scan", async () => {
+    const source = new UlogIterableSource({ type: "file", file: makeLongUlog(70_000) });
+    await source.initialize();
+    const abort = new AbortController();
+    const realSetTimeout = globalThis.setTimeout;
+    vi.spyOn(globalThis, "setTimeout").mockImplementation(((fn: () => void, ms?: number) => {
+      abort.abort();
+      return realSetTimeout(fn, ms);
+    }) as typeof setTimeout);
+    const messages = await source.getBackfillMessages({
+      topics: new Map([["b", { topic: "b" }]]),
+      time: { sec: 2, nsec: 0 },
+      abortSignal: abort.signal,
+    });
+    expect(messages).toEqual([]);
+  });
+});
