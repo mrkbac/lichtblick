@@ -20,7 +20,11 @@ import { PropsWithChildren, useState } from "react";
 import type { Mock } from "vitest";
 
 import { PanelVisibleContext } from "@lichtblick/suite-base/components/DockPanelContext";
-import { MessagePipelineProvider } from "@lichtblick/suite-base/components/MessagePipeline";
+import {
+  MessagePipelineContext,
+  MessagePipelineProvider,
+  useMessagePipelineBatchedWhenHidden,
+} from "@lichtblick/suite-base/components/MessagePipeline";
 import FakePlayer from "@lichtblick/suite-base/components/MessagePipeline/FakePlayer";
 import MockMessagePipelineProvider from "@lichtblick/suite-base/components/MessagePipeline/MockMessagePipelineProvider";
 import AppConfigurationContext from "@lichtblick/suite-base/context/AppConfigurationContext";
@@ -298,6 +302,45 @@ describe("useMessageReducer", () => {
 
     // Then
     expect(result.current).toBe(1);
+  });
+
+  it("hands a hidden panel the new value right away when its flush key changes (a seek)", () => {
+    // Given
+    const now = vi.spyOn(performance, "now").mockReturnValue(0);
+    let currentTime = { sec: 1, nsec: 0 };
+    // Stands in for lastSeekTime, which changes in the same pipeline state as the seek's time
+    const flushKey = (ctx: MessagePipelineContext) =>
+      (ctx.playerState.activeData?.currentTime.sec ?? 0) >= 9 ? "seek" : "start";
+    const { result, rerender } = renderHook(
+      () =>
+        useMessagePipelineBatchedWhenHidden((ctx) => ctx.playerState.activeData?.currentTime, {
+          flushKey,
+        }),
+      {
+        wrapper: ({ children }: PropsWithChildren) => (
+          <PanelVisibleContext.Provider value={false}>
+            <MockMessagePipelineProvider currentTime={currentTime}>
+              {children}
+            </MockMessagePipelineProvider>
+          </PanelVisibleContext.Provider>
+        ),
+      },
+    );
+
+    // When: playback moves on within the interval
+    now.mockReturnValue(100);
+    currentTime = { sec: 2, nsec: 0 };
+    rerender();
+    // Then: still the held value
+    expect(result.current).toEqual({ sec: 1, nsec: 0 });
+
+    // When: a seek, still within the interval
+    now.mockReturnValue(200);
+    currentTime = { sec: 9, nsec: 0 };
+    rerender();
+    // Then
+    expect(result.current).toEqual({ sec: 9, nsec: 0 });
+    now.mockRestore();
   });
 
   it("calls addMessages for messages added later", async () => {

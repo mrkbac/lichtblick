@@ -82,26 +82,35 @@ export function useMessagePipeline<T>(selector: (arg0: MessagePipelineContext) =
  */
 export function useMessagePipelineBatchedWhenHidden<T>(
   selector: (arg0: MessagePipelineContext) => T,
-  { enabled = true }: { enabled?: boolean } = {},
+  {
+    enabled = true,
+    flushKey,
+  }: {
+    enabled?: boolean;
+    /** A change of this value (e.g. the last seek time) hands out the new value right away. */
+    flushKey?: (ctx: MessagePipelineContext) => unknown;
+  } = {},
 ): T {
   const visible = useContext(PanelVisibleContext) || !enabled;
-  const handedOut = useRef<{ value: T; at: number } | undefined>(undefined);
+  const handedOut = useRef<{ value: T; at: number; key: unknown } | undefined>(undefined);
   return useMessagePipeline(
     useCallback(
       (ctx: MessagePipelineContext) => {
         const value = selector(ctx);
+        const key = flushKey?.(ctx);
         const now = performance.now();
         if (
           !visible &&
           handedOut.current != undefined &&
+          handedOut.current.key === key &&
           now - handedOut.current.at < HIDDEN_RENDER_INTERVAL_MS
         ) {
           return handedOut.current.value;
         }
-        handedOut.current = { value, at: now };
+        handedOut.current = { value, at: now, key };
         return value;
       },
-      [selector, visible],
+      [flushKey, selector, visible],
     ),
   );
 }
