@@ -21,6 +21,7 @@ const defaultProps = {
   saveConfig: vi.fn(),
   sidebarDimension: BasicBuilder.number(),
   paths: [],
+  supportsStreamModifiers: true,
 };
 
 const getContextValue = () => ({
@@ -65,6 +66,22 @@ const setup = (overrides = {}) => {
     </PanelContext.Provider>,
   );
 };
+
+vi.mock("@lichtblick/suite-base/PanelAPI", () => ({
+  useDataSourceInfo: () => ({ topics: [], datatypes: new Map() }),
+}));
+
+vi.mock("@lichtblick/suite-base/components/MessagePathSyntax/MessagePathInput", () => ({
+  default: ({ path, onChange }: { path: string; onChange: (value: string) => void }) => (
+    <input
+      aria-label="Message path"
+      value={path}
+      onChange={(event) => {
+        onChange(event.target.value);
+      }}
+    />
+  ),
+}));
 
 vi.mock("@lichtblick/suite-base/panels/shared/useSeriesDrag", () => ({
   useSeriesDrag: () => ({ dragRef: undefined, isDragging: false }),
@@ -118,15 +135,49 @@ describe("PlotLegend", () => {
     expect(screen.getByText(secondPath)).toBeDefined();
   });
 
-  it("calls onClickPath when a path is clicked", async () => {
+  it("opens the series settings from the settings button", async () => {
     const mockOnClickPath = vi.fn();
     const paths = [{ value: path, enabled: true }];
 
     setup({ paths, onClickPath: mockOnClickPath });
 
-    await userEvent.setup().click(screen.getByText(path));
+    await userEvent.setup().click(screen.getByTestId("series-settings"));
 
     expect(mockOnClickPath).toHaveBeenCalledWith(0);
+  });
+
+  it("edits a series path inline", async () => {
+    const saveConfig = vi.fn();
+    const user = userEvent.setup();
+    setup({ paths: [{ value: "/a.x", enabled: true }], saveConfig });
+
+    await user.click(screen.getByText("/a.x"));
+    const input = screen.getByLabelText("Message path");
+    await user.clear(input);
+    await user.type(input, "/a.y{Enter}");
+
+    expect(saveConfig).toHaveBeenCalledWith({ paths: [{ value: "/a.y", enabled: true }] });
+    expect(screen.queryByLabelText("Message path")).toBeNull();
+  });
+
+  it("adds a series inline and cancels with Escape", async () => {
+    const saveConfig = vi.fn();
+    const user = userEvent.setup();
+    setup({ paths: [{ value: "/a.x", enabled: true }], saveConfig });
+
+    await user.click(screen.getByText("Add series"));
+    await user.type(screen.getByLabelText("Message path"), "/b.x{Enter}");
+    expect(saveConfig).toHaveBeenCalledWith({
+      paths: [
+        { value: "/a.x", enabled: true },
+        { value: "/b.x", enabled: true, timestampMethod: "receiveTime" },
+      ],
+    });
+
+    saveConfig.mockClear();
+    await user.click(screen.getByText("Add series"));
+    await user.type(screen.getByLabelText("Message path"), "/c.x{Escape}");
+    expect(saveConfig).not.toHaveBeenCalled();
   });
 
   it("does not re-render when the mismatched-length paths are re-emitted unchanged", () => {
