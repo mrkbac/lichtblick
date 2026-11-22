@@ -4,11 +4,12 @@
 import { darken } from "@mui/material";
 
 import { MessageEvent } from "@lichtblick/suite";
-import { MessagePathDataItem } from "@lichtblick/suite-base/components/MessagePathSyntax/useCachedGetMessagePathDataItems";
 import {
   PathSample,
+  PathSampleColumns,
   toPathSample,
-} from "@lichtblick/suite-base/components/MessagePathSyntax/usePathSampleHistory";
+} from "@lichtblick/suite-base/components/MessagePathSyntax/PathSampleColumns";
+import { MessagePathDataItem } from "@lichtblick/suite-base/components/MessagePathSyntax/useCachedGetMessagePathDataItems";
 import MessageEventBuilder from "@lichtblick/suite-base/testing/builders/MessageEventBuilder";
 import RosTimeBuilder from "@lichtblick/suite-base/testing/builders/RosTimeBuilder";
 import { TimestampMethod } from "@lichtblick/suite-base/util/time";
@@ -236,7 +237,7 @@ describe("messagesToDataset", () => {
     const argsDataset: MessageDatasetArgs = {
       ...args,
       path: { ...args.path, timestampMethod: "receiveTime" },
-      blocks,
+      blocks: blocks.map((block) => PathSampleColumns.from(block)),
     };
 
     const result = messagesToDataset(argsDataset);
@@ -259,7 +260,7 @@ describe("messagesToDataset", () => {
     const [datum] = messagesToDataset({
       ...args,
       path: { ...args.path, timestampMethod: "receiveTime" },
-      blocks,
+      blocks: blocks.map((block) => PathSampleColumns.from(block)),
       darkenLabels: true,
     }).data;
 
@@ -283,7 +284,7 @@ describe("messagesToDataset", () => {
     const argsDataset: MessageDatasetArgs = {
       ...args,
       path: { ...args.path, timestampMethod: "headerStamp" },
-      blocks,
+      blocks: blocks.map((block) => PathSampleColumns.from(block)),
     };
 
     const result = messagesToDataset(argsDataset);
@@ -307,7 +308,7 @@ describe("messagesToDataset", () => {
     const argsDataset: MessageDatasetArgs = {
       ...args,
       path: { ...args.path, timestampMethod: "headerStamp", label: undefined },
-      blocks,
+      blocks: blocks.map((block) => PathSampleColumns.from(block)),
     };
 
     const result = messagesToDataset(argsDataset);
@@ -340,7 +341,7 @@ describe("messagesToDataset", () => {
     const argsDataset: MessageDatasetArgs = {
       ...args,
       path: { ...args.path, timestampMethod: "receiveTime" },
-      blocks,
+      blocks: blocks.map((block) => PathSampleColumns.from(block)),
     };
 
     const result = messagesToDataset(argsDataset);
@@ -363,7 +364,7 @@ describe("messagesToDataset", () => {
     const argsDataset: MessageDatasetArgs = {
       ...args,
       path: { ...args.path, timestampMethod: "receiveTime" },
-      blocks,
+      blocks: blocks.map((block) => PathSampleColumns.from(block)),
     };
 
     const result = messagesToDataset(argsDataset);
@@ -383,7 +384,7 @@ describe("messagesToDataset", () => {
     const argsDataset: MessageDatasetArgs = {
       ...args,
       path: { ...args.path, timestampMethod: "receiveTime" },
-      blocks,
+      blocks: blocks.map((block) => PathSampleColumns.from(block)),
     };
 
     const result = messagesToDataset(argsDataset);
@@ -403,7 +404,7 @@ describe("messagesToDataset", () => {
     const argsDataset: MessageDatasetArgs = {
       ...args,
       path: { ...args.path, timestampMethod: "receiveTime" },
-      blocks,
+      blocks: blocks.map((block) => PathSampleColumns.from(block)),
     };
 
     const result = messagesToDataset(argsDataset);
@@ -421,7 +422,7 @@ describe("messagesToDataset", () => {
 
     const result = messagesToDataset({
       ...args,
-      blocks,
+      blocks: blocks.map((block) => PathSampleColumns.from(block)),
       path: { ...args.path, timestampMethod: "receiveTime" },
     });
 
@@ -441,7 +442,7 @@ describe("messagesToDataset", () => {
 
     const result = messagesToDataset({
       ...args,
-      blocks,
+      blocks: blocks.map((block) => block && PathSampleColumns.from(block)),
       path: { ...args.path, timestampMethod: "receiveTime" },
     });
 
@@ -462,7 +463,7 @@ describe("messagesToDataset", () => {
 
     const result = messagesToDataset({
       ...args,
-      blocks,
+      blocks: blocks.map((block) => PathSampleColumns.from(block)),
       path: { ...args.path, timestampMethod: "receiveTime" },
       showPoints: true,
     });
@@ -482,7 +483,7 @@ describe("messagesToDataset", () => {
 
     const result = messagesToDataset({
       ...args,
-      blocks,
+      blocks: blocks.map((block) => PathSampleColumns.from(block)),
       path: { ...args.path, timestampMethod: "receiveTime" },
     });
 
@@ -499,7 +500,7 @@ describe("messagesToDataset", () => {
 
     const result = messagesToDataset({
       ...args,
-      blocks,
+      blocks: blocks.map((block) => PathSampleColumns.from(block)),
       path: { ...args.path, timestampMethod: "receiveTime" },
       showPoints: false,
     });
@@ -520,7 +521,7 @@ describe("messagesToDataset", () => {
 
     const result = messagesToDataset({
       ...args,
-      blocks: [[messageAndData, messageAndData, gap]],
+      blocks: [PathSampleColumns.from([messageAndData, messageAndData, gap])],
       path: { ...args.path, timestampMethod: "receiveTime" },
       showPoints: false,
     });
@@ -530,5 +531,60 @@ describe("messagesToDataset", () => {
       expect.objectContaining({ value: repeatedValue }),
       { x: expect.any(Number), y: NaN },
     ]);
+  });
+
+  it("draws the end of a repeated state and doesn't mix up values across blocks", () => {
+    const at = (sec: number, value: unknown): PathSample => ({
+      receiveTime: { sec, nsec: 0 },
+      headerStamp: undefined,
+      count: 1,
+      value,
+      constantName: undefined,
+    });
+    const result = messagesToDataset({
+      ...args,
+      startTime: { sec: 0, nsec: 0 },
+      path: { ...args.path, timestampMethod: "receiveTime", condition: undefined },
+      showPoints: false,
+      // Both blocks start with their own first value, so ids alone would say "repeat".
+      blocks: [
+        PathSampleColumns.from([at(0, 3), at(1, 3), at(2, 3)]),
+        PathSampleColumns.from([at(3, "x"), at(4, "x")]),
+      ],
+    });
+    expect(result.data.map((datum) => [datum?.x, datum?.value, datum?.label])).toEqual([
+      [0, 3, "3"],
+      [3, "x", "x"],
+      [4, "x", undefined],
+    ]);
+  });
+});
+
+describe("messagesToDataset of thinned samples", () => {
+  it("draws a fast signal merged by thinning as a dense stretch, not a steady state", () => {
+    const columns = new PathSampleColumns(100);
+    for (let i = 0; i < 10_000; i++) {
+      columns.push({
+        receiveTime: { sec: i, nsec: 0 },
+        headerStamp: undefined,
+        count: 1,
+        value: i % 2,
+        constantName: undefined,
+      });
+    }
+    const dataset = messagesToDataset({
+      path: { value: "/a.b", timestampMethod: "receiveTime" },
+      startTime: { sec: 0, nsec: 0 },
+      y: 0,
+      pathIndex: 0,
+      blocks: [columns],
+      showPoints: false,
+    });
+    const labels = dataset.data.map((datum) => datum?.label).filter((label) => label != undefined);
+    // One dense band (merged stretches in a row continue it); at most the newest, unmerged
+    // samples show a plain state.
+    expect(labels[0]).toBe("[...]");
+    expect(labels.filter((label) => label !== "[...]").length).toBeLessThanOrEqual(2);
+    expect(dataset.data.at(-1)?.x).toBe(9_999);
   });
 });

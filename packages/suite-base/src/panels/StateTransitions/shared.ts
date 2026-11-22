@@ -33,8 +33,8 @@ export function datasetContainsArray(dataset: ImmutableDataset): boolean {
   // since that is invalid input
   let any = false;
   for (const samples of dataset) {
-    for (const sample of samples ?? []) {
-      if (sample.count <= 1) {
+    for (let i = 0; i < (samples?.size() ?? 0); i++) {
+      if (samples!.sampleValue(i).count <= 1) {
         return false;
       }
       any = true;

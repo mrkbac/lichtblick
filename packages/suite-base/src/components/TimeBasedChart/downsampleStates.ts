@@ -5,7 +5,6 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { Immutable } from "@lichtblick/suite";
 import { Point } from "@lichtblick/suite-base/components/Chart/datasets";
 
 import { calculateIntervals } from "./downsample";
@@ -22,26 +21,6 @@ export type StatePoint = {
   states?: string[];
 };
 
-type Label = {
-  // The index at which this label first appeared
-  index: number;
-  // The value of the label
-  value: string;
-};
-
-/**
- * Add a Label to a list of Labels, but not if the top of the new Label's value
- * matches the value of the Label at the top of the stack.
- */
-function addLabel(label: Label, labels: Immutable<Label[]>): Immutable<Label[]> {
-  const last = labels.at(-1);
-  if (label.value === last?.value) {
-    return labels;
-  }
-
-  return [...labels, label];
-}
-
 // Contains all of the state we need to keep track of for each interval.
 type Interval = {
   // The x coordinate of the beginning of the interval
@@ -50,10 +29,16 @@ type Interval = {
   xPixel: number;
   // The x coordinate of the end of the interval
   endX: number;
-  // All of the labels that appeared in this interval
-  labels: Immutable<Label[]>;
   // The index of the point that started the interval
   index: number;
+  // Every label seen in this interval
+  states: Set<string>;
+  // The label of the last change in this interval, and its index
+  lastLabel: string;
+  lastIndex: number;
+  // Whether a gap was folded into this interval, and the gap it ends with, if any
+  hasGap: boolean;
+  trailingGap?: StatePoint;
   // The last unlabelled repeat of the state in this interval, which ends its band
   lastRepeat?: StatePoint;
 };
@@ -115,19 +100,13 @@ export function downsampleStates(
       return;
     }
 
-    const { labels, endX } = interval;
-    const [first] = labels;
-    const last = labels.at(-1);
-    const haveMultiple = labels.length > 1;
-
-    if (first == undefined || last == undefined) {
-      return;
-    }
+    const { states, endX, trailingGap } = interval;
+    const haveMultiple = states.size > 1 || interval.hasGap;
 
     indices.push({
       x: interval.x,
-      index: haveMultiple ? undefined : first.index,
-      ...(haveMultiple ? { states: [...new Set(labels.map(({ value }) => value))] } : undefined),
+      index: haveMultiple ? undefined : interval.index,
+      ...(haveMultiple ? { states: [...states] } : undefined),
     });
 
     if (!haveMultiple) {
@@ -138,12 +117,19 @@ export function downsampleStates(
       return;
     }
 
+    // Don't let the synthetic end run past a gap that starts within the same pixel.
+    const gapStart = trailingGap?.x ?? gapX;
     indices.push({
-      // Don't let the synthetic end run past a gap that starts within the same pixel.
-      x: gapX != undefined ? Math.min(endX, gapX) : endX,
-      index: last.index,
+      x: gapStart != undefined ? Math.min(endX, gapStart) : endX,
+      index: interval.lastIndex,
     });
+    if (trailingGap) {
+      indices.push(trailingGap);
+    }
   };
+
+  // The pixel of the last gap pushed. One gap per pixel is drawn exactly; more fold in.
+  let lastGapPixel: number | undefined;
 
   for (const datum of points) {
     const { index, label, x } = datum;
@@ -168,14 +154,25 @@ export function downsampleStates(
       continue;
     }
 
+    const xPixel = Math.trunc(x * pixelPerXValue);
+
     // Unlabelled points repeat the previous state (shown points, segment ends) or mark a gap
-    // (y = NaN). A repeat inside the open interval is folded into it. Anything else closes
-    // the interval first so output stays in x order and a same-state segment after a gap isn't
-    // merged into the one before.
+    // (y = NaN). Within the open interval's pixel, a repeat moves where its band ends. A gap
+    // closes the interval, so the same state after it isn't merged into the one before, unless
+    // this pixel already drew a gap: then it folds in (the pixel shows as mixed), so a row
+    // alternating with gaps stays a few output points per pixel.
     if (label == undefined) {
       const isGap = Number.isNaN(datum.y);
-      if (!isGap && interval?.xPixel === Math.trunc(x * pixelPerXValue)) {
-        interval.lastRepeat = { x, index };
+      if (interval?.xPixel === xPixel && (!isGap || lastGapPixel === xPixel)) {
+        if (isGap) {
+          interval.hasGap = true;
+          interval.trailingGap = { x, index };
+        } else {
+          interval.lastRepeat = { x, index };
+        }
+        continue;
+      }
+      if (isGap && interval == undefined && lastGapPixel === xPixel) {
         continue;
       }
       finishInterval(isGap ? x : undefined);
@@ -184,40 +181,33 @@ export function downsampleStates(
         x,
         index,
       });
+      if (isGap) {
+        lastGapPixel = xPixel;
+      }
       continue;
     }
 
-    const xPixel = Math.trunc(x * pixelPerXValue);
-    const isNew = interval?.xPixel !== xPixel;
-    if (interval != undefined && isNew) {
-      finishInterval();
-    }
-
-    // Start a new interval if this point falls in a new one
-    if (interval == undefined || isNew) {
-      interval = {
-        x,
-        endX: xPixel * xValuePerPixel + xValuePerPixel,
-        xPixel,
-        index,
-        labels: [
-          {
-            index,
-            value: label,
-          },
-        ],
-      };
+    if (interval?.xPixel === xPixel) {
+      interval.states.add(label);
+      if (label !== interval.lastLabel) {
+        interval.lastLabel = label;
+        interval.lastIndex = index;
+      }
+      interval.trailingGap = undefined;
       continue;
     }
 
-    // If we haven't yet moved on, add this point's label
-    interval.labels = addLabel(
-      {
-        index,
-        value: label,
-      },
-      interval.labels,
-    );
+    finishInterval();
+    interval = {
+      x,
+      endX: xPixel * xValuePerPixel + xValuePerPixel,
+      xPixel,
+      index,
+      states: new Set([label]),
+      lastLabel: label,
+      lastIndex: index,
+      hasGap: false,
+    };
   }
 
   if (interval != undefined) {

@@ -8,13 +8,14 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import React from "react";
 import type { Mock } from "vitest";
 
-import { MessagePathDataItem } from "@lichtblick/suite-base/components/MessagePathSyntax/useCachedGetMessagePathDataItems";
 import {
   PathSample,
+  PathSampleColumns,
   toPathSample,
-  usePathSampleHistory,
-} from "@lichtblick/suite-base/components/MessagePathSyntax/usePathSampleHistory";
-import { LIVE_HISTORY_SIZE } from "@lichtblick/suite-base/panels/StateTransitions/constants";
+} from "@lichtblick/suite-base/components/MessagePathSyntax/PathSampleColumns";
+import { MessagePathDataItem } from "@lichtblick/suite-base/components/MessagePathSyntax/useCachedGetMessagePathDataItems";
+import { usePathSampleHistory } from "@lichtblick/suite-base/components/MessagePathSyntax/usePathSampleHistory";
+import { MAX_LIVE_SAMPLES_PER_PATH } from "@lichtblick/suite-base/panels/StateTransitions/constants";
 import { SamplesByPath } from "@lichtblick/suite-base/panels/StateTransitions/types";
 import { MessageEvent } from "@lichtblick/suite-base/players/types";
 import MessageEventBuilder from "@lichtblick/suite-base/testing/builders/MessageEventBuilder";
@@ -178,7 +179,11 @@ describe("StateTransitions", () => {
       ],
     });
 
-    expect(mockUsePathSampleHistory).toHaveBeenCalledWith([topicA, topicB], LIVE_HISTORY_SIZE);
+    expect(mockUsePathSampleHistory).toHaveBeenCalledWith(
+      [topicA, topicB],
+      MAX_LIVE_SAMPLES_PER_PATH,
+      [],
+    );
   });
 
   it("should remove marker annotations when a path timestamp source changes", () => {
@@ -208,26 +213,28 @@ describe("StateTransitions", () => {
 
   it("should pass empty array to usePathSampleHistory when range data is active", () => {
     const topic = BasicBuilder.string();
-    const decodedMessages: SamplesByPath[] = [{ [topic]: [buildMessageAndData(topic)] }];
+    const decodedMessages: SamplesByPath[] = [
+      { [topic]: PathSampleColumns.from([buildMessageAndData(topic)]) },
+    ];
     mockUseDecodedMessageRange.mockReturnValue(decodedMessages);
 
     renderPanel({
       paths: [{ value: topic, timestampMethod: "receiveTime" }],
     });
 
-    expect(mockUsePathSampleHistory).toHaveBeenCalledWith([], LIVE_HISTORY_SIZE);
+    expect(mockUsePathSampleHistory).toHaveBeenCalledWith([], MAX_LIVE_SAMPLES_PER_PATH, []);
   });
 
   it("should pass pathStrings when decodedMessages has matching paths but empty arrays", () => {
     const topic = BasicBuilder.string();
-    const decodedMessages: SamplesByPath[] = [{ [topic]: [] }];
+    const decodedMessages: SamplesByPath[] = [{ [topic]: PathSampleColumns.from([]) }];
     mockUseDecodedMessageRange.mockReturnValue(decodedMessages);
 
     renderPanel({
       paths: [{ value: topic, timestampMethod: "receiveTime" }],
     });
 
-    expect(mockUsePathSampleHistory).toHaveBeenCalledWith([topic], LIVE_HISTORY_SIZE);
+    expect(mockUsePathSampleHistory).toHaveBeenCalledWith([topic], MAX_LIVE_SAMPLES_PER_PATH, []);
   });
 
   it("should skip usePathSampleHistory when any path has range data", () => {
@@ -235,8 +242,8 @@ describe("StateTransitions", () => {
     const topicB = BasicBuilder.string();
     const decodedMessages: SamplesByPath[] = [
       {
-        [topicA]: [buildMessageAndData(topicA)],
-        [topicB]: [],
+        [topicA]: PathSampleColumns.from([buildMessageAndData(topicA)]),
+        [topicB]: PathSampleColumns.from([]),
       },
     ];
     mockUseDecodedMessageRange.mockReturnValue(decodedMessages);
@@ -248,7 +255,7 @@ describe("StateTransitions", () => {
       ],
     });
 
-    expect(mockUsePathSampleHistory).toHaveBeenCalledWith([], LIVE_HISTORY_SIZE);
+    expect(mockUsePathSampleHistory).toHaveBeenCalledWith([], MAX_LIVE_SAMPLES_PER_PATH, []);
   });
 
   it.each([undefined, "=> 2"])("hides match navigation for condition %s", (condition) => {

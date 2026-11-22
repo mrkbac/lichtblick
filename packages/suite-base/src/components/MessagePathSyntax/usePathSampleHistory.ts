@@ -1,67 +1,36 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import { Time } from "@foxglove/rostime";
 import { useCallback, useMemo, useRef } from "react";
 
-import { filterMap, ReadonlyRingBuffer, RingBuffer } from "@lichtblick/den/collection";
+import { filterMap } from "@lichtblick/den/collection";
 import { useLatest, useShallowMemo } from "@lichtblick/hooks";
 import { parseMessagePath } from "@lichtblick/message-path";
 import { useMessageReducer } from "@lichtblick/suite-base/PanelAPI/useMessageReducer";
-import {
-  MessagePathDataItem,
-  useCachedGetMessagePathDataItems,
-} from "@lichtblick/suite-base/components/MessagePathSyntax/useCachedGetMessagePathDataItems";
+import { useCachedGetMessagePathDataItems } from "@lichtblick/suite-base/components/MessagePathSyntax/useCachedGetMessagePathDataItems";
 import useGlobalVariables from "@lichtblick/suite-base/hooks/useGlobalVariables";
 import { subscribePayloadFromMessagePath } from "@lichtblick/suite-base/players/subscribePayloadFromMessagePath";
 import { MessageEvent } from "@lichtblick/suite-base/players/types";
-import { getTimestampForMessage } from "@lichtblick/suite-base/util/time";
+
+import { PathSampleColumns } from "./PathSampleColumns";
+
+export type PathSampleHistoryByPath = Readonly<Record<string, PathSampleColumns>>;
 
 /**
- * A message path's value in one message, without the message: keeping samples instead of
- * MessageEvents lets a long history hold just the values a panel draws. Flat, one object per
- * sample, since histories hold millions of them.
- */
-export type PathSample = {
-  receiveTime: Time;
-  /** The message's header stamp, if it has one. */
-  headerStamp: Time | undefined;
-  /** How many values the path matched. `value` and `constantName` are only set when it is 1. */
-  count: number;
-  value: unknown;
-  constantName: string | undefined;
-};
-
-export type PathSampleHistoryByPath = Readonly<Record<string, ReadonlyRingBuffer<PathSample>>>;
-
-export function toPathSample(
-  message: MessageEvent,
-  queriedData: MessagePathDataItem[],
-): PathSample {
-  const stamp = getTimestampForMessage(message.message);
-  const only = queriedData.length === 1 ? queriedData[0] : undefined;
-  return {
-    receiveTime: message.receiveTime,
-    // Copy, so the sample never keeps the message alive through a lazily decoded stamp
-    headerStamp: stamp ? { sec: stamp.sec, nsec: stamp.nsec } : undefined,
-    count: queriedData.length,
-    value: only?.value,
-    constantName: only?.constantName,
-  };
-}
-
-/**
- * Decoded values of `paths` for the newest `historySize` messages of each path. Each message is
- * decoded once when it arrives and then dropped.
+ * Decoded values of `paths`, at most `maxSamples` per path (thinned evenly beyond that, see
+ * PathSampleColumns). Each message is decoded once when it arrives and then dropped.
  *
- * The buffers are appended in place; the returned record is a new object whenever any path got a
+ * The columns are appended in place; the returned record is a new object whenever any path got a
  * sample. After a seek the history starts over.
  */
 export function usePathSampleHistory(
   paths: readonly string[],
   /** Required and finite: samples kept per path. */
-  historySize: number,
+  maxSamples: number,
+  /** Paths whose exact value changes are kept apart once thinned (see trackChanges). */
+  changesPaths: readonly string[] = [],
 ): PathSampleHistoryByPath {
+  const changesPathsRef = useLatest(changesPaths);
   const memoizedPaths = useShallowMemo(paths);
   const subscribeTopics = useMemo(
     () =>
@@ -96,30 +65,33 @@ export function usePathSampleHistory(
   const bufferKeysRef = useRef(new Map<string, string>());
 
   const restore = useCallback(
-    (prev?: Record<string, RingBuffer<PathSample>>) => {
-      const next: Record<string, RingBuffer<PathSample>> = {};
+    (prev?: Record<string, PathSampleColumns>) => {
+      const next: Record<string, PathSampleColumns> = {};
       const keys = bufferKeysRef.current;
       for (const path of topicByPath.keys()) {
         const key = path.includes("$") ? variablesKey : "";
         const prevBuffer = keys.get(path) === key ? prev?.[path] : undefined;
         keys.set(path, key);
         next[path] =
-          prevBuffer?.capacity === historySize
+          prevBuffer?.maxSamples === maxSamples
             ? prevBuffer
-            : RingBuffer.from(historySize, prevBuffer ?? []);
+            : PathSampleColumns.from(prevBuffer?.toArray() ?? [], maxSamples);
       }
       return next;
     },
-    [topicByPath, historySize, variablesKey],
+    [topicByPath, maxSamples, variablesKey],
   );
 
   const addMessages = useCallback(
-    (prev: Record<string, RingBuffer<PathSample>>, messages: readonly MessageEvent[]) => {
+    (prev: Record<string, PathSampleColumns>, messages: readonly MessageEvent[]) => {
       let changed = false;
       for (const [path, topic] of topicByPath) {
         const buffer = prev[path];
         if (!buffer) {
           continue;
+        }
+        if (changesPathsRef.current.includes(path)) {
+          buffer.trackChanges();
         }
         for (const message of messages) {
           if (message.topic !== topic) {
@@ -127,14 +99,14 @@ export function usePathSampleHistory(
           }
           const queriedData = decodeRef.current(path, message);
           if (queriedData) {
-            buffer.push(toPathSample(message, queriedData));
+            buffer.pushMessage(message, queriedData);
             changed = true;
           }
         }
       }
       return changed ? { ...prev } : prev;
     },
-    [decodeRef, topicByPath],
+    [changesPathsRef, decodeRef, topicByPath],
   );
 
   return useMessageReducer({ topics: subscribeTopics, restore, addMessages });
