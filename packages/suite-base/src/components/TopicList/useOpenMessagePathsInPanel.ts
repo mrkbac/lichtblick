@@ -24,7 +24,7 @@ async function loadSchemas(panel: PanelInfo): Promise<ReadonlySet<string>> {
   let schemas = schemasByPanel.get(panel);
   if (!schemas) {
     schemas = (panel.docs?.() ?? Promise.resolve(undefined)).then(
-      (docs) => new Set(docs?.default.schemas ?? []),
+      (docs) => new Set(docs?.default.openInSchemas ?? docs?.default.schemas ?? []),
       () => new Set<string>(),
     );
     schemasByPanel.set(panel, schemas);
@@ -101,7 +101,7 @@ export function useOpenMessagePathsInPanel(): (
   paths: readonly DraggedMessagePath[],
   type?: string,
 ) => Promise<void> {
-  const { addPanel } = useCurrentLayoutActions();
+  const { addPanel, getCurrentLayoutState } = useCurrentLayoutActions();
   const { getSelectedPanelIds, setSelectedPanelIds } = useSelectedPanels();
   const panelCatalog = usePanelCatalog();
 
@@ -119,27 +119,31 @@ export function useOpenMessagePathsInPanel(): (
         return;
       }
       const panels = panelCatalog.getPanels();
-      const type =
-        requestedType ??
-        getDefaultPanelType(getOpenInPanels(panels, await loadOpenInSchemas(panels), paths));
-      const shownPaths =
-        panelCatalog.getPanelByType(type)?.openIn?.multiple === true ? paths : paths.slice(0, 1);
+      let type = requestedType;
+      if (type == undefined) {
+        const layoutId = getCurrentLayoutState().selectedLayout?.id;
+        const schemas = await loadOpenInSchemas(panels);
+        // Another layout may have been opened while the schemas loaded
+        if (getCurrentLayoutState().selectedLayout?.id !== layoutId) {
+          return;
+        }
+        type = getDefaultPanelType(getOpenInPanels(panels, schemas, paths));
+      }
+      const openIn = panelCatalog.getPanelByType(type)?.openIn;
+      const shownPaths = openIn?.multiple === true ? paths : paths.slice(0, 1);
       const id = getPanelIdForType(type);
       const placement =
         selected[0] != undefined
           ? { position: "right" as const, targetPanelId: selected[0] }
           : undefined;
-      // The 3D scene only knows which topics it can draw once it has subscribed, so it gets them
-      // through the initial config.
-      if (type === "3D") {
-        const topics = Object.fromEntries(shownPaths.map((p) => [p.topicName, { visible: true }]));
-        addPanel({ id, config: { topics }, ...placement });
+      if (openIn?.config) {
+        addPanel({ id, config: openIn.config(shownPaths.map((p) => p.topicName)), ...placement });
       } else {
         addPanel({ id, ...placement });
         queuePanelDrop(id, shownPaths);
       }
       setSelectedPanelIds([id]);
     },
-    [addPanel, getSelectedPanelIds, panelCatalog, setSelectedPanelIds],
+    [addPanel, getCurrentLayoutState, getSelectedPanelIds, panelCatalog, setSelectedPanelIds],
   );
 }

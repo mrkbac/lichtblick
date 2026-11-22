@@ -23,7 +23,9 @@ import { makeStyles } from "tss-react/mui";
 
 import Log from "@lichtblick/log";
 import { DraggedMessagePath } from "@lichtblick/suite-base/components/PanelExtensionAdapter";
+import { useSelectedPanels } from "@lichtblick/suite-base/context/CurrentLayoutContext";
 import { PanelInfo, usePanelCatalog } from "@lichtblick/suite-base/context/PanelCatalogContext";
+import { anyPanelAccepts } from "@lichtblick/suite-base/services/messagePathDragging/panelDropRegistry";
 import clipboard from "@lichtblick/suite-base/util/clipboard";
 
 import {
@@ -54,6 +56,11 @@ export function ContextMenu(props: {
   // Undefined until loaded; the menu opens then so focus starts on its first item
   const [openIn, setOpenIn] = useState<{ panels: readonly PanelInfo[]; defaultType: string }>();
   const openInPanel = useOpenMessagePathsInPanel();
+  const { getSelectedPanelIds } = useSelectedPanels();
+  // A double-click adds to the selected panel when it accepts the paths, not to a new one
+  const [doubleClickTarget] = useState(
+    () => doubleClickOpens && !anyPanelAccepts(getSelectedPanelIds(), messagePaths),
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -143,7 +150,7 @@ export function ContextMenu(props: {
                 </ListItemIcon>
               )}
               <ListItemText>{panel.title}</ListItemText>
-              {doubleClickOpens && panel.type === openIn.defaultType && (
+              {doubleClickTarget && panel.type === openIn.defaultType && (
                 <Typography variant="caption" color="text.secondary" className={classes.hint}>
                   {t("doubleClick")}
                 </Typography>

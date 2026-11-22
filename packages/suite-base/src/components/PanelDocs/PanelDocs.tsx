@@ -48,6 +48,8 @@ export type PanelDocs = {
   intro: string;
   /** Schemas the panel reads, from the panel's own constants. */
   schemas?: Iterable<string>;
+  /** Schemas a topic needs to be opened in a new panel of this kind ("Open in"); else `schemas`. */
+  openInSchemas?: Iterable<string>;
   /** The panel's declared buttons, in the order it draws them. */
   buttons?: readonly PanelButton[];
   /** The panel's settings tree for its default config, built by the panel's own builder. */
