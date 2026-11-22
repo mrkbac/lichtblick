@@ -205,6 +205,9 @@ export class ImageRenderable extends Renderable<ImageUserData> {
   #decodedImage?: ImageBitmap | ImageData;
   protected decoder?: WorkerImageDecoder;
   #receivedImageSequenceNumber = 0;
+  // Sequence number of the newest video frame put in `#pendingVideoDecodeQueue`. Frames that are
+  // dropped before queueing (duplicates) must not make the newest queued frame look stale.
+  #lastQueuedVideoSeq = 0;
   #displayedImageSequenceNumber = 0;
   #showingErrorImage = false;
   // Decoder config parsed from the most recent keyframe. Delta frames carry no parameter sets, so
@@ -437,6 +440,7 @@ export class ImageRenderable extends Renderable<ImageUserData> {
       // pause stops painting at the current frame instead of letting orphaned parallel decodes
       // keep drawing for a second after stop.
       this.#pendingVideoDecodeQueue.push({ image, resizeWidth, onDecoded, seq });
+      this.#lastQueuedVideoSeq = seq;
       return;
     }
 
@@ -575,6 +579,10 @@ export class ImageRenderable extends Renderable<ImageUserData> {
     this.#pendingVideoDecodeQueue.length = 0;
     this.#videoFrameHistory.length = 0;
     this.videoPlayer?.resetForSeek();
+    // Timestamps restart from the new stream's first frame, so the old bitmap's no longer applies
+    if (this.videoPlayer) {
+      this.videoPlayer.lastImageBitmapTimestampMicros = undefined;
+    }
   }
 
   /**
@@ -624,9 +632,9 @@ export class ImageRenderable extends Renderable<ImageUserData> {
       // works off a backlog (the replayed GOP plus frames that arrived while decoding) faster
       // than realtime; painting each one would fast-forward the video. Skipping all but the
       // latest-received frame collapses the burst into a single jump to the current frame.
-      // Using the received sequence number (not the momentary queue length) is robust to frames
-      // being fed incrementally across multiple drain passes during playback.
-      const skipRender = pendingDecode.seq < this.#receivedImageSequenceNumber;
+      // Comparing with the newest queued frame (not the momentary queue length) is robust to
+      // frames being fed incrementally across multiple drain passes during playback.
+      const skipRender = pendingDecode.seq < this.#lastQueuedVideoSeq;
 
       await this.#startDecode(
         pendingDecode.image,
@@ -881,7 +889,8 @@ export class ImageRenderable extends Renderable<ImageUserData> {
 
   /**
    * With `skipRender`, a video frame that decodes normally only advances the decoder and returns
-   * undefined instead of a bitmap nobody would see.
+   * undefined instead of a bitmap nobody would see. The rare fallback paths (GOP replay after a
+   * seek, empty and B-frame placeholders) still return a bitmap.
    */
   protected async decodeImage(
     image: AnyImage,

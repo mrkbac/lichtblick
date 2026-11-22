@@ -1014,6 +1014,55 @@ describe("ImageRenderable error handling", () => {
     self.createImageBitmap = originalCreateImageBitmap;
   });
 
+  it("shows the target when a seek backfill resends the target frame", async () => {
+    const renderable = new ImageRenderable(mockUserData.topic, mockRenderer, { ...mockUserData });
+    const decode = vi.fn(async (_data: Uint8Array, timestampMicros: number) =>
+      createDecodedVideoFrame(timestampMicros),
+    );
+    renderable.videoPlayer = {
+      isInitialized: vi.fn().mockReturnValue(true),
+      init: vi.fn().mockResolvedValue(undefined),
+      decode,
+      codedSize: vi.fn(),
+      resetForSeek: vi.fn(),
+      lastImageBitmap: undefined,
+      lastVideoFrame: undefined,
+    } as unknown as ImageRenderable["videoPlayer"];
+    const originalCreateImageBitmap = self.createImageBitmap;
+    const createImageBitmapSpy = vi.fn(async () => new ImageBitmap());
+    self.createImageBitmap = createImageBitmapSpy;
+
+    // The decoder is running (keyframe decoded), so duplicate timestamps get dropped.
+    await decodeAndSettle(renderable, h265Keyframe, { sec: 0, nsec: 0 });
+    createImageBitmapSpy.mockClear();
+
+    renderable.setImage(createH265Frame(h265DeltaFrame, { sec: 0, nsec: 16666666 }));
+    renderable.setImage(createH265Frame(h265DeltaFrame, { sec: 0, nsec: 33333333 }));
+    // The target frame again, as the backfill delivers it next to its GOP: dropped as duplicate.
+    renderable.setImage(createH265Frame(h265DeltaFrame, { sec: 0, nsec: 33333333 }));
+    renderable.flushPendingDecodes();
+    await renderable.settleVideoDecodes();
+
+    expect(decode).toHaveBeenCalledTimes(3);
+    expect(createImageBitmapSpy).toHaveBeenCalledTimes(1);
+    const painted = createImageBitmapSpy.mock.calls[0] as unknown as [VideoFrame];
+    expect(painted[0].timestamp).toBe(33333);
+    self.createImageBitmap = originalCreateImageBitmap;
+  });
+
+  it("forgets the last bitmap's timestamp when the codec changes", () => {
+    const renderable = new ImageRenderable(mockUserData.topic, mockRenderer, { ...mockUserData });
+    const player = {
+      resetForSeek: vi.fn(),
+      isInitialized: vi.fn().mockReturnValue(false),
+      lastImageBitmapTimestampMicros: 33333 as number | undefined,
+    };
+    renderable.videoPlayer = player as unknown as ImageRenderable["videoPlayer"];
+    renderable.setImage(createH265Frame(h265Keyframe));
+    renderable.setImage({ ...createH265Frame(h265Keyframe), format: "h264" });
+    expect(player.lastImageBitmapTimestampMicros).toBeUndefined();
+  });
+
   it("should replay h265 GOP when seeking to a P frame", async () => {
     const renderable = new ImageRenderable(mockUserData.topic, mockRenderer, { ...mockUserData });
     const replayFrame = createDecodedVideoFrame(33333);
