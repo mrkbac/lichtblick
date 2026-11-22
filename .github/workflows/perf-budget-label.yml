@@ -1,0 +1,84 @@
+name: Perf budget label
+
+# Keeps the required perf-budget check (ci.yml) in line with the `perf-budget-accepted` label:
+# when the label is added or removed, waits for the PR's whole CI run to finish (a re-run requested
+# while other jobs still run is rejected), then re-runs perf-budget, which reads the label itself
+# when it finishes. It always re-runs instead of guessing whether the old result depended on the
+# label: after a partial re-run, perf-budget is a copy without the annotations that would say so.
+#
+# A separate workflow so label events never create a `perf-budget` check run (a skipped run would
+# count as passing for the required check and hide a failed one). It uses pull_request_target so
+# fork PRs get a token that can re-run jobs.
+#
+# SECURITY: this runs with a write token in the base repository's context. It must never check out
+# or run code from the PR; it only reads PR metadata and requests a re-run.
+
+on:
+  pull_request_target:
+    types: [labeled, unlabeled]
+
+permissions: {}
+
+jobs:
+  reconcile:
+    if: github.event.label.name == 'perf-budget-accepted'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    # The newest label change decides; it reads the live label state anyway
+    concurrency:
+      group: perf-budget-label-${{ github.event.pull_request.number }}
+      cancel-in-progress: true
+    permissions:
+      actions: write # re-run the perf-budget job
+      pull-requests: read # read the labels and head commit
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      PR: ${{ github.event.pull_request.number }}
+    steps:
+      - name: Reconcile perf-budget with the label
+        run: |
+          set -euo pipefail
+          # gh with retries, so a transient API error doesn't leave the check out of date
+          gh() {
+            for attempt in 1 2 3 4 5; do
+              command gh "$@" && return 0
+              sleep $((attempt * 5))
+            done
+            return 1
+          }
+          while true; do
+            pr=$(gh pr view "$PR" --json headRefOid,headRefName,headRepository,headRepositoryOwner)
+            sha=$(jq -r .headRefOid <<<"$pr")
+            # This PR's CI run: its head commit, branch and repository, and the PR number that ci.yml
+            # puts in the run name (runs from forks list no pull_requests)
+            run=$(gh api "repos/$GH_REPO/actions/runs?head_sha=$sha&event=pull_request&per_page=100" |
+              jq --argjson pr "$pr" --argjson number "$PR" '[.workflow_runs[] | select(
+                  .path == ".github/workflows/ci.yml" and
+                  .head_branch == $pr.headRefName and
+                  .head_repository.full_name == "\($pr.headRepositoryOwner.login)/\($pr.headRepository.name)" and
+                  (.display_title | startswith("PR #\($number): "))
+                ) | {databaseId: .id, status}][0] // empty')
+            if [ -z "$run" ]; then
+              echo "No CI run for $sha yet; it reads the label itself"
+              exit 0
+            fi
+            if [ "$(jq -r .status <<<"$run")" = completed ]; then
+              break
+            fi
+            echo "CI run $(jq -r .databaseId <<<"$run") hasn't finished; waiting"
+            sleep 20
+          done
+          run=$(jq -r .databaseId <<<"$run")
+          job=$(gh api --paginate "repos/$GH_REPO/actions/runs/$run/jobs" --jq '.jobs[] | select(.name == "perf-budget")')
+          if [ -z "$job" ] || [ "$(jq -r .conclusion <<<"$job")" = skipped ]; then
+            echo "perf-budget was skipped in $run (e.g. tests failed); nothing to reconcile"
+            exit 0
+          fi
+          # A re-run of an older commit's run would cancel the new push's CI (same concurrency group)
+          if [ "$(gh pr view "$PR" --json headRefOid --jq .headRefOid)" != "$sha" ]; then
+            echo "The PR moved past $sha; its new CI run reads the label itself"
+            exit 0
+          fi
+          echo "Re-running perf-budget in run $run so it reads the current label"
+          gh run rerun "$run" --job "$(jq -r .id <<<"$job")"

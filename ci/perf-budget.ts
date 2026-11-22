@@ -11,6 +11,7 @@
 // numbers, so a slow or busy machine doesn't fail it. Bytes read and bundle bytes are exact.
 
 import { execFileSync, spawn } from "node:child_process";
+import { createHash } from "node:crypto";
 import { once } from "node:events";
 import fs from "node:fs";
 import os from "node:os";
@@ -34,6 +35,9 @@ const BUDGETS: Record<string, number> = {
   heap: 1.1,
   "gzip bytes": 1.01,
 };
+/** Exit codes; ci.yml lets the perf-budget-accepted label accept only EXIT_OVER_BUDGET */
+const EXIT_NOT_COMPARABLE = 2;
+const EXIT_OVER_BUDGET = 3;
 const ROUNDS = 10;
 const HEAP_ROUNDS = 3;
 /** Measured in a fresh process per run (see childMain) */
@@ -168,7 +172,12 @@ async function main(): Promise<void> {
   const git = (...args: string[]) =>
     execFileSync("git", args, { cwd: ROOT, encoding: "utf8" }).trim();
   const sha = git("rev-parse", values.base ?? git("merge-base", "HEAD", "origin/licht"));
-  const work = path.join(os.tmpdir(), "lichtblick-perf-budget");
+  // Outside the repository, so the base resolves only its own node_modules (inside it, a dependency
+  // the base lacks would silently resolve from this checkout's), and one directory per checkout
+  const work = path.join(
+    os.tmpdir(),
+    `lichtblick-perf-budget-${createHash("sha256").update(ROOT).digest("hex").slice(0, 12)}`,
+  );
   const baseDir = path.join(work, "base");
   fs.mkdirSync(work, { recursive: true });
   console.error(`Comparing ${git("rev-parse", "--short", "HEAD")} against base ${sha.slice(0, 9)}`);
@@ -176,6 +185,15 @@ async function main(): Promise<void> {
   // CI has the memory to build all four at once; locally other work may be running
   const parallel = process.env.CI === "true";
   const skip = values["no-build"] === true;
+  const revisions = path.join(work, "revisions");
+  const expected = [git("rev-parse", "HEAD"), sha].join("\n");
+  if (skip) {
+    if (!fs.existsSync(revisions) || fs.readFileSync(revisions, "utf8") !== expected) {
+      throw new Error("Run without --no-build to build these revisions first");
+    }
+  } else {
+    fs.rmSync(revisions, { force: true });
+  }
   const headBuild = skip ? Promise.resolve() : build(ROOT);
   if (!parallel) {
     await headBuild;
@@ -188,15 +206,18 @@ async function main(): Promise<void> {
     await fs.promises.access(path.join(baseDir, "benchmark/.perf/cases.mjs"));
   })();
   await headBuild;
-  // A run that compared nothing must not pass; the label can still accept it
+  // Cases that can't be compared (e.g. the PR changed an API they call). Nothing was measured for
+  // them, so they fail and the label can't accept them: the cases must run on both builds
   const problems: string[] = [];
-  const baseOk = await baseBuild.then(
-    () => true,
-    (err: unknown) => {
-      problems.push(`Base build failed, nothing was compared: ${String(err)}`);
-      return false;
-    },
+  // A run that compared nothing (failed base build) must fail, and the label can't change that
+  const baseError = await baseBuild.then(
+    () => undefined,
+    (err: unknown) => String(err),
   );
+  const baseOk = baseError == undefined;
+  if (baseOk && !skip) {
+    fs.writeFileSync(revisions, expected);
+  }
   const variants: Variant[] = baseOk ? ["base", "head"] : ["head"];
   const dirs: Record<Variant, string> = { base: baseDir, head: ROOT };
 
@@ -314,19 +335,30 @@ async function main(): Promise<void> {
     ...rows,
     "",
     ...problems.map((problem) => `- ❌ ${problem}`),
+    ...(baseOk ? [] : [`- ❌ Base build failed, nothing was compared: ${baseError}`]),
     "",
-    failed + problems.length > 0
-      ? `**${failed} metric(s) over budget, ${problems.length} problem(s).** A deliberate trade-off can be accepted with the \`perf-budget-accepted\` PR label.`
-      : "All metrics within budget.",
+    !baseOk
+      ? "**Nothing was compared.** This fails regardless of labels; re-run once the base builds."
+      : problems.length > 0
+        ? `**${problems.length} case(s) not comparable.** This fails regardless of labels: make the cases in benchmark/src/perf/cases.ts run on both builds.`
+        : failed > 0
+          ? `**${failed} metric(s) over budget.** A deliberate trade-off can be accepted with the \`perf-budget-accepted\` PR label.`
+          : "All metrics within budget.",
     "",
   ].join("\n");
   console.log(report);
   if (process.env.GITHUB_STEP_SUMMARY) {
     fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, report);
   }
-  // Set by the workflow when the PR has the perf-budget-accepted label
-  process.exitCode =
-    failed + problems.length > 0 && process.env.PERF_BUDGET_ACCEPTED !== "true" ? 1 : 0;
+  // Only "over budget and nothing else" may be accepted by the label (ci.yml checks it then). A
+  // failed base build, a case that isn't comparable or a crash (exit 1) never is.
+  process.exitCode = !baseOk
+    ? 1
+    : problems.length > 0
+      ? EXIT_NOT_COMPARABLE
+      : failed > 0
+        ? EXIT_OVER_BUDGET
+        : 0;
 }
 
 if (process.argv[2] === "--child") {
