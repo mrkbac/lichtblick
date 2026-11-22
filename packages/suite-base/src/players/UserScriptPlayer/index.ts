@@ -41,6 +41,7 @@ import {
   UserScriptLog,
 } from "@lichtblick/suite-base/players/UserScriptPlayer/types";
 import { hasTransformerErrors } from "@lichtblick/suite-base/players/UserScriptPlayer/utils";
+import { isRecordingSource } from "@lichtblick/suite-base/players/constants";
 import {
   AdvertiseOptions,
   BlockCache,
@@ -282,14 +283,20 @@ export default class UserScriptPlayer implements Player {
   // a script may set its own alert or clear its alert
   #alertStore = new Map<string, PlayerAlert>();
 
-  // keep track of last message on all topics to recompute output topic messages when user scripts change
+  // Last message per subscribed topic, to rerun an edited user script on its (possibly new) inputs.
+  // Kept only while user scripts exist; these are the messages panels and the message pipeline
+  // hold anyway, so it costs little. Pruned (see #pruneLastMessages) once nobody subscribes.
   #lastMessageByInputTopic = new Map<string, MessageEvent>();
-  // Source topics (see #sourceTopic) a user script or topic converter reads; only messages on
-  // these are kept above.
-  #scriptInputTopics = new Set<string>();
   // Aliased topic name -> the topic it is aliased from. An alias and its source carry the same
-  // events, so a script switched from one to the other still finds the event above.
-  #aliasSources = new Map<string, string>();
+  // events, so pruning treats them as one topic.
+  #aliasSources = memoizeWeak(
+    (topics: readonly Topic[]) =>
+      new Map(
+        filterMap(topics, ({ name, aliasedFromName }) =>
+          aliasedFromName != undefined ? ([name, aliasedFromName] as const) : undefined,
+        ),
+      ),
+  );
   #userScriptIdsNeedUpdate = new Set<string>();
 
   #protectedState = new MutexLocked<ProtectedState>({
@@ -442,7 +449,7 @@ export default class UserScriptPlayer implements Player {
       // which specific topics had their preloaded data invalidated via reference comparison.
       this.#memoizedScriptTopics = this.#memoizedScriptTopics.map((t) => ({ ...t }));
       await this.#resetWorkersUnlocked(state);
-      this.#setSubscriptionsUnlocked(this.#subscriptions, state);
+      this.#pruneLastMessages(state, this.#setSubscriptionsUnlocked(this.#subscriptions, state));
 
       return this.#pausedStateToReemit(state);
     });
@@ -850,14 +857,6 @@ export default class UserScriptPlayer implements Player {
 
     let changedTopicsRequireEmitState = false;
     state.scriptRegistrations = validScriptRegistrations;
-    this.#aliasSources = new Map(
-      filterMap(state.lastPlayerStateActiveData.topics, ({ name, aliasedFromName }) =>
-        aliasedFromName != undefined ? [name, aliasedFromName] : undefined,
-      ),
-    );
-    this.#scriptInputTopics = new Set(
-      [...state.inputsByOutputTopic.values()].flat().map((topic) => this.#sourceTopic(topic)),
-    );
 
     // Atomically replace shadow registry for synchronous access in getBatchIterator.
     // We avoid clearing the old map earlier because getBatchIterator is synchronous and
@@ -1161,12 +1160,10 @@ export default class UserScriptPlayer implements Player {
 
         this.#userScriptIdsNeedUpdate.clear();
 
-        // Without scripts or converters there is nothing to keep, so skip the loop.
-        if (this.#scriptInputTopics.size > 0) {
+        // Only edited user scripts are rerun on these; without scripts, keep nothing.
+        if (Object.keys(state.userScripts).length > 0) {
           for (const message of messages) {
-            if (this.#scriptInputTopics.has(this.#sourceTopic(message.topic))) {
-              this.#lastMessageByInputTopic.set(message.topic, message);
-            }
+            this.#lastMessageByInputTopic.set(message.topic, message);
           }
         }
 
@@ -1268,16 +1265,7 @@ export default class UserScriptPlayer implements Player {
     this.#subscriptions = subscriptions;
     this.#protectedState
       .runExclusive(async (state) => {
-        const remapped = this.#setSubscriptionsUnlocked(subscriptions, state);
-        // Panels stopped reading these topics: don't keep their last message (it can be large, e.g.
-        // an image). Only here, not after a script save, so a save that briefly drops an input
-        // (a broken `inputs` export) keeps it.
-        const subscribedTopics = new Set(remapped.map(({ topic }) => this.#sourceTopic(topic)));
-        for (const topic of this.#lastMessageByInputTopic.keys()) {
-          if (!subscribedTopics.has(this.#sourceTopic(topic))) {
-            this.#lastMessageByInputTopic.delete(topic);
-          }
-        }
+        this.#pruneLastMessages(state, this.#setSubscriptionsUnlocked(subscriptions, state));
       })
       .catch((err: unknown) => {
         log.error(err);
@@ -1285,8 +1273,28 @@ export default class UserScriptPlayer implements Player {
       });
   }
 
-  #sourceTopic(topic: string): string {
-    return this.#aliasSources.get(topic) ?? topic;
+  /**
+   * Without user scripts, drop every last message. With them, on a recording, drop those of topics
+   * nobody subscribes to any more (they can be large, e.g. an image), counting an alias and its
+   * source as one topic: subscribing again backfills them. Like the message pipeline, a live source
+   * keeps them, since it never sends a latched message again.
+   */
+  #pruneLastMessages(state: ProtectedState, subscriptions: Immutable<SubscribePayload[]>): void {
+    if (Object.keys(state.userScripts).length === 0) {
+      this.#lastMessageByInputTopic.clear();
+      return;
+    }
+    if (!isRecordingSource(this.#playerState?.capabilities ?? [])) {
+      return;
+    }
+    const aliasSources = this.#aliasSources(state.lastPlayerStateActiveData?.topics ?? []);
+    const sourceTopic = (topic: string) => aliasSources.get(topic) ?? topic;
+    const subscribed = new Set(subscriptions.map(({ topic }) => sourceTopic(topic)));
+    for (const topic of this.#lastMessageByInputTopic.keys()) {
+      if (!subscribed.has(sourceTopic(topic))) {
+        this.#lastMessageByInputTopic.delete(topic);
+      }
+    }
   }
 
   #setSubscriptionsUnlocked(
