@@ -107,6 +107,22 @@ class SkimThinner<MessageType> {
   }
 
   /**
+   * A source's stamp at timeNs: it read everything up to there. Ends the window if that covers
+   * it, so its results don't wait for the source's next message (a later, maybe remote, read).
+   * Each stamp comes out once: as the window's own, or forwarded when no window is open. One
+   * inside an open window would jump ahead of its held results, so the window's stamp follows.
+   */
+  public sourceStamp(
+    timeNs: bigint,
+    stamp: Readonly<IteratorResult<MessageType>>,
+  ): Readonly<IteratorResult<MessageType>>[] {
+    if (this.#windowEndNs == undefined) {
+      return [stamp];
+    }
+    return this.#windowEndNs <= timeNs ? this.finish() : [];
+  }
+
+  /**
    * Ends the window like flush() and continues with windows from startNs to endNs: a skimmed
    * source read from startNs picks with these, so thinning its results changes nothing
    */
@@ -1037,14 +1053,16 @@ class CachingIterableSource<MessageType = unknown>
         consumptionType: args.consumptionType,
         skimInterval: args.skimInterval,
       })) {
-        if (result.type === "stamp") {
-          continue;
-        }
-        if (result.type === "message-event") {
-          const timeNs = toNanoSec(result.msgEvent.receiveTime);
+        if (result.type !== "alert") {
+          const timeNs = toNanoSec(
+            result.type === "stamp" ? result.stamp : result.msgEvent.receiveTime,
+          );
           lastNs = timeNs > lastNs ? timeNs : lastNs;
         }
-        const closed = thinner.add(lastNs, result);
+        const closed =
+          result.type === "stamp"
+            ? thinner.sourceStamp(toNanoSec(result.stamp), result)
+            : thinner.add(lastNs, result);
         if (closed) {
           for (const closedResult of closed) {
             yield closedResult;

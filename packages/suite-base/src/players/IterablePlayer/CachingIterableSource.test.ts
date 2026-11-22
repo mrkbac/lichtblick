@@ -1827,6 +1827,72 @@ describe("CachingIterableSource", () => {
       ]);
     });
 
+    it("yields a missing topic's skimmed window at the source's stamp, not its next read", async () => {
+      // Given a cached at full density, and a source whose skimmed read of tf stalls after its
+      // first window's stamp (e.g. a slow remote read)
+      const messages = [0, 1, 2, 3].flatMap((sec) => [
+        { topic: "a", sec, nsec: 980_000_000, publisher: "a" },
+        { topic: "tf", sec, nsec: 980_000_000, publisher: "p1" },
+      ]);
+      const source = skimmingSource(messages);
+      const cache = new CachingIterableSource(source, { maxTotalSize: TEST_CACHE_BYTES });
+      await cache.initialize();
+      await readTopics(cache.messageIterator({ topics: mockTopicSelection("a") }));
+      const skim = source.messageIterator.bind(source);
+      let release!: () => void;
+      const stalled = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      source.messageIterator = async function* (args: MessageIteratorArgs) {
+        let stamps = 0;
+        for await (const result of skim(args)) {
+          yield result;
+          if (result.type === "stamp" && ++stamps === 1) {
+            await stalled;
+          }
+        }
+      };
+
+      // When skimming a and tf
+      const iterator = cache.messageIterator({
+        topics: mockTopicSelection("a", "tf"),
+        skimInterval: { sec: 2, nsec: 0 },
+      });
+
+      // Then the first window and its one stamp come out before the source reads on
+      const first: string[] = [];
+      while (!first.includes("stamp")) {
+        const { value } = await iterator.next();
+        first.push(
+          value?.type === "message-event"
+            ? `${value.msgEvent.topic}@${value.msgEvent.receiveTime.sec}`
+            : String(value?.type),
+        );
+      }
+      expect(first).toEqual(["a@1", "tf@1", "stamp"]);
+      release();
+      const rest: string[] = [];
+      for await (const value of iterator) {
+        rest.push(
+          value.type === "message-event"
+            ? `${value.msgEvent.topic}@${value.msgEvent.receiveTime.sec}`
+            : value.type,
+        );
+      }
+      expect(rest.slice(0, 3)).toEqual(["a@3", "tf@3", "stamp"]);
+      // and every source stamp once
+      const sourceStamps: string[] = [];
+      for await (const value of skim({
+        topics: mockTopicSelection("a", "tf"),
+        skimInterval: { sec: 2, nsec: 0 },
+      })) {
+        if (value.type === "stamp") {
+          sourceStamps.push(value.type);
+        }
+      }
+      expect(["stamp", ...rest.filter((type) => type === "stamp")]).toEqual(sourceStamps);
+    });
+
     it("keeps alerts in order with the thinned messages", async () => {
       const source = new TestSource();
       const cache = new CachingIterableSource(source, { maxTotalSize: TEST_CACHE_BYTES });
