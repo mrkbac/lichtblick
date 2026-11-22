@@ -24,6 +24,8 @@ type RingScan = {
   count: number;
   /** Transform tree version its pose row was computed at; undefined while it has no row */
   posedAt: number | undefined;
+  /** The ring kept 1 in this many scans around this one (its intake rate, raised by thinning) */
+  stride: number;
 };
 
 export type RingScanInfo = Pick<RingScan, "receiveTime" | "messageTime" | "frameId" | "pose">;
@@ -230,7 +232,7 @@ export class DecayPointRing extends Renderable<BaseUserData, /*TRenderer=*/ unde
     // A reused slot still has its last scan's row: hidden until this scan is placed
     this.#points.poses()!.fill(0, slot * POSE_FLOATS, (slot + 1) * POSE_FLOATS);
     this.#points.markPoses(slot, 1);
-    this.#scans.push({ ...info, slot, start, count, posedAt: undefined });
+    this.#scans.push({ ...info, slot, start, count, posedAt: undefined, stride: this.#stride });
     this.#livePoints += count;
 
     this.#positions.set(positions, start * 3);
@@ -255,18 +257,23 @@ export class DecayPointRing extends Renderable<BaseUserData, /*TRenderer=*/ unde
     while (this.#scans.length > 0 && this.#livePoints + reservePoints > maxPoints) {
       // Thinning can't make room next to a latest scan that alone fills the budget
       if (this.#scans.length > 1 && reservePoints < maxPoints) {
-        this.#thin();
+        this.#makeRoom();
       } else {
         this.#evictOldest({ budget: true });
       }
     }
-    // Twice the density must fit in half the limits, so this doesn't undo the last thinning (which
-    // leaves the history at least about 3/8 full) and flip back and forth
+    // Keep twice as many again once the whole window was taken at the current rate (so at most
+    // once per decay time) and twice the history fits in half the limits, so this doesn't undo the
+    // last thinning and flip back and forth
+    const oldest = this.#scans[0];
     const roomFor = (used: number, limit: number) => used * 4 <= limit;
-    if (
+    if (!oldest) {
+      this.#stride = 1;
+    } else if (
       this.#stride > 1 &&
-      roomFor(this.#livePoints + reservePoints, Math.min(maxPoints, MAX_SET_POINTS)) &&
-      roomFor(this.#scans.length, this.#limits.maxEntries)
+      oldest.stride <= this.#stride &&
+      roomFor(this.#livePoints * 2 + reservePoints, Math.min(maxPoints, MAX_SET_POINTS) * 2) &&
+      roomFor(this.#scans.length * 2, this.#limits.maxEntries * 2)
     ) {
       this.#stride /= 2;
     }
@@ -488,7 +495,7 @@ export class DecayPointRing extends Renderable<BaseUserData, /*TRenderer=*/ unde
     // range. Packing re-uploads every point, so first thin while the history fills over 3/4 of the
     // buffers: the next pack is then far off instead of a few scans away.
     while (this.#scans.length > 1 && (this.#livePoints + count) * 4 > this.#capacity * 3) {
-      this.#thin();
+      this.#makeRoom();
     }
     if (this.#livePoints + count > this.#capacity) {
       this.#evictOldest({ budget: true });
@@ -540,17 +547,38 @@ export class DecayPointRing extends Renderable<BaseUserData, /*TRenderer=*/ unde
     this.#points.setArrays(positions, colors, slots);
   }
 
+  /**
+   * Frees points: thins, unless one scan holds over half of them. Thinning could keep that one
+   * every round and thin everything else away, so it is dropped instead.
+   */
+  #makeRoom(): void {
+    let largest = this.#scans[0]!;
+    for (const scan of this.#scans) {
+      if (scan.count > largest.count) {
+        largest = scan;
+      }
+    }
+    if (largest.count * 2 > this.#livePoints) {
+      this.#scans.splice(this.#scans.indexOf(largest), 1);
+      this.#free(largest);
+    } else {
+      this.#thin();
+    }
+  }
+
   /** Drops every other scan, keeping the newest, and keeps 1 in twice as many pushed from now on */
   #thin(): void {
     const newest = this.#scans.length - 1;
+    this.#stride *= 2;
     this.#scans = this.#scans.filter((scan, i) => {
       const keep = (newest - i) % 2 === 0;
-      if (!keep) {
+      if (keep) {
+        scan.stride = Math.max(scan.stride * 2, this.#stride);
+      } else {
         this.#free(scan);
       }
       return keep;
     });
-    this.#stride *= 2;
   }
 
   #evictOldest({ budget }: { budget: boolean }): void {

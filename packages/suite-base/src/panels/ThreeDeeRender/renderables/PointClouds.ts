@@ -7,7 +7,6 @@
 
 import { Time, toNanoSec } from "@foxglove/rostime";
 import { NumericType, PackedElementField, PointCloud } from "@foxglove/schemas";
-import i18next from "i18next";
 import * as THREE from "three/webgpu";
 
 import { SettingsTreeAction, MessageEvent } from "@lichtblick/suite";
@@ -18,6 +17,8 @@ import {
   DECAY_HISTORY_LIMITS,
   RenderObjectHistory,
   PointsRenderable,
+  DECAY_LIMITED,
+  updateDecayNotice,
 } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/pointExtensionUtils";
 import { colorFieldComputedPrefix } from "@lichtblick/suite-base/panels/ThreeDeeRender/settingsNodes/colorMode";
 import {
@@ -108,7 +109,6 @@ const ALL_POINTCLOUD_DATATYPES = new Set<string>([
 ]);
 
 const INVALID_POINTCLOUD = "INVALID_POINTCLOUD";
-export const DECAY_LIMITED = "DECAY_LIMITED";
 
 const tempColor = { r: 0, g: 0, b: 0, a: 0 };
 const tempFieldReaders: PointCloudFieldReaders = {
@@ -474,37 +474,14 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
       reservePoints: this.#pointsHistory.latest().renderable.geometry.drawRange.count,
     });
 
-    // Say so when the limits thin the history, or (the latest scan alone filling the budget) empty it
-    const evictedUntil = ring.budgetEvictedUntil();
-    const emptied = evictedUntil != undefined && evictedUntil >= expireTime;
-    if (emptied || ring.stride() > 1) {
-      const locale = i18next.language;
-      const maxPoints = decayMaxPoints(settings);
-      // Formatted only when what it shows changes, not on every frame
-      const key = `${locale} ${maxPoints} ${emptied ? 0 : ring.stride()}`;
-      // (errors can also be cleared elsewhere, e.g. on a topic reset)
-      if (
-        key !== this.#decayNoticeKey ||
-        !this.renderer.settings.errors.hasError(settingsPath, DECAY_LIMITED)
-      ) {
-        this.#decayNoticeKey = key;
-        const values = {
-          maxPoints: maxPoints.toLocaleString(locale),
-          maxScans: DECAY_HISTORY_LIMITS.maxEntries.toLocaleString(locale),
-          stride: ring.stride().toLocaleString(locale),
-        };
-        this.renderer.settings.errors.add(
-          settingsPath,
-          DECAY_LIMITED,
-          emptied
-            ? i18next.t("threeDee:decayHistoryLimited", values)
-            : i18next.t("threeDee:decayHistoryThinned", values),
-        );
-      }
-    } else {
-      this.#decayNoticeKey = undefined;
-      this.renderer.settings.errors.remove(settingsPath, DECAY_LIMITED);
-    }
+    this.#decayNoticeKey = updateDecayNotice({
+      renderer: this.renderer,
+      settingsPath,
+      ring,
+      maxPoints: decayMaxPoints(settings),
+      latestPoints: this.#pointsHistory.latest().renderable.geometry.drawRange.count,
+      shownKey: this.#decayNoticeKey,
+    });
 
     const missingFrame = ring.updatePoses(
       this.renderer.transformTree,

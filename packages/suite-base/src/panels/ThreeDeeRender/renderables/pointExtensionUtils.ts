@@ -5,6 +5,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+import i18next from "i18next";
 import * as THREE from "three/webgpu";
 
 import { DynamicBufferGeometry } from "@lichtblick/suite-base/panels/ThreeDeeRender/DynamicBufferGeometry";
@@ -18,7 +19,7 @@ import { MAX_DURATION } from "@lichtblick/suite-base/panels/ThreeDeeRender/trans
 import { updatePose } from "@lichtblick/suite-base/panels/ThreeDeeRender/updatePose";
 
 import { colorHasTransparency } from "./colorMode";
-import type { RingStyle } from "./pointClouds/DecayPointRing";
+import type { DecayPointRing, RingStyle } from "./pointClouds/DecayPointRing";
 import { RasterPoints } from "./pointClouds/RasterPoints";
 import type { LayerSettingsPointExtension } from "../settingsNodes/topics";
 
@@ -163,6 +164,54 @@ export type HistoryLimits = {
  * ring past these thins evenly, so for it they only set how dense the history can be.
  */
 export const DECAY_HISTORY_LIMITS: HistoryLimits = { maxEntries: 1_000, maxPoints: 10_000_000 };
+
+export const DECAY_LIMITED = "DECAY_LIMITED";
+
+/**
+ * Shows the notice that the limits shape a decay history (the ring keeps only 1 in N incoming
+ * scans, or the latest scan alone fills the point budget), or clears it. Takes and returns the key
+ * of the shown notice, so its text is only formatted again when it changes.
+ */
+export function updateDecayNotice({
+  renderer,
+  settingsPath,
+  ring,
+  maxPoints,
+  latestPoints,
+  shownKey,
+}: {
+  renderer: Renderer;
+  settingsPath: readonly string[];
+  ring: DecayPointRing;
+  maxPoints: number;
+  latestPoints: number;
+  shownKey: string | undefined;
+}): string | undefined {
+  const errors = renderer.settings.errors;
+  const emptied = latestPoints >= maxPoints;
+  if (!emptied && ring.stride() <= 1) {
+    errors.remove(settingsPath, DECAY_LIMITED);
+    return undefined;
+  }
+  const locale = i18next.language;
+  const key = `${locale} ${maxPoints} ${emptied ? 0 : ring.stride()}`;
+  // (errors can also be cleared elsewhere, e.g. on a topic reset)
+  if (key !== shownKey || !errors.hasError(settingsPath, DECAY_LIMITED)) {
+    const values = {
+      maxPoints: maxPoints.toLocaleString(locale),
+      maxScans: DECAY_HISTORY_LIMITS.maxEntries.toLocaleString(locale),
+      stride: ring.stride().toLocaleString(locale),
+    };
+    errors.add(
+      settingsPath,
+      DECAY_LIMITED,
+      emptied
+        ? i18next.t("threeDee:decayHistoryLimited", values)
+        : i18next.t("threeDee:decayHistoryThinned", values),
+    );
+  }
+  return key;
+}
 
 type HistoryEntry<TRenderable extends HistoryRenderable> = {
   receiveTime: bigint;
