@@ -24,8 +24,8 @@ const tempTuple4: THREE.Vector4Tuple = [0, 0, 0, 0];
 
 export class RenderableLineStrip extends RenderableMarker {
   #geometry: LineGeometry;
-  #linePrepass: Line2;
-  #line: Line2;
+  public readonly linePrepass: Line2;
+  public readonly line: Line2;
   #positionBuffer = new Float32Array();
   #colorBuffer = new Uint8Array();
 
@@ -49,29 +49,29 @@ export class RenderableLineStrip extends RenderableMarker {
 
     // Depth pass 1
     const matLinePrepass = makeLinePrepassMaterial(marker, options);
-    this.#linePrepass = new Line2(this.#geometry, matLinePrepass);
-    this.#linePrepass.renderOrder = 1;
-    this.#linePrepass.userData.picking = false;
-    this.add(this.#linePrepass);
+    this.linePrepass = new Line2(this.#geometry, matLinePrepass);
+    this.linePrepass.renderOrder = 1;
+    this.linePrepass.userData.picking = false;
+    this.add(this.linePrepass);
 
     // Color pass 2
     const matLine = makeLineMaterial(marker, options);
-    this.#line = new Line2(this.#geometry, matLine);
-    this.#line.renderOrder = 2;
+    this.line = new Line2(this.#geometry, matLine);
+    this.line.renderOrder = 2;
     const pickingLineWidth = marker.scale.x * 1.2;
-    this.#line.userData.pickingMaterial = makeLinePickingMaterial(pickingLineWidth, options);
-    this.add(this.#line);
+    this.line.userData.pickingMaterial = makeLinePickingMaterial(pickingLineWidth, options);
+    this.add(this.line);
 
     this.update(marker, receiveTime);
   }
 
   public override dispose(): void {
-    this.#linePrepass.material.dispose();
-    this.#line.material.dispose();
+    this.linePrepass.material.dispose();
+    this.line.material.dispose();
 
-    const pickingMaterial = this.#line.userData.pickingMaterial as THREE.Material;
+    const pickingMaterial = this.line.userData.pickingMaterial as THREE.Material;
     pickingMaterial.dispose();
-    this.#line.userData.pickingMaterial = undefined;
+    this.line.userData.pickingMaterial = undefined;
 
     super.dispose();
   }
@@ -88,32 +88,32 @@ export class RenderableLineStrip extends RenderableMarker {
     if (pointsLength === 0) {
       // THREE.LineGeometry.setPositions crashes when given an empty array:
       // https://github.com/foxglove/studio/issues/3954
-      this.#linePrepass.visible = false;
-      this.#line.visible = false;
+      this.linePrepass.visible = false;
+      this.line.visible = false;
       return;
     } else {
-      this.#linePrepass.visible = true;
-      this.#line.visible = true;
+      this.linePrepass.visible = true;
+      this.line.visible = true;
     }
 
     if (transparent !== markerHasTransparency(prevMarker)) {
-      this.#linePrepass.material.transparent = transparent;
-      this.#linePrepass.material.depthWrite = !transparent;
-      this.#linePrepass.material.needsUpdate = true;
-      this.#line.material.transparent = transparent;
-      this.#line.material.depthWrite = !transparent;
-      this.#line.material.needsUpdate = true;
+      this.linePrepass.material.transparent = transparent;
+      this.linePrepass.material.depthWrite = !transparent;
+      this.linePrepass.material.needsUpdate = true;
+      this.line.material.transparent = transparent;
+      this.line.material.depthWrite = !transparent;
+      this.line.material.needsUpdate = true;
     }
 
-    this.#linePrepass.material.linewidth = lineWidth;
-    this.#line.material.linewidth = lineWidth;
+    this.linePrepass.material.linewidth = lineWidth;
+    this.line.material.linewidth = lineWidth;
 
     const prevPointsLength = this.#positionBuffer.length / 3;
     if (pointsLength > prevPointsLength) {
       this.#geometry.dispose();
       this.#geometry = new LineGeometry();
-      this.#linePrepass.geometry = this.#geometry;
-      this.#line.geometry = this.#geometry;
+      this.linePrepass.geometry = this.#geometry;
+      this.line.geometry = this.#geometry;
     }
 
     this.#setPositions(marker, pointsLength);

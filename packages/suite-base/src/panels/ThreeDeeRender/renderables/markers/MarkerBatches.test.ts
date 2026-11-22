@@ -4,6 +4,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import * as THREE from "three";
+import { LineSegments2 } from "three/examples/jsm/lines/webgpu/LineSegments2.js";
 import type { Mock } from "vitest";
 import { setupVitestCanvasMock } from "vitest-canvas-mock";
 
@@ -13,7 +14,10 @@ import { DEFAULT_CAMERA_STATE } from "@lichtblick/suite-base/panels/ThreeDeeRend
 import { DEFAULT_PUBLISH_SETTINGS } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/PublishSettings";
 
 import { MarkerBatches } from "./MarkerBatches";
+import { RenderableArrow } from "./RenderableArrow";
 import { RenderableCube } from "./RenderableCube";
+import { RenderableLineList } from "./RenderableLineList";
+import { RenderableLineStrip } from "./RenderableLineStrip";
 import { RenderableMarker } from "./RenderableMarker";
 import { RendererConfig } from "../../IRenderer";
 import { LAYER_DEFAULT, LAYER_PICK_ONLY } from "../../layers";
@@ -153,6 +157,71 @@ describe("MarkerBatches", () => {
     );
   });
 
+  it("batches the head and shaft of both arrow forms with their own transforms", () => {
+    topic.addMarkerMessage(marker(1, MarkerType.ARROW), 0n);
+    topic.addMarkerMessage(
+      {
+        ...marker(2, MarkerType.ARROW),
+        points: [
+          { x: 0, y: 0, z: 0 },
+          { x: 0, y: 0, z: 4 },
+        ],
+      },
+      0n,
+    );
+    topic.addMarkerMessage(marker(3, MarkerType.ARROW, 0.5), 0n);
+    topic.startFrame(0n, "map", "map");
+
+    expect(instanced().map((object) => (object as THREE.InstancedMesh).count)).toEqual([
+      2, 2, 2, 2,
+    ]);
+    const arrow = byId(2) as RenderableArrow;
+    const transparentArrow = byId(3) as RenderableArrow;
+    expect(transparentArrow.shaftMesh.layers.mask).toBe(1 << LAYER_DEFAULT);
+    arrow.updateMatrixWorld();
+    for (const mesh of [arrow.shaftMesh, arrow.headMesh]) {
+      expect(mesh.layers.mask).toBe(1 << LAYER_PICK_ONLY);
+      const batch = instanced().find(
+        (object): object is THREE.InstancedMesh =>
+          object instanceof THREE.InstancedMesh && object.geometry === mesh.geometry,
+      )!;
+      const instance = new THREE.Matrix4();
+      batch.getMatrixAt(1, instance);
+      const matrix = new THREE.Matrix4().makeTranslation(...batch.position.toArray());
+      matrix.multiply(instance).elements.forEach((value, i) => {
+        expect(value).toBeCloseTo(mesh.matrixWorld.elements[i]!, 6);
+      });
+    }
+  });
+
+  it("draws opaque strips and lists together with one depth and color pass per width", () => {
+    const points = [
+      { x: 0, y: 0, z: 0 },
+      { x: 0, y: 1, z: 0 },
+    ];
+    topic.addMarkerMessage({ ...marker(1, MarkerType.LINE_LIST), points }, 0n);
+    topic.addMarkerMessage({ ...marker(2, MarkerType.LINE_STRIP), points }, 0n);
+    topic.addMarkerMessage({ ...marker(3, MarkerType.LINE_LIST, 0.5), points }, 0n);
+    topic.addMarkerMessage(
+      { ...marker(4, MarkerType.LINE_LIST), points, scale: { x: 2, y: 1, z: 1 } },
+      0n,
+    );
+    topic.startFrame(0n, "map", "map");
+
+    const batches = topic.children.find((child) => child instanceof MarkerBatches)!;
+    const lines = batches.children.filter((child) => child instanceof LineSegments2);
+    expect(lines.map((pass) => pass.geometry.instanceCount)).toEqual([2, 2, 1, 1]);
+    expect(lines.map((pass) => pass.renderOrder)).toEqual([1, 2, 1, 2]);
+    const first = lines[0]!;
+    expect(first.position.x).toBe(1);
+    const start = first.geometry.getAttribute("instanceStart");
+    expect(start.getX(0)).toBe(0);
+    expect(start.getX(1)).toBe(1);
+    expect((byId(1) as RenderableLineList).line.layers.mask).toBe(1 << LAYER_PICK_ONLY);
+    expect((byId(2) as RenderableLineStrip).line.layers.mask).toBe(1 << LAYER_PICK_ONLY);
+    expect((byId(3) as RenderableLineList).line.layers.mask).toBe(1 << LAYER_DEFAULT);
+  });
+
   it("stores instances relative to the batch origin, so map-scale coordinates keep precision", () => {
     const far = (id: number, x: number) => ({
       ...marker(id, MarkerType.CUBE),
@@ -192,7 +261,7 @@ describe("MarkerBatches", () => {
     }
   });
 
-  it("draws reflected and far-away markers on their own", () => {
+  it("batches distant markers in their own cell and draws reflected markers separately", () => {
     topic.addMarkerMessage(marker(1, MarkerType.CUBE), 0n);
     topic.addMarkerMessage({ ...marker(2, MarkerType.CUBE), scale: { x: -1, y: 1, z: 1 } }, 0n);
     topic.addMarkerMessage(
@@ -206,9 +275,14 @@ describe("MarkerBatches", () => {
 
     expect((byId(1) as RenderableCube).mesh.layers.mask).toBe(1 << LAYER_PICK_ONLY);
     expect((byId(2) as RenderableCube).mesh.layers.mask).toBe(1 << LAYER_DEFAULT);
-    expect((byId(3) as RenderableCube).mesh.layers.mask).toBe(1 << LAYER_DEFAULT);
-    const cubes = instanced().find((object) => object instanceof THREE.Mesh) as THREE.InstancedMesh;
-    expect(cubes.count).toBe(1);
+    expect((byId(3) as RenderableCube).mesh.layers.mask).toBe(1 << LAYER_PICK_ONLY);
+    const cubes = instanced().filter((object) => object instanceof THREE.Mesh);
+    expect(cubes.map((batch) => batch.position.x)).toEqual([1, 1e6]);
+    topic.addMarkerMessage({ ...marker(3, MarkerType.CUBE), action: MarkerAction.DELETE }, 0n);
+    topic.startFrame(0n, "map", "map");
+    expect(topic.children.find((child) => child instanceof MarkerBatches)?.children).toHaveLength(
+      2,
+    );
   });
 
   it("keeps a marker at a non-finite position out of the batch", () => {
