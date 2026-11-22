@@ -73,6 +73,48 @@ describe("McapIndexedIterableSource", () => {
     expect(after.updatedRanges).toBeUndefined();
   });
 
+  it("keeps the density of chunks indexed later that start before the known range", async () => {
+    // Given a recording with one chunk per second, of which the reader first knows the later half
+    const tempBuffer = new TempBuffer();
+    const writer = new McapWriter({ writable: tempBuffer, chunkSize: 1 });
+    await writer.start({ library: "", profile: "" });
+    const channelId = await writer.registerChannel({
+      messageEncoding: "json",
+      schemaId: 0,
+      metadata: new Map(),
+      topic: "/example",
+    });
+    for (let sec = 0n; sec < 10n; sec++) {
+      await writer.addMessage({
+        channelId,
+        data: new TextEncoder().encode("{}"),
+        logTime: sec * 1_000_000_000n,
+        publishTime: sec * 1_000_000_000n,
+        sequence: 0,
+      });
+    }
+    await writer.end();
+    const reader = await McapIndexedReader.Initialize({
+      readable: new BlobReadable(new Blob([tempBuffer.get().slice()])),
+      decompressHandlers: await loadDecompressHandlers(),
+    });
+    const chunks = [...reader.chunkIndexes];
+    expect(chunks).toHaveLength(10);
+    reader.setChunkIndexes(chunks.slice(5));
+    const source = new McapIndexedIterableSource(reader);
+    await source.initialize();
+
+    // When live indexing finds the earlier chunks
+    reader.appendIndex({ chunkIndexes: chunks.slice(0, 5) });
+    const init = await source.initialize();
+
+    // Then the earlier half has data too
+    const bytes = init.recordingFiles![0]!.messageBytes!;
+    expect(init.start).toEqual({ sec: 0, nsec: 0 });
+    expect(bytes[0]).toBeGreaterThan(0);
+    expect(bytes.slice(0, bytes.length / 2).reduce((a, b) => a + b, 0)).toBeGreaterThan(0);
+  });
+
   it("returns the correct metadata", async () => {
     const tempBuffer = new TempBuffer();
 

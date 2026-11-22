@@ -106,6 +106,57 @@ function offset(time: Time, start: Time): string {
   return `${toSec(subtract(time, start)).toFixed(2)} s`;
 }
 
+/** Intervals over twice the median, i.e. more than one missed message at a steady rate */
+function GapList({
+  data,
+  start,
+  onSeek,
+}: {
+  data: TopicInspection;
+  start: Time;
+  onSeek?: (time: Time) => void;
+}): React.JSX.Element | undefined {
+  const { classes } = useStyles();
+  const medianNs = data.timing?.medianIntervalNs;
+  if (medianNs == undefined || data.largestIntervals.length === 0) {
+    return undefined;
+  }
+  const gaps = data.largestIntervals.filter(
+    ({ nanoseconds }) => Number(nanoseconds) > 2 * medianNs,
+  );
+  return (
+    <>
+      <Typography
+        variant="caption"
+        color="textSecondary"
+        className={classes.subheading}
+        component="div"
+      >
+        Largest gaps (over 2× the median interval of {(medianNs / 1e6).toFixed(1)} ms)
+      </Typography>
+      {gaps.length === 0 ? (
+        <Typography variant="body2" color="textSecondary">
+          None: no interval exceeded the threshold.
+        </Typography>
+      ) : (
+        <div className={classes.gaps}>
+          {gaps.map((gap) => (
+            <button
+              key={String(gap.nanoseconds) + offset(gap.start, start)}
+              className={classes.interval}
+              disabled={!onSeek}
+              title="Seek to the start of this gap"
+              onClick={() => onSeek?.(gap.start)}
+            >
+              {(Number(gap.nanoseconds) / 1e9).toFixed(3)} s at +{offset(gap.start, start)}
+            </button>
+          ))}
+        </div>
+      )}
+    </>
+  );
+}
+
 export function RecordingInspector(): React.JSX.Element {
   const { t } = useTranslation("dataSourceInfo");
   const { classes, cx } = useStyles();
@@ -237,7 +288,7 @@ export function RecordingInspector(): React.JSX.Element {
       case "size":
         return inspections.get(topic.name)?.bytes;
       case "interval": {
-        const interval = inspections.get(topic.name)?.largestInterval;
+        const interval = inspections.get(topic.name)?.largestIntervals[0];
         return interval ? Number(interval.nanoseconds) : undefined;
       }
     }
@@ -268,6 +319,26 @@ export function RecordingInspector(): React.JSX.Element {
   );
   const total = knownCounts.reduce<number>((sum, count) => sum + (count ?? 0), 0);
   const allCountsKnown = knownCounts.every((count) => count != undefined);
+  // Aliases share their recorded topic's payload: count each recorded topic once.
+  const recorded = new Map(
+    topics.map((topic) => [topic.aliasedFromName ?? topic.name, topic.name]),
+  );
+  const byteTotal = [...recorded.values()].reduce(
+    (sum, recordedName) => sum + (inspections.get(recordedName)?.bytes ?? 0),
+    0,
+  );
+  const allScanned = topics.every((topic) => inspections.has(topic.name));
+  const byteShare = (bytes: number) =>
+    byteTotal > 0 ? (
+      <div
+        className={cx(classes.share, classes.byteShare)}
+        title={`${((100 * bytes) / byteTotal).toFixed(1)}% of ${
+          allScanned ? "all" : "scanned"
+        } message bytes`}
+      >
+        <div style={{ width: `${(100 * bytes) / byteTotal}%` }} />
+      </div>
+    ) : undefined;
   const aggregate = aggregateBuckets(inspections.values());
   const measuredCount = aggregate.reduce((sum, count) => sum + count, 0);
   const fileBytes =
@@ -734,6 +805,7 @@ export function RecordingInspector(): React.JSX.Element {
                               <>
                                 {totals.estimatedBytes ? "≈ " : ""}
                                 {formatByteSize(totals.bytes)}
+                                {byteShare(totals.bytes)}
                                 <Typography
                                   variant="caption"
                                   color="textSecondary"
@@ -898,6 +970,7 @@ export function RecordingInspector(): React.JSX.Element {
                             {data
                               ? `${data.estimatedBytes ? "≈ " : ""}${formatByteSize(data.bytes)}`
                               : "—"}
+                            {data && byteShare(data.bytes)}
                             {data && (
                               <span className={classes.schemaLabel}>
                                 {sort === "average" && data.count > 0
@@ -909,16 +982,16 @@ export function RecordingInspector(): React.JSX.Element {
                             )}
                           </td>
                           <td>
-                            {data?.largestInterval ? (
+                            {data?.largestIntervals[0] ? (
                               <button
                                 className={classes.interval}
                                 disabled={!seek}
                                 title="Seek to the beginning of this interval; this does not imply lost messages"
                                 onClick={() => {
-                                  seekTo(data.largestInterval!.start);
+                                  seekTo(data.largestIntervals[0]!.start);
                                 }}
                               >
-                                {(Number(data.largestInterval.nanoseconds) / 1e9).toFixed(3)} s
+                                {(Number(data.largestIntervals[0].nanoseconds) / 1e9).toFixed(3)} s
                               </button>
                             ) : (
                               "—"
@@ -1019,6 +1092,13 @@ export function RecordingInspector(): React.JSX.Element {
                                     </div>
                                   ))}
                                 </div>
+                              )}
+                              {data && (
+                                <GapList
+                                  data={data}
+                                  start={start}
+                                  onSeek={seek ? seekTo : undefined}
+                                />
                               )}
                               {qos.length > 0 && (
                                 <>
