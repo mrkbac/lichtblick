@@ -12,6 +12,7 @@ import { DEFAULT_SCENE_EXTENSION_CONFIG } from "@lichtblick/suite-base/panels/Th
 import { DEFAULT_CAMERA_STATE } from "@lichtblick/suite-base/panels/ThreeDeeRender/camera";
 import { DEFAULT_PUBLISH_SETTINGS } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/PublishSettings";
 
+import { FrameAxes } from "./FrameAxes";
 import { TopicMarkers } from "./TopicMarkers";
 import { RendererConfig } from "../IRenderer";
 import { Marker, MarkerAction, MarkerType } from "../ros";
@@ -208,5 +209,47 @@ describe("TopicMarkers.startFrame", () => {
     renderer.transformTree.addTransform("arm", "base", 1n, Transform.Identity());
     topic.startFrame(2_100_000_000n, "map", "map");
     expect(renderable.position.length()).toBeGreaterThan(0);
+  });
+
+  it("re-poses a paused panel after a frame offset edit", () => {
+    const topic = makeTopic();
+    topic.addMarkerMessage(cube(1, "arm", 2), 2_000_000_000n);
+    topic.startFrame(2_000_000_000n, "map", "map");
+    const renderable = topic.namespaces.get("ns")!.markersById.get(1)!;
+    const frameAxes = renderer.sceneExtensions.get("foxglove.FrameAxes") as FrameAxes;
+    renderer.emit("transformTreeUpdated", renderer);
+    const moved = (edit: () => void) => {
+      const before = renderable.position.clone();
+      edit();
+      topic.startFrame(2_000_000_000n, "map", "map");
+      return renderable.position.distanceTo(before);
+    };
+
+    // A legacy per-panel offset from the config, applied once offsets become editable
+    renderer.updateConfig((draft) => {
+      draft.transforms["frame:arm"] = { xyzOffset: [0, 2, 0] };
+    });
+    expect(
+      moved(() => {
+        frameAxes.handleSettingsAction({
+          action: "update",
+          payload: { path: ["transforms", "settings", "editable"], input: "boolean", value: true },
+        });
+      }),
+    ).toBeGreaterThan(0);
+
+    // A layout-wide offset typed in the settings
+    expect(
+      moved(() => {
+        frameAxes.handleSettingsAction({
+          action: "update",
+          payload: {
+            path: ["transforms", "frame:arm", "xyzOffset"],
+            input: "vec3",
+            value: [1, 0, 0],
+          },
+        });
+      }),
+    ).toBeGreaterThan(0);
   });
 });

@@ -7,7 +7,6 @@
 
 import { Time, toNanoSec } from "@foxglove/rostime";
 import { NumericType, PackedElementField, PointCloud } from "@foxglove/schemas";
-import i18next from "i18next";
 import * as THREE from "three/webgpu";
 
 import { SettingsTreeAction, MessageEvent } from "@lichtblick/suite";
@@ -18,6 +17,8 @@ import {
   DECAY_HISTORY_LIMITS,
   RenderObjectHistory,
   PointsRenderable,
+  DECAY_LIMITED,
+  updateDecayNotice,
 } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/pointExtensionUtils";
 import { colorFieldComputedPrefix } from "@lichtblick/suite-base/panels/ThreeDeeRender/settingsNodes/colorMode";
 import {
@@ -108,7 +109,6 @@ const ALL_POINTCLOUD_DATATYPES = new Set<string>([
 ]);
 
 const INVALID_POINTCLOUD = "INVALID_POINTCLOUD";
-export const DECAY_LIMITED = "DECAY_LIMITED";
 
 const tempColor = { r: 0, g: 0, b: 0, a: 0 };
 const tempFieldReaders: PointCloudFieldReaders = {
@@ -474,37 +474,15 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
       reservePoints: this.#pointsHistory.latest().renderable.geometry.drawRange.count,
     });
 
-    // Say so when the limits, not the decay time, decide how far back the history goes. With the
-    // ring emptied by the limits, only the latest scan is shown.
-    const evictedUntil = ring.budgetEvictedUntil();
-    const oldest = ring.oldestReceiveTime() ?? this.#pointsHistory.latest().receiveTime;
-    if (evictedUntil != undefined && evictedUntil >= expireTime) {
-      const shownSeconds = Math.round(Math.max(0, Number(currentTime - oldest) / 1e9));
-      const locale = i18next.language;
-      const maxPoints = decayMaxPoints(settings);
-      // Formatted only when what it shows changes, not on every frame
-      const key = `${locale} ${maxPoints} ${shownSeconds} ${settings.decayTime}`;
-      // (errors can also be cleared elsewhere, e.g. on a topic reset)
-      if (
-        key !== this.#decayNoticeKey ||
-        !this.renderer.settings.errors.hasError(settingsPath, DECAY_LIMITED)
-      ) {
-        this.#decayNoticeKey = key;
-        this.renderer.settings.errors.add(
-          settingsPath,
-          DECAY_LIMITED,
-          i18next.t("threeDee:decayHistoryLimited", {
-            maxPoints: maxPoints.toLocaleString(locale),
-            maxScans: DECAY_HISTORY_LIMITS.maxEntries.toLocaleString(locale),
-            shownSeconds: shownSeconds.toLocaleString(locale),
-            decaySeconds: settings.decayTime.toLocaleString(locale),
-          }),
-        );
-      }
-    } else {
-      this.#decayNoticeKey = undefined;
-      this.renderer.settings.errors.remove(settingsPath, DECAY_LIMITED);
-    }
+    this.#decayNoticeKey = updateDecayNotice({
+      renderer: this.renderer,
+      settingsPath,
+      ring,
+      maxPoints: decayMaxPoints(settings),
+      latestPoints: this.#pointsHistory.latest().renderable.geometry.drawRange.count,
+      windowStart: expireTime,
+      shownKey: this.#decayNoticeKey,
+    });
 
     const missingFrame = ring.updatePoses(
       this.renderer.transformTree,
@@ -512,6 +490,10 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
       renderFrameId,
       fixedFrameId,
     );
+    if (ring.posesPending()) {
+      // Paused redraws stop on their own: draw again until every scan is placed
+      this.renderer.queueAnimationFrame();
+    }
     if (missingFrame != undefined) {
       this.renderer.settings.errors.add(
         settingsPath,

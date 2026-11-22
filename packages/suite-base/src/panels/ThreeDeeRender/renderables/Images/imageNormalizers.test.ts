@@ -184,4 +184,21 @@ describe("imageNormalizers", () => {
       expect(normalizeCompressedVideo(input)).toEqual(expected);
     });
   });
+
+  describe("ROS 2 stamps", () => {
+    // The ROS 2 CDR decoder gives builtin_interfaces/Time as { sec, nanosec }.
+    const ros2Time = { sec: 7, nanosec: 33_333_333 } as unknown as typeof mockTime;
+
+    it("keeps the nanoseconds of a CompressedVideo timestamp", () => {
+      expect(normalizeCompressedVideo({ timestamp: ros2Time }).timestamp).toEqual({
+        sec: 7,
+        nsec: 33_333_333,
+      });
+    });
+
+    it("keeps the nanoseconds of an image header stamp", () => {
+      const image = normalizeRosImage({ header: { stamp: ros2Time, frame_id: "cam" } });
+      expect(image.header.stamp).toEqual({ sec: 7, nsec: 33_333_333 });
+    });
+  });
 });
