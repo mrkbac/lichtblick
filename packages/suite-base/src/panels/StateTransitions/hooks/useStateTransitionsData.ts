@@ -15,7 +15,10 @@ import {
   ROW_SPACING,
 } from "@lichtblick/suite-base/panels/StateTransitions/hooks/constants";
 import { UseStateTransitionsData } from "@lichtblick/suite-base/panels/StateTransitions/hooks/types";
-import { messagesToDataset } from "@lichtblick/suite-base/panels/StateTransitions/messagesToDataset";
+import {
+  LiveDatasetCache,
+  messagesToDataset,
+} from "@lichtblick/suite-base/panels/StateTransitions/messagesToDataset";
 import { datasetContainsArray } from "@lichtblick/suite-base/panels/StateTransitions/shared";
 import {
   MessageDatasetArgs,
@@ -47,22 +50,25 @@ function addMatches(
   drawn: ChartDataset,
   args: Omit<MessageDatasetArgs, "blocks">,
   out: Set<number>,
-): void {
+  liveCache?: LiveDatasetCache,
+): boolean {
+  const approximate = blocks.some((samples) => samples?.hasAllChanges() === false);
   const changeBlocks = blocks.map((samples) => samples?.changes());
   if (changeBlocks.every((changes, i) => changes === blocks[i])) {
     addMatchStarts(drawn, out);
-    return;
+    return approximate;
   }
-  const exact = messagesToDataset({ ...args, blocks: changeBlocks, showPoints: false });
-  if (blocks.every((samples) => samples?.hasAllChanges() !== false)) {
+  const exact = messagesToDataset({ ...args, blocks: changeBlocks, showPoints: false }, liveCache);
+  if (!approximate) {
     addMatchStarts(exact, out);
-    return;
+    return false;
   }
   // The record only starts at its oldest kept change: matches before it come from the drawn
   // samples. (Its first sample carries the state from before the cut and is never a match.)
   const firstChangeX = exact.data.find((datum) => datum != undefined)?.x ?? Infinity;
   addMatchStarts(exact, out);
   addMatchStarts(drawn, out, (x) => x < firstChangeX);
+  return true;
 }
 
 function useStateTransitionsData(
@@ -76,6 +82,10 @@ function useStateTransitionsData(
 ): UseStateTransitionsData {
   // Light segment colors need darker label text on a light background.
   const darkenLabels = colorScheme === "light";
+  const liveCaches = useMemo<{ drawn: LiveDatasetCache; exact: LiveDatasetCache }[]>(
+    () => paths.map(() => ({ drawn: {}, exact: {} })),
+    [paths],
+  );
   return useMemo(() => {
     // ignore all data when we don't have a start time
     if (!startTime) {
@@ -84,6 +94,7 @@ function useStateTransitionsData(
         minY: undefined,
         pathState: [],
         matchStarts: [],
+        matchesApproximate: false,
       };
     }
 
@@ -91,6 +102,7 @@ function useStateTransitionsData(
     const outDatasets: ChartDatasets = [];
     const outPathState: PathState[] = [];
     const matchStarts = new Set<number>();
+    let matchesApproximate = false;
 
     paths.forEach((path, pathIndex) => {
       const y = -(pathIndex + 1) * ROW_SPACING;
@@ -111,17 +123,24 @@ function useStateTransitionsData(
       });
       outDatasets.push(newBlockDataSet);
       if (hasCondition) {
-        addMatches(blocksForPath, newBlockDataSet, datasetArgs, matchStarts);
+        matchesApproximate =
+          addMatches(blocksForPath, newBlockDataSet, datasetArgs, matchStarts) ||
+          matchesApproximate;
       }
 
+      const cache = liveCaches[pathIndex]!;
       if (items == undefined) {
+        cache.drawn.checkpoint = undefined;
+        cache.exact.checkpoint = undefined;
         return;
       }
 
-      const newPathDataSet = messagesToDataset({ ...datasetArgs, blocks: [items] });
+      const newPathDataSet = messagesToDataset({ ...datasetArgs, blocks: [items] }, cache.drawn);
       outDatasets.push(newPathDataSet);
       if (hasCondition) {
-        addMatches([items], newPathDataSet, datasetArgs, matchStarts);
+        matchesApproximate =
+          addMatches([items], newPathDataSet, datasetArgs, matchStarts, cache.exact) ||
+          matchesApproximate;
       }
     });
 
@@ -130,8 +149,9 @@ function useStateTransitionsData(
       minY: outMinY,
       pathState: outPathState,
       matchStarts: [...matchStarts].sort((a, b) => a - b),
+      matchesApproximate,
     };
-  }, [decodedBlocks, itemsByPath, paths, startTime, showPoints, darkenLabels]);
+  }, [decodedBlocks, itemsByPath, paths, startTime, showPoints, darkenLabels, liveCaches]);
 }
 
 export default useStateTransitionsData;

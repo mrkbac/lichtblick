@@ -7,8 +7,6 @@ import {
   draftFromFiles,
   draftToCompare,
   encodeCompareNames,
-  joinUrls,
-  splitUrls,
   mergeArgs,
   recordingExtension,
   recordingName,
@@ -132,11 +130,13 @@ describe("mergeArgs", () => {
       mergeArgs(remote, ["https://e.com/a.mcap", "https://e.com/a.mcap"], { withCookies: true }),
     ).toEqual({
       type: "connection",
-      params: { url: "https://e.com/a.mcap", includeCredentials: "true" },
+      urls: ["https://e.com/a.mcap"],
+      params: { includeCredentials: "true" },
     });
     expect(mergeArgs(remote, ["https://e.com/a.mcap"], { withCookies: false })).toEqual({
       type: "connection",
-      params: { url: "https://e.com/a.mcap" },
+      urls: ["https://e.com/a.mcap"],
+      params: {},
     });
   });
 
@@ -146,26 +146,5 @@ describe("mergeArgs", () => {
       type: "file",
       files: [f, "https://e.com/b.mcap"],
     });
-  });
-});
-
-describe("joinUrls", () => {
-  it("keeps a URL with a comma whole when the list is split on commas", () => {
-    const joined = joinUrls(["https://e.com/run,1.mcap", "https://e.com/b.mcap"]);
-    expect(joined.split(",")).toEqual(["https://e.com/run%2C1.mcap", "https://e.com/b.mcap"]);
-    expect(recordingName(joined.split(",")[0]!)).toBe("run,1.mcap");
-  });
-});
-
-describe("splitUrls", () => {
-  it("starts a new URL only at a scheme, so commas inside a URL stay", () => {
-    expect(splitUrls("https://e.com/run,1.mcap,https://e.com/b.mcap")).toEqual([
-      "https://e.com/run,1.mcap",
-      "https://e.com/b.mcap",
-    ]);
-    expect(splitUrls(joinUrls(["https://e.com/a,b.mcap", "http://e.com/c.mcap"]))).toEqual([
-      "https://e.com/a%2Cb.mcap",
-      "http://e.com/c.mcap",
-    ]);
   });
 });

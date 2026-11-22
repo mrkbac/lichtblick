@@ -21,6 +21,7 @@ export type RemoteLayout = {
   id: LayoutID;
   name: string;
   permission: LayoutPermission;
+  untrusted?: true;
   data: LayoutData;
   savedAt: ISO8601Timestamp | undefined;
   externalId: string;

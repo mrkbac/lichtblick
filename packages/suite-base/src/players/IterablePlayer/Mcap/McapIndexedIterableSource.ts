@@ -23,7 +23,6 @@ import {
 import { PlayerAlert, RecordingFileInfo, TopicStats } from "@lichtblick/suite-base/players/types";
 import { RosDatatypes } from "@lichtblick/suite-base/types/RosDatatypes";
 import type { ReadOptions } from "@lichtblick/suite-base/util/CachedFilelike.types";
-import { GrowingHistogram } from "@lichtblick/suite-base/util/timelineDensity";
 import { toError } from "@lichtblick/suite-base/util/toError";
 
 import type { PrefetchOptions } from "./RemoteFileReadable.types";
@@ -101,7 +100,6 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
     publishersByTopic: new Map<string, Set<string>>(),
     alerts: [] as PlayerAlert[],
     metadataCount: 0,
-    density: undefined as GrowingHistogram | undefined,
     metadata: [] as Metadata[],
   };
 
@@ -292,7 +290,6 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
     const reader = this.#reader;
     const index = this.#index;
     const newChunks = reader.chunkIndexes.slice(index.chunks);
-    const previousStart = index.startTime;
     for (const chunk of newChunks) {
       if (index.startTime == undefined || chunk.messageStartTime < index.startTime) {
         index.startTime = chunk.messageStartTime;
@@ -311,27 +308,6 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
       index.compression.set(format, group);
     }
     index.chunks = reader.chunkIndexes.length;
-    if (index.startTime != undefined && index.endTime != undefined) {
-      // The histogram can't grow backwards: rebuild it from all chunks when the start moved
-      // earlier (rare: live indexing found an earlier chunk), else add only the new chunks
-      let density = index.density;
-      let chunks: readonly McapTypes.ChunkIndex[] = newChunks;
-      if (!density || index.startTime !== previousStart) {
-        density = new GrowingHistogram(
-          Number(index.startTime),
-          Number(index.endTime - index.startTime),
-        );
-        chunks = reader.chunkIndexes;
-      }
-      index.density = density;
-      for (const chunk of chunks) {
-        density.add(
-          Number(chunk.messageStartTime),
-          Number(chunk.messageEndTime),
-          Number(chunk.uncompressedSize),
-        );
-      }
-    }
 
     // A channel whose schema is missing stays pending: a later chunk may repeat the schema. Once
     // added, its messages in earlier chunks become readable too.
@@ -387,10 +363,6 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
     const recordingFiles: RecordingFileInfo[] = [
       {
         library: reader.header.library,
-        messageBytes:
-          startTime != undefined && endTime != undefined
-            ? index.density?.resample(Number(startTime), Number(endTime))
-            : undefined,
         schemaCount: reader.schemasById.size,
         compression: [...index.compression.values()].map((group) => ({ ...group })),
         channels: [...reader.channelsById.values()].map((channel) => {

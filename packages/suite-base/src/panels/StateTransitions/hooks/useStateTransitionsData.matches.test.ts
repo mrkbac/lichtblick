@@ -10,6 +10,24 @@ import { PathSampleColumns } from "@lichtblick/suite-base/components/MessagePath
 import useStateTransitionsData from "./useStateTransitionsData";
 
 describe("useStateTransitionsData matches", () => {
+  it("reports exact matches while the history fits the budget", () => {
+    const columns = new PathSampleColumns(4);
+    columns.trackChanges();
+    columns.push({
+      receiveTime: { sec: 1, nsec: 0 },
+      headerStamp: undefined,
+      count: 1,
+      value: 2,
+      constantName: undefined,
+    });
+    const path = { value: "/a.b", condition: "== 2", timestampMethod: "receiveTime" as const };
+    const { result } = renderHook(() =>
+      useStateTransitionsData([path], { sec: 0, nsec: 0 }, { "/a.b": columns }, [], false),
+    );
+    expect(result.current.matchStarts).toEqual([1]);
+    expect(result.current.matchesApproximate).toBe(false);
+  });
+
   it("finds every match even when the drawn samples are thinned past the changes", () => {
     // 3 values cycling every sample: a budget of 40 must merge, which blurs changes.
     const columns = new PathSampleColumns(40);
@@ -33,6 +51,7 @@ describe("useStateTransitionsData matches", () => {
     const expected = Array.from({ length: 100 }, (_, i) => i * 3).filter((x) => x >= first);
     expect(expected.length).toBeGreaterThan(0);
     expect(result.current.matchStarts).toEqual(expected);
+    expect(result.current.matchesApproximate).toBe(true);
   });
 
   it("doesn't count a match where the changes record cut off its oldest changes", () => {

@@ -8,6 +8,7 @@ import userEvent from "@testing-library/user-event";
 import { webcrypto } from "node:crypto";
 
 import LayoutManagerContext from "@lichtblick/suite-base/context/LayoutManagerContext";
+import { initI18n } from "@lichtblick/suite-base/i18n";
 import { ILayoutManager } from "@lichtblick/suite-base/services/ILayoutManager";
 import { Layout, LayoutPermission } from "@lichtblick/suite-base/services/ILayoutStorage";
 import { UserScripts } from "@lichtblick/suite-base/types/panels";
@@ -43,6 +44,10 @@ function setup(permission: LayoutPermission, extra: Partial<Layout> = {}) {
 Object.defineProperty(globalThis, "crypto", { value: webcrypto, configurable: true });
 
 describe("useTrustedUserScripts", () => {
+  beforeAll(async () => {
+    await initI18n();
+  });
+
   beforeEach(() => {
     localStorage.clear();
   });
@@ -105,7 +110,8 @@ describe("useTrustedUserScripts", () => {
     expect(hook.result.current.scripts).toEqual({});
 
     showPrompt();
-    expect(screen.getByText("Run user scripts from this linked layout?")).toBeTruthy();
+    expect(screen.getByText("Run user scripts from this imported layout?")).toBeTruthy();
+    expect(screen.getByText(/This layout contains a user script: Speed/)).toBeTruthy();
     await userEvent.click(screen.getByRole("button", { name: "Run scripts" }));
     expect(hook.result.current.scripts).toBe(scripts);
   });

@@ -156,7 +156,6 @@ describe("CompareDialog", () => {
     });
     await pickElsewhere(1, "remote", "https://example.com/a.mcap");
     await pickElsewhere(2, "remote", "https://example.com/b.mcap");
-    // The remote source splits its lists on commas
     fireEvent.change(screen.getAllByLabelText("Recording name")[1]!, {
       target: { value: "B, tuned" },
     });
@@ -164,12 +163,56 @@ describe("CompareDialog", () => {
 
     expect(selection.selectSource).toHaveBeenLastCalledWith("remote", {
       type: "connection",
+      urls: ["https://example.com/a.mcap", "https://example.com/b.mcap"],
       params: {
-        url: "https://example.com/a.mcap,https://example.com/b.mcap",
         compareNames: "a.mcap,B%2C tuned",
       },
     });
   });
+
+  it.each([false, true])(
+    "keeps saved comparison sides, names and cookies with an already-shared file: %s",
+    async (alreadyShared) => {
+      const shared = "https://example.com/calibration.mcap";
+      const a = "https://example.com/a.mcap";
+      const b = "https://example.com/b.mcap";
+      const existing = "https://example.com/existing.mcap";
+      renderDialog();
+      act(() => {
+        useCompareDialog.getState().show({
+          shared: alreadyShared ? [shared] : [],
+          sides: [{ name: "Existing", files: [existing] }],
+          withCookies: alreadyShared ? [existing, shared] : [existing],
+        });
+      });
+      fireEvent.click(screen.getAllByText("URL, recent or catalog")[1]!);
+      await act(async () => {
+        expect(
+          takeSourcePick("remote", {
+            type: "connection",
+            urls: [shared, a, shared, b],
+            params: {
+              compareNames: "Before,Before,After%2C tuned,After%2C tuned",
+              includeCredentials: "true",
+            },
+          }),
+        ).toBe(true);
+      });
+      fireEvent.click(screen.getByRole("button", { name: "Compare 3 recordings" }));
+      expect(selection.selectSource).toHaveBeenLastCalledWith("remote", {
+        type: "connection",
+        urls: alreadyShared
+          ? [shared, existing, shared, a, shared, b]
+          : [existing, shared, a, shared, b],
+        params: {
+          compareNames: alreadyShared
+            ? "Existing,Existing,Before,Before,After%2C tuned,After%2C tuned"
+            : "Existing,Before,Before,After%2C tuned,After%2C tuned",
+          includeCredentials: "true",
+        },
+      });
+    },
+  );
 
   it("mixes local files and remote recordings in one comparison", async () => {
     renderDialog();
@@ -246,8 +289,8 @@ describe("CompareDialog", () => {
     fireEvent.click(screen.getByRole("button", { name: "Compare 2 recordings" }));
     expect(selection.selectSource).toHaveBeenLastCalledWith("remote", {
       type: "connection",
+      urls: ["https://example.com/private-a.mcap", "https://example.com/private-b.mcap"],
       params: {
-        url: "https://example.com/private-a.mcap,https://example.com/private-b.mcap",
         compareNames: "private-a.mcap,private-b.mcap",
         includeCredentials: "true",
       },
@@ -283,8 +326,8 @@ describe("CompareDialog", () => {
 
     expect(selection.selectSource).toHaveBeenLastCalledWith("remote", {
       type: "connection",
+      urls: ["https://example.com/private-a.mcap", "https://example.com/open.mcap"],
       params: {
-        url: "https://example.com/private-a.mcap,https://example.com/open.mcap",
         compareNames: "private-a.mcap,open.mcap",
       },
     });
@@ -306,8 +349,8 @@ describe("CompareDialog", () => {
 
     expect(selection.selectSource).toHaveBeenLastCalledWith("remote", {
       type: "connection",
+      urls: ["https://example.com/x.mcap", "https://example.com/y.mcap"],
       params: {
-        url: "https://example.com/x.mcap,https://example.com/y.mcap",
         compareNames: "x.mcap,y.mcap",
         includeCredentials: "true",
       },

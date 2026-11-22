@@ -270,6 +270,7 @@ export type IterableSourceInitializeArgs = {
   // Compare `files`/`urls`/`recordings` side by side instead of merging them: the side name of each, in order.
   // Entries with the same name are merged into one side (see MultiSource).
   compare?: readonly string[];
+  compareOffsets?: readonly number[];
   // Fetch credentials for `url`/`urls`, e.g. "include" to send cookies (`ds.includeCredentials`)
   credentials?: RequestCredentials;
   // Optional overrides for multi-file hydration tuning (see MultiSourceHydrationOptions in

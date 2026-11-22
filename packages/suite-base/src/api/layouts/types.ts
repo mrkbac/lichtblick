@@ -69,6 +69,7 @@ export interface UpdateLayoutRequest {
   data?: LayoutData;
   /** Updated permission level (optional) */
   permission?: LayoutPermission;
+  untrusted?: true;
   /** Timestamp when the layout was saved */
   savedAt: ISO8601Timestamp;
 }
@@ -120,7 +121,7 @@ export type FavoriteLayoutsResponse = {
 /**
  * Parameters for saving a new layout (service layer)
  */
-export type SaveNewLayoutParams = Pick<Layout, "id" | "name" | "permission"> & {
+export type SaveNewLayoutParams = Pick<Layout, "id" | "name" | "permission" | "untrusted"> & {
   /** New layout data */
   data: LayoutData;
   /** Organization to save a shared layout in (organization API only). */

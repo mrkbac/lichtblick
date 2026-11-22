@@ -46,6 +46,7 @@ export function initialize(args: IterableSourceInitializeArgs): WorkerIterableSo
         urls: args.urls,
         credentials: args.credentials,
         compare: args.compare,
+        compareOffsets: args.compareOffsets,
         ...pickDefinedHydrationOverrides(args),
       },
       McapIterableSource,

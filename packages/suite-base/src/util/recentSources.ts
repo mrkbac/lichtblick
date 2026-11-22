@@ -5,6 +5,23 @@ import type { RecentRecord } from "@lichtblick/suite-base/hooks/useIndexedDbRece
 
 type FileRecent = Extract<RecentRecord, { type: "file" }>;
 
+type ConnectionRecent = Pick<
+  Extract<RecentRecord, { type: "connection" }>,
+  "sourceId" | "extra" | "urls"
+>;
+
+export function connectionRecentArgs(
+  recent: ConnectionRecent,
+): Extract<DataSourceArgs, { type: "connection" }> {
+  if (!["remote-file", "mcap-remote-file", "ros1-remote-bagfile"].includes(recent.sourceId)) {
+    return { type: "connection", params: recent.extra, urls: recent.urls };
+  }
+  const { url, ...params } = recent.extra ?? {};
+  // Only older recents saved a comma-joined list. New inputs and stored lists stay untouched.
+  const urls = recent.urls ?? url?.split(/,(?=[a-z][a-z\d+.-]*:\/\/)/i);
+  return { type: "connection", params, urls };
+}
+
 /** Reopens a file recent as it was opened: compared side by side when it was */
 export function recentArgs(recent: FileRecent): Extract<DataSourceArgs, { type: "file" }> {
   return { type: "file", handles: recent.handles, compare: recent.compare };
@@ -129,8 +146,7 @@ export function detectConnection(input: string): { sourceId: string; url: string
   const url = trimmed.includes("://") ? trimmed : `ws://${trimmed}`;
   let parsed: URL;
   try {
-    // Remote files may be a comma separated list; detect on the first one
-    parsed = new URL(url.split(",")[0]!);
+    parsed = new URL(url);
   } catch {
     return undefined;
   }

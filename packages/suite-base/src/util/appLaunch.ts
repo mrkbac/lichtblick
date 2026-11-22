@@ -15,7 +15,11 @@ export const useAppLaunch = create<{ url?: URL; launch: (state: AppURLState) => 
     // nor apply its layout
     if (
       state.ds != undefined &&
-      takeSourcePick(state.ds, { type: "connection", params: state.dsParams })
+      takeSourcePick(state.ds, {
+        type: "connection",
+        params: state.dsParams,
+        urls: state.dsParamsArray?.urls,
+      })
     ) {
       return;
     }
