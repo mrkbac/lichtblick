@@ -7,6 +7,7 @@ import { useCallback, useEffect, useState } from "react";
 import {
   useMessagePipeline,
   useMessagePipelineGetter,
+  useMessagePipelineSubscribe,
 } from "@lichtblick/suite-base/components/MessagePipeline";
 import { selectLastSeekTime } from "@lichtblick/suite-base/components/MessagePipeline/selectors";
 
@@ -19,8 +20,9 @@ const isSame = (a: PlaybackTimes, b: PlaybackTimes) =>
   same(a.start, b.start) && same(a.end, b.end) && same(a.current, b.current);
 
 /**
- * Data source start/end and current playback time, polled at a fixed rate (and on seek) instead
- * of on every frame so panels with hundreds of rows don't re-render at playback rate.
+ * Data source start/end and current playback time, read at most once per interval (and on seek)
+ * instead of on every frame so panels with hundreds of rows don't re-render at playback rate.
+ * Only pipeline updates schedule a read, so nothing wakes up while playback is paused.
  */
 export default function usePlaybackTimes(updateIntervalMillis?: number): PlaybackTimes {
   const messagePipeline = useMessagePipelineGetter();
@@ -39,12 +41,20 @@ export default function usePlaybackTimes(updateIntervalMillis?: number): Playbac
     setTimes((prev) => (isSame(prev, next) ? prev : next));
   }, [read]);
 
+  const subscribe = useMessagePipelineSubscribe();
   useEffect(() => {
-    const interval = setInterval(update, updateIntervalMillis ?? DEFAULT_UPDATE_INTERVAL_MS);
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const unsubscribe = subscribe(() => {
+      timer ??= setTimeout(() => {
+        timer = undefined;
+        update();
+      }, updateIntervalMillis ?? DEFAULT_UPDATE_INTERVAL_MS);
+    });
     return () => {
-      clearInterval(interval);
+      unsubscribe();
+      clearTimeout(timer);
     };
-  }, [update, updateIntervalMillis]);
+  }, [subscribe, update, updateIntervalMillis]);
 
   const lastSeekTime = useMessagePipeline(selectLastSeekTime);
   useEffect(update, [update, lastSeekTime]);

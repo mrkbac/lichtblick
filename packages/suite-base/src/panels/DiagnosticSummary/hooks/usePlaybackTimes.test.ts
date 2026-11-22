@@ -8,6 +8,7 @@ import type { Mock } from "vitest";
 import {
   useMessagePipeline,
   useMessagePipelineGetter,
+  useMessagePipelineSubscribe,
 } from "@lichtblick/suite-base/components/MessagePipeline";
 
 import usePlaybackTimes from "./usePlaybackTimes";
@@ -15,12 +16,20 @@ import usePlaybackTimes from "./usePlaybackTimes";
 vi.mock("@lichtblick/suite-base/components/MessagePipeline", () => ({
   useMessagePipelineGetter: vi.fn(),
   useMessagePipeline: vi.fn(),
+  useMessagePipelineSubscribe: vi.fn(),
 }));
 
 describe("usePlaybackTimes", () => {
   const start: Time = { sec: 1, nsec: 0 };
   const end: Time = { sec: 100, nsec: 0 };
   let current: Time | undefined;
+  let listeners: (() => void)[];
+  /** The pipeline publishes a frame */
+  const emit = () => {
+    for (const listener of listeners) {
+      listener();
+    }
+  };
 
   beforeEach(() => {
     vi.useFakeTimers();
@@ -29,6 +38,14 @@ describe("usePlaybackTimes", () => {
       playerState: { activeData: { startTime: start, endTime: end, currentTime: current } },
     }));
     (useMessagePipeline as Mock).mockReturnValue(undefined);
+    listeners = [];
+    const subscribe = (fn: () => void) => {
+      listeners.push(fn);
+      return () => {
+        listeners = listeners.filter((other) => other !== fn);
+      };
+    };
+    (useMessagePipelineSubscribe as Mock).mockReturnValue(subscribe);
   });
 
   afterEach(() => {
@@ -40,21 +57,41 @@ describe("usePlaybackTimes", () => {
     expect(result.current).toEqual({ start, end, current });
   });
 
-  it("polls the current time and keeps identity while nothing changes", () => {
+  it("reads the current time at most once per interval and keeps identity while nothing changes", () => {
     const { result } = renderHook(() => usePlaybackTimes(100));
     const first = result.current;
 
     act(() => {
       current = { sec: 10, nsec: 0 }; // equal value, new object
+      emit();
       vi.advanceTimersByTime(100);
     });
     expect(result.current).toBe(first);
 
     act(() => {
       current = { sec: 11, nsec: 0 };
-      vi.advanceTimersByTime(100);
+      emit();
+      vi.advanceTimersByTime(50);
+      current = { sec: 12, nsec: 0 };
+      emit();
     });
-    expect(result.current.current).toEqual({ sec: 11, nsec: 0 });
+    expect(result.current.current).toEqual({ sec: 10, nsec: 0 });
+    act(() => {
+      vi.advanceTimersByTime(50);
+    });
+    expect(result.current.current).toEqual({ sec: 12, nsec: 0 });
+  });
+
+  it("schedules nothing while the pipeline publishes nothing (paused)", () => {
+    const { unmount } = renderHook(() => usePlaybackTimes(100));
+    expect(vi.getTimerCount()).toBe(0);
+    act(() => {
+      emit();
+    });
+    expect(vi.getTimerCount()).toBe(1);
+    unmount();
+    expect(vi.getTimerCount()).toBe(0);
+    expect(listeners).toHaveLength(0);
   });
 
   it("handles a player without active data", () => {
