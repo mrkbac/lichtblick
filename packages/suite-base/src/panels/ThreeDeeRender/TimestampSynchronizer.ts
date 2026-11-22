@@ -74,13 +74,16 @@ export class TimestampSynchronizer {
       return events as MessageEvent[];
     }
     const out: MessageEvent[] = [];
-    let buffered = false;
+    // A set can only complete at a stamp inserted now: older complete ones were already released
+    let newest: bigint | undefined;
+    // Earlier candidates of this batch, only needed if eviction removes a part of `newest`
+    let older: bigint[] | undefined;
+    let evicted = false;
     for (const event of events) {
       if (!this.#topics.has(event.topic)) {
         out.push(event);
         continue;
       }
-      buffered = true;
       let buffer = this.#buffers.get(event.topic);
       if (!buffer) {
         buffer = { events: new AVLTree((a, b) => (a < b ? -1 : a > b ? 1 : 0)), bytes: 0 };
@@ -89,6 +92,16 @@ export class TimestampSynchronizer {
       const stamp = syncTimestamp(event);
       buffer.bytes += event.sizeInBytes - (buffer.events.get(stamp)?.sizeInBytes ?? 0);
       buffer.events.set(stamp, event);
+      if (this.#allHave(stamp)) {
+        if (newest == undefined) {
+          newest = stamp;
+        } else if (stamp > newest) {
+          (older ??= []).push(newest);
+          newest = stamp;
+        } else if (stamp < newest) {
+          (older ??= []).push(stamp);
+        }
+      }
       const cutoff = buffer.events.maxKey()! - SYNC_WINDOW_NS;
       // The newest message always stays, even past the byte budget
       while (
@@ -96,36 +109,40 @@ export class TimestampSynchronizer {
         (buffer.events.minKey()! < cutoff || buffer.bytes > SYNC_BYTES_PER_TOPIC)
       ) {
         buffer.bytes -= buffer.events.shift()![1].sizeInBytes;
+        evicted = true;
       }
     }
-    if (buffered) {
-      this.#releaseNewestMatch(out);
+    if (evicted && newest != undefined && !this.#allHave(newest)) {
+      // A later message in the batch evicted part of it: take the newest still complete
+      const candidates = older ?? [];
+      newest = undefined;
+      for (const stamp of candidates) {
+        if ((newest == undefined || stamp > newest) && this.#allHave(stamp)) {
+          newest = stamp;
+        }
+      }
+    }
+    if (newest != undefined) {
+      this.#release(newest, out);
     }
     return out;
   }
 
-  #releaseNewestMatch(out: MessageEvent[]): void {
-    const buffers: Buffer[] = [];
+  #allHave(stamp: bigint): boolean {
     for (const topic of this.#topics) {
-      const buffer = this.#buffers.get(topic);
-      if (!buffer) {
-        return;
+      if (this.#buffers.get(topic)?.events.has(stamp) !== true) {
+        return false;
       }
-      buffers.push(buffer);
     }
-    const [first, ...rest] = buffers;
-    // Newest first, so a steady stream matches on its first try
-    let entry = first!.events.maxEntry();
-    while (entry && !rest.every((buffer) => buffer.events.has(entry![0]))) {
-      entry = first!.events.findLessThan(entry[0]);
-    }
-    if (!entry) {
-      return;
-    }
-    const newest = entry[0];
-    for (const buffer of buffers) {
-      out.push(buffer.events.get(newest)!);
-      while (buffer.events.size > 0 && buffer.events.minKey()! <= newest) {
+    return true;
+  }
+
+  /** Releases the set at `stamp` and drops everything older */
+  #release(stamp: bigint, out: MessageEvent[]): void {
+    for (const topic of this.#topics) {
+      const buffer = this.#buffers.get(topic)!;
+      out.push(buffer.events.get(stamp)!);
+      while (buffer.events.size > 0 && buffer.events.minKey()! <= stamp) {
         buffer.bytes -= buffer.events.shift()![1].sizeInBytes;
       }
     }

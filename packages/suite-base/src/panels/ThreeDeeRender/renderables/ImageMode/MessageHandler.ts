@@ -167,6 +167,15 @@ export class MessageHandler {
   /** Total `data` bytes of the images in `#tree` */
   #treeImageBytes = 0;
 
+  /** Stamp of the synchronized set being shown; everything older is dropped from `#tree` */
+  #match: Time | undefined;
+  /**
+   * Stamps changed since the last render state. A new set can only complete at one of them, so the
+   * whole tree is only searched again (`#rescan`) when the config or available topics change.
+   */
+  #touched: Time[] = [];
+  #rescan = true;
+
   /** listener functions that are called when the state changes. */
   #listeners: RenderStateListener[] = [];
 
@@ -247,6 +256,7 @@ export class MessageHandler {
       this.#tree.set(stamp, { image: normalizedImageMessage, annotationsByTopic: new Map() });
     }
     this.#treeImageBytes += imageBytes(normalizedImageMessage);
+    this.#touched.push(stamp);
     this.#evictOldSyncItems();
   }
 
@@ -271,6 +281,7 @@ export class MessageHandler {
   #clearSyncItems(): void {
     this.#tree.clear();
     this.#treeImageBytes = 0;
+    this.#rescan = true;
   }
 
   public handleCameraInfo = (message: PartialMessageEvent<CameraInfo>): void => {
@@ -319,6 +330,7 @@ export class MessageHandler {
         originalMessage: messageEvent,
         annotations: group,
       });
+      this.#touched.push(stamp);
     }
     if (groups.size > 0) {
       this.#evictOldSyncItems();
@@ -329,6 +341,7 @@ export class MessageHandler {
 
   public setConfig(newConfig: Immutable<ImageModeConfig>): void {
     let changed = false;
+    this.#rescan = true;
 
     if (newConfig.synchronize != undefined && newConfig.synchronize !== this.#config.synchronize) {
       this.#oldRenderState = undefined;
@@ -392,6 +405,7 @@ export class MessageHandler {
 
   public setAvailableAnnotationTopics(topicNames: string[]): void {
     this.#availableAnnotationTopics = new Set(topicNames);
+    this.#rescan = true;
     this.#emitState();
   }
 
@@ -485,34 +499,55 @@ export class MessageHandler {
    */
   #findSynchronizedSetAndRemoveOlderItems(visibleAnnotations: Set<string>): SynchronizationResult {
     const visible = [...visibleAnnotations];
-    let presentAnnotationTopics: string[] | undefined;
-    let missingAnnotationTopics: string[] | undefined;
-    // Newest first: a steady stream matches on its first entry
+    const complete = (item: SynchronizationItem | undefined): item is SynchronizationItem =>
+      item?.image != undefined && visible.every((topic) => item.annotationsByTopic.has(topic));
+
+    if (this.#rescan) {
+      this.#rescan = false;
+      this.#match = undefined;
+      // Newest first: stops at the first complete entry
+      for (let entry = this.#tree.maxEntry(); entry; entry = this.#tree.findLessThan(entry[0])) {
+        if (complete(entry[1])) {
+          this.#match = entry[0];
+          break;
+        }
+      }
+    } else {
+      for (const stamp of this.#touched) {
+        if (
+          (this.#match == undefined || compareTime(stamp, this.#match) > 0) &&
+          complete(this.#tree.get(stamp))
+        ) {
+          this.#match = stamp;
+        }
+      }
+    }
+    this.#touched.length = 0;
+
+    // The match may have been evicted since
+    const matched = this.#match && this.#tree.get(this.#match);
+    if (complete(matched)) {
+      while (isLessThan(this.#tree.minKey()!, this.#match!)) {
+        this.#shiftSyncItem();
+      }
+      return { found: true, messages: matched };
+    }
+    this.#match = undefined;
+
     for (let entry = this.#tree.maxEntry(); entry; entry = this.#tree.findLessThan(entry[0])) {
       const { image, annotationsByTopic } = entry[1];
-      if (!image) {
-        continue;
-      }
-      if (missingAnnotationTopics == undefined) {
-        presentAnnotationTopics = [];
-        missingAnnotationTopics = [];
+      if (image) {
+        const presentAnnotationTopics: string[] = [];
+        const missingAnnotationTopics: string[] = [];
         for (const topic of visible) {
           (annotationsByTopic.has(topic) ? presentAnnotationTopics : missingAnnotationTopics).push(
             topic,
           );
         }
-        if (missingAnnotationTopics.length > 0) {
-          continue;
-        }
-      } else if (!visible.every((topic) => annotationsByTopic.has(topic))) {
-        continue;
+        return { found: false, presentAnnotationTopics, missingAnnotationTopics };
       }
-      while (isLessThan(this.#tree.minKey()!, entry[0])) {
-        this.#shiftSyncItem();
-      }
-      return { found: true, messages: entry[1] };
     }
-    return { found: false, missingAnnotationTopics, presentAnnotationTopics };
+    return { found: false, presentAnnotationTopics: undefined, missingAnnotationTopics: undefined };
   }
 
   #visibleAnnotations(): Set<string> {

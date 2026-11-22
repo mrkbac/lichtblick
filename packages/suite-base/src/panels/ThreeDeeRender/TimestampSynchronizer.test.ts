@@ -95,6 +95,22 @@ describe("TimestampSynchronizer", () => {
     expect(stamps(sync.filter([msg("b", 9)]))).toEqual([`a@${9n * S}`, `b@${9n * S}`]);
   });
 
+  it("releases an older set completed in the same batch when the newest is evicted by it", () => {
+    const sync = new TimestampSynchronizer();
+    sync.setTopics(new Set(["a", "b"]));
+    sync.filter([msg("a", 1), msg("a", 2)]);
+    // b completes 1 and 2, then a@12 pushes a@1 out of the window
+    const out = sync.filter([msg("b", 1), msg("b", 2), msg("a", 12)]);
+    expect(stamps(out)).toEqual([`a@${2n * S}`, `b@${2n * S}`]);
+  });
+
+  it("releases the newest set completed in a batch whatever the arrival order", () => {
+    const sync = new TimestampSynchronizer();
+    sync.setTopics(new Set(["a", "b"]));
+    sync.filter([msg("a", 1), msg("a", 2)]);
+    expect(stamps(sync.filter([msg("b", 2), msg("b", 1)]))).toEqual([`a@${2n * S}`, `b@${2n * S}`]);
+  });
+
   it("counts a replaced stamp's bytes once", () => {
     const sync = new TimestampSynchronizer();
     sync.setTopics(new Set(["a", "b"]));
