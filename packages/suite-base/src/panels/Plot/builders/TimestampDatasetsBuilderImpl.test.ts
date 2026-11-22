@@ -92,8 +92,8 @@ describe("TimestampDatasetsBuilderImpl", () => {
     });
 
     it("thins the busiest series and leaves sparse ones intact", () => {
-      // GIVEN a fast and a slow series sharing a budget
-      const builder = new TimestampDatasetsBuilderImpl(1000);
+      // GIVEN a fast and a slow series sharing a budget of 1000 rows
+      const builder = new TimestampDatasetsBuilderImpl(500);
       builder.applyAction({
         type: "update-series-config",
         seriesItems: [seriesItem("0"), seriesItem("1")],

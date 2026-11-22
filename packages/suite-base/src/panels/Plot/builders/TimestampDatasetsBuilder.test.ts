@@ -821,7 +821,7 @@ describe("TimestampDatasetsBuilder", () => {
     });
   });
 
-  it("keeps all current messages while under the memory budget", async () => {
+  it("thins current messages past the budget instead of dropping the oldest", async () => {
     const builder = new TimestampDatasetsBuilder();
 
     builder.setSeries(
@@ -869,7 +869,7 @@ describe("TimestampDatasetsBuilder", () => {
       });
     }
 
-    // Next batch passes the old fixed cap of 50k; nothing is dropped
+    // Next batch passes the budget of 40k rows: older data is thinned, the whole range stays
     {
       builder.handlePlayerState(
         buildPlayerState({
@@ -882,9 +882,10 @@ describe("TimestampDatasetsBuilder", () => {
         bounds: {},
       });
 
-      expect(result.datasetsByConfigIndex[0]!.data.length).toEqual(60_000);
-      expect(result.datasetsByConfigIndex[0]!.data[0]).toEqual({ x: 0, y: 0, value: 0 });
-      expect(result.datasetsByConfigIndex[0]!.data[59_999]).toEqual({
+      const data = result.datasetsByConfigIndex[0]!.data;
+      expect(data.length).toBeLessThanOrEqual(40_000);
+      expect(data[0]).toEqual({ x: 0, y: 0, value: 0 });
+      expect(data.at(-1)).toEqual({
         x: 59_999,
         y: 59_999,
         value: 59_999,

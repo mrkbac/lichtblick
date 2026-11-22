@@ -111,14 +111,12 @@ export type UpdateDataAction =
   | UpdateSeriesCurrentAction
   | UpdateSeriesFullAction;
 
-/** Bytes per row in PointColumns (see TimestampDatasetsBuilderImpl) */
-const BYTES_PER_ROW = 40;
-
 /**
- * Memory budget for current (live, not preloaded) rows of the x-axis and all series. Past it,
+ * Budget for current (live, not preloaded) rows, per stream (the x-axis and each series), shared by
+ * all of them. It stays below the average fill of the old 50k cap, so memory doesn't grow; past it,
  * live data is thinned evenly in time instead of dropping its oldest part.
  */
-const CURRENT_ROWS_BUDGET = Math.floor((32 * 1024 * 1024) / BYTES_PER_ROW);
+const CURRENT_ROWS_PER_STREAM = 40_000;
 
 const newStream = (): Stream => ({ points: new PointColumns(), fullLength: 0 });
 
@@ -145,6 +143,14 @@ function appendFull(stream: Stream, items: Immutable<ValueItem[]>): number {
     return points.length;
   }
   const at = points.receiveUpperBound(items[0]!.receiveTime, 0, stream.fullLength);
+  if (at === points.length) {
+    // usual case: blocks load in time order and there are no current rows
+    for (const item of items) {
+      points.pushValue(item.x ?? Number.NaN, item.value, item.originalValue, item.receiveTime);
+    }
+    stream.fullLength += items.length;
+    return at;
+  }
   points.insert(at, items.map(toRow));
   stream.fullLength += items.length;
   // drop current rows the full rows now cover
@@ -164,6 +170,24 @@ function appendCurrent(stream: Stream, items: Immutable<ValueItem[]>): number {
     return points.length;
   }
   const lastFull = stream.fullLength > 0 ? points.receiveTime(stream.fullLength - 1) : undefined;
+  // Usual case: messages arrive in order after everything stored; append without copies
+  const prev = points.length > stream.fullLength ? points.receiveTime(points.length - 1) : lastFull;
+  let prevSec = prev?.sec ?? -Infinity;
+  let prevNsec = prev?.nsec ?? 0;
+  let inOrder = lastFull == undefined || compare(items[0]!.receiveTime, lastFull) > 0;
+  for (let i = 0; inOrder && i < items.length; i++) {
+    const { sec, nsec } = items[i]!.receiveTime;
+    inOrder = sec > prevSec || (sec === prevSec && nsec >= prevNsec);
+    prevSec = sec;
+    prevNsec = nsec;
+  }
+  if (inOrder) {
+    const at = points.length;
+    for (const item of items) {
+      points.pushValue(item.x ?? Number.NaN, item.value, item.originalValue, item.receiveTime);
+    }
+    return at;
+  }
   const rows = items
     .filter((item) => lastFull == undefined || compare(item.receiveTime, lastFull) > 0)
     .map(toRow);
@@ -206,12 +230,16 @@ function appendCurrent(stream: Stream, items: Immutable<ValueItem[]>): number {
 export class CustomDatasetsBuilderImpl {
   #x: Stream = newStream();
   #seriesByKey = new Map<SeriesConfigKey, Series>();
-  readonly #currentRowsBudget: number;
+  readonly #currentRowsPerStream: number;
   /** Live rows keep one message per this many seconds; 0 keeps all */
   #bucket = 0;
 
-  public constructor(currentRowsBudget = CURRENT_ROWS_BUDGET) {
-    this.#currentRowsBudget = currentRowsBudget;
+  public constructor(currentRowsPerStream = CURRENT_ROWS_PER_STREAM) {
+    this.#currentRowsPerStream = currentRowsPerStream;
+  }
+
+  #currentRowsBudget(): number {
+    return this.#currentRowsPerStream * (this.#seriesByKey.size + 1);
   }
 
   public updateData(actions: Immutable<UpdateDataAction[]>): void {
@@ -321,20 +349,22 @@ export class CustomDatasetsBuilderImpl {
     }
     const { points } = series;
     const xPoints = this.#x.points;
-    const newestX = xPoints.length > 0 ? xPoints.receiveTime(xPoints.length - 1) : undefined;
-    let groupStart = series.pairedUpTo > 0 ? messageStart(points, series.pairedUpTo + 1, 0) : 0;
-    let settled = true;
-    let xEnd = 0;
-    let xStart = 0;
+    const xLength = xPoints.length;
     const from = series.pairedUpTo;
+    let groupStart = from > 0 ? messageStart(points, from + 1, 0) : 0;
+    let settled = true;
+    // Rows and x-axis rows are both in receive order: walk them together
+    let xEnd = from > 0 ? xPoints.receiveUpperBound(points.receiveTime(from)) : 0;
+    let xStart = 0;
     for (let i = from; i < points.length; i++) {
-      const time = points.receiveTime(i);
       if (i === from || !points.sameReceive(i, i - 1)) {
         if (i > from) {
           groupStart = i;
         }
         // the x-axis message received last at or before this one
-        xEnd = xPoints.receiveUpperBound(time);
+        while (xEnd < xLength && points.compareReceive(i, xPoints, xEnd) >= 0) {
+          xEnd++;
+        }
         xStart = xEnd > 0 ? messageStart(xPoints, xEnd, 0) : 0;
       }
       let x = Number.NaN;
@@ -348,9 +378,7 @@ export class CustomDatasetsBuilderImpl {
         }
       }
       points.x[i] = x;
-      settled &&=
-        newestX != undefined &&
-        (newestX.sec > time.sec || (newestX.sec === time.sec && newestX.nsec >= time.nsec));
+      settled &&= xLength > 0 && points.compareReceive(i, xPoints, xLength - 1) <= 0;
       if (settled) {
         series.pairedUpTo = i + 1;
       }
@@ -380,7 +408,7 @@ export class CustomDatasetsBuilderImpl {
     const currentRows = () =>
       this.#streams().reduce((sum, s) => sum + s.points.length - s.fullLength, 0);
     let total = currentRows();
-    if (this.#bucket === 0 && total <= this.#currentRowsBudget) {
+    if (this.#bucket === 0 && total <= this.#currentRowsBudget()) {
       return;
     }
     for (const series of this.#seriesByKey.values()) {
@@ -394,7 +422,7 @@ export class CustomDatasetsBuilderImpl {
       this.#thin(stream, prevStart > floor ? messageStart(stream.points, prevStart, floor) : floor);
       total = currentRows();
     }
-    if (total <= this.#currentRowsBudget) {
+    if (total <= this.#currentRowsBudget()) {
       return;
     }
     // Past this bucket every stream is down to its first and newest message
@@ -405,7 +433,7 @@ export class CustomDatasetsBuilderImpl {
         maxSpan = Math.max(maxSpan, span);
       }
     }
-    while (total > this.#currentRowsBudget && this.#bucket <= maxSpan) {
+    while (total > this.#currentRowsBudget() && this.#bucket <= maxSpan) {
       if (this.#bucket === 0) {
         // Start at about half the message rate of the busiest stream
         let busiest = this.#x;

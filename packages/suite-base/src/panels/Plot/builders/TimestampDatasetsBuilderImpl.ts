@@ -62,14 +62,13 @@ type Series = {
   headInputs: number;
 };
 
-/** Bytes per row in PointColumns: x, y, receive and stamp sec (f64), receive and stamp nsec (u32) */
-const BYTES_PER_ROW = 40;
-
 /**
- * Memory budget for current (live, not preloaded) rows of all series of a plot. Past it, the
- * series with the most current rows is thinned evenly instead of dropping its oldest data.
+ * Budget for current (live, not preloaded) rows per series, shared by all series of a plot. The
+ * old fixed cap culled each series between 37.5k and 50k rows; this stays below its average, so
+ * memory and redraw cost don't grow. Past it, the series with the most current rows is thinned
+ * evenly instead of dropping its oldest data.
  */
-const CURRENT_ROWS_BUDGET = Math.floor((32 * 1024 * 1024) / BYTES_PER_ROW);
+const CURRENT_ROWS_PER_SERIES = 40_000;
 
 type ResetSeriesFullAction = {
   type: "reset-full";
@@ -343,10 +342,10 @@ function downsampleInto(
 
 export class TimestampDatasetsBuilderImpl {
   #seriesByKey = new Map<SeriesConfigKey, Series>();
-  readonly #currentRowsBudget: number;
+  readonly #currentRowsPerSeries: number;
 
-  public constructor(currentRowsBudget = CURRENT_ROWS_BUDGET) {
-    this.#currentRowsBudget = currentRowsBudget;
+  public constructor(currentRowsPerSeries = CURRENT_ROWS_PER_SERIES) {
+    this.#currentRowsPerSeries = currentRowsPerSeries;
   }
   /** Bumped on every data or series change; keys the analysis cache */
   #dataVersion = 0;
@@ -644,7 +643,8 @@ export class TimestampDatasetsBuilderImpl {
       total += series.points.length - series.fullLength;
     }
     let thinned = false;
-    while (total > this.#currentRowsBudget) {
+    const budget = this.#currentRowsPerSeries * this.#seriesByKey.size;
+    while (total > budget) {
       let largest: Series | undefined;
       for (const series of this.#seriesByKey.values()) {
         const rows = series.points.length - series.fullLength;

@@ -12,7 +12,7 @@ export type DataItem = Datum & {
 };
 
 /**
- * Growable columnar point storage. A point costs ~36 bytes here instead of a ~200 byte object
+ * Growable columnar point storage. A point costs 28 bytes (40 with a header stamp) instead of a ~200 byte object
  * graph (datum + receive time + header stamp objects). The original value is only kept when it is
  * not simply `y` (strings, bigints, times...).
  */
@@ -23,8 +23,9 @@ export class PointColumns {
   #receiveSec = new Float64Array(0);
   #receiveNsec = new Uint32Array(0);
   /** NaN when the point has no header stamp */
-  #stampSec = new Float64Array(0);
-  #stampNsec = new Uint32Array(0);
+  /** Allocated on the first header stamp; until then no row has one */
+  #stampSec: Float64Array | undefined;
+  #stampNsec: Uint32Array | undefined;
   /** undefined entries mean "value is y" (or null for a NaN y) */
   #values: (OriginalValue | undefined)[] | undefined;
 
@@ -46,6 +47,12 @@ export class PointColumns {
   /** Receive time in seconds; loses sub-microsecond precision, for bucketing only */
   public receiveSeconds(i: number): number {
     return this.#receiveSec[i]! + this.#receiveNsec[i]! / 1e9;
+  }
+
+  /** Sign of (receive time of row `i`) - (receive time of row `j` of `other`) */
+  public compareReceive(i: number, other: PointColumns, j: number): number {
+    const sec = this.#receiveSec[i]! - other.#receiveSec[j]!;
+    return sec !== 0 ? sec : this.#receiveNsec[i]! - other.#receiveNsec[j]!;
   }
 
   /** Whether rows `i` and `j` were received at the same time, i.e. come from the same message */
@@ -119,8 +126,8 @@ export class PointColumns {
   }
 
   public headerStamp(i: number): Time | undefined {
-    const sec = this.#stampSec[i]!;
-    return Number.isNaN(sec) ? undefined : { sec, nsec: this.#stampNsec[i]! };
+    const sec = this.#stampSec?.[i];
+    return sec == undefined || Number.isNaN(sec) ? undefined : { sec, nsec: this.#stampNsec![i]! };
   }
 
   public push(item: Immutable<DataItem>): void {
@@ -128,17 +135,38 @@ export class PointColumns {
     this.set(this.length++, item);
   }
 
+  /** Append a row without a header stamp, from plain values (no item object needed) */
+  public pushValue(x: number, y: number, value: OriginalValue, receiveTime: Immutable<Time>): void {
+    this.#reserve(this.length + 1);
+    this.#write(this.length++, x, y, value, receiveTime, undefined);
+  }
+
   /** Overwrite row `i` */
   public set(i: number, item: Immutable<DataItem>): void {
-    this.x[i] = item.x;
-    this.y[i] = item.y;
-    this.#receiveSec[i] = item.receiveTime.sec;
-    this.#receiveNsec[i] = item.receiveTime.nsec;
-    this.#stampSec[i] = item.headerStamp?.sec ?? Number.NaN;
-    this.#stampNsec[i] = item.headerStamp?.nsec ?? 0;
-    const value = item.value;
+    this.#write(i, item.x, item.y, item.value, item.receiveTime, item.headerStamp);
+  }
+
+  #write(
+    i: number,
+    x: number,
+    y: number,
+    value: OriginalValue,
+    receiveTime: Immutable<Time>,
+    headerStamp: Immutable<Time> | undefined,
+  ): void {
+    this.x[i] = x;
+    this.y[i] = y;
+    this.#receiveSec[i] = receiveTime.sec;
+    this.#receiveNsec[i] = receiveTime.nsec;
+    if (headerStamp) {
+      this.#ensureStamps();
+    }
+    if (this.#stampSec) {
+      this.#stampSec[i] = headerStamp?.sec ?? Number.NaN;
+      this.#stampNsec![i] = headerStamp?.nsec ?? 0;
+    }
     // eslint-disable-next-line @lichtblick/strict-equality
-    const derivable = value === item.y || (value === null && Number.isNaN(item.y));
+    const derivable = value === y || (value === null && Number.isNaN(y));
     if (!derivable) {
       this.#values ??= [];
       this.#values[i] = value;
@@ -180,8 +208,10 @@ export class PointColumns {
     this.y[to] = this.y[from]!;
     this.#receiveSec[to] = this.#receiveSec[from]!;
     this.#receiveNsec[to] = this.#receiveNsec[from]!;
-    this.#stampSec[to] = this.#stampSec[from]!;
-    this.#stampNsec[to] = this.#stampNsec[from]!;
+    if (this.#stampSec) {
+      this.#stampSec[to] = this.#stampSec[from]!;
+      this.#stampNsec![to] = this.#stampNsec![from]!;
+    }
     if (this.#values) {
       this.#values[to] = this.#values[from];
     }
@@ -234,8 +264,13 @@ export class PointColumns {
     this.y[j] = src.y[i]!;
     this.#receiveSec[j] = src.#receiveSec[i]!;
     this.#receiveNsec[j] = src.#receiveNsec[i]!;
-    this.#stampSec[j] = src.#stampSec[i]!;
-    this.#stampNsec[j] = src.#stampNsec[i]!;
+    if (src.#stampSec) {
+      this.#ensureStamps();
+    }
+    if (this.#stampSec) {
+      this.#stampSec[j] = src.#stampSec?.[i] ?? Number.NaN;
+      this.#stampNsec![j] = src.#stampNsec?.[i] ?? 0;
+    }
     if (src.#values || this.#values) {
       this.#values ??= [];
       this.#values[j] = src.#values?.[i];
@@ -249,14 +284,22 @@ export class PointColumns {
     out.y = this.y.slice(start, this.length);
     out.#receiveSec = this.#receiveSec.slice(start, this.length);
     out.#receiveNsec = this.#receiveNsec.slice(start, this.length);
-    out.#stampSec = this.#stampSec.slice(start, this.length);
-    out.#stampNsec = this.#stampNsec.slice(start, this.length);
+    out.#stampSec = this.#stampSec?.slice(start, this.length);
+    out.#stampNsec = this.#stampNsec?.slice(start, this.length);
     out.#values = this.#values?.slice(start, this.length);
     return out;
   }
 
   #columns(): (Float64Array | Uint32Array)[] {
-    return [this.x, this.y, this.#receiveSec, this.#receiveNsec, this.#stampSec, this.#stampNsec];
+    const columns = [this.x, this.y, this.#receiveSec, this.#receiveNsec];
+    return this.#stampSec ? [...columns, this.#stampSec, this.#stampNsec!] : columns;
+  }
+
+  #ensureStamps(): void {
+    if (!this.#stampSec) {
+      this.#stampSec = new Float64Array(this.x.length).fill(Number.NaN);
+      this.#stampNsec = new Uint32Array(this.x.length);
+    }
   }
 
   #reserve(size: number): void {
@@ -275,8 +318,10 @@ export class PointColumns {
     this.y = grow(this.y, f64);
     this.#receiveSec = grow(this.#receiveSec, f64);
     this.#receiveNsec = grow(this.#receiveNsec, u32);
-    this.#stampSec = grow(this.#stampSec, f64);
-    this.#stampNsec = grow(this.#stampNsec, u32);
+    if (this.#stampSec) {
+      this.#stampSec = grow(this.#stampSec, f64);
+      this.#stampNsec = grow(this.#stampNsec!, u32);
+    }
   }
 }
 

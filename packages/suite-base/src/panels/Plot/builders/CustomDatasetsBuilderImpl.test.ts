@@ -119,8 +119,8 @@ describe("CustomDatasetsBuilderImpl", () => {
   });
 
   it("keeps the pair of a retained y value when thinning drops its x message", () => {
-    // GIVEN x and y on different topics and a budget of 4 rows
-    const builder = build({}, 4);
+    // GIVEN x and y on different topics and a budget of 4 rows (2 per stream)
+    const builder = build({}, 2);
     builder.updateData([
       { type: "append-current-x", items: values([0, 1, 2, 3], (t) => t) },
       { type: "append-current", series: key, items: values([1.5], (t) => t) },
@@ -186,8 +186,8 @@ describe("CustomDatasetsBuilderImpl", () => {
   });
 
   it("thins live data evenly under the budget and keeps x and y of a message together", () => {
-    // GIVEN x and y from the same topic and a budget of 1000 rows
-    const builder = build({}, 1000);
+    // GIVEN x and y from the same topic and a budget of 1000 rows (500 per stream)
+    const builder = build({}, 500);
     for (let start = 0; start < 20_000; start += 100) {
       const times = Array.from({ length: 100 }, (_, i) => (start + i) / 100);
       builder.updateData([

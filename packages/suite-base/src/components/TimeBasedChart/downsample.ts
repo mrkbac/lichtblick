@@ -386,26 +386,28 @@ export function downsamplePathColumns(
   const xMax = Math.max(bounds.x.min, bounds.x.max);
   const yMin = Math.min(bounds.y.min, bounds.y.max);
   const yMax = Math.max(bounds.y.min, bounds.y.max);
-  // Which edges a row is beyond: 1 left, 2 right, 4 below, 8 above; NaN rows are gaps (-1)
-  const outcode = (i: number): number => {
+  // Which edges each row is beyond: 1 left, 2 right, 4 below, 8 above; NaN rows are gaps (-1).
+  // Computed once and shared by the passes below.
+  const codes = new Int8Array(Math.max(0, end - start));
+  for (let i = start; i < end; i++) {
     const x = xs[i]!;
     const y = ys[i]!;
-    if (Number.isNaN(x) || Number.isNaN(y)) {
-      return -1;
-    }
-    return (x < xMin ? 1 : 0) | (x > xMax ? 2 : 0) | (y < yMin ? 4 : 0) | (y > yMax ? 8 : 0);
-  };
+    codes[i - start] =
+      Number.isNaN(x) || Number.isNaN(y)
+        ? -1
+        : (x < xMin ? 1 : 0) | (x > xMax ? 2 : 0) | (y < yMin ? 4 : 0) | (y > yMax ? 8 : 0);
+  }
 
-  for (let distance = 1; ; distance *= 2) {
+  for (let distance = 1; ; ) {
     const indices: number[] = [];
     let lastPx = Number.NaN;
     let lastPy = Number.NaN;
     // edges shared by every row since the last kept one
     let mask = 0;
     let prevCode = -1;
-    let code = start < end ? outcode(start) : 0;
     for (let i = start; i < end; i++) {
-      const nextCode = i + 1 < end ? outcode(i + 1) : -1;
+      const code = codes[i - start]!;
+      const nextCode = i + 1 < end ? codes[i + 1 - start]! : -1;
       let keep = code === -1 || i === start || i === end - 1 || nextCode === -1;
       if (!keep && code !== 0) {
         const shared = mask & code & nextCode;
@@ -427,7 +429,6 @@ export function downsamplePathColumns(
         lastPy = ys[i]! * pixelPerY;
       }
       prevCode = code;
-      code = nextCode;
     }
     if (indices.length <= maxPoints) {
       return indices;
@@ -444,5 +445,7 @@ export function downsamplePathColumns(
           Number.isNaN(ys[index]!),
       );
     }
+    // A line keeps about one row per `distance` pixels of its length: jump close to the cap
+    distance *= Math.max(2, (1.2 * indices.length) / maxPoints);
   }
 }
