@@ -117,10 +117,12 @@ const useStyles = makeStyles<void, "plotName" | "actionButton">()((theme, _param
     justifySelf: "stretch",
     height: ROW_HEIGHT,
     padding: theme.spacing(0.25, 1, 0.25, 0.25),
-    whiteSpace: "pre-wrap",
-    // Fixed-width digits and a reserved width keep the legend from resizing as values change.
+    // Fixed-width digits and a fixed column width keep the legend from resizing as values change
+    // (e.g. between whole and fractional values); longer values are clipped with the full value in
+    // the title.
     fontVariantNumeric: "tabular-nums",
-    minWidth: "12ch",
+    width: "16ch",
+    minWidth: 0,
     justifyContent: "flex-end",
   },
   errorIcon: {
@@ -279,6 +281,8 @@ export function PlotLegendRow({
           <Typography
             variant="body2"
             align="right"
+            noWrap
+            title={String(renderValue(value) ?? "")}
             color={valueSource === "hover" ? "warning" : "textSecondary"}
           >
             {renderValue(value)}
