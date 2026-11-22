@@ -5,15 +5,25 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { Fragment, ReactNode, useCallback } from "react";
+import * as _ from "lodash-es";
+import { Fragment, ReactNode, useCallback, useRef } from "react";
 
+import {
+  LayoutState,
+  useCurrentLayoutSelector,
+} from "@lichtblick/suite-base/context/CurrentLayoutContext";
 import {
   PanelStateStore,
   usePanelStateStore,
 } from "@lichtblick/suite-base/context/PanelStateContext";
 
+const selectSelectedLayout = (state: LayoutState) => state.selectedLayout;
+
 /**
- * Wrapper component used to force-remount the panel when its settings sequence number changes.
+ * Wrapper component used to force-remount the panel when its settings sequence number changes,
+ * or when its config was replaced by something other than the panel itself (undo, redo, loading
+ * another layout). Many panels read their config only on mount, so they'd keep showing the old
+ * config and write it back on their next save.
  */
 export function PanelRemounter({
   children,
@@ -25,5 +35,16 @@ export function PanelRemounter({
   const selector = useCallback((store: PanelStateStore) => store.sequenceNumbers[id] ?? 0, [id]);
   const sequenceNumber = usePanelStateStore(selector);
 
-  return <Fragment key={`${id}${sequenceNumber}`}>{children}</Fragment>;
+  const selectedLayout = useCurrentLayoutSelector(selectSelectedLayout);
+  const config = selectedLayout?.data?.configById[id];
+  const seen = useRef({ config, remounts: 0 });
+  if (config !== seen.current.config) {
+    // Deep compare: a layout load hands every panel new objects, often with the same content.
+    if (selectedLayout?.externalEdit === true && !_.isEqual(config, seen.current.config)) {
+      seen.current.remounts++;
+    }
+    seen.current.config = config;
+  }
+
+  return <Fragment key={`${id}${sequenceNumber}:${seen.current.remounts}`}>{children}</Fragment>;
 }
