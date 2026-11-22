@@ -484,7 +484,11 @@ export class CustomDatasetsBuilderImpl {
     }
     const series = stream as Series;
     const before = series.points.length;
-    series.pairedUpTo = series.points.thinByTime(start, this.#bucket, series.pairedUpTo);
+    // x is the paired or own x value: a missing one breaks the line like a missing y
+    series.pairedUpTo = series.points.thinByTime(start, this.#bucket, {
+      mark: series.pairedUpTo,
+      gapsInX: true,
+    });
     if (series.points.length < before) {
       // rows moved: a mismatch in the thinned range stays reported at its start
       const { mismatchRows } = series;

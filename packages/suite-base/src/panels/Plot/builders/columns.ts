@@ -95,11 +95,15 @@ export class PointColumns {
   /**
    * Thin rows [start, length), which must be in receive order, to one message per `bucket` seconds
    * of receive time: a message stays if it is the first in its bucket, and the newest message
-   * always stays. A run of messages with gaps (NaN) is kept as one message between kept ones. The decision only depends on receive times, so streams read from the same
-   * messages keep the same messages. Returns where row `mark` moved to (the number of kept rows
-   * before it).
+   * always stays. Of the dropped messages between two kept ones, the first with a gap (NaN in y,
+   * or in x with `gapsInX`) stays too, so the line still breaks there. Messages are kept or
+   * dropped whole. Returns where row `mark` moved to (the number of kept rows before it).
    */
-  public thinByTime(start: number, bucket: number, mark = this.length): number {
+  public thinByTime(
+    start: number,
+    bucket: number,
+    { mark = this.length, gapsInX = false }: { mark?: number; gapsInX?: boolean } = {},
+  ): number {
     const end = this.length;
     let write = start;
     let movedMark = Math.min(mark, start);
@@ -112,7 +116,8 @@ export class PointColumns {
       }
     };
     let lastBucket = Number.NaN;
-    // A run of messages with gaps (NaN) becomes its first one, kept only between kept messages
+    // The first dropped message with a gap (NaN) since the last kept one. It is kept before the
+    // next kept message, so lines still break where the data does.
     let gapStart = -1;
     let gapEnd = -1;
     for (let read = start; read < end; ) {
@@ -121,27 +126,24 @@ export class PointColumns {
         groupEnd++;
       }
       const b = Math.floor(this.receiveSeconds(read) / bucket);
-      let gap = false;
-      for (let i = read; i < groupEnd && !gap; i++) {
-        gap = Number.isNaN(this.y[i]!);
-      }
-      if (gap) {
-        if (gapStart < 0) {
-          gapStart = read;
-          gapEnd = groupEnd;
-        }
-      } else if (b !== lastBucket || groupEnd === end) {
+      if (b !== lastBucket || groupEnd === end) {
+        // kept whole, its gaps and values alike
         if (gapStart >= 0 && write > start) {
           moveMessage(gapStart, gapEnd);
         }
         gapStart = -1;
         moveMessage(read, groupEnd);
+      } else if (gapStart < 0) {
+        for (let i = read; i < groupEnd; i++) {
+          if (Number.isNaN(this.y[i]!) || (gapsInX && Number.isNaN(this.x[i]!))) {
+            gapStart = read;
+            gapEnd = groupEnd;
+            break;
+          }
+        }
       }
       lastBucket = b;
       read = groupEnd;
-    }
-    if (gapStart >= 0 && write > start) {
-      moveMessage(gapStart, gapEnd);
     }
     this.truncate(write);
     return movedMark;
@@ -199,7 +201,7 @@ export class PointColumns {
 
   /**
    * Halve rows [start, length) by dropping every other value row; the first and the last value
-   * row stay, and each run of gaps (NaN in y or in an `extra` column) between kept rows stays as
+   * row stay, and each run of gaps (NaN in x, y or an `extra` column) between kept rows stays as
    * one gap row. Rows of `extra` columns move the same way. Returns
    * the number of rows removed.
    */
@@ -209,7 +211,9 @@ export class PointColumns {
       return 0;
     }
     const isGap = (row: number) =>
-      Number.isNaN(this.y[row]!) || extra.some((column) => Number.isNaN(column[row]!));
+      Number.isNaN(this.x[row]!) ||
+      Number.isNaN(this.y[row]!) ||
+      extra.some((column) => Number.isNaN(column[row]!));
     let lastFinite = end - 1;
     while (lastFinite >= start && isGap(lastFinite)) {
       lastFinite--;

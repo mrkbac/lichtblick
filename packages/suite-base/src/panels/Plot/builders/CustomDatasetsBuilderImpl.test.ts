@@ -195,6 +195,21 @@ describe("CustomDatasetsBuilderImpl", () => {
     expect(ys.some(Number.isNaN)).toBe(true);
   });
 
+  it("keeps a missing x as a gap when thinning live data", () => {
+    // GIVEN a series with its own x path and a message whose x is missing
+    const builder = build({ xParsed: unwrap(parseMessagePath("/b.x")) }, 2);
+    const xs = [0, NaN, 2, 3, 4];
+    builder.updateData([
+      {
+        type: "append-current",
+        series: key,
+        items: xs.map((x, t) => ({ ...values([t], () => t + 1)[0]!, x })),
+      },
+    ]);
+    // THEN the row without x is still there, so the line breaks
+    expect(builder.getCsvData()[0]!.data.some((datum) => Number.isNaN(datum.x))).toBe(true);
+  });
+
   it("keeps gaps when thinning live data", () => {
     // GIVEN a series with its own x path, a budget of 2 rows per stream and a gap at t=1
     const builder = build({ xParsed: unwrap(parseMessagePath("/b.x")) }, 2);
