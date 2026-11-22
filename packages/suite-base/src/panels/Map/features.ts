@@ -302,6 +302,9 @@ export type DrawnTrack = {
   runs: readonly number[];
   /** `store.version` when `indices` were chosen; they are stale once it changes. */
   version: number;
+  /** `store.length` and `store.tailReplacements` then: rows past or replaced since aren't drawn. */
+  length: number;
+  tailReplacements: number;
   color: string;
   style: TopicStyle;
   /** Per-fix values (NaN where unknown) and their color scale, when colored by a value. */
@@ -321,7 +324,12 @@ export function trackFeatures(
 } {
   const points: Feature[] = [];
   const lines: Feature[] = [];
-  tracks.forEach(({ store, indices, runs, color, style, colorScale }, k) => {
+  tracks.forEach(({ store, version, indices, runs, color, style, colorScale }, k) => {
+    // Rows moved (cleared or thinned) since `indices` were chosen: skip it until the next redraw,
+    // which the change schedules, rather than draw the wrong fixes.
+    if (store.version !== version) {
+      return;
+    }
     const history = style.history ?? "points";
     const base = lightColor(color);
     const colorAt = (i: number) => {
@@ -505,13 +513,17 @@ export function resolveTrackFix(
     !track ||
     typeof i !== "number" ||
     track.store.version !== track.version ||
-    i >= track.store.length
+    i >= track.length
   ) {
     return undefined;
   }
+  // The newest drawn row may have been replaced in place by a later fix since.
+  const usable =
+    track.store.tailReplacements === track.tailReplacements ? track.length : track.length - 1;
   const position = lastIndexAtOrBefore(track.indices, track.indices.length, i);
   if (track.indices[position] !== i) {
     return undefined;
   }
-  return { track, fix: nearestFix(track.store, track.indices, position, at) };
+  const fix = nearestFix(track.store, track.indices, position, at, usable);
+  return fix < usable ? { track, fix } : undefined;
 }

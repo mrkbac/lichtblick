@@ -1123,13 +1123,14 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
     if (!thinView) {
       return [];
     }
-    const budget = TRACK_POINT_BUDGET / Math.max(1, visibleTracks.length);
-    return filterMap(visibleTracks, (store) => {
+    // Hidden histories take no share of the budget.
+    const drawn = visibleTracks.filter(
+      (store) => (config.topicStyles[store.topic]?.history ?? "points") !== "none",
+    );
+    const budget = TRACK_POINT_BUDGET / Math.max(1, drawn.length);
+    return drawn.map((store) => {
       const style = config.topicStyles[store.topic] ?? {};
       const history = style.history ?? "points";
-      if (history === "none") {
-        return undefined;
-      }
       // Points overlap heavily at half their radius apart; lines only need a pixel.
       const minPixels =
         history === "line" ? 1 : Math.max(1, (style.pointSize ?? DEFAULT_POINT_SIZE) / 2);
@@ -1137,6 +1138,8 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
         store,
         style,
         version: store.version,
+        length: store.length,
+        tailReplacements: store.tailReplacements,
         ...thinTrack(store, { ...thinView, minPixels, budget }),
       };
     });
@@ -1368,7 +1371,8 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
         const value = colored?.values[fix];
         return {
           kind: "nav",
-          id: `${generation as number}\0${track.store.topic}\0${fix}`,
+          // The fix, not the overlay: the popup and preview time stay put across redraws.
+          id: `${track.store.topic}\0${track.version}\0${fix}`,
           message: track.store.message(fix),
           value:
             colored && value != undefined && isFinite(value)

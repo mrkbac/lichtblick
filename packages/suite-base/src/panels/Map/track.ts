@@ -25,6 +25,8 @@ export class ColumnStore<K extends string> {
   public length = 0;
   /** Changes when existing rows move or go away (clear, thinning); appending keeps it. */
   public version = 0;
+  /** Counts in-place replacements of the newest row (while thinned), which keep `version`. */
+  public tailReplacements = 0;
   public readonly columns: Record<K, ColumnArray>;
   readonly #keys: K[];
   #stride = 1;
@@ -62,6 +64,7 @@ export class ColumnStore<K extends string> {
     const replaceTail = this.#tailIsExtra;
     this.#tailIsExtra = !keep;
     if (replaceTail) {
+      this.tailReplacements++;
       return this.length - 1;
     }
     if (this.length === this.columns[this.#keys[0]!].length) {
@@ -345,15 +348,24 @@ function sampleEvenly(
   return { indices: sampled, runs: sampledRuns };
 }
 
-/** The fix between the kept neighbors of `kept[k]` that is closest to `at`, at full resolution. */
-export function nearestFix(store: TrackStore, kept: Uint32Array, k: number, at: LngLat): number {
+/**
+ * The fix between the kept neighbors of `kept[k]` that is closest to `at`, at full resolution,
+ * among the first `length` rows.
+ */
+export function nearestFix(
+  store: TrackStore,
+  kept: Uint32Array,
+  k: number,
+  at: LngLat,
+  length = store.length,
+): number {
   // Capped: across a part outside the viewport the neighbors can be far apart, and far away.
   const from = Math.max(kept[k]! - 10_000, k > 0 ? kept[k - 1]! + 1 : 0);
   // `kept` may be from before the store last changed: stay inside it.
   const to = Math.min(
     kept[k]! + 10_000,
     k + 1 < kept.length ? kept[k + 1]! - 1 : Infinity,
-    store.length - 1,
+    Math.min(length, store.length) - 1,
   );
   const x = mercatorX(at[0]);
   const y = mercatorY(at[1]);

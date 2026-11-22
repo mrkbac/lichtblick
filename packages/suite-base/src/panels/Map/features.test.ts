@@ -32,7 +32,14 @@ describe("trackFeatures", () => {
     [3, 0],
     [4, 0],
   ]);
-  const base = { store, version: 0, color: "#ff0000", indices: Uint32Array.of(0, 1, 2, 3, 4) };
+  const base = {
+    store,
+    version: 0,
+    length: 5,
+    tailReplacements: 0,
+    color: "#ff0000",
+    indices: Uint32Array.of(0, 1, 2, 3, 4),
+  };
 
   it("draws one line per run and points that index into the store", () => {
     const { points, lines } = trackFeatures([
@@ -94,10 +101,36 @@ describe("trackFeatures", () => {
   });
 });
 
+describe("trackFeatures with a store changed after thinning", () => {
+  it("skips the track instead of drawing other fixes", () => {
+    const store = storeOf([
+      [0, 0],
+      [1, 0],
+    ]);
+    const track: DrawnTrack = {
+      store,
+      version: store.version,
+      length: 2,
+      tailReplacements: 0,
+      indices: Uint32Array.of(0, 1),
+      runs: [0],
+      color: "#ff0000",
+      style: { history: "both" },
+    };
+    expect(trackFeatures([track]).points.features).toHaveLength(2);
+    store.clear();
+    const { points, lines } = trackFeatures([track]);
+    expect(points.features).toHaveLength(0);
+    expect(lines.features).toHaveLength(0);
+  });
+});
+
 describe("resolveTrackFix", () => {
   const drawn = (store: TrackStore): DrawnTrack => ({
     store,
     version: store.version,
+    length: store.length,
+    tailReplacements: store.tailReplacements,
     indices: Uint32Array.of(0, 2, 4),
     runs: [0],
     color: "#ff0000",
@@ -124,6 +157,39 @@ describe("resolveTrackFix", () => {
     expect(resolveTrackFix(tracks, "0", 2, [2, 0])).toBeUndefined();
     // Not a drawn index.
     expect(resolveTrackFix(tracks, 0, 3, [3, 0])).toBeUndefined();
+  });
+
+  it("rejects rows appended after the overlay was built", () => {
+    const store = storeOf(points);
+    const tracks = [{ ...drawn(store), length: 3, indices: Uint32Array.of(0, 2) }];
+    expect(resolveTrackFix(tracks, 0, 2, [4, 0])?.fix).toBe(2);
+    expect(resolveTrackFix([{ ...tracks[0]!, indices: Uint32Array.of(0, 4) }], 0, 4, [4, 0])).toBe(
+      undefined,
+    );
+  });
+
+  it("rejects the newest drawn row once a later fix replaced it", () => {
+    // A limit of 4 thins the store: from then on the newest row is replaced until the next kept one.
+    const store = new TrackStore("/fix", 4);
+    const push = (sec: number) => {
+      store.push({
+        topic: "/fix",
+        schemaName: "sensor_msgs/NavSatFix",
+        receiveTime: { sec, nsec: 0 },
+        sizeInBytes: 0,
+        message: { longitude: sec, latitude: 0 },
+      });
+    };
+    for (let sec = 0; sec < 5; sec++) {
+      push(sec);
+    }
+    const track = { ...drawn(store), indices: Uint32Array.from([...Array(store.length).keys()]) };
+    const last = store.length - 1;
+    expect(resolveTrackFix([track], 0, last, [99, 0])?.fix).toBe(last);
+    push(5);
+    push(6);
+    expect(store.tailReplacements).toBeGreaterThan(track.tailReplacements);
+    expect(resolveTrackFix([track], 0, last, [99, 0])).toBeUndefined();
   });
 
   it("rejects features once the store was cleared or thinned since", () => {
