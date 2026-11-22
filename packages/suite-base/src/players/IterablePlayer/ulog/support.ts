@@ -6,11 +6,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { MessageDefinition, MessageDefinitionField } from "@foxglove/message-definition";
-import { MessageDefinition as ULogMessageDefinition, ULog, LogLevel } from "@foxglove/ulog";
-
-export function messageIdToTopic(msgId: number, ulog: ULog): string | undefined {
-  return ulog.subscriptions.get(msgId)?.name;
-}
+import { MessageDefinition as ULogMessageDefinition, LogLevel } from "@foxglove/ulog";
 
 export function messageDefinitionToRos(msgDef: ULogMessageDefinition): MessageDefinition {
   const definitions: MessageDefinitionField[] = [];

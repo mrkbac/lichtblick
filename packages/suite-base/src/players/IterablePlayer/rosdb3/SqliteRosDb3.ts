@@ -5,10 +5,17 @@ import type { MessageReadOptions, RawMessage, SqliteDb, TopicDefinition } from "
 import { fromNanoSec, toNanoSec } from "@foxglove/rostime";
 import type { Time } from "@foxglove/rostime";
 import type { BindableValue } from "@sqlite.org/sqlite-wasm";
+import { parse } from "yaml";
 
 import { openSqliteFile } from "./SqliteFile";
 
 type RowCursor = { timestamp: bigint; id?: bigint };
+
+function asRecord(value: unknown): Record<string, unknown> | undefined {
+  return typeof value === "object" && value != undefined && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : undefined;
+}
 
 export class SqliteRosDb3 implements SqliteDb {
   readonly #file: File;
@@ -113,6 +120,76 @@ export class SqliteRosDb3 implements SqliteDb {
       "SELECT (SELECT min(timestamp) FROM messages), (SELECT max(timestamp) FROM messages)",
     ) as [bigint | number | null, bigint | number | null];
     return [fromNanoSec(BigInt(min ?? 0)), fromNanoSec(BigInt(max ?? 0))];
+  }
+
+  /** Accept per-file metadata only for single-file bags with matching message bounds. */
+  public async embeddedMessageCounts(): Promise<Map<string, number> | undefined> {
+    const { db } = this.#opened();
+    let metadata: Record<string, unknown> | undefined;
+    let firstId: string | undefined;
+    let lastId: string | undefined;
+    try {
+      // Consecutive IDs catch stale append counts even when the recording time bounds did not move.
+      const [text, first, last] =
+        db.selectArray(
+          `SELECT metadata, CAST((SELECT min(id) FROM messages) AS TEXT),
+           CAST((SELECT max(id) FROM messages) AS TEXT)
+         FROM metadata ORDER BY id DESC LIMIT 1`,
+        ) ?? [];
+      if (typeof text !== "string") {
+        return undefined;
+      }
+      firstId = typeof first === "string" ? first : undefined;
+      lastId = typeof last === "string" ? last : undefined;
+      metadata = asRecord(parse(text, { intAsBigInt: true }));
+    } catch {
+      // Older recordings have no metadata table. Invalid metadata also needs a scan.
+      return undefined;
+    }
+    const paths = metadata?.relative_file_paths;
+    const entries = metadata?.topics_with_message_count;
+    const expected = metadata?.message_count;
+    if (
+      metadata?.storage_identifier !== "sqlite3" ||
+      !Array.isArray(paths) ||
+      paths.length !== 1 ||
+      typeof paths[0] !== "string" ||
+      !Array.isArray(entries) ||
+      typeof expected !== "bigint" ||
+      expected <= 0n ||
+      expected > BigInt(Number.MAX_SAFE_INTEGER) ||
+      firstId !== "1" ||
+      lastId !== expected.toString()
+    ) {
+      return undefined;
+    }
+    const [start, end] = await this.timeRange();
+    if (
+      asRecord(metadata.starting_time)?.nanoseconds_since_epoch !== toNanoSec(start) ||
+      asRecord(metadata.duration)?.nanoseconds !== toNanoSec(end) - toNanoSec(start)
+    ) {
+      return undefined;
+    }
+    const counts = new Map<string, number>();
+    let total = 0n;
+    for (const entry of entries as unknown[]) {
+      const item = asRecord(entry);
+      const name = asRecord(item?.topic_metadata)?.name;
+      const count = item?.message_count;
+      if (
+        typeof name !== "string" ||
+        !this.#topicIds.has(name) ||
+        counts.has(name) ||
+        typeof count !== "bigint" ||
+        count < 0n ||
+        count > expected
+      ) {
+        return undefined;
+      }
+      counts.set(name, Number(count));
+      total += count;
+    }
+    return total === expected ? counts : undefined;
   }
 
   public async messageCounts(): Promise<Map<string, number>> {

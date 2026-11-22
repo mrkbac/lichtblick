@@ -42,16 +42,16 @@ function addLogged(msgId: number, name: string): Uint8Array<ArrayBuffer> {
 }
 
 /** Topics "a" and "b"; "b" was written out of time order */
-function makeUlog(base = 0): File {
+function makeUlog(base = 0, topicA = "a", topicB = "b"): File {
   const header = new Uint8Array(16);
   header.set([0x55, 0x4c, 0x6f, 0x67, 0x01, 0x12, 0x35, 1]);
   const parts = [
     header,
     record("B", new Uint8Array(40)),
-    record("F", text("a:uint64_t timestamp;float x;")),
-    record("F", text("b:uint64_t timestamp;float x;")),
-    addLogged(0, "a"),
-    addLogged(1, "b"),
+    record("F", text(`${topicA}:uint64_t timestamp;float x;`)),
+    record("F", text(`${topicB}:uint64_t timestamp;float x;`)),
+    addLogged(0, topicA),
+    addLogged(1, topicB),
     data(0, base + 1_000_000, 1),
     data(1, base + 3_000_000, 30),
     data(1, base + 2_000_000, 20),
@@ -74,6 +74,34 @@ async function read(source: UlogIterableSource, topics: string[]) {
 }
 
 describe("UlogIterableSource", () => {
+  it("keeps the synthetic log and same-named data topics separate", async () => {
+    const source = new UlogIterableSource({ type: "file", file: makeUlog(0, "Log", "Log_2") });
+    const { topics, topicStats } = await source.initialize();
+    expect(topics).toEqual([
+      { name: "Log_3", schemaName: "rosgraph_msgs/Log" },
+      { name: "Log", schemaName: "Log" },
+      { name: "Log_2", schemaName: "Log_2" },
+    ]);
+    expect(topicStats.get("Log")).toEqual({ numMessages: 2 });
+    expect(topicStats.get("Log_3")).toEqual({ numMessages: 1 });
+    expect(await read(source, ["Log"])).toEqual([
+      ["Log", 1],
+      ["Log", 4],
+    ]);
+    expect(await read(source, ["Log_3"])).toEqual([["Log_3", 2]]);
+    const messages = await source.getBackfillMessages({
+      topics: new Map([
+        ["Log", { topic: "Log" }],
+        ["Log_3", { topic: "Log_3" }],
+      ]),
+      time: { sec: 4, nsec: 0 },
+    });
+    expect(messages.map((m) => [m.topic, m.receiveTime.sec])).toEqual([
+      ["Log_3", 2],
+      ["Log", 4],
+    ]);
+  });
+
   it("reads messages in time order, only for the requested topics", async () => {
     const source = new UlogIterableSource({ type: "file", file: makeUlog() });
     const init = await source.initialize();

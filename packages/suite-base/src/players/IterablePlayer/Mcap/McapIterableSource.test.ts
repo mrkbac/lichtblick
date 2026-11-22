@@ -281,6 +281,64 @@ describe("McapIterableSource", () => {
     );
   });
 
+  it("reports conflicting definitions when an indexed read recovers during playback", async () => {
+    const buffer = new TempBuffer();
+    const writer = new McapWriter({ writable: buffer, chunkSize: 1 });
+    await writer.start({ library: "test", profile: "" });
+    const schema = {
+      name: "first",
+      encoding: "jsonschema",
+      data: new TextEncoder().encode('{"type":"object"}'),
+    };
+    const schemaId = await writer.registerSchema(schema);
+    const topic = "/first";
+    const channel = { schemaId, topic, messageEncoding: "json", metadata: new Map() };
+    const channelId = await writer.registerChannel(channel);
+    await addMessage(writer, channelId, { data: new TextEncoder().encode("{}") });
+
+    // The summary describes the first definitions. Only a forward scan sees these redefinitions.
+    const conflicting = new McapRecordBuilder();
+    conflicting.writeSchema({ ...schema, id: schemaId, name: "second" });
+    conflicting.writeChannel({ ...channel, id: channelId, topic: "/second" });
+    await buffer.write(conflicting.buffer);
+    await writer.end();
+
+    const initializeReader = vi.spyOn(McapIndexedReader, "Initialize");
+    const source = new McapIterableSource({
+      type: "file",
+      file: new Blob([buffer.get().slice()]) as unknown as globalThis.Blob,
+    });
+    const init = await source.initialize();
+    expect(init.recordingFiles?.[0]?.footerIndexed).toBe(true);
+    expect(init.alerts).toEqual([]);
+
+    const reader = await initializeReader.mock.results[0]!.value;
+    const readMessages = reader.readMessages.bind(reader);
+    vi.spyOn(reader, "readMessages").mockImplementation(async function* (args) {
+      for await (const message of readMessages(args)) {
+        yield message;
+        throw new Error("read failed");
+      }
+    });
+    const topics = new Map([[topic, PlayerBuilder.subscribePayload({ topic })]]);
+    const fullResults: string[] = [];
+    for await (const { type } of source.messageIterator({ topics, consumptionType: "full" })) {
+      fullResults.push(type);
+    }
+    expect(fullResults).toEqual(["message-event"]);
+
+    const warnings = new Map<number, string>();
+    for await (const result of source.messageIterator({ topics, consumptionType: "partial" })) {
+      if (result.type === "alert") {
+        warnings.set(result.connectionId, result.alert.message);
+      }
+    }
+    expect([...warnings.values()]).toEqual([
+      `Schema ${schemaId} is defined twice with different content`,
+      `Channel ${channelId} is defined twice with different content`,
+    ]);
+  });
+
   it("opens a recording that was cut off before its footer was written", async () => {
     const tempBuffer = new TempBuffer();
     const writer = new McapWriter({ writable: tempBuffer, chunkSize: 1 });

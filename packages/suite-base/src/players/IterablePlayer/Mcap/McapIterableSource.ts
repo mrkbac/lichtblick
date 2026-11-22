@@ -603,6 +603,7 @@ export class McapIterableSource implements ISerializedIterableSource {
       return {
         reader,
         alert: this.#recovery.hasLosses() ? recoveryAlert(this.#recovery) : undefined,
+        conflicts: conflictAlerts(this.#recovery),
       };
     };
   }
@@ -758,7 +759,7 @@ export class McapIterableSource implements ISerializedIterableSource {
         start,
         end,
         sizeBytes: Number.isFinite(sizeBytes) ? sizeBytes : undefined,
-        footerIndexed: this.#recovery == undefined,
+        footerIndexed: file.footerIndexed !== false && this.#recovery == undefined,
       }));
     }
     return init;

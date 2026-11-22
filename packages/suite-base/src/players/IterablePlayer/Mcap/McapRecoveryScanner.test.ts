@@ -523,6 +523,7 @@ describe("McapIndexedIterableSource read errors", () => {
     const recover = vi.fn<RecoverReader>().mockResolvedValue({
       reader: await indexedReader(),
       alert: undefined,
+      conflicts: [],
     });
 
     // When
@@ -559,6 +560,7 @@ describe("McapIndexedIterableSource read errors", () => {
     const recover = vi.fn<RecoverReader>().mockResolvedValue({
       reader: recovered,
       alert: undefined,
+      conflicts: [],
     });
 
     // When / Then

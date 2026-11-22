@@ -48,7 +48,13 @@ const DB3_SCHEMA = `
 `;
 
 /** A .db3 with a "fast" topic at 10 Hz for 100 s and a "rare" one at 1 s and 50 s */
-async function makeDb3(): Promise<Uint8Array<ArrayBuffer>> {
+async function makeDb3({
+  metadata,
+  lateMessage,
+}: {
+  metadata?: string;
+  lateMessage?: boolean;
+} = {}): Promise<Uint8Array<ArrayBuffer>> {
   const sqlite = await initSqlite();
   const db = new sqlite.oo1.DB();
   db.exec(`${DB3_SCHEMA}
@@ -56,6 +62,7 @@ async function makeDb3(): Promise<Uint8Array<ArrayBuffer>> {
     INSERT INTO topics VALUES (2, '/rare', 'std_msgs/msg/String', 'cdr', '[]');
     INSERT INTO topics VALUES (3, '/dense', 'std_msgs/msg/String', 'cdr', '[]');
     INSERT INTO topics VALUES (4, '/tied', 'std_msgs/msg/String', 'cdr', '[]');
+    INSERT INTO topics VALUES (5, '/empty', 'std_msgs/msg/String', 'cdr', '[]');
   `);
   db.exec("BEGIN");
   const insert = db.prepare("INSERT INTO messages (topic_id, timestamp, data) VALUES (?, ?, ?)");
@@ -74,12 +81,38 @@ async function makeDb3(): Promise<Uint8Array<ArrayBuffer>> {
   for (let i = 0; i < 4097; i++) {
     insert.bind([3, ns(99), new Uint8Array([3])]).stepReset();
   }
+  if (lateMessage === true) {
+    insert.bind([2, ns(170), new Uint8Array([3])]).stepReset();
+  }
   insert.finalize();
   db.exec("COMMIT");
+  if (metadata != undefined) {
+    db.exec(
+      "CREATE TABLE metadata(id INTEGER PRIMARY KEY, metadata_version INTEGER, metadata TEXT)",
+    );
+    db.exec({
+      sql: "INSERT INTO metadata VALUES (1, 9, 'unfinished'), (2, 9, ?)",
+      bind: [metadata],
+    });
+  }
   const bytes = sqlite.capi.sqlite3_js_db_export(db);
   db.close();
   return bytes;
 }
+
+const metadata = `
+storage_identifier: sqlite3
+relative_file_paths: [test.db3]
+starting_time: {nanoseconds_since_epoch: 99000000000}
+duration: {nanoseconds: 101000000000}
+message_count: 15101
+topics_with_message_count:
+  - {topic_metadata: {name: /fast}, message_count: 1001}
+  - {topic_metadata: {name: /rare}, message_count: 2}
+  - {topic_metadata: {name: /dense}, message_count: 14097}
+  - {topic_metadata: {name: /tied}, message_count: 1}
+  - {topic_metadata: {name: /empty}, message_count: 0}
+`;
 
 describe("RosDb3IterableSource", () => {
   let db3: Uint8Array<ArrayBuffer>;
@@ -101,6 +134,88 @@ describe("RosDb3IterableSource", () => {
     sources.push(source);
     return { source, init };
   }
+
+  it("uses the latest embedded topic counts without scanning messages", async () => {
+    const scan = vi.spyOn(SqliteRosDb3.prototype, "messageCounts");
+    const source = new RosDb3IterableSource([new BytesFile(await makeDb3({ metadata }))]);
+    sources.push(source);
+    const init = await source.initialize();
+    expect(init.topicStats.get("/rare")).toEqual({ numMessages: 2 });
+    expect(scan).not.toHaveBeenCalled();
+
+    const backfill = await source.getBackfillMessages({
+      topics: new Map([["/rare", { topic: "/rare" }]]),
+      time: { sec: 180, nsec: 0 },
+    });
+    expect(backfill.map((message) => message.receiveTime)).toEqual([{ sec: 150, nsec: 0 }]);
+  });
+
+  it("reuses an empty backfill prefix without skipping newer messages", async () => {
+    const source = new RosDb3IterableSource([new BytesFile(await makeDb3({ metadata }))]);
+    sources.push(source);
+    await source.initialize();
+    const pages = vi.spyOn(SqliteRosDb3.prototype, "backfillPage");
+    const empty = new Map([["/empty", { topic: "/empty" }]]);
+    await expect(
+      source.getBackfillMessages({ topics: empty, time: { sec: 200, nsec: 0 } }),
+    ).resolves.toEqual([]);
+    expect(pages).toHaveBeenCalled();
+    pages.mockClear();
+    await expect(
+      source.getBackfillMessages({ topics: empty, time: { sec: 160, nsec: 0 } }),
+    ).resolves.toEqual([]);
+    expect(pages).not.toHaveBeenCalled();
+
+    const rare = new Map([["/rare", { topic: "/rare" }]]);
+    await expect(
+      source.getBackfillMessages({ topics: rare, time: { sec: 100, nsec: 0 } }),
+    ).resolves.toEqual([]);
+    const later = await source.getBackfillMessages({ topics: rare, time: { sec: 180, nsec: 0 } });
+    expect(later.map((message) => message.receiveTime)).toEqual([{ sec: 150, nsec: 0 }]);
+  });
+
+  it("rejects stale counts after an append within the existing time range", async () => {
+    const source = new RosDb3IterableSource([
+      new BytesFile(await makeDb3({ metadata, lateMessage: true })),
+    ]);
+    sources.push(source);
+    const scan = vi.spyOn(SqliteRosDb3.prototype, "messageCounts");
+    const init = await source.initialize();
+    expect(scan).toHaveBeenCalledOnce();
+    expect(init.topicStats.get("/rare")).toEqual({ numMessages: 3 });
+  });
+
+  it("backfills real messages even if embedded counts say a topic is empty", async () => {
+    const inaccurate = metadata
+      .replace("{name: /rare}, message_count: 2", "{name: /rare}, message_count: 0")
+      .replace("{name: /dense}, message_count: 14097", "{name: /dense}, message_count: 14099");
+    const source = new RosDb3IterableSource([
+      new BytesFile(await makeDb3({ metadata: inaccurate })),
+    ]);
+    sources.push(source);
+    const scan = vi.spyOn(SqliteRosDb3.prototype, "messageCounts");
+    await source.initialize();
+    expect(scan).not.toHaveBeenCalled();
+
+    const backfill = await source.getBackfillMessages({
+      topics: new Map([["/rare", { topic: "/rare" }]]),
+      time: { sec: 180, nsec: 0 },
+    });
+    expect(backfill.map((message) => message.receiveTime)).toEqual([{ sec: 150, nsec: 0 }]);
+  });
+
+  it.each([
+    ["malformed", "not [a valid yaml document"],
+    ["stale", metadata.replace("101000000000", "99000000000")],
+    ["split-wide", metadata.replace("[test.db3]", "[first.db3, test.db3]")],
+  ])("scans messages when embedded metadata is %s", async (_case, text) => {
+    const source = new RosDb3IterableSource([new BytesFile(await makeDb3({ metadata: text }))]);
+    sources.push(source);
+    const scan = vi.spyOn(SqliteRosDb3.prototype, "messageCounts");
+    const init = await source.initialize();
+    expect(init.topicStats.get("/rare")).toEqual({ numMessages: 2 });
+    expect(scan).toHaveBeenCalledOnce();
+  });
 
   it("reads every message", async () => {
     const { source, init } = await open();
