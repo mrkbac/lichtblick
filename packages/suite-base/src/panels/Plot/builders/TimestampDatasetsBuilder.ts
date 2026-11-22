@@ -21,6 +21,7 @@ import {
   GetViewportDatasetsResult,
   HandlePlayerStateResult,
   IDatasetsBuilder,
+  MessageRangeOptions,
   SeriesItem,
   Viewport,
 } from "./IDatasetsBuilder";
@@ -184,7 +185,7 @@ export class TimestampDatasetsBuilder implements IDatasetsBuilder {
 
   public handleMessageRange(
     messages: Immutable<MessageEvent[]>,
-    options: { isReset: boolean },
+    options: MessageRangeOptions,
     startTime: Immutable<Time>,
   ): void {
     this.#hasRangeSource = true;

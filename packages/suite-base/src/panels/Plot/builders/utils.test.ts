@@ -177,6 +177,20 @@ describe("buildFullSeriesActions", () => {
     expect(result).toEqual([{ type: "append-full", series: "a", items }]);
   });
 
+  it("only touches the given series when the read is for some of them", () => {
+    const seriesC = makeSeriesItem({ key: "c" as SeriesConfigKey, value: `${topic}.other` });
+    const result = buildFullSeriesActions(
+      [seriesA, seriesC],
+      topic,
+      { isReset: true, seriesKeys: new Set(["c" as SeriesConfigKey]) },
+      () => [1],
+    );
+    expect(result).toEqual([
+      { type: "reset-full", series: "c" },
+      { type: "append-full", series: "c", items: [1] },
+    ]);
+  });
+
   it("emits reset-full before append-full when isReset is true", () => {
     const items = [1, 2];
     const result = buildFullSeriesActions([seriesA], topic, { isReset: true }, () => items);
