@@ -10,14 +10,13 @@ import { Fragment, ReactNode, useCallback, useRef } from "react";
 
 import {
   LayoutState,
+  useCurrentLayoutActions,
   useCurrentLayoutSelector,
 } from "@lichtblick/suite-base/context/CurrentLayoutContext";
 import {
   PanelStateStore,
   usePanelStateStore,
 } from "@lichtblick/suite-base/context/PanelStateContext";
-
-const selectSelectedLayout = (state: LayoutState) => state.selectedLayout;
 
 /**
  * Wrapper component used to force-remount the panel when its settings sequence number changes,
@@ -35,12 +34,17 @@ export function PanelRemounter({
   const selector = useCallback((store: PanelStateStore) => store.sequenceNumbers[id] ?? 0, [id]);
   const sequenceNumber = usePanelStateStore(selector);
 
-  const selectedLayout = useCurrentLayoutSelector(selectSelectedLayout);
-  const config = selectedLayout?.data?.configById[id];
+  const { getCurrentLayoutState } = useCurrentLayoutActions();
+  const config = useCurrentLayoutSelector(
+    useCallback((state: LayoutState) => state.selectedLayout?.data?.configById[id], [id]),
+  );
   const seen = useRef({ config, remounts: 0 });
   if (config !== seen.current.config) {
     // Deep compare: a layout load hands every panel new objects, often with the same content.
-    if (selectedLayout?.externalEdit === true && !_.isEqual(config, seen.current.config)) {
+    if (
+      getCurrentLayoutState().selectedLayout?.externalEdit === true &&
+      !_.isEqual(config, seen.current.config)
+    ) {
       seen.current.remounts++;
     }
     seen.current.config = config;
