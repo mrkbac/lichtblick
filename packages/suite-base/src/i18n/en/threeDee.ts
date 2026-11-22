@@ -65,7 +65,7 @@ export const threeDee = {
   decayHistoryLimited:
     "The latest scan alone fills the decay limit of {{maxPoints}} points: no decay history is shown",
   decayHistoryThinned:
-    "Decay history limit reached ({{maxPoints}} points or {{maxScans}} scans): showing 1 in {{stride}} scans",
+    "Decay history limit reached ({{maxPoints}} points or {{maxScans}} scans): keeping 1 in {{stride}} incoming scans",
   parent: "Parent",
   pose: "Pose",
   rotationOffset: "Rotation offset",

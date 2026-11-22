@@ -217,6 +217,71 @@ describe("DecayPointRing", () => {
     expect(ring.stride()).toBe(1);
   });
 
+  it("recomputes no pose rows until the transforms change, then rechecks them", () => {
+    const { ring, points } = makeRing();
+    push(ring, 1n, 1);
+    push(ring, 2n, 1);
+    const tree = {
+      apply: (...args: Parameters<Renderer["transformTree"]["apply"]>) =>
+        transformTree.apply(...args),
+      version: 1,
+    } as unknown as Renderer["transformTree"];
+    const apply = vi.spyOn(tree, "apply");
+    ring.updatePoses(tree, 0n, "map", "map");
+    points.poseAttribute()!.clearUpdateRanges();
+    apply.mockClear();
+
+    ring.updatePoses(tree, 0n, "map", "map");
+    expect(apply).toHaveBeenCalledTimes(1); // render <- fixed only
+    expect(points.poseAttribute()!.updateRanges).toEqual([]);
+
+    (tree as { version: number }).version = 2;
+    ring.updatePoses(tree, 0n, "map", "map");
+    expect(apply).toHaveBeenCalledTimes(1 + 2 + 1);
+    expect(points.poseAttribute()!.updateRanges).toEqual([{ start: 0, count: 2 * 12 }]);
+  });
+
+  it("places the whole ring by the render frame's transform", () => {
+    const { ring, poseRow } = makeRing();
+    push(ring, 10n, 1);
+    push(ring, 20n, 1);
+    ring.updatePoses(transformTree, 5n, "map", "odom"); // render <- fixed: x + 5
+
+    // Rows are relative to the first placed scan (the newest) in the fixed frame
+    expect(poseRow(1)).toEqual(rows(new THREE.Matrix4()));
+    expect(poseRow(0)).toEqual(rows(new THREE.Matrix4().makeTranslation(-10, 0, 0)));
+    expect(ring.position.x).toBe(25);
+  });
+
+  it("halves the stride at most once until the window was refilled at the new rate", () => {
+    const { ring } = makeRing({ maxEntries: 4, maxPoints: 1000 });
+    for (let i = 1; i <= 16; i++) {
+      push(ring, BigInt(i), 1);
+    }
+    expect(ring.stride()).toBe(4);
+    ring.expire(13n); // e.g. a shorter decay time: 1 scan left, taken at the current rate
+    ring.enforceLimits({ maxPoints: 1000, reservePoints: 0 });
+    expect(ring.stride()).toBe(2);
+
+    for (let i = 0; i < 10; i++) {
+      ring.enforceLimits({ maxPoints: 1000, reservePoints: 0 });
+    }
+    expect(ring.stride()).toBe(2); // the kept scan was taken at 1 in 4
+  });
+
+  it("drops a scan holding over half the points instead of thinning around it", () => {
+    const { ring } = makeRing({ maxEntries: 100, maxPoints: 20 });
+    push(ring, 1n, 1);
+    push(ring, 2n, 1);
+    push(ring, 3n, 1);
+    push(ring, 4n, 12); // the newest, which thinning always keeps
+
+    ring.enforceLimits({ maxPoints: 20, reservePoints: 8 });
+
+    expect(ring.pointCount()).toBe(3);
+    expect(ring.stride()).toBe(1);
+  });
+
   it("uploads only the poses of slots in use", () => {
     const { ring, points } = makeRing();
     push(ring, 1n, 1);

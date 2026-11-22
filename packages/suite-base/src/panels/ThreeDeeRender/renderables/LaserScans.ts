@@ -14,7 +14,8 @@ import {
   createGeometry,
   PointsRenderable,
   DECAY_HISTORY_LIMITS,
-  DECAY_RING_LIMITS,
+  DECAY_LIMITED,
+  updateDecayNotice,
   pointStyle,
   RenderObjectHistory,
 } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/pointExtensionUtils";
@@ -112,6 +113,8 @@ class LaserScanHistoryRenderable extends Renderable<LaserScanHistoryUserData> {
   #decayRing: DecayPointRing | undefined;
   /** Decodes scans older than the latest before they are copied into the ring */
   #scratch: DynamicBufferGeometry | undefined;
+  /** Key of the shown decay limit notice, see updateDecayNotice */
+  #decayNoticeKey: string | undefined;
 
   public constructor(topic: string, renderer: Renderer, userData: LaserScanHistoryUserData) {
     super(topic, renderer, userData);
@@ -150,6 +153,7 @@ class LaserScanHistoryRenderable extends Renderable<LaserScanHistoryUserData> {
     this.#pointsHistory.dispose();
     this.#decayRing?.dispose();
     this.#scratch?.dispose();
+    this.renderer.settings.errors.remove(this.userData.settingsPath, DECAY_LIMITED);
     super.dispose();
   }
 
@@ -237,7 +241,7 @@ class LaserScanHistoryRenderable extends Renderable<LaserScanHistoryUserData> {
 
   #ring(style: RingStyle): DecayPointRing {
     if (!this.#decayRing) {
-      this.#decayRing = new DecayPointRing(this.userData.topic, style, DECAY_RING_LIMITS);
+      this.#decayRing = new DecayPointRing(this.userData.topic, style, DECAY_HISTORY_LIMITS);
       this.add(this.#decayRing);
     }
     return this.#decayRing;
@@ -270,12 +274,19 @@ class LaserScanHistoryRenderable extends Renderable<LaserScanHistoryUserData> {
       ring.removeFromParent();
       ring.dispose();
       this.#decayRing = undefined;
+      this.renderer.settings.errors.remove(settingsPath, DECAY_LIMITED);
       return true;
     }
     ring.expire(currentTime - BigInt(Math.round(settings.decayTime * 1e9)));
-    ring.enforceLimits({
+    const latestPoints = this.#pointsHistory.latest().renderable.geometry.drawRange.count;
+    ring.enforceLimits({ maxPoints: DECAY_HISTORY_LIMITS.maxPoints, reservePoints: latestPoints });
+    this.#decayNoticeKey = updateDecayNotice({
+      renderer: this.renderer,
+      settingsPath,
+      ring,
       maxPoints: DECAY_HISTORY_LIMITS.maxPoints,
-      reservePoints: this.#pointsHistory.latest().renderable.geometry.drawRange.count,
+      latestPoints,
+      shownKey: this.#decayNoticeKey,
     });
     const missingFrame = ring.updatePoses(
       this.renderer.transformTree,

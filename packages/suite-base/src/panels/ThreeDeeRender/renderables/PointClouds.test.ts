@@ -10,9 +10,10 @@ import { ColorModeSettings } from "@lichtblick/suite-base/panels/ThreeDeeRender/
 import { DEFAULT_POINT_SETTINGS } from "@lichtblick/suite-base/panels/ThreeDeeRender/settingsNodes/topics";
 import { updatePose } from "@lichtblick/suite-base/panels/ThreeDeeRender/updatePose";
 
-import { createStixelMaterial, DECAY_LIMITED, PointCloudHistoryRenderable } from "./PointClouds";
+import { createStixelMaterial, PointCloudHistoryRenderable } from "./PointClouds";
 import { getColorConverter } from "./colorMode";
 import { DecayPointRing } from "./pointClouds/DecayPointRing";
+import { DECAY_LIMITED } from "./pointExtensionUtils";
 
 vi.mock("@lichtblick/suite-base/panels/ThreeDeeRender/updatePose", () => ({
   updatePose: vi.fn(),
@@ -303,8 +304,8 @@ describe("PointCloudHistoryRenderable decay", () => {
   it("keeps the limit notice when the latest scan alone fills the point budget", () => {
     const errors = new LayerErrors();
     const path = ["topics", "/points"];
-    // 6 points: one 4-point cloud fits, two don't
-    const { renderable, settings } = decode(makeCloud(), { decayTime: 10, decayMaxPoints: 6e-6 }, {
+    // 3 points: the 4-point latest cloud alone is over the budget
+    const { renderable, settings } = decode(makeCloud(), { decayTime: 10, decayMaxPoints: 3e-6 }, {
       ...rendererMock,
       transformTree: { apply: (out: unknown) => out },
       settings: { errors },
