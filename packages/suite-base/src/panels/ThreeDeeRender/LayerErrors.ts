@@ -181,14 +181,16 @@ export class LayerErrors extends EventEmitter<LayerErrorEvents> {
  * message) and resolve on their own, so they stay in the settings tree but never reach the log.
  * @returns unsubscribe
  */
-export function reportPersistentErrors(
+export function reportPersistentErrors<T>(
   errors: LayerErrors,
-  report: (path: Path, errorId: string, errorMessage: string) => void,
+  report: (path: Path, errorId: string, errorMessage: string, raisedAt: T) => void,
   graceMs: number,
+  now: () => T,
 ): () => void {
   const pending = new Map<string, ReturnType<typeof setTimeout>>();
   const onAdd = (path: Path, errorId: string) => {
     const pathCopy = [...path]; // callers reuse path arrays
+    const raisedAt = now(); // reported as of when it was raised, not graceMs later
     const key = `${pathCopy.join("\0")}\0${errorId}`;
     clearTimeout(pending.get(key));
     pending.set(
@@ -197,7 +199,7 @@ export function reportPersistentErrors(
         pending.delete(key);
         const message = errors.getError(pathCopy, errorId);
         if (message != undefined) {
-          report(pathCopy, errorId, message);
+          report(pathCopy, errorId, message, raisedAt);
         }
       }, graceMs),
     );

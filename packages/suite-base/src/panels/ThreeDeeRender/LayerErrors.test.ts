@@ -149,10 +149,12 @@ describe("reportPersistentErrors", () => {
     vi.useFakeTimers();
     const errors = new LayerErrors();
     const report = vi.fn();
-    const unsubscribe = reportPersistentErrors(errors, report, 1000);
+    let now = 1;
+    const unsubscribe = reportPersistentErrors(errors, report, 1000, () => now);
 
     errors.addToTopic("/transient", "missing", "Missing transform");
     errors.addToTopic("/persistent", "missing", "Missing transform");
+    now = 2;
     vi.advanceTimersByTime(500);
     errors.removeFromTopic("/transient", "missing");
     errors.addToTopic("/transient", "missing", "New occurrence");
@@ -160,7 +162,8 @@ describe("reportPersistentErrors", () => {
     vi.advanceTimersByTime(500);
 
     expect(report).toHaveBeenCalledTimes(1);
-    expect(report).toHaveBeenCalledWith(["topics", "/persistent"], "missing", "Still missing");
+    // stamped with when it was raised, not when the grace period ended
+    expect(report).toHaveBeenCalledWith(["topics", "/persistent"], "missing", "Still missing", 1);
 
     errors.addToTopic("/late", "missing", "Missing transform");
     unsubscribe();

@@ -5,7 +5,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { Time, toNanoSec } from "@foxglove/rostime";
+import { fromNanoSec, Time, toNanoSec } from "@foxglove/rostime";
 import { Button } from "@mui/material";
 import * as _ from "lodash-es";
 import React, {
@@ -436,12 +436,13 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
 
   // Log LayerErrors to PanelLogs
   const handleLayerErrorUpdate = useCallback(
-    (path: Path, errorId: string, errorMessage: string) => {
+    (path: Path, errorId: string, errorMessage: string, raisedAt: bigint) => {
       // Every panel starts without frames; logging that floods the log after each seek
       if (logError != undefined && errorId !== NO_FRAME_SELECTED) {
         const pathString = path.join(" > ");
         const fullMessage = `[${pathString}] ${errorMessage}`;
-        logError(fullMessage);
+        // 0n: no frame rendered yet, so the panel uses the playback time
+        logError(fullMessage, undefined, raisedAt === 0n ? undefined : fromNanoSec(raisedAt));
       }
     },
     [logError],
@@ -457,6 +458,7 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
       renderer.settings.errors,
       handleLayerErrorUpdate,
       LAYER_ERROR_LOG_GRACE_MS,
+      () => renderer.currentTime,
     );
   }, [renderer, handleLayerErrorUpdate]);
 

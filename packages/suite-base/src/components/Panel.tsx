@@ -26,7 +26,8 @@ import React, {
 } from "react";
 import { Transition } from "react-transition-group";
 
-import { useMountedState, useShallowMemo } from "@lichtblick/hooks";
+import { useLatest, useMountedState, useShallowMemo } from "@lichtblick/hooks";
+import { Time } from "@lichtblick/suite";
 import { useConfigById } from "@lichtblick/suite-base/PanelAPI";
 import { useCompare } from "@lichtblick/suite-base/components/Compare/CompareContext";
 import { ComparedPanel } from "@lichtblick/suite-base/components/Compare/ComparedPanel";
@@ -120,13 +121,16 @@ export default function Panel<
 
     const nextLogId = useRef(0);
     const getMessagePipeline = useMessagePipelineGetter();
-    const { formatTime } = useAppTimeFormat();
+    // Latest formatter without changing addLog's identity: panels re-initialize when it changes
+    const formatTime = useLatest(useAppTimeFormat().formatTime);
     const addLog = useCallback(
-      (level: PanelLogLevel, message: string, error?: Error) => {
+      (level: PanelLogLevel, message: string, error?: Error, time?: Time) => {
         // Stamp entries with the recording time, so they line up with the data and the timeline
-        const currentTime = getMessagePipeline().playerState.activeData?.currentTime;
+        const recordingTime = time ?? getMessagePipeline().playerState.activeData?.currentTime;
         const timestamp =
-          currentTime != undefined ? formatTime(currentTime) : new Date().toLocaleTimeString();
+          recordingTime != undefined
+            ? formatTime.current(recordingTime)
+            : new Date().toLocaleTimeString();
         setLogs((prev) => {
           const last = prev.at(-1);
           // Fold an identical repeat into the previous row so a noisy source can't flood the log
