@@ -104,6 +104,14 @@ describe("TimestampSynchronizer", () => {
     expect(stamps(out)).toEqual([`a@${2n * S}`, `b@${2n * S}`]);
   });
 
+  it("keeps matching after one future-stamped message", () => {
+    const sync = new TimestampSynchronizer();
+    sync.setTopics(new Set(["a", "b"]));
+    sync.filter([msg("a", 1000)]);
+    sync.filter([msg("a", 1)]);
+    expect(stamps(sync.filter([msg("b", 1)]))).toEqual([`a@${S}`, `b@${S}`]);
+  });
+
   it("releases the newest set completed in a batch whatever the arrival order", () => {
     const sync = new TimestampSynchronizer();
     sync.setTopics(new Set(["a", "b"]));

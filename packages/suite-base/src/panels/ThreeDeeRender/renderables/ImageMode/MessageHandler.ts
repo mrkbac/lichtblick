@@ -171,8 +171,6 @@ export class MessageHandler {
 
   /** Stamp of the synchronized set being shown; everything older is dropped from `#tree` */
   #match: Time | undefined;
-  /** The set at `#match`, kept even once evicted from `#tree` */
-  #shown: SynchronizationItem | undefined;
   /**
    * Stamps changed since the last render state. A new set can only complete at one of them, so the
    * whole tree is only searched again (`#rescan`) when the config or available topics change.
@@ -264,15 +262,17 @@ export class MessageHandler {
   }
 
   /**
-   * Drops stamps more than SYNC_WINDOW_NS behind the newest and the oldest ones past SYNC_BYTES,
-   * so sets that never complete cannot pile up. The newest stays. Runs after matching, so a set
-   * completed by the same message that would evict it is still shown.
+   * Drops stamps more than SYNC_WINDOW_NS behind `latest` (the newest stamp received just now, not
+   * the tree's max, so one future-stamped message can't evict everything after it) and the oldest
+   * ones past SYNC_BYTES, so sets that never complete cannot pile up. The newest stays. Runs after
+   * matching, so a set completed by the same message that would evict it is still shown.
    */
-  #evictOldSyncItems(): void {
-    const cutoff = toNanoSec(this.#tree.maxKey()!) - SYNC_WINDOW_NS;
+  #evictOldSyncItems(latest: Time | undefined): void {
+    const cutoff = latest ? toNanoSec(latest) - SYNC_WINDOW_NS : undefined;
     while (
       this.#tree.size > 1 &&
-      (toNanoSec(this.#tree.minKey()!) < cutoff || this.#treeBytes > SYNC_BYTES)
+      ((cutoff != undefined && toNanoSec(this.#tree.minKey()!) < cutoff) ||
+        this.#treeBytes > SYNC_BYTES)
     ) {
       this.#shiftSyncItem();
     }
@@ -510,7 +510,6 @@ export class MessageHandler {
     if (this.#rescan) {
       this.#rescan = false;
       this.#match = undefined;
-      this.#shown = undefined;
       // Newest first: stops at the first complete entry
       for (let entry = this.#tree.maxEntry(); entry; entry = this.#tree.findLessThan(entry[0])) {
         if (complete(entry[1])) {
@@ -528,23 +527,28 @@ export class MessageHandler {
         }
       }
     }
+    let latest: Time | undefined;
+    for (const stamp of this.#touched) {
+      if (latest == undefined || compareTime(stamp, latest) > 0) {
+        latest = stamp;
+      }
+    }
     this.#touched.length = 0;
 
+    // Captured before eviction, which may drop it: shown for this render only
     const matched = this.#match && this.#tree.get(this.#match);
     if (complete(matched)) {
-      this.#shown = matched;
       while (isLessThan(this.#tree.minKey()!, this.#match!)) {
         this.#shiftSyncItem();
       }
     }
     if (this.#tree.size > 0) {
-      this.#evictOldSyncItems();
+      this.#evictOldSyncItems(latest);
     }
-    if (complete(this.#shown)) {
-      return { found: true, messages: this.#shown };
+    if (complete(matched)) {
+      return { found: true, messages: matched };
     }
     this.#match = undefined;
-    this.#shown = undefined;
 
     for (let entry = this.#tree.maxEntry(); entry; entry = this.#tree.findLessThan(entry[0])) {
       const { image, annotationsByTopic } = entry[1];

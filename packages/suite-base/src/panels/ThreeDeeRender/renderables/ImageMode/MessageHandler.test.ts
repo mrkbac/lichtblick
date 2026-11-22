@@ -346,6 +346,10 @@ describe("MessageHandler: synchronized = true", () => {
 
   it("shows a set completed by the message whose other stamps evict it", () => {
     const messageHandler = syncedHandler();
+    const emitted: unknown[] = [];
+    messageHandler.addListener((state) => {
+      emitted.push((state.image?.message as RawImage | undefined)?.timestamp);
+    });
     messageHandler.handleRawImage(imageAt(SEC));
     messageHandler.handleAnnotations(
       wrapInMessageEvent(
@@ -355,9 +359,31 @@ describe("MessageHandler: synchronized = true", () => {
         createCircleAnnotations([SEC, 12n * SEC]),
       ) as MessageEvent<ImageAnnotations>,
     );
-    expect(renderedStamp(messageHandler)).toEqual(fromNanoSec(SEC));
+    expect(emitted.at(-1)).toEqual(fromNanoSec(SEC));
     messageHandler.handleRawImage(imageAt(12n * SEC));
-    expect(renderedStamp(messageHandler)).toEqual(fromNanoSec(12n * SEC));
+    expect(emitted.at(-1)).toEqual(fromNanoSec(12n * SEC));
+  });
+
+  it("shows waiting for sync once a stalled annotation topic lets the match age out", () => {
+    const messageHandler = syncedHandler();
+    messageHandler.handleRawImage(imageAt(SEC));
+    messageHandler.handleAnnotations(annotationsAt(SEC));
+    expect(renderedStamp(messageHandler)).toEqual(fromNanoSec(SEC));
+    // Annotations stop; images keep coming
+    for (let sec = 2n; sec <= 12n; sec++) {
+      messageHandler.handleRawImage(imageAt(sec * SEC));
+    }
+    const state = messageHandler.getRenderStateAndUpdateHUD();
+    expect(state.image).toBeUndefined();
+    expect(state.missingAnnotationTopics).toEqual(["annotations"]);
+  });
+
+  it("keeps matching after one future-stamped image", () => {
+    const messageHandler = syncedHandler();
+    messageHandler.handleRawImage(imageAt(1000n * SEC));
+    messageHandler.handleRawImage(imageAt(SEC));
+    messageHandler.handleAnnotations(annotationsAt(SEC));
+    expect(renderedStamp(messageHandler)).toEqual(fromNanoSec(SEC));
   });
 
   it("counts annotations waiting for their image against the byte budget", () => {

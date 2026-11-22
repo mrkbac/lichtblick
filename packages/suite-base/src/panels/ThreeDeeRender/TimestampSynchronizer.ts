@@ -7,7 +7,7 @@ import { toNanoSec, type Time } from "@foxglove/rostime";
 import type { MessageEvent } from "@lichtblick/suite";
 import { getTimestampForMessage } from "@lichtblick/suite-base/util/time";
 
-/** Stamps older than this behind a topic's newest one are treated as never getting a match. */
+/** Stamps this far behind a topic's latest received one are treated as never getting a match. */
 export const SYNC_WINDOW_NS = 10_000_000_000n;
 /** Bytes buffered per topic while waiting for a match; the oldest stamps go first past it. */
 export const SYNC_BYTES_PER_TOPIC = 256 * 1024 * 1024;
@@ -102,7 +102,8 @@ export class TimestampSynchronizer {
           (older ??= []).push(stamp);
         }
       }
-      const cutoff = buffer.events.maxKey()! - SYNC_WINDOW_NS;
+      // From this message, not the buffer's max: one future-stamped message must not evict the rest
+      const cutoff = stamp - SYNC_WINDOW_NS;
       // The newest message always stays, even past the byte budget
       while (
         buffer.events.size > 1 &&
