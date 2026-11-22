@@ -11,12 +11,11 @@ import { makeStyles } from "tss-react/mui";
 
 import { Immutable } from "@lichtblick/suite";
 import { PANEL_FLOATING_TOOLBAR_HEIGHT } from "@lichtblick/suite-base/components/PanelToolbar/constants";
-import { DEFAULT_PLOT_PATH } from "@lichtblick/suite-base/panels/Plot/constants";
 import { SaveConfig } from "@lichtblick/suite-base/types/panels";
 import { parseColor, toHex8 } from "@lichtblick/suite-base/util/parseColor";
 
 import type { PlotCoordinator } from "./PlotCoordinator";
-import { PlotLegendRow, ROW_HEIGHT } from "./PlotLegendRow";
+import { PlotLegendAddRow, PlotLegendRow, ROW_HEIGHT } from "./PlotLegendRow";
 import { PlotPath, PlotConfig } from "./utils/config";
 
 const minLegendWidth = 25;
@@ -31,6 +30,8 @@ type Props = Immutable<{
   sidebarDimension: number;
   showValues: boolean;
   hoveredValuesBySeriesIndex?: string[];
+  /** Whether series paths may end in a time-series modifier like `.@derivative` */
+  supportsStreamModifiers: boolean;
 }>;
 
 const useStyles = makeStyles<void, "grid">()(({ palette, spacing }, _params, classes) => ({
@@ -63,6 +64,10 @@ const useStyles = makeStyles<void, "grid">()(({ palette, spacing }, _params, cla
       backdropFilter: "blur(8px)",
       border: `1px solid ${palette.divider}`,
       boxShadow: "0 4px 16px rgb(0 0 0 / 0.18)",
+
+      "&:not(:hover, :focus-within) [data-hide-when-idle]": {
+        display: "none",
+      },
     },
   },
   rootLeft: {
@@ -113,7 +118,18 @@ function PlotLegendComponent(props: Props): React.JSX.Element {
     sidebarDimension,
     showValues,
     hoveredValuesBySeriesIndex,
+    supportsStreamModifiers,
   } = props;
+  // The row whose path is edited inline, or "new" for the add row
+  const [editing, setEditing] = useState<number | "new">();
+  const gridRef = useRef<HTMLDivElement>(null);
+  const endEdit = useCallback(() => {
+    setEditing(undefined);
+    // The wide input may have scrolled a narrow legend sideways
+    if (gridRef.current) {
+      gridRef.current.scrollLeft = 0;
+    }
+  }, []);
   const { classes, cx } = useStyles();
 
   const dragStart = useRef({ x: 0, y: 0, sidebarDimension: 0 });
@@ -209,14 +225,21 @@ function PlotLegendComponent(props: Props): React.JSX.Element {
       })}
     >
       <div
+        ref={gridRef}
         className={classes.grid}
         style={{
           height: legendDisplay === "top" ? Math.round(sidebarDimension) : undefined,
           width: legendDisplay === "left" ? Math.round(sidebarDimension) : undefined,
         }}
       >
-        {(paths.length === 0 ? [DEFAULT_PLOT_PATH] : paths).map((path, index) => (
+        {paths.map((path, index) => (
           <PlotLegendRow
+            editing={editing === index}
+            onStartEdit={() => {
+              setEditing(index);
+            }}
+            onEndEdit={endEdit}
+            supportsStreamModifiers={supportsStreamModifiers}
             hasMismatchedDataLength={pathsWithMismatchedDataLengths.includes(path.value)}
             index={index}
             key={index}
@@ -230,6 +253,25 @@ function PlotLegendComponent(props: Props): React.JSX.Element {
             valueSource={valueSource}
           />
         ))}
+        <PlotLegendAddRow
+          editing={editing === "new"}
+          hideWhenIdle={paths.length > 0}
+          onStartEdit={() => {
+            setEditing("new");
+          }}
+          onEndEdit={endEdit}
+          onAdd={(values) => {
+            savePaths([
+              ...paths,
+              ...values.map((value) => ({
+                value,
+                enabled: true,
+                timestampMethod: "receiveTime" as const,
+              })),
+            ]);
+          }}
+          supportsStreamModifiers={supportsStreamModifiers}
+        />
       </div>
       {legendDisplay !== "floating" && (
         <div

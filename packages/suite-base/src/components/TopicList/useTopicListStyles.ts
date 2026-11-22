@@ -28,7 +28,7 @@ function mixRgb(from: string, to: string, amount: number): string {
   }).toRgbString();
 }
 
-type TreeClasses = "dragHandle" | "row" | "isDragging" | "selected";
+type TreeClasses = "dragHandle" | "hoverButton" | "row" | "isDragging" | "selected";
 
 export const useTopicListStyles = makeStyles<void, TreeClasses>()((theme, _, classes) => ({
   isDragging: {},
@@ -47,6 +47,10 @@ export const useTopicListStyles = makeStyles<void, TreeClasses>()((theme, _, cla
     boxShadow: `0 1px 0 0 ${theme.palette.action.selected}`,
     userSelect: "none",
 
+    // Transparent rather than hidden so keyboard users can still tab to it
+    [`:not(:hover, :focus-within) .${classes.hoverButton}`]: {
+      opacity: 0,
+    },
     [`:not(:hover) .${classes.dragHandle}`]: {
       visibility: "hidden",
     },
@@ -72,6 +76,7 @@ export const useTopicListStyles = makeStyles<void, TreeClasses>()((theme, _, cla
       }),
     },
   },
+  hoverButton: {},
   dragHandle: {
     opacity: 0.6,
     display: "flex",

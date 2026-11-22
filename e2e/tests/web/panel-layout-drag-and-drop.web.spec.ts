@@ -337,10 +337,9 @@ test.describe("panel layout drag and drop", { tag: "@smoke" }, () => {
     await page.getByTestId("AddPanelButton").click();
     await page.getByTestId("panel-menu-item Plot").click();
     await page.getByTestId("add-series").click();
-    await page
-      .getByTestId("settings-tree-editor")
-      .getByPlaceholder("/some/topic.msgs[0].field")
-      .fill("mouse.clientX");
+    const seriesInput = page.getByPlaceholder("Field, or a message to add all its fields");
+    await seriesInput.fill("mouse.clientX");
+    await seriesInput.press("Enter");
     const panel = page.locator('[data-testid^="panel-mouseenter-container Plot!"]');
     await expect(panel.getByTestId("plot-legend-row-path-label")).toHaveText("mouse.clientX");
     await drag(page, async () => await toolbarOf(page, "Plot"), inGroup(page, "3D", 0.5, 0.5));

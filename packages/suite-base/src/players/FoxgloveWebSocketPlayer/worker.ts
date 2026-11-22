@@ -8,9 +8,29 @@ import {
 
 let ws: WebSocket | undefined = undefined;
 
-const send: (message: FromWorkerMessage) => void = self.postMessage;
-const sendWithTransfer: (message: FromWorkerMessage, transfer: Transferable[]) => void =
-  self.postMessage;
+const post: (message: FromWorkerMessage, transfer: Transferable[]) => void = self.postMessage;
+
+// Received messages go to the main thread in batches: one task there per batch instead of one per
+// message. A batch is posted once the messages already queued here have been handled.
+let batch: unknown[] = [];
+let transfer: ArrayBuffer[] = [];
+let flushTimer: ReturnType<typeof setTimeout> | undefined;
+
+function flush(): void {
+  clearTimeout(flushTimer);
+  flushTimer = undefined;
+  if (batch.length > 0) {
+    post({ type: "messages", data: batch }, transfer);
+    batch = [];
+    transfer = [];
+  }
+}
+
+/** Posts everything received so far first, so the main thread sees events in order */
+function send(message: FromWorkerMessage): void {
+  flush();
+  self.postMessage(message);
+}
 
 self.onmessage = (event: MessageEvent<ToWorkerMessage>) => {
   const { type, data } = event.data;
@@ -37,20 +57,11 @@ self.onmessage = (event: MessageEvent<ToWorkerMessage>) => {
           send({ type: "close", data: { code, reason, wasClean } });
         };
         ws.onmessage = (wsEvent: MessageEvent) => {
+          batch.push(wsEvent.data);
           if (wsEvent.data instanceof ArrayBuffer) {
-            sendWithTransfer(
-              {
-                type: "message",
-                data: wsEvent.data,
-              },
-              [wsEvent.data],
-            );
-          } else {
-            send({
-              type: "message",
-              data: wsEvent.data,
-            });
+            transfer.push(wsEvent.data);
           }
+          flushTimer ??= setTimeout(flush, 0);
         };
       } catch (err: unknown) {
         // try-catch is needed to catch `Mixed Content` errors in Chrome, where the client

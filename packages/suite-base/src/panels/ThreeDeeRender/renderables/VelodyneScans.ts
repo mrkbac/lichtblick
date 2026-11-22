@@ -33,6 +33,7 @@ import type { AnyRendererSubscription } from "../IRenderer";
 import type { Renderer } from "../Renderer";
 import { SceneExtension } from "../SceneExtension";
 import { SettingsTreeEntry, SettingsTreeNodeWithActionHandler } from "../SettingsManager";
+import { normalizeTime } from "../normalizeMessages";
 import { VELODYNE_SCAN_DATATYPES } from "../ros";
 import { pointCloudSettingsNode } from "../settingsNodes/topics";
 import { topicIsConvertibleToSchema } from "../topicIsConvertibleToSchema";
@@ -87,13 +88,19 @@ class VelodyneCloudConverter {
       return undefined;
     }
 
-    const stamp = toSec(scan.header.stamp);
+    const headerStamp = normalizeTime(scan.header.stamp);
+    const stamp = toSec(headerStamp);
     const maxPoints = RawPacket.MAX_POINTS_PER_PACKET * scan.packets.length;
     const cloud = new PointCloud({ stamp, maxPoints });
     const transformer = this.getTransformer(model);
 
     for (const packet of scan.packets) {
-      transformer.unpack(new RawPacket(packet.data), stamp, toSec(packet.stamp), cloud);
+      transformer.unpack(
+        new RawPacket(packet.data),
+        stamp,
+        toSec(normalizeTime(packet.stamp)),
+        cloud,
+      );
     }
 
     cloud.trim();
@@ -103,7 +110,7 @@ class VelodyneCloudConverter {
     }
 
     return {
-      timestamp: scan.header.stamp,
+      timestamp: headerStamp,
       frame_id: scan.header.frame_id,
       pose: makePose(),
       point_stride: cloud.point_step,

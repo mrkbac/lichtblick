@@ -51,9 +51,18 @@ export default class WorkerSocketAdapter implements IWebSocket {
             this.onerror(event.data);
           }
           break;
-        case "message":
-          if (this.onmessage) {
-            this.onmessage(event.data);
+        case "messages":
+          for (const data of event.data.data) {
+            if (this.#connectionClosed) {
+              break;
+            }
+            // Each frame used to be its own task: a throw for one frame is reported like an
+            // uncaught error and doesn't drop the frames after it
+            try {
+              this.onmessage?.({ data });
+            } catch (error) {
+              reportError(error);
+            }
           }
           break;
       }

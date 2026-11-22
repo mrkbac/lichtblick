@@ -185,6 +185,17 @@ describe("RemoteDataSourceFactory", () => {
     );
   });
 
+  it("should title the player with ds.name and keep it in the URL", () => {
+    factory.initialize(setupArgs({ url: "https://example.com/test.mcap", name: "Sample drive" }));
+
+    expect(IterablePlayer).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: "Sample drive",
+        urlParams: { urls: ["https://example.com/test.mcap"], name: "Sample drive" },
+      }),
+    );
+  });
+
   it("should not send cookies unless ds.includeCredentials is exactly true", () => {
     factory.initialize(setupArgs({ url: "https://example.com/test.bag", includeCredentials: "1" }));
 
@@ -207,4 +218,15 @@ describe("RemoteDataSourceFactory", () => {
 
     expect(() => factory.initialize(mockArgs)).toThrow("All sources need to be from the same type");
   });
+
+  it.each([".db3", ".ulg", ".csv"])(
+    "should explain that %s files can't be opened from a URL",
+    (ext) => {
+      const mockArgs = setupArgs({ url: `https://example.com/test${ext}` });
+
+      expect(() => factory.initialize(mockArgs)).toThrow(
+        `${ext} files can't be opened from a URL yet`,
+      );
+    },
+  );
 });

@@ -1,12 +1,12 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import { fromNanoSec, fromSec, isTime } from "@foxglove/rostime";
+import { fromNanoSec, fromSec } from "@foxglove/rostime";
 
 import { MessagePath } from "@lichtblick/message-path";
 import { Immutable, MessageEvent, Time } from "@lichtblick/suite";
 import { simpleGetMessagePathDataItems } from "@lichtblick/suite-base/components/MessagePathSyntax/simpleGetMessagePathDataItems";
-import { getTimestampForMessage } from "@lichtblick/suite-base/util/time";
+import { getTimestampForMessage, stampToTime } from "@lichtblick/suite-base/util/time";
 
 import { PlotTimestampMethod } from "./config";
 
@@ -15,8 +15,9 @@ import { PlotTimestampMethod } from "./config";
  * seconds (other numbers).
  */
 export function timeFromFieldValue(value: unknown): Time | undefined {
-  if (isTime(value)) {
-    return value;
+  const time = stampToTime(value);
+  if (time) {
+    return time;
   }
   if (typeof value === "bigint") {
     return fromNanoSec(value);
