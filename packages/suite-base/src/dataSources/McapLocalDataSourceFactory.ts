@@ -10,14 +10,12 @@ import {
   IDataSourceFactory,
   DataSourceFactoryInitializeArgs,
 } from "@lichtblick/suite-base/context/PlayerSelectionContext";
-import { IterablePlayer } from "@lichtblick/suite-base/players/IterablePlayer";
+import { loadIterablePlayer, prefetch } from "@lichtblick/suite-base/dataSources/playerModules";
 import { createMcapSourceWorker } from "@lichtblick/suite-base/players/IterablePlayer/Mcap/createMcapSourceWorker";
-import { WorkerSerializedIterableSource } from "@lichtblick/suite-base/players/IterablePlayer/WorkerIterableSource";
 import {
   MultiFileHydrationOverrides,
   addMultiFileHydrationOverrides,
 } from "@lichtblick/suite-base/players/IterablePlayer/shared/multiFileHydrationOptions";
-import { expandVideoSeekBackfill } from "@lichtblick/suite-base/players/IterablePlayer/videoSeekBackfill";
 import { Player } from "@lichtblick/suite-base/players/types";
 import { recordingName } from "@lichtblick/suite-base/util/compareSides";
 
@@ -38,7 +36,13 @@ class McapLocalDataSourceFactory implements IDataSourceFactory {
     this.multiFileHydrationOverrides = multiFileHydrationOverrides;
   }
 
-  public initialize(args: DataSourceFactoryInitializeArgs): Player | undefined {
+  public prefetch = (): void => {
+    prefetch(loadIterablePlayer);
+  };
+
+  public async initialize(args: DataSourceFactoryInitializeArgs): Promise<Player | undefined> {
+    const { IterablePlayer, WorkerSerializedIterableSource, expandVideoSeekBackfill } =
+      await loadIterablePlayer();
     const files = args.files ?? [];
 
     if (args.file) {

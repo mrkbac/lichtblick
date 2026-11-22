@@ -6,10 +6,7 @@ import {
   IDataSourceFactory,
   DataSourceFactoryInitializeArgs,
 } from "@lichtblick/suite-base/context/PlayerSelectionContext";
-import {
-  IterablePlayer,
-  WorkerIterableSource,
-} from "@lichtblick/suite-base/players/IterablePlayer";
+import { loadIterablePlayer, prefetch } from "@lichtblick/suite-base/dataSources/playerModules";
 import { Player } from "@lichtblick/suite-base/players/types";
 
 class CsvLocalDataSourceFactory implements IDataSourceFactory {
@@ -20,7 +17,12 @@ class CsvLocalDataSourceFactory implements IDataSourceFactory {
   public supportedFileTypes = [AllowedFileExtensions.CSV, AllowedFileExtensions.TSV];
   public supportsMultiFile = true;
 
-  public initialize(args: DataSourceFactoryInitializeArgs): Player | undefined {
+  public prefetch = (): void => {
+    prefetch(loadIterablePlayer);
+  };
+
+  public async initialize(args: DataSourceFactoryInitializeArgs): Promise<Player | undefined> {
+    const { IterablePlayer, WorkerIterableSource } = await loadIterablePlayer();
     const files = args.files ?? (args.file ? [args.file] : []);
     if (files.length === 0) {
       return;

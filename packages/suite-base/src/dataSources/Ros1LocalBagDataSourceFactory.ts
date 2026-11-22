@@ -10,8 +10,7 @@ import {
   IDataSourceFactory,
   DataSourceFactoryInitializeArgs,
 } from "@lichtblick/suite-base/context/PlayerSelectionContext";
-import { IterablePlayer } from "@lichtblick/suite-base/players/IterablePlayer";
-import { WorkerSerializedIterableSource } from "@lichtblick/suite-base/players/IterablePlayer/WorkerIterableSource";
+import { loadIterablePlayer, prefetch } from "@lichtblick/suite-base/dataSources/playerModules";
 import { Player } from "@lichtblick/suite-base/players/types";
 
 class Ros1LocalBagDataSourceFactory implements IDataSourceFactory {
@@ -21,7 +20,12 @@ class Ros1LocalBagDataSourceFactory implements IDataSourceFactory {
   public iconName: IDataSourceFactory["iconName"] = "OpenFile";
   public supportedFileTypes = [AllowedFileExtensions.BAG];
 
-  public initialize(args: DataSourceFactoryInitializeArgs): Player | undefined {
+  public prefetch = (): void => {
+    prefetch(loadIterablePlayer);
+  };
+
+  public async initialize(args: DataSourceFactoryInitializeArgs): Promise<Player | undefined> {
+    const { IterablePlayer, WorkerSerializedIterableSource } = await loadIterablePlayer();
     const files = args.files ?? [];
 
     if (args.file) {

@@ -13,7 +13,7 @@ import { useTranslation } from "react-i18next";
 import { formatByteSize } from "@lichtblick/den/format";
 import { Immutable } from "@lichtblick/suite";
 import { AttachmentDialog } from "@lichtblick/suite-base/components/Attachments/AttachmentDialog";
-import { useExportableFile } from "@lichtblick/suite-base/components/ExportRecordingDialog/exportRecording";
+import { useExportableFile } from "@lichtblick/suite-base/components/ExportRecordingDialog/exportSource";
 import { useMessagePipeline } from "@lichtblick/suite-base/components/MessagePipeline";
 import { selectCurrentTime } from "@lichtblick/suite-base/components/MessagePipeline/selectors";
 import { RecordingFileInfo } from "@lichtblick/suite-base/players/types";

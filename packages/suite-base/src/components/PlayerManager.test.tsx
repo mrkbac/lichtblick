@@ -12,6 +12,7 @@ import {
   usePlayerSelection,
 } from "@lichtblick/suite-base/context/PlayerSelectionContext";
 import type { RecentRecord } from "@lichtblick/suite-base/hooks/useIndexedDbRecents";
+import { Player } from "@lichtblick/suite-base/players/types";
 import { useSourcePick } from "@lichtblick/suite-base/util/sourcePick";
 
 import PlayerManager from "./PlayerManager";
@@ -132,6 +133,117 @@ describe("PlayerManager", () => {
       storedRecents.recents = [];
       storedRecents.recentsLoaded = false;
       sessionStorage.clear();
+    }
+  });
+
+  // Lets a selection that is awaiting something run to its end
+  const settle = async () => {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  };
+
+  function renderManager(sources: IDataSourceFactory[]): () => PlayerSelection {
+    let selection: PlayerSelection | undefined;
+    function Probe() {
+      selection = usePlayerSelection();
+      return <></>;
+    }
+    render(
+      <PlayerManager playerSources={sources}>
+        <Probe />
+      </PlayerManager>,
+    );
+    return () => selection!;
+  }
+
+  it("drops a player whose import finished after a newer selection", async () => {
+    // Given - a source whose initialize is still loading its player's code
+    const loading = Promise.withResolvers<Player | undefined>();
+    const close = vi.fn();
+    const late = { close } as unknown as Player;
+    const slow = source("slow", async () => await loading.promise);
+    const fast = source("fast", () => undefined);
+    const selection = renderManager([slow, fast]);
+    const files = [new File(["a"], "a.bag"), new File(["b"], "b.bag")];
+
+    // When - another source is picked meanwhile, then the slow import finishes
+    await act(async () => {
+      selection().selectSource("slow", { type: "file", files });
+      await settle();
+    });
+    await act(async () => {
+      selection().selectSource("fast", { type: "file", files });
+      await settle();
+    });
+    await act(async () => {
+      loading.resolve(late);
+      await settle();
+    });
+
+    // Then - the newer selection stays and the late player is closed, never used
+    expect(selection().selectedSource).toBe(fast);
+    expect(close).toHaveBeenCalled();
+  });
+
+  it("closes a player whose import finished after the source was closed", async () => {
+    // Given
+    const loading = Promise.withResolvers<Player | undefined>();
+    const close = vi.fn();
+    const late = { close } as unknown as Player;
+    const slow = source("slow", async () => await loading.promise);
+    const selection = renderManager([slow]);
+
+    // When
+    await act(async () => {
+      selection().selectSource("slow", {
+        type: "file",
+        files: [new File(["a"], "a.bag"), new File(["b"], "b.bag")],
+      });
+      await settle();
+    });
+    act(() => {
+      selection().closeSource();
+    });
+    await act(async () => {
+      loading.resolve(late);
+      await settle();
+    });
+
+    // Then
+    expect(selection().selectedSource).toBeUndefined();
+    expect(close).toHaveBeenCalled();
+  });
+
+  it("starts loading a source's player when it is picked and file sources' players once idle", async () => {
+    // Given
+    const filePrefetch = vi.fn();
+    const connectionPrefetch = vi.fn();
+    const file = { ...source("file", () => undefined), prefetch: filePrefetch };
+    const connection: IDataSourceFactory = {
+      ...source("connection", () => undefined),
+      type: "connection",
+      prefetch: connectionPrefetch,
+    };
+    vi.useFakeTimers();
+    try {
+      const selection = renderManager([file, connection]);
+
+      // When - the app goes idle after starting
+      await act(async () => {
+        await vi.runAllTimersAsync();
+      });
+
+      // Then - file sources prefetch, connection sources wait until picked
+      expect(filePrefetch).toHaveBeenCalledTimes(1);
+      expect(connectionPrefetch).not.toHaveBeenCalled();
+
+      vi.useRealTimers();
+      await act(async () => {
+        selection().selectSource("connection", { type: "connection", params: { url: "x" } });
+        await settle();
+      });
+      expect(connectionPrefetch).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
     }
   });
 });
