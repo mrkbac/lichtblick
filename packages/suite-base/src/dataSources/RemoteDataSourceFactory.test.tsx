@@ -185,6 +185,17 @@ describe("RemoteDataSourceFactory", () => {
     );
   });
 
+  it("should title the player with ds.name and keep it in the URL", () => {
+    factory.initialize(setupArgs({ url: "https://example.com/test.mcap", name: "Sample drive" }));
+
+    expect(IterablePlayer).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: "Sample drive",
+        urlParams: { urls: ["https://example.com/test.mcap"], name: "Sample drive" },
+      }),
+    );
+  });
+
   it("should not send cookies unless ds.includeCredentials is exactly true", () => {
     factory.initialize(setupArgs({ url: "https://example.com/test.bag", includeCredentials: "1" }));
 

@@ -25,6 +25,7 @@ vi.mock("@lichtblick/suite-base/components/MessagePipeline");
 vi.mock("./useTopicListSearch");
 vi.mock("./useOpenMessagePathsInPanel", () => ({
   useOpenMessagePathsInPanel: () => vi.fn(),
+  usePrefetchOpenInSchemas: () => vi.fn(),
 }));
 vi.mock("./useMultiSelection", () => ({
   useMultiSelection: vi.fn().mockReturnValue({

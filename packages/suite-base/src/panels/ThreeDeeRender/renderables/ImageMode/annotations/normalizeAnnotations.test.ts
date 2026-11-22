@@ -13,6 +13,41 @@ import {
 import { normalizeAnnotations } from "./normalizeAnnotations";
 
 describe("normalizeAnnotations", () => {
+  it("reads ROS 2 { sec, nanosec } stamps", () => {
+    const stamp = { sec: 2, nanosec: 5 };
+    const marker = {
+      header: { stamp, frame_id: "cam" },
+      type: 0,
+      action: 0,
+      position: { x: 1, y: 2, z: 0 },
+      scale: 3,
+      outline_color: { r: 1, g: 1, b: 1, a: 1 },
+      filled: false,
+      fill_color: { r: 0, g: 0, b: 0, a: 0 },
+      points: [],
+      outline_colors: [],
+    };
+    const fromMarker = normalizeAnnotations(marker, "visualization_msgs/ImageMarker");
+    expect(fromMarker[0]?.stamp).toEqual({ sec: 2, nsec: 5 });
+
+    const fromFoxglove = normalizeAnnotations(
+      {
+        circles: [
+          {
+            timestamp: stamp,
+            position: { x: 1, y: 2 },
+            diameter: 3,
+            thickness: 1,
+            fill_color: { r: 0, g: 0, b: 0, a: 0 },
+            outline_color: { r: 1, g: 1, b: 1, a: 1 },
+          },
+        ],
+      },
+      "foxglove_msgs/msg/ImageAnnotations",
+    );
+    expect(fromFoxglove[0]?.stamp).toEqual({ sec: 2, nsec: 5 });
+  });
+
   it("handles circle", () => {
     const input: Partial<FoxgloveImageAnnotations> = {
       circles: [

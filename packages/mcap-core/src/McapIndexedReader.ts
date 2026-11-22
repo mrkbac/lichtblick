@@ -539,28 +539,24 @@ export class McapIndexedReader<TReadOptions = unknown> {
       }
     }
 
-    const chunkCursors = new Heap<ChunkCursor>((a, b) => a.compare(b));
     let chunksOrdered = true;
     let prevChunkEndTime: bigint | undefined;
     const chunksInRange: ChunkIndex[] = [];
     for (const chunkIndex of this.chunkIndexes) {
       if (chunkIndex.messageStartTime <= endingAt && chunkIndex.messageEndTime >= startingAt) {
         chunksInRange.push(chunkIndex);
-        chunkCursors.push(
-          new ChunkCursor({
-            chunkIndex,
-            relevantChannels,
-            startingAt,
-            endingAt,
-            reverse,
-          }),
-        );
         if (chunksOrdered && prevChunkEndTime != undefined) {
           chunksOrdered = chunkIndex.messageStartTime >= prevChunkEndTime;
         }
         prevChunkEndTime = chunkIndex.messageEndTime;
       }
     }
+    // In the order the read reaches them, so cursors join the heap only once they can hold the
+    // next message: a long read of a file with many chunks (playback from the start, every seek)
+    // otherwise built a cursor for each chunk up front and paid for a heap of all of them.
+    sortChunksForRead(chunksInRange, reverse);
+    const chunkCursors = new Heap<ChunkCursor>((a, b) => a.compare(b));
+    let nextChunk = 0;
 
     const readAhead = this.#chunkCache?.readAhead;
     // Built on first use, after the first message is out: sorting a huge file's chunks takes a while
@@ -582,7 +578,29 @@ export class McapIndexedReader<TReadOptions = unknown> {
       chunkViewCache.set(chunkIndex.chunkStartOffset, view);
       return view;
     };
-    for (let cursor; (cursor = chunkCursors.peek()); ) {
+    for (;;) {
+      // Add the chunks whose first message (last, for a reverse read) may come before the heap's
+      // next one. Ties join too: the heap orders them by file offset.
+      for (let first = chunkCursors.peek(); nextChunk < chunksInRange.length; ) {
+        const chunkIndex = chunksInRange[nextChunk]!;
+        if (
+          first &&
+          (reverse
+            ? chunkIndex.messageEndTime < first.sortTime()
+            : chunkIndex.messageStartTime > first.sortTime())
+        ) {
+          break;
+        }
+        chunkCursors.push(
+          new ChunkCursor({ chunkIndex, relevantChannels, startingAt, endingAt, reverse }),
+        );
+        nextChunk++;
+        first = chunkCursors.peek();
+      }
+      const cursor = chunkCursors.peek();
+      if (!cursor) {
+        break;
+      }
       const chunkOffset = cursor.chunkIndex.chunkStartOffset;
       if (!cursor.hasMessageIndexes()) {
         // If we encounter a chunk whose message indexes have not been loaded yet, load them and re-organize the heap.
@@ -640,7 +658,7 @@ export class McapIndexedReader<TReadOptions = unknown> {
       yield record;
 
       if (loadAheadFrom && readAhead) {
-        plan ??= readAheadPlan(chunksInRange, reverse, relevantChannels);
+        plan ??= readAheadPlan(chunksInRange, relevantChannels);
         this.#loadAhead(readAhead, plan, loadAheadFrom, {
           validateCrcs: validateCrcs ?? true,
           readOptions,
@@ -898,12 +916,11 @@ type ReadAheadPlan = {
 };
 
 /**
- * The chunks in a read's time range that hold a message on a channel it wants, ordered by when the
- * read reaches them: by first message time (last message time, newest first, for a reverse read).
+ * The chunks in a read's time range that hold a message on a channel it wants, in the order the
+ * read reaches them. `chunksInRange` is in that order already (see `sortChunksForRead`).
  */
 function readAheadPlan(
   chunksInRange: readonly ChunkIndex[],
-  reverse: boolean,
   relevantChannels: Set<number> | undefined,
 ): ReadAheadPlan {
   const chunks: ChunkIndex[] = [];
@@ -923,18 +940,37 @@ function readAheadPlan(
     }
     chunks.push(chunkIndex);
   }
-  const compare = reverse
-    ? (a: ChunkIndex, b: ChunkIndex) => compareBigInt(b.messageEndTime, a.messageEndTime)
-    : (a: ChunkIndex, b: ChunkIndex) => compareBigInt(a.messageStartTime, b.messageStartTime);
-  // Chunks are usually written in time order already
-  if (chunks.some((chunk, i) => i > 0 && compare(chunks[i - 1]!, chunk) > 0)) {
-    chunks.sort(compare);
-  }
   const position = new Map<bigint, number>();
   for (const [i, chunk] of chunks.entries()) {
     position.set(chunk.chunkStartOffset, i);
   }
   return { chunks, position };
+}
+
+/**
+ * Sorts a read's chunks in place, in the order it reaches them: by first message time (last message
+ * time, newest first, for a reverse read).
+ */
+function sortChunksForRead(chunks: ChunkIndex[], reverse: boolean): void {
+  if (reverse) {
+    chunks.reverse();
+  }
+  // Ties go by file offset, like the merge heap: a read-ahead plan in another order would skip
+  // the chunk the read reaches next
+  const compare = (a: ChunkIndex, b: ChunkIndex) => {
+    const byTime = reverse
+      ? compareBigInt(b.messageEndTime, a.messageEndTime)
+      : compareBigInt(a.messageStartTime, b.messageStartTime);
+    if (byTime !== 0) {
+      return byTime;
+    }
+    const byOffset = compareBigInt(a.chunkStartOffset, b.chunkStartOffset);
+    return reverse ? -byOffset : byOffset;
+  };
+  // Chunks are usually written in time order already
+  if (chunks.some((chunk, i) => i > 0 && compare(chunks[i - 1]!, chunk) > 0)) {
+    chunks.sort(compare);
+  }
 }
 
 function compareBigInt(a: bigint, b: bigint): number {

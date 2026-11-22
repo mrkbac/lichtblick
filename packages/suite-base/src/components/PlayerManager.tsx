@@ -565,6 +565,7 @@ export default function PlayerManager(
       (item): RecentSource => ({
         id: item.id,
         title: item.title,
+        name: item.type === "connection" ? item.extra?.name : undefined,
         label: item.label,
         sourceId: item.sourceId,
         type: item.type,
