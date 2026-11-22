@@ -905,9 +905,15 @@ importers:
 
   packages/suite-web:
     dependencies:
+      '@ai-ecoverse/wasm-tailscale':
+        specifier: 1.104.1-13
+        version: 1.104.1-13
       '@lichtblick/suite-base':
         specifier: workspace:*
         version: link:../suite-base
+      idb:
+        specifier: 8.0.4
+        version: 8.0.4
     devDependencies:
       '@fluentui/react-icons':
         specifier: 2.0.345
@@ -933,6 +939,9 @@ importers:
       '@testing-library/react':
         specifier: 16.3.3
         version: 16.3.3(@testing-library/dom@10.4.1)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
+      fake-indexeddb:
+        specifier: 6.2.7
+        version: 6.2.7
       react:
         specifier: 19.3.1
         version: 19.3.1
@@ -1039,6 +1048,9 @@ packages:
 
   '@adobe/css-tools@4.5.0':
     resolution: {integrity: sha512-6OzddxPio9UiWTCemp4N8cYLV2ZN1ncRnV1cVGtve7dhPOtRkleRyx32GQCYSwDYgaHU3USMm84tNsvKzRCa1Q==}
+
+  '@ai-ecoverse/wasm-tailscale@1.104.1-13':
+    resolution: {integrity: sha512-+rFjdgBWVaPaCjSStZb+gFEgxFJehdzQAwICLTSj36Kmq0a4RZKSwFkD7U/eq13zkAP7jQFTkcZU9qYo1LbWSw==}
 
   '@apideck/better-ajv-errors@0.3.7':
     resolution: {integrity: sha512-TajUJwGWbDwkCx/CZi7tRE8PVB7simCvKJfHUsSdvps+aTM/PDPP4gkLmKnc+x3CE//y9i/nj74GqdL/hwk7Iw==}
@@ -8187,6 +8199,8 @@ snapshots:
       semver: 6.3.1
 
   '@adobe/css-tools@4.5.0': {}
+
+  '@ai-ecoverse/wasm-tailscale@1.104.1-13': {}
 
   '@apideck/better-ajv-errors@0.3.7(ajv@8.20.0)':
     dependencies:

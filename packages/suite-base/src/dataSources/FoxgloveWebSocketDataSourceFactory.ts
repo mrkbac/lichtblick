@@ -42,6 +42,18 @@ export default class FoxgloveWebSocketDataSourceFactory implements IDataSourceFa
     ],
   };
 
+  public ConnectionDialog?: IDataSourceFactory["ConnectionDialog"];
+
+  public constructor(
+    options?: Pick<IDataSourceFactory, "id" | "displayName" | "ConnectionDialog">,
+  ) {
+    if (options) {
+      this.id = options.id;
+      this.displayName = options.displayName;
+      this.ConnectionDialog = options.ConnectionDialog;
+    }
+  }
+
   public initialize(args: DataSourceFactoryInitializeArgs): Player | undefined {
     const url = args.params?.url;
     if (!url) {
@@ -51,6 +63,7 @@ export default class FoxgloveWebSocketDataSourceFactory implements IDataSourceFa
     return new FoxgloveWebSocketPlayer({
       url,
       sourceId: this.id,
+      transport: args.transport,
     });
   }
 }

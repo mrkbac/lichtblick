@@ -13,10 +13,10 @@ class MockWebSocket {
   public static lastInstance: MockWebSocket | undefined;
   public binaryType = "";
   public protocol = "foxglove.sdk.v1";
-  public onerror?: (event: unknown) => void;
-  public onopen?: (event: unknown) => void;
-  public onclose?: (event: unknown) => void;
-  public onmessage?: (event: unknown) => void;
+  public onerror: ((event: unknown) => void) | undefined;
+  public onopen: ((event: unknown) => void) | undefined;
+  public onclose: ((event: unknown) => void) | undefined;
+  public onmessage: ((event: unknown) => void) | undefined;
   public close = vi.fn();
   public send = vi.fn();
 
@@ -290,5 +290,44 @@ describe("FoxgloveWebSocketPlayer playback control", () => {
         }),
       ).requestId,
     ).toBe("");
+  });
+});
+
+describe("Foxglove live connection backend", () => {
+  it("reopens a failed stream on the same backend, stops on sign-out and disposes once", () => {
+    vi.useFakeTimers();
+    const open = vi.fn(() => new MockWebSocket());
+    const dispose = vi.fn();
+    const player = new FoxgloveWebSocketPlayer({
+      url: "ws://example:8765",
+      sourceId: "example",
+      transport: { open, dispose },
+    });
+    try {
+      expect(open).toHaveBeenCalledWith("ws://example:8765", [
+        "foxglove.websocket.v1",
+        "foxglove.sdk.v1",
+      ]);
+      open.mock.results[0]!.value.onclose?.({ code: 1006, reason: "" });
+      vi.advanceTimersByTime(3000);
+      expect(open).toHaveBeenCalledTimes(2);
+      const socket = open.mock.results[1]!.value;
+      socket.onclose?.({ code: 1008, reason: "Signed out", retryable: false });
+      vi.advanceTimersByTime(10000);
+      expect(open).toHaveBeenCalledTimes(2);
+      expect(dispose).not.toHaveBeenCalled();
+      player.close();
+      player.close();
+      expect(dispose).toHaveBeenCalledOnce();
+      expect(console.error).toHaveBeenLastCalledWith(
+        "Player alert",
+        "ws:connection-failed",
+        expect.objectContaining({ message: "Signed out" }),
+      );
+      (console.error as Mock).mockClear();
+    } finally {
+      player.close();
+      vi.useRealTimers();
+    }
   });
 });

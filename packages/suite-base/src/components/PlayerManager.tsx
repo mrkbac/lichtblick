@@ -73,6 +73,7 @@ import { rememberHandle } from "@lichtblick/suite-base/util/compareSides";
 import { recentArgs, recentFileTitle } from "@lichtblick/suite-base/util/recentSources";
 import { toError } from "@lichtblick/suite-base/util/toError";
 
+import { useConnectionDialog } from "./useConnectionDialog";
 import { useTrustedUserScripts } from "./useTrustedUserScripts";
 
 const log = Logger.getLogger(__filename);
@@ -249,11 +250,14 @@ export default function PlayerManager(
   // Bumped on every selectSource/closeSource call, so a slow earlier selection can tell it was
   // superseded and won't apply its player or layout late.
   const selectionSeq = useRef(0);
+  const { dialog: connectionDialog, prompt, dismiss } = useConnectionDialog();
 
   const selectSource = useCallback(
-    async (sourceId: string, args?: DataSourceArgs) => {
+    async (sourceId: string, initialArgs?: DataSourceArgs) => {
+      let args = initialArgs;
       log.debug(`Select Source: ${sourceId}`);
       const seq = ++selectionSeq.current;
+      dismiss();
 
       const foundSource = playerSources.find(
         (source) => (source.id === sourceId || source.legacyIds?.includes(sourceId)) ?? false,
@@ -272,6 +276,19 @@ export default function PlayerManager(
         }
         return newPlayer;
       };
+      let transport: DataSourceFactoryInitializeArgs["transport"];
+      if (args?.type === "connection" && foundSource.ConnectionDialog) {
+        const result = await prompt(foundSource.ConnectionDialog, args.params?.url);
+        if (!result) {
+          return;
+        }
+        if (!isMounted() || seq !== selectionSeq.current) {
+          result.transport.dispose?.();
+          return;
+        }
+        transport = result.transport;
+        args = { ...args, params: { ...args.params, url: result.url } };
+      }
       setCurrentRecentId(undefined);
 
       setSelectedSource(foundSource);
@@ -355,7 +372,12 @@ export default function PlayerManager(
             const newPlayer = initializePlayer({
               params: args.params,
               sourceMetadata: args.sourceMetadata,
+              transport,
             });
+            if (transport && !newPlayer) {
+              throw new Error("Unable to initialize player");
+            }
+            transport = undefined; // The player owns the backend from here.
             setBasePlayer(newPlayer);
             writeLastFile(undefined);
 
@@ -454,6 +476,7 @@ export default function PlayerManager(
 
         enqueueSnackbar("Unable to initialize player", { variant: "error" });
       } catch (error) {
+        transport?.dispose?.();
         // A superseded selection (closed or replaced meanwhile) shouldn't surface its error
         if (seq === selectionSeq.current) {
           enqueueSnackbar(toError(error).message, { variant: "error" });
@@ -462,6 +485,8 @@ export default function PlayerManager(
     },
     [
       playerSources,
+      dismiss,
+      prompt,
       analytics,
       enqueueSnackbar,
       isMounted,
@@ -541,6 +566,7 @@ export default function PlayerManager(
 
   const closeSource = useCallback(() => {
     selectionSeq.current++;
+    dismiss();
     // Dropping the player makes MessagePipelineProvider close() it (e.g. closes the websocket).
     setBasePlayer(undefined);
     setSelectedSource(undefined);
@@ -557,7 +583,7 @@ export default function PlayerManager(
     });
     url.searchParams.delete("mcap-bundle");
     window.history.replaceState(undefined, "", url.href);
-  }, []);
+  }, [dismiss]);
 
   // Make a RecentSources array for the PlayerSelectionContext
   const recentSources = useMemo(() => {
@@ -609,6 +635,7 @@ export default function PlayerManager(
   return (
     <>
       {userScriptsPrompt}
+      {connectionDialog}
       <PlayerSelectionContext.Provider value={value}>
         <MessagePipelineProvider player={player}>
           <CompareProvider>{children}</CompareProvider>

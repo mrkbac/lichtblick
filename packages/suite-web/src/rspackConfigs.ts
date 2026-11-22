@@ -14,6 +14,9 @@ import {
 } from "@rspack/core";
 import { ReactRefreshRspackPlugin } from "@rspack/plugin-react-refresh";
 import { writeFile } from "fs/promises";
+import { createRequire } from "node:module";
+import { fileURLToPath } from "node:url";
+import { gzipSync } from "node:zlib";
 import path from "path";
 import { generateSW } from "workbox-build";
 
@@ -26,6 +29,11 @@ import {
 import * as palette from "@lichtblick/theme/src/palette.ts";
 
 import { ASSET_LIST_FILE, type AssetList, HASHED_FILE, RUNTIME_CACHE_NAME } from "./assetCache.ts";
+// Match the worker runtime to the versioned static WASM across web deployments.
+const { version } = createRequire(import.meta.url)("@ai-ecoverse/wasm-tailscale/package.json") as {
+  version: string;
+};
+const tailscaleAsset = `tailscale/client-${version}.wasm.gz`;
 
 /**
  * Upper bound for the JS the web app loads before its first render: the entry chunk plus the
@@ -263,9 +271,25 @@ export const mainConfig =
 
       plugins: [
         ...plugins,
+        new rspack.DefinePlugin({ TAILSCALE_WASM_ASSET: JSON.stringify(tailscaleAsset) }),
         ...(appConfig.plugins ?? []),
         new rspack.CopyRspackPlugin({
           patterns: [
+            {
+              from: fileURLToPath(import.meta.resolve("@ai-ecoverse/wasm-tailscale/main.wasm")),
+              to: tailscaleAsset,
+              transform: (input) => gzipSync(input),
+            },
+            ...["LICENSE", "THIRD-PARTY-NOTICES.md"].map((name) => ({
+              from: path.join(
+                path.dirname(
+                  fileURLToPath(import.meta.resolve("@ai-ecoverse/wasm-tailscale/package.json")),
+                ),
+                name,
+              ),
+              to: `tailscale/${name}`,
+              toType: "file" as const,
+            })),
             {
               from: path.resolve(import.meta.dirname, "..", "public"),
               // Name and colors come from package.json productName and the theme palette

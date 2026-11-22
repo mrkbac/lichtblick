@@ -8,10 +8,12 @@
 import { createContext, useContext } from "react";
 
 import { LayoutData } from "@lichtblick/suite-base/context/CurrentLayoutContext/actions";
+import type { LiveConnectionBackend } from "@lichtblick/suite-base/players/LiveConnectionBackend";
 import { Player } from "@lichtblick/suite-base/players/types";
 import { RegisteredIconNames } from "@lichtblick/suite-base/types/Icons";
 
 export type DataSourceFactoryInitializeArgs = {
+  transport?: LiveConnectionBackend;
   file?: File;
   // The handle `file` came from, if any (see IterableSourceInitializeArgs)
   handle?: FileSystemFileHandle;
@@ -56,6 +58,12 @@ export interface IDataSourceFactory {
   badgeText?: string;
   hidden?: boolean;
   warning?: string | React.JSX.Element;
+
+  ConnectionDialog?: React.ComponentType<{
+    initialUrl?: string;
+    onCancel: () => void;
+    onConnect: (url: string, transport: LiveConnectionBackend) => void;
+  }>;
 
   sampleLayout?: LayoutData;
   /**

@@ -294,7 +294,12 @@ export function OpenUrlInput({
               key={s.id}
               selected={s === picked}
               onClick={() => {
-                pick(s);
+                if (s.ConnectionDialog) {
+                  setMenuAnchor(undefined);
+                  selectSource(s.id, { type: "connection", params: isUrl ? { url } : {} });
+                } else {
+                  pick(s);
+                }
               }}
             >
               {s.displayName}

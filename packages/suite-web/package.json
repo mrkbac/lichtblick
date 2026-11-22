@@ -4,7 +4,9 @@
   "private": true,
   "main": "./src/index.tsx",
   "dependencies": {
-    "@lichtblick/suite-base": "workspace:*"
+    "@ai-ecoverse/wasm-tailscale": "1.104.1-13",
+    "@lichtblick/suite-base": "workspace:*",
+    "idb": "8.0.4"
   },
   "devDependencies": {
     "@fluentui/react-icons": "2.0.345",
@@ -15,6 +17,7 @@
     "@rspack/core": "2.3.1",
     "@rspack/plugin-react-refresh": "2.0.2",
     "@testing-library/react": "16.3.3",
+    "fake-indexeddb": "6.2.7",
     "react": "19.3.1",
     "react-dom": "19.3.1",
     "react-refresh": "0.18.0",

@@ -114,7 +114,17 @@ describe("Start Component", () => {
     });
     (usePlayerSelection as Mock).mockReturnValue({
       recentSources,
-      availableSources: [wsSource, rosbridgeSource, udpSource],
+      availableSources: [
+        wsSource,
+        rosbridgeSource,
+        udpSource,
+        {
+          ...wsSource,
+          id: "custom",
+          displayName: "Custom connection",
+          ConnectionDialog: () => <div />,
+        },
+      ],
       selectRecent: mockSelectRecent,
       selectSource: mockSelectSource,
       removeRecent: mockRemoveRecent,
@@ -196,6 +206,17 @@ describe("Start Component", () => {
     expect(mockSelectSource).toHaveBeenCalledWith("udp", {
       type: "connection",
       params: { port: "3000" },
+    });
+  });
+
+  it("opens an interactive connection dialog with the address already entered", () => {
+    setup();
+    typeUrl("localhost:8765");
+    fireEvent.click(screen.getByRole("button", { name: "connectionType" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Custom connection" }));
+    expect(mockSelectSource).toHaveBeenCalledWith("custom", {
+      type: "connection",
+      params: { url: "ws://localhost:8765" },
     });
   });
 
