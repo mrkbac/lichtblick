@@ -50,14 +50,14 @@ function toTime(value: unknown): Time | undefined {
     return undefined;
   }
   const t = value as {
-    sec?: number;
+    sec?: number | bigint;
     nsec?: number;
     nanosec?: number;
     seconds?: number | bigint;
     nanos?: number;
   };
   if (t.sec != undefined) {
-    return stampToTime(t) ?? { sec: t.sec, nsec: 0 };
+    return stampToTime(t) ?? { sec: Number(t.sec), nsec: t.nsec ?? t.nanosec ?? 0 };
   }
   if (t.seconds != undefined) {
     return { sec: Number(t.seconds), nsec: t.nanos ?? 0 };

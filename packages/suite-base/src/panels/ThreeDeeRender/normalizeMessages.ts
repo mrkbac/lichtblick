@@ -38,10 +38,12 @@ export type LegacyFrameTransform = {
   transform: LegacyTransform;
 };
 
-/** A stamp as `Time` (see `stampToTime`), with missing parts as 0. */
-export function normalizeTime(time: unknown): Time {
-  const stamp = time as { sec?: unknown } | undefined;
-  return stampToTime(time) ?? { sec: typeof stamp?.sec === "number" ? stamp.sec : 0, nsec: 0 };
+/**
+ * A stamp or duration as `Time` (see `stampToTime`), with missing parts as 0: a duration such as a
+ * marker `lifetime` may carry only nanoseconds.
+ */
+export function normalizeTime(time: (Partial<Time> & { nanosec?: number }) | undefined): Time {
+  return stampToTime(time) ?? { sec: time?.sec ?? 0, nsec: time?.nsec ?? time?.nanosec ?? 0 };
 }
 
 export function normalizeByteArray(byteArray: unknown): Uint8Array {
