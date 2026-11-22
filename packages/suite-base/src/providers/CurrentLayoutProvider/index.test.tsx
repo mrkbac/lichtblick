@@ -444,6 +444,64 @@ describe("CurrentLayoutProvider", () => {
     expect(mounts).toBe(3);
   });
 
+  it("doesn't remount a panel that undo removes from the layout", async () => {
+    mockLayoutManager.getLayouts.mockImplementation(async () => [
+      {
+        id: "example",
+        name: "Test layout",
+        data: { data: TEST_LAYOUT },
+        permission: "CREATOR_WRITE",
+      },
+    ]);
+    mockLayoutManager.getLayout.mockResolvedValue({
+      id: "example",
+      name: "Test layout",
+      baseline: { data: TEST_LAYOUT, updatedAt: new Date(10).toISOString() },
+    });
+    mockLayoutManager.updateLayout.mockImplementation(async () => ({
+      id: "example",
+      name: "Test layout",
+      baseline: { data: TEST_LAYOUT, updatedAt: new Date(10).toISOString() },
+    }));
+    mockUserProfile.getUserProfile.mockResolvedValue({ currentLayoutId: "example" });
+    let mounts = 0;
+    function ReadsConfigOnMount() {
+      useEffect(() => {
+        mounts++;
+      }, []);
+      return <></>;
+    }
+
+    const { result } = renderTest({
+      mockLayoutManager,
+      mockUserProfile,
+      siblings: (
+        <PanelStateContextProvider>
+          <PanelRemounter id="ExamplePanel!2">
+            <ReadsConfigOnMount />
+          </PanelRemounter>
+        </PanelStateContextProvider>
+      ),
+    });
+    await act(async () => {
+      await result.current.childMounted;
+    });
+    await waitFor(() => {
+      expect(result.current.layoutState.selectedLayout?.loading).toBe(false);
+    });
+    act(() => {
+      result.current.actions.addPanel({ id: "ExamplePanel!2", config: { foo: "added" } });
+    });
+    act(() => {
+      result.current.actions.undoLayoutChange();
+    });
+
+    expect(result.current.layoutState.selectedLayout?.data?.configById["ExamplePanel!2"]).toBe(
+      undefined,
+    );
+    expect(mounts).toBe(1);
+  });
+
   it("continues the selected layout's saved history", async () => {
     // Saved as the provider shows it: migrated.
     const current = migratePanelsState(TEST_LAYOUT);

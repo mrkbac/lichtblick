@@ -41,7 +41,10 @@ export function PanelRemounter({
   const seen = useRef({ config, remounts: 0 });
   if (config !== seen.current.config) {
     // Deep compare: a layout load hands every panel new objects, often with the same content.
+    // A panel the new layout no longer has (e.g. undoing its Add Panel) is about to unmount:
+    // remounting it would only let it save its defaults into the restored step.
     if (
+      config != undefined &&
       getCurrentLayoutState().selectedLayout?.externalEdit === true &&
       !_.isEqual(config, seen.current.config)
     ) {
