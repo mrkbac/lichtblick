@@ -329,6 +329,68 @@ export class BlockLoader {
     this.#activeChangeCondvar.notifyAll();
   }
 
+  /** Of `topics`, those every block from `time` to the end holds, loaded with the wanted fields */
+  public topicsHeldFrom(topics: TopicSelection, time: Time): TopicSelection {
+    const first = this.#blockOf(time);
+    return new Map(
+      [...topics].filter(([topic, subscription]) => {
+        for (let id = first; id < this.#blocks.length; id++) {
+          if (!this.#holds(id, topic, subscription)) {
+            return false;
+          }
+        }
+        return this.#blocks.length > 0;
+      }),
+    );
+  }
+
+  /**
+   * The preloaded messages of `topics` received from `start` to `end` (inclusive), in receive time
+   * order. Undefined if a block in that range doesn't hold one of the topics.
+   */
+  public getMessages(topics: TopicSelection, start: Time, end: Time): MessageEvent[] | undefined {
+    if (compare(start, end) > 0 || this.#blocks.length === 0) {
+      return [];
+    }
+    const messages: MessageEvent[] = [];
+    for (let id = this.#blockOf(start); id <= this.#blockOf(end); id++) {
+      for (const [topic, subscription] of topics) {
+        if (!this.#holds(id, topic, subscription)) {
+          return undefined;
+        }
+        const blockMessages = this.#blocks[id]?.messagesByTopic[topic] ?? [];
+        // Messages are in receive time order: find the first one at or after `start`
+        let from = 0;
+        for (let to = blockMessages.length; from < to; ) {
+          const mid = (from + to) >>> 1;
+          if (compare(blockMessages[mid]!.receiveTime, start) < 0) {
+            from = mid + 1;
+          } else {
+            to = mid;
+          }
+        }
+        for (let i = from; i < blockMessages.length; i++) {
+          const message = blockMessages[i]!;
+          if (compare(message.receiveTime, end) > 0) {
+            break;
+          }
+          messages.push(message);
+        }
+      }
+    }
+    if (topics.size > 1) {
+      messages.sort((a, b) => compare(a.receiveTime, b.receiveTime));
+    }
+    return messages;
+  }
+
+  #holds(id: number, topic: string, subscription: Immutable<SubscribePayload>): boolean {
+    return (
+      this.#blocks[id]?.messagesByTopic[topic] != undefined &&
+      subscriptionCovers(this.#loadedSubscriptions[id]?.[topic], subscription)
+    );
+  }
+
   public async stopLoading(): Promise<void> {
     log.debug("Stop loading blocks");
     this.#stopped = true;

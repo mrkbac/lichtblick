@@ -909,6 +909,31 @@ describe("BlockLoader", () => {
       consoleWarnMock.mockClear();
     });
 
+    it("hands out preloaded messages by time range, and nothing where a block is missing", async () => {
+      // Room for 6 of the 10 blocks of "a": 4 to 9, nearest to the playhead
+      const { loader, loading, settled } = setup({ a: 10, b: 1 }, 70);
+      loader.setPlayhead({ sec: 6, nsec: 0 });
+      await settled();
+      const a = new Map([["a", { topic: "a" }]]);
+      const b = new Map([["b", { topic: "b" }]]);
+
+      expect([...loader.topicsHeldFrom(new Map([...a, ...b]), { sec: 4, nsec: 0 }).keys()]).toEqual(
+        ["a", "b"],
+      );
+      expect([...loader.topicsHeldFrom(a, { sec: 3, nsec: 0 }).keys()]).toEqual([]);
+      expect(
+        loader
+          .getMessages(new Map([...a, ...b]), { sec: 5, nsec: 0 }, { sec: 6, nsec: 0 })
+          ?.map((message) => `${message.topic}${message.receiveTime.sec}`),
+      ).toEqual(["a5", "b5", "a6", "b6"]);
+      expect(loader.getMessages(a, { sec: 5, nsec: 1 }, { sec: 5, nsec: 999_999_999 })).toEqual([]);
+      expect(loader.getMessages(a, { sec: 2, nsec: 0 }, { sec: 5, nsec: 0 })).toBeUndefined();
+
+      await loader.stopLoading();
+      await loading;
+      consoleWarnMock.mockClear();
+    });
+
     it("settles when several topics each want more than their share", async () => {
       const { loader, loading, settled } = setup({ a: 10, b: 10, c: 3 }, 100);
       loader.setPlayhead({ sec: 5, nsec: 0 });

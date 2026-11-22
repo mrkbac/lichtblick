@@ -197,6 +197,13 @@ export class IterablePlayer implements Player {
   #subscriptions: SubscribePayload[] = [];
   #allTopics: TopicSelection = new Map();
   #preloadTopics: TopicSelection = new Map();
+  /**
+   * Preloaded topics that playback takes from the block loader instead of the playback iterator,
+   * so they aren't read and decoded twice
+   */
+  #blockTopics: TopicSelection = new Map();
+  /** The receive time from which on #blockTopics messages are due next */
+  #blockCursor?: Time;
 
   #progress: Progress = {};
   // Set by the idle loadedRangesChange handler; progress is refreshed once per emit, not per change
@@ -924,11 +931,62 @@ export class IterablePlayer implements Player {
     log.debug("Initializing forward iterator from", next);
     this.#playbackSkimInterval = this.#skimInterval();
     this.#playbackIterator = this.#bufferedSource.messageIterator({
-      topics: this.#allTopics,
+      topics: this.#iteratorTopics(next),
       start: next,
       consumptionType: "partial",
       skimInterval: this.#playbackSkimInterval,
     });
+  }
+
+  /**
+   * The topics the playback iterator reads from `next` on: all but the preloaded ones that the
+   * block loader holds from there to the end (those come from #withBlockMessages)
+   */
+  #iteratorTopics(next: Time): TopicSelection {
+    this.#blockTopics = this.#topicsServedFromBlocks(next);
+    this.#blockCursor = next;
+    if (this.#blockTopics.size === 0) {
+      return this.#allTopics;
+    }
+    return new Map([...this.#allTopics].filter(([topic]) => !this.#blockTopics.has(topic)));
+  }
+
+  /** Preloaded topics the block loader holds, as playback subscribes them, from `time` to the end */
+  #topicsServedFromBlocks(time: Time): TopicSelection {
+    // Skimming reads fewer messages than the blocks would hand out
+    if (!this.#blockLoader || this.#playbackSkimInterval) {
+      return new Map();
+    }
+    const candidates: TopicSelection = new Map(
+      filterMap([...this.#preloadTopics], ([topic, subscription]) =>
+        this.#allTopics.get(topic) === subscription && !subscription.samplingRequest
+          ? [topic, subscription]
+          : undefined,
+      ),
+    );
+    return this.#blockLoader.topicsHeldFrom(candidates, time);
+  }
+
+  /**
+   * `messages` plus the #blockTopics messages up to `end`, in receive time order. Undefined if
+   * the block loader no longer holds them (e.g. evicted): playback then reads them again from the
+   * current time.
+   */
+  #withBlockMessages(messages: MessageEvent[], end: Time): MessageEvent[] | undefined {
+    if (this.#blockTopics.size === 0 || !this.#blockCursor) {
+      return messages;
+    }
+    const fromBlocks = this.#blockLoader?.getMessages(this.#blockTopics, this.#blockCursor, end);
+    if (!fromBlocks) {
+      this.#lastMessageEvent = undefined;
+      this.#setState("reset-playback-iterator");
+      return undefined;
+    }
+    this.#blockCursor = add(end, { sec: 0, nsec: 1 });
+    if (fromBlocks.length === 0) {
+      return messages;
+    }
+    return messages.concat(fromBlocks).sort((a, b) => compare(a.receiveTime, b.receiveTime));
   }
 
   async #stateResetPlaybackIterator() {
@@ -971,6 +1029,10 @@ export class IterablePlayer implements Player {
 
     log.debug("Initializing forward iterator from", this.#start);
     this.#playbackSkimInterval = this.#skimInterval();
+    // Preloading has barely started: read everything. Playback switches to the preloaded blocks
+    // when it starts a new iterator anyway (a seek, new subscriptions): switching sooner would read
+    // the playback buffer again, which costs more than decoding the preloaded topics twice.
+    this.#blockTopics = new Map();
     this.#playbackIterator = this.#bufferedSource.messageIterator({
       topics: this.#allTopics,
       start: this.#start,
@@ -1283,11 +1345,15 @@ export class IterablePlayer implements Player {
     // tick logic.
     if (this.#lastStamp) {
       if (compare(this.#lastStamp, end) >= 0) {
+        const messages = this.#withBlockMessages([], end);
+        if (!messages) {
+          return;
+        }
         // Wait for the previous render frame to finish
         await this.#queueEmitState.currentPromise;
 
         this.#currentTime = end;
-        this.#messages = [];
+        this.#messages = messages;
         this.#queueEmitState();
         if (this.#untilTime && compare(this.#currentTime, this.#untilTime) >= 0) {
           this.pausePlayback();
@@ -1305,11 +1371,15 @@ export class IterablePlayer implements Player {
     if (this.#lastMessageEvent) {
       // If the last message we saw is still ahead of the tick end time, we don't emit anything
       if (compare(this.#lastMessageEvent.receiveTime, end) > 0) {
+        const messages = this.#withBlockMessages(msgEvents, end);
+        if (!messages) {
+          return;
+        }
         // Wait for the previous render frame to finish
         await this.#queueEmitState.currentPromise;
 
         this.#currentTime = end;
-        this.#messages = msgEvents;
+        this.#messages = messages;
         this.#queueEmitState();
 
         if (this.#untilTime && compare(this.#currentTime, this.#untilTime) >= 0) {
@@ -1373,6 +1443,10 @@ export class IterablePlayer implements Player {
     if (this.#nextState) {
       return;
     }
+    const messages = this.#withBlockMessages(msgEvents, end);
+    if (!messages) {
+      return;
+    }
 
     // Wait on any active emit state to finish as part of this tick
     // Without waiting on the emit state to finish we might drop messages since our emitState
@@ -1380,7 +1454,7 @@ export class IterablePlayer implements Player {
     await this.#queueEmitState.currentPromise;
 
     this.#currentTime = end;
-    this.#messages = msgEvents;
+    this.#messages = messages;
     this.#queueEmitState();
 
     // This tick has reached the end of the untilTime so we go back to pause

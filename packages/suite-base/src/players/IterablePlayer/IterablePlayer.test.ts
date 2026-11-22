@@ -6,7 +6,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { fromSec, toSec } from "@foxglove/rostime";
+import { compare, fromSec, toSec } from "@foxglove/rostime";
 import * as _ from "lodash-es";
 import type { Mock, MockInstance } from "vitest";
 
@@ -1318,6 +1318,77 @@ describe("IterablePlayer", () => {
       ([args]) => args.consumptionType === "full",
     );
     expect(firstPreload?.[0].start).toEqual({ sec: 0, nsec: 800e6 });
+
+    player.close();
+    await player.isClosed;
+  });
+
+  it("plays fully preloaded topics from the preloaded blocks after a seek instead of reading them again", async () => {
+    const source = new TestSource();
+    const messages: MessageEvent[] = [];
+    for (let nsec = 0; nsec <= 1e9; nsec += 50e6) {
+      for (const topic of ["preloaded", "live"]) {
+        messages.push(
+          messageEvent({ topic, receiveTime: { sec: Math.floor(nsec / 1e9), nsec: nsec % 1e9 } }),
+        );
+      }
+    }
+    const messageIteratorSpy = vi.spyOn(source, "messageIterator");
+    messageIteratorSpy.mockImplementation(async function* (args) {
+      for (const msgEvent of messages) {
+        if (
+          args.topics.has(msgEvent.topic) &&
+          (!args.start || compare(msgEvent.receiveTime, args.start) >= 0) &&
+          (!args.end || compare(msgEvent.receiveTime, args.end) <= 0)
+        ) {
+          yield { type: "message-event", msgEvent };
+        }
+      }
+    });
+    const player = new IterablePlayer({ source, enablePreload: true, sourceId: "test" });
+    const states: PlayerState[] = [];
+    player.setListener(async (state) => {
+      states.push(state);
+    });
+    player.setSubscriptions([{ topic: "preloaded", preloadType: "full" }, { topic: "live" }]);
+
+    // Wait for the whole recording to be preloaded
+    await vi.waitFor(() => {
+      const blocks = states.at(-1)?.progress.messageCache?.blocks ?? [];
+      expect(blocks.length).toBeGreaterThan(0);
+      expect(blocks.every((block) => block?.messagesByTopic["preloaded"] != undefined)).toBe(true);
+    });
+
+    // The seek starts a new playback iterator
+    const readsBefore = messageIteratorSpy.mock.calls.length;
+    player.seekPlayback({ sec: 0, nsec: 0 });
+    await vi.waitUntil(() => messageIteratorSpy.mock.calls.length > readsBefore);
+    // Below the speed at which playback skims
+    player.setPlaybackSpeed(5);
+    player.startPlayback();
+    await vi.waitFor(() => {
+      expect(states.at(-1)?.activeData?.currentTime).toEqual({ sec: 1, nsec: 0 });
+    });
+
+    // Playback read only the live topic
+    const playbackReads = messageIteratorSpy.mock.calls
+      .slice(readsBefore)
+      .filter(([args]) => args.consumptionType === "partial");
+    expect(playbackReads.length).toBeGreaterThan(0);
+    for (const [args] of playbackReads) {
+      expect([...args.topics.keys()]).toEqual(["live"]);
+    }
+    // ...and still delivered the preloaded topic like the live one: each message once, in order
+    const delivered = states
+      .filter((state) => state.activeData?.isPlaying === true)
+      .flatMap((state) => state.activeData?.messages ?? []);
+    const times = (topic: string) =>
+      delivered.filter((message) => message.topic === topic).map((message) => message.receiveTime);
+    expect(times("preloaded").length).toBeGreaterThan(10);
+    expect(times("preloaded")).toEqual(times("live"));
+    expect(delivered.map((message) => message.receiveTime)).toEqual(
+      [...delivered.map((message) => message.receiveTime)].sort(compare),
+    );
 
     player.close();
     await player.isClosed;
