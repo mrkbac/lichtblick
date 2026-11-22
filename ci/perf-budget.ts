@@ -34,6 +34,8 @@ const BUDGETS: Record<string, number> = {
   heap: 1.1,
   "gzip bytes": 1.01,
 };
+/** Over budget or not comparable, and nothing worse */
+const EXIT_WAIVABLE = 3;
 const ROUNDS = 10;
 const HEAP_ROUNDS = 3;
 /** Measured in a fresh process per run (see childMain) */
@@ -188,15 +190,15 @@ async function main(): Promise<void> {
     await fs.promises.access(path.join(baseDir, "benchmark/.perf/cases.mjs"));
   })();
   await headBuild;
-  // A run that compared nothing must not pass; the label can still accept it
+  // Cases that can't be compared, e.g. because the PR changed an API they call: the label can
+  // accept these, like a metric over budget
   const problems: string[] = [];
-  const baseOk = await baseBuild.then(
-    () => true,
-    (err: unknown) => {
-      problems.push(`Base build failed, nothing was compared: ${String(err)}`);
-      return false;
-    },
+  // A run that compared nothing (failed base build) must fail, and the label can't change that
+  const baseError = await baseBuild.then(
+    () => undefined,
+    (err: unknown) => String(err),
   );
+  const baseOk = baseError == undefined;
   const variants: Variant[] = baseOk ? ["base", "head"] : ["head"];
   const dirs: Record<Variant, string> = { base: baseDir, head: ROOT };
 
@@ -314,18 +316,22 @@ async function main(): Promise<void> {
     ...rows,
     "",
     ...problems.map((problem) => `- ❌ ${problem}`),
+    ...(baseOk ? [] : [`- ❌ Base build failed, nothing was compared: ${baseError}`]),
     "",
-    failed + problems.length > 0
-      ? `**${failed} metric(s) over budget, ${problems.length} problem(s).** A deliberate trade-off can be accepted with the \`perf-budget-accepted\` PR label.`
-      : "All metrics within budget.",
+    !baseOk
+      ? "**Nothing was compared.** This fails regardless of labels; re-run once the base builds."
+      : failed + problems.length > 0
+        ? `**${failed} metric(s) over budget, ${problems.length} case(s) not comparable.** A deliberate trade-off can be accepted with the \`perf-budget-accepted\` PR label.`
+        : "All metrics within budget.",
     "",
   ].join("\n");
   console.log(report);
   if (process.env.GITHUB_STEP_SUMMARY) {
     fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, report);
   }
-  // The perf-budget-accepted label is checked by the workflow (ci.yml), live, after this exits
-  process.exitCode = failed + problems.length > 0 ? 1 : 0;
+  // Exit code 3 means "only things the perf-budget-accepted label may accept"; ci.yml checks the
+  // label then. Anything else non-zero (a failed base build, a crash) is never accepted.
+  process.exitCode = !baseOk ? 1 : failed + problems.length > 0 ? EXIT_WAIVABLE : 0;
 }
 
 if (process.argv[2] === "--child") {

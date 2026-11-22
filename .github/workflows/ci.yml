@@ -104,15 +104,22 @@ jobs:
           BASE: ${{ github.event.pull_request.base.sha }}
           GH_TOKEN: ${{ github.token }}
           PR: ${{ github.event.pull_request.number }}
-        # A deliberate trade-off passes with the `perf-budget-accepted` label. The label is read
-        # now, not from the event, so a re-run after labelling (perf-budget-label.yml) sees it.
+        # Exit code 3 means over budget or not comparable, which a deliberate trade-off may accept
+        # with the `perf-budget-accepted` label. The label is read now, not from the event, so a
+        # re-run (perf-budget-label.yml) sees the current state. The annotation titles tell
+        # perf-budget-label.yml what this run decided. Other failures are never accepted.
         run: |
-          pnpm perf:budget --base "$(git merge-base HEAD "$BASE")" && exit 0
-          if gh pr view "$PR" -R "$GITHUB_REPOSITORY" --json labels --jq '.labels[].name' | grep -qx perf-budget-accepted; then
-            echo "::notice::Over budget, accepted with the perf-budget-accepted label"
-            exit 0
+          set +e
+          node --expose-gc ci/perf-budget.ts --base "$(git merge-base HEAD "$BASE")"
+          code=$?
+          if [ "$code" -eq 3 ]; then
+            if gh pr view "$PR" -R "$GITHUB_REPOSITORY" --json labels --jq '.labels[].name' | grep -qx perf-budget-accepted; then
+              echo "::notice title=perf-budget-accepted::Over budget, accepted with the perf-budget-accepted label"
+              exit 0
+            fi
+            echo "::error title=perf-budget-waivable::Over budget; the perf-budget-accepted label would accept it"
           fi
-          exit 1
+          exit "$code"
 
   e2e-desktop:
     runs-on: ubuntu-latest
