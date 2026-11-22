@@ -94,8 +94,13 @@ class CachingIterableSource<MessageType = unknown>
   #want?: { topics: ReadonlySet<string>; skimInterval?: Time };
   // False when no block can hold results #want doesn't need: skips scanning for them per message
   #maybeUnwanted = false;
-  // The block #fillBlock() is merging into; its items can't be dropped while it reads
-  #fillingBlock?: CacheBlock<MessageType>;
+  // Blocks a running read appends or merges into; their items can't be dropped meanwhile
+  #writing = new Set<CacheBlock<MessageType>>();
+  // Bytes of results on topics `want` lacks, per block items array (unchanged while not written)
+  #unwantedBytesCache = new WeakMap<
+    CacheItem<MessageType>[],
+    { want: ReadonlySet<string>; count: number; bytes: number }
+  >();
 
   // The producer loads results into the cache and the consumer reads from the cache.
   #cache: CacheBlock<MessageType>[] = [];
@@ -365,6 +370,7 @@ class CachingIterableSource<MessageType = unknown>
             this.#candidatesStale = true;
 
             block = newBlock;
+            this.#writing.add(block);
             this.#markLoadedRangesDirty();
           }
 
@@ -407,6 +413,7 @@ class CachingIterableSource<MessageType = unknown>
             readHead = add(block.end, { sec: 0, nsec: 1 });
 
             // Will force creation of a new block on the next loop
+            this.#doneWriting(block);
             block = undefined;
           }
 
@@ -481,11 +488,15 @@ class CachingIterableSource<MessageType = unknown>
           );
           this.#cache.splice(insertIndex, 0, newBlock);
           this.#candidatesStale = true;
+          this.#doneWriting(newBlock);
 
           this.#markLoadedRangesDirty();
         }
         stored = true;
       } finally {
+        if (block) {
+          this.#doneWriting(block);
+        }
         // A consumer that stops early (e.g. a seek) leaves results that were counted, not stored
         if (!stored) {
           for (const [, item] of pendingIterResults) {
@@ -693,21 +704,56 @@ class CachingIterableSource<MessageType = unknown>
     }
 
     // Results on topics no longer wanted are dropped before the next read stores anything
-    return this.#evictableCandidates().length > 0 || this.#trimmableBlocks().length > 0;
+    return (
+      this.#evictableCandidates().length > 0 ||
+      this.#trimmableBlocks().some((block) => this.#unwantedBytes(block) > 0)
+    );
   }
 
-  /** Blocks with results on topics the latest messageIterator() doesn't want */
+  /**
+   * Blocks that may hold results on topics the latest messageIterator() doesn't want, except
+   * those a read is writing
+   */
   #trimmableBlocks(): CacheBlock<MessageType>[] {
     const want = this.#want?.topics;
     if (!want || !this.#maybeUnwanted) {
       return [];
     }
     const blocks = this.#cache.filter(
-      (block) => block !== this.#fillingBlock && CachingIterableSource.#Lacks(want, block.topics),
+      (block) => !this.#writing.has(block) && CachingIterableSource.#Lacks(want, block.topics),
     );
-    // The filling block sets it again when its fill ends
+    // Blocks being written set it again when their read is done
     this.#maybeUnwanted = blocks.length > 0;
     return blocks;
+  }
+
+  /** Bytes of block's results on topics the latest messageIterator() doesn't want */
+  #unwantedBytes(block: CacheBlock<MessageType>): number {
+    const want = this.#want?.topics;
+    if (!want) {
+      return 0;
+    }
+    const cached = this.#unwantedBytesCache.get(block.items);
+    if (cached?.want === want && cached.count === block.items.length) {
+      return cached.bytes;
+    }
+    let bytes = 0;
+    for (const [, result] of block.items) {
+      if (!CachingIterableSource.#Wanted(result, want)) {
+        bytes += CachingIterableSource.#Size(result);
+      }
+    }
+    this.#unwantedBytesCache.set(block.items, { want, count: block.items.length, bytes });
+    return bytes;
+  }
+
+  /** A read stopped writing block: from now on its unwanted results can be dropped */
+  #doneWriting(block: CacheBlock<MessageType>): void {
+    this.#writing.delete(block);
+    const want = this.#want?.topics;
+    if (want && CachingIterableSource.#Lacks(want, block.topics)) {
+      this.#maybeUnwanted = true;
+    }
   }
 
   /** The evictable block ids, most evictable first; recomputed only when blocks changed */
@@ -827,13 +873,16 @@ class CachingIterableSource<MessageType = unknown>
       return;
     }
     for (const block of this.#trimmableBlocks()) {
-      block.items = block.items.filter(([, result]) => CachingIterableSource.#Wanted(result, want));
-      const size = CachingIterableSource.#SumSizes(block.items);
-      this.#budget.release(block.size - size);
-      block.size = size;
+      if (this.#unwantedBytes(block) > 0) {
+        block.items = block.items.filter(([, result]) =>
+          CachingIterableSource.#Wanted(result, want),
+        );
+        const size = CachingIterableSource.#SumSizes(block.items);
+        this.#budget.release(block.size - size);
+        block.size = size;
+      }
       block.topics = new Set([...block.topics].filter((topic) => want.has(topic)));
     }
-    this.#maybeUnwanted = false;
   }
 
   /**
@@ -851,7 +900,6 @@ class CachingIterableSource<MessageType = unknown>
     if (compare(block.start, readHead) < 0) {
       this.#splitBlock(block, readHead);
     }
-    this.#fillingBlock = block;
     const missing: TopicSelection = new Map(
       [...args.topics].filter(([topic]) => !block.topics.has(topic)),
     );
@@ -868,9 +916,9 @@ class CachingIterableSource<MessageType = unknown>
     // Bytes of source results after filledNs, counted in #budget
     let pendingSize = 0;
 
-    // Moves the merged results up to timeNs into a block of their own, cut from the front of block
     // Set once all of block is filled: it holds the merged results, nothing more to cut from it
     let blockFilled = false;
+    // Moves the merged results up to timeNs into a block of their own, cut from the front of block
     const commit = (timeNs: bigint) => {
       if (blockFilled || timeNs < toNanoSec(block.start)) {
         return;
@@ -898,19 +946,21 @@ class CachingIterableSource<MessageType = unknown>
 
     const filter = topics.size !== want.size;
     const endNs = toNanoSec(end);
-    const source = this.#source.messageIterator({
-      topics: missing,
-      start: readHead,
-      end,
-      consumptionType: args.consumptionType,
-      skimInterval: block.skimInterval,
-    });
+    let source: AsyncIterator<Readonly<IteratorResult<MessageType>>> | undefined;
     try {
+      this.#writing.add(block);
+      source = this.#source.messageIterator({
+        topics: missing,
+        start: readHead,
+        end,
+        consumptionType: args.consumptionType,
+        skimInterval: block.skimInterval,
+      });
       for (;;) {
         const next = await source.next();
         // undefined: the source is done, merge the rest of block up to end
-        const result = next.done === true ? undefined : next.value;
-        const resultNs =
+        let result = next.done === true ? undefined : next.value;
+        let resultNs =
           result == undefined
             ? endNs
             : result.type === "message-event"
@@ -918,6 +968,11 @@ class CachingIterableSource<MessageType = unknown>
               : result.type === "stamp"
                 ? toNanoSec(result.stamp)
                 : lastTime;
+        // Past the end: block's range can't hold it, so the source is done for this fill
+        if (resultNs > endNs) {
+          result = undefined;
+          resultNs = endNs;
+        }
         // An out-of-order result is stored at the latest time, like the source read path does,
         // so merged stays sorted
         const timeNs = resultNs > lastTime ? resultNs : lastTime;
@@ -965,12 +1020,12 @@ class CachingIterableSource<MessageType = unknown>
       commit(filledNs);
       // Unfilled source results are dropped; block keeps its own results after filledNs
       this.#budget.release(pendingSize);
-      this.#fillingBlock = undefined;
+      this.#writing.delete(block);
       this.#maybeUnwanted = true;
       this.#candidatesStale = true;
       this.#markLoadedRangesDirty();
       try {
-        await source.return?.();
+        await source?.return?.();
       } catch (err: unknown) {
         // Don't hide the error that ended the fill, if any
         log.error("Failed to close the fill read", err);

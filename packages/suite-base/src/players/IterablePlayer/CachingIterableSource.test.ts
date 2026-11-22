@@ -1363,14 +1363,14 @@ describe("CachingIterableSource", () => {
       });
       await cache.initialize();
       await readTopics(cache.messageIterator({ topics: mockTopicSelection("a") }));
-      // A source that ignores start and end for b
+      // A source that ignores the end for b
       const readA = source.messageIterator.bind(source);
       source.messageIterator = async function* (args: MessageIteratorArgs) {
         if (!args.topics.has("b")) {
           yield* readA(args);
           return;
         }
-        for (let sec = 0; sec < 10; sec++) {
+        for (let sec = args.start?.sec ?? 0; sec < 10; sec++) {
           yield {
             type: "message-event",
             msgEvent: {
@@ -1384,10 +1384,54 @@ describe("CachingIterableSource", () => {
         }
       };
 
-      await readTopics(cache.messageIterator({ topics: mockTopicSelection("a", "b") }));
+      const filled = await readTopics(
+        cache.messageIterator({ topics: mockTopicSelection("a", "b") }),
+      );
 
+      // Results past each block's end are neither yielded nor counted
+      expect(filled).toEqual(Array(10).fill(["b", "a"]).flat());
+      expect(cache.getCacheSize()).toBe(2000);
       const topics = await readTopics(cache.messageIterator({ topics: mockTopicSelection("a") }));
       expect(topics).toEqual(Array(10).fill("a"));
+    });
+
+    it("doesn't count an unsubscribed topic without messages as room", async () => {
+      // Given a full budget of a, read together with c, which has no messages
+      const { source } = recordingSource(["a"], 10);
+      const cache = new CachingIterableSource(source, { maxTotalSize: 1000 });
+      await cache.initialize();
+      await readTopics(cache.messageIterator({ topics: mockTopicSelection("a", "c") }));
+      cache.setCurrentReadHead({ sec: 0, nsec: 0 });
+
+      // When c is unsubscribed
+      const iterator = cache.messageIterator({ topics: mockTopicSelection("a") });
+      await iterator.next();
+
+      // Then dropping it frees nothing
+      expect(cache.canReadMore()).toBe(false);
+      await iterator.return?.(undefined);
+    });
+
+    it("drops unwanted results only from blocks no read is writing", async () => {
+      // Given a read of a and b still writing its block with a full budget
+      const { source } = recordingSource(["a", "b"], 10);
+      const cache = new CachingIterableSource(source, { maxTotalSize: 600 });
+      await cache.initialize();
+      const older = cache.messageIterator({ topics: mockTopicSelection("a", "b") });
+      for (let i = 0; i < 6; i++) {
+        await older.next();
+      }
+
+      // When a newer read wants b only
+      const newer = cache.messageIterator({ topics: mockTopicSelection("b") });
+      await newer.next();
+
+      // Then the block being written isn't room to read more
+      expect(cache.canReadMore()).toBe(false);
+      // Until the older read is done with it
+      await older.return?.(undefined);
+      expect(cache.canReadMore()).toBe(true);
+      await newer.return?.(undefined);
     });
 
     it("yields a cached stamp only after the added topic's messages at its time", async () => {
