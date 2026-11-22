@@ -11,8 +11,10 @@
 // numbers, so a slow or busy machine doesn't fail it. Bytes read and bundle bytes are exact.
 
 import { execFileSync, spawn } from "node:child_process";
+import { createHash } from "node:crypto";
 import { once } from "node:events";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { parseArgs } from "node:util";
 import zlib from "node:zlib";
@@ -170,7 +172,12 @@ async function main(): Promise<void> {
   const git = (...args: string[]) =>
     execFileSync("git", args, { cwd: ROOT, encoding: "utf8" }).trim();
   const sha = git("rev-parse", values.base ?? git("merge-base", "HEAD", "origin/licht"));
-  const work = git("rev-parse", "--path-format=absolute", "--git-path", "lichtblick-perf-budget");
+  // Outside the repository, so the base resolves only its own node_modules (inside it, a dependency
+  // the base lacks would silently resolve from this checkout's), and one directory per checkout
+  const work = path.join(
+    os.tmpdir(),
+    `lichtblick-perf-budget-${createHash("sha256").update(ROOT).digest("hex").slice(0, 12)}`,
+  );
   const baseDir = path.join(work, "base");
   fs.mkdirSync(work, { recursive: true });
   console.error(`Comparing ${git("rev-parse", "--short", "HEAD")} against base ${sha.slice(0, 9)}`);

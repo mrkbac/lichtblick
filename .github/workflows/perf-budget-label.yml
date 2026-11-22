@@ -39,12 +39,20 @@ jobs:
       - name: Reconcile perf-budget with the label
         run: |
           set -euo pipefail
+          # gh with retries, so a transient API error doesn't leave the check out of date
+          gh() {
+            for attempt in 1 2 3 4 5; do
+              command gh "$@" && return 0
+              sleep $((attempt * 5))
+            done
+            return 1
+          }
           while true; do
             pr=$(gh pr view "$PR" --json headRefOid,headRefName)
             sha=$(jq -r .headRefOid <<<"$pr")
-            # The PR's branch and its head commit: a commit alone can belong to other PRs too
-            run=$(gh run list --workflow ci.yml --event pull_request --branch "$(jq -r .headRefName <<<"$pr")" --limit 20 --json databaseId,status,headSha |
-              jq --arg sha "$sha" '[.[] | select(.headSha == $sha)][0] // empty')
+            # The run for the PR's head commit on the PR's branch (a commit can be in other PRs too)
+            run=$(gh run list --workflow ci.yml --event pull_request --commit "$sha" --json databaseId,status,headBranch |
+              jq --arg branch "$(jq -r .headRefName <<<"$pr")" '[.[] | select(.headBranch == $branch)][0] // empty')
             if [ -z "$run" ]; then
               echo "No CI run for $sha yet; it reads the label itself"
               exit 0
@@ -58,7 +66,12 @@ jobs:
           run=$(jq -r .databaseId <<<"$run")
           job=$(gh api --paginate "repos/$GH_REPO/actions/runs/$run/jobs" --jq '.jobs[] | select(.name == "perf-budget")')
           if [ -z "$job" ] || [ "$(jq -r .conclusion <<<"$job")" = skipped ]; then
-            echo "perf-budget didn't run in $run (tests failed, cancelled, awaiting approval); nothing to reconcile"
+            echo "perf-budget was skipped in $run (e.g. tests failed); nothing to reconcile"
+            exit 0
+          fi
+          # A re-run of an older commit's run would cancel the new push's CI (same concurrency group)
+          if [ "$(gh pr view "$PR" --json headRefOid --jq .headRefOid)" != "$sha" ]; then
+            echo "The PR moved past $sha; its new CI run reads the label itself"
             exit 0
           fi
           echo "Re-running perf-budget in run $run so it reads the current label"
