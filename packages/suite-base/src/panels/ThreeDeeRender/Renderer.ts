@@ -74,6 +74,7 @@ import { DARK_OUTLINE, LIGHT_OUTLINE, stringToRgb } from "./color";
 import { HOVER_PICK_THROTTLE_MS } from "./constants";
 import { FRAME_TRANSFORMS_DATATYPES, FRAME_TRANSFORM_DATATYPES } from "./foxglove";
 import { getGpuDevice } from "./gpuDevice";
+import { LAYER_DEFAULT, LAYER_PICK_ONLY, LAYER_SELECTED } from "./layers";
 import { DetailLevel } from "./lod";
 import {
   normalizeFrameTransform,
@@ -122,8 +123,6 @@ const LIGHT_BACKDROP = new THREE.Color(palette.light.background?.default);
 const DARK_BACKDROP = new THREE.Color(palette.dark.background?.default);
 
 // Define rendering layers for multipass rendering used for the selection effect
-const LAYER_DEFAULT = 0;
-const LAYER_SELECTED = 1;
 
 const FOLLOW_TF_PATH = ["general", "followTf"];
 /** Expected until the first transform arrives, so it is not reported in the panel log. */
@@ -2180,6 +2179,8 @@ export class Renderer extends EventEmitter<RendererEvents> {
       return undefined;
     }
     camera.layers.set(LAYER_DEFAULT);
+    // Batched markers draw as instances but pick as themselves
+    camera.layers.enable(LAYER_PICK_ONLY);
     try {
       // The raster reads world matrices and the projection before render() would refresh them
       // (same as #drawScene); a camera's first render also switches it to WebGPU clip space
@@ -2356,8 +2357,9 @@ function selectObject(object: THREE.Object3D) {
 
 function deselectObject(object: THREE.Object3D) {
   object.layers.set(LAYER_DEFAULT);
+  // Back to its own layer: a batched mesh draws through its batch again
   object.traverse((child) => {
-    child.layers.set(LAYER_DEFAULT);
+    child.layers.set(child.userData.pickOnly === true ? LAYER_PICK_ONLY : LAYER_DEFAULT);
   });
 }
 
