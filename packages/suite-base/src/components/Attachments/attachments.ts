@@ -23,20 +23,27 @@ export async function attachmentData(
 ): Promise<Blob | undefined> {
   const encoder = new TextEncoder();
   const nameBytes = encoder.encode(name);
-  const nameStart = offset + 1 + 8 + 8 + 8 + 4;
-  const header = new Uint8Array(
-    await file.slice(offset, nameStart + nameBytes.length).arrayBuffer(),
-  );
-  const view = new DataView(header.buffer);
-  const matches =
-    header.length === nameStart - offset + nameBytes.length &&
-    header[0] === Opcode.ATTACHMENT &&
-    view.getUint32(nameStart - offset - 4, true) === nameBytes.length &&
-    nameBytes.every((byte, i) => header[nameStart - offset + i] === byte);
-  if (!matches) {
+  const typeBytes = encoder.encode(mediaType);
+  const nameStart = 1 + 8 + 8 + 8 + 4;
+  const typeStart = nameStart + nameBytes.length + 4;
+  const headerSize = typeStart + typeBytes.length + 8;
+  const start = offset + headerSize;
+  if (start + sizeBytes + 4 > file.size) {
     return undefined;
   }
-  const start = nameStart + nameBytes.length + 4 + encoder.encode(mediaType).length + 8;
+  const header = new Uint8Array(await file.slice(offset, start).arrayBuffer());
+  const view = new DataView(header.buffer);
+  if (
+    header[0] !== Opcode.ATTACHMENT ||
+    view.getBigUint64(1, true) !== BigInt(headerSize - 9 + sizeBytes + 4) ||
+    view.getUint32(nameStart - 4, true) !== nameBytes.length ||
+    !nameBytes.every((byte, i) => header[nameStart + i] === byte) ||
+    view.getUint32(typeStart - 4, true) !== typeBytes.length ||
+    !typeBytes.every((byte, i) => header[typeStart + i] === byte) ||
+    view.getBigUint64(headerSize - 8, true) !== BigInt(sizeBytes)
+  ) {
+    return undefined;
+  }
   return file.slice(start, start + sizeBytes, mediaType);
 }
 

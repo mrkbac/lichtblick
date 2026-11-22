@@ -69,6 +69,7 @@ describe("attachments", () => {
       await attachmentData(file, { ...infos[0]!, offset: infos[0]!.offset + 1 }),
     ).toBeUndefined();
     expect(await attachmentData(file, { ...infos[0]!, name: "other.json" })).toBeUndefined();
+    expect(await attachmentData(file, { ...infos[0]!, sizeBytes: infos[0]!.sizeBytes + 1 })).toBeUndefined();
     expect(await attachmentData(new Blob([bytes.slice(0, 20)]), infos[1]!)).toBeUndefined();
   });
 
