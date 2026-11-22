@@ -1096,9 +1096,10 @@ export default class UserScriptPlayer implements Player {
       return converted;
     };
 
-    const blocks = await Promise.all(
-      source.blocks.map(async (block) => (block ? await convertBlock(block) : undefined)),
-    );
+    const blocks: (MessageBlock | undefined)[] = [];
+    for (const block of source.blocks) {
+      blocks.push(block ? await convertBlock(block) : undefined);
+    }
     const previous = this.#lastMessageCache?.converted;
     // Keep the previous array when no block changed, so panels don't re-process allFrames.
     const converted: BlockCache =
