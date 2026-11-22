@@ -132,6 +132,18 @@ describe("TimestampDatasetsBuilderImpl", () => {
       expect(ys.some(Number.isNaN)).toBe(true);
     });
 
+    it("keeps line breaks when halving", () => {
+      const builder = new TimestampDatasetsBuilderImpl(3);
+      builder.applyAction({ type: "update-series-config", seriesItems: [seriesItem("0")] });
+      builder.applyAction({
+        type: "append-current",
+        series: key,
+        items: items([0, 1, 2, 3], (x) => (x === 1 ? NaN : x)),
+      });
+      const ys = builder.getCsvData()[0]!.data.map((item) => item.y);
+      expect(ys).toEqual([0, NaN, 2, 3]);
+    });
+
     it("starts unthinned again after current data is reset", () => {
       const builder = new TimestampDatasetsBuilderImpl(100);
       builder.applyAction({ type: "update-series-config", seriesItems: [seriesItem("0")] });

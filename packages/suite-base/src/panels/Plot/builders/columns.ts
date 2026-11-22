@@ -89,11 +89,13 @@ export class PointColumns {
    * Thin rows [start, length), which must be in receive order, to one message per `bucket` seconds
    * of receive time: a message stays if it is the first in its bucket, and the newest message
    * always stays. The decision only depends on receive times, so streams read from the same
-   * messages keep the same messages. Returns the number of rows removed.
+   * messages keep the same messages. Returns where row `mark` moved to (the number of kept rows
+   * before it).
    */
-  public thinByTime(start: number, bucket: number): number {
+  public thinByTime(start: number, bucket: number, mark = this.length): number {
     const end = this.length;
     let write = start;
+    let movedMark = Math.min(mark, start);
     let lastBucket = Number.NaN;
     for (let read = start; read < end; ) {
       let groupEnd = read + 1;
@@ -103,17 +105,17 @@ export class PointColumns {
       const b = Math.floor(this.receiveSeconds(read) / bucket);
       if (b !== lastBucket || groupEnd === end) {
         for (let i = read; i < groupEnd; i++) {
+          if (i < mark) {
+            movedMark = write + 1;
+          }
           this.#moveRow(i, write++);
         }
       }
       lastBucket = b;
       read = groupEnd;
     }
-    this.length = write;
-    if (this.#values && this.#values.length > write) {
-      this.#values.length = write;
-    }
-    return end - write;
+    this.truncate(write);
+    return movedMark;
   }
 
   public headerStamp(i: number): Time | undefined {
@@ -154,22 +156,32 @@ export class PointColumns {
     if (end - start <= 2) {
       return 0;
     }
-    let write = start + 1;
-    for (let read = start + 2; read < end - 1; read += 2) {
-      this.#moveRow(read, write++);
+    let write = start;
+    for (let read = start; read < end; read++) {
+      // gaps (NaN) stay so lines still break where the data does
+      if ((read - start) % 2 === 0 || read === end - 1 || Number.isNaN(this.y[read]!)) {
+        this.#moveRow(read, write++);
+      }
     }
-    this.#moveRow(end - 1, write++);
-    this.length = write;
-    if (this.#values && this.#values.length > write) {
-      this.#values.length = write;
-    }
+    this.truncate(write);
     return end - write;
   }
 
-  #moveRow(from: number, to: number): void {
-    for (const col of this.#columns()) {
-      col[to] = col[from]!;
+  /** Drop rows from `length` on; keeps the column capacity for new rows */
+  public truncate(length: number): void {
+    this.length = Math.min(length, this.length);
+    if (this.#values && this.#values.length > this.length) {
+      this.#values.length = this.length;
     }
+  }
+
+  #moveRow(from: number, to: number): void {
+    this.x[to] = this.x[from]!;
+    this.y[to] = this.y[from]!;
+    this.#receiveSec[to] = this.#receiveSec[from]!;
+    this.#receiveNsec[to] = this.#receiveNsec[from]!;
+    this.#stampSec[to] = this.#stampSec[from]!;
+    this.#stampNsec[to] = this.#stampNsec[from]!;
     if (this.#values) {
       this.#values[to] = this.#values[from];
     }

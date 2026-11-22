@@ -118,6 +118,50 @@ describe("CustomDatasetsBuilderImpl", () => {
     expect(builder.getViewportDatasets(viewport).pathsWithMismatchedDataLengths.size).toBe(1);
   });
 
+  it("keeps the pair of a retained y value when thinning drops its x message", () => {
+    // GIVEN x and y on different topics and a budget of 4 rows
+    const builder = build({}, 4);
+    builder.updateData([
+      { type: "append-current-x", items: values([0, 1, 2, 3], (t) => t) },
+      { type: "append-current", series: key, items: values([1.5], (t) => t) },
+    ]);
+    // THEN y at 1.5 still pairs with x from t=1
+    expect(pairs(builder)).toEqual([[1, 1.5]]);
+  });
+
+  it("clears the mismatch warning once the matching x message arrives", () => {
+    const builder = build();
+    const at = (value: number, t: number) => ({
+      value,
+      originalValue: value,
+      receiveTime: { sec: t, nsec: 0 },
+    });
+    builder.updateData([
+      { type: "append-full-x", items: [at(0, 0), at(1, 1)] },
+      { type: "append-full", series: key, items: [at(0, 0), at(10, 2), at(20, 2)] },
+    ]);
+    expect(builder.getViewportDatasets(viewport).pathsWithMismatchedDataLengths.size).toBe(1);
+
+    builder.updateData([{ type: "append-full-x", items: [at(2, 2), at(3, 2)] }]);
+
+    expect(builder.getViewportDatasets(viewport).pathsWithMismatchedDataLengths.size).toBe(0);
+    expect(pairs(builder)).toEqual([
+      [0, 0],
+      [2, 10],
+      [3, 20],
+    ]);
+  });
+
+  it("merges messages played again after a backward seek in receive order", () => {
+    const builder = build({ xParsed: unwrap(parseMessagePath("/b.x")) });
+    const xy = (t: number) => ({ ...values([t], (v) => v)[0]!, x: t });
+    builder.updateData([
+      { type: "append-current", series: key, items: [xy(5), xy(6)] },
+      { type: "append-current", series: key, items: [xy(1), xy(5.5), xy(7)] },
+    ]);
+    expect(pairs(builder).map(([x]) => x)).toEqual([1, 5, 5.5, 6, 7]);
+  });
+
   it("downsamples lines to what the viewport can show, keeping both ends", () => {
     // GIVEN a dense circle walked 20 times
     const builder = build({ xParsed: unwrap(parseMessagePath("/b.x")) });

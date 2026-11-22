@@ -22,7 +22,7 @@ import {
   SeriesItem,
   Viewport,
 } from "./IDatasetsBuilder";
-import { PointColumns, iteratePoints } from "./columns";
+import { DataItem, PointColumns, iteratePoints } from "./columns";
 import { buildDatasetStyle } from "./utils";
 import { Dataset } from "../types";
 import { OriginalValue } from "../utils/datum";
@@ -48,8 +48,11 @@ type Series = Stream & {
    * `pairedUpTo` are paired for good; later ones are paired again on each read.
    */
   pairedUpTo: number;
-  /** A message had more y values than its x-axis message had x values */
-  mismatched: boolean;
+  /**
+   * Last rows of messages whose value count differs from their x-axis message's, in row order.
+   * Entries from `pairedUpTo` on are found again on each pairing.
+   */
+  mismatchRows: number[];
 };
 
 type ResetSeriesFullAction = {
@@ -161,20 +164,43 @@ function appendCurrent(stream: Stream, items: Immutable<ValueItem[]>): number {
     return points.length;
   }
   const lastFull = stream.fullLength > 0 ? points.receiveTime(stream.fullLength - 1) : undefined;
-  let changed = points.length;
-  for (const item of items) {
-    if (lastFull != undefined && compare(item.receiveTime, lastFull) <= 0) {
-      continue;
-    }
-    const at = points.receiveUpperBound(item.receiveTime, stream.fullLength);
-    if (at === points.length) {
-      points.push(toRow(item));
-    } else {
-      points.insert(at, [toRow(item)]);
-      changed = Math.min(changed, at);
-    }
+  const rows = items
+    .filter((item) => lastFull == undefined || compare(item.receiveTime, lastFull) > 0)
+    .map(toRow);
+  if (rows.length === 0) {
+    return points.length;
   }
-  return changed;
+  // stable, so values of one message keep their order
+  rows.sort((a, b) => compare(a.receiveTime, b.receiveTime));
+  const at = points.receiveUpperBound(rows[0]!.receiveTime, stream.fullLength);
+  if (at === points.length) {
+    for (const row of rows) {
+      points.push(row);
+    }
+    return at;
+  }
+  // Merge in one pass: stored rows first on equal receive times
+  const tail: DataItem[] = [];
+  for (let i = at; i < points.length; i++) {
+    tail.push({
+      x: points.x[i]!,
+      y: points.y[i]!,
+      value: points.value(i),
+      receiveTime: points.receiveTime(i),
+    });
+  }
+  points.truncate(at);
+  let t = 0;
+  for (const row of rows) {
+    while (t < tail.length && compare(tail[t]!.receiveTime, row.receiveTime) <= 0) {
+      points.push(tail[t++]!);
+    }
+    points.push(row);
+  }
+  for (; t < tail.length; t++) {
+    points.push(tail[t]!);
+  }
+  return at;
 }
 
 export class CustomDatasetsBuilderImpl {
@@ -206,7 +232,7 @@ export class CustomDatasetsBuilderImpl {
 
       this.#pair(series);
       const { x: xs, y: ys, length } = series.points;
-      if (series.mismatched) {
+      if (series.mismatchRows.length > 0) {
         pathsWithMismatchedDataLengths.add(series.config.messagePath);
       }
 
@@ -286,6 +312,10 @@ export class CustomDatasetsBuilderImpl {
    * x-axis has data at or after the row's receive time, so pans and zooms do not pair again.
    */
   #pair(series: Series): void {
+    const { mismatchRows } = series;
+    while (mismatchRows.length > 0 && mismatchRows.at(-1)! >= series.pairedUpTo) {
+      mismatchRows.pop();
+    }
     if (series.config.xParsed || series.pairedUpTo >= series.points.length) {
       return;
     }
@@ -311,16 +341,10 @@ export class CustomDatasetsBuilderImpl {
       const index = i - groupStart;
       if (xEnd > 0) {
         x = xStart + index < xEnd ? xPoints.y[xStart + index]! : Number.NaN;
-        // At the message's last value: a message without a partner for every value, or one from
-        // the x-axis topic's message (same time) with another value count, is a mismatch
+        // At the message's last value: compare value counts with the paired x-axis message
         const groupEnds = i + 1 === points.length || !points.sameReceive(i + 1, i);
-        const xCount = xEnd - xStart;
-        if (
-          groupEnds &&
-          (index + 1 > xCount ||
-            (index + 1 !== xCount && compare(xPoints.receiveTime(xStart), time) === 0))
-        ) {
-          series.mismatched = true;
+        if (groupEnds && index + 1 !== xEnd - xStart) {
+          mismatchRows.push(i);
         }
       }
       points.x[i] = x;
@@ -340,9 +364,6 @@ export class CustomDatasetsBuilderImpl {
       if (row < series.pairedUpTo) {
         series.pairedUpTo = row;
       }
-      if (row === 0) {
-        series.mismatched = false;
-      }
     }
   }
 
@@ -352,24 +373,39 @@ export class CustomDatasetsBuilderImpl {
 
   /**
    * Keep current rows within the budget by thinning them to one message per time bucket. The
-   * bucket only grows (doubles), and later messages are kept at the same rate. All streams use
-   * the same bucket, so x and y values of the same message are kept together.
+   * bucket only grows (doubles), and later messages are kept at the same rate. Rows are paired
+   * before thinning and keep their pairs, so thinning the x-axis does not move retained y values.
    */
   #thinCurrent(stream: Stream, from: number): void {
+    const currentRows = () =>
+      this.#streams().reduce((sum, s) => sum + s.points.length - s.fullLength, 0);
+    let total = currentRows();
+    if (this.#bucket === 0 && total <= this.#currentRowsBudget) {
+      return;
+    }
+    for (const series of this.#seriesByKey.values()) {
+      this.#pair(series);
+    }
     const floor = stream.fullLength;
     if (this.#bucket > 0 && from > floor && from < stream.points.length) {
       // Only the newest message may break the bucket rule. Re-check from the message before the
       // one that was newest; it is first in its bucket, and older ones are settled.
       const prevStart = messageStart(stream.points, from, floor);
-      const start = prevStart > floor ? messageStart(stream.points, prevStart, floor) : floor;
-      if (stream.points.thinByTime(start, this.#bucket) > 0) {
-        this.#rowsChanged(stream, start);
+      this.#thin(stream, prevStart > floor ? messageStart(stream.points, prevStart, floor) : floor);
+      total = currentRows();
+    }
+    if (total <= this.#currentRowsBudget) {
+      return;
+    }
+    // Past this bucket every stream is down to its first and newest message
+    let maxSpan = 0;
+    for (const { points, fullLength } of this.#streams()) {
+      if (points.length > fullLength) {
+        const span = points.receiveSeconds(points.length - 1) - points.receiveSeconds(fullLength);
+        maxSpan = Math.max(maxSpan, span);
       }
     }
-    const currentRows = () =>
-      this.#streams().reduce((sum, s) => sum + s.points.length - s.fullLength, 0);
-    let total = currentRows();
-    while (total > this.#currentRowsBudget) {
+    while (total > this.#currentRowsBudget && this.#bucket <= maxSpan) {
       if (this.#bucket === 0) {
         // Start at about half the message rate of the busiest stream
         let busiest = this.#x;
@@ -380,20 +416,37 @@ export class CustomDatasetsBuilderImpl {
         }
         const { points, fullLength } = busiest;
         const span = points.receiveSeconds(points.length - 1) - points.receiveSeconds(fullLength);
-        this.#bucket = span > 0 ? (2 * span) / (points.length - fullLength) : 1e-3;
+        this.#bucket = span > 0 ? (2 * span) / (points.length - fullLength) : maxSpan + 1;
       } else {
         this.#bucket *= 2;
       }
       for (const other of this.#streams()) {
-        if (other.points.thinByTime(other.fullLength, this.#bucket) > 0) {
-          this.#rowsChanged(other, other.fullLength);
-        }
+        this.#thin(other, other.fullLength);
       }
-      const next = currentRows();
-      if (next >= total) {
-        break;
+      total = currentRows();
+    }
+  }
+
+  /** Thin rows of `stream` from `start` on with the current bucket, keeping existing pairs */
+  #thin(stream: Stream, start: number): void {
+    if (stream === this.#x) {
+      stream.points.thinByTime(start, this.#bucket);
+      return;
+    }
+    const series = stream as Series;
+    const before = series.points.length;
+    series.pairedUpTo = series.points.thinByTime(start, this.#bucket, series.pairedUpTo);
+    if (series.points.length < before) {
+      // rows moved: a mismatch in the thinned range stays reported at its start
+      const { mismatchRows } = series;
+      let moved = false;
+      while (mismatchRows.length > 0 && mismatchRows.at(-1)! >= start) {
+        mismatchRows.pop();
+        moved = true;
       }
-      total = next;
+      if (moved && start < series.pairedUpTo) {
+        mismatchRows.push(start);
+      }
     }
   }
 
@@ -412,7 +465,7 @@ export class CustomDatasetsBuilderImpl {
   #applyAction(action: Immutable<UpdateDataAction>): void {
     switch (action.type) {
       case "reset-current-x":
-        this.#x.points.length = this.#x.fullLength;
+        this.#x.points.truncate(this.#x.fullLength);
         this.#unpairFrom(undefined);
         break;
       case "reset-full-x":
@@ -423,7 +476,7 @@ export class CustomDatasetsBuilderImpl {
       case "reset-current": {
         const series = this.#seriesByKey.get(action.series);
         if (series) {
-          series.points.length = series.fullLength;
+          series.points.truncate(series.fullLength);
           series.pairedUpTo = Math.min(series.pairedUpTo, series.fullLength);
         }
         break;
@@ -434,7 +487,6 @@ export class CustomDatasetsBuilderImpl {
           series.points.remove(0, series.fullLength);
           series.fullLength = 0;
           series.pairedUpTo = 0;
-          series.mismatched = false;
         }
         break;
       }
@@ -472,11 +524,10 @@ export class CustomDatasetsBuilderImpl {
             ...newStream(),
             config,
             pairedUpTo: 0,
-            mismatched: false,
+            mismatchRows: [],
           };
           if (Boolean(series.config.xParsed) !== Boolean(config.xParsed)) {
             series.pairedUpTo = 0;
-            series.mismatched = false;
           }
           series.config = config;
           next.set(config.key, series);

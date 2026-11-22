@@ -402,6 +402,7 @@ export function downsamplePathColumns(
     let lastPy = Number.NaN;
     // edges shared by every row since the last kept one
     let mask = 0;
+    let prevCode = -1;
     let code = start < end ? outcode(start) : 0;
     for (let i = start; i < end; i++) {
       const nextCode = i + 1 < end ? outcode(i + 1) : -1;
@@ -411,9 +412,13 @@ export function downsamplePathColumns(
         keep = shared === 0;
         mask = keep ? code : shared;
       } else if (!keep) {
-        const px = xs[i]! * pixelPerX;
-        const py = ys[i]! * pixelPerY;
-        keep = !(Math.abs(px - lastPx) < distance && Math.abs(py - lastPy) < distance);
+        // rows where the line enters or leaves the view stay, so it is drawn up to the edge
+        keep = prevCode !== 0 || nextCode !== 0;
+        if (!keep) {
+          const px = xs[i]! * pixelPerX;
+          const py = ys[i]! * pixelPerY;
+          keep = !(Math.abs(px - lastPx) < distance && Math.abs(py - lastPy) < distance);
+        }
       }
       if (keep) {
         indices.push(i);
@@ -421,10 +426,23 @@ export function downsamplePathColumns(
         lastPx = xs[i]! * pixelPerX;
         lastPy = ys[i]! * pixelPerY;
       }
+      prevCode = code;
       code = nextCode;
     }
-    if (indices.length <= maxPoints || distance > Math.max(width, height)) {
+    if (indices.length <= maxPoints) {
       return indices;
+    }
+    if (distance > Math.max(width, height)) {
+      // ponytail: a line crossing the view more often than it has pixels (e.g. noise around an
+      // edge) keeps evenly spaced rows. Gaps and the last row stay so lines still break at gaps.
+      const stride = Math.ceil(indices.length / maxPoints);
+      return indices.filter(
+        (index, j) =>
+          j % stride === 0 ||
+          j === indices.length - 1 ||
+          Number.isNaN(xs[index]!) ||
+          Number.isNaN(ys[index]!),
+      );
     }
   }
 }

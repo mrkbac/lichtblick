@@ -271,6 +271,27 @@ describe("downsamplePathColumns", () => {
     expect(indices).toEqual([0, 1, 3, 4]);
   });
 
+  it("keeps the row where the line enters the view", () => {
+    expect(
+      run([
+        [-0.01, 5],
+        [0.01, 5],
+        [-0.01, 6],
+      ]),
+    ).toEqual([0, 1, 2]);
+  });
+
+  it("stays within the point cap when the line crosses the view more often than it has pixels", () => {
+    const n = 20_000;
+    const xs = Float64Array.from({ length: n }, (_unused, i) => (i % 2 === 0 ? -1 : 11));
+    const ys = Float64Array.from({ length: n }, () => 5);
+    ys[100] = Number.NaN;
+    const indices = downsamplePathColumns(xs, ys, 0, n, view, 1000);
+    expect(indices.length).toBeLessThanOrEqual(1002);
+    expect(indices).toContain(100);
+    expect(indices.at(-1)).toBe(n - 1);
+  });
+
   it("drops rows within a pixel of the last kept one and keeps gaps", () => {
     const indices = run([
       [1, 1],

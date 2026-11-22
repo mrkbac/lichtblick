@@ -682,7 +682,7 @@ export class TimestampDatasetsBuilderImpl {
         if (!series) {
           return;
         }
-        series.points.length = series.fullLength;
+        series.points.truncate(series.fullLength);
         series.keepEvery = 1;
         series.headInputs = 0;
         break;
