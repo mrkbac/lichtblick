@@ -42,7 +42,7 @@ function addLogged(msgId: number, name: string): Uint8Array<ArrayBuffer> {
 }
 
 /** Topics "a" and "b"; "b" was written out of time order */
-function makeUlog(): File {
+function makeUlog(base = 0): File {
   const header = new Uint8Array(16);
   header.set([0x55, 0x4c, 0x6f, 0x67, 0x01, 0x12, 0x35, 1]);
   const parts = [
@@ -52,11 +52,11 @@ function makeUlog(): File {
     record("F", text("b:uint64_t timestamp;float x;")),
     addLogged(0, "a"),
     addLogged(1, "b"),
-    data(0, 1_000_000, 1),
-    data(1, 3_000_000, 30),
-    data(1, 2_000_000, 20),
-    log(2_500_000, "hello"),
-    data(0, 4_000_000, 4),
+    data(0, base + 1_000_000, 1),
+    data(1, base + 3_000_000, 30),
+    data(1, base + 2_000_000, 20),
+    log(base + 2_500_000, "hello"),
+    data(0, base + 4_000_000, 4),
   ];
   return new File(parts, "test.ulg");
 }
@@ -114,5 +114,32 @@ describe("UlogIterableSource backfill", () => {
         time: { sec: 1, nsec: 0 },
       }),
     ).toEqual([]);
+  });
+});
+
+describe("UlogIterableSource backfill cutoff", () => {
+  it("doesn't round the seek time up past a message", async () => {
+    // Seconds since 2023 as µs: 1 ns before a message at +4 s rounds up as a float µs count
+    const base = 1_700_000_000_000_000;
+    const source = new UlogIterableSource({ type: "file", file: makeUlog(base) });
+    await source.initialize();
+    const messages = await source.getBackfillMessages({
+      topics: new Map([["a", { topic: "a" }]]),
+      time: { sec: 1_700_000_003, nsec: 999_999_999 },
+    });
+    expect(messages.map((m) => m.receiveTime)).toEqual([{ sec: 1_700_000_001, nsec: 0 }]);
+  });
+
+  it("stops when aborted", async () => {
+    const source = new UlogIterableSource({ type: "file", file: makeUlog() });
+    await source.initialize();
+    const abort = new AbortController();
+    abort.abort();
+    const messages = await source.getBackfillMessages({
+      topics: new Map(["a", "b"].map((topic) => [topic, { topic }])),
+      time: { sec: 4, nsec: 0 },
+      abortSignal: abort.signal,
+    });
+    expect(messages).toEqual([]);
   });
 });

@@ -5,7 +5,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 import { ros1 } from "@foxglove/rosmsg-msgs-common";
-import { Time, compare, fromMicros, isTimeInRangeInclusive, toMicroSec } from "@foxglove/rostime";
+import { Time, compare, fromMicros, isTimeInRangeInclusive } from "@foxglove/rostime";
 import { DataSectionMessage, MessageType, ULog } from "@foxglove/ulog";
 import { BlobReader } from "@foxglove/ulog/web";
 
@@ -139,8 +139,8 @@ export class UlogIterableSource implements IIterableSource {
       return;
     }
 
-    const startTime = BigInt(Math.floor(toMicroSec(start)));
-    const endTime = BigInt(Math.floor(toMicroSec(end)));
+    const startTime = toMicros(start, "ceil");
+    const endTime = toMicros(end, "floor");
     for await (const msg of this.#ulog.readMessages({
       startTime,
       endTime,
@@ -161,28 +161,42 @@ export class UlogIterableSource implements IIterableSource {
   public async getBackfillMessages({
     topics,
     time,
+    abortSignal,
   }: GetBackfillMessagesArgs): Promise<MessageEvent[]> {
     if (this.#ulog == undefined) {
       throw new Error(`UlogDataProvider is not initialized`);
     }
-    const endTime = BigInt(Math.floor(toMicroSec(time)));
-    const messages: MessageEvent[] = [];
-    for (const topic of topics.keys()) {
-      // Reading back skips other topics in the index without touching the file
-      for await (const msg of this.#ulog.readMessages({
-        endTime,
-        msgIds: this.#msgIds([topic]),
-        includeLogs: topic === LOG_TOPIC,
-        reverse: true,
-      })) {
-        const msgEvent = this.#toMessageEvent(msg);
-        if (msgEvent?.topic === topic) {
-          messages.push(msgEvent);
-          break;
+    // One reverse pass for all topics. A topic's ids leave the set once it has its message, so the
+    // reader skips its older messages in the index without reading them.
+    const msgIds = this.#msgIds(topics.keys());
+    const latest = new Map<string, MessageEvent>();
+    // Requested topics the file has: stop once each has its message
+    const names = new Set([...this.#ulog.subscriptions.values()].map((sub) => sub.name));
+    const wanted = [...topics.keys()].filter((t) => t === LOG_TOPIC || names.has(t)).length;
+    for await (const msg of this.#ulog.readMessages({
+      endTime: toMicros(time, "floor"),
+      msgIds,
+      includeLogs: topics.has(LOG_TOPIC),
+      reverse: true,
+    })) {
+      if (abortSignal?.aborted === true) {
+        break;
+      }
+      const msgEvent = this.#toMessageEvent(msg);
+      if (!msgEvent || !topics.has(msgEvent.topic) || latest.has(msgEvent.topic)) {
+        continue;
+      }
+      latest.set(msgEvent.topic, msgEvent);
+      if (msg.type === MessageType.Data) {
+        for (const id of this.#msgIds([msgEvent.topic])) {
+          msgIds.delete(id);
         }
       }
+      if (latest.size === wanted) {
+        break;
+      }
     }
-    return messages.sort((a, b) => compare(a.receiveTime, b.receiveTime));
+    return [...latest.values()].sort((a, b) => compare(a.receiveTime, b.receiveTime));
   }
 
   /** ULog message ids of the topics: only these are read and parsed */
@@ -231,4 +245,10 @@ export class UlogIterableSource implements IIterableSource {
     }
     return undefined;
   }
+}
+
+/** A Time in whole microseconds, without float rounding */
+function toMicros(time: Time, round: "floor" | "ceil"): bigint {
+  const micros = BigInt(time.sec) * 1_000_000n + BigInt(Math.floor(time.nsec / 1000));
+  return round === "ceil" && time.nsec % 1000 !== 0 ? micros + 1n : micros;
 }
