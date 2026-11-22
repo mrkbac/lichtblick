@@ -3,18 +3,6 @@
 import type { McapRecoveryScanner, RecoveryLosses } from "@lichtblick/mcap-core";
 import type { PlayerAlert } from "@lichtblick/suite-base/players/types";
 
-const RECOVERY_MESSAGES = {
-  noIndex: "This file has no index; it was rebuilt in memory.",
-  noFooter: "This file was not closed properly (no footer); recovered all of its records.",
-  damaged: "This file is damaged; showing what could be recovered.",
-};
-const RECOVERY_MESSAGE_SET = new Set(Object.values(RECOVERY_MESSAGES));
-
-/** True for an alert saying playback rebuilt the file's index (it survives worker messaging) */
-export function isRecoveryAlert(alert: PlayerAlert): boolean {
-  return RECOVERY_MESSAGE_SET.has(alert.message);
-}
-
 /** What a recovery scan recovered and lost, for the user */
 export function recoveryAlert(scanner: McapRecoveryScanner): PlayerAlert {
   const lost = describeLosses(scanner.losses());
@@ -25,12 +13,12 @@ export function recoveryAlert(scanner: McapRecoveryScanner): PlayerAlert {
   return scanner.complete
     ? {
         severity: "info",
-        message: RECOVERY_MESSAGES.noIndex,
+        message: "This file has no index; it was rebuilt in memory.",
         tip: `${recovered}.`,
       }
     : {
         severity: "warn",
-        message: RECOVERY_MESSAGES.noFooter,
+        message: "This file was not closed properly (no footer); recovered all of its records.",
         tip: `${recovered}.`,
       };
 }
@@ -54,7 +42,7 @@ function describeRecovered(scanner: McapRecoveryScanner): string {
 function damagedAlert(scanner: McapRecoveryScanner, lost: string[]): PlayerAlert {
   return {
     severity: "warn",
-    message: RECOVERY_MESSAGES.damaged,
+    message: "This file is damaged; showing what could be recovered.",
     tip: `${describeRecovered(scanner)}; ${lost.join("; ")}.`,
   };
 }

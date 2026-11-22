@@ -24,15 +24,24 @@ function pendingReadable(): ExportReadable & { close: () => void } {
 describe("ExportRecordingDialog", () => {
   it("closes the readable when dismissed while it is still opening", async () => {
     const readable = pendingReadable();
-    const open = vi.fn(async () => readable);
+    let signal: AbortSignal | undefined;
+    const open = vi.fn(async (openSignal: AbortSignal) => {
+      signal = openSignal;
+      return readable;
+    });
     const { unmount } = render(
-      <ExportRecordingDialog source={{ name: "a.mcap", open }} onClose={() => {}} />,
+      <ExportRecordingDialog
+        source={{ name: "a.mcap", exactCounts: true, open }}
+        onClose={() => {}}
+      />,
     );
     await waitFor(() => {
       expect(open).toHaveBeenCalled();
     });
     unmount();
     expect(readable.close).toHaveBeenCalled();
+    // Requests still opening the file are cancelled too
+    expect(signal?.aborted).toBe(true);
   });
 
   it("closes the readable when the file can't be opened", async () => {
@@ -43,7 +52,7 @@ describe("ExportRecordingDialog", () => {
     };
     render(
       <ExportRecordingDialog
-        source={{ name: "a.mcap", open: async () => readable }}
+        source={{ name: "a.mcap", exactCounts: true, open: async () => readable }}
         onClose={() => {}}
       />,
     );

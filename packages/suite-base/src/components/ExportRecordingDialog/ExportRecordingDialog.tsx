@@ -93,12 +93,12 @@ export function ExportRecordingDialog({ source, onClose }: Props): React.JSX.Ele
   >();
   useEffect(() => {
     // Closing the readable on dismiss or source change also stops its pending reads.
-    let cancelled = false;
-    const isCancelled = () => cancelled;
+    const controller = new AbortController();
+    const isCancelled = () => controller.signal.aborted;
     let readable: ExportReadable | undefined;
     void (async () => {
       try {
-        readable = await source.open();
+        readable = await source.open(controller.signal);
         if (isCancelled()) {
           readable.close?.();
           return;
@@ -119,7 +119,7 @@ export function ExportRecordingDialog({ source, onClose }: Props): React.JSX.Ele
       }
     })();
     return () => {
-      cancelled = true;
+      controller.abort();
       readable?.close?.();
       setOpened(undefined);
     };
@@ -240,8 +240,8 @@ function ExportForm({
   // Exact counts come from the message indexes; until they're read (or if a chunk has none),
   // estimate from the share of the recording's duration.
   const messageTimesState = useAsync(
-    async () => await readMessageTimes(reader, readable),
-    [reader, readable],
+    async () => (source.exactCounts ? await readMessageTimes(reader, readable) : undefined),
+    [reader, readable, source.exactCounts],
   );
   const messageTimes = messageTimesState.value;
   const exactCounts = messageTimes != undefined;

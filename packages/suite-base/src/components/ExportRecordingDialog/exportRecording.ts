@@ -20,7 +20,6 @@ import {
   useMessagePipeline,
 } from "@lichtblick/suite-base/components/MessagePipeline";
 import { usePlayerSelection } from "@lichtblick/suite-base/context/PlayerSelectionContext";
-import { isRecoveryAlert } from "@lichtblick/suite-base/players/IterablePlayer/Mcap/recoveryAlerts";
 import { downloadFiles } from "@lichtblick/suite-base/util/download";
 
 import type { ExportChunkWorker } from "./exportChunk.worker";
@@ -38,46 +37,68 @@ export type ExportReadable = McapTypes.IReadable & { close?: () => void };
 
 export type ExportSource = {
   name: string;
-  /** The caller closes what it opens, also when it stops early */
-  open: () => Promise<ExportReadable>;
+  /** The caller closes what it opens; aborting `signal` cancels an open in progress */
+  open: (signal: AbortSignal) => Promise<ExportReadable>;
+  /** Read every message index up front for exact counts: cheap locally, payload-heavy remotely */
+  exactCounts: boolean;
 };
 
-const selectIndexRebuilt = (ctx: MessagePipelineContext) =>
-  ctx.playerState.alerts?.some(isRecoveryAlert) ?? false;
+// Export reads the file's own index: only offered once the player says it has a complete one.
+const selectFooterIndexed = (ctx: MessagePipelineContext) => {
+  const files = ctx.playerState.activeData?.recordingFiles;
+  return files?.length === 1 && files[0]!.footerIndexed === true;
+};
+
+/** The last path segment, decoded when it is valid percent-encoding */
+export function remoteFileName(url: string): string {
+  const pathname = new URL(url).pathname;
+  const raw = pathname.slice(pathname.lastIndexOf("/") + 1);
+  try {
+    return decodeURIComponent(raw);
+  } catch {
+    return raw;
+  }
+}
 
 /** The opened recording, if it can be exported: a single local or remote MCAP file. */
 export function useExportSource(): ExportSource | undefined {
   const file = useExportableFile();
   const { selectedRemoteFile } = usePlayerSelection();
-  // Playback rebuilt a missing or damaged index in memory; the export reads the file's own index.
-  const indexRebuilt = useMessagePipeline(selectIndexRebuilt);
+  const footerIndexed = useMessagePipeline(selectFooterIndexed);
   return useMemo(() => {
-    if (indexRebuilt) {
+    if (!footerIndexed) {
       return undefined;
     }
     if (file) {
-      return { name: file.name, open: async () => new BlobReadable(file) };
+      return { name: file.name, exactCounts: true, open: async () => new BlobReadable(file) };
     }
     if (!selectedRemoteFile) {
       return undefined;
     }
     const { url, credentials } = selectedRemoteFile;
-    const pathname = new URL(url).pathname;
-    if (!/\.mcap$/i.test(pathname)) {
+    if (!/\.mcap$/i.test(new URL(url).pathname)) {
       return undefined;
     }
     return {
-      name: decodeURIComponent(pathname.slice(pathname.lastIndexOf("/") + 1)),
-      open: async () => {
+      name: remoteFileName(url),
+      // Message indexes sit between chunks: reading them all would fetch much of the payload.
+      exactCounts: false,
+      open: async (signal) => {
         // Its own reader: the player's cache and prefetching stay untouched by the export.
         // No read-ahead: opening reads only the summary and indexes, never the whole file.
         // Loaded on demand: the HTTP reader stays out of the startup bundle.
         const { RemoteFileReadable } = await import(
           "@lichtblick/suite-base/players/IterablePlayer/Mcap/RemoteFileReadable"
         );
-        const readable = new RemoteFileReadable(url, { credentials, readAheadEnabled: false });
+        signal.throwIfAborted();
+        const readable = new RemoteFileReadable(url, {
+          credentials,
+          readAheadEnabled: false,
+          signal,
+        });
         try {
           await readable.open();
+          signal.throwIfAborted();
         } catch (error) {
           readable.close();
           throw error;
@@ -85,7 +106,7 @@ export function useExportSource(): ExportSource | undefined {
         return readable;
       },
     };
-  }, [file, selectedRemoteFile, indexRebuilt]);
+  }, [file, selectedRemoteFile, footerIndexed]);
 }
 
 /**

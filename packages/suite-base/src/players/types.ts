@@ -309,6 +309,8 @@ export type RecordingFileInfo = {
   start?: Time;
   end?: Time;
   library: string;
+  /** Read through the file's own complete index (not rebuilt, not still being written) */
+  footerIndexed?: boolean;
   channels: {
     id: number;
     topic: string;
