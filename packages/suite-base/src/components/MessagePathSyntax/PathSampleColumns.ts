@@ -99,6 +99,7 @@ export class PathSampleColumns {
   /** Values of NUMBER samples; allocated with the first one. */
   #numbers: Float64Array | undefined;
   #length = 0;
+  #prefixRevision = 0;
   #values: SampleValue[] = [];
   /** Index into #values of each value without a constant name. */
   #indexByValue = new Map<unknown, number>();
@@ -126,6 +127,7 @@ export class PathSampleColumns {
   /** Set on a changes record: past its budget it forgets its oldest changes instead of merging. */
   #isChangesRecord = false;
   #forgotChanges = false;
+  #startedTrackingLate = false;
 
   public constructor(maxSamples: number) {
     if (!Number.isInteger(maxSamples) || maxSamples < 4) {
@@ -146,6 +148,11 @@ export class PathSampleColumns {
     return this.#length;
   }
 
+  /** Changes when compaction can rewrite rows before the newest two. */
+  public prefixRevision(): number {
+    return this.#prefixRevision;
+  }
+
   /** Size of the value table (for tests). */
   public distinctValues(): number {
     return this.#values.length;
@@ -153,6 +160,9 @@ export class PathSampleColumns {
 
   /** Keep the exact value changes apart once thinning starts merging (for condition matches). */
   public trackChanges(): void {
+    if (!this.#trackChanges && this.#level === 3) {
+      this.#startedTrackingLate = true;
+    }
     this.#trackChanges = true;
   }
 
@@ -164,10 +174,11 @@ export class PathSampleColumns {
     return this.#changes ?? this;
   }
 
-  /** False once the changes record went over its budget and forgot its oldest changes. */
+  /** Whether the retained history still records all value changes. */
   public hasAllChanges(): boolean {
-    const changes = this.#changes;
-    return changes == undefined || !changes.#forgotChanges;
+    return this.#changes
+      ? !this.#startedTrackingLate && !this.#changes.#forgotChanges
+      : this.#level < 3;
   }
 
   /**
@@ -416,6 +427,7 @@ export class PathSampleColumns {
   }
 
   #thin(): void {
+    this.#prefixRevision++;
     const target = Math.floor((this.maxSamples * 3) / 4);
 
     if (this.#isChangesRecord) {
