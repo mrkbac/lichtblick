@@ -284,6 +284,9 @@ export type PlotCoordinatorEventTypes = {
   /** Current values changed (for displaying in the legend) */
   currentValuesChanged(values: readonly unknown[]): void;
 
+  /** Series with derived values recomputed from thinned live samples. */
+  approximateSeriesChanged(indices: readonly number[]): void;
+
   /** Paths with mismatched data lengths were detected */
   pathsWithMismatchedDataLengthsChanged(pathsWithMismatchedDataLengths: string[]): void;
 

@@ -5,6 +5,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+import { Warning16Regular } from "@fluentui/react-icons";
 import { Tooltip, Fade, useTheme } from "@mui/material";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -80,6 +81,7 @@ const labelOr = (label: string | undefined, fallback: string): string =>
 const SIDE_DASHES: (readonly number[] | undefined)[] = [undefined, [6, 4], [2, 3], [8, 3, 2, 3]];
 
 const isTopicPlotPath = (path: PlotPath) => !isReferenceLinePlotPathType(path);
+const noApproximateSeries: readonly number[] = [];
 
 const Plot = (props: PlotProps): React.JSX.Element => {
   // While every compared recording is shown, each series is drawn once per recording
@@ -128,6 +130,7 @@ const Plot = (props: PlotProps): React.JSX.Element => {
   const [subscriberId] = useState(() => randomUUID());
   const [canvasDiv, setCanvasDiv] = useState<HTMLDivElement | null>(null);
   const [coordinator, setCoordinator] = useState<PlotCoordinator | undefined>(undefined);
+  const [approximateSeries, setApproximateSeries] = useState(noApproximateSeries);
   const shouldSync = config.isSynced;
   const plotMode = getPlotMode(config);
   // A spectrum or histogram names its axes unless the user did
@@ -325,6 +328,14 @@ const Plot = (props: PlotProps): React.JSX.Element => {
 
     const plotCoordinator = new PlotCoordinator(renderer, datasetsBuilder, subscribeMessageRange);
     setCoordinator(plotCoordinator);
+    setApproximateSeries(noApproximateSeries);
+    plotCoordinator.on("approximateSeriesChanged", (indices) => {
+      setApproximateSeries((previous) =>
+        previous.length === indices.length && previous.every((index, i) => index === indices[i])
+          ? previous
+          : indices,
+      );
+    });
 
     plotCoordinator.setSize({
       width: contentRect.width,
@@ -376,6 +387,13 @@ const Plot = (props: PlotProps): React.JSX.Element => {
     return values;
   }, [activeTooltip, config.paths.length, config.showPlotValuesInLegend]);
 
+  const approximateWarning =
+    approximateSeries.length > 0
+      ? t("approximateLiveSeries", {
+          series: approximateSeries.map((index) => labelsByDatasetIndex[index]).join(", "),
+        })
+      : undefined;
+
   return (
     <Stack
       flex="auto"
@@ -387,6 +405,17 @@ const Plot = (props: PlotProps): React.JSX.Element => {
       <PanelToolbar
         additionalIcons={
           <>
+            {approximateWarning && (
+              <Tooltip title={approximateWarning}>
+                <Stack alignItems="center" justifyContent="center" padding={0.5}>
+                  <Warning16Regular
+                    aria-label={approximateWarning}
+                    role="img"
+                    primaryFill={theme.palette.warning.main}
+                  />
+                </Stack>
+              </Tooltip>
+            )}
             {canReset && (
               <PanelIconButton
                 button={PLOT_BUTTONS.resetView}
