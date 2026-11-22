@@ -275,6 +275,28 @@ describe("PointCloudHistoryRenderable decay", () => {
 
     // The decay ring and one stixels renderable for the older scan
     expect(renderable.children.length).toBe(before + 2);
+
+    // Read back again (e.g. a later decay change re-reads the window): nothing is added
+    renderable.addOlderScan(makeCloud(), settings, 5n);
+    expect(renderable.children.length).toBe(before + 2);
+  });
+
+  it("skips an older scan that playback already moved into the history", () => {
+    const { renderable, settings } = decode(makeCloud(), {
+      colorMode: "flat",
+      decayTime: 10,
+      stixelsEnabled: true,
+    });
+    renderable.updatePointCloud(makeCloud(), undefined, settings, 5n);
+    renderable.pushHistory(makeCloud(), settings, 10n); // the 5n scan moves into the history
+    renderable.updatePointCloud(makeCloud(), undefined, settings, 10n);
+    const ring = renderable.children.find((child) => child instanceof DecayPointRing)!;
+    const before = renderable.children.length;
+
+    renderable.addOlderScan(makeCloud(), settings, 5n); // the paced read reaches it afterwards
+
+    expect(ring.scanCount()).toBe(1);
+    expect(renderable.children.length).toBe(before);
   });
 
   it("skips an older scan that can't be drawn without blanking the latest one", () => {

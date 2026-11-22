@@ -282,6 +282,13 @@ export class RenderObjectHistory<TRenderable extends HistoryRenderable> {
     this.#evictOldest(this.#history.length - this.#limits.maxEntries);
   }
 
+  /** Whether an entry for the message received at `receiveTime` and stamped `messageTime` exists */
+  public has(receiveTime: bigint, messageTime: bigint): boolean {
+    return this.#history.some(
+      (entry) => entry.receiveTime === receiveTime && entry.messageTime === messageTime,
+    );
+  }
+
   /** Adds an entry older than the latest one (read back after a seek), in time order */
   public insertOlderEntry(entry: HistoryEntry<TRenderable>): void {
     entry.renderable.releaseMessage();

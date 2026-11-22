@@ -177,8 +177,6 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
   #decayRing: DecayPointRing | undefined;
   /** Decodes scans older than the latest before they are copied into the ring */
   #scratch: DynamicBufferGeometry | undefined;
-  /** While validating an older scan, whose errors must not touch the latest scan */
-  #checkingOlderScan = false;
   /** What the shown decay limit notice says, to format it again only when that changes */
   #decayNoticeKey: string | undefined;
 
@@ -456,23 +454,26 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
     settings: LayerSettingsPointClouds,
     receiveTime: bigint,
   ): void {
-    this.#checkingOlderScan = true;
-    try {
-      if (
-        !this.#validatePointCloud(pointCloud) ||
-        !this.#getPointCloudFieldReaders(tempFieldReaders, pointCloud, settings)
-      ) {
-        return;
-      }
-    } finally {
-      this.#checkingOlderScan = false;
+    const messageTime = toNanoSec(getTimestamp(pointCloud));
+    // Already in the history (e.g. played, then read back after a seek): nothing to decode
+    const inRing = this.#decayRing?.has(receiveTime, messageTime) === true;
+    const inStixels =
+      !settings.stixelsEnabled || this.#stixelsHistory.has(receiveTime, messageTime);
+    // An older cloud that can't be drawn is just skipped; the latest one stays
+    const skip = () => {};
+    if (
+      (inRing && inStixels) ||
+      !this.#validatePointCloud(pointCloud, skip) ||
+      !this.#getPointCloudFieldReaders(tempFieldReaders, pointCloud, settings, skip)
+    ) {
+      return;
     }
     const count = Math.trunc(pointCloud.data.length / getStride(pointCloud));
     this.#scratch ??= createGeometry(`${this.userData.topic}:older`, THREE.StaticDrawUsage);
     this.#scratch.resize(count);
     const { position, color } = this.#scratch.attributes;
     // Stixels keep one renderable per scan, inserted into their history in time order
-    const stixels = settings.stixelsEnabled
+    const stixels = !inStixels
       ? new StixelsRenderable(
           this.userData.topic,
           {
@@ -501,22 +502,20 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
     );
     if (stixels) {
       this.add(stixels);
-      this.#stixelsHistory.insertOlderEntry({
-        receiveTime,
-        messageTime: toNanoSec(getTimestamp(pointCloud)),
-        renderable: stixels,
-      });
+      this.#stixelsHistory.insertOlderEntry({ receiveTime, messageTime, renderable: stixels });
     }
-    this.#ring(settings).push(
-      {
-        receiveTime,
-        messageTime: toNanoSec(getTimestamp(pointCloud)),
-        frameId: this.renderer.normalizeFrameId(getFrameId(pointCloud)),
-        pose: getPose(pointCloud),
-      },
-      (position!.array as Float32Array).subarray(0, count * 3),
-      (color!.array as Uint8Array).subarray(0, count * 4),
-    );
+    if (!inRing) {
+      this.#ring(settings).push(
+        {
+          receiveTime,
+          messageTime,
+          frameId: this.renderer.normalizeFrameId(getFrameId(pointCloud)),
+          pose: getPose(pointCloud),
+        },
+        (position!.array as Float32Array).subarray(0, count * 3),
+        (color!.array as Uint8Array).subarray(0, count * 4),
+      );
+    }
   }
 
   /** The decay ring, created on first use, with the point budget of `settings` */
@@ -587,58 +586,56 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
     return true;
   }
 
-  #invalidError(message: string): void {
-    if (this.#checkingOlderScan) {
-      return; // an older scan that can't be drawn is just skipped; the latest one stays
-    }
+  #invalidError = (message: string): void => {
     this.renderer.settings.errors.addToTopic(this.userData.topic, INVALID_POINTCLOUD, message);
     const lastEntry = this.#pointsHistory.latest();
     lastEntry.renderable.geometry.resize(0);
     lastEntry.renderable.decoded = undefined;
-  }
+  };
 
-  #validatePointCloud(pointCloud: PointCloud | PointCloud2): boolean {
+  /** `report` gets why a cloud can't be drawn (by default an error that blanks the latest scan) */
+  #validatePointCloud(pointCloud: PointCloud | PointCloud2, report = this.#invalidError): boolean {
     return "header" in pointCloud
-      ? this.#validateRosPointCloud(pointCloud)
-      : this.#validateFoxglovePointCloud(pointCloud);
+      ? this.#validateRosPointCloud(pointCloud, report)
+      : this.#validateFoxglovePointCloud(pointCloud, report);
   }
 
-  #validateFoxglovePointCloud(pointCloud: PointCloud): boolean {
+  #validateFoxglovePointCloud(pointCloud: PointCloud, report: (message: string) => void): boolean {
     const data = pointCloud.data;
 
     if (data.length % pointCloud.point_stride !== 0) {
       const message = `PointCloud data length ${data.length} is not a multiple of point_stride ${pointCloud.point_stride}`;
-      this.#invalidError(message);
+      report(message);
       return false;
     }
 
     if (pointCloud.fields.length === 0) {
       const message = `PointCloud has no fields`;
-      this.#invalidError(message);
+      report(message);
       return false;
     }
 
     return true;
   }
 
-  #validateRosPointCloud(pointCloud: PointCloud2): boolean {
+  #validateRosPointCloud(pointCloud: PointCloud2, report: (message: string) => void): boolean {
     const data = pointCloud.data;
 
     if (pointCloud.is_bigendian) {
       const message = `PointCloud2 is_bigendian=true is not supported`;
-      this.#invalidError(message);
+      report(message);
       return false;
     }
 
     if (data.length % pointCloud.point_step !== 0) {
       const message = `PointCloud2 data length ${data.length} is not a multiple of point_step ${pointCloud.point_step}`;
-      this.#invalidError(message);
+      report(message);
       return false;
     }
 
     if (pointCloud.fields.length === 0) {
       const message = `PointCloud2 has no fields`;
-      this.#invalidError(message);
+      report(message);
       return false;
     }
 
@@ -661,6 +658,7 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
     output: PointCloudFieldReaders,
     pointCloud: PointCloud | PointCloud2,
     settings: LayerSettingsPointClouds,
+    report = this.#invalidError,
   ): boolean {
     let xReader: FieldReader | undefined;
     let yReader: FieldReader | undefined;
@@ -687,7 +685,7 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
 
       if (field.offset < 0) {
         const message = `PointCloud field "${field.name}" has invalid offset ${field.offset}. Must be >= 0`;
-        this.#invalidError(message);
+        report(message);
         return false;
       }
 
@@ -702,7 +700,7 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
         if (!xReader) {
           const typeName = pointFieldTypeName(type);
           const message = `PointCloud field "x" is invalid. type=${typeName}, offset=${field.offset}, stride=${stride}`;
-          this.#invalidError(message);
+          report(message);
           return false;
         }
       } else if (field.name === "y") {
@@ -710,7 +708,7 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
         if (!yReader) {
           const typeName = pointFieldTypeName(type);
           const message = `PointCloud field "y" is invalid. type=${typeName}, offset=${field.offset}, stride=${stride}`;
-          this.#invalidError(message);
+          report(message);
           return false;
         }
       } else if (field.name === "z") {
@@ -718,7 +716,7 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
         if (!zReader) {
           const typeName = pointFieldTypeName(type);
           const message = `PointCloud field "z" is invalid. type=${typeName}, offset=${field.offset}, stride=${stride}`;
-          this.#invalidError(message);
+          report(message);
           return false;
         }
       } else if (field.name === "red") {
@@ -749,7 +747,7 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
         if (!packedColorReader) {
           const typeName = pointFieldTypeName(type);
           const message = `PointCloud field "${field.name}" is invalid. type=${typeName}, offset=${field.offset}, stride=${stride}`;
-          this.#invalidError(message);
+          report(message);
           return false;
         }
       }
@@ -766,14 +764,14 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
     }
     if (minBytesPerPoint > stride) {
       const message = `PointCloud stride ${stride} is less than minimum bytes per point ${minBytesPerPoint}`;
-      this.#invalidError(message);
+      report(message);
       return false;
     }
 
     const positionReaderCount = (xReader ? 1 : 0) + (yReader ? 1 : 0) + (zReader ? 1 : 0);
     if (positionReaderCount < 2) {
       const message = `PointCloud must contain at least two of x/y/z fields`;
-      this.#invalidError(message);
+      report(message);
       return false;
     }
 

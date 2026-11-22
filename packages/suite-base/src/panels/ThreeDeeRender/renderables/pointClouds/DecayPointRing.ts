@@ -206,6 +206,16 @@ export class DecayPointRing extends Renderable<BaseUserData, /*TRenderer=*/ unde
     return this.#livePoints;
   }
 
+  /**
+   * Whether the ring holds the scan received at `receiveTime` with header stamp `messageTime`
+   * (distinct scans received at the same time have their own stamps)
+   */
+  public has(receiveTime: bigint, messageTime: bigint): boolean {
+    return this.#scans.some(
+      (scan) => scan.receiveTime === receiveTime && scan.messageTime === messageTime,
+    );
+  }
+
   /** The ring keeps 1 in this many scans (1 until it is first over its limits) */
   public stride(): number {
     return this.#stride;
@@ -249,13 +259,8 @@ export class DecayPointRing extends Renderable<BaseUserData, /*TRenderer=*/ unde
     if (count === 0 || count > MAX_SET_POINTS) {
       return;
     }
-    // The same message pushed again (e.g. read back after a seek twice); distinct scans received at
-    // the same time have their own stamps
-    if (
-      this.#scans.some(
-        (scan) => scan.receiveTime === info.receiveTime && scan.messageTime === info.messageTime,
-      )
-    ) {
+    // The same message pushed again (e.g. read back after a seek twice)
+    if (this.has(info.receiveTime, info.messageTime)) {
       return;
     }
     if (++this.#sinceKept < this.#stride) {

@@ -602,16 +602,23 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
   const decayKey = decayTopics.map((d) => `${d.topic} ${d.convertTo} ${d.decayNs}`).join("\n");
 
   // A seek empties the decay histories: read each decayed topic's window before the new time again.
-  // The layers put messages older than their latest one straight into the history.
+  // The layers put messages older than their latest one straight into the history. With `only`,
+  // read just those topics and keep the reads in flight (a decay time changed, not the time).
   const readDecayHistory = useCallback(
-    (time: bigint) => {
-      decayReadRef.current?.abort();
+    (time: bigint, only?: ReadonlySet<string>) => {
+      if (only == undefined || decayReadRef.current?.signal.aborted !== false) {
+        decayReadRef.current?.abort();
+        decayReadRef.current = new AbortController();
+      }
+      const abort = decayReadRef.current;
       if (!renderer || decayTopicsRef.current.length === 0) {
+        abort.abort();
         return;
       }
-      const abort = new AbortController();
-      decayReadRef.current = abort;
       for (const { decayNs, ingest, ...source } of decayTopicsRef.current) {
+        if (only != undefined && !only.has(source.topic)) {
+          continue;
+        }
         void readTransformRange({
           subscribeRange: context.unstable_subscribeMessageRange,
           topics: [source],
@@ -643,13 +650,32 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
     [renderer, decayTopicsRef],
   );
   useLayoutEffect(() => () => decayReadRef.current?.abort(), [readDecayHistory]);
-  // A new or longer decay time shows its window at once (scans already in the history are skipped);
-  // with no decayed topic left, the read in flight stops
+  // A new or longer decay time shows its window at once, read for just that topic (scans already
+  // in the history are skipped before decoding); with no decayed topic left, the reads stop
+  const decayReadNsRef = useRef(new Map<string, bigint>());
+  // A new renderer starts with empty histories: every decayed topic counts as new
   useEffect(() => {
-    if (renderer) {
-      readDecayHistory(renderer.currentTime);
+    decayReadNsRef.current = new Map();
+  }, [renderer]);
+  useEffect(() => {
+    if (!renderer) {
+      return;
     }
-  }, [renderer, decayKey, readDecayHistory]);
+    const grown = new Set<string>();
+    const readNs = new Map<string, bigint>();
+    for (const { topic, decayNs } of decayTopicsRef.current) {
+      readNs.set(topic, decayNs);
+      if (decayNs > (decayReadNsRef.current.get(topic) ?? 0n)) {
+        grown.add(topic);
+      }
+    }
+    decayReadNsRef.current = readNs;
+    if (readNs.size === 0) {
+      readDecayHistory(renderer.currentTime); // stops the reads
+    } else if (grown.size > 0) {
+      readDecayHistory(renderer.currentTime, grown);
+    }
+  }, [renderer, decayKey, readDecayHistory, decayTopicsRef]);
 
   // After a seek past the preloaded history (or with preloading off), read the transforms just
   // before the new time, so every frame is placed right without waiting for preloading. The first

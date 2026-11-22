@@ -224,7 +224,11 @@ class LaserScanHistoryRenderable extends Renderable<LaserScanHistoryUserData> {
     settings: LayerSettingsLaserScan,
     receiveTime: bigint,
   ): void {
-    if (laserScanError(laserScan, settings) != undefined) {
+    // Already in the history (e.g. played, then read back after a seek): nothing to decode
+    if (
+      this.#decayRing?.has(receiveTime, toNanoSec(laserScan.timestamp)) === true ||
+      laserScanError(laserScan, settings) != undefined
+    ) {
       return;
     }
     this.#scratch ??= createGeometry(`${this.userData.topic}:older`, THREE.StaticDrawUsage);
