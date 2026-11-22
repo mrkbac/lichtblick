@@ -189,5 +189,18 @@ export function splitRemoteRecordingUrlList(value: string): string[] | undefined
   if (tailStart !== -1) {
     urls[urls.length - 1] = urls[urls.length - 1]! + value.slice(tailStart);
   }
-  return urls.every((url) => detectConnection(url)?.sourceId === "remote-file") ? urls : undefined;
+  const valid = urls.every((entry) => {
+    try {
+      const url = new URL(entry);
+      return (
+        (url.protocol === "http:" || url.protocol === "https:") &&
+        url.username === "" &&
+        url.password === "" &&
+        REMOTE_FILE_EXTENSIONS.some((ext) => url.pathname.toLowerCase().endsWith(ext))
+      );
+    } catch {
+      return false;
+    }
+  });
+  return valid ? urls : undefined;
 }

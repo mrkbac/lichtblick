@@ -79,6 +79,15 @@ describe("app state url parser", () => {
       expect(parseAppURLState(url)).toEqual({ ds: "remote-file", dsParams: { url: recording } });
     });
 
+    it("does not extract a URL with embedded credentials from a legacy list", () => {
+      const url = urlBuilder();
+      const recording =
+        "https://example.com/first.mcap,https://user:invalid@example.com/second.mcap";
+      url.searchParams.set("ds", "remote-file");
+      url.searchParams.set("ds.url", recording);
+      expect(parseAppURLState(url)).toEqual({ ds: "remote-file", dsParams: { url: recording } });
+    });
+
     it("parses handles duplicate dsParams correctly", () => {
       const url = urlBuilder();
       url.searchParams.append("ds", "remote-file");
