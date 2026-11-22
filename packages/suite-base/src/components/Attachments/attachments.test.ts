@@ -18,7 +18,7 @@ describe("attachments", () => {
   ];
 
   /** A recording with `attachments` and the infos a player lists for it */
-  async function recording(): Promise<{ bytes: Uint8Array; infos: AttachmentInfo[] }> {
+  async function recording(): Promise<{ bytes: Uint8Array<ArrayBuffer>; infos: AttachmentInfo[] }> {
     const buffer = new TempBuffer();
     const writer = new McapWriter({ writable: buffer });
     await writer.start({ profile: "", library: "test" });
@@ -69,7 +69,9 @@ describe("attachments", () => {
       await attachmentData(file, { ...infos[0]!, offset: infos[0]!.offset + 1 }),
     ).toBeUndefined();
     expect(await attachmentData(file, { ...infos[0]!, name: "other.json" })).toBeUndefined();
-    expect(await attachmentData(file, { ...infos[0]!, sizeBytes: infos[0]!.sizeBytes + 1 })).toBeUndefined();
+    expect(
+      await attachmentData(file, { ...infos[0]!, sizeBytes: infos[0]!.sizeBytes + 1 }),
+    ).toBeUndefined();
     expect(await attachmentData(new Blob([bytes.slice(0, 20)]), infos[1]!)).toBeUndefined();
   });
 
