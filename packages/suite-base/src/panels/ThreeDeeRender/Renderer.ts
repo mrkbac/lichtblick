@@ -113,6 +113,8 @@ export type CustomLayerAction = {
 
 // Maximum number of objects to present as selection options in a single click
 const MAX_SELECTIONS = 10;
+/** Longest wait between repaints while transform history batches arrive */
+const HISTORY_REPAINT_MS = 250;
 
 // NOTE: These do not use .convertSRGBToLinear() since background color is not
 // affected by gamma correction
@@ -285,6 +287,8 @@ export class Renderer extends EventEmitter<RendererEvents> {
   #rendering = false;
   #disposed = false;
   #animationFrame?: number;
+  #historyRepaintTimer: ReturnType<typeof setTimeout> | undefined;
+  #historyRepaintPending = false;
   #cameraSyncError: undefined | string;
   #devicePixelRatioMediaQuery?: MediaQueryList;
   #fetchAsset: BuiltinPanelExtensionContext["unstable_fetchAsset"];
@@ -613,6 +617,7 @@ export class Renderer extends EventEmitter<RendererEvents> {
       this.#ownerWindow.cancelAnimationFrame(this.#animationFrame);
       this.#animationFrame = undefined;
     }
+    clearTimeout(this.#historyRepaintTimer);
     log.warn(`Disposing renderer`);
     this.#devicePixelRatioMediaQuery?.removeEventListener("change", this.#onDevicePixelRatioChange);
     this.#canvas.ownerDocument.removeEventListener("visibilitychange", this.#onVisibilityChange);
@@ -709,7 +714,32 @@ export class Renderer extends EventEmitter<RendererEvents> {
       }
     });
     this.#touchedFrameIds = undefined;
+    // A complete tree hides transforms received after the current time, so a batch that starts
+    // later changes nothing on screen (a paused panel loading its history stays idle)
+    const first = messageEvents[0];
+    if (first == undefined || toNanoSec(first.receiveTime) > this.currentTime) {
+      return;
+    }
+    this.#queueHistoryRepaint();
+  }
+
+  /**
+   * Repaints for history reads at most every HISTORY_REPAINT_MS, plus once after the last batch:
+   * a full frame per batch would hold the main thread and slow the read down
+   */
+  #queueHistoryRepaint(): void {
+    if (this.#historyRepaintTimer != undefined) {
+      this.#historyRepaintPending = true;
+      return;
+    }
     this.queueAnimationFrame();
+    this.#historyRepaintTimer = setTimeout(() => {
+      this.#historyRepaintTimer = undefined;
+      if (this.#historyRepaintPending) {
+        this.#historyRepaintPending = false;
+        this.#queueHistoryRepaint();
+      }
+    }, HISTORY_REPAINT_MS);
   }
 
   /**
