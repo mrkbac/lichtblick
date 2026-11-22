@@ -180,7 +180,11 @@ export class McapIterableSource implements ISerializedIterableSource {
       };
     }
     return {
-      inner: new McapUnindexedIterableSource({ readable, size: result.length, chunkCache: this.#chunkCache }),
+      inner: new McapUnindexedIterableSource({
+        readable,
+        size: result.length,
+        chunkCache: this.#chunkCache,
+      }),
       indexed: false,
       weightBytes: READER_BASE_BYTES,
     };
@@ -236,7 +240,11 @@ export class McapIterableSource implements ISerializedIterableSource {
     }
     // Unindexed: scanned once, then messages are read through the same connection and cache
     return {
-      inner: new McapUnindexedIterableSource({ readable, size: result.length, chunkCache: this.#chunkCache }),
+      inner: new McapUnindexedIterableSource({
+        readable,
+        size: result.length,
+        chunkCache: this.#chunkCache,
+      }),
       readable,
       indexed: false,
       weightBytes: READER_BASE_BYTES,
