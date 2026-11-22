@@ -35,7 +35,16 @@ function panel(
 
 const PANELS = [
   panel("3D", { kind: "topic", multiple: true }, ["sensor_msgs/Image", "tf2_msgs/TFMessage"]),
-  panel("Image", { kind: "topic" }, ["sensor_msgs/Image"]),
+  panel("Image", { kind: "topic" }, ["sensor_msgs/Image", "pkg/Annotations"], {
+    docs: async () =>
+      await Promise.resolve({
+        default: {
+          intro: "",
+          schemas: ["sensor_msgs/Image", "pkg/Annotations"],
+          openInSchemas: ["sensor_msgs/Image"],
+        },
+      }),
+  }),
   panel("CameraGrid", { kind: "topic", multiple: true }, ["sensor_msgs/Image"]),
   panel("RosOut", { kind: "topic", multiple: true }, ["rosgraph_msgs/Log"]),
   panel("Gauge", { kind: "field" }),
@@ -65,6 +74,8 @@ describe("getOpenInPanels / getDefaultPanelType", () => {
       ["3D"],
       "3D",
     ],
+    // Annotations are read by the Image panel but can't open one on their own
+    ["annotation topic", [topic("/ann", "pkg/Annotations")], ["RawMessages"], "RawMessages"],
     ["log topic", [topic("/log", "rosgraph_msgs/Log")], ["RosOut", "RawMessages"], "RosOut"],
     [
       "one leaf field",

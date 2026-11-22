@@ -95,11 +95,19 @@ import variableSliderThumbnail from "./VariableSlider/thumbnail.png";
 import { WATCH_SHORTCUTS } from "./Watch/shortcuts";
 import watchThumbnail from "./Watch/thumbnail.png";
 
+const visibleTopics = (topics: readonly string[]) =>
+  Object.fromEntries(topics.map((topic) => [topic, { visible: true }]));
+
 export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
   {
     title: t("3D"),
     type: "3D",
-    openIn: { kind: "topic", multiple: true },
+    // The scene only knows which topics it can draw once it has subscribed, so not via a drop
+    openIn: {
+      kind: "topic",
+      multiple: true,
+      config: (topics) => ({ topics: visibleTopics(topics) }),
+    },
     icon: Cube20Regular,
     keywords: ["scene", "pointcloud", "lidar", "markers", "rviz"],
     description: t("3DPanelDescription"),
@@ -122,7 +130,6 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
   {
     title: t("ROSDiagnosticSummary"),
     type: "DiagnosticSummary",
-    openIn: { kind: "topic", multiple: true },
     icon: Stethoscope20Regular,
     description: t("ROSDiagnosticSummaryDescription"),
     thumbnail: diagnosticSummaryThumbnail,
@@ -192,7 +199,6 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
   {
     title: t("gauge"),
     type: "Gauge",
-    openIn: { kind: "field" },
     icon: Gauge20Regular,
     description: t("gaugeDescription"),
     thumbnail: gaugeThumbnail,
@@ -214,7 +220,6 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
   {
     title: t("map"),
     type: "map",
-    openIn: { kind: "topic", multiple: true },
     icon: Map20Regular,
     keywords: ["gps", "navsat", "geo"],
     description: t("mapDescription"),
@@ -317,7 +322,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
   {
     title: t("log"),
     type: "RosOut",
-    openIn: { kind: "topic", multiple: true },
+    openIn: { kind: "topic", config: ([topic]) => ({ topicToRender: topic }) },
     icon: TextBulletListLtr20Regular,
     keywords: ["rosout", "console", "logs"],
     description: t("logDescription"),
@@ -364,7 +369,6 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
   {
     title: t("transformTree"),
     type: "TransformTree",
-    openIn: { kind: "topic", multiple: true },
     icon: BranchFork20Regular,
     keywords: ["tf", "tf_static", "frames", "transforms"],
     description: t("transformTreeDescription"),
