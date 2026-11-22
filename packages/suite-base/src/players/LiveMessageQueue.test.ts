@@ -86,4 +86,30 @@ describe("LiveMessageQueue", () => {
     }
     (console.warn as Mock).mockClear();
   });
+
+  it("keeps the static transform first when the newest per topic don't all fit", () => {
+    const queue = new LiveMessageQueue(1000, new PlayerAlertManager());
+    const staticFrame = msg(0, 10, "/transforms", { transforms: [{ child_frame_id: "static" }] });
+    queue.push(staticFrame);
+    for (let camera = 1; camera <= 15; camera++) {
+      queue.push(msg(camera, 60, `/camera${camera}`)); // 900 bytes of large one-shot messages
+    }
+    for (let i = 16; i < 300; i++) {
+      queue.push(msg(i, 10));
+      expect(queue.sizeInBytes()).toBeLessThanOrEqual(1000);
+    }
+    const kept = queue.drain();
+    expect(kept[0]).toBe(staticFrame);
+    expect(kept.at(-1)!.receiveTime.sec).toBe(299);
+    (console.warn as Mock).mockClear();
+  });
+
+  it("doesn't keep a dropped message that a still queued one replaces", () => {
+    const queue = new LiveMessageQueue(100, new PlayerAlertManager());
+    for (let i = 0; i < 50; i++) {
+      queue.push(msg(i, 10));
+    }
+    expect(queue.drain().map((m) => m.receiveTime.sec)).toEqual([42, 43, 44, 45, 46, 47, 48, 49]);
+    (console.warn as Mock).mockClear();
+  });
 });

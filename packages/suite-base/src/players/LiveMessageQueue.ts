@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
+import { compare } from "@foxglove/rostime";
+
 import PlayerAlertManager from "@lichtblick/suite-base/players/PlayerAlertManager";
 import { transformEntries } from "@lichtblick/suite-base/players/liveHistory/LiveHistoryBuffer";
 import { MessageEvent } from "@lichtblick/suite-base/players/types";
@@ -26,6 +28,8 @@ export class LiveMessageQueue {
   readonly #maxBytes: number;
   readonly #alerts: PlayerAlertManager;
   #messages: MessageEvent[] = [];
+  /** Newest messages per topic and child frame kept by earlier drops; older than `#messages`. */
+  #latched: MessageEvent[] = [];
   #bytes = 0;
 
   public constructor(maxBytes: number, alerts: PlayerAlertManager) {
@@ -37,7 +41,7 @@ export class LiveMessageQueue {
   }
 
   public length(): number {
-    return this.#messages.length;
+    return this.#latched.length + this.#messages.length;
   }
 
   public sizeInBytes(): number {
@@ -54,13 +58,15 @@ export class LiveMessageQueue {
 
   /** Remove and return every queued message, oldest first. */
   public drain(): MessageEvent[] {
-    const messages = this.#messages;
+    const messages =
+      this.#latched.length > 0 ? this.#latched.concat(this.#messages) : this.#messages;
     this.clear();
     return messages;
   }
 
   public clear(): void {
     this.#messages = [];
+    this.#latched = [];
     this.#bytes = 0;
   }
 
@@ -72,48 +78,94 @@ export class LiveMessageQueue {
       bytes -= this.#messages[count]!.sizeInBytes;
       count++;
     }
-    // Keep the newest dropped message of each topic (each child frame for transforms), so a one-shot
-    // static transform or map isn't lost for good while the tab is in the background. Only the
-    // dropped part is scanned; a kept message that a later one replaces goes in the next drop.
-    const done = new Set<string>(); // topics whose newest whole message is kept
-    const seenFrames = new Map<string, Set<string>>();
-    const kept: MessageEvent[] = [];
-    let keptBytes = 0;
-    for (let i = count - 1; i >= 0; i--) {
-      const msg = this.#messages[i]!;
-      if (done.has(msg.topic)) {
-        continue;
+    // Keep the newest dropped message of each topic (each child frame for transforms) unless one
+    // still queued replaces it, so a one-shot static transform or map isn't lost for good while
+    // the tab is in the background. Kept messages move to `#latched`: later drops only check
+    // them against newer dropped messages, so a key that never comes back is searched for once.
+    const claimed = new Map<string, Set<string>>(); // per topic: child frames, or "" for the topic
+    const candidates: Candidate[] = [];
+    const consider = (msg: MessageEvent, source: "queue" | "latched") => {
+      let topicKeys = claimed.get(msg.topic);
+      if (topicKeys?.has("") === true) {
+        return; // a newer whole message of this topic is already kept
+      }
+      if (!topicKeys) {
+        topicKeys = new Set();
+        claimed.set(msg.topic, topicKeys);
       }
       const transforms = transformEntries(msg.message);
-      let isNew = transforms == undefined;
+      let keys: string[] | undefined;
       if (transforms == undefined) {
-        done.add(msg.topic);
+        topicKeys.add("");
+        keys = [""];
       } else {
-        let seen = seenFrames.get(msg.topic);
-        if (!seen) {
-          seen = new Set();
-          seenFrames.set(msg.topic, seen);
-        }
         for (const { child_frame_id: frame } of transforms) {
-          if (!seen.has(frame)) {
-            seen.add(frame);
-            isNew = true;
+          if (!topicKeys.has(frame)) {
+            topicKeys.add(frame);
+            (keys ??= []).push(frame);
           }
         }
       }
-      if (isNew) {
-        kept.push(msg);
-        keptBytes += msg.sizeInBytes;
+      if (keys) {
+        candidates.push({
+          msg,
+          keys,
+          transform: transforms != undefined,
+          latched: source === "latched",
+        });
+      }
+    };
+    for (let i = count - 1; i >= 0; i--) {
+      consider(this.#messages[i]!, "queue");
+    }
+    for (let i = this.#latched.length - 1; i >= 0; i--) {
+      bytes -= this.#latched[i]!.sizeInBytes;
+      consider(this.#latched[i]!, "latched");
+    }
+    const pending = new Map<string, Set<string>>();
+    for (const { msg, keys, latched } of candidates) {
+      if (!latched) {
+        const topicKeys = pending.get(msg.topic) ?? new Set();
+        pending.set(msg.topic, topicKeys);
+        keys.forEach((key) => topicKeys.add(key));
       }
     }
-    // Leave headroom, or every push would drop again; without room, drop those too.
-    if (bytes + keptBytes <= 0.9 * this.#maxBytes) {
-      bytes += keptBytes;
-    } else {
-      kept.length = 0;
+    // Stops once every key turned up again.
+    for (let i = count; i < this.#messages.length && pending.size > 0; i++) {
+      const msg = this.#messages[i]!;
+      const topicKeys = pending.get(msg.topic);
+      if (!topicKeys) {
+        continue;
+      }
+      for (const key of transformEntries(msg.message)?.map((tf) => tf.child_frame_id) ?? [""]) {
+        topicKeys.delete(key);
+      }
+      if (topicKeys.size === 0) {
+        pending.delete(msg.topic);
+      }
     }
+    // Within the headroom left under the cap (so the next push doesn't drop again), transforms
+    // first, then the smallest messages.
+    const wanted = candidates
+      .filter(
+        ({ msg, keys, latched }) =>
+          latched || keys.some((key) => pending.get(msg.topic)?.has(key) === true),
+      )
+      .sort((a, b) =>
+        a.transform === b.transform
+          ? a.msg.sizeInBytes - b.msg.sizeInBytes
+          : Number(b.transform) - Number(a.transform),
+      );
+    const kept: MessageEvent[] = [];
+    for (const { msg } of wanted) {
+      if (bytes + msg.sizeInBytes <= 0.9 * this.#maxBytes) {
+        bytes += msg.sizeInBytes;
+        kept.push(msg);
+      }
+    }
+    this.#latched = kept.sort((a, b) => compare(a.receiveTime, b.receiveTime));
     this.#bytes = bytes;
-    this.#messages.splice(0, count, ...kept.reverse());
+    this.#messages.splice(0, count);
     this.#alerts.addAlert(LIVE_QUEUE_FULL_ALERT_ID, {
       severity: "warn",
       message: `Dropped messages: more than ${(this.#maxBytes / 1_000_000).toFixed(0)} MB were waiting to be shown.`,
@@ -121,3 +173,5 @@ export class LiveMessageQueue {
     });
   }
 }
+
+type Candidate = { msg: MessageEvent; keys: string[]; transform: boolean; latched: boolean };

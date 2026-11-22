@@ -246,19 +246,16 @@ export class LiveHistoryBuffer {
       }
     };
     // Walking back to the oldest message is what a transform or silent topic costs. While scrubbing,
-    // if the checkpoint at the start of the block is cheaper to bring up to date than that, walk
-    // back only to the block start and take what's still missing from the checkpoint. A lone seek
-    // walks as before, so checkpoints are only built when later seeks will reuse them.
+    // walk back only to the block start and take what's still missing from its checkpoint, which
+    // costs at most that same walk to bring up to date. A lone seek walks as before, so checkpoints
+    // are only built when later seeks will reuse them.
     const end = this.#upperBound(at);
     const block = Math.floor(this.#seqOf(end) / CHECKPOINT_INTERVAL);
     const blockStart = this.#indexOf(block * CHECKPOINT_INTERVAL);
     const added = this.#seqOf(this.#messages.length);
     const scrubbing = added - this.#lastSeekSeq < CHECKPOINT_INTERVAL;
     this.#lastSeekSeq = added;
-    const useCheckpoint =
-      scrubbing &&
-      blockStart > this.#head &&
-      block * CHECKPOINT_INTERVAL - this.#checkpointBase(block).seq <= blockStart - this.#head;
+    const useCheckpoint = scrubbing && blockStart > this.#head;
     const stop = useCheckpoint ? blockStart : this.#head;
     for (let i = end - 1; i >= stop && complete < topics.size; i--) {
       const msg = this.#messages[i]!;
@@ -360,22 +357,19 @@ export class LiveHistoryBuffer {
     return this.#head + (seq - this.#headSeq);
   }
 
-  /** The checkpoint to build `block`'s checkpoint from, and the sequence number it covers up to. */
-  #checkpointBase(block: number): { base: Checkpoint | undefined; from: number; seq: number } {
-    let from = block;
+  /** The checkpoint of `block`, whose start must be a retained message. */
+  #checkpoint(block: number): Checkpoint {
+    const cached = this.#checkpoints.get(block);
+    if (cached) {
+      return cached;
+    }
+    // Continue from the nearest earlier checkpoint, or from the oldest retained message.
+    let from = block - 1;
     while (from * CHECKPOINT_INTERVAL > this.#headSeq && !this.#checkpoints.has(from)) {
       from--;
     }
     const base = this.#checkpoints.get(from);
-    return { base, from, seq: base ? from * CHECKPOINT_INTERVAL : this.#headSeq };
-  }
-
-  /** The checkpoint of `block`, whose start must be a retained message. */
-  #checkpoint(block: number): Checkpoint {
-    const { base, from, seq: start } = this.#checkpointBase(block);
-    if (base && from === block) {
-      return base;
-    }
+    const start = base ? from * CHECKPOINT_INTERVAL : this.#headSeq;
     const state: Checkpoint = base
       ? cloneCheckpoint(base)
       : { whole: new Map<string, number>(), frames: new Map<string, Map<string, number>>() };
