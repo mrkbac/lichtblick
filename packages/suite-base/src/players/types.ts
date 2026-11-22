@@ -326,6 +326,11 @@ export type RecordingFileInfo = {
     uncompressedBytes: number;
   }[];
   attachments: { name: string; mediaType: string; sizeBytes: number }[];
+  /**
+   * Uncompressed message bytes in DENSITY_BUCKETS equal time slices of [start, end], from the
+   * file's index (no message reads). Zero where nothing was recorded.
+   */
+  messageBytes?: Float32Array;
 };
 
 export type TopicStats = {
