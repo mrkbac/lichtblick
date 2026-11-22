@@ -5,9 +5,13 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { ObjectPool } from "@lichtblick/den/collection";
-
-import { CoordinateFrame, FallbackFrameId, AnyFrameId } from "./CoordinateFrame";
+import {
+  CoordinateFrame,
+  FallbackFrameId,
+  AnyFrameId,
+  MAX_DURATION,
+  TransformVisibility,
+} from "./CoordinateFrame";
 import { Transform } from "./Transform";
 import { Pose } from "./geometry";
 import { Duration, Time } from "./time";
@@ -44,6 +48,13 @@ export const DEFAULT_MAX_CAPACITY_PER_FRAME = 10_000;
  */
 export const DEFAULT_MAX_STORAGE_TIME: Duration = 300n * BigInt(1e9);
 
+/**
+ * Sample budget across all frames of a complete tree (see {@link TransformTree.setComplete}), about
+ * 128 MB at 64 bytes per sample. Past it, every frame's history is halved, so long recordings lose
+ * time resolution evenly instead of losing their end.
+ */
+export const MAX_COMPLETE_TRANSFORM_SAMPLES = 2_000_000;
+
 export enum AddTransformResult {
   NOT_UPDATED,
   UPDATED,
@@ -63,24 +74,30 @@ export class TransformTree {
   public version = 0;
   #maxStorageTime: Duration;
   #maxCapacityPerFrame: number;
-  #transformPool: ObjectPool<Transform>;
+  #complete = false;
+  #receivedUntil: Time | undefined;
+  #visibility: TransformVisibility = { complete: false, receivedUntil: undefined };
+  #sampleBudget: number;
+  #sampleCount = 0;
+  /** How many times the histories were halved to stay within the sample budget */
+  public decimations = 0;
 
   public defaultRootFrame: CoordinateFrame<FallbackFrameId>;
 
   public constructor(
-    transformPool: ObjectPool<Transform>,
     maxStorageTime = DEFAULT_MAX_STORAGE_TIME,
     maxCapacityPerFrame = DEFAULT_MAX_CAPACITY_PER_FRAME,
+    sampleBudget = MAX_COMPLETE_TRANSFORM_SAMPLES,
   ) {
-    this.#transformPool = transformPool;
     this.#maxStorageTime = maxStorageTime;
     this.#maxCapacityPerFrame = maxCapacityPerFrame;
+    this.#sampleBudget = sampleBudget;
     this.defaultRootFrame = new CoordinateFrame(
       CoordinateFrame.FALLBACK_FRAME_ID,
       undefined,
       this.#maxStorageTime,
       this.#maxCapacityPerFrame,
-      this.#transformPool,
+      this.#visibility,
     );
     this.defaultRootFrame.addTransform(0n, Transform.Identity());
   }
@@ -90,12 +107,14 @@ export class TransformTree {
     parentFrameId: string,
     time: Time,
     transform: Transform,
+    receiveTime?: Time,
   ): AddTransformResult {
     this.version++;
     let updated = !this.hasFrame(frameId);
     let cycleDetected = false;
     const frame = this.getOrCreateFrame(frameId);
-    const curParentFrame = frame.parent();
+    const sizeBefore = frame.transformsSize();
+    const curParentFrame = frame.latestParent();
     if (curParentFrame?.id !== parentFrameId) {
       cycleDetected = this.#checkParentForCycle(frameId, parentFrameId);
       // This frame was previously unparented but now we know its parent, or we
@@ -107,7 +126,11 @@ export class TransformTree {
     }
 
     if (!cycleDetected) {
-      frame.addTransform(time, transform);
+      frame.addTransform(time, transform, receiveTime);
+    }
+    this.#sampleCount += frame.transformsSize() - sizeBefore;
+    if (this.#complete && this.#sampleCount > this.#sampleBudget) {
+      this.#decimate();
     }
 
     return cycleDetected
@@ -126,10 +149,12 @@ export class TransformTree {
     if (!child) {
       return;
     }
-    if (child.parent()?.id !== parentFrameId) {
+    if (child.latestParent()?.id !== parentFrameId) {
       return;
     }
+    const sizeBefore = child.transformsSize();
     child.removeTransformAt(stamp);
+    this.#sampleCount += child.transformsSize() - sizeBefore;
     this.version++;
     this.#removeEmptyAncestors(child);
   }
@@ -193,6 +218,57 @@ export class TransformTree {
   public clear(): void {
     this.version++;
     this.#frames.clear();
+    this.#sampleCount = 0;
+    this.decimations = 0;
+  }
+
+  /**
+   * A complete tree holds the whole transform history of a recording: frames keep every transform
+   * (within the sample budget) instead of a bounded window, and lookups only see the transforms
+   * received by the time set with {@link setReceivedUntil}. Turning it off clears the tree, since
+   * the history would exceed the bounds.
+   */
+  // eslint-disable-next-line @lichtblick/no-boolean-parameters
+  public setComplete(complete: boolean): void {
+    if (this.#complete === complete) {
+      return;
+    }
+    this.#complete = complete;
+    this.#visibility.complete = complete;
+    this.#visibility.receivedUntil = complete ? this.#receivedUntil : undefined;
+    if (!complete) {
+      this.clear();
+    }
+    for (const frame of this.#frames.values()) {
+      this.#applyLimits(frame);
+    }
+  }
+
+  public isComplete(): boolean {
+    return this.#complete;
+  }
+
+  /** The playback time: a complete tree hides transforms received after it */
+  public setReceivedUntil(time: Time): void {
+    this.#receivedUntil = time;
+    if (this.#complete) {
+      this.#visibility.receivedUntil = this.#receivedUntil;
+    }
+  }
+
+  #applyLimits(frame: CoordinateFrame): void {
+    frame.maxCapacity = this.#complete ? Infinity : this.#maxCapacityPerFrame;
+    frame.maxStorageTime = this.#complete ? MAX_DURATION : this.#maxStorageTime;
+    frame.setKeepEvery(2 ** this.decimations);
+  }
+
+  #decimate(): void {
+    // ponytail: halves every frame, also sparse ones; per-frame budgets if a dense frame starves
+    // slow ones of resolution.
+    this.decimations++;
+    for (const frame of this.#frames.values()) {
+      this.#sampleCount -= frame.decimate(2 ** this.decimations);
+    }
   }
 
   public hasFrame(id: AnyFrameId): boolean {
@@ -217,8 +293,9 @@ export class TransformTree {
         undefined,
         this.#maxStorageTime,
         this.#maxCapacityPerFrame,
-        this.#transformPool,
+        this.#visibility,
       );
+      this.#applyLimits(frame);
       this.#frames.set(id, frame);
     }
     return frame;
@@ -328,24 +405,38 @@ export class TransformTree {
       return true;
     }
     // walk up tree from parent Frame to check if it eventually crosses the frame
-    let frame = this.frame(parentFrameId);
-    while (frame?.parent()) {
-      if (frame.parent()?.id === frameId) {
-        return true;
+    // Walk every parent a frame had, not only the latest: a preloaded history switches to earlier
+    // parents at earlier playback times, and no playback time may see a cycle.
+    const visited = new Set<CoordinateFrame>();
+    const pending = [this.frame(parentFrameId)];
+    for (let frame = pending.pop(); frame; frame = pending.pop()) {
+      if (visited.has(frame)) {
+        continue;
       }
-      frame = frame.parent();
+      visited.add(frame);
+      for (const parent of frame.allParents()) {
+        if (parent.id === frameId) {
+          return true;
+        }
+        pending.push(parent);
+      }
     }
     return false;
   }
 
   public static Clone(tree: TransformTree): TransformTree {
     const newTree = new TransformTree(
-      tree.#transformPool,
       tree.#maxStorageTime,
       tree.#maxCapacityPerFrame,
+      tree.#sampleBudget,
     );
     newTree.#frames = tree.#frames;
     newTree.version = tree.version;
+    newTree.#complete = tree.#complete;
+    newTree.#receivedUntil = tree.#receivedUntil;
+    newTree.#visibility = tree.#visibility;
+    newTree.#sampleCount = tree.#sampleCount;
+    newTree.decimations = tree.decimations;
     return newTree;
   }
 }

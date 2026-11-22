@@ -3,8 +3,6 @@
 import { WGS84_ELLIPSOID } from "3d-tiles-renderer";
 import * as THREE from "three";
 
-import { ObjectPool } from "@lichtblick/den/collection";
-
 import type { Renderer } from "../Renderer";
 import { Transform, TransformTree } from "../transforms";
 import { LayerSettingsMap, Maps, groundHeight } from "./Maps";
@@ -12,7 +10,7 @@ import { LayerSettingsMap, Maps, groundHeight } from "./Maps";
 vi.mock("../ModelCache", () => ({ createBundledDracoLoader: vi.fn() }));
 
 function setup(locationFrame?: string) {
-  const transformTree = new TransformTree(new ObjectPool(Transform.Empty));
+  const transformTree = new TransformTree();
   const time = 1532402927647951000n;
   transformTree.addTransform(
     "base_link",

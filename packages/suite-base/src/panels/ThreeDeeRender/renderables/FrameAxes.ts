@@ -130,6 +130,7 @@ const tempVecB = new THREE.Vector3();
 const tempColor = new THREE.Color();
 const tempLower: [Duration, Transform] = [0n, Transform.Identity()];
 const tempUpper: [Duration, Transform] = [0n, Transform.Identity()];
+const tempRecorded = Transform.Identity();
 const tempTfPath: [string, string] = ["transforms", ""];
 
 export class FrameAxes extends SceneExtension<FrameAxisRenderable> {
@@ -468,9 +469,6 @@ export class FrameAxes extends SceneExtension<FrameAxisRenderable> {
       } else if (action.payload.id === "hide-all") {
         // Hide all frames
         toggleFrameVisibility(false);
-      } else if (action.payload.id === "clear-preload-buffer") {
-        // Clear preloaded transform messages
-        this.renderer.emit("clearPreloadBuffer", this.renderer);
       } else if (action.payload.id === "undo-adjustment") {
         this.#undo();
       } else if (action.payload.id === "reset-all-adjustments") {
@@ -637,7 +635,9 @@ export class FrameAxes extends SceneExtension<FrameAxisRenderable> {
     if (!frame || !frame.findClosestTransforms(tempLower, tempUpper, currentTime, MAX_DURATION)) {
       return undefined;
     }
-    const transform = tempUpper[1];
+    // A preloaded history can hold transforms after currentTime too, so interpolate
+    const transform = tempRecorded;
+    CoordinateFrame.InterpolateTransform(transform, tempLower, tempUpper, currentTime);
     return {
       position: [...transform.position()] as Vec3,
       rotation: [...transform.rotation()] as Quat,
@@ -664,7 +664,7 @@ export class FrameAxes extends SceneExtension<FrameAxisRenderable> {
     const recorded = this.#recorded(frame);
     let ageValue: string | undefined;
     if (recorded) {
-      const transformTime = tempUpper[0];
+      const transformTime = tempLower[0];
       ageValue =
         transformTime < currentTime ? formatShortDuration(currentTime - transformTime) : "0 ns";
     }

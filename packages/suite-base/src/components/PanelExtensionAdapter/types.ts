@@ -12,6 +12,7 @@ import {
   MessageConverterAlert,
   PanelExtensionContext,
   SettingsTree,
+  SubscribeMessageRangeArgs,
 } from "@lichtblick/suite";
 import { IteratorResult } from "@lichtblick/suite-base/players/IterablePlayer/IIterableSource";
 import { PlayerAlert, Topic } from "@lichtblick/suite-base/players/types";
@@ -109,7 +110,15 @@ export type BuiltinPanelExtensionContext = {
    * clears the alert with the given `alertId`.
    */
   unstable_setAlert?: (alertId: string, alert: Immutable<PlayerAlert> | undefined) => void;
-} & Omit<PanelExtensionContext, "updatePanelSettingsEditor">;
+
+  /**
+   * `PanelExtensionContext.unstable_subscribeMessageRange`, where built-in panels can also ask for
+   * read errors to reach their iterator instead of the range just ending early.
+   */
+  unstable_subscribeMessageRange: (
+    args: SubscribeMessageRangeArgs & { rethrowErrors?: boolean },
+  ) => () => void;
+} & Omit<PanelExtensionContext, "updatePanelSettingsEditor" | "unstable_subscribeMessageRange">;
 
 /**
  * The context the adapter hands to every panel: the Lichtblick API, the built-in extras, and the

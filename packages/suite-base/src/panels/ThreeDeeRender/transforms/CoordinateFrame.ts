@@ -9,10 +9,8 @@
 
 import { mat4, quat, vec3, vec4 } from "gl-matrix";
 
-import { ArrayMap } from "@lichtblick/den/collection";
-import { ObjectPool } from "@lichtblick/den/collection/ObjectPool";
-
 import { Transform } from "./Transform";
+import { TransformHistory } from "./TransformHistory";
 import { Pose, mat4Identity } from "./geometry";
 import { Duration, interpolate, percentOf, Time } from "./time";
 
@@ -34,6 +32,17 @@ const tempMatrix = mat4Identity();
 const FALLBACK_FRAME_ID = Symbol("FALLBACK_FRAME_ID");
 export type FallbackFrameId = typeof FALLBACK_FRAME_ID;
 
+/**
+ * Shared by all frames of a tree. Transforms received after `receivedUntil` (in ns of the playback
+ * clock) are hidden from lookups, so a history preloaded past the current time behaves as if only
+ * the transforms received so far were there. Undefined shows everything.
+ */
+export type TransformVisibility = {
+  /** The history is a recording's complete (preloaded) one, so earlier parents are kept too */
+  complete: boolean;
+  receivedUntil: Time | undefined;
+};
+
 export type UserFrameId = string;
 export type AnyFrameId = UserFrameId | FallbackFrameId;
 
@@ -52,16 +61,23 @@ export class CoordinateFrame<ID extends AnyFrameId = UserFrameId> {
   public offsetPosition: vec3 | undefined;
   public offsetEulerDegrees: vec3 | undefined;
 
-  #transformPool: ObjectPool<Transform>;
   #parent?: CoordinateFrame;
-  #transforms: ArrayMap<Time, Transform>;
+  #transforms = new TransformHistory();
+  /**
+   * Parents and histories before the latest reparenting, oldest first. Only kept while lookups are
+   * limited to what was received (a preloaded history), so the frame keeps its earlier parent until
+   * playback reaches the reparenting.
+   */
+  #earlier: { parent: CoordinateFrame; transforms: TransformHistory }[] = [];
+  #keepEvery = 1;
+  #visibility: TransformVisibility;
 
   public constructor(
     id: ID,
     parent: CoordinateFrame | undefined, // fallback frame not allowed as parent
     maxStorageTime: Duration,
     maxCapacity: number,
-    transformPool: ObjectPool<Transform>,
+    visibility: TransformVisibility = { complete: false, receivedUntil: undefined },
   ) {
     if (parent) {
       this.#parent = parent;
@@ -69,8 +85,7 @@ export class CoordinateFrame<ID extends AnyFrameId = UserFrameId> {
     this.id = id;
     this.maxStorageTime = maxStorageTime;
     this.maxCapacity = maxCapacity;
-    this.#transforms = new ArrayMap<Time, Transform>();
-    this.#transformPool = transformPool;
+    this.#visibility = visibility;
   }
 
   public static assertUserFrame(
@@ -81,8 +96,48 @@ export class CoordinateFrame<ID extends AnyFrameId = UserFrameId> {
     }
   }
 
+  /** The parent at the playback time (see {@link TransformVisibility}) */
   public parent(): CoordinateFrame | undefined {
+    return this.#earlier.length === 0 ? this.#parent : this.#active().parent;
+  }
+
+  /** The parent of the newest transforms, whatever the playback time */
+  public latestParent(): CoordinateFrame | undefined {
     return this.#parent;
+  }
+
+  /** Every parent this frame has had in its kept history, newest first */
+  public allParents(): CoordinateFrame[] {
+    const parents: CoordinateFrame[] = this.#parent ? [this.#parent] : [];
+    for (let i = this.#earlier.length - 1; i >= 0; i--) {
+      parents.push(this.#earlier[i]!.parent);
+    }
+    return parents;
+  }
+
+  /**
+   * The parent and history in effect at the playback time: the newest one with a transform received
+   * by then, or the oldest one before any was received.
+   */
+  #active(): { parent: CoordinateFrame | undefined; transforms: TransformHistory } {
+    const receivedUntil = this.#visibility.receivedUntil;
+    if (
+      this.#earlier.length === 0 ||
+      receivedUntil == undefined ||
+      this.#transforms.receivedCount(receivedUntil) > 0
+    ) {
+      return { parent: this.#parent, transforms: this.#transforms };
+    }
+    for (let i = this.#earlier.length - 1; i > 0; i--) {
+      if (this.#earlier[i]!.transforms.receivedCount(receivedUntil) > 0) {
+        return this.#earlier[i]!;
+      }
+    }
+    return this.#earlier[0]!;
+  }
+
+  #activeTransforms(): TransformHistory {
+    return this.#earlier.length === 0 ? this.#transforms : this.#active().transforms;
   }
 
   /**
@@ -96,8 +151,8 @@ export class CoordinateFrame<ID extends AnyFrameId = UserFrameId> {
     CoordinateFrame.assertUserFrame(this);
     // eslint-disable-next-line @typescript-eslint/no-this-alias
     let root: CoordinateFrame = this;
-    while (root.#parent) {
-      root = root.#parent;
+    for (let parent = root.parent(); parent; parent = parent.parent()) {
+      root = parent;
     }
     return root as CoordinateFrame<ID>;
   }
@@ -106,25 +161,33 @@ export class CoordinateFrame<ID extends AnyFrameId = UserFrameId> {
    * Returns true if this frame has no parent frame.
    */
   public isRoot(): boolean {
-    return this.#parent == undefined;
+    return this.parent() == undefined;
   }
 
   /**
    * Returns the number of transforms stored in the transform history.
    */
   public transformsSize(): number {
-    return this.#transforms.size;
+    let size = this.#transforms.size();
+    for (const { transforms } of this.#earlier) {
+      size += transforms.size();
+    }
+    return size;
   }
 
   /**
-   * Set the parent frame for this frame. If the parent frame is already set to
-   * a different frame, the transform history is cleared.
+   * Set the parent frame for this frame. If the parent frame is already set to a different frame,
+   * the transform history starts over. A preloaded history keeps the earlier parent and its
+   * transforms for playback times before the reparenting.
    */
   public setParent(parent: CoordinateFrame): void {
     if (this.#parent && this.#parent !== parent) {
-      const removed = this.#transforms.clear();
-      for (const [, tf] of removed) {
-        this.#transformPool.release(tf);
+      if (this.#visibility.complete && this.#transforms.size() > 0) {
+        this.#earlier.push({ parent: this.#parent, transforms: this.#transforms });
+        this.#transforms = new TransformHistory();
+        this.#transforms.setKeepEvery(this.#keepEvery);
+      } else {
+        this.#transforms.clear();
       }
     }
     this.#parent = parent;
@@ -137,12 +200,12 @@ export class CoordinateFrame<ID extends AnyFrameId = UserFrameId> {
    * @returns The ancestor frame, or undefined if not found
    */
   public findAncestor(id: string): CoordinateFrame | undefined {
-    let ancestor = this.#parent;
+    let ancestor = this.parent();
     while (ancestor) {
       if (ancestor.id === id) {
         return ancestor;
       }
-      ancestor = ancestor.#parent;
+      ancestor = ancestor.parent();
     }
     return undefined;
   }
@@ -155,55 +218,69 @@ export class CoordinateFrame<ID extends AnyFrameId = UserFrameId> {
    *
    * If a transform with an identical timestamp already exists, it is replaced.
    */
-  public addTransform(time: Time, transform: Transform): void {
-    const oldTf = this.#transforms.set(time, transform);
-    if (oldTf) {
-      this.#transformPool.release(oldTf);
+  public addTransform(time: Time, transform: Transform, receiveTime?: Time): void {
+    const history = this.#transforms;
+    history.set(time, transform, receiveTime);
+    if (this.maxStorageTime === MAX_DURATION && this.maxCapacity === Infinity) {
+      // Complete history: nothing to prune
+      return;
     }
 
     // Prune by time on insert. Wait until the oldest entry is a quarter of maxStorageTime past the
-    // window so the O(n) removeBefore runs once per quarter window, not on every insert.
-    const windowStart = this.#transforms.maxKey()! - this.maxStorageTime;
-    if (this.#transforms.minKey()! < windowStart - this.maxStorageTime / 4n) {
+    // window so the O(n) removal runs once per quarter window, not on every insert.
+    const windowStart = history.timeAt(history.size() - 1) - this.maxStorageTime;
+    if (history.timeAt(0) < windowStart - this.maxStorageTime / 4n) {
       // Keep the newest transform before the window, so lookups inside the window still
       // interpolate from it instead of snapping to the next one.
-      const index = this.#transforms.binarySearch(windowStart);
-      const keepFrom = index >= 0 ? index : ~index - 1;
-      if (keepFrom > 0) {
-        for (const [, tf] of this.#transforms.removeBefore(this.#transforms.at(keepFrom)![0])) {
-          this.#transformPool.release(tf);
-        }
-      }
+      const index = history.binarySearch(windowStart);
+      history.removeFirst(index >= 0 ? index : ~index - 1);
     }
-
-    const transformsFull = this.#transforms.size >= this.maxCapacity;
 
     // Trim down to the maximum history size if we've exceeded the capacity
-    if (transformsFull) {
-      // remove a quarter of old transforms
-      const removeBeforeIndex = Math.floor(this.maxCapacity * MAX_CAPACITY_EVICT_PORTION);
-      // guaranteed to be more than minKey
-      let removeBeforeTime = this.#transforms.at(removeBeforeIndex)![0];
-      const endTime = this.#transforms.maxKey()!;
-      // not guaranteed to be more than minKey
-      const startTime = endTime - this.maxStorageTime;
-      // at the very least we trim a quarter, but if the maxStorageTime enforces a larger trim we take that
-      // we can't afford to check maxStorageTime every time we add a transform, so we only check it when capacity is full
-      removeBeforeTime = startTime > removeBeforeTime ? startTime : removeBeforeTime;
-
-      const entriesRemoved = this.#transforms.removeBefore(removeBeforeTime);
-      for (const [, tf] of entriesRemoved) {
-        this.#transformPool.release(tf);
-      }
+    if (history.size() >= this.maxCapacity) {
+      // remove at least a quarter of old transforms, more if maxStorageTime asks for it
+      let removeCount = Math.floor(this.maxCapacity * MAX_CAPACITY_EVICT_PORTION);
+      const startIndex = history.binarySearch(windowStart);
+      removeCount = Math.max(removeCount, startIndex >= 0 ? startIndex : ~startIndex);
+      history.removeFirst(removeCount);
     }
+  }
+
+  /**
+   * Halves this frame's history, keeping its first and last transform, and keeps one in
+   * `keepEvery` transforms added later. Returns the count removed.
+   */
+  public decimate(keepEvery: number): number {
+    this.setKeepEvery(keepEvery);
+    let removed = this.#transforms.decimate();
+    for (const { transforms } of this.#earlier) {
+      removed += transforms.decimate();
+    }
+    return removed;
+  }
+
+  /** Keep one in `keepEvery` transforms added from now on */
+  public setKeepEvery(keepEvery: number): void {
+    this.#keepEvery = keepEvery;
+    this.#transforms.setKeepEvery(keepEvery);
+  }
+
+  /** Time of the newest transform at or before `time` that lookups can see, if any */
+  public latestTimeAtOrBefore(time: Time): Time | undefined {
+    const history = this.#activeTransforms();
+    const index = history.binarySearch(time, this.#visibleCount(history));
+    const at = index >= 0 ? index : ~index - 1;
+    return at >= 0 ? history.timeAt(at) : undefined;
+  }
+
+  #visibleCount(history: TransformHistory): number {
+    const receivedUntil = this.#visibility.receivedUntil;
+    return receivedUntil == undefined ? history.size() : history.receivedCount(receivedUntil);
   }
 
   /** Removes a transform with a specific timestamp */
   public removeTransformAt(time: Time): void {
-    const tf = this.#transforms.remove(time);
-    if (tf?.[1]) {
-      this.#transformPool.release(tf[1]);
-    }
+    this.#transforms.remove(time);
   }
 
   /**
@@ -227,62 +304,37 @@ export class CoordinateFrame<ID extends AnyFrameId = UserFrameId> {
     maxDelta: Duration,
   ): boolean {
     // perf-sensitive: function params instead of options object to avoid allocations
-    const transformCount = this.#transforms.size;
+    const history = this.#activeTransforms();
+    const transformCount = this.#visibleCount(history);
     if (transformCount === 0) {
-      return false;
-    } else if (transformCount === 1) {
-      // If only a single transform exists, check if `time` is before or equal to
-      // `latestTime + maxDelta`
-      const [latestTime, latestTf] = this.#transforms.maxEntry()!;
-      if (time <= latestTime + maxDelta) {
-        outLower[0] = outUpper[0] = latestTime;
-        outLower[1] = outUpper[1] = latestTf;
-        return true;
-      }
       return false;
     }
 
-    const index = this.#transforms.binarySearch(time);
+    const index = history.binarySearch(time, transformCount);
     if (index >= 0) {
       // If the time is exactly on an existing transform, return it
-      const [, tf] = this.#transforms.at(index)!;
-      outLower[0] = outUpper[0] = time;
-      outLower[1] = outUpper[1] = tf;
-      return true;
+      return setBoth(outLower, outUpper, history, index);
     }
 
     const greaterThanIndex = ~index;
-    if (greaterThanIndex >= this.#transforms.size) {
-      // If the time is greater than all existing transforms, return the last
-      // transform
-      const [latestTime, latestTf] = this.#transforms.maxEntry()!;
-      if (time <= latestTime + maxDelta) {
-        outLower[0] = outUpper[0] = latestTime;
-        outLower[1] = outUpper[1] = latestTf;
-        return true;
-      }
-      return false;
+    if (greaterThanIndex >= transformCount) {
+      // If the time is greater than all existing transforms, return the last transform
+      return (
+        time <= history.timeAt(transformCount - 1) + maxDelta &&
+        setBoth(outLower, outUpper, history, transformCount - 1)
+      );
     }
 
     const lessThanIndex = greaterThanIndex - 1;
     if (lessThanIndex < 0) {
-      // If the time is less than all existing transforms, return the first
-      // transform
-      const [earliestTime, earliestTf] = this.#transforms.minEntry()!;
-      if (earliestTime + maxDelta >= time) {
-        outLower[0] = outUpper[0] = earliestTime;
-        outLower[1] = outUpper[1] = earliestTf;
-        return true;
-      }
-      return false;
+      // If the time is less than all existing transforms, return the first transform
+      return history.timeAt(0) - maxDelta <= time && setBoth(outLower, outUpper, history, 0);
     }
 
-    const [lteTime, lteTf] = this.#transforms.at(lessThanIndex)!;
-    const [gtTime, gtTf] = this.#transforms.at(greaterThanIndex)!;
-    outLower[0] = lteTime;
-    outLower[1] = lteTf;
-    outUpper[0] = gtTime;
-    outUpper[1] = gtTf;
+    outLower[0] = history.timeAt(lessThanIndex);
+    history.transformAt(lessThanIndex, outLower[1]);
+    outUpper[0] = history.timeAt(greaterThanIndex);
+    history.transformAt(greaterThanIndex, outUpper[1]);
     return true;
   }
 
@@ -350,7 +402,7 @@ export class CoordinateFrame<ID extends AnyFrameId = UserFrameId> {
           ? out
           : undefined;
       }
-      curSrcFrame = curSrcFrame.#parent;
+      curSrcFrame = curSrcFrame.parent();
     }
 
     return undefined;
@@ -502,12 +554,13 @@ export class CoordinateFrame<ID extends AnyFrameId = UserFrameId> {
 
       mat4.multiply(out, tempTransform.matrix(), out);
 
-      if (curFrame.#parent == undefined) {
+      const parent = curFrame.parent();
+      if (parent == undefined) {
         throw new Error(
           `Frame "${parentFrame.displayName()}" is not a parent of "${childFrame.displayName()}"`,
         );
       }
-      curFrame = curFrame.#parent;
+      curFrame = parent;
     }
 
     return true;
@@ -563,6 +616,18 @@ export class CoordinateFrame<ID extends AnyFrameId = UserFrameId> {
       ? `"${frameId}"`
       : frameId;
   }
+}
+
+function setBoth(
+  outLower: TimeAndTransform,
+  outUpper: TimeAndTransform,
+  history: TransformHistory,
+  index: number,
+): true {
+  outLower[0] = outUpper[0] = history.timeAt(index);
+  history.transformAt(index, outLower[1]);
+  outUpper[1].copy(outLower[1]);
+  return true;
 }
 
 function copyPose(out: Pose, pose: Readonly<Pose>): void {

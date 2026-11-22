@@ -19,10 +19,7 @@ import {
   PanelExtensionAdapter,
 } from "@lichtblick/suite-base/components/PanelExtensionAdapter";
 import { useAnalytics } from "@lichtblick/suite-base/context/AnalyticsContext";
-import {
-  DEFAULT_FOLLOW_MODE,
-  MAX_TRANSFORM_MESSAGES,
-} from "@lichtblick/suite-base/panels/ThreeDeeRender/constants";
+import { DEFAULT_FOLLOW_MODE } from "@lichtblick/suite-base/panels/ThreeDeeRender/constants";
 import type { MessageEvent } from "@lichtblick/suite-base/players/types";
 import * as PanelStateContextProvider from "@lichtblick/suite-base/providers/PanelStateContextProvider";
 import PanelSetup from "@lichtblick/suite-base/stories/PanelSetup";
@@ -61,7 +58,15 @@ const createMockRenderer = (overrides?: Record<string, any>) => {
     setCurrentTime: vi.fn(),
     handleSeek: vi.fn(),
     setColorScheme: vi.fn(),
-    handleAllFramesMessages: vi.fn(),
+    addTransformMessages: vi.fn(),
+    resetTransformHistory: vi.fn(),
+    transformTree: {
+      setComplete: vi.fn(),
+      isComplete: vi.fn().mockReturnValue(false),
+      frames: vi.fn().mockReturnValue(new Map()),
+      frame: vi.fn(),
+      decimations: 0,
+    },
     addMessageEvent: vi.fn(),
     setCameraState: vi.fn(),
     getCameraState: vi.fn().mockReturnValue(undefined),
@@ -97,7 +102,7 @@ const createMockRenderer = (overrides?: Record<string, any>) => {
     setCameraSyncError: vi.fn(),
     followFrameId: "base_link",
     ros: false,
-    currentTime: undefined,
+    currentTime: 0n,
     measurementTool: {
       addEventListener: vi.fn(),
       removeEventListener: vi.fn(),
@@ -1085,176 +1090,249 @@ describe("ThreeDeeRender", () => {
       });
     });
 
-    it("trims messages to MAX_TRANSFORM_MESSAGES and keeps oldest", async () => {
-      // Given
-      const topicName = "/tf";
-      const totalMessages = MAX_TRANSFORM_MESSAGES + 5;
-      const messages = buildTfMessages({
-        topic: topicName,
-        count: totalMessages,
-      });
-
-      const topics = [
-        RenderStateBuilder.topic({ name: topicName, schemaName: "tf2_msgs/TFMessage" }),
-      ];
-
-      const mockBatchIterator = {
-        async *[Symbol.asyncIterator]() {
-          yield messages;
-        },
-      };
-
+    const renderPreloading = async (
+      messages: MessageEvent[],
+      rendererOverrides?: { transformTree: ReturnType<typeof createMockRenderer>["transformTree"] },
+    ) => {
+      const topics = [RenderStateBuilder.topic({ name: "/tf", schemaName: "tf2_msgs/TFMessage" })];
       const customRendererInstance = createMockRenderer({
         schemaSubscriptions: new Map([["tf2_msgs/TFMessage", [{ preload: true }]]]),
+        ...rendererOverrides,
       });
-
       vi.mocked(Renderer).mockImplementationOnce(function () {
         return customRendererInstance as any;
       });
-
       const mockContext = createPreloadingContext({
         onSubscribe: (args: any) => {
-          void args.onNewRangeIterator?.(mockBatchIterator);
+          void args.onNewRangeIterator?.({
+            async *[Symbol.asyncIterator]() {
+              yield messages;
+            },
+          });
         },
       });
-
-      const props = setup({}, mockContext);
-
-      // When
-      render(<ThreeDeeRender {...props} />);
-
+      const subscribe = vi.fn();
+      Object.assign(mockContext, { subscribe });
+      render(<ThreeDeeRender {...setup({}, mockContext)} />);
       await waitFor(() => {
-        expect(customRendererInstance.setTopics).toBeDefined();
         expect(mockContext.onRender).toBeDefined();
       });
-
       act(() => {
         mockContext.onRender!(
-          {
-            topics,
-            currentFrame: [],
-            currentTime: { sec: 100, nsec: 0 },
-          },
+          { topics, currentFrame: [], currentTime: { sec: 100, nsec: 0 } },
           vi.fn(),
         );
       });
+      return { customRendererInstance, mockContext, subscribe };
+    };
 
-      await waitFor(
-        () => {
-          expect(customRendererInstance.handleAllFramesMessages).toHaveBeenCalled();
-          const handleAllFrames = customRendererInstance.handleAllFramesMessages.mock.calls;
-          // Get the last call which should have the actual messages
-          const lastCall = handleAllFrames[handleAllFrames.length - 1];
-          const trimmedMessages = lastCall?.[0];
-          expect(trimmedMessages).toBeDefined();
-          expect(trimmedMessages.length).toBeGreaterThan(0);
+    it("feeds every preloaded transform straight into a complete transform tree", async () => {
+      // Given: far more messages than the old preload buffer held
+      const messages = buildTfMessages({ topic: "/tf", count: 20_000 });
+
+      // When
+      const { customRendererInstance, subscribe } = await renderPreloading(messages);
+
+      // Then: nothing is dropped and the player does not preload the topic as well
+      await waitFor(() => {
+        expect(customRendererInstance.addTransformMessages).toHaveBeenCalledWith(messages);
+      });
+      expect(customRendererInstance.transformTree.setComplete).toHaveBeenCalledWith(true);
+      const subscriptions = subscribe.mock.calls.at(-1)?.[0];
+      expect(subscriptions).toEqual([expect.objectContaining({ topic: "/tf" })]);
+      expect(subscriptions[0].preload).toBeUndefined();
+    });
+
+    it("tells the user when the history was thinned to fit in memory", async () => {
+      // Given: a renderer whose tree had to halve its history once
+      const { customRendererInstance, mockContext } = await renderPreloading(
+        buildTfMessages({ topic: "/tf", count: 10 }),
+        {
+          transformTree: {
+            setComplete: vi.fn(),
+            isComplete: vi.fn().mockReturnValue(false),
+            frames: vi.fn().mockReturnValue(new Map()),
+            frame: vi.fn(),
+            decimations: 1,
+          },
         },
-        { timeout: 2000 },
       );
 
-      const handleAllFrames = customRendererInstance.handleAllFramesMessages.mock.calls;
-      const lastCall = handleAllFrames[handleAllFrames.length - 1];
-      const trimmedMessages = lastCall?.[0];
-
       // Then
-      expect(trimmedMessages).toHaveLength(MAX_TRANSFORM_MESSAGES);
-
-      // Verify the FIRST (oldest) messages were kept
-      expect(trimmedMessages[0].receiveTime).toEqual({ sec: 100, nsec: 0 });
-      expect(trimmedMessages[MAX_TRANSFORM_MESSAGES - 1].receiveTime).toEqual({
-        sec: 100,
-        nsec: MAX_TRANSFORM_MESSAGES - 1,
+      await waitFor(() => {
+        expect(customRendererInstance.addTransformMessages).toHaveBeenCalled();
+      });
+      await waitFor(() => {
+        expect(mockContext.unstable_setAlert).toHaveBeenLastCalledWith(
+          "transform-preload",
+          expect.objectContaining({ severity: "info" }),
+        );
       });
     });
 
-    it("respects custom maxPreloadMessages configuration", async () => {
-      // Given
-      const customMaxMessages = 10;
-      const totalMessages = customMaxMessages + 5;
-      const topicName = "/tf";
-      const messages = buildTfMessages({
-        topic: topicName,
-        count: totalMessages,
+    it("starts the transform history over when transform topics go away, with preloading off", async () => {
+      // Given: a tree filled from /tf and /tf_static
+      const tf = RenderStateBuilder.topic({ name: "/tf", schemaName: "tf2_msgs/TFMessage" });
+      const tfStatic = RenderStateBuilder.topic({
+        name: "/tf_static",
+        schemaName: "tf2_msgs/TFMessage",
       });
-
-      const topics = [
-        RenderStateBuilder.topic({ name: topicName, schemaName: "tf2_msgs/TFMessage" }),
-      ];
-
-      const mockBatchIterator = {
-        async *[Symbol.asyncIterator]() {
-          yield messages;
-        },
-      };
-
       const customRendererInstance = createMockRenderer({
         schemaSubscriptions: new Map([["tf2_msgs/TFMessage", [{ preload: true }]]]),
+        transformTree: {
+          setComplete: vi.fn(),
+          isComplete: vi.fn().mockReturnValue(false),
+          frames: vi.fn().mockReturnValue(new Map([["s", { id: "s", parent: () => undefined }]])),
+          frame: vi.fn(),
+          decimations: 0,
+        },
+        currentTime: 0n,
+        resetTransformHistory: vi.fn(),
       });
-
       vi.mocked(Renderer).mockImplementationOnce(function () {
         return customRendererInstance as any;
       });
-
       const mockContext = createPreloadingContext({
         initialState: {
-          scene: {
-            transforms: {
-              enablePreloading: true,
-              maxPreloadMessages: customMaxMessages,
-            },
-          },
-          topics: {
-            "/tf": { visible: true },
-          },
-        },
-        onSubscribe: (args: any) => {
-          void args.onNewRangeIterator?.(mockBatchIterator);
+          scene: { transforms: { enablePreloading: false } },
+          topics: { "/tf": { visible: true }, "/tf_static": { visible: true } },
         },
       });
-
-      const props = setup({}, mockContext);
-
-      // When
-      render(<ThreeDeeRender {...props} />);
-
+      render(<ThreeDeeRender {...setup({}, mockContext)} />);
       await waitFor(() => {
-        expect(customRendererInstance.setTopics).toBeDefined();
         expect(mockContext.onRender).toBeDefined();
       });
+      act(() => {
+        mockContext.onRender!({ topics: [tf, tfStatic], currentFrame: [] }, vi.fn());
+      });
+      customRendererInstance.resetTransformHistory.mockClear();
 
+      // When: /tf_static goes away
+      act(() => {
+        mockContext.onRender!({ topics: [tf], currentFrame: [] }, vi.fn());
+      });
+
+      // Then: cached transforms of /tf_static are dropped, /tf ones kept
+      await waitFor(() => {
+        expect(customRendererInstance.resetTransformHistory).toHaveBeenCalledWith(new Set(["/tf"]));
+      });
+    });
+
+    it("keeps widening the seek read until it refreshes every known frame", async () => {
+      // Given: frames A and B are known; a cached transform must not count as refreshed. The first
+      // window only gives B a transform, the second one gives A one.
+      const topics = [RenderStateBuilder.topic({ name: "/tf", schemaName: "tf2_msgs/TFMessage" })];
+      const frame = (id: string) => ({ id, parent: () => ({ id: "root" }) });
+      let reads = 0;
+      const customRendererInstance = createMockRenderer({
+        schemaSubscriptions: new Map([["tf2_msgs/TFMessage", [{ preload: true }]]]),
+        transformTree: {
+          setComplete: vi.fn(),
+          isComplete: vi.fn().mockReturnValue(false),
+          // Empty until the frames arrive, right before the seek
+          frames: vi.fn().mockReturnValue(new Map()),
+          frame: vi.fn(),
+          decimations: 0,
+        },
+        isStaticTransformFrame: vi.fn().mockReturnValue(false),
+        addTransformMessages: vi.fn((_batch: unknown, touched?: Set<string>) => {
+          touched?.add(reads === 1 ? "B" : "A");
+        }),
+      });
+      vi.mocked(Renderer).mockImplementationOnce(function () {
+        return customRendererInstance as any;
+      });
+      const mockContext = createPreloadingContext({
+        initialState: {
+          scene: { transforms: { enablePreloading: false } },
+          topics: { "/tf": { visible: true } },
+        },
+        onSubscribe: (args: any) => {
+          reads++;
+          void args.onNewRangeIterator?.({
+            async *[Symbol.asyncIterator]() {
+              yield buildTfMessages({ topic: "/tf", count: 1 });
+            },
+          });
+        },
+      });
+      render(<ThreeDeeRender {...setup({}, mockContext)} />);
+      await waitFor(() => {
+        expect(mockContext.onRender).toBeDefined();
+      });
+      act(() => {
+        mockContext.onRender!({ topics, currentFrame: [] }, vi.fn());
+      });
+      customRendererInstance.transformTree.frames.mockReturnValue(
+        new Map([
+          ["A", frame("A")],
+          ["B", frame("B")],
+        ]),
+      );
+
+      // When
       act(() => {
         mockContext.onRender!(
-          {
-            topics,
-            currentFrame: [],
-            currentTime: { sec: 100, nsec: 0 },
-          },
+          { topics, currentFrame: [], currentTime: { sec: 100, nsec: 0 }, didSeek: true },
           vi.fn(),
         );
       });
 
-      await waitFor(
-        () => {
-          expect(customRendererInstance.handleAllFramesMessages).toHaveBeenCalled();
-          const handleAllFrames = customRendererInstance.handleAllFramesMessages.mock.calls;
-          const lastCall = handleAllFrames[handleAllFrames.length - 1];
-          const trimmedMessages = lastCall?.[0];
-          expect(trimmedMessages).toBeDefined();
-          expect(trimmedMessages.length).toBeGreaterThan(0);
+      // Then: a second, older window was read, and no third one
+      await waitFor(() => {
+        expect(mockContext.unstable_subscribeMessageRange).toHaveBeenCalledTimes(2);
+      });
+      expect(mockContext.unstable_subscribeMessageRange).toHaveBeenLastCalledWith(
+        expect.objectContaining({ start: { sec: 92, nsec: 0 } }),
+      );
+      await act(async () => {
+        await Promise.resolve();
+      });
+      expect(mockContext.unstable_subscribeMessageRange).toHaveBeenCalledTimes(2);
+    });
+
+    it("reads the transforms just before the seek time when preloading is off", async () => {
+      // Given
+      const topics = [RenderStateBuilder.topic({ name: "/tf", schemaName: "tf2_msgs/TFMessage" })];
+      const customRendererInstance = createMockRenderer({
+        schemaSubscriptions: new Map([["tf2_msgs/TFMessage", [{ preload: true }]]]),
+      });
+      vi.mocked(Renderer).mockImplementationOnce(function () {
+        return customRendererInstance as any;
+      });
+      const mockContext = createPreloadingContext({
+        initialState: {
+          scene: { transforms: { enablePreloading: false } },
+          topics: { "/tf": { visible: true } },
         },
-        { timeout: 2000 },
-      );
+      });
+      render(<ThreeDeeRender {...setup({}, mockContext)} />);
+      await waitFor(() => {
+        expect(mockContext.onRender).toBeDefined();
+      });
+      act(() => {
+        mockContext.onRender!({ topics, currentFrame: [] }, vi.fn());
+      });
+      expect(mockContext.unstable_subscribeMessageRange).not.toHaveBeenCalled();
 
-      const handleAllFrames = customRendererInstance.handleAllFramesMessages.mock.calls;
-      const lastCall = handleAllFrames[handleAllFrames.length - 1];
-      const trimmedMessages = lastCall?.[0];
+      // When
+      act(() => {
+        mockContext.onRender!(
+          { topics, currentFrame: [], currentTime: { sec: 100, nsec: 0 }, didSeek: true },
+          vi.fn(),
+        );
+      });
 
-      // Then
-      expect(trimmedMessages).toHaveLength(customMaxMessages);
-      expect(mockContext.unstable_setAlert).toHaveBeenLastCalledWith(
-        "transform-preload",
-        expect.objectContaining({ severity: "warn" }),
-      );
+      // Then: the first lookback window ends at the seek time
+      await waitFor(() => {
+        expect(mockContext.unstable_subscribeMessageRange).toHaveBeenCalledWith(
+          expect.objectContaining({
+            topic: "/tf",
+            start: { sec: 98, nsec: 0 },
+            end: { sec: 100, nsec: 0 },
+          }),
+        );
+      });
     });
 
     it("updates loading indicator during progressive loading", async () => {
@@ -1333,85 +1411,6 @@ describe("ThreeDeeRender", () => {
         () => {
           const loadingElement = container.querySelector('[class*="loadingTransforms"]');
           expect(loadingElement).toBeInTheDocument();
-        },
-        { timeout: 2000 },
-      );
-    });
-
-    it("clears allFrames when clearPreloadBuffer event is emitted", async () => {
-      // Given
-      const topicName = "/tf";
-      const messages = buildTfMessages({
-        topic: topicName,
-        count: 100,
-      });
-
-      const topics = [
-        RenderStateBuilder.topic({ name: topicName, schemaName: "tf2_msgs/TFMessage" }),
-      ];
-
-      const mockBatchIterator = {
-        async *[Symbol.asyncIterator]() {
-          yield messages;
-        },
-      };
-
-      const customRendererInstance = createMockRenderer({
-        schemaSubscriptions: new Map([["tf2_msgs/TFMessage", [{ preload: true }]]]),
-      });
-
-      vi.mocked(Renderer).mockImplementationOnce(function () {
-        return customRendererInstance as any;
-      });
-
-      const mockContext = createPreloadingContext({
-        onSubscribe: (args: any) => {
-          void args.onNewRangeIterator?.(mockBatchIterator);
-        },
-      });
-
-      const props = setup({}, mockContext);
-
-      // When
-      render(<ThreeDeeRender {...props} />);
-
-      await waitFor(() => {
-        expect(customRendererInstance.setTopics).toBeDefined();
-        expect(mockContext.onRender).toBeDefined();
-      });
-
-      act(() => {
-        mockContext.onRender!(
-          {
-            topics,
-            currentFrame: [],
-            currentTime: { sec: 100, nsec: 0 },
-          },
-          vi.fn(),
-        );
-      });
-
-      // Wait for initial load
-      await waitFor(
-        () => {
-          expect(customRendererInstance.handleAllFramesMessages).toHaveBeenCalled();
-        },
-        { timeout: 2000 },
-      );
-
-      // Reset the mock to track new calls
-      customRendererInstance.handleAllFramesMessages.mockClear();
-      (mockContext.unstable_subscribeMessageRange as Mock).mockClear();
-
-      // When - Emit clearPreloadBuffer event
-      act(() => {
-        customRendererInstance.emit("clearPreloadBuffer");
-      });
-
-      // Then - Should trigger reload
-      await waitFor(
-        () => {
-          expect(mockContext.unstable_subscribeMessageRange).toHaveBeenCalled();
         },
         { timeout: 2000 },
       );
@@ -1522,7 +1521,7 @@ describe("ThreeDeeRender", () => {
       // Wait for preloading to complete
       await waitFor(
         () => {
-          expect(customRendererInstance.handleAllFramesMessages).toHaveBeenCalled();
+          expect(customRendererInstance.addTransformMessages).toHaveBeenCalled();
         },
         { timeout: 2000 },
       );
