@@ -165,6 +165,41 @@ describe("<RendererOverlay /> hover wiring", () => {
     expect(mockHoverTooltipRenders).toBe(rendersBefore);
   });
 
+  it("shows the publish button once the renderer has a fixed frame", () => {
+    // Given: a publishable connection before any transform arrived
+    const { queryByTestId } = render(
+      <ThemeProvider isDark={false}>
+        <RendererOverlay
+          addPanel={vi.fn() as any}
+          canPublish
+          canvas={document.createElement("canvas")}
+          enableStats={false}
+          hoverInspector
+          interfaceMode="3d"
+          measureActive={false}
+          onChangePublishClickType={vi.fn()}
+          onClickMeasure={vi.fn()}
+          onClickPublish={vi.fn()}
+          onShowTopicSettings={vi.fn()}
+          onTogglePerspective={vi.fn()}
+          perspective={false}
+          publishActive={false}
+          publishClickType="point"
+          timezone={undefined}
+        />
+      </ThemeProvider>,
+    );
+    expect(queryByTestId("publish-button")).toBeNull();
+
+    // When: a frame ends with a fixed frame
+    act(() => {
+      mockRendererEventCallbacks.get("endFrame")!(0n, { ...mockRenderer, fixedFrameId: "map" });
+    });
+
+    // Then
+    expect(queryByTestId("publish-button")).not.toBeNull();
+  });
+
   it("zooms to data from the 3D toolbar", () => {
     renderOverlay(document.createElement("canvas"));
     fireEvent.click(document.querySelector('[aria-label="Zoom to data"]')!);

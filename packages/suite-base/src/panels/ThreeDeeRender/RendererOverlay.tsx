@@ -47,6 +47,7 @@ import { HoverTooltip } from "./Interactions/HoverTooltip";
 import type { HoverEntityInfo } from "./Interactions/types";
 import { MeasurePanel } from "./MeasurePanel";
 import type { PickedRenderable } from "./Picker";
+import type { Renderer } from "./Renderer";
 import { useRenderer, useRendererEvent } from "./RendererContext";
 import { Stats } from "./Stats";
 import { IMAGE_BUTTONS, MeasureIcon, THREE_DEE_BUTTONS } from "./buttons";
@@ -266,6 +267,17 @@ export const RendererOverlay = memo(function RendererOverlay(
   );
   const [interactionsTabType, setInteractionsTabType] = useState<TabType | undefined>(undefined);
   const renderer = useRenderer();
+  // The fixed frame appears once transforms arrive; the overlay re-renders only when that changes
+  const [hasFixedFrame, setHasFixedFrame] = useState(renderer?.fixedFrameId != undefined);
+  useEffect(() => {
+    setHasFixedFrame(renderer?.fixedFrameId != undefined);
+  }, [renderer]);
+  useRendererEvent(
+    "endFrame",
+    useCallback((_currentTime: bigint, frameRenderer: Renderer) => {
+      setHasFixedFrame(frameRenderer.fixedFrameId != undefined);
+    }, []),
+  );
 
   useEffect(() => {
     // Selections refer to objects owned by the previous renderer.
@@ -391,8 +403,7 @@ export const RendererOverlay = memo(function RendererOverlay(
   const MeasureFramesIcon = THREE_DEE_BUTTONS.measureFrames.icon;
 
   // Publish control is only available if the canPublish prop is true and we have a fixed frame in the renderer
-  const showPublishControl =
-    props.interfaceMode === "3d" && props.canPublish && renderer?.fixedFrameId != undefined;
+  const showPublishControl = props.interfaceMode === "3d" && props.canPublish && hasFixedFrame;
   const publishControls = showPublishControl && (
     <>
       <Tooltip placement="left" title={publishLabel}>
