@@ -162,6 +162,47 @@ describe("CustomDatasetsBuilderImpl", () => {
     expect(pairs(builder).map(([x]) => x)).toEqual([1, 5, 5.5, 6, 7]);
   });
 
+  it("keeps gaps when thinning live data", () => {
+    // GIVEN a series with its own x path, a budget of 2 rows per stream and a gap at t=1
+    const builder = build({ xParsed: unwrap(parseMessagePath("/b.x")) }, 2);
+    const ys = [1, NaN, 2, 3, 4];
+    builder.updateData([
+      {
+        type: "append-current",
+        series: key,
+        items: ys.map((y, t) => ({ ...values([t], () => y)[0]!, x: t })),
+      },
+    ]);
+    // THEN the gap is still plotted, so the line breaks
+    expect(pairs(builder).some(([, y]) => Number.isNaN(y))).toBe(true);
+  });
+
+  it("pairs many y messages with one large x message in linear time", () => {
+    // GIVEN 20k x values in one message and 20k y messages after it
+    const builder = build();
+    const n = 20_000;
+    const at = (value: number, sec: number) => ({
+      value,
+      originalValue: value,
+      receiveTime: { sec, nsec: 0 },
+    });
+    builder.updateData([
+      {
+        type: "append-full-x",
+        items: [...Array.from({ length: n }, (_, i) => at(i, 0)), at(-1, 1e6)],
+      },
+      {
+        type: "append-full",
+        series: key,
+        items: Array.from({ length: n }, (_, i) => at(i, i + 1)),
+      },
+    ]);
+    // THEN each y message pairs with that message's first value (quadratic before: 4e8 steps)
+    const data = builder.getCsvData()[0]!.data;
+    expect(data).toHaveLength(n);
+    expect(data.every((datum) => datum.x === 0)).toBe(true);
+  });
+
   it("downsamples lines to what the viewport can show, keeping both ends", () => {
     // GIVEN a dense circle walked 20 times
     const builder = build({ xParsed: unwrap(parseMessagePath("/b.x")) });

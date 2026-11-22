@@ -144,6 +144,22 @@ describe("TimestampDatasetsBuilderImpl", () => {
       expect(ys).toEqual([0, NaN, 2, 3]);
     });
 
+    it("computes stream modifiers over every sample, not the thinned ones", () => {
+      // GIVEN a live delta series of samples 1 apart, thinned many times over
+      const builder = new TimestampDatasetsBuilderImpl(100);
+      builder.applyAction({
+        type: "update-series-config",
+        seriesItems: [seriesItem("0", { path: "/topic.value.@delta" })],
+      });
+      appendLive(builder, "0", range(0, 5000));
+
+      // THEN every plotted delta is still 1
+      const data = builder.getCsvData()[0]!.data;
+      expect(data.length).toBeLessThanOrEqual(100);
+      expect(data.at(-1)!.x).toBe(4999);
+      expect(new Set(data.slice(1).map((item) => item.y))).toEqual(new Set([1]));
+    });
+
     it("starts unthinned again after current data is reset", () => {
       const builder = new TimestampDatasetsBuilderImpl(100);
       builder.applyAction({ type: "update-series-config", seriesItems: [seriesItem("0")] });

@@ -94,8 +94,8 @@ export class PointColumns {
 
   /**
    * Thin rows [start, length), which must be in receive order, to one message per `bucket` seconds
-   * of receive time: a message stays if it is the first in its bucket, and the newest message
-   * always stays. The decision only depends on receive times, so streams read from the same
+   * of receive time: a message stays if it is the first in its bucket, and the newest message and
+   * messages with a gap (NaN) always stay. The decision only depends on receive times, so streams read from the same
    * messages keep the same messages. Returns where row `mark` moved to (the number of kept rows
    * before it).
    */
@@ -110,7 +110,12 @@ export class PointColumns {
         groupEnd++;
       }
       const b = Math.floor(this.receiveSeconds(read) / bucket);
-      if (b !== lastBucket || groupEnd === end) {
+      let gap = false;
+      for (let i = read; i < groupEnd && !gap; i++) {
+        gap = Number.isNaN(this.y[i]!);
+      }
+      // messages with a gap (NaN) stay so lines still break where the data does
+      if (b !== lastBucket || groupEnd === end || gap) {
         for (let i = read; i < groupEnd; i++) {
           if (i < mark) {
             movedMark = write + 1;
@@ -176,10 +181,10 @@ export class PointColumns {
   }
 
   /**
-   * Halve rows [start, length) by dropping every other row; the first and the last row stay.
-   * Returns the number of rows removed.
+   * Halve rows [start, length) by dropping every other row; the first and the last row and gaps
+   * (NaN) stay. Rows of `extra` columns move the same way. Returns the number of rows removed.
    */
-  public halve(start: number): number {
+  public halve(start: number, extra: readonly Float64Array[] = []): number {
     const end = this.length;
     if (end - start <= 2) {
       return 0;
@@ -188,6 +193,9 @@ export class PointColumns {
     for (let read = start; read < end; read++) {
       // gaps (NaN) stay so lines still break where the data does
       if ((read - start) % 2 === 0 || read === end - 1 || Number.isNaN(this.y[read]!)) {
+        for (const column of extra) {
+          column[write] = column[read]!;
+        }
         this.#moveRow(read, write++);
       }
     }

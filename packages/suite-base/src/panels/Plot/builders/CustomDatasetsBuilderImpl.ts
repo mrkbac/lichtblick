@@ -362,10 +362,14 @@ export class CustomDatasetsBuilderImpl {
           groupStart = i;
         }
         // the x-axis message received last at or before this one
+        const selected = xEnd;
         while (xEnd < xLength && points.compareReceive(i, xPoints, xEnd) >= 0) {
           xEnd++;
         }
-        xStart = xEnd > 0 ? messageStart(xPoints, xEnd, 0) : 0;
+        // find the selected x message's first row only when the selection changes
+        if (i === from || xEnd !== selected) {
+          xStart = xEnd > 0 ? messageStart(xPoints, xEnd, 0) : 0;
+        }
       }
       let x = Number.NaN;
       const index = i - groupStart;

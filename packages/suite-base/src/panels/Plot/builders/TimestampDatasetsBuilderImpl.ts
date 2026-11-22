@@ -48,6 +48,11 @@ type Derived = {
   /** rows [0, upTo) of y are valid; always within the full (preloaded) rows */
   upTo: number;
   state: DeriveState;
+  /**
+   * Derived values of current rows, extended as rows arrive: rows [fullLength, upTo) of y. Kept
+   * across thinning, so modifiers like `.@delta` stay computed over every input sample.
+   */
+  current?: { upTo: number; state: DeriveState };
 };
 
 type Series = {
@@ -557,7 +562,8 @@ export class TimestampDatasetsBuilderImpl {
 
   /**
    * y values after stream modifiers and smoothing. Derived values of preloaded rows are cached and
-   * only extended when rows are appended; current rows are cheap (capped) and derived each time.
+   * only extended when rows are appended. Current rows extend their own copy of the state, which
+   * is dropped when current rows are reset or reordered.
    */
   #getY(series: Series): Float64Array {
     const modifier = this.#streamModifier(series);
@@ -577,7 +583,7 @@ export class TimestampDatasetsBuilderImpl {
     }
     if (derived.y.length < points.x.length) {
       const y = new Float64Array(points.x.length);
-      y.set(derived.y.subarray(0, derived.upTo));
+      y.set(derived.y.subarray(0, Math.max(derived.upTo, derived.current?.upTo ?? 0)));
       derived.y = y;
     }
     deriveRows(
@@ -589,17 +595,22 @@ export class TimestampDatasetsBuilderImpl {
       modifier,
       modifiersAfter,
     );
-    derived.upTo = fullLength;
-    const currentState = cloneDeriveState(derived.state);
+    if (derived.upTo !== fullLength) {
+      derived.upTo = fullLength;
+      derived.current = undefined;
+    }
+    derived.current ??= { upTo: fullLength, state: cloneDeriveState(derived.state) };
+    const { current } = derived;
     deriveRows(
       points,
-      fullLength,
+      current.upTo,
       points.length,
       derived.y,
-      currentState,
+      current.state,
       modifier,
       modifiersAfter,
     );
+    current.upTo = points.length;
     return derived.y;
   }
 
@@ -625,7 +636,15 @@ export class TimestampDatasetsBuilderImpl {
       !Number.isNaN(item.y) &&
       !Number.isNaN(points.y[last]!)
     ) {
+      // Derived values consume the sample being replaced first, so modifiers see every sample
+      if (isDerivedSeries(series.config)) {
+        this.#getY(series);
+      }
+      const current = series.derived?.current;
       points.set(last, item);
+      if (current) {
+        current.upTo = last;
+      }
       series.headInputs++;
     } else {
       points.push(item);
@@ -652,7 +671,16 @@ export class TimestampDatasetsBuilderImpl {
           largest = series;
         }
       }
-      const removed = largest?.points.halve(largest.fullLength) ?? 0;
+      if (largest) {
+        // derive every current row before thinning, then thin the derived values along with them
+        this.#getY(largest);
+      }
+      const current = largest?.derived?.current;
+      const extra = current ? [largest!.derived!.y] : [];
+      const removed = largest?.points.halve(largest.fullLength, extra) ?? 0;
+      if (current) {
+        current.upTo = largest!.points.length;
+      }
       if (!largest || removed === 0) {
         break;
       }
@@ -683,6 +711,9 @@ export class TimestampDatasetsBuilderImpl {
           return;
         }
         series.points.truncate(series.fullLength);
+        if (series.derived) {
+          series.derived.current = undefined;
+        }
         series.keepEvery = 1;
         series.headInputs = 0;
         break;
@@ -722,6 +753,11 @@ export class TimestampDatasetsBuilderImpl {
         }
         if (split > 0) {
           points.insert(fullLength, items.slice(0, split), points.length);
+          // ponytail: rows merged into the middle restart current derived values from the full
+          // rows, over the rows still kept. Exact unless the series was thinned before.
+          if (series.derived) {
+            series.derived.current = undefined;
+          }
         }
         for (let i = split; i < items.length; i++) {
           this.#appendCurrent(series, items[i]!);
@@ -747,6 +783,10 @@ export class TimestampDatasetsBuilderImpl {
         } else {
           points.insert(oldFullLength, action.items);
         }
+        if (series.derived) {
+          // current rows shift and get trimmed below
+          series.derived.current = undefined;
+        }
         series.fullLength = oldFullLength + action.items.length;
 
         // trim current data to remove values present in the full data
@@ -770,6 +810,9 @@ export class TimestampDatasetsBuilderImpl {
           // the cached running state continues from the last derived row
           if (derived) {
             derived.state.prevX -= action.delta;
+            if (derived.current) {
+              derived.current.state.prevX -= action.delta;
+            }
           }
         }
         break;
