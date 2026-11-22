@@ -309,7 +309,6 @@ export function UnconnectedPlaybackTimeDisplay({
 }: PlaybackTimeDisplayMethodProps): React.JSX.Element {
   const { classes, cx } = useStyles();
   const { t } = useTranslation("playbackTime");
-  const timeOutID = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   // Whether the user typed since focusing; the current time may change meanwhile.
   const edited = useRef(false);
 
@@ -372,13 +371,16 @@ export function UnconnectedPlaybackTimeDisplay({
       setIsEditing(false);
       setHasError(false);
     }
-
-    return () => {
-      if (timeOutID.current != undefined) {
-        clearTimeout(timeOutID.current);
-      }
-    };
-  }, [hasError, inputText, isPlaying]);
+    if (hasError && !isEditing) {
+      const timer = setTimeout(() => {
+        setHasError(false);
+      }, 600);
+      return () => {
+        clearTimeout(timer);
+      };
+    }
+    return undefined;
+  }, [hasError, inputText, isEditing, isPlaying]);
 
   const displayedText = isEditing ? inputText : currentTimeString;
 
@@ -437,9 +439,6 @@ export function UnconnectedPlaybackTimeDisplay({
                 onSubmit(e);
               }
               setIsEditing(false);
-              timeOutID.current = setTimeout(() => {
-                setHasError(false);
-              }, 600);
             }}
             onChange={(event) => {
               setInputText(event.target.value);

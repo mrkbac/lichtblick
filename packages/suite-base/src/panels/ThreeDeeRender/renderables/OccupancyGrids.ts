@@ -56,6 +56,8 @@ export type OccupancyGridUserData = BaseUserData & {
   mesh: THREE.Mesh;
   texture: THREE.DataTexture;
   material: THREE.MeshBasicNodeMaterial;
+  /** The texture and settings the current cells were last drawn into */
+  rasterized?: { texture: THREE.DataTexture; settings: LayerSettingsOccupancyGrid };
 };
 
 export class OccupancyGridRenderable extends Renderable<OccupancyGridUserData> {
@@ -182,6 +184,7 @@ export class OccupancyGrids extends SceneExtension<OccupancyGridRenderable> {
     occupancyGrid: OccupancyGrid,
     receiveTime: bigint,
   ): void {
+    const previous = renderable.userData.occupancyGrid;
     renderable.userData.occupancyGrid = occupancyGrid;
     renderable.userData.pose = occupancyGrid.info.origin;
     renderable.userData.receiveTime = receiveTime;
@@ -210,8 +213,16 @@ export class OccupancyGrids extends SceneExtension<OccupancyGridRenderable> {
       renderable.userData.material.needsUpdate = true;
     }
 
-    // Update the occupancy grid texture
-    updateTexture(texture, occupancyGrid, renderable.userData.settings);
+    // Update the occupancy grid texture, unless it shows these cells with these settings already
+    const settings = renderable.userData.settings;
+    if (
+      texture !== renderable.userData.rasterized?.texture ||
+      settings !== renderable.userData.rasterized.settings ||
+      !sameCells(previous.data, occupancyGrid.data)
+    ) {
+      updateTexture(texture, occupancyGrid, settings);
+      renderable.userData.rasterized = { texture, settings };
+    }
 
     renderable.scale.set(resolution * width, resolution * height, 1);
   }
@@ -270,60 +281,91 @@ const tempUnknownColor = { r: 0, g: 0, b: 0, a: 0 };
 const tempInvalidColor = { r: 0, g: 0, b: 0, a: 0 };
 const tempMinColor = { r: 0, g: 0, b: 0, a: 0 };
 const tempMaxColor = { r: 0, g: 0, b: 0, a: 0 };
+// RGBA per cell value (int8, indexed as uint8). Clamped like the texture, so stored bytes match
+const lut = new Uint8ClampedArray(256 * 4);
+const lut32 = new Uint32Array(lut.buffer);
+
+function setLut(value: number, r: number, g: number, b: number, a: number): void {
+  const offset = (value & 0xff) * 4;
+  lut[offset + 0] = r;
+  lut[offset + 1] = g;
+  lut[offset + 2] = b;
+  lut[offset + 3] = a;
+}
+
+function updateLut(settings: LayerSettingsOccupancyGrid): void {
+  if (settings.colorMode === "custom") {
+    stringToRgba(tempMinColor, settings.minColor);
+    stringToRgba(tempMaxColor, settings.maxColor);
+    stringToRgba(tempUnknownColor, settings.unknownColor);
+    stringToRgba(tempInvalidColor, settings.invalidColor);
+    srgbToLinearUint8(tempMinColor);
+    srgbToLinearUint8(tempMaxColor);
+    srgbToLinearUint8(tempUnknownColor);
+    srgbToLinearUint8(tempInvalidColor);
+    for (let value = -128; value <= 127; value++) {
+      if (value === -1) {
+        // Unknown (-1)
+        const c = tempUnknownColor;
+        setLut(value, c.r, c.g, c.b, c.a);
+      } else if (value >= 0 && value <= 100) {
+        // Valid [0-100]
+        const frac = value / 100;
+        const min = tempMinColor;
+        const max = tempMaxColor;
+        setLut(
+          value,
+          min.r + (max.r - min.r) * frac,
+          min.g + (max.g - min.g) * frac,
+          min.b + (max.b - min.b) * frac,
+          min.a + (max.a - min.a) * frac,
+        );
+      } else {
+        // Invalid (< -1 or > 100)
+        const c = tempInvalidColor;
+        setLut(value, c.r, c.g, c.b, c.a);
+      }
+    }
+    return;
+  }
+  for (let value = -128; value <= 127; value++) {
+    paletteColorCached(tempColor, value, settings.colorMode);
+    setLut(value, tempColor.r, tempColor.g, tempColor.b, tempColor.a * settings.alpha);
+  }
+}
 
 function updateTexture(
   texture: THREE.DataTexture,
   occupancyGrid: OccupancyGrid,
   settings: LayerSettingsOccupancyGrid,
 ): void {
+  // A cell is one of 256 values: color those once, then copy one 32-bit texel per cell
+  updateLut(settings);
   const size = occupancyGrid.info.width * occupancyGrid.info.height;
-  const rgba = texture.image.data!;
-  stringToRgba(tempMinColor, settings.minColor);
-  stringToRgba(tempMaxColor, settings.maxColor);
-  stringToRgba(tempUnknownColor, settings.unknownColor);
-  stringToRgba(tempInvalidColor, settings.invalidColor);
-
-  srgbToLinearUint8(tempMinColor);
-  srgbToLinearUint8(tempMaxColor);
-  srgbToLinearUint8(tempUnknownColor);
-  srgbToLinearUint8(tempInvalidColor);
-
+  const rgba = texture.image.data as Uint8ClampedArray;
+  const texels = new Uint32Array(rgba.buffer, rgba.byteOffset, size);
   const data = occupancyGrid.data;
   for (let i = 0; i < size; i++) {
-    const value = data[i]! | 0;
-    const offset = i * 4;
-    if (settings.colorMode === "custom") {
-      if (value === -1) {
-        // Unknown (-1)
-        rgba[offset + 0] = tempUnknownColor.r;
-        rgba[offset + 1] = tempUnknownColor.g;
-        rgba[offset + 2] = tempUnknownColor.b;
-        rgba[offset + 3] = tempUnknownColor.a;
-      } else if (value >= 0 && value <= 100) {
-        // Valid [0-100]
-        const frac = value / 100;
-
-        rgba[offset + 0] = tempMinColor.r + (tempMaxColor.r - tempMinColor.r) * frac;
-        rgba[offset + 1] = tempMinColor.g + (tempMaxColor.g - tempMinColor.g) * frac;
-        rgba[offset + 2] = tempMinColor.b + (tempMaxColor.b - tempMinColor.b) * frac;
-        rgba[offset + 3] = tempMinColor.a + (tempMaxColor.a - tempMinColor.a) * frac;
-      } else {
-        // Invalid (< -1 or > 100)
-        rgba[offset + 0] = tempInvalidColor.r;
-        rgba[offset + 1] = tempInvalidColor.g;
-        rgba[offset + 2] = tempInvalidColor.b;
-        rgba[offset + 3] = tempInvalidColor.a;
-      }
-    } else {
-      paletteColorCached(tempColor, value, settings.colorMode);
-      rgba[offset + 0] = tempColor.r;
-      rgba[offset + 1] = tempColor.g;
-      rgba[offset + 2] = tempColor.b;
-      rgba[offset + 3] = tempColor.a * settings.alpha;
-    }
+    texels[i] = lut32[data[i]! & 0xff]!;
   }
 
   texture.needsUpdate = true;
+}
+
+/** Whether two grids hold the same cells, so an unchanged republished map skips its upload */
+function sameCells(a: ArrayLike<number>, b: ArrayLike<number>): boolean {
+  if (a === b) {
+    return true;
+  }
+  if (a.length !== b.length) {
+    return false;
+  }
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] !== b[i]) {
+      return false;
+    }
+  }
+  return true;
 }
 
 function createMaterial(

@@ -5,6 +5,7 @@ import "@testing-library/jest-dom/vitest";
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import type { Mock } from "vitest";
 
+import KeyListener from "@lichtblick/suite-base/components/KeyListener";
 import { DEFAULT_CONFIG } from "@lichtblick/suite-base/panels/Teleop/constants";
 import {
   DirectionalPadAction,
@@ -314,6 +315,20 @@ describe("TeleopPanel", () => {
       vi.advanceTimersByTime(100);
       expect(publish).toHaveBeenLastCalledWith("/cmd", twist(0.6));
       expect(lastSavedConfig(context).speedScale).toBe(0.6);
+    });
+
+    it("keeps drive keys and the stop key from also seeking or toggling playback", () => {
+      const seek = vi.fn();
+      const togglePlay = vi.fn();
+      render(<KeyListener global keyDownHandlers={{ arrowleft: seek, " ": togglePlay }} />);
+      const { publish, root } = setup();
+
+      fireEvent.keyDown(root, { key: "ArrowLeft" });
+      fireEvent.keyDown(root, { key: " " });
+
+      expect(publish).toHaveBeenLastCalledWith("/cmd", ZERO);
+      expect(seek).not.toHaveBeenCalled();
+      expect(togglePlay).not.toHaveBeenCalled();
     });
 
     it("ignores drive keys with modifiers and when the keyboard is disabled", () => {

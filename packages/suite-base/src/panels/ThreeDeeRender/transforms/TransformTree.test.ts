@@ -8,7 +8,12 @@
 import { Transform } from "@lichtblick/suite-base/panels/ThreeDeeRender/transforms/Transform";
 
 import { MAX_DURATION } from "./CoordinateFrame";
-import { AddTransformResult, TransformTree } from "./TransformTree";
+import {
+  AddTransformResult,
+  FULL_RATE_TRANSFORM_TIME,
+  THINNED_TRANSFORM_SPACING,
+  TransformTree,
+} from "./TransformTree";
 
 const tf = Transform.Identity();
 describe("TransformTree", () => {
@@ -81,10 +86,10 @@ describe("TransformTree", () => {
     expect(tfTree.frame("d")).toBeUndefined();
   });
 
-  it("keeps only maxStorageTime of history per frame, well below the capacity cap", () => {
+  it("keeps only maxStorageTime of history per frame", () => {
     const sec = BigInt(1e9);
-    const tfTree = new TransformTree(10n * sec, 10_000);
-    // 10 Hz for 1000 s: the old capacity-only trim would keep all 10_000 transforms.
+    const tfTree = new TransformTree(10n * sec);
+    // 10 Hz for 1000 s
     for (let i = 0n; i < 10_000n; i++) {
       tfTree.addTransform(
         "b",
@@ -94,14 +99,178 @@ describe("TransformTree", () => {
       );
     }
     const size = tfTree.frame("b")!.transformsSize();
-    // 10 s window plus up to a quarter window of slack before the amortized trim runs.
+    // 10 s window plus up to an eighth window of slack before the amortized trim runs.
     expect(size).toBeGreaterThanOrEqual(100);
-    expect(size).toBeLessThanOrEqual(126);
+    expect(size).toBeLessThanOrEqual(113);
+  });
+
+  it("keeps the whole storage window of a fast live frame", () => {
+    // 200 Hz for 120 s: 24k transforms, more than a per-frame cap used to keep
+    const sec = BigInt(1e9);
+    const tfTree = new TransformTree();
+    const step = sec / 200n;
+    for (let i = 0; i < 200 * 120; i++) {
+      tfTree.addTransform("b", "a", BigInt(i) * step, new Transform([i, 0, 0], [0, 0, 0, 1]));
+    }
+    const frame = tfTree.frame("b")!;
+    const lower: [bigint, Transform] = [0n, Transform.Empty()];
+    const upper: [bigint, Transform] = [0n, Transform.Empty()];
+    // 100 s before the newest transform: bracketed by kept transforms at most the thinned spacing
+    // apart, and interpolating between them gives the pose (x grows linearly with time)
+    const time = 20n * sec + 3n * step;
+    expect(frame.findClosestTransforms(lower, upper, time, 0n)).toBe(true);
+    expect(lower[0]).toBeLessThanOrEqual(time);
+    expect(upper[0]).toBeGreaterThanOrEqual(time);
+    expect(upper[0] - lower[0]).toBeLessThanOrEqual(2n * THINNED_TRANSFORM_SPACING);
+    const fraction = Number(time - lower[0]) / Math.max(1, Number(upper[0] - lower[0]));
+    const x = lower[1].position()[0] + fraction * (upper[1].position()[0] - lower[1].position()[0]);
+    expect(x).toBeCloseTo(20 * 200 + 3, 6);
+  });
+
+  it("keeps full rate for recent live transforms and thins older ones to a fixed spacing", () => {
+    const sec = BigInt(1e9);
+    const tfTree = new TransformTree();
+    const step = sec / 200n;
+    const count = 200 * 120;
+    for (let i = 0; i < count; i++) {
+      tfTree.addTransform("b", "a", BigInt(i) * step, new Transform([i, 0, 0], [0, 0, 0, 1]));
+    }
+    const frame = tfTree.frame("b")!;
+    const newest = BigInt(count - 1) * step;
+    const times: bigint[] = [];
+    for (let t: bigint | undefined = newest; t != undefined; ) {
+      times.push(t);
+      t = t > 0n ? frame.latestTimeAtOrBefore(t - 1n) : undefined;
+    }
+    times.reverse();
+    const recent = times.filter((t) => t >= newest - FULL_RATE_TRANSFORM_TIME);
+    const old = times.filter((t) => t < newest - FULL_RATE_TRANSFORM_TIME - 5n * sec);
+    // Every recent transform is kept
+    expect(recent.length).toBeGreaterThanOrEqual(30 * 200);
+    // Older ones keep the thinned spacing, about 20 Hz instead of 200 Hz
+    const gaps = old.slice(1).map((t, i) => t - old[i]!);
+    expect(gaps.every((gap) => gap >= THINNED_TRANSFORM_SPACING)).toBe(true);
+    expect(gaps.every((gap) => gap <= 2n * THINNED_TRANSFORM_SPACING)).toBe(true);
+    expect(frame.transformsSize()).toBeLessThan(count / 2);
+  });
+
+  it("thins a live tree evenly past the sample budget instead of dropping old transforms", () => {
+    const sec = BigInt(1e9);
+    const tfTree = new TransformTree(300n * sec, 100);
+    for (let i = 0; i <= 300; i++) {
+      tfTree.addTransform("b", "a", BigInt(i) * sec, new Transform([i, 0, 0], [0, 0, 0, 1]));
+    }
+    const frame = tfTree.frame("b")!;
+    expect(tfTree.decimations).toBeGreaterThan(0);
+    expect(frame.transformsSize()).toBeLessThanOrEqual(100);
+    expect(frame.latestTimeAtOrBefore(0n)).toBe(0n);
+    expect(frame.latestTimeAtOrBefore(1000n * sec)).toBe(300n * sec);
+  });
+
+  it("keeps every live transform again once the thinned window ages out", () => {
+    const sec = BigInt(1e9);
+    const tfTree = new TransformTree(10n * sec, 100);
+    let t = 0n;
+    const add = (hz: bigint, seconds: bigint) => {
+      for (const end = t + seconds * sec; t < end; t += sec / hz) {
+        tfTree.addTransform("b", "a", t, new Transform([Number(t), 0, 0], [0, 0, 0, 1]));
+      }
+    };
+    // 20 Hz over a 10 s window is 200 transforms, twice the budget
+    add(20n, 30n);
+    expect(tfTree.decimations).toBeGreaterThan(0);
+    // The rate falls to 1 Hz: 10 transforms per window
+    add(1n, 60n);
+    expect(tfTree.decimations).toBe(0);
+    expect(tfTree.frame("b")!.latestTimeAtOrBefore(t - 2n * sec)).toBe(t - 2n * sec);
+  });
+
+  it("keeps steps exact in thinned live history", () => {
+    // 100 Hz: x = 150 until 10 s, held at 200 from 10.01 s to 20 s, then moving until 60 s
+    const ms = 1_000_000n;
+    const tfTree = new TransformTree();
+    for (let i = 0; i <= 6000; i++) {
+      const x = i <= 1000 ? 150 : i < 2000 ? 200 : i;
+      tfTree.addTransform("b", "a", BigInt(i) * 10n * ms, new Transform([x, 0, 0], [0, 0, 0, 1]));
+    }
+    const frame = tfTree.frame("b")!;
+    const lower: [bigint, Transform] = [0n, Transform.Empty()];
+    const upper: [bigint, Transform] = [0n, Transform.Empty()];
+    // 45 s before the newest transform, in the thinned part
+    expect(frame.findClosestTransforms(lower, upper, 15_000n * ms, 0n)).toBe(true);
+    expect(lower[1].position()[0]).toBe(200);
+    expect(upper[1].position()[0]).toBe(200);
+    // The step itself stays where it was
+    expect(frame.latestTimeAtOrBefore(10_009n * ms)).toBe(10_000n * ms);
+  });
+
+  it("thins older live transforms to one per spacing interval, also for slower streams", () => {
+    // 30 Hz for 120 s: thinning keeps 20 Hz, not every other sample (15 Hz)
+    const sec = BigInt(1e9);
+    const tfTree = new TransformTree();
+    const count = 30 * 120;
+    for (let i = 0; i < count; i++) {
+      tfTree.addTransform(
+        "b",
+        "a",
+        (BigInt(i) * sec) / 30n,
+        new Transform([i, 0, 0], [0, 0, 0, 1]),
+      );
+    }
+    const frame = tfTree.frame("b")!;
+    let kept = 0;
+    for (let t: bigint | undefined = 20n * sec; t != undefined && t >= 10n * sec; ) {
+      kept++;
+      t = frame.latestTimeAtOrBefore(t - 1n);
+    }
+    // 10 s of thinned history at 20 Hz
+    expect(kept).toBeGreaterThanOrEqual(10 * 20);
+    expect(kept).toBeLessThan(10 * 30);
+  });
+
+  it("keeps pruning after transforms were removed or the history started over", () => {
+    const sec = BigInt(1e9);
+    const at = (x: number) => new Transform([x, 0, 0], [0, 0, 0, 1]);
+    const feed = (tfTree: TransformTree, from: bigint) => {
+      for (let i = 1n; i <= 1000n; i++) {
+        tfTree.addTransform("b", "a", from + i * sec, at(Number(i)));
+      }
+      return tfTree.frame("b")!.transformsSize();
+    };
+    // Emptied (a child keeps the frame), then started over at a much later stamp
+    const emptied = new TransformTree(10n * sec);
+    emptied.addTransform("c", "b", 0n, at(0));
+    emptied.addTransform("b", "a", 0n, at(0));
+    emptied.addTransform("b", "a", 1000n * sec, at(1));
+    emptied.removeTransform("b", "a", 0n);
+    emptied.removeTransform("b", "a", 1000n * sec);
+    expect(emptied.frame("b")!.transformsSize()).toBe(0);
+    expect(feed(emptied, 5000n * sec)).toBeLessThanOrEqual(12);
+    // The newest transform removed, then earlier ones added
+    const removed = new TransformTree(10n * sec);
+    removed.addTransform("b", "a", 0n, at(0));
+    removed.addTransform("b", "a", 2000n * sec, at(1));
+    removed.removeTransform("b", "a", 2000n * sec);
+    expect(feed(removed, 0n)).toBeLessThanOrEqual(12);
+  });
+
+  it("drops late transforms that arrive already outside the storage window", () => {
+    const sec = BigInt(1e9);
+    const tfTree = new TransformTree(10n * sec);
+    const at = (x: number) => new Transform([x, 0, 0], [0, 0, 0, 1]);
+    tfTree.addTransform("b", "a", 0n, at(0));
+    tfTree.addTransform("b", "a", 100n * sec, at(100));
+    // Delayed transforms far behind the newest one, which does not advance
+    for (let i = 1; i <= 600; i++) {
+      tfTree.addTransform("b", "a", BigInt(i) * (sec / 10n), at(i));
+    }
+    // The newest one before the window and the newest one
+    expect(tfTree.frame("b")!.transformsSize()).toBeLessThanOrEqual(2 + 600 / 64);
   });
 
   it("keeps the transform just before the storage window for interpolation", () => {
     const sec = BigInt(1e9);
-    const tfTree = new TransformTree(300n * sec, 10_000);
+    const tfTree = new TransformTree(300n * sec);
     tfTree.addTransform("b", "a", 0n, new Transform([0, 0, 0], [0, 0, 0, 1]));
     tfTree.addTransform("b", "a", 400n * sec, new Transform([400, 0, 0], [0, 0, 0, 1]));
     const lower: [bigint, Transform] = [0n, Transform.Empty()];
@@ -117,8 +286,8 @@ describe("TransformTree", () => {
     const sec = BigInt(1e9);
     const at = (x: number) => new Transform([x, 0, 0], [0, 0, 0, 1]);
 
-    it("keeps every transform beyond the storage window and capacity", () => {
-      const tfTree = new TransformTree(10n * sec, 100);
+    it("keeps every transform beyond the storage window", () => {
+      const tfTree = new TransformTree(10n * sec);
       tfTree.setComplete(true);
       for (let i = 0; i < 1000; i++) {
         tfTree.addTransform("b", "a", BigInt(i) * sec, at(i));
@@ -166,7 +335,7 @@ describe("TransformTree", () => {
     });
 
     it("halves every frame's history past the sample budget, keeping both ends", () => {
-      const tfTree = new TransformTree(undefined, undefined, 100);
+      const tfTree = new TransformTree(undefined, 100);
       tfTree.setComplete(true);
       for (let i = 0; i <= 100; i++) {
         tfTree.addTransform("b", "a", BigInt(i) * sec, at(i));
@@ -179,7 +348,7 @@ describe("TransformTree", () => {
     });
 
     it("keeps the thinned density for transforms added after thinning", () => {
-      const tfTree = new TransformTree(undefined, undefined, 100);
+      const tfTree = new TransformTree(undefined, 100);
       tfTree.setComplete(true);
       for (let i = 0; i <= 300; i++) {
         tfTree.addTransform("b", "a", BigInt(i) * sec, at(i));
@@ -230,6 +399,20 @@ describe("TransformTree", () => {
       expect(tfTree.addTransform("a", "b", 20n * sec, at(3), 20n * sec)).toBe(
         AddTransformResult.CYCLE_DETECTED,
       );
+    });
+
+    it("starts preloading unthinned after a thinned live history", () => {
+      const tfTree = new TransformTree(300n * sec, 100);
+      for (let i = 0; i <= 300; i++) {
+        tfTree.addTransform("b", "a", BigInt(i) * sec, at(i));
+      }
+      expect(tfTree.decimations).toBeGreaterThan(0);
+      tfTree.setComplete(true);
+      expect(tfTree.decimations).toBe(0);
+      tfTree.addTransform("c", "a", 0n, at(0));
+      tfTree.addTransform("c", "a", 1n, at(1));
+      tfTree.addTransform("c", "a", 2n, at(2));
+      expect(tfTree.frame("c")!.transformsSize()).toBe(3);
     });
 
     it("clears the tree when leaving complete mode", () => {

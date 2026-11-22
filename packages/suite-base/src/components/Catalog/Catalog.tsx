@@ -27,7 +27,7 @@ import { makeStyles } from "tss-react/mui";
 
 import { formatByteSize } from "@lichtblick/den/format";
 import Stack from "@lichtblick/suite-base/components/Stack";
-import { formatDuration } from "@lichtblick/suite-base/util/formatTime";
+import { formatDurationCompact } from "@lichtblick/suite-base/util/formatTime";
 import { formatTimeAgo } from "@lichtblick/suite-base/util/recentSources";
 
 import { AnimatedThumbnail } from "./AnimatedThumbnail";
@@ -623,7 +623,7 @@ export default function Catalog({
                         {formatStart(r)}
                       </Typography>
                       <Typography variant="body2" className={classes.numeric}>
-                        {r.start && r.end ? formatDuration(subtract(r.end, r.start)) : "–"}
+                        {r.start && r.end ? formatDurationCompact(subtract(r.end, r.start)) : "–"}
                       </Typography>
                       <Typography variant="body2" className={classes.numeric}>
                         {r.size != undefined ? formatByteSize(r.size) : "–"}

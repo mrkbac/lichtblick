@@ -110,24 +110,41 @@ describe("FoxgloveWebSocketPlayer worker", () => {
       expect(postMessageMock).toHaveBeenCalledWith({ type: "close", data: closeEvent });
     });
 
-    it("should post a message and transfer the buffer for ArrayBuffer payloads", () => {
+    it("should post the messages received meanwhile in one batch, transferring buffers", () => {
       // Given
+      vi.useFakeTimers();
       dispatch({ type: "open", data: { wsUrl } });
       const buffer = new ArrayBuffer(8);
+      const text = BasicBuilder.string();
       // When
       MockWebSocket.lastInstance?.onmessage?.({ data: buffer } as MessageEvent);
+      MockWebSocket.lastInstance?.onmessage?.({ data: text } as MessageEvent);
       // Then
-      expect(postMessageMock).toHaveBeenCalledWith({ type: "message", data: buffer }, [buffer]);
+      expect(postMessageMock).not.toHaveBeenCalled();
+      vi.runAllTimers();
+      expect(postMessageMock).toHaveBeenCalledTimes(1);
+      expect(postMessageMock).toHaveBeenCalledWith({ type: "messages", data: [buffer, text] }, [
+        buffer,
+      ]);
+      vi.useRealTimers();
     });
 
-    it("should post a message without transfer for non-ArrayBuffer payloads", () => {
+    it("should post pending messages before a close, keeping their order", () => {
       // Given
+      vi.useFakeTimers();
       dispatch({ type: "open", data: { wsUrl } });
-      const data = BasicBuilder.string();
+      const buffer = new ArrayBuffer(8);
+      const closeEvent = { code: 1000, reason: "", wasClean: true };
       // When
-      MockWebSocket.lastInstance?.onmessage?.({ data } as MessageEvent);
+      MockWebSocket.lastInstance?.onmessage?.({ data: buffer } as MessageEvent);
+      MockWebSocket.lastInstance?.onclose?.(closeEvent);
+      vi.runAllTimers();
       // Then
-      expect(postMessageMock).toHaveBeenCalledWith({ type: "message", data });
+      expect(postMessageMock.mock.calls).toEqual([
+        [{ type: "messages", data: [buffer] }, [buffer]],
+        [{ type: "close", data: closeEvent }],
+      ]);
+      vi.useRealTimers();
     });
 
     it("should post an error message when constructing the WebSocket throws", () => {

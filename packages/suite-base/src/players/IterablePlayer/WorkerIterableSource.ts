@@ -25,6 +25,7 @@ import type {
 } from "./IIterableSource";
 import type { WorkerIterableSourceWorker } from "./WorkerIterableSourceWorker";
 import { abortSignalTransferHandler } from "./abortSignalTransferHandler";
+import { unpackBatch } from "./packedBatch";
 
 const log = Log.getLogger(__filename);
 
@@ -133,12 +134,14 @@ class WorkerIterableSourceBase<MessageType> implements IIterableSource<MessageTy
 
       async nextBatch(durationMs: number) {
         const messageCursor = await messageCursorPromise;
-        return await messageCursor.nextBatch(durationMs);
+        const packed = await messageCursor.nextBatch(durationMs);
+        return packed && unpackBatch(packed);
       },
 
       async readUntil(end: Time) {
         const messageCursor = await messageCursorPromise;
-        return await messageCursor.readUntil(end);
+        const packed = await messageCursor.readUntil(end);
+        return packed && unpackBatch(packed);
       },
 
       async end() {

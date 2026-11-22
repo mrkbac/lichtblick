@@ -104,8 +104,10 @@ class MockRosClient {
     }
   }
 
+  public closed = false;
+
   public close() {
-    // no-op
+    this.closed = true;
   }
 
   /** While set, topic requests wait until the test calls `settleTopics`. */
@@ -193,6 +195,17 @@ describe("RosbridgePlayer", () => {
 
   afterEach(() => {
     player.close();
+  });
+
+  it("closes a connection that is still being opened when the player closes", () => {
+    const client = workerInstance;
+    player.close();
+    expect(client.closed).toBe(true);
+
+    // The connection completing afterwards must not revive it either.
+    client.closed = false;
+    client.setup({ types: ["rosgraph_msgs/Log"] });
+    expect(client.closed).toBe(true);
   });
 
   it("doesn't poll topics again when a request settles after close", async () => {

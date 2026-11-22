@@ -3,7 +3,8 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import { render } from "@testing-library/react";
+import { MenuItem, MenuList, Slider } from "@mui/material";
+import { fireEvent, render, screen } from "@testing-library/react";
 import type { Mock } from "vitest";
 
 import KeyListener, { KeyListenerProps } from "./KeyListener";
@@ -38,6 +39,61 @@ describe("KeyListener", () => {
 
       // Then
       expect(mockHandler).toHaveBeenCalledTimes(1);
+    });
+
+    it("should skip keys the focused element already handled", () => {
+      // Given: a tree that uses the arrow keys itself (React handlers run before document ones)
+      const keyDownHandlers = { arrowleft: mockHandler };
+      setup({ global: true, keyDownHandlers });
+      const tree = document.createElement("div");
+      tree.addEventListener("keydown", (event) => {
+        event.preventDefault();
+      });
+      document.body.appendChild(tree);
+
+      // When
+      tree.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true, cancelable: true }),
+      );
+      tree.remove();
+
+      // Then
+      expect(mockHandler).not.toHaveBeenCalled();
+    });
+
+    it("should leave arrow keys to a focused slider or menu", () => {
+      // Given: playback-style shortcuts on the arrow keys
+      setup({ global: true, keyDownHandlers: { arrowright: mockHandler, arrowdown: mockHandler } });
+      render(
+        <>
+          <Slider defaultValue={2} max={10} />
+          <MenuList>
+            <MenuItem>first</MenuItem>
+            <MenuItem>second</MenuItem>
+          </MenuList>
+        </>,
+      );
+
+      // When
+      fireEvent.keyDown(screen.getByRole("slider"), { key: "ArrowRight" });
+      fireEvent.keyDown(screen.getByText("first"), { key: "ArrowDown" });
+
+      // Then
+      expect(mockHandler).not.toHaveBeenCalled();
+    });
+
+    it("should still call every global listener for a key another listener handled", () => {
+      // Given: e.g. one listener per Plot panel for the same shortcut
+      const otherHandler = vi.fn();
+      setup({ global: true, keyDownHandlers: { a: mockHandler } });
+      setup({ global: true, keyDownHandlers: { a: otherHandler } });
+
+      // When
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "a", cancelable: true }));
+
+      // Then
+      expect(mockHandler).toHaveBeenCalledTimes(1);
+      expect(otherHandler).toHaveBeenCalledTimes(1);
     });
 
     it("should prevent default behavior by default", () => {

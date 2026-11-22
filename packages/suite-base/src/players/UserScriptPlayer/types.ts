@@ -66,6 +66,8 @@ export type ScriptRegistration = {
   buildMessageProcessor: () => {
     processMessages: ProcessMessages;
     terminate: () => void;
+    /** Whether this processor hit an error (a failed message or, for scripts, registration). */
+    failed: () => boolean;
   };
   terminate: () => void;
 };
