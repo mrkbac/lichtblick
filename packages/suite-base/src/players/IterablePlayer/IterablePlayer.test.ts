@@ -1653,6 +1653,7 @@ describe("IterablePlayer", () => {
       expect(mockMessageIterator).toHaveBeenCalledWith({
         topics: new Map([["test_topic", { topic: "test_topic" }]]),
         consumptionType: "full",
+        abort: expect.any(AbortSignal),
       });
     });
 
@@ -1722,6 +1723,7 @@ describe("IterablePlayer", () => {
               ["topic2", { topic: "topic2" }],
             ]),
             consumptionType: "full",
+            abort: expect.any(AbortSignal),
           },
         ],
       ]);
@@ -1891,6 +1893,7 @@ describe("IterablePlayer", () => {
       expect(mockMessageIterator).toHaveBeenCalledWith({
         topics: expect.any(Map),
         consumptionType: "full",
+        abort: expect.any(AbortSignal),
       });
     });
   });
