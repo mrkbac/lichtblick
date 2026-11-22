@@ -5,7 +5,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import {
   App,
@@ -15,6 +15,8 @@ import {
   IAppConfiguration,
   IDataSourceFactory,
   IdbExtensionLoader,
+  INativeAppMenu,
+  INativeWindow,
   McapLocalDataSourceFactory,
   OsContext,
   RemoteDataSourceFactory,
@@ -29,8 +31,6 @@ import {
 
 import { DesktopExtensionLoader } from "./services/DesktopExtensionLoader";
 import { DesktopLayoutLoader } from "./services/DesktopLayoutLoader";
-import { NativeAppMenu } from "./services/NativeAppMenu";
-import { NativeWindow } from "./services/NativeWindow";
 import { CLIFlags, Desktop, NativeMenuBridge, Storage } from "../common/types";
 
 const desktopBridge = (global as unknown as { desktopBridge: Desktop }).desktopBridge;
@@ -79,8 +79,17 @@ export default function Root(props: RootProps): React.JSX.Element {
 
   const [layoutLoaders] = useState(() => [new DesktopLayoutLoader(desktopBridge)]);
 
-  const nativeAppMenu = useMemo(() => new NativeAppMenu(menuBridge), []);
-  const nativeWindow = useMemo(() => new NativeWindow(desktopBridge), []);
+  const [nativeAppMenu] = useState<INativeAppMenu>(() => ({
+    on: (name, listener) => menuBridge?.addIpcEventListener(name, listener),
+  }));
+  const [nativeWindow] = useState<INativeWindow>(() => ({
+    setRepresentedFilename: async (path) => {
+      await desktopBridge.setRepresentedFilename(path);
+    },
+    on: (name, listener) => {
+      desktopBridge.addIpcEventListener(name, listener);
+    },
+  }));
 
   const dataSources: IDataSourceFactory[] = useMemo(() => {
     if (props.dataSources) {
@@ -116,20 +125,6 @@ export default function Root(props: RootProps): React.JSX.Element {
   });
 
   const [isFullScreen, setFullScreen] = useState(false);
-  const [isMaximized, setMaximized] = useState(nativeWindow.isMaximized());
-
-  const onMinimizeWindow = useCallback(() => {
-    nativeWindow.minimize();
-  }, [nativeWindow]);
-  const onMaximizeWindow = useCallback(() => {
-    nativeWindow.maximize();
-  }, [nativeWindow]);
-  const onUnmaximizeWindow = useCallback(() => {
-    nativeWindow.unmaximize();
-  }, [nativeWindow]);
-  const onCloseWindow = useCallback(() => {
-    nativeWindow.close();
-  }, [nativeWindow]);
 
   useEffect(() => {
     const unregisterFull = desktopBridge.addIpcEventListener("enter-full-screen", () => {
@@ -138,17 +133,9 @@ export default function Root(props: RootProps): React.JSX.Element {
     const unregisterLeave = desktopBridge.addIpcEventListener("leave-full-screen", () => {
       setFullScreen(false);
     });
-    const unregisterMax = desktopBridge.addIpcEventListener("maximize", () => {
-      setMaximized(true);
-    });
-    const unregisterUnMax = desktopBridge.addIpcEventListener("unmaximize", () => {
-      setMaximized(false);
-    });
     return () => {
       unregisterFull();
       unregisterLeave();
-      unregisterMax();
-      unregisterUnMax();
     };
   }, []);
 
@@ -165,13 +152,8 @@ export default function Root(props: RootProps): React.JSX.Element {
       enableGlobalCss
       appBarLeftInset={ctxbridge?.platform === "darwin" && !isFullScreen ? 72 : undefined}
       onAppBarDoubleClick={() => {
-        nativeWindow.handleTitleBarDoubleClick();
+        desktopBridge.handleTitleBarDoubleClick();
       }}
-      isMaximized={isMaximized}
-      onMinimizeWindow={onMinimizeWindow}
-      onMaximizeWindow={onMaximizeWindow}
-      onUnmaximizeWindow={onUnmaximizeWindow}
-      onCloseWindow={onCloseWindow}
       extraProviders={extraProviders}
     />
   );

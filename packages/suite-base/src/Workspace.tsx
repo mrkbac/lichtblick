@@ -802,27 +802,9 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
       <AppBarComponent
         leftInset={props.appBarLeftInset}
         onDoubleClick={props.onAppBarDoubleClick}
-        showCustomWindowControls={props.showCustomWindowControls}
-        isMaximized={props.isMaximized}
-        initialZoomFactor={props.initialZoomFactor}
-        onMinimizeWindow={props.onMinimizeWindow}
-        onMaximizeWindow={props.onMaximizeWindow}
-        onUnmaximizeWindow={props.onUnmaximizeWindow}
-        onCloseWindow={props.onCloseWindow}
       />
     ),
-    [
-      AppBarComponent,
-      props.appBarLeftInset,
-      props.isMaximized,
-      props.initialZoomFactor,
-      props.onAppBarDoubleClick,
-      props.onCloseWindow,
-      props.onMaximizeWindow,
-      props.onMinimizeWindow,
-      props.onUnmaximizeWindow,
-      props.showCustomWindowControls,
-    ],
+    [AppBarComponent, props.appBarLeftInset, props.onAppBarDoubleClick],
   );
 
   useBroadcast({

@@ -99,12 +99,6 @@ export function main(): void {
     },
   };
 
-  // Keep track of maximized state in the preload script because the initial ipc event sent from main
-  // may occur before the app is fully rendered.
-  let isMaximized = false;
-  ipcRenderer.on("maximize", () => (isMaximized = true));
-  ipcRenderer.on("unmaximize", () => (isMaximized = false));
-
   let extensionHandler: ExtensionsHandler | undefined;
 
   const getExtensionHandler = async (): Promise<ExtensionsHandler> => {
@@ -175,24 +169,6 @@ export function main(): void {
     },
     handleTitleBarDoubleClick() {
       ipcRenderer.send("titleBarDoubleClicked");
-    },
-    isMaximized() {
-      return isMaximized;
-    },
-    minimizeWindow() {
-      ipcRenderer.send("minimizeWindow");
-    },
-    maximizeWindow() {
-      ipcRenderer.send("maximizeWindow");
-    },
-    unmaximizeWindow() {
-      ipcRenderer.send("unmaximizeWindow");
-    },
-    closeWindow() {
-      ipcRenderer.send("closeWindow");
-    },
-    reloadWindow() {
-      ipcRenderer.send("reloadMainWindow");
     },
   };
 
