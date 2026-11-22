@@ -203,7 +203,14 @@ export class TopicMarkers extends Renderable<MarkerTopicUserData> {
         const transform = frameTransform(frameId, srcTime);
         renderable.visible = transform !== false;
         if (transform === false) {
-          missingTransform ??= missingTransformMessage(renderFrameId, fixedFrameId, frameId);
+          missingTransform ??= missingTransformMessage(
+            this.renderer.transformTree,
+            renderFrameId,
+            fixedFrameId,
+            frameId,
+            currentTime,
+            srcTime,
+          );
           continue;
         }
         anyUpdated = true;

@@ -123,10 +123,12 @@ const useStyles = makeStyles<void, "plotName" | "actionButton">()((theme, _param
     justifySelf: "stretch",
     height: ROW_HEIGHT,
     padding: theme.spacing(0.25, 1, 0.25, 0.25),
-    whiteSpace: "pre-wrap",
-    // Fixed-width digits and a reserved width keep the legend from resizing as values change.
+    // Fixed-width digits and a fixed column width keep the legend from resizing as values change
+    // (e.g. between whole and fractional values); longer values are clipped with the full value in
+    // the title.
     fontVariantNumeric: "tabular-nums",
-    minWidth: "12ch",
+    width: "16ch",
+    minWidth: 0,
     justifyContent: "flex-end",
   },
   errorIcon: {
@@ -150,13 +152,24 @@ const useStyles = makeStyles<void, "plotName" | "actionButton">()((theme, _param
   },
 }));
 
+/**
+ * Integers (counters, seconds timestamps) show exactly. Fractions keep four decimals for a steady
+ * width, switching to an exponent only where fixed digits stop being readable.
+ */
+export function formatLegendNumber(value: number): string {
+  if (Number.isInteger(value)) {
+    return String(value);
+  }
+  return Math.abs(value) >= 1e5 && Math.abs(value) < 1e15 ? value.toFixed(4) : formatStat(value);
+}
+
 function renderValue(value: unknown): string | number | undefined {
   switch (typeof value) {
     case "bigint":
     case "boolean":
       return value.toString();
     case "number":
-      return formatStat(value);
+      return formatLegendNumber(value);
     case "string":
       return value;
     case "object":
@@ -315,6 +328,8 @@ export function PlotLegendRow({
           <Typography
             variant="body2"
             align="right"
+            noWrap
+            title={String(renderValue(value) ?? "")}
             color={valueSource === "hover" ? "warning" : "textSecondary"}
           >
             {renderValue(value)}
