@@ -3,7 +3,9 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
+import { LabelNodeMaterial } from "@foxglove/three-text/webgpu";
 import * as THREE from "three";
+import { LineSegments2 } from "three/examples/jsm/lines/webgpu/LineSegments2.js";
 import type { Mock } from "vitest";
 import { setupVitestCanvasMock } from "vitest-canvas-mock";
 
@@ -13,8 +15,13 @@ import { DEFAULT_CAMERA_STATE } from "@lichtblick/suite-base/panels/ThreeDeeRend
 import { DEFAULT_PUBLISH_SETTINGS } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/PublishSettings";
 
 import { MarkerBatches } from "./MarkerBatches";
+import { RenderableArrow } from "./RenderableArrow";
 import { RenderableCube } from "./RenderableCube";
+import { RenderableLineList } from "./RenderableLineList";
+import { RenderableLineStrip } from "./RenderableLineStrip";
 import { RenderableMarker } from "./RenderableMarker";
+import { RenderableTextViewFacing } from "./RenderableTextViewFacing";
+import { TextMarkerBatches } from "./TextMarkerBatches";
 import { RendererConfig } from "../../IRenderer";
 import { LAYER_DEFAULT, LAYER_PICK_ONLY } from "../../layers";
 import { Marker, MarkerAction, MarkerType } from "../../ros";
@@ -153,6 +160,192 @@ describe("MarkerBatches", () => {
     );
   });
 
+  it("batches the head and shaft of both arrow forms with their own transforms", () => {
+    topic.addMarkerMessage(marker(1, MarkerType.ARROW), 0n);
+    topic.addMarkerMessage(
+      {
+        ...marker(2, MarkerType.ARROW),
+        points: [
+          { x: 0, y: 0, z: 0 },
+          { x: 0, y: 0, z: 4 },
+        ],
+      },
+      0n,
+    );
+    topic.addMarkerMessage(marker(3, MarkerType.ARROW, 0.5), 0n);
+    topic.startFrame(0n, "map", "map");
+
+    expect(instanced().map((object) => (object as THREE.InstancedMesh).count)).toEqual([
+      2, 2, 2, 2,
+    ]);
+    const arrow = byId(2) as RenderableArrow;
+    const transparentArrow = byId(3) as RenderableArrow;
+    expect(transparentArrow.shaftMesh.layers.mask).toBe(1 << LAYER_DEFAULT);
+    arrow.updateMatrixWorld();
+    for (const mesh of [arrow.shaftMesh, arrow.headMesh]) {
+      expect(mesh.layers.mask).toBe(1 << LAYER_PICK_ONLY);
+      const batch = instanced().find(
+        (object): object is THREE.InstancedMesh =>
+          object instanceof THREE.InstancedMesh && object.geometry === mesh.geometry,
+      )!;
+      const instance = new THREE.Matrix4();
+      batch.getMatrixAt(1, instance);
+      const matrix = new THREE.Matrix4().makeTranslation(...batch.position.toArray());
+      matrix.multiply(instance).elements.forEach((value, i) => {
+        expect(value).toBeCloseTo(mesh.matrixWorld.elements[i]!, 6);
+      });
+    }
+  });
+
+  it("draws opaque strips and lists together with one depth and color pass per width", () => {
+    const points = [
+      { x: 0, y: 0, z: 0 },
+      { x: 0, y: 1, z: 0 },
+    ];
+    topic.addMarkerMessage({ ...marker(1, MarkerType.LINE_LIST), points }, 0n);
+    topic.addMarkerMessage({ ...marker(2, MarkerType.LINE_STRIP), points }, 0n);
+    topic.addMarkerMessage({ ...marker(3, MarkerType.LINE_LIST, 0.5), points }, 0n);
+    topic.addMarkerMessage(
+      { ...marker(4, MarkerType.LINE_LIST), points, scale: { x: 2, y: 1, z: 1 } },
+      0n,
+    );
+    topic.startFrame(0n, "map", "map");
+
+    const batches = topic.children.find((child) => child instanceof MarkerBatches)!;
+    const lines = batches.children.filter((child) => child instanceof LineSegments2);
+    expect(lines.map((pass) => pass.geometry.instanceCount)).toEqual([2, 2]);
+    expect(lines.map((pass) => pass.renderOrder)).toEqual([1, 2]);
+    const first = lines[0]!;
+    expect(first.position.x).toBe(1);
+    const start = first.geometry.getAttribute("instanceStart");
+    expect(start.getX(0)).toBe(0);
+    expect(start.getX(1)).toBe(1);
+    expect((byId(1) as RenderableLineList).line.layers.mask).toBe(1 << LAYER_PICK_ONLY);
+    expect((byId(2) as RenderableLineStrip).line.layers.mask).toBe(1 << LAYER_PICK_ONLY);
+    expect((byId(3) as RenderableLineList).line.layers.mask).toBe(1 << LAYER_DEFAULT);
+  });
+
+  it("keeps a singleton and an oversized path in their original GPU buffers", () => {
+    const small = marker(1, MarkerType.LINE_LIST);
+    const large = marker(2, MarkerType.LINE_LIST);
+    const start = { x: 0, y: 0, z: 0 };
+    const end = { x: 1, y: 0, z: 0 };
+    small.points = [start, end];
+    large.points = Array.from({ length: 16_384 }, (_, i) => (i % 2 === 0 ? start : end));
+    topic.addMarkerMessage(small, 0n);
+    topic.addMarkerMessage(large, 0n);
+    topic.startFrame(0n, "map", "map");
+    topic.startFrame(1n, "map", "map");
+
+    const batches = topic.children.find((child) => child instanceof MarkerBatches)!;
+    expect(batches.children).toHaveLength(0);
+    expect((byId(1) as RenderableLineList).line.layers.mask).toBe(1 << LAYER_DEFAULT);
+    expect((byId(2) as RenderableLineList).line.layers.mask).toBe(1 << LAYER_DEFAULT);
+  });
+
+  it("leaves fine lines in their local buffers when a batch would collapse the endpoints", () => {
+    const first = marker(1, MarkerType.LINE_LIST);
+    first.pose.position.x = 1_000_000;
+    first.points = [
+      { x: 0, y: 0, z: 0 },
+      { x: 1, y: 0, z: 0 },
+    ];
+    const second = marker(2, MarkerType.LINE_LIST);
+    second.pose.position.x = 1_004_000;
+    second.points = [
+      { x: 0, y: 0, z: 0 },
+      { x: 0.00005, y: 0, z: 0 },
+    ];
+    topic.addMarkerMessage(first, 0n);
+    topic.addMarkerMessage(second, 0n);
+    topic.startFrame(0n, "map", "map");
+
+    expect(topic.children.find((child) => child instanceof MarkerBatches)?.children).toHaveLength(
+      0,
+    );
+    expect((byId(1) as RenderableLineList).line.layers.mask).toBe(1 << LAYER_DEFAULT);
+    expect((byId(2) as RenderableLineList).line.layers.mask).toBe(1 << LAYER_DEFAULT);
+  });
+
+  it("keeps a strip translucent after it becomes empty and returns", () => {
+    const points = [
+      { x: 0, y: 0, z: 0 },
+      { x: 1, y: 0, z: 0 },
+    ];
+    topic.addMarkerMessage({ ...marker(1, MarkerType.LINE_STRIP), points }, 0n);
+    topic.addMarkerMessage(marker(1, MarkerType.LINE_STRIP, 0.5), 0n);
+    topic.addMarkerMessage({ ...marker(1, MarkerType.LINE_STRIP, 0.5), points }, 0n);
+    topic.addMarkerMessage({ ...marker(2, MarkerType.LINE_STRIP), points }, 0n);
+    topic.startFrame(0n, "map", "map");
+
+    const translucent = (byId(1) as RenderableLineStrip).line;
+    expect(translucent.material.transparent).toBe(true);
+    expect(translucent.layers.mask).toBe(1 << LAYER_DEFAULT);
+    expect(topic.children.find((child) => child instanceof MarkerBatches)?.children).toHaveLength(
+      0,
+    );
+  });
+
+  it("batches matching opaque labels and keeps the original marker meshes for picking", () => {
+    topic.addMarkerMessage({ ...marker(1, MarkerType.TEXT_VIEW_FACING), text: "ABC" }, 0n);
+    topic.addMarkerMessage({ ...marker(2, MarkerType.TEXT_VIEW_FACING), text: "ABC" }, 0n);
+    topic.addMarkerMessage({ ...marker(3, MarkerType.TEXT_VIEW_FACING), text: "DEF" }, 0n);
+    topic.addMarkerMessage({ ...marker(4, MarkerType.TEXT_VIEW_FACING, 0.5), text: "ABC" }, 0n);
+    topic.startFrame(0n, "map", "map");
+
+    const glyphBatches = topic.children.find((child) => child instanceof TextMarkerBatches)!;
+    const batch = glyphBatches.children[0] as THREE.Mesh<THREE.InstancedBufferGeometry>;
+    expect(glyphBatches.children).toHaveLength(1);
+    expect(batch.geometry.instanceCount).toBe(6);
+    const offsets = batch.geometry.getAttribute("labelOrigin");
+    expect(offsets.getX(0)).toBe(0);
+    expect(offsets.getX(3)).toBe(1);
+    const mesh = (id: number) => (byId(id) as RenderableTextViewFacing).label.mesh;
+    expect(mesh(1).layers.mask).toBe(1 << LAYER_PICK_ONLY);
+    expect(mesh(2).layers.mask).toBe(1 << LAYER_PICK_ONLY);
+    expect(mesh(3).layers.mask).toBe(1 << LAYER_DEFAULT);
+    expect(mesh(4).layers.mask).toBe(1 << LAYER_DEFAULT);
+    expect(batch.userData.picking).toBe(false);
+
+    topic.addMarkerMessage(
+      { ...marker(1, MarkerType.TEXT_VIEW_FACING), action: MarkerAction.DELETE },
+      0n,
+    );
+    topic.startFrame(0n, "map", "map");
+    expect(glyphBatches.children).toHaveLength(0);
+    expect(mesh(2).layers.mask).toBe(1 << LAYER_DEFAULT);
+  });
+
+  it("refreshes text scale and glyph buffers on paused redraws", () => {
+    topic.addMarkerMessage({ ...marker(1, MarkerType.TEXT_VIEW_FACING), text: "ABC" }, 0n);
+    topic.addMarkerMessage({ ...marker(2, MarkerType.TEXT_VIEW_FACING), text: "ABC" }, 0n);
+    topic.startFrame(0n, "map", "map");
+
+    const glyphBatches = topic.children.find((child) => child instanceof TextMarkerBatches)!;
+    const batch = glyphBatches.children[0] as THREE.Mesh<
+      THREE.InstancedBufferGeometry,
+      LabelNodeMaterial
+    >;
+    const glyphPosition = batch.geometry.getAttribute(
+      "instanceBoxPosition",
+    ) as THREE.InterleavedBufferAttribute;
+    const version = glyphPosition.data.version;
+    const setScale = vi.spyOn(batch.material, "setScale");
+    topic.startFrame(0n, "map", "map");
+    expect(setScale).not.toHaveBeenCalled();
+    expect(glyphPosition.data.version).toBe(version);
+
+    renderer.labelPool.setScaleFactor(2);
+    topic.startFrame(0n, "map", "map");
+    expect(setScale).toHaveBeenLastCalledWith(
+      6 / renderer.labelPool.fontManager.atlasData.lineHeight,
+    );
+
+    renderer.labelPool.updateAtlas("Ω");
+    topic.startFrame(0n, "map", "map");
+    expect(glyphPosition.data.version).toBeGreaterThan(version);
+  });
+
   it("stores instances relative to the batch origin, so map-scale coordinates keep precision", () => {
     const far = (id: number, x: number) => ({
       ...marker(id, MarkerType.CUBE),
@@ -192,7 +385,7 @@ describe("MarkerBatches", () => {
     }
   });
 
-  it("draws reflected and far-away markers on their own", () => {
+  it("batches distant markers in their own cell and draws reflected markers separately", () => {
     topic.addMarkerMessage(marker(1, MarkerType.CUBE), 0n);
     topic.addMarkerMessage({ ...marker(2, MarkerType.CUBE), scale: { x: -1, y: 1, z: 1 } }, 0n);
     topic.addMarkerMessage(
@@ -206,9 +399,17 @@ describe("MarkerBatches", () => {
 
     expect((byId(1) as RenderableCube).mesh.layers.mask).toBe(1 << LAYER_PICK_ONLY);
     expect((byId(2) as RenderableCube).mesh.layers.mask).toBe(1 << LAYER_DEFAULT);
-    expect((byId(3) as RenderableCube).mesh.layers.mask).toBe(1 << LAYER_DEFAULT);
-    const cubes = instanced().find((object) => object instanceof THREE.Mesh) as THREE.InstancedMesh;
-    expect(cubes.count).toBe(1);
+    expect((byId(3) as RenderableCube).mesh.layers.mask).toBe(1 << LAYER_PICK_ONLY);
+    const cubes = instanced().filter((object) => object instanceof THREE.InstancedMesh);
+    expect(cubes.map((batch) => batch.position.x)).toEqual([1, 1e6]);
+    expect(cubes.every((batch) => batch.frustumCulled && batch.boundingSphere != undefined)).toBe(
+      true,
+    );
+    topic.addMarkerMessage({ ...marker(3, MarkerType.CUBE), action: MarkerAction.DELETE }, 0n);
+    topic.startFrame(0n, "map", "map");
+    expect(topic.children.find((child) => child instanceof MarkerBatches)?.children).toHaveLength(
+      2,
+    );
   });
 
   it("keeps a marker at a non-finite position out of the batch", () => {
