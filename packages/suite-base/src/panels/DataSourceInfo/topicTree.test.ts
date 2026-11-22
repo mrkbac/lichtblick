@@ -51,7 +51,7 @@ it("does not merge distinct arbitrary MCAP topic names with repeated slashes", (
 
 it("totals namespace descendants and distinguishes partial scans from complete payload totals", () => {
   const topics = ["/a", "/a/b", "/a/c"].map((name) => ({ name, schemaName: undefined }));
-  const data = { count: 2, bytes: 12, estimatedBytes: false, buckets: [2] };
+  const data = { count: 2, bytes: 12, estimatedBytes: false, buckets: [2], largestIntervals: [] };
   const partial = namespaceTotals(topics, new Map([["/a", data]]), () => 2);
   expect(partial).toMatchObject({ count: 6, bytes: 12, scanned: 1, complete: false });
   const full = namespaceTotals(topics, new Map(topics.map((topic) => [topic.name, data])), () => 2);
