@@ -359,6 +359,46 @@ describe("TimestampDatasetsBuilderImpl", () => {
     expect(builder.getCsvData()[0]!.data.map((item) => item.x)).toEqual([0, 3, 6, 7, 8]);
   });
 
+  it("flags derived values when a late header stamp forces recomputation after thinning", () => {
+    const builder = new TimestampDatasetsBuilderImpl(6);
+    const derived = seriesItem("0", {
+      timestampMethod: "headerStamp",
+      path: "/topic.value.@delta",
+    });
+    const plain = seriesItem("1", { timestampMethod: "headerStamp" });
+    builder.applyAction({ type: "update-series-config", seriesItems: [derived, plain] });
+    const firstBatch = items(range(0, 16));
+    builder.applyAction({ type: "append-current", series: key, items: firstBatch });
+    expect(builder.getCsvData()[0]!.data.length).toBeLessThan(firstBatch.length);
+    expect(builder.getViewportResult(viewport).approximateSeries).toEqual([]);
+
+    builder.applyAction({ type: "append-current", series: key, items: items([5.5]) });
+    expect(builder.getViewportResult(viewport).approximateSeries).toEqual([0]);
+
+    builder.applyAction({
+      type: "update-series-config",
+      seriesItems: [{ ...derived, configIndex: 1 }],
+    });
+    expect(builder.getViewportResult(viewport).approximateSeries).toEqual([1]);
+
+    builder.applyAction({ type: "reset-current", series: key });
+    expect(builder.getViewportResult(viewport).approximateSeries).toEqual([]);
+  });
+
+  it("flags smoothing enabled after live samples have already been thinned", () => {
+    const builder = new TimestampDatasetsBuilderImpl(6);
+    const config = seriesItem("0");
+    builder.applyAction({ type: "update-series-config", seriesItems: [config] });
+    builder.applyAction({ type: "append-current", series: key, items: items(range(0, 12)) });
+    expect(builder.getViewportResult(viewport).approximateSeries).toEqual([]);
+
+    builder.applyAction({
+      type: "update-series-config",
+      seriesItems: [{ ...config, smoothing: 3 }],
+    });
+    expect(builder.getViewportResult(viewport).approximateSeries).toEqual([0]);
+  });
+
   it("keeps original values that are not the plotted number", () => {
     // GIVEN values that are strings, bigints, gaps and plain numbers, without header stamps
     const builder = build([seriesItem("0")]);

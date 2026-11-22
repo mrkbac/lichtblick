@@ -10,7 +10,7 @@ import { Time, fromNanoSec, toNanoSec, toRFC3339String, compare } from "@foxglov
 import Logger from "@lichtblick/log";
 import { type McapIndexedReader, McapTypes } from "@lichtblick/mcap-core";
 import { ParsedChannel, parseChannel } from "@lichtblick/mcap-support";
-import { MessageEvent, Metadata } from "@lichtblick/suite";
+import { Metadata } from "@lichtblick/suite";
 import {
   GetBackfillMessagesArgs,
   Initialization,
@@ -20,10 +20,14 @@ import {
   SKIM_TAIL_NS,
   TopicWithDecodingInfo,
 } from "@lichtblick/suite-base/players/IterablePlayer/IIterableSource";
-import { PlayerAlert, RecordingFileInfo, TopicStats } from "@lichtblick/suite-base/players/types";
+import {
+  MessageEvent,
+  PlayerAlert,
+  RecordingFileInfo,
+  TopicStats,
+} from "@lichtblick/suite-base/players/types";
 import { RosDatatypes } from "@lichtblick/suite-base/types/RosDatatypes";
 import type { ReadOptions } from "@lichtblick/suite-base/util/CachedFilelike.types";
-import { GrowingHistogram } from "@lichtblick/suite-base/util/timelineDensity";
 import { toError } from "@lichtblick/suite-base/util/toError";
 
 import type { PrefetchOptions } from "./RemoteFileReadable.types";
@@ -48,10 +52,12 @@ export type RecoverReader = (error: Error) => Promise<{
  */
 export type CheckChunk = (chunk: McapTypes.ChunkIndex) => Promise<Error | undefined>;
 
+type LocatedMessage = McapTypes.Message & { recordOffset?: string };
+
 type ReadMessagesArgs = Omit<
   NonNullable<Parameters<McapIndexedReader["readMessages"]>[0]>,
-  "validateCrcs"
->;
+  "validateCrcs" | "readOptions"
+> & { readOptions?: ReadOptions; abort?: AbortSignal };
 
 const FULL_READ_OPTIONS: ReadOptions = { background: true };
 
@@ -68,6 +74,7 @@ const SKIM_MIN_CHUNKS_PER_WINDOW = 4n;
 
 export class McapIndexedIterableSource implements ISerializedIterableSource {
   #reader: McapIndexedReader;
+  readonly #recordIdPrefix?: string;
   #channelInfoById = new Map<
     number,
     {
@@ -103,7 +110,6 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
     publishersByTopic: new Map<string, Set<string>>(),
     alerts: [] as PlayerAlert[],
     metadataCount: 0,
-    density: undefined as GrowingHistogram | undefined,
     metadata: [] as Metadata[],
   };
 
@@ -125,9 +131,11 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
       recover?: RecoverReader;
       checkChunk?: CheckChunk;
       corruptChunks?: Set<bigint>;
+      recordIdPrefix?: string;
     },
   ) {
     this.#reader = reader;
+    this.#recordIdPrefix = options?.recordIdPrefix;
     this.#prefetch = options?.prefetch;
     this.#recover = options?.recover;
     this.#checkChunk = options?.checkChunk;
@@ -198,12 +206,13 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
    * recovered reader, once) and resumes after the last message already yielded, so consumers see
    * one uninterrupted stream.
    */
-  async *#readMessages(args: ReadMessagesArgs): AsyncGenerator<McapTypes.Message> {
+  async *#readMessages(args: ReadMessagesArgs): AsyncGenerator<LocatedMessage> {
     // Resume point: the last yielded logTime and how many messages at that logTime were yielded
     let lastTime: bigint | undefined;
     let yieldedAtLastTime = 0;
     let retried = false;
-    for (;;) {
+    const isAborted = () => args.abort?.aborted === true;
+    while (!isAborted()) {
       const resumeArgs: ReadMessagesArgs =
         lastTime == undefined
           ? args
@@ -213,13 +222,23 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
       let skip = yieldedAtLastTime;
       const reader = this.#reader;
       const chunkIndexes = reader.chunkIndexes;
-      const messages = reader.readMessages({ ...resumeArgs, validateCrcs: false });
+      const messages = reader.readMessages({
+        ...resumeArgs,
+        validateCrcs: false,
+        readOptions: args.abort
+          ? { ...resumeArgs.readOptions, signal: args.abort }
+          : resumeArgs.readOptions,
+        includeRecordOffsets: this.#recordIdPrefix != undefined,
+      });
       try {
         for (;;) {
           let result;
           try {
             result = await messages.next();
           } catch (err: unknown) {
+            if (isAborted()) {
+              return;
+            }
             // Retry once first: a transient error (e.g. the network) needs no scan. Then, unless
             // another read already dropped a chunk or swapped the reader meanwhile, look for the
             // corrupt chunk around the read position and drop it. Only if there is none, recover
@@ -262,7 +281,7 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
             }
             break;
           }
-          if (result.done === true) {
+          if (result.done === true || isAborted()) {
             return;
           }
           const message = result.value;
@@ -313,7 +332,6 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
     const reader = this.#reader;
     const index = this.#index;
     const newChunks = reader.chunkIndexes.slice(index.chunks);
-    const previousStart = index.startTime;
     for (const chunk of newChunks) {
       if (index.startTime == undefined || chunk.messageStartTime < index.startTime) {
         index.startTime = chunk.messageStartTime;
@@ -332,27 +350,6 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
       index.compression.set(format, group);
     }
     index.chunks = reader.chunkIndexes.length;
-    if (index.startTime != undefined && index.endTime != undefined) {
-      // The histogram can't grow backwards: rebuild it from all chunks when the start moved
-      // earlier (rare: live indexing found an earlier chunk), else add only the new chunks
-      let density = index.density;
-      let chunks: readonly McapTypes.ChunkIndex[] = newChunks;
-      if (!density || index.startTime !== previousStart) {
-        density = new GrowingHistogram(
-          Number(index.startTime),
-          Number(index.endTime - index.startTime),
-        );
-        chunks = reader.chunkIndexes;
-      }
-      index.density = density;
-      for (const chunk of chunks) {
-        density.add(
-          Number(chunk.messageStartTime),
-          Number(chunk.messageEndTime),
-          Number(chunk.uncompressedSize),
-        );
-      }
-    }
 
     // A channel whose schema is missing stays pending: a later chunk may repeat the schema. Once
     // added, its messages in earlier chunks become readable too.
@@ -408,10 +405,6 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
     const recordingFiles: RecordingFileInfo[] = [
       {
         library: reader.header.library,
-        messageBytes:
-          startTime != undefined && endTime != undefined
-            ? index.density?.resample(Number(startTime), Number(endTime))
-            : undefined,
         schemaCount: reader.schemasById.size,
         compression: [...index.compression.values()].map((group) => ({ ...group })),
         channels: [...reader.channelsById.values()].map((channel) => {
@@ -524,6 +517,7 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
     }
 
     for await (const message of this.#readMessages({
+      abort: args.abort,
       startingAt: toNanoSec(start),
       endingAt: toNanoSec(end),
       topics: topicNames,
@@ -736,7 +730,7 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
     return [...chunks];
   }
 
-  #toResult(message: McapTypes.Message): Readonly<IteratorResult<Uint8Array>> {
+  #toResult(message: LocatedMessage): Readonly<IteratorResult<Uint8Array>> {
     const channelInfo = this.#channelInfoById.get(message.channelId);
     if (!channelInfo) {
       return {
@@ -757,6 +751,9 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
         message: message.data,
         sizeInBytes: message.data.byteLength,
         schemaName: channelInfo.schemaName ?? "",
+        ...(message.recordOffset != undefined && {
+          recordId: `${this.#recordIdPrefix}:${message.recordOffset}`,
+        }),
       },
     };
   }
@@ -807,6 +804,9 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
           message: message.data,
           sizeInBytes: message.data.byteLength,
           schemaName: channelInfo.schemaName ?? "",
+          ...(message.recordOffset != undefined && {
+            recordId: `${this.#recordIdPrefix}:${message.recordOffset}`,
+          }),
         });
 
         break;

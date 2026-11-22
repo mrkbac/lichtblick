@@ -744,6 +744,34 @@ describe("PlotCoordinator", () => {
         );
       });
 
+      it("keeps the surviving duplicate series' key and range read after removing an earlier row", async () => {
+        (parseMessagePath as Mock).mockReturnValue({ topicName: "/foo" });
+        (fillInGlobalVariablesInPath as Mock).mockImplementation((parsed) => parsed);
+        (stringifyMessagePath as Mock).mockReturnValue("/foo.val");
+        const first = PlotBuilder.path({ value: "/foo.val", label: "first" });
+        const second = PlotBuilder.path({ value: "/foo.val", label: "second" });
+        const config = PlotBuilder.config({ paths: [first, second] });
+        plotCoordinator.handleConfig(config, "light", {});
+        plotCoordinator.handlePlayerState(state);
+
+        const firstKey = plotCoordinator["series"][0]!.key;
+        const secondKey = plotCoordinator["series"][1]!.key;
+        expect(firstKey).not.toEqual(secondKey);
+        await vi.waitFor(() => {
+          expect(handleMessageRange).toHaveBeenCalledTimes(1);
+        });
+
+        // The panel can supply freshly deserialized paths on each config update.
+        plotCoordinator.handleConfig({ ...config, paths: [{ ...second }] }, "light", {});
+        plotCoordinator.handlePlayerState(state);
+
+        expect(plotCoordinator["series"]).toEqual([
+          expect.objectContaining({ key: secondKey, configIndex: 0 }),
+        ]);
+        expect(cancels[0]).not.toHaveBeenCalled();
+        expect(mockSubscribeMessageRange).toHaveBeenCalledTimes(1);
+      });
+
       it("keeps the read when one of the series is removed", () => {
         setKeys([keyA, keyB]);
         mockSubscribeMessageRange.mockClear();
@@ -1243,8 +1271,6 @@ describe("PlotCoordinator", () => {
       expect(series).toHaveLength(2);
       expect(series[0].configIndex).toBe(0);
       expect(series[1].configIndex).toBe(1);
-      expect(series[0].key).toBe(`0:receiveTime:${messagePath.value}`);
-      expect(series[1].key).toBe(`1:receiveTime:${messagePath.value}`);
       expect(series[0].key).not.toEqual(series[1].key);
     });
 

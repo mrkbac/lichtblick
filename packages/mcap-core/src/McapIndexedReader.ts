@@ -516,8 +516,9 @@ export class McapIndexedReader<TReadOptions = unknown> {
       reverse?: boolean;
       validateCrcs?: boolean;
       readOptions?: TReadOptions;
+      includeRecordOffsets?: boolean;
     } = {},
-  ): AsyncGenerator<TypedMcapRecords["Message"], void, void> {
+  ): AsyncGenerator<TypedMcapRecords["Message"] & { recordOffset?: string }, void, void> {
     const { topics, reverse = false, validateCrcs, readOptions } = args;
     const { startingAt, endingAt } = resolveInclusiveTimeRange(
       args,
@@ -655,7 +656,9 @@ export class McapIndexedReader<TReadOptions = unknown> {
           `Message log time ${record.logTime} did not match message index entry (${logTime} at offset ${offset} in chunk at offset ${cursor.chunkIndex.chunkStartOffset})`,
         );
       }
-      yield record;
+      yield args.includeRecordOffsets === true
+        ? { ...record, recordOffset: `${chunkOffset}:${offset}` }
+        : record;
 
       if (loadAheadFrom && readAhead) {
         plan ??= readAheadPlan(chunksInRange, relevantChannels);

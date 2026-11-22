@@ -16,6 +16,7 @@ type PendingRead = {
   offset: bigint;
   size: bigint;
   background: boolean;
+  signal?: AbortSignal;
   resolve: (data: Uint8Array) => void;
   reject: (error: Error) => void;
 };
@@ -52,6 +53,7 @@ export class BatchingReadable implements McapTypes.IReadable<ReadOptions> {
         offset,
         size,
         background: options?.background === true,
+        signal: options?.signal,
         resolve,
         reject,
       });
@@ -89,6 +91,7 @@ export class BatchingReadable implements McapTypes.IReadable<ReadOptions> {
       const mergedEnd = current != undefined && current.end > readEnd ? current.end : readEnd;
       if (
         current != undefined &&
+        current.members[0]!.signal === read.signal &&
         read.offset <= current.end + this.#gapThresholdBytes &&
         mergedEnd - current.start <= this.#maxCoalescedBytes
       ) {
@@ -105,7 +108,10 @@ export class BatchingReadable implements McapTypes.IReadable<ReadOptions> {
         try {
           // A merged read waits for its most urgent member
           const background = group.members.every((member) => member.background);
-          const data = await this.#inner.read(groupStart, group.end - groupStart, { background });
+          const data = await this.#inner.read(groupStart, group.end - groupStart, {
+            background,
+            ...(group.members[0]!.signal && { signal: group.members[0]!.signal }),
+          });
           const first = group.members[0];
           if (group.members.length === 1 && first != undefined) {
             // Single-member read: forward unchanged to avoid a copy in this hot path.

@@ -8,7 +8,7 @@
 import SearchIcon from "@mui/icons-material/Search";
 import { List, ListItem, ListItemText, PopoverPosition, Skeleton } from "@mui/material";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { MouseEvent, useCallback, useRef, useState } from "react";
+import { MouseEvent, Suspense, lazy, useCallback, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useDebounce } from "use-debounce";
 
@@ -21,7 +21,6 @@ import { useMessagePipeline } from "@lichtblick/suite-base/components/MessagePip
 import { selectPlayerPresence } from "@lichtblick/suite-base/components/MessagePipeline/selectors";
 import { DraggedMessagePath } from "@lichtblick/suite-base/components/PanelExtensionAdapter";
 import SearchBar from "@lichtblick/suite-base/components/SearchBar/SearchBar";
-import { ContextMenu } from "@lichtblick/suite-base/components/TopicList/ContextMenu";
 import { SKELETON_ITEMS } from "@lichtblick/suite-base/components/TopicList/constants";
 import { getDraggedMessagePath } from "@lichtblick/suite-base/components/TopicList/getDraggedMessagePath";
 import { PlayerPresence } from "@lichtblick/suite-base/players/types";
@@ -34,6 +33,11 @@ import { TopicRow } from "./TopicRow";
 import { useMultiSelection } from "./useMultiSelection";
 import { useOpenMessagePathsInPanel, usePrefetchOpenInSchemas } from "./useOpenMessagePathsInPanel";
 import { useTopicListSearch } from "./useTopicListSearch";
+
+// Only needed on right-click: kept out of the startup bundle
+const ContextMenu = lazy(async () => ({
+  default: (await import("@lichtblick/suite-base/components/TopicList/ContextMenu")).ContextMenu,
+}));
 
 export function TopicList(): React.JSX.Element {
   const { t } = useTranslation("topicList");
@@ -276,12 +280,14 @@ export function TopicList(): React.JSX.Element {
         <DirectTopicStatsUpdater interval={6} />
       </div>
       {contextMenuState && (
-        <ContextMenu
-          onClose={handleContextMenuClose}
-          anchorPosition={contextMenuState.position}
-          messagePaths={contextMenuState.items}
-          doubleClickOpens
-        />
+        <Suspense fallback={undefined}>
+          <ContextMenu
+            onClose={handleContextMenuClose}
+            anchorPosition={contextMenuState.position}
+            messagePaths={contextMenuState.items}
+            doubleClickOpens
+          />
+        </Suspense>
       )}
     </MessagePathSelectionProvider>
   );

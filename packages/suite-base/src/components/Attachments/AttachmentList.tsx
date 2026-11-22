@@ -7,7 +7,7 @@ import { useTranslation } from "react-i18next";
 
 import { formatByteSize } from "@lichtblick/den/format";
 import EmptyState from "@lichtblick/suite-base/components/EmptyState";
-import { useExportableFile } from "@lichtblick/suite-base/components/ExportRecordingDialog/exportRecording";
+import { useExportableFile } from "@lichtblick/suite-base/components/ExportRecordingDialog/exportSource";
 import { useMessagePipeline } from "@lichtblick/suite-base/components/MessagePipeline";
 import { selectRecordingFiles } from "@lichtblick/suite-base/components/MessagePipeline/selectors";
 

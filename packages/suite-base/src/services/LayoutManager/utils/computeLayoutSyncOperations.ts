@@ -82,7 +82,8 @@ function syncRemoteLayout(
       // layouts without it, which hid them from their organization's section.
       if (
         localLayout.syncInfo.lastRemoteSavedAt !== remoteLayout.savedAt ||
-        localLayout.organizationId !== remoteLayout.organizationId
+        localLayout.organizationId !== remoteLayout.organizationId ||
+        (remoteLayout.untrusted === true && localLayout.untrusted !== true)
       ) {
         operations.push({
           local: true,

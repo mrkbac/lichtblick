@@ -113,9 +113,7 @@ class WorkerIterableSourceBase<MessageType> implements IIterableSource<MessageTy
     return await this.#sourceWorkerRemote.getBackfillMessages(rest, abortSignal);
   }
 
-  public getMessageCursor(
-    args: Immutable<MessageIteratorArgs & { abort?: AbortSignal }>,
-  ): IMessageCursor<MessageType> {
+  public getMessageCursor(args: Immutable<MessageIteratorArgs>): IMessageCursor<MessageType> {
     if (this.#sourceWorkerRemote == undefined) {
       throw new Error(`WorkerIterableSource is not initialized`);
     }

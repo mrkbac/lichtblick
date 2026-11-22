@@ -64,6 +64,25 @@ class FakeSource implements IIterableSource<Uint8Array> {
 }
 
 describe("compared recordings", () => {
+  it("returns shifted compare sides and timeline on first initialization", async () => {
+    const source = new MultiIterableSource(
+      {
+        type: "files",
+        files: [{ startSec: 1 }, { startSec: 10 }, { startSec: 30 }] as unknown as Blob[],
+        compare: ["first", "first", "second"],
+        compareOffsets: [-2, 3.5],
+      },
+      FakeSource,
+    );
+    const init = await source.initialize();
+    expect(init.start).toEqual({ sec: 0, nsec: 0 });
+    expect(
+      init.compareSides?.map(({ name, sharedStart, offsetSec }) => [name, sharedStart, offsetSec]),
+    ).toEqual([
+      ["first", { sec: 0, nsec: 0 }, -2],
+      ["second", { sec: 5, nsec: 500_000_000 }, 3.5],
+    ]);
+  });
   it("prefixes topics and aligns every recording to the earliest start", async () => {
     const source = new MultiIterableSource(
       {

@@ -30,7 +30,7 @@ import {
   selectStartPlayback,
   selectStartTime,
 } from "@lichtblick/suite-base/components/MessagePipeline/selectors";
-import { usePanelGuideStore } from "@lichtblick/suite-base/components/PanelDocs/PanelDocs";
+import { usePanelGuideStore } from "@lichtblick/suite-base/components/PanelDocs/PanelGuide";
 import { PLAYBACK_SPEED_OPTIONS } from "@lichtblick/suite-base/components/PlaybackSpeedControls";
 import { APP_CONFIG } from "@lichtblick/suite-base/constants/config";
 import {

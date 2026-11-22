@@ -48,7 +48,7 @@ describe("app state url parser", () => {
       });
     });
 
-    it("parses multiple remote data state urls to a single string", () => {
+    it("keeps multiple remote data state URLs in order", () => {
       const url = urlBuilder();
       url.searchParams.append("ds", "remote-file");
       url.searchParams.append("ds.url", "http://example1.com");
@@ -56,9 +56,7 @@ describe("app state url parser", () => {
 
       expect(parseAppURLState(url)).toMatchObject({
         ds: "remote-file",
-        dsParams: {
-          url: "http://example1.com,http://example2.com",
-        },
+        dsParamsArray: { urls: ["http://example1.com", "http://example2.com"] },
       });
     });
 
@@ -338,7 +336,7 @@ describe("parseAppURLState with Foxglove link arguments", () => {
     ).toEqual({ ds: "foxglove-websocket", dsParams: { url: "ws://localhost:8765" } });
   });
 
-  it("joins repeated ds.url for remote files and keeps time", () => {
+  it("preserves repeated ds.url for remote files and keeps time", () => {
     expect(
       parseAppURLState(
         new URL(
@@ -348,7 +346,7 @@ describe("parseAppURLState with Foxglove link arguments", () => {
       ),
     ).toEqual({
       ds: "remote-file",
-      dsParams: { url: "https://example.com/a.mcap,https://example.com/b.mcap" },
+      dsParamsArray: { urls: ["https://example.com/a.mcap", "https://example.com/b.mcap"] },
       time: { sec: 1704164645, nsec: 0 },
     });
   });

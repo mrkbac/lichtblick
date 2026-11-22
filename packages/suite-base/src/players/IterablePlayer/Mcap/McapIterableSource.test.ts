@@ -23,6 +23,7 @@ import { BasicBuilder } from "@lichtblick/test-builders";
 import { McapIndexedIterableSource } from "./McapIndexedIterableSource";
 import { McapIterableSource, TAIL_POLL_MS } from "./McapIterableSource";
 import { RemoteFileReadable } from "./RemoteFileReadable";
+import { SharedRangeReads } from "../SharedRangeReads";
 import { HydratedSourcePool } from "../shared/HydratedSourcePool";
 import { MultiIterableSource } from "../shared/MultiIterableSource";
 
@@ -110,6 +111,103 @@ describe("McapIterableSource", () => {
 
   afterEach(() => {
     vi.clearAllMocks();
+  });
+
+  it("cancels an in-flight HTTP range request and can read the recording again", async () => {
+    mockLoadDecompressHandlers.mockResolvedValueOnce({});
+    const buffer = new TempBuffer();
+    const writer = new McapWriter({ writable: buffer, chunkSize: 1 });
+    await writer.start({ library: "test", profile: "" });
+    const topic = "/test";
+    const channelId = await writer.registerChannel({
+      schemaId: 0,
+      topic,
+      messageEncoding: "json",
+      metadata: new Map(),
+    });
+    for (let i = 1; i <= 4; i++) {
+      await addMessage(writer, channelId, {
+        logTime: BigInt(i) * 1_000_000_000n,
+        data: new Uint8Array(96 * 1024),
+      });
+    }
+    await writer.end();
+    const file = buffer.get();
+    const actual =
+      await vi.importActual<typeof import("./RemoteFileReadable")>("./RemoteFileReadable");
+    MockRemoteFileReadable.mockImplementationOnce(function (url, options) {
+      return new actual.RemoteFileReadable(url, options);
+    });
+    const requestStarted = Promise.withResolvers<AbortSignal>();
+    let hold = false;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url: string, init: RequestInit) => {
+        if (hold) {
+          return await new Promise<Response>((_resolve, reject) => {
+            const signal = init.signal!;
+            signal.addEventListener(
+              "abort",
+              () => {
+                reject(new DOMException("Aborted", "AbortError"));
+              },
+              { once: true },
+            );
+            requestStarted.resolve(signal);
+          });
+        }
+        const range = new Headers(init.headers).get("range")!;
+        const [startPart, endPart] = range.slice(6).split("-");
+        const start = startPart === "" ? file.byteLength - Number(endPart) : Number(startPart);
+        const end =
+          startPart === "" ? file.byteLength - 1 : Math.min(Number(endPart), file.byteLength - 1);
+        return new Response(file.slice(start, end + 1), {
+          status: 206,
+          headers: { "content-range": `bytes ${start}-${end}/${file.byteLength}` },
+        });
+      }),
+    );
+    const source = new McapIterableSource({
+      type: "url",
+      url: "https://example.com/test.mcap",
+      readAheadEnabled: false,
+    });
+    try {
+      await source.initialize();
+      const reads = new SharedRangeReads((topics, range, abort) =>
+        source.messageIterator({ topics, ...range, abort, consumptionType: "full" }),
+      );
+      const range = { start: { sec: 2, nsec: 0 }, end: { sec: 2, nsec: 0 } };
+      hold = true;
+      const reader = reads.read(topic, range);
+      const pull = reader.next();
+      const signal = await Promise.race([
+        requestStarted.promise,
+        pull.then(() => {
+          throw new Error("Expected an in-flight request");
+        }),
+      ]);
+      await reader.return?.();
+      expect(signal.aborted).toBe(true);
+      await expect(pull).resolves.toEqual({ done: true, value: undefined });
+
+      hold = false;
+      const [backfill] = await source.getBackfillMessages({
+        topics: new Map([[topic, { topic }]]),
+        time: range.end,
+      });
+      expect(backfill?.recordId).toBeDefined();
+      const reread = [];
+      for await (const result of reads.read(topic, range)) {
+        if (result.type === "message-event") {
+          reread.push(result.msgEvent.recordId);
+        }
+      }
+      expect(reread).toEqual([backfill?.recordId]);
+    } finally {
+      await source.terminate();
+      vi.unstubAllGlobals();
+    }
   });
 
   it("returns an appropriate error message for an empty MCAP file", async () => {

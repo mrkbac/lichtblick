@@ -107,6 +107,8 @@ export type GetViewportDatasetsResult = {
    */
   datasetsByConfigIndex: readonly (Dataset | undefined)[];
   pathsWithMismatchedDataLengths: ReadonlySet<string>;
+  /** Config indices of enabled series whose values were recomputed from thinned live history. */
+  approximateSeries?: readonly number[];
 };
 
 export type HandlePlayerStateResult = {

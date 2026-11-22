@@ -36,11 +36,10 @@ import {
   draftToCompare,
   encodeCompareNames,
   handlesOf,
-  joinUrls,
-  splitUrls,
   recordingExtension,
   recordingName,
   rememberHandle,
+  remoteCompareNames,
 } from "@lichtblick/suite-base/util/compareSides";
 import showOpenFilePicker from "@lichtblick/suite-base/util/showOpenFilePicker";
 import { useSourcePick } from "@lichtblick/suite-base/util/sourcePick";
@@ -55,18 +54,20 @@ import { compareSourceFor, useCompareDialog } from "./compareDialogStore";
 async function recordingsOf(
   source: IDataSourceFactory | undefined,
   args: DataSourceArgs | undefined,
-): Promise<{ recordings: Recording[]; withCookies: boolean }> {
+): Promise<{ recordings: readonly Recording[]; names?: readonly string[]; withCookies: boolean }> {
   if (args?.type === "connection") {
     // Only sources that read recording files (not live connections, whatever their URL ends with)
-    const url = source?.supportedFileTypes != undefined ? args.params?.url : undefined;
-    const urls = url != undefined ? splitUrls(url) : [];
-    const isHttp = (each: string) => /^https?:\/\//i.test(each);
+    const url = args.params?.url;
+    const urls =
+      source?.supportedFileTypes != undefined ? (args.urls ?? (url == undefined ? [] : [url])) : [];
+    const isHttp = urls.every((each) => /^https?:\/\//i.test(each));
     return {
-      recordings: urls.every(isHttp) ? urls : [],
+      recordings: isHttp ? urls : [],
+      names: isHttp ? remoteCompareNames(urls, args.params) : undefined,
       withCookies: args.params?.includeCredentials === "true",
     };
   }
-  return { recordings: await filesOf(args), withCookies: false };
+  return { recordings: await filesOf(args), names: args?.compare, withCookies: false };
 }
 
 async function filesOf(args: DataSourceArgs | undefined): Promise<Recording[]> {
@@ -234,6 +235,50 @@ function newSide(files: Recording[] = [], name = ""): DialogSide {
   return { id: nextSideId++, name, files };
 }
 
+/** Keep the picked comparison's shared files inside its own sides. */
+function addPickedRecordings(
+  draft: DialogDraft,
+  target: number | undefined,
+  recordings: readonly Recording[],
+  names: readonly string[] | undefined,
+): DialogDraft {
+  if (names?.length !== recordings.length || new Set(names).size < 2) {
+    return target == undefined
+      ? { ...draft, shared: [...draft.shared, ...recordings] }
+      : {
+          ...draft,
+          sides: draft.sides.map((side) =>
+            side.id === target ? { ...side, files: [...side.files, ...recordings] } : side,
+          ),
+        };
+  }
+
+  const picked = [...new Set(names)].map((name) =>
+    newSide(
+      recordings.filter((_, i) => names[i] === name),
+      name,
+    ),
+  );
+  const index =
+    target == undefined
+      ? draft.sides.findIndex((side) => side.files.length === 0 && side.name === "")
+      : draft.sides.findIndex((side) => side.id === target);
+  if (index < 0) {
+    return target == undefined ? { ...draft, sides: [...draft.sides, ...picked] } : draft;
+  }
+
+  const sides = [...draft.sides];
+  const row = sides[index]!;
+  if (row.files.length === 0) {
+    // A later pick for the same row can still fill it after the comparison arrives.
+    const [first, ...rest] = picked;
+    sides.splice(index, 1, { ...first!, id: row.id }, ...rest);
+  } else {
+    sides.splice(index + 1, 0, ...picked);
+  }
+  return { ...draft, sides };
+}
+
 /** The draft with row ids and at least two sides, so there is something to compare against */
 function toDialogDraft(draft: CompareDraft): DialogDraft {
   const sides = draft.sides.map((side) => newSide(side.files, side.name));
@@ -317,12 +362,10 @@ function CompareDialogContent({ initial }: { initial: CompareDraft }): React.JSX
   };
   /**
    * Pick recordings for a row in the app's open dialog: whatever the user opens there (a recent, a
-   * URL, a catalog entry, a sample, a local file) is added to the row instead of being opened
+   * URL, a catalog entry, a sample, a local file) is added to the row instead of being opened.
+   * Saved comparisons keep their sides.
    */
-  const pickElsewhere = (
-    label: string,
-    add: (old: DialogDraft, picked: Recording[]) => DialogDraft,
-  ) => {
+  const pickElsewhere = (label: string, target?: number) => {
     setError(undefined);
     useSourcePick.setState({
       pick: {
@@ -333,7 +376,7 @@ function CompareDialogContent({ initial }: { initial: CompareDraft }): React.JSX
             (s) => s.id === sourceId || s.legacyIds?.includes(sourceId) === true,
           );
           recordingsOf(source, args)
-            .then(({ recordings: picked, withCookies }) => {
+            .then(({ recordings: picked, names, withCookies }) => {
               const unsupported = picked.find((r) => !accepts(r));
               // One URL, one cookie policy: the same recording can't be fetched both ways. Checked
               // and committed against the latest draft in one step.
@@ -364,7 +407,7 @@ function CompareDialogContent({ initial }: { initial: CompareDraft }): React.JSX
               // The draft's cookie setting for each picked URL follows this pick
               const urls = picked.filter((r) => typeof r === "string");
               updateDraft((old) =>
-                add(
+                addPickedRecordings(
                   {
                     ...old,
                     withCookies: [
@@ -372,7 +415,9 @@ function CompareDialogContent({ initial }: { initial: CompareDraft }): React.JSX
                       ...(withCookies ? urls : []),
                     ],
                   },
+                  target,
                   picked,
+                  names,
                 ),
               );
             })
@@ -445,10 +490,7 @@ function CompareDialogContent({ initial }: { initial: CompareDraft }): React.JSX
               });
             }}
             onPickElsewhere={() => {
-              pickElsewhere(t("sharedPick"), (old, picked) => ({
-                ...old,
-                shared: [...old.shared, ...picked],
-              }));
+              pickElsewhere(t("sharedPick"));
             }}
           />
           {draft.sides.map((side, index) => (
@@ -491,12 +533,7 @@ function CompareDialogContent({ initial }: { initial: CompareDraft }): React.JSX
                 });
               }}
               onPickElsewhere={() => {
-                pickElsewhere(t("sideName", { label: sideLabel(index) }), (old, picked) => ({
-                  ...old,
-                  sides: old.sides.map((s) =>
-                    s.id === side.id ? { ...s, files: [...s.files, ...picked] } : s,
-                  ),
-                }));
+                pickElsewhere(t("sideName", { label: sideLabel(index) }), side.id);
               }}
               onRemoveRow={
                 draft.sides.length > 2
@@ -562,8 +599,8 @@ function CompareDialogContent({ initial }: { initial: CompareDraft }): React.JSX
             if (remoteSource) {
               selectSource(remoteSource.id, {
                 type: "connection",
+                urls,
                 params: {
-                  url: joinUrls(urls),
                   compareNames: encodeCompareNames(compare),
                   ...(withCookies.length > 0 && { includeCredentials: "true" }),
                 },

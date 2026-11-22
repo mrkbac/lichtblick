@@ -14,12 +14,12 @@ import { useStyles } from "@lichtblick/suite-base/components/AppBar/AppMenu.styl
 import { useCommandPaletteStore } from "@lichtblick/suite-base/components/CommandPalette/CommandPalette";
 import { LAYOUT_SHORTCUTS } from "@lichtblick/suite-base/components/CommandPalette/layoutShortcuts";
 import { useShowCompareDialog } from "@lichtblick/suite-base/components/Compare/compareDialogStore";
-import { useExportSource } from "@lichtblick/suite-base/components/ExportRecordingDialog/exportRecording";
+import { useExportSource } from "@lichtblick/suite-base/components/ExportRecordingDialog/exportSource";
 import { useTrimStore } from "@lichtblick/suite-base/components/ExportRecordingDialog/trimStore";
 import { useKeyboardShortcutsStore } from "@lichtblick/suite-base/components/KeyboardShortcuts/KeyboardShortcuts";
 import { APP_SHORTCUTS } from "@lichtblick/suite-base/components/KeyboardShortcuts/appShortcuts";
 import { useLiveRecordingsDialog } from "@lichtblick/suite-base/components/LiveRecordingsDialog";
-import { usePanelGuideStore } from "@lichtblick/suite-base/components/PanelDocs/PanelDocs";
+import { usePanelGuideStore } from "@lichtblick/suite-base/components/PanelDocs/PanelGuide";
 import { RecentSourceLabel } from "@lichtblick/suite-base/components/RecentSourceLabel";
 import { useCurrentLayoutActions } from "@lichtblick/suite-base/context/CurrentLayoutContext";
 import { usePlayerSelection } from "@lichtblick/suite-base/context/PlayerSelectionContext";

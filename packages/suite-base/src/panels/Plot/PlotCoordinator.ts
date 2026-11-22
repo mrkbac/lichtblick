@@ -52,6 +52,7 @@ import {
   isReferenceLinePlotPathType,
   PlotAnalysisRange,
   PlotConfig,
+  PlotPath,
   yBound,
 } from "./utils/config";
 import { getSeriesTimestamp } from "./utils/seriesTimestamp";
@@ -62,6 +63,12 @@ const log = Logger.getLogger(__filename);
 const replaceUndefinedWithEmptyDataset = (dataset: Dataset | undefined) => dataset ?? { data: [] };
 
 /** Window size of a sliding time window that has no size set yet */
+
+type SeriesMatch = {
+  path: Immutable<PlotPath>;
+  dataKey: string;
+  key: SeriesConfigKey;
+};
 
 type RangeSubscription = {
   cancel: () => void;
@@ -99,6 +106,8 @@ export class PlotCoordinator extends EventEmitter<PlotCoordinatorEventTypes> {
   private lastSeekTime = NaN;
   /** Normalized series from latest config */
   private series: Immutable<SeriesItem[]> = [];
+  private seriesMatches: SeriesMatch[] = [];
+  private nextSeriesId = 0;
   /** Current value for each series to show in the legend */
   private currentValuesByConfigIndex: unknown[] = [];
   /** Message time of each current value, for series not timed by receive time */
@@ -481,7 +490,7 @@ export class PlotCoordinator extends EventEmitter<PlotCoordinatorEventTypes> {
     const newSeriesKeysByTopic = new Map<string, Set<SeriesConfigKey>>();
     const newCurrentValuesByConfigIndex: unknown[] = [];
     const newCurrentValueTimesByConfigIndex: (Time | undefined)[] = [];
-    const newSeries = filterMap(config.paths, (path, idx): Immutable<SeriesItem> | undefined => {
+    const candidates = filterMap(config.paths, (path, idx) => {
       if (isReferenceLinePlotPathType(path)) {
         return;
       }
@@ -500,16 +509,6 @@ export class PlotCoordinator extends EventEmitter<PlotCoordinatorEventTypes> {
         ? fillInGlobalVariablesInPath(xParsedRaw, globalVariables)
         : undefined;
 
-      // When global variables change the path.value is still the original value with the variable
-      // names But we need to consider this as a new series (new block cursor) so we compute new
-      // values when variables cause the resolved path value to update.
-      //
-      // We also want to re-compute values when the timestamp method changes. So we use a _key_ that
-      // is the filled path and the timestamp method. If either change, we consider this a new
-      // series.
-      //
-      // This key lets us treat series with the same name but different timestamp methods as distinct
-      // using a key instead of the path index lets us preserve loaded data when a path is removed
       // The custom time field is read from the same messages, like the series' own x path
       const timestampPath =
         path.timestampMethod === "customField" ? path.timestampPath?.trim() : undefined;
@@ -519,36 +518,16 @@ export class PlotCoordinator extends EventEmitter<PlotCoordinatorEventTypes> {
           ? fillInGlobalVariablesInPath(timestampParsedRaw, globalVariables)
           : undefined;
 
-      const xKey = xParsed ? `:x=${stringifyMessagePath(xParsed)}` : "";
-      const timeKey = timestampParsed ? `:t=${stringifyMessagePath(timestampParsed)}` : "";
-      const key = `${idx}:${path.timestampMethod}:${stringifyMessagePath(
-        filledParsed,
-      )}${xKey}${timeKey}` as SeriesConfigKey;
-
-      // Keep current values for paths that match existing ones, unless the legend switches
-      // between the raw and the plotted value (moving average or stream modifier toggled)
-      const existingSeries = this.series.find((series) => series.key === key);
-      if (
-        existingSeries != undefined &&
-        isDerivedSeries(existingSeries) ===
-          isDerivedSeries({ parsed: filledParsed, smoothing: path.smoothing })
-      ) {
-        newCurrentValuesByConfigIndex[idx] =
-          this.currentValuesByConfigIndex[existingSeries.configIndex];
-        newCurrentValueTimesByConfigIndex[idx] =
-          this.currentValueTimesByConfigIndex[existingSeries.configIndex];
-      }
-
+      // Any change to the resolved inputs needs a fresh read, but a row move does not.
+      const dataKey =
+        JSON.stringify([
+          path.timestampMethod,
+          stringifyMessagePath(filledParsed),
+          xParsed && stringifyMessagePath(xParsed),
+          timestampParsed && stringifyMessagePath(timestampParsed),
+        ]) ?? "";
       const color = getLineColor(path.color, idx);
-
-      if (pathToSubscribePayload(filledParsed, "full") != undefined) {
-        const keys = newSeriesKeysByTopic.get(filledParsed.topicName) ?? new Set<SeriesConfigKey>();
-        keys.add(key);
-        newSeriesKeysByTopic.set(filledParsed.topicName, keys);
-      }
-
-      return {
-        key,
+      const item: Immutable<Omit<SeriesItem, "key">> = {
         configIndex: idx,
         messagePath: path.value,
         parsed: filledParsed,
@@ -565,6 +544,57 @@ export class PlotCoordinator extends EventEmitter<PlotCoordinatorEventTypes> {
         xParsed,
         timestampParsed,
       };
+      return { path, dataKey, item };
+    });
+
+    const previousByDataKey = Map.groupBy(this.seriesMatches, ({ dataKey }) => dataKey);
+    const matchedKeys: (SeriesConfigKey | undefined)[] = new Array(candidates.length).fill(
+      undefined,
+    );
+    // Reserve unchanged rows before matching edits or new duplicates to any leftover keys.
+    // Compare attaches a symbol to each expanded row that contains its position.
+    for (const matches of [
+      (a: Immutable<PlotPath>, b: Immutable<PlotPath>) => a === b,
+      (a: Immutable<PlotPath>, b: Immutable<PlotPath>) =>
+        _.isEqual(Object.fromEntries(Object.entries(a)), Object.fromEntries(Object.entries(b))),
+      () => true,
+    ]) {
+      candidates.forEach(({ path, dataKey }, index) => {
+        if (matchedKeys[index] != undefined) {
+          return;
+        }
+        const previous = previousByDataKey.get(dataKey);
+        const matchIndex = previous?.findIndex((candidate) => matches(candidate.path, path)) ?? -1;
+        if (previous && matchIndex >= 0) {
+          matchedKeys[index] = previous.splice(matchIndex, 1)[0]!.key;
+        }
+      });
+    }
+
+    const previousByKey = new Map(this.series.map((item) => [item.key, item]));
+    this.seriesMatches = [];
+    const newSeries = candidates.map(({ path, dataKey, item }, index) => {
+      const key = matchedKeys[index] ?? (String(this.nextSeriesId++) as SeriesConfigKey);
+      this.seriesMatches.push({ path, dataKey, key });
+
+      const existingSeries = previousByKey.get(key);
+      if (
+        existingSeries != undefined &&
+        isDerivedSeries(existingSeries) === isDerivedSeries(item)
+      ) {
+        newCurrentValuesByConfigIndex[item.configIndex] =
+          this.currentValuesByConfigIndex[existingSeries.configIndex];
+        newCurrentValueTimesByConfigIndex[item.configIndex] =
+          this.currentValueTimesByConfigIndex[existingSeries.configIndex];
+      }
+
+      if (pathToSubscribePayload(item.parsed, "full") != undefined) {
+        const topic = item.parsed.topicName;
+        const keys = newSeriesKeysByTopic.get(topic) ?? new Set<SeriesConfigKey>();
+        keys.add(key);
+        newSeriesKeysByTopic.set(topic, keys);
+      }
+      return { ...item, key };
     });
 
     // If the builder uses a separate x-axis topic (e.g. custom x-axis), subscribe to it too.
@@ -867,11 +897,15 @@ export class PlotCoordinator extends EventEmitter<PlotCoordinatorEventTypes> {
       return;
     }
 
+    const generation = this.derivedGeneration;
     const result = await this.datasetsBuilder.getViewportDatasets(this.viewport);
     if (this.isDestroyed()) {
       return;
     }
     this.emit("pathsWithMismatchedDataLengthsChanged", [...result.pathsWithMismatchedDataLengths]);
+    if (generation === this.derivedGeneration) {
+      this.emit("approximateSeriesChanged", result.approximateSeries ?? []);
+    }
 
     // Use Array.from to fill in any `undefined` entries with an empty dataset (`map` would not
     // work for sparse arrays)

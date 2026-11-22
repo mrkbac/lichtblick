@@ -294,6 +294,7 @@ export default function LayoutBrowser({
           data: item.working?.data ?? item.baseline.data,
           permission: "ORG_WRITE",
           organizationId: target.organizationId,
+          ...(item.untrusted && { untrusted: true }),
         });
         analytics.logEvent(AppEvent.LAYOUT_SHARE, { permission: item.permission });
         if (isFavorite(item)) {

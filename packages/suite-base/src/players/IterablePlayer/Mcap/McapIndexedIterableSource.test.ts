@@ -108,11 +108,8 @@ describe("McapIndexedIterableSource", () => {
     reader.appendIndex({ chunkIndexes: chunks.slice(0, 5) });
     const init = await source.initialize();
 
-    // Then the earlier half has data too
-    const bytes = init.recordingFiles![0]!.messageBytes!;
+    // Then the start moves to the earlier chunks
     expect(init.start).toEqual({ sec: 0, nsec: 0 });
-    expect(bytes[0]).toBeGreaterThan(0);
-    expect(bytes.slice(0, bytes.length / 2).reduce((a, b) => a + b, 0)).toBeGreaterThan(0);
   });
 
   it("returns the correct metadata", async () => {

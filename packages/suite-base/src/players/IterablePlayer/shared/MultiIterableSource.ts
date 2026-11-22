@@ -72,6 +72,13 @@ const PREWARM_EARLIEST_COUNT = 3;
 // publishes on its own clock) are merged into one per interval.
 export const MIN_UPDATE_INTERVAL_MS = 2000;
 
+// Times cannot go below zero. A side moved before zero shifts the whole comparison later.
+function compareStartWithOffsets(initialStart: Time, offsets: readonly number[]): Time {
+  const earliestOffset = offsets.reduce((min, offset) => Math.min(min, offset), 0);
+  const lowest = fromNanoSec(BigInt(Math.round(-earliestOffset * 1e9)));
+  return compare(initialStart, lowest) < 0 ? lowest : initialStart;
+}
+
 export class MultiIterableSource<T extends ISerializedIterableSource, P>
   implements ISerializedIterableSource
 {
@@ -192,7 +199,7 @@ export class MultiIterableSource<T extends ISerializedIterableSource, P>
         members.length === 1
           ? members[0]!
           : new MultiIterableSource(
-              { ...this.dataSource, compare: undefined },
+              { ...this.dataSource, compare: undefined, compareOffsets: undefined },
               this.SourceConstructor,
               members,
             );
@@ -206,7 +213,9 @@ export class MultiIterableSource<T extends ISerializedIterableSource, P>
       initializations[0]!.start,
     );
     this.#compareStart = earliest;
-    return compared.map((source) => source.alignStartTo(earliest));
+    const offsets = this.dataSource.compareOffsets ?? [];
+    const start = compareStartWithOffsets(earliest, offsets);
+    return compared.map((source, side) => source.alignStartTo(start, offsets[side]));
   }
 
   /** Move each compared side by `offsetsSec[i]` seconds; reported through waitForUpdate() */
@@ -215,10 +224,7 @@ export class MultiIterableSource<T extends ISerializedIterableSource, P>
       return;
     }
     this.#compareRequest = request;
-    // Times can't go below zero: a side moved before time zero moves every side later instead
-    const earliestOffset = Math.min(0, ...offsetsSec);
-    const lowest = fromNanoSec(BigInt(Math.round(-earliestOffset * 1e9)));
-    const start = compare(this.#compareStart, lowest) < 0 ? lowest : this.#compareStart;
+    const start = compareStartWithOffsets(this.#compareStart, offsetsSec);
     this.#compared.forEach((source, side) => {
       const init = source.alignStartTo(start, offsetsSec[side] ?? 0);
       const index = this.#sources.indexOf(source);

@@ -117,6 +117,10 @@ export class RemoteFileReadable {
   }
 
   async #read(start: number, end: number, options?: ReadOptions): Promise<Uint8Array> {
+    // Skim prefetches belong to playback and may outlive this range read.
+    if (options?.signal) {
+      return await this.#batchingReadable.read(BigInt(start), BigInt(end - start), options);
+    }
     let prefetched = this.#findPrefetched(start, end);
     if (!prefetched && Date.now() - this.#lastPrefetchMs < PREFETCH_ACTIVE_MS) {
       this.prefetch([{ offset: BigInt(start), length: BigInt(end - start) }]);

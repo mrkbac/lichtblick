@@ -31,9 +31,9 @@ describe("SampleBoreasDataSourceFactory", () => {
     vi.clearAllMocks();
   });
 
-  it("should create a IterablePlayer with the sample Boreas data source", () => {
+  it("should create a IterablePlayer with the sample Boreas data source", async () => {
     // When
-    const player = factory.initialize();
+    const player = await factory.initialize();
 
     // Then
     expect(WorkerSerializedIterableSource).toHaveBeenCalledWith({
@@ -52,9 +52,9 @@ describe("SampleBoreasDataSourceFactory", () => {
     expect(player).toBeInstanceOf(IterablePlayer);
   });
 
-  it("should use the correct sample Boreas data source URL", () => {
+  it("should use the correct sample Boreas data source URL", async () => {
     // When
-    factory.initialize();
+    await factory.initialize();
 
     // Then
     expect(WorkerSerializedIterableSource).toHaveBeenCalledWith(
@@ -66,7 +66,7 @@ describe("SampleBoreasDataSourceFactory", () => {
     );
   });
 
-  it("should have correct factory properties", () => {
+  it("should have correct factory properties", async () => {
     //Given / When / Then
     expect(factory.id).toBe(SAMPLE_BOREAS_DATA_SOURCE_ID);
     expect(factory.type).toBe(SAMPLE_BOREAS_DATA_SOURCE_TYPE);

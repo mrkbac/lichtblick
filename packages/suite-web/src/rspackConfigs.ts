@@ -33,8 +33,7 @@ import { ASSET_LIST_FILE, type AssetList, HASHED_FILE, RUNTIME_CACHE_NAME } from
  * shared module that pulls in a panel's heavy dependencies (three.js, monaco, a player) is caught
  * in CI instead of slowing every start. Raise it only for code that is needed to show the app.
  */
-// ponytail: raised from 3.90 MB after a batch of UI merges went ~1 KB over; bring startup back under 3.90 MB and lower this again.
-const STARTUP_JS_BUDGET_BYTES = 3_950_000;
+const STARTUP_JS_BUDGET_BYTES = 3_800_000;
 
 /**
  * Unhashed scripts in public/ that the service worker imports, in this order, before workbox's own

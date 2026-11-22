@@ -40,8 +40,7 @@ export type Layout = {
   from?: string;
   permission: LayoutPermission;
   /**
-   * Installed from a link (a share link or `layoutUrl`) rather than made or imported by the user:
-   * like a shared layout's, its user scripts only run after the user allows them.
+   * Imported or copied from a source whose user scripts require approval.
    */
   untrusted?: true;
 
@@ -88,7 +87,7 @@ export function layoutPermissionIsShared(
 
 /**
  * What saveNewLayout needs to copy `layout` as a personal layout named `name`. Every copy goes
- * through here so a linked layout's copy stays untrusted (see Layout.untrusted).
+ * through here so a copy keeps a layout's script approval requirement (see Layout.untrusted).
  */
 export function personalLayoutCopy(
   layout: Layout,

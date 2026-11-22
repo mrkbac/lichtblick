@@ -51,11 +51,11 @@ describe("McapLocalDataSourceFactory", () => {
     };
   }
 
-  it("should create a IterablePlayer with one file", () => {
+  it("should create a IterablePlayer with one file", async () => {
     const files = [buildMcapFile()];
     const { args } = setup({ files });
 
-    const player = factory.initialize(args);
+    const player = await factory.initialize(args);
 
     expect(WorkerSerializedIterableSource).toHaveBeenCalledWith({
       initWorker: expect.any(Function),
@@ -71,11 +71,11 @@ describe("McapLocalDataSourceFactory", () => {
     expect(player).toBeInstanceOf(IterablePlayer);
   });
 
-  it("should create a IterablePlayer with multiple files", () => {
+  it("should create a IterablePlayer with multiple files", async () => {
     const files = [buildMcapFile(), buildMcapFile()];
     const { args } = setup({ files });
 
-    const player = factory.initialize(args);
+    const player = await factory.initialize(args);
 
     expect(WorkerSerializedIterableSource).toHaveBeenCalledWith({
       initWorker: expect.any(Function),
@@ -91,7 +91,7 @@ describe("McapLocalDataSourceFactory", () => {
     expect(player).toBeInstanceOf(IterablePlayer);
   });
 
-  it("should pass configured hydration overrides into initArgs", () => {
+  it("should pass configured hydration overrides into initArgs", async () => {
     const files = [buildMcapFile(), buildMcapFile()];
     const { args } = setup({ files });
     factory = new McapLocalDataSourceFactory({
@@ -100,7 +100,7 @@ describe("McapLocalDataSourceFactory", () => {
       initConcurrency: 2,
     });
 
-    factory.initialize(args);
+    await factory.initialize(args);
 
     expect(WorkerSerializedIterableSource).toHaveBeenCalledWith({
       initWorker: expect.any(Function),
@@ -113,21 +113,21 @@ describe("McapLocalDataSourceFactory", () => {
     });
   });
 
-  it("should return undefined when no files are provided", () => {
+  it("should return undefined when no files are provided", async () => {
     const { args } = setup({ files: undefined });
 
-    const player = factory.initialize(args);
+    const player = await factory.initialize(args);
 
     expect(player).toBeUndefined();
     expect(WorkerSerializedIterableSource).not.toHaveBeenCalled();
     expect(IterablePlayer).not.toHaveBeenCalled();
   });
 
-  it("should handle one file", () => {
+  it("should handle one file", async () => {
     const file = buildMcapFile();
     const { args } = setup({ file });
 
-    const player = factory.initialize(args);
+    const player = await factory.initialize(args);
 
     expect(WorkerSerializedIterableSource).toHaveBeenCalledWith({
       initWorker: expect.any(Function),
@@ -143,12 +143,12 @@ describe("McapLocalDataSourceFactory", () => {
     expect(player).toBeInstanceOf(IterablePlayer);
   });
 
-  it("should handle file and files", () => {
+  it("should handle file and files", async () => {
     const file = buildMcapFile();
     const files = [buildMcapFile()];
     const { args } = setup({ file, files });
 
-    const player = factory.initialize(args);
+    const player = await factory.initialize(args);
 
     expect(WorkerSerializedIterableSource).toHaveBeenCalledWith({
       initWorker: expect.any(Function),
