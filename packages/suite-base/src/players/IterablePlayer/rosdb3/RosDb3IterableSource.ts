@@ -28,6 +28,13 @@ import { BlockCachedFile } from "./BlockCachedFile";
 
 /** Backfill rows read between yields to the event loop */
 const BACKFILL_YIELD_ROWS = 256;
+/** Longest backfill window, which bounds the rows SQLite scans between two yields */
+const BACKFILL_MAX_WINDOW_SEC = 64;
+
+/** Lets the worker take a superseding seek's abort message: sql.js reads synchronously */
+async function yieldToWorker(): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, 0));
+}
 
 function dataTypeToFullName(dataType: string): string {
   const parts = dataType.split("/");
@@ -42,6 +49,7 @@ export class RosDb3IterableSource implements ISerializedIterableSource {
   #bag?: Rosbag2;
   #start: Time = { sec: 0, nsec: 0 };
   #end: Time = { sec: 0, nsec: 0 };
+  #messageCounts = new Map<string, number>();
   #textEncoder = new TextEncoder();
 
   public readonly sourceType = "serialized";
@@ -65,6 +73,7 @@ export class RosDb3IterableSource implements ISerializedIterableSource {
     const [start, end] = await this.#bag.timeRange();
     const topicDefs = await this.#bag.readTopics();
     const messageCounts = await this.#bag.messageCounts();
+    this.#messageCounts = messageCounts;
     let hasAnyMessages = false;
     for (const count of messageCounts.values()) {
       if (count > 0) {
@@ -199,11 +208,21 @@ export class RosDb3IterableSource implements ISerializedIterableSource {
     const latest = new Map<string, MessageEvent<Uint8Array>>();
     let windowEnd = addTime(time, { sec: 0, nsec: 1 });
     let rows = 0;
-    for (let windowSec = 1; compare(windowEnd, this.#start) > 0; windowSec *= 2) {
-      const missing = [...topics.keys()].filter((topic) => !latest.has(topic));
-      if (missing.length === 0 || abortSignal?.aborted === true) {
+    for (
+      let windowSec = 1;
+      compare(windowEnd, this.#start) > 0;
+      windowSec = Math.min(windowSec * 2, BACKFILL_MAX_WINDOW_SEC)
+    ) {
+      // Topics without messages would only make every window scan to the start
+      const missing = [...topics.keys()].filter(
+        (topic) => !latest.has(topic) && (this.#messageCounts.get(topic) ?? 0) > 0,
+      );
+      if (missing.length === 0) {
         break;
       }
+      // Also between windows: a sparse topic can leave many windows without a matching row
+      await yieldToWorker();
+      abortSignal?.throwIfAborted();
       const back = subtractTime(windowEnd, { sec: windowSec, nsec: 0 });
       const windowStart = compare(back, this.#start) > 0 ? back : this.#start;
       for await (const msg of this.#bag.readMessages({
@@ -212,9 +231,8 @@ export class RosDb3IterableSource implements ISerializedIterableSource {
         topics: missing,
         rawMessages: true,
       })) {
-        // sql.js reads synchronously: let the worker take a superseding seek's abort now and then
         if (++rows % BACKFILL_YIELD_ROWS === 0) {
-          await new Promise((resolve) => setTimeout(resolve, 0));
+          await yieldToWorker();
         }
         // Leaving the loop frees the window's statement
         abortSignal?.throwIfAborted();

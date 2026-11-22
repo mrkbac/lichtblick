@@ -129,13 +129,38 @@ describe("RosDb3IterableSource", () => {
     expect(none).toEqual([]);
   });
 
+  it("stops a backfill when the seek is superseded between windows without matches", async () => {
+    const { source } = await open();
+    const abort = new AbortController();
+    const realSetTimeout = globalThis.setTimeout;
+    let yields = 0;
+    vi.spyOn(globalThis, "setTimeout").mockImplementation(((fn: () => void, ms?: number) => {
+      // /rare's latest is 50 s back: the first windows match no row
+      if (++yields === 2) {
+        abort.abort();
+      }
+      return realSetTimeout(fn, ms);
+    }) as typeof setTimeout);
+    await expect(
+      source.getBackfillMessages({
+        topics: new Map([["/rare", { topic: "/rare" }]]),
+        time: { sec: 200, nsec: 0 },
+        abortSignal: abort.signal,
+      }),
+    ).rejects.toThrow();
+  });
+
   it("stops a backfill when the seek is superseded mid-window", async () => {
     const { source } = await open();
     const abort = new AbortController();
     const realSetTimeout = globalThis.setTimeout;
-    // The backfill yields every 256 rows; the superseding seek's abort lands during that yield
+    // Six windows (one yield each) reach the burst; its 256th row yields again, mid-window, and
+    // the superseding seek's abort lands then
+    let yields = 0;
     vi.spyOn(globalThis, "setTimeout").mockImplementation(((fn: () => void, ms?: number) => {
-      abort.abort();
+      if (++yields === 7) {
+        abort.abort();
+      }
       return realSetTimeout(fn, ms);
     }) as typeof setTimeout);
     await expect(
