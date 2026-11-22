@@ -210,6 +210,22 @@ describe("useDecodedMessageRange", () => {
     expect(mockSubscribeMessageRange).toHaveBeenCalledTimes(1);
   });
 
+  it("reloads a topic when one of its paths gains a condition, so its changes are kept", () => {
+    const topic = PlayerBuilder.topic().name;
+    const paths = [`${topic}.a`];
+    const { rerender } = renderHook(
+      ({ changesPaths }) => useDecodedMessageRange([topic], paths, changesPaths),
+      { initialProps: { changesPaths: [] as string[] } },
+    );
+
+    mockSubscribeMessageRange.mockClear();
+    rerender({ changesPaths: [] });
+    expect(mockSubscribeMessageRange).not.toHaveBeenCalled();
+
+    rerender({ changesPaths: [`${topic}.a`] });
+    expect(mockSubscribeMessageRange).toHaveBeenCalledTimes(1);
+  });
+
   it("reloads paths with variables when the variables change", () => {
     const topic = PlayerBuilder.topic().name;
     const { rerender } = renderHook(() => useDecodedMessageRange([topic], [`${topic}.a[$index]`]));

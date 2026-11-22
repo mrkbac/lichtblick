@@ -18,19 +18,22 @@ const FLUSH_INTERVAL_MS = 250;
 
 type TopicRequest = { paths: string[]; key: string };
 
+const NO_PATHS: readonly string[] = [];
+
 /**
  * Loads `pathStrings` over the whole recording. Each batch is decoded as it arrives and only the
  * decoded samples are kept, compactly and thinned past MAX_SAMPLES_PER_PATH, so memory doesn't
  * depend on message size or recording length and a flush never re-reads earlier batches.
  *
  * A topic is reloaded when the paths reading it change (or, for paths using `$variables`, when
- * global variables change), since the messages themselves are not kept.
+ * global variables change, or when a path gains or loses a condition), since the messages
+ * themselves are not kept.
  */
 export function useDecodedMessageRange(
   topics: readonly string[],
   pathStrings: readonly string[],
   /** Paths whose exact value changes are kept for condition matches (see trackChanges). */
-  changesPaths: readonly string[] = [],
+  changesPaths: readonly string[] = NO_PATHS,
 ): PathSamplesByPath[] {
   const subscribeMessageRange = useSubscribeMessageRange();
   const changesPathsRef = useLatest(changesPaths);
@@ -52,10 +55,12 @@ export function useDecodedMessageRange(
       const variables = paths.some((path) => path.includes("$"))
         ? JSON.stringify(globalVariables)
         : "";
-      result.set(topic, { paths, key: JSON.stringify([paths, variables]) ?? "" });
+      // A path that gains a condition reloads, so its exact changes are kept from the start.
+      const tracked = paths.filter((path) => changesPaths.includes(path));
+      result.set(topic, { paths, key: JSON.stringify([paths, variables, tracked]) ?? "" });
     }
     return result;
-  }, [globalVariables, pathStrings, topics]);
+  }, [changesPaths, globalVariables, pathStrings, topics]);
 
   const [samplesByPath, setSamplesByPath] = useState<PathSamplesByPath>({});
   // Mutated in place while loading; published as a new outer object on each flush.
