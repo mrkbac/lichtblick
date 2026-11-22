@@ -264,11 +264,16 @@ export function thinTrack(
 export function nearestFix(store: TrackStore, kept: Uint32Array, k: number, at: LngLat): number {
   // Capped: across a part outside the viewport the neighbors can be far apart, and far away.
   const from = Math.max(kept[k]! - 10_000, k > 0 ? kept[k - 1]! + 1 : 0);
-  const to = Math.min(kept[k]! + 10_000, k + 1 < kept.length ? kept[k + 1]! - 1 : store.length - 1);
+  // `kept` may be from before the store last changed: stay inside it.
+  const to = Math.min(
+    kept[k]! + 10_000,
+    k + 1 < kept.length ? kept[k + 1]! - 1 : Infinity,
+    store.length - 1,
+  );
   const x = mercatorX(at[0]);
   const y = mercatorY(at[1]);
   const { lon, lat } = store.columns;
-  let best = kept[k]!;
+  let best = Math.min(kept[k]!, store.length - 1);
   let bestDistance = Infinity;
   for (let i = from; i <= to; i++) {
     const d = Math.hypot(mercatorX(lon[i]!) - x, mercatorY(lat[i]!) - y);
