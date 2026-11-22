@@ -73,6 +73,19 @@ type LegacyConfig = {
 
 export const DEFAULT_POINT_SIZE = 3;
 
+/** MapLibre copies this onto the move events of the camera moves made to follow a topic. */
+const FOLLOW_MOVE = "lichtblickFollowMove";
+export const FOLLOW_MOVE_EVENT = { [FOLLOW_MOVE]: true };
+
+/**
+ * Whether a finished camera move should be saved to the layout. Following moves the map on every
+ * frame; saving each move would rewrite the layout (and its undo history) many times a second and
+ * mark it edited. A follow move that ends after Follow was turned off is the final view: save it.
+ */
+export function shouldSaveView(event: object, config: Pick<Config, "followTopic">): boolean {
+  return !(FOLLOW_MOVE in event) || config.followTopic === "";
+}
+
 function migrateLayers(legacy: LegacyConfig): MapLayer[] {
   const base = { id: "base", visible: true, opacity: 1 };
   switch (legacy.layer) {

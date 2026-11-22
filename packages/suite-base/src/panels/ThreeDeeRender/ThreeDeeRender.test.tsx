@@ -1218,6 +1218,35 @@ describe("ThreeDeeRender", () => {
       });
     });
 
+    it("tells the user when live transforms were thinned to fit in memory", async () => {
+      // Given: preloading off
+      const customRendererInstance = createMockRenderer();
+      vi.mocked(Renderer).mockImplementationOnce(function () {
+        return customRendererInstance as unknown as Renderer;
+      });
+      const mockContext = createPreloadingContext({
+        initialState: { scene: { transforms: { enablePreloading: false } } },
+      });
+      render(<ThreeDeeRender {...setup({}, mockContext)} />);
+      await waitFor(() => {
+        expect(mockContext.onRender).toBeDefined();
+      });
+
+      // When: the live tree halves its history
+      act(() => {
+        customRendererInstance.transformTree.decimations = 1;
+        customRendererInstance.emit("transformTreeUpdated", customRendererInstance);
+      });
+
+      // Then
+      await waitFor(() => {
+        expect(mockContext.unstable_setAlert).toHaveBeenLastCalledWith(
+          "transform-preload",
+          expect.objectContaining({ severity: "info" }),
+        );
+      });
+    });
+
     it("keeps the read that restores transforms after a topic change running", async () => {
       // Given: preloading off, a tree filled from /tf and /tf_static, and range reads that take a
       // while (they never finish here)

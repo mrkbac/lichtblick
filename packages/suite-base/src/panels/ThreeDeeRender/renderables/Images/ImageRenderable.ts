@@ -58,6 +58,8 @@ import {
   decodeCompressedImageToBitmap,
   decodeCompressedVideoToBitmap,
   emptyVideoFrame,
+  latestVideoBitmap,
+  paintVideoBitmap,
   prepareVideoFrame,
 } from "./decodeImage";
 import {
@@ -137,6 +139,13 @@ const MAX_VIDEO_FRAME_HISTORY = 2000;
  */
 const MAX_VIDEO_FRAME_HISTORY_BYTES = 256 * 1024 * 1024;
 
+/**
+ * Longest a video decode backlog goes without painting. Frames with a newer frame queued are
+ * decoded without a bitmap; on a machine that decodes slower than playback that would be every
+ * frame, so one is painted at least this often.
+ */
+const MIN_VIDEO_PAINT_INTERVAL_MS = 100;
+
 type PendingVideoDecode = {
   image: AnyImage;
   resizeWidth?: number;
@@ -205,6 +214,9 @@ export class ImageRenderable extends Renderable<ImageUserData> {
   #decodedImage?: ImageBitmap | ImageData;
   protected decoder?: WorkerImageDecoder;
   #receivedImageSequenceNumber = 0;
+  // Sequence number of the newest video frame put in `#pendingVideoDecodeQueue`. Frames that are
+  // dropped before queueing (duplicates) must not make the newest queued frame look stale.
+  #lastQueuedVideoSeq = 0;
   #displayedImageSequenceNumber = 0;
   #showingErrorImage = false;
   // Decoder config parsed from the most recent keyframe. Delta frames carry no parameter sets, so
@@ -437,6 +449,7 @@ export class ImageRenderable extends Renderable<ImageUserData> {
       // pause stops painting at the current frame instead of letting orphaned parallel decodes
       // keep drawing for a second after stop.
       this.#pendingVideoDecodeQueue.push({ image, resizeWidth, onDecoded, seq });
+      this.#lastQueuedVideoSeq = seq;
       return;
     }
 
@@ -575,6 +588,10 @@ export class ImageRenderable extends Renderable<ImageUserData> {
     this.#pendingVideoDecodeQueue.length = 0;
     this.#videoFrameHistory.length = 0;
     this.videoPlayer?.resetForSeek();
+    // Timestamps restart from the new stream's first frame, so the old bitmap's no longer applies
+    if (this.videoPlayer) {
+      this.videoPlayer.lastImageBitmapTimestampMicros = undefined;
+    }
   }
 
   /**
@@ -610,10 +627,13 @@ export class ImageRenderable extends Renderable<ImageUserData> {
     this.#waitingForVideoKeyframe = true;
     this.#canReplayVideoGop = true;
     this.#pendingVideoDecodeQueue.length = 0;
+    // Nothing is queued any more, so no frame is newer than one still decoding
+    this.#lastQueuedVideoSeq = 0;
     this.#lastQueuedVideoMessageTime = undefined;
   }
 
   async #drainPendingVideoDecodes(): Promise<void> {
+    let lastPaintAt = performance.now();
     while (this.#pendingVideoDecodeQueue.length > 0) {
       const pendingDecode = this.#pendingVideoDecodeQueue.shift();
       if (pendingDecode == undefined) {
@@ -624,9 +644,17 @@ export class ImageRenderable extends Renderable<ImageUserData> {
       // works off a backlog (the replayed GOP plus frames that arrived while decoding) faster
       // than realtime; painting each one would fast-forward the video. Skipping all but the
       // latest-received frame collapses the burst into a single jump to the current frame.
-      // Using the received sequence number (not the momentary queue length) is robust to frames
-      // being fed incrementally across multiple drain passes during playback.
-      const skipRender = pendingDecode.seq < this.#receivedImageSequenceNumber;
+      // Comparing with the newest queued frame (not the momentary queue length) is robust to
+      // frames being fed incrementally across multiple drain passes during playback.
+      // When decoding stays slower than playback there is always a newer frame, so still paint
+      // every MIN_VIDEO_PAINT_INTERVAL_MS: the picture keeps moving instead of freezing.
+      const now = performance.now();
+      const skipRender =
+        pendingDecode.seq < this.#lastQueuedVideoSeq &&
+        now - lastPaintAt < MIN_VIDEO_PAINT_INTERVAL_MS;
+      if (!skipRender) {
+        lastPaintAt = now;
+      }
 
       await this.#startDecode(
         pendingDecode.image,
@@ -647,7 +675,11 @@ export class ImageRenderable extends Renderable<ImageUserData> {
   ): Promise<void> {
     try {
       const skipRender = options?.skipRender ?? false;
-      const result = await this.decodeImage(image, resizeWidth);
+      const result = await this.decodeImage(image, resizeWidth, skipRender);
+      if (result == undefined) {
+        // A video frame decoded only to keep the decoder's reference chain: nothing to show.
+        return;
+      }
       if (this.isDisposed() || this.#displayedImageSequenceNumber > seq) {
         // Disposed meanwhile, or a newer image is already shown: this result is never displayed.
         this.#releaseBitmap(result);
@@ -863,9 +895,7 @@ export class ImageRenderable extends Renderable<ImageUserData> {
     }
 
     try {
-      const imageBitmap = await globalThis.createImageBitmap(result.frame, { resizeWidth });
-      this.videoPlayer.lastImageBitmap?.close();
-      this.videoPlayer.lastImageBitmap = imageBitmap;
+      const imageBitmap = await paintVideoBitmap(this.videoPlayer, result.frame, resizeWidth);
       this.#waitingForVideoKeyframe = false;
       this.#canReplayVideoGop = false;
       return imageBitmap;
@@ -874,10 +904,17 @@ export class ImageRenderable extends Renderable<ImageUserData> {
     }
   }
 
+  /**
+   * With `skipRender`, a video frame that decodes normally only advances the decoder and returns
+   * undefined instead of a bitmap nobody would see, as do empty frames and B frames. The rare
+   * keyframe-wait paths (GOP replay after a seek, the black placeholder) still return a bitmap.
+   */
   protected async decodeImage(
     image: AnyImage,
     resizeWidth?: number,
-  ): Promise<ImageBitmap | ImageData> {
+    // eslint-disable-next-line @lichtblick/no-boolean-parameters
+    skipRender = false,
+  ): Promise<ImageBitmap | ImageData | undefined> {
     if ("format" in image) {
       if (this.#codec == undefined) {
         if (isCompressedDepthFormat(image.format)) {
@@ -893,12 +930,13 @@ export class ImageRenderable extends Renderable<ImageUserData> {
         if (frameMsg.data.byteLength === 0) {
           const error = "Empty video frame";
           log.error(error);
-          // show last frame instead of error image if available
-          if (this.videoPlayer?.lastImageBitmap) {
-            return this.videoPlayer.lastImageBitmap;
+          if (skipRender) {
+            return undefined;
           }
-          // show black image instead of error image
-          return await emptyVideoFrame(this.videoPlayer, resizeWidth);
+          // Show the last frame (black before the first one) instead of an error image
+          return this.videoPlayer
+            ? await latestVideoBitmap(this.videoPlayer, resizeWidth)
+            : await emptyVideoFrame(undefined, resizeWidth);
         }
 
         if (!this.videoPlayer) {
@@ -918,7 +956,7 @@ export class ImageRenderable extends Renderable<ImageUserData> {
         const { preparedFrame } = this.#prepareIncomingVideoFrame(frameMsg);
 
         if (preparedFrame.status === PreparedVideoFrameStatus.UnsupportedBFrame) {
-          return videoPlayer.lastImageBitmap ?? (await emptyVideoFrame(videoPlayer, resizeWidth));
+          return skipRender ? undefined : await latestVideoBitmap(videoPlayer, resizeWidth);
         }
         if (this.#waitingForVideoKeyframe && preparedFrame.type !== "key") {
           const replayBitmap = this.#canReplayVideoGop
@@ -954,6 +992,7 @@ export class ImageRenderable extends Renderable<ImageUserData> {
           videoPlayer,
           this.#videoFirstMessageTime,
           resizeWidth,
+          { skipBitmap: skipRender },
         );
       }
     }

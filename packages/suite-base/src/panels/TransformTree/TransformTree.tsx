@@ -15,8 +15,11 @@ import {
   useMessageReducer,
 } from "@lichtblick/suite-base/PanelAPI";
 import EmptyState from "@lichtblick/suite-base/components/EmptyState";
-import { useMessagePipeline } from "@lichtblick/suite-base/components/MessagePipeline";
-import { selectCurrentTime } from "@lichtblick/suite-base/components/MessagePipeline/selectors";
+import { useMessagePipelineBatchedWhenHidden } from "@lichtblick/suite-base/components/MessagePipeline";
+import {
+  selectCurrentTime,
+  selectLastSeekTime,
+} from "@lichtblick/suite-base/components/MessagePipeline/selectors";
 import { usePanelButtonTitle } from "@lichtblick/suite-base/components/PanelButton";
 import { usePanelContext } from "@lichtblick/suite-base/components/PanelContext";
 import PanelToolbar from "@lichtblick/suite-base/components/PanelToolbar";
@@ -217,6 +220,9 @@ export function TransformTree({ config, saveConfig }: Props): React.JSX.Element 
     topics: visibleTopics,
     restore: restoreEntries,
     addMessages: addTransformState,
+    // `known` records every frame seen across seeks after each render; a batched hidden value
+    // could be dropped by a seek before it is rendered and recorded.
+    batchWhenHidden: false,
   });
 
   // Static transforms are published once, usually at the start of a recording, so a seek would
@@ -272,7 +278,11 @@ export function TransformTree({ config, saveConfig }: Props): React.JSX.Element 
     knownRef.current = { playerId, visibleTopics, entries: known };
   }, [known, playerId, visibleTopics]);
 
-  const currentTime = useMessagePipeline(selectCurrentTime);
+  // Ages follow playback while shown; a hidden panel catches up once per interval, and right away
+  // on a seek so the clock matches the (unbatched) transforms and warns of no false staleness
+  const currentTime = useMessagePipelineBatchedWhenHidden(selectCurrentTime, {
+    flushKey: selectLastSeekTime,
+  });
   const now = currentTime ? toSec(currentTime) : undefined;
 
   // Manual adjustments shared with every 3D and Image panel of the layout

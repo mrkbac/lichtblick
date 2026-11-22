@@ -14,6 +14,7 @@ import {
   PropsVirtualizedTree,
   TreeNode,
 } from "@lichtblick/suite-base/panels/RawMessagesCommon/types";
+import { parseRangeKey } from "@lichtblick/suite-base/panels/RawMessagesCommon/utils";
 import {
   COLLAPSED_ICON,
   DEFAULT_FONT_SIZE,
@@ -67,6 +68,40 @@ export const VirtualizedTree = memo(function VirtualizedTree({
     [data, diff, search],
   );
 
+  // Element indexes with a search match (or one below), per array key, so ranges holding them open.
+  const matchIndexesByArray = useMemo(() => {
+    const byArray = new Map<string, number[]>();
+    for (const key of searchResult?.visible ?? []) {
+      const separator = key.indexOf(PATH_NAME_AGGREGATOR);
+      const first = separator < 0 ? key : key.slice(0, separator);
+      if (/^\d+$/.test(first)) {
+        const arrayPath = separator < 0 ? "" : key.slice(separator + 1);
+        byArray.set(arrayPath, [...(byArray.get(arrayPath) ?? []), Number(first)]);
+      }
+    }
+    return byArray;
+  }, [searchResult]);
+
+  /** Whether the search opens node `key`: an ancestor of a match, or a range holding one. */
+  const searchOpens = useCallback(
+    (key: string) => {
+      if (searchResult == undefined) {
+        return false;
+      }
+      if (searchResult.ancestors.has(key)) {
+        return true;
+      }
+      const range = parseRangeKey(key);
+      return (
+        range != undefined &&
+        (matchIndexesByArray.get(range.arrayPath) ?? []).some(
+          (index) => index >= range.start && index < range.end,
+        )
+      );
+    },
+    [matchIndexesByArray, searchResult],
+  );
+
   // Search shows the path to matches expanded. Collapsing such a parent is remembered for the
   // current search text only, so it wins over the search without changing the saved expansion.
   const [searchCollapsed, setSearchCollapsed] = useState({ search, keys: new Set<string>() });
@@ -74,15 +109,13 @@ export const VirtualizedTree = memo(function VirtualizedTree({
 
   const isShownExpanded = useCallback(
     (key: string, value: unknown) =>
-      searchResult?.ancestors.has(key) === true
-        ? collapsedInSearch?.has(key) !== true
-        : isExpanded(key, value),
-    [collapsedInSearch, isExpanded, searchResult],
+      searchOpens(key) ? collapsedInSearch?.has(key) !== true : isExpanded(key, value),
+    [collapsedInSearch, isExpanded, searchOpens],
   );
 
   const toggle = useCallback(
     (key: string, value: unknown) => {
-      if (searchResult?.ancestors.has(key) !== true) {
+      if (!searchOpens(key)) {
         onToggleExpand(key, value);
         return;
       }
@@ -92,7 +125,7 @@ export const VirtualizedTree = memo(function VirtualizedTree({
       }
       setSearchCollapsed({ search, keys });
     },
-    [collapsedInSearch, onToggleExpand, search, searchResult],
+    [collapsedInSearch, onToggleExpand, search, searchOpens],
   );
 
   const flatData = useMemo(() => {
@@ -192,36 +225,38 @@ export const VirtualizedTree = memo(function VirtualizedTree({
     [activeIndex, flatData, focusRow, isShownExpanded, toggle],
   );
 
-  // Breadcrumb of the topmost visible row's ancestors, so deep rows keep their context.
-  const topNode =
-    flatData[items.find((item) => item.end > (virtualizer.scrollOffset ?? 0))?.index ?? -1];
+  // Breadcrumb of the topmost visible row's ancestors, so deep rows keep their context. Taken from
+  // the rows above it, so index ranges show up although element keys don't name them.
+  const topIndex = items.find((item) => item.end > (virtualizer.scrollOffset ?? 0))?.index ?? -1;
   const hasNesting = flatData.some((node) => node.depth > 0);
   const breadcrumb = useMemo(() => {
     if (!hasNesting) {
       return undefined;
     }
-    if (!topNode?.parentPath) {
-      return [];
+    const crumbs: { label: string; index: number }[] = [];
+    let depth = flatData[topIndex]?.depth ?? 0;
+    for (let index = topIndex - 1; index >= 0 && depth > 0; index--) {
+      const node = flatData[index]!;
+      if (node.depth < depth) {
+        crumbs.unshift({ label: node.label, index });
+        depth = node.depth;
+      }
     }
-    // Keys are stored child-first: "child~parent~root".
-    const parts = topNode.parentPath.split(PATH_NAME_AGGREGATOR);
-    return parts
-      .map((label, index) => ({ label, key: parts.slice(index).join(PATH_NAME_AGGREGATOR) }))
-      .reverse();
-  }, [hasNesting, topNode?.parentPath]);
+    return crumbs;
+  }, [flatData, hasNesting, topIndex]);
 
   return (
     <div className={classes.wrapper}>
       {breadcrumb != undefined && (
         <div className={classes.breadcrumb} style={{ fontSize: fontSize ?? "inherit" }}>
-          {breadcrumb.map(({ label, key }, index) => (
-            <Fragment key={key}>
+          {breadcrumb.map(({ label, index: rowIndex }, index) => (
+            <Fragment key={rowIndex}>
               {index > 0 && <span className={classes.breadcrumbSeparator}>›</span>}
               <button
                 className={classes.spanButton}
                 tabIndex={-1}
                 onClick={() => {
-                  focusRow(flatData.findIndex((node) => node.key === key));
+                  focusRow(rowIndex);
                 }}
               >
                 {label}
@@ -292,7 +327,9 @@ export const VirtualizedTree = memo(function VirtualizedTree({
                   )}
                 </span>
                 <span className={classes.key}>{node.label}</span>
-                <div className={classes.valueContainer}>{renderValue(node)}</div>
+                <div className={classes.valueContainer}>
+                  {node.isRange !== true && renderValue(node)}
+                </div>
               </div>
             );
           })}

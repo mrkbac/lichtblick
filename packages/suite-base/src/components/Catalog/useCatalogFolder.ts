@@ -256,7 +256,7 @@ export function useCatalogFolder(): CatalogFolder {
         case "foxglove-websocket":
           selectSource(source.type, {
             type: "connection",
-            params: { url: source.url },
+            params: { url: source.url, name: recording.name },
           });
           break;
       }
