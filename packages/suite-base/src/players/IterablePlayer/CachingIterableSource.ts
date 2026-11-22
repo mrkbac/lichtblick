@@ -257,6 +257,8 @@ class CachingIterableSource<MessageType = unknown>
 
       // We've found a block containing our readHead, try reading items from the block
       if (block) {
+        // The block holds every wanted topic (checked above): filter only if it holds more
+        const filter = block.topics.size !== want.size;
         const cacheIndex = CachingIterableSource.#FindStartCacheItemIndex(
           block.items,
           toNanoSec(readHead),
@@ -278,7 +280,7 @@ class CachingIterableSource<MessageType = unknown>
           // update the last time this block was accessed
           block.lastAccess = Date.now();
 
-          if (CachingIterableSource.#Wanted(cachedItem[1], want)) {
+          if (!filter || CachingIterableSource.#Wanted(cachedItem[1], want)) {
             yield cachedItem[1];
           }
         }
@@ -845,21 +847,8 @@ class CachingIterableSource<MessageType = unknown>
       filled.lastAccess = Date.now();
     };
 
-    // Merges block's results up to timeNs
-    const mergeOld = function* (timeNs: bigint) {
-      for (; oldIdx < block.items.length; ++oldIdx) {
-        const item = block.items[oldIdx]!;
-        if (item[0] > timeNs) {
-          return;
-        }
-        merged.push(item);
-        mergedSize += CachingIterableSource.#Size(item[1]);
-        if (CachingIterableSource.#Wanted(item[1], want)) {
-          yield item[1];
-        }
-      }
-    };
-
+    const filter = topics.size !== want.size;
+    const endNs = toNanoSec(end);
     const source = this.#source.messageIterator({
       topics: missing,
       start: readHead,
@@ -868,14 +857,33 @@ class CachingIterableSource<MessageType = unknown>
       skimInterval: block.skimInterval,
     });
     try {
-      for await (const result of source) {
+      for (;;) {
+        const next = await source.next();
+        // undefined: the source is done, merge the rest of block up to end
+        const result = next.done === true ? undefined : next.value;
         const timeNs =
-          result.type === "message-event"
-            ? toNanoSec(result.msgEvent.receiveTime)
-            : result.type === "stamp"
-              ? toNanoSec(result.stamp)
-              : lastTime;
-        yield* mergeOld(timeNs);
+          result == undefined
+            ? endNs
+            : result.type === "message-event"
+              ? toNanoSec(result.msgEvent.receiveTime)
+              : result.type === "stamp"
+                ? toNanoSec(result.stamp)
+                : lastTime;
+        // Merge block's results up to timeNs first (inline: a generator per result is slow)
+        for (; oldIdx < block.items.length; ++oldIdx) {
+          const item = block.items[oldIdx]!;
+          if (item[0] > timeNs) {
+            break;
+          }
+          merged.push(item);
+          mergedSize += CachingIterableSource.#Size(item[1]);
+          if (!filter || CachingIterableSource.#Wanted(item[1], want)) {
+            yield item[1];
+          }
+        }
+        if (result == undefined) {
+          break;
+        }
         if (timeNs > lastTime) {
           // The source is sorted: nothing more comes before timeNs
           lastTime = timeNs;
@@ -894,10 +902,10 @@ class CachingIterableSource<MessageType = unknown>
         mergedSize += size;
         yield result;
       }
-      yield* mergeOld(toNanoSec(end));
-      filledNs = toNanoSec(end);
+      filledNs = endNs;
       pendingSize = 0;
     } finally {
+      await source.return?.();
       commit(filledNs);
       // Unfilled source results are dropped; block keeps its own results after filledNs
       this.#budget.release(pendingSize);
