@@ -17,10 +17,9 @@ import {
   Tooltip,
   Typography,
 } from "@mui/material";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { makeStyles } from "tss-react/mui";
-import { create } from "zustand";
 
 import Stack from "@lichtblick/suite-base/components/Stack";
 import {
@@ -34,7 +33,6 @@ import { useWorkspaceActions } from "@lichtblick/suite-base/context/Workspace/us
 import {
   CompareDraft,
   Recording,
-  draftFromFiles,
   draftToCompare,
   encodeCompareNames,
   handlesOf,
@@ -46,22 +44,7 @@ import showOpenFilePicker from "@lichtblick/suite-base/util/showOpenFilePicker";
 import { useSourcePick } from "@lichtblick/suite-base/util/sourcePick";
 
 import { SIDE_COLORS, sideLabel } from "./CompareContext";
-
-/**
- * The source that compares `recordings` (local files and remote URLs): a file source that compares
- * and reads every recording's type
- */
-export function compareSourceFor(
-  recordings: readonly Recording[],
-  sources: readonly IDataSourceFactory[],
-): IDataSourceFactory | undefined {
-  return sources.find(
-    (source) =>
-      source.type === "file" &&
-      source.supportsCompare === true &&
-      recordings.every((r) => source.supportedFileTypes?.includes(recordingExtension(r)) === true),
-  );
-}
+import { compareSourceFor, useCompareDialog } from "./compareDialogStore";
 
 /**
  * The recordings `source` opened with `args` reads, and whether its URLs are fetched with cookies.
@@ -105,35 +88,6 @@ async function filesOf(args: DataSourceArgs | undefined): Promise<Recording[]> {
     );
   }
   return args.files ?? [];
-}
-
-/** The open compare dialog's starting draft, so menus anywhere can open it */
-export const useCompareDialog = create<{
-  draft: CompareDraft | undefined;
-  show: (draft: CompareDraft) => void;
-  hide: () => void;
-}>()((set) => ({
-  draft: undefined,
-  show: (draft) => {
-    set({ draft });
-  },
-  hide: () => {
-    set({ draft: undefined });
-  },
-}));
-
-/** Opens the compare dialog with the files open now, so adding recordings starts from them */
-export function useShowCompareDialog(): () => void {
-  const { selectedRecordings, selectedCompare, selectedWithCookies } = usePlayerSelection();
-  const show = useCompareDialog((state) => state.show);
-  return useCallback(() => {
-    const recordings = selectedRecordings ?? [];
-    show({
-      ...draftFromFiles(recordings, selectedCompare),
-      withCookies:
-        selectedWithCookies === true ? recordings.filter((r) => typeof r === "string") : [],
-    });
-  }, [selectedRecordings, selectedCompare, selectedWithCookies, show]);
 }
 
 const useStyles = makeStyles()((theme) => ({
@@ -607,7 +561,10 @@ function CompareDialogContent({ initial }: { initial: CompareDraft }): React.JSX
   );
 }
 
-/** Pick the recordings to compare: one row per side, each merged from any number of files */
+/**
+ * Pick the recordings to compare: one row per side, each merged from any number of files. Loaded
+ * only once a comparison is being edited (see compareDialogStore).
+ */
 export function CompareDialog(): React.JSX.Element | null {
   const draft = useCompareDialog((state) => state.draft);
   const hide = useCompareDialog((state) => state.hide);

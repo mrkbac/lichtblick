@@ -16,7 +16,7 @@ import {
 import { useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import { useShowCompareDialog } from "@lichtblick/suite-base/components/Compare/CompareDialog";
+import { useShowCompareDialog } from "@lichtblick/suite-base/components/Compare/compareDialogStore";
 import { FormField } from "@lichtblick/suite-base/components/DataSourceDialog/FormField";
 import { useStyles } from "@lichtblick/suite-base/components/DataSourceDialog/OpenUrlInput.style";
 import Stack from "@lichtblick/suite-base/components/Stack";

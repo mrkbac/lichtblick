@@ -15,7 +15,8 @@ import { useAppLaunch } from "@lichtblick/suite-base/util/appLaunch";
 import showOpenFilePicker from "@lichtblick/suite-base/util/showOpenFilePicker";
 import { takeSourcePick } from "@lichtblick/suite-base/util/sourcePick";
 
-import { CompareDialog, useCompareDialog } from "./CompareDialog";
+import { CompareDialog } from "./CompareDialog";
+import { useCompareDialog } from "./compareDialogStore";
 
 vi.mock("@lichtblick/suite-base/util/showOpenFilePicker", () => ({ default: vi.fn() }));
 

@@ -15,11 +15,11 @@ import { formatByteSize } from "@lichtblick/den/format";
 import { TempBuffer } from "@lichtblick/mcap-core";
 import { Immutable } from "@lichtblick/suite";
 import { useCompare } from "@lichtblick/suite-base/components/Compare/CompareContext";
+import { CompareSidesEditor } from "@lichtblick/suite-base/components/Compare/CompareSidesEditor";
 import {
   compareSourceFor,
   useShowCompareDialog,
-} from "@lichtblick/suite-base/components/Compare/CompareDialog";
-import { CompareSidesEditor } from "@lichtblick/suite-base/components/Compare/CompareSidesEditor";
+} from "@lichtblick/suite-base/components/Compare/compareDialogStore";
 import CopyButton from "@lichtblick/suite-base/components/CopyButton";
 import {
   MessagePipelineContext,
