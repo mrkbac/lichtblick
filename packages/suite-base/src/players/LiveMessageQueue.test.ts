@@ -10,11 +10,11 @@ import {
 import PlayerAlertManager from "@lichtblick/suite-base/players/PlayerAlertManager";
 import { MessageEvent } from "@lichtblick/suite-base/players/types";
 
-function msg(i: number, sizeInBytes: number): MessageEvent {
+function msg(i: number, sizeInBytes: number, topic = "/a", message: unknown = i): MessageEvent {
   return {
-    topic: "/a",
+    topic,
     receiveTime: { sec: i, nsec: 0 },
-    message: i,
+    message,
     sizeInBytes,
     schemaName: "x",
   };
@@ -52,6 +52,177 @@ describe("LiveMessageQueue", () => {
     expect(alerts.hasAlert(LIVE_QUEUE_FULL_ALERT_ID)).toBe(true);
     // The alert is logged once, not once per drop.
     expect(console.warn).toHaveBeenCalledTimes(1);
+    (console.warn as Mock).mockClear();
+  });
+
+  it("keeps the newest message per topic and per transform child frame when dropping", () => {
+    const queue = new LiveMessageQueue(1000, new PlayerAlertManager());
+    const tf = (i: number, ...children: string[]) =>
+      msg(i, 10, "/transforms", {
+        transforms: children.map((child_frame_id) => ({ child_frame_id })),
+      });
+    const latched = msg(0, 10, "/latched");
+    const staticFrame = tf(1, "static", "moving");
+    queue.push(latched);
+    queue.push(staticFrame);
+    for (let i = 2; i < 5000; i++) {
+      queue.push(i % 2 === 0 ? tf(i, "moving") : msg(i, 10));
+      expect(queue.sizeInBytes()).toBeLessThanOrEqual(1000);
+    }
+    const kept = queue.drain();
+    expect(kept.slice(0, 2)).toEqual([latched, staticFrame]);
+    expect(kept.at(-1)!.receiveTime.sec).toBe(4999);
+    expect(kept.map((m) => m.receiveTime.sec)).toEqual(
+      kept.map((m) => m.receiveTime.sec).sort((a, b) => a - b),
+    );
+    (console.warn as Mock).mockClear();
+  });
+
+  it("drops the oldest regardless once the newest per topic alone exceed the cap", () => {
+    const queue = new LiveMessageQueue(100, new PlayerAlertManager());
+    for (let i = 0; i < 20; i++) {
+      queue.push(msg(i, 10, `/t${i}`));
+      expect(queue.sizeInBytes()).toBeLessThanOrEqual(100);
+    }
+    (console.warn as Mock).mockClear();
+  });
+
+  it("keeps the static transform first when the newest per topic don't all fit", () => {
+    const queue = new LiveMessageQueue(1000, new PlayerAlertManager());
+    const staticFrame = msg(0, 10, "/transforms", { transforms: [{ child_frame_id: "static" }] });
+    queue.push(staticFrame);
+    for (let camera = 1; camera <= 15; camera++) {
+      queue.push(msg(camera, 60, `/camera${camera}`)); // 900 bytes of large one-shot messages
+    }
+    for (let i = 16; i < 300; i++) {
+      queue.push(msg(i, 10));
+      expect(queue.sizeInBytes()).toBeLessThanOrEqual(1000);
+    }
+    const kept = queue.drain();
+    expect(kept[0]).toBe(staticFrame);
+    expect(kept.at(-1)!.receiveTime.sec).toBe(299);
+    (console.warn as Mock).mockClear();
+  });
+
+  it("doesn't keep a dropped message that a still queued one replaces", () => {
+    const queue = new LiveMessageQueue(100, new PlayerAlertManager());
+    for (let i = 0; i < 50; i++) {
+      queue.push(msg(i, 10));
+    }
+    expect(queue.drain().map((m) => m.receiveTime.sec)).toEqual([42, 43, 44, 45, 46, 47, 48, 49]);
+    (console.warn as Mock).mockClear();
+  });
+
+  it("drops a kept message once a newer one is queued, to make room for a one-shot map", () => {
+    const queue = new LiveMessageQueue(1000, new PlayerAlertManager());
+    let t = 0;
+    queue.push(msg(t++, 30, "/latched"));
+    queue.push(msg(t++, 30, "/camera")); // kept by the first drop, replaced below
+    while (t < 100) {
+      queue.push(msg(t++, 10));
+    }
+    const map = msg(t++, 200, "/map"); // one-shot, needs the room the old camera message holds
+    queue.push(map);
+    for (let i = 0; i < 20; i++) {
+      queue.push(msg(t++, 10));
+    }
+    queue.push(msg(t++, 30, "/camera"));
+    while (t < 400) {
+      queue.push(msg(t++, 10));
+      expect(queue.sizeInBytes()).toBeLessThanOrEqual(1000);
+    }
+    const kept = queue.drain();
+    expect(kept).toContain(map);
+    expect(kept.map((m) => m.topic)).toContain("/latched");
+    expect(queue.sizeInBytes()).toBe(0);
+    (console.warn as Mock).mockClear();
+  });
+
+  it("ignores malformed transform-like messages", () => {
+    const queue = new LiveMessageQueue(100, new PlayerAlertManager());
+    for (let i = 0; i < 50; i++) {
+      queue.push(msg(i, 10, "/json", { transforms: [null] }));
+    }
+    expect(queue.drain().at(-1)!.receiveTime.sec).toBe(49);
+    (console.warn as Mock).mockClear();
+  });
+
+  it("keeps the newest message per topic when kept messages are large", () => {
+    const queue = new LiveMessageQueue(1000, new PlayerAlertManager());
+    let t = 0;
+    for (let topic = 0; topic < 23; topic++) {
+      queue.push(msg(t++, 45, `/oneShot${topic}`));
+    }
+    for (let i = 0; i < 300; i++) {
+      queue.push(msg(t++, 10));
+      expect(queue.sizeInBytes()).toBeLessThanOrEqual(1000);
+    }
+    const kept = queue.drain();
+    expect(kept.at(-1)!.receiveTime.sec).toBe(t - 1);
+    expect(kept.filter((m) => m.topic !== "/a").length).toBeGreaterThan(15);
+    (console.warn as Mock).mockClear();
+  });
+
+  it("drops older images before a one-shot map when the map and the newest image fit", () => {
+    const queue = new LiveMessageQueue(1000, new PlayerAlertManager());
+    const map = msg(0, 525, "/map");
+    queue.push(map);
+    for (let t = 1; t < 40; t++) {
+      queue.push(msg(t, 20, "/image"));
+      expect(queue.sizeInBytes()).toBeLessThanOrEqual(1000);
+    }
+    const kept = queue.drain();
+    expect(kept[0]).toBe(map);
+    expect(kept.at(-1)!.receiveTime.sec).toBe(39);
+    (console.warn as Mock).mockClear();
+  });
+
+  it("keeps messages received at the same time in arrival order", () => {
+    const queue = new LiveMessageQueue(1000, new PlayerAlertManager());
+    const tfs = (...children: string[]) => ({
+      transforms: children.map((child_frame_id) => ({ child_frame_id })),
+    });
+    const older = msg(0, 20, "/transforms", tfs("f", "g"));
+    const newer = msg(0, 10, "/transforms", tfs("f")); // same stamp, newer value for f
+    queue.push(older);
+    queue.push(newer);
+    for (let t = 1; t < 300; t++) {
+      queue.push(msg(t, 10));
+    }
+    expect(queue.drain().slice(0, 2)).toEqual([older, newer]);
+    (console.warn as Mock).mockClear();
+  });
+
+  it("drops replaced camera frames before a one-shot map", () => {
+    const queue = new LiveMessageQueue(1000, new PlayerAlertManager());
+    const map = msg(0, 300, "/map");
+    queue.push(map);
+    for (let t = 1; t < 100; t++) {
+      queue.push(msg(t, 50, "/camera"));
+      expect(queue.sizeInBytes()).toBeLessThanOrEqual(1000);
+    }
+    const kept = queue.drain();
+    expect(kept[0]).toBe(map);
+    expect(kept.at(-1)!.receiveTime.sec).toBe(99);
+    (console.warn as Mock).mockClear();
+  });
+
+  it("keeps kept messages in arrival order across a clock reset", () => {
+    const queue = new LiveMessageQueue(1000, new PlayerAlertManager());
+    const tfs = (...children: string[]) => ({
+      transforms: children.map((child_frame_id) => ({ child_frame_id })),
+    });
+    const before = msg(100, 20, "/transforms", tfs("f", "g"));
+    queue.push(before);
+    for (let t = 101; t < 200; t++) {
+      queue.push(msg(t, 10));
+    }
+    const after = msg(5, 20, "/transforms", tfs("f")); // the clock went back; newer value for f
+    queue.push(after);
+    for (let t = 6; t < 300; t++) {
+      queue.push(msg(t, 10));
+    }
+    expect(queue.drain().slice(0, 2)).toEqual([before, after]);
     (console.warn as Mock).mockClear();
   });
 });
