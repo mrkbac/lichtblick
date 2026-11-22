@@ -986,6 +986,9 @@ export class IterablePlayer implements Player {
     if (fromBlocks.length === 0) {
       return messages;
     }
+    if (messages.length === 0) {
+      return fromBlocks;
+    }
     return messages.concat(fromBlocks).sort((a, b) => compare(a.receiveTime, b.receiveTime));
   }
 
