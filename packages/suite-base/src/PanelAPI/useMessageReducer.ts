@@ -21,6 +21,7 @@ import Log from "@lichtblick/log";
 import {
   MessagePipelineContext,
   useMessagePipeline,
+  useMessagePipelineBatchedWhenHidden,
 } from "@lichtblick/suite-base/components/MessagePipeline";
 import useShouldNotChangeOften from "@lichtblick/suite-base/hooks/useShouldNotChangeOften";
 import {
@@ -47,6 +48,12 @@ type Params<T> = {
    * @default "partial"
    */
   preloadType?: SubscriptionPreloadType;
+  /**
+   * A hidden panel gets the reduced value at most once a second (default). Pass false when the
+   * panel must see every value, e.g. because it records them across seeks while rendering.
+   * @default true
+   */
+  batchWhenHidden?: boolean;
 
   /**
    * Called on intialization, seek, and when reducers change.
@@ -73,7 +80,13 @@ function selectSetSubscriptions(ctx: MessagePipelineContext) {
 
 export function useMessageReducer<T>(props: Params<T>): T {
   const [id] = useState(() => randomUUID());
-  const { restore, addMessage, addMessages, preloadType = "partial" } = props;
+  const {
+    restore,
+    addMessage,
+    addMessages,
+    preloadType = "partial",
+    batchWhenHidden = true,
+  } = props;
 
   // only one of the add message callbacks should be provided
   if ([props.addMessage, props.addMessages].filter(Boolean).length !== 1) {
@@ -138,7 +151,9 @@ export function useMessageReducer<T>(props: Params<T>): T {
     | undefined
   >(undefined);
 
-  return useMessagePipeline(
+  // A hidden panel keeps reducing every message, so it is current the moment it is shown, but
+  // re-renders with the result at most once per interval.
+  return useMessagePipelineBatchedWhenHidden(
     useCallback(
       // To compute the reduced value from new messages:
       // - Call restore() to initialize state, if lastSeekTime has changed, or if reducers have changed
@@ -190,5 +205,6 @@ export function useMessageReducer<T>(props: Params<T>): T {
       },
       [id, addMessage, addMessages, restore],
     ),
+    { enabled: batchWhenHidden },
   );
 }

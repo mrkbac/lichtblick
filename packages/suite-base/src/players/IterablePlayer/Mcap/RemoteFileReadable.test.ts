@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
+import type { McapTypes } from "@lichtblick/mcap-core";
 import CachedFilelike from "@lichtblick/suite-base/util/CachedFilelike";
 
 import { RemoteFileReadable } from "./RemoteFileReadable";
@@ -125,6 +126,62 @@ describe("RemoteFileReadable", () => {
     });
   });
 
+  describe("setChunks", () => {
+    // A chunk at 100..150 with its message indexes right after it, at 150..160
+    const chunk = (overrides: Partial<McapTypes.ChunkIndex> = {}): McapTypes.ChunkIndex => ({
+      messageStartTime: 0n,
+      messageEndTime: 1n,
+      chunkStartOffset: 100n,
+      chunkLength: 50n,
+      messageIndexOffsets: new Map([[1, 150n]]),
+      messageIndexLength: 10n,
+      compression: "",
+      compressedSize: 0n,
+      uncompressedSize: 0n,
+      ...overrides,
+    });
+
+    it("reads a chunk's message indexes together with the chunk before them", async () => {
+      mockRead.mockResolvedValueOnce(Uint8Array.from({ length: 60 }, (_, i) => 100 + i));
+      const reader = new RemoteFileReadable(testUrl, { cacheSizeInBytes: 87_381_333 });
+      reader.setChunks([chunk()]);
+
+      const data = await reader.read(150n, 10n);
+
+      expect(mockRead).toHaveBeenCalledWith(100, 60, { background: false });
+      expect([...data]).toEqual([150, 151, 152, 153, 154, 155, 156, 157, 158, 159]);
+    });
+
+    it("reads other ranges as asked", async () => {
+      const reader = new RemoteFileReadable(testUrl);
+      reader.setChunks([chunk()]);
+
+      await reader.read(151n, 9n);
+      await reader.read(100n, 50n);
+
+      expect(mockRead).toHaveBeenNthCalledWith(1, 151, 9, { background: false });
+      expect(mockRead).toHaveBeenNthCalledWith(2, 100, 50, { background: false });
+    });
+
+    it("leaves out chunks whose message indexes don't follow them", async () => {
+      const reader = new RemoteFileReadable(testUrl);
+      reader.setChunks([chunk({ messageIndexOffsets: new Map([[1, 9000n]]) })]);
+
+      await reader.read(150n, 10n);
+
+      expect(mockRead).toHaveBeenCalledWith(150, 10, { background: false });
+    });
+
+    it("leaves out chunks too big for a quarter of the cache", async () => {
+      const reader = new RemoteFileReadable(testUrl, { cacheSizeInBytes: 160 });
+      reader.setChunks([chunk()]);
+
+      await reader.read(150n, 10n);
+
+      expect(mockRead).toHaveBeenCalledWith(150, 10, { background: false });
+    });
+  });
+
   describe("close", () => {
     it("should delegate to CachedFilelike.close()", () => {
       // Given a RemoteFileReadable instance
@@ -161,6 +218,76 @@ describe("RemoteFileReadable", () => {
         expect.objectContaining({ headers: { range: "bytes=100-104" } }),
       );
       expect(mockRead).not.toHaveBeenCalled();
+    });
+
+    it("fetches misses exactly while skimming, and streams them after a one-off batch", async () => {
+      const fetchMock = vi
+        .fn()
+        .mockImplementation(async () => new Response(new Uint8Array(5), { status: 206 }));
+      globalThis.fetch = fetchMock;
+      const skimming = new RemoteFileReadable(testUrl);
+      const oneOff = new RemoteFileReadable(testUrl);
+
+      skimming.prefetch([{ offset: 100n, length: 5n }]);
+      oneOff.prefetch([{ offset: 100n, length: 5n }], { skim: false });
+      await skimming.read(500n, 5n);
+      await oneOff.read(500n, 5n);
+
+      expect(fetchMock).toHaveBeenCalledTimes(3);
+      expect(mockRead).toHaveBeenCalledTimes(1);
+      expect(mockRead).toHaveBeenCalledWith(500, 5, { background: false });
+    });
+
+    it("stops a batch at the byte budget instead of evicting its own ranges", async () => {
+      const fetchMock = vi
+        .fn()
+        .mockImplementation(async () => new Response(new Uint8Array(1), { status: 206 }));
+      globalThis.fetch = fetchMock;
+      const readable = new RemoteFileReadable(testUrl);
+      const mib100 = 100n * 1024n * 1024n;
+
+      readable.prefetch([
+        { offset: 0n, length: mib100 },
+        { offset: mib100, length: mib100 },
+      ]);
+      await vi.waitFor(() => {
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+      });
+      readable.prefetch([{ offset: 0n, length: mib100 }]);
+      await Promise.resolve();
+
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
+    it("doesn't download a range dropped from the budget while it was queued", async () => {
+      const pending: (() => void)[] = [];
+      const fetchMock = vi.fn().mockImplementation(
+        async () =>
+          await new Promise<Response>((resolve) => {
+            pending.push(() => {
+              resolve(new Response(new Uint8Array(1), { status: 206 }));
+            });
+          }),
+      );
+      globalThis.fetch = fetchMock;
+      const readable = new RemoteFileReadable(testUrl);
+      const mib100 = 100n * 1024n * 1024n;
+
+      // Four small downloads take every slot, so the next ranges wait in the queue
+      readable.prefetch([0n, 10n, 20n, 30n].map((offset) => ({ offset, length: 1n })));
+      await vi.waitFor(() => {
+        expect(pending).toHaveLength(4);
+      });
+      readable.prefetch([{ offset: 1000n, length: mib100 }]);
+      readable.prefetch([{ offset: 1000n + mib100, length: mib100 }]);
+      while (pending.length > 0) {
+        pending.shift()!();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      }
+
+      const ranges = fetchMock.mock.calls.map(([, init]) => (init as RequestInit).headers);
+      expect(ranges).not.toContainEqual({ range: `bytes=1000-${999n + mib100}` });
+      expect(ranges).toContainEqual({ range: `bytes=${1000n + mib100}-${999n + 2n * mib100}` });
     });
 
     it("falls back to the cached reader when the server ignores the range", async () => {

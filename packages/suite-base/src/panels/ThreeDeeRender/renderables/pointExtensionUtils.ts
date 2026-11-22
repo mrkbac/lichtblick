@@ -5,6 +5,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+import i18next from "i18next";
 import * as THREE from "three/webgpu";
 
 import { DynamicBufferGeometry } from "@lichtblick/suite-base/panels/ThreeDeeRender/DynamicBufferGeometry";
@@ -18,7 +19,7 @@ import { MAX_DURATION } from "@lichtblick/suite-base/panels/ThreeDeeRender/trans
 import { updatePose } from "@lichtblick/suite-base/panels/ThreeDeeRender/updatePose";
 
 import { colorHasTransparency } from "./colorMode";
-import type { RingStyle } from "./pointClouds/DecayPointRing";
+import type { DecayPointRing, RingStyle } from "./pointClouds/DecayPointRing";
 import { RasterPoints } from "./pointClouds/RasterPoints";
 import type { LayerSettingsPointExtension } from "../settingsNodes/topics";
 
@@ -158,8 +159,71 @@ export type HistoryLimits = {
   maxPoints: number;
 };
 
-/** ~1000 Hz for 1 s or 10 Hz for 100 s; 10 M points is a few hundred MB of GPU buffers. */
+/**
+ * ~1000 Hz for 1 s or 10 Hz for 100 s; 10 M points is a few hundred MB of GPU buffers. A point decay
+ * ring past these thins evenly, so for it they only set how dense the history can be.
+ */
 export const DECAY_HISTORY_LIMITS: HistoryLimits = { maxEntries: 1_000, maxPoints: 10_000_000 };
+
+export const DECAY_LIMITED = "DECAY_LIMITED";
+
+/**
+ * Shows the notice that the limits shape a decay history (the latest scan alone fills the point
+ * budget, scans in the window were dropped for it, or the ring keeps only 1 in N incoming scans), or
+ * clears it. Takes and returns the key
+ * of the shown notice, so its text is only formatted again when it changes.
+ */
+export function updateDecayNotice({
+  renderer,
+  settingsPath,
+  ring,
+  maxPoints,
+  latestPoints,
+  windowStart,
+  shownKey,
+}: {
+  renderer: Renderer;
+  settingsPath: readonly string[];
+  ring: DecayPointRing;
+  maxPoints: number;
+  latestPoints: number;
+  /** Receive time where the decay window starts */
+  windowStart: bigint;
+  shownKey: string | undefined;
+}): string | undefined {
+  const errors = renderer.settings.errors;
+  const evictedUntil = ring.budgetEvictedUntil();
+  const droppedInWindow = evictedUntil != undefined && evictedUntil >= windowStart;
+  // No history fits next to the latest scan: it alone fills the budget, or the budget just dropped
+  // the last history scan because one more scan its size doesn't fit (not merely an empty ring
+  // whose scans expired)
+  const noRoom =
+    latestPoints >= maxPoints ||
+    (ring.scanCount() === 0 && latestPoints * 2 > maxPoints && droppedInWindow);
+  const state = noRoom
+    ? "threeDee:decayHistoryLimited"
+    : droppedInWindow
+      ? "threeDee:decayHistoryDropped"
+      : ring.stride() > 1
+        ? "threeDee:decayHistoryThinned"
+        : undefined;
+  if (state == undefined) {
+    errors.remove(settingsPath, DECAY_LIMITED);
+    return undefined;
+  }
+  const locale = i18next.language;
+  const key = `${locale} ${maxPoints} ${state} ${ring.stride()}`;
+  // (errors can also be cleared elsewhere, e.g. on a topic reset)
+  if (key !== shownKey || !errors.hasError(settingsPath, DECAY_LIMITED)) {
+    const values = {
+      maxPoints: maxPoints.toLocaleString(locale),
+      maxScans: DECAY_HISTORY_LIMITS.maxEntries.toLocaleString(locale),
+      stride: ring.stride().toLocaleString(locale),
+    };
+    errors.add(settingsPath, DECAY_LIMITED, i18next.t(state, values));
+  }
+  return key;
+}
 
 type HistoryEntry<TRenderable extends HistoryRenderable> = {
   receiveTime: bigint;
@@ -265,7 +329,14 @@ export class RenderObjectHistory<TRenderable extends HistoryRenderable> {
         srcTime,
       );
       if (!updated && !hadTfError) {
-        const message = missingTransformMessage(renderFrameId, fixedFrameId, frameId);
+        const message = missingTransformMessage(
+          this.#renderer.transformTree,
+          renderFrameId,
+          fixedFrameId,
+          frameId,
+          currentTime,
+          srcTime,
+        );
         this.#renderer.settings.errors.add(
           this.#parentRenderable.userData.settingsPath,
           MISSING_TRANSFORM,
