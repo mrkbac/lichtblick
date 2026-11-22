@@ -14,7 +14,13 @@ import { updatePose } from "@lichtblick/suite-base/panels/ThreeDeeRender/updateP
 import { createStixelMaterial, PointCloudHistoryRenderable, PointClouds } from "./PointClouds";
 import { getColorConverter } from "./colorMode";
 import { DecayPointRing } from "./pointClouds/DecayPointRing";
-import { DECAY_LIMITED } from "./pointExtensionUtils";
+import { DECAY_LIMITED, payloadFingerprint } from "./pointExtensionUtils";
+
+// A spy around the payload hash, to check playback doesn't compute it
+vi.mock("./pointExtensionUtils", async (importOriginal) => {
+  const original = await importOriginal<typeof import("./pointExtensionUtils")>();
+  return { ...original, payloadFingerprint: vi.fn(original.payloadFingerprint) };
+});
 
 vi.mock("@lichtblick/suite-base/panels/ThreeDeeRender/updatePose", () => ({
   updatePose: vi.fn(),
@@ -312,6 +318,22 @@ describe("PointCloudHistoryRenderable decay", () => {
       geometry: { drawRange: { count: number } };
     };
     expect(latest.geometry.drawRange.count).toBe(POSITIONS.length);
+  });
+
+  it("computes no payload hash during playback, only for scans whose times tie", () => {
+    const { renderable, settings } = decode(makeCloud(), {
+      colorMode: "flat",
+      decayTime: 10,
+      stixelsEnabled: true,
+    });
+    vi.mocked(payloadFingerprint).mockClear();
+    for (let i = 1; i <= 5; i++) {
+      renderable.pushHistory(makeCloud(), settings, BigInt(i));
+      renderable.updatePointCloud(makeCloud(), undefined, settings, BigInt(i));
+    }
+    renderable.addOlderScan(makeCloud(), settings, 0n); // read back, older than all of them
+
+    expect(vi.mocked(payloadFingerprint)).not.toHaveBeenCalled();
   });
 
   it("drops the ring and its limit notice when the decay time is turned off", () => {

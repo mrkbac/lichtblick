@@ -170,9 +170,8 @@ export const DECAY_LIMITED = "DECAY_LIMITED";
 
 /**
  * Tells apart distinct records received at the same time with the same header stamp (e.g. the
- * segments of one sweep published together): a 53-bit hash of the whole payload. Messages carry no
- * record id (offset or sequence), and keeping their bytes to compare would hold every message, so
- * equal hashes count as equal payloads. About 0.3 ms per MB.
+ * segments of one sweep published together): a 53-bit hash of the whole payload, about 0.3 ms per
+ * MB. Messages carry no record id (offset or sequence). Only computed on a tie of both times.
  */
 export function payloadFingerprint(payload: ArrayBufferView): number {
   const bytes = new Uint8Array(payload.buffer, payload.byteOffset, payload.byteLength);
@@ -279,8 +278,6 @@ export function updateDecayNotice({
 type HistoryEntry<TRenderable extends HistoryRenderable> = {
   receiveTime: bigint;
   messageTime: bigint;
-  /** See payloadFingerprint; unknown for the entry a history starts with */
-  fingerprint?: number;
   renderable: TRenderable;
 };
 
@@ -319,13 +316,17 @@ export class RenderObjectHistory<TRenderable extends HistoryRenderable> {
     this.#evictOldest(this.#history.length - this.#limits.maxEntries);
   }
 
-  /** Whether an entry for this record (times and payload fingerprint) exists */
-  public has(receiveTime: bigint, messageTime: bigint, fingerprint: number): boolean {
+  /** Whether an entry with these times exists for which `same` (checked only on such a tie) holds */
+  public has(
+    receiveTime: bigint,
+    messageTime: bigint,
+    same: (renderable: TRenderable) => boolean,
+  ): boolean {
     return this.#history.some(
       (entry) =>
         entry.receiveTime === receiveTime &&
         entry.messageTime === messageTime &&
-        (entry.fingerprint == undefined || entry.fingerprint === fingerprint),
+        same(entry.renderable),
     );
   }
 

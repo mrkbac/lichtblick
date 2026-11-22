@@ -58,7 +58,7 @@ import {
 import { pointCloudSettingsNode } from "../settingsNodes/topics";
 import { topicIsConvertibleToSchema } from "../topicIsConvertibleToSchema";
 import { makePose, Pose } from "../transforms";
-import { DecayPointRing } from "./pointClouds/DecayPointRing";
+import { DecayPointRing, sameBytes } from "./pointClouds/DecayPointRing";
 import { FieldReader, getReader, isSupportedField } from "./pointClouds/fieldReaders";
 import { MISSING_TRANSFORM, missingTransformMessage } from "./transforms";
 
@@ -417,7 +417,6 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
         {
           receiveTime: latest.receiveTime,
           messageTime: latest.messageTime,
-          fingerprint: payloadFingerprint(latest.renderable.decoded!.pointCloud.data),
           frameId: this.userData.frameId,
           pose: latest.renderable.userData.pose,
         },
@@ -442,62 +441,92 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
         stixelGeometry,
         stixelMaterial,
       );
-      stixelsHistory.addHistoryEntry({
-        receiveTime,
-        messageTime,
-        fingerprint: payloadFingerprint(pointCloud.data),
-        renderable: stixels,
-      });
+      stixelsHistory.addHistoryEntry({ receiveTime, messageTime, renderable: stixels });
       this.add(stixels);
     }
   }
 
   /**
    * Decodes a scan older than the latest one (read back after a seek) straight into the decay ring
-   * (and the stixel history), leaving the latest scan as it is
+   * (and the stixel history), leaving the latest scan as it is. A scan the history already holds
+   * (e.g. played, then read back) is skipped; that is checked only when both times tie.
    */
   public addOlderScan(
     pointCloud: PointCloud | PointCloud2,
     settings: LayerSettingsPointClouds,
     receiveTime: bigint,
   ): void {
-    const messageTime = toNanoSec(getTimestamp(pointCloud));
-    // Already in the history (e.g. played, then read back after a seek): nothing to decode
-    const fingerprint = payloadFingerprint(pointCloud.data);
-    const inRing = this.#decayRing?.has(receiveTime, messageTime, fingerprint) === true;
-    const inStixels =
-      !settings.stixelsEnabled || this.#stixelsHistory.has(receiveTime, messageTime, fingerprint);
     // An older cloud that can't be drawn is just skipped; the latest one stays
     const skip = () => {};
     if (
-      (inRing && inStixels) ||
       !this.#validatePointCloud(pointCloud, skip) ||
       !this.#getPointCloudFieldReaders(tempFieldReaders, pointCloud, settings, skip)
     ) {
       return;
     }
+    const messageTime = toNanoSec(getTimestamp(pointCloud));
     const count = Math.trunc(pointCloud.data.length / getStride(pointCloud));
     this.#scratch ??= createGeometry(`${this.userData.topic}:older`, THREE.StaticDrawUsage);
     this.#scratch.resize(count);
     const { position, color } = this.#scratch.attributes;
+    const positions = (position!.array as Float32Array).subarray(0, count * 3);
+    const colors = (color!.array as Uint8Array).subarray(0, count * 4);
+    const points = { ...settings, stixelsEnabled: false };
+    this.#updatePointCloudBuffers(
+      pointCloud,
+      tempFieldReaders,
+      count,
+      points,
+      position!,
+      color!,
+      position!,
+      color!,
+    );
+    this.#ring(settings).push(
+      {
+        receiveTime,
+        messageTime,
+        frameId: this.renderer.normalizeFrameId(getFrameId(pointCloud)),
+        pose: getPose(pointCloud),
+      },
+      positions,
+      colors,
+    );
+
     // Stixels keep one renderable per scan, inserted into their history in time order
-    const stixels = !inStixels
-      ? new StixelsRenderable(
-          this.userData.topic,
-          {
-            receiveTime: -1n, // unused
-            messageTime: -1n, // unused
-            frameId: "", //unused
-            pose: getPose(pointCloud),
-            settingsPath: [], //unused
-            settings: { visible: true }, //unused
-            topic: this.userData.topic,
-          },
-          createStixelGeometry(this.userData.topic, THREE.StaticDrawUsage),
-          this.userData.stixelMaterial,
-        )
-      : undefined;
-    stixels?.geometry.resize(count * 2);
+    const sameStixels = (renderable: StixelsRenderable) => {
+      const tops = renderable.geometry.attributes.position!.array as Float32Array;
+      if (renderable.geometry.drawRange.count !== count * 2) {
+        return false;
+      }
+      for (let i = 0; i < count; i++) {
+        if (!sameBytes(tops.subarray(i * 6, i * 6 + 3), positions.subarray(i * 3, i * 3 + 3))) {
+          return false;
+        }
+      }
+      return true;
+    };
+    if (
+      !settings.stixelsEnabled ||
+      this.#stixelsHistory.has(receiveTime, messageTime, sameStixels)
+    ) {
+      return;
+    }
+    const stixels = new StixelsRenderable(
+      this.userData.topic,
+      {
+        receiveTime: -1n, // unused
+        messageTime: -1n, // unused
+        frameId: "", //unused
+        pose: getPose(pointCloud),
+        settingsPath: [], //unused
+        settings: { visible: true }, //unused
+        topic: this.userData.topic,
+      },
+      createStixelGeometry(this.userData.topic, THREE.StaticDrawUsage),
+      this.userData.stixelMaterial,
+    );
+    stixels.geometry.resize(count * 2);
     this.#updatePointCloudBuffers(
       pointCloud,
       tempFieldReaders,
@@ -505,31 +534,11 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
       settings,
       position!,
       color!,
-      stixels?.geometry.attributes.position ?? position!,
-      stixels?.geometry.attributes.color ?? color!,
+      stixels.geometry.attributes.position!,
+      stixels.geometry.attributes.color!,
     );
-    if (stixels) {
-      this.add(stixels);
-      this.#stixelsHistory.insertOlderEntry({
-        receiveTime,
-        messageTime,
-        fingerprint,
-        renderable: stixels,
-      });
-    }
-    if (!inRing) {
-      this.#ring(settings).push(
-        {
-          receiveTime,
-          messageTime,
-          fingerprint,
-          frameId: this.renderer.normalizeFrameId(getFrameId(pointCloud)),
-          pose: getPose(pointCloud),
-        },
-        (position!.array as Float32Array).subarray(0, count * 3),
-        (color!.array as Uint8Array).subarray(0, count * 4),
-      );
-    }
+    this.add(stixels);
+    this.#stixelsHistory.insertOlderEntry({ receiveTime, messageTime, renderable: stixels });
   }
 
   /** The decay ring, created on first use, with the point budget of `settings` */

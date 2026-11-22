@@ -202,7 +202,6 @@ class LaserScanHistoryRenderable extends Renderable<LaserScanHistoryUserData> {
         {
           receiveTime: latestEntry.receiveTime,
           messageTime: latestEntry.messageTime,
-          fingerprint: payloadFingerprint(latest.userData.laserScan?.ranges ?? EMPTY_RANGES),
           frameId: latest.userData.frameId,
           pose: latest.userData.pose,
         },
@@ -230,15 +229,8 @@ class LaserScanHistoryRenderable extends Renderable<LaserScanHistoryUserData> {
     settings: LayerSettingsLaserScan,
     receiveTime: bigint,
   ): void {
-    // Already in the history (e.g. played, then read back after a seek): nothing to decode
-    if (
-      this.#decayRing?.has(
-        receiveTime,
-        toNanoSec(laserScan.timestamp),
-        payloadFingerprint(laserScan.ranges),
-      ) === true ||
-      laserScanError(laserScan, settings) != undefined
-    ) {
+    // (a scan the ring already holds, e.g. played and then read back, is skipped by its push)
+    if (laserScanError(laserScan, settings) != undefined) {
       return;
     }
     this.#scratch ??= createGeometry(`${this.userData.topic}:older`, THREE.StaticDrawUsage);
@@ -249,7 +241,6 @@ class LaserScanHistoryRenderable extends Renderable<LaserScanHistoryUserData> {
       {
         receiveTime,
         messageTime: toNanoSec(laserScan.timestamp),
-        fingerprint: payloadFingerprint(laserScan.ranges),
         frameId: this.renderer.normalizeFrameId(laserScan.frame_id),
         pose: laserScan.pose,
       },

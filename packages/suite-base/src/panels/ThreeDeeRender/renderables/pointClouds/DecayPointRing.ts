@@ -19,8 +19,6 @@ type RingScan = {
   frameId: string;
   /** The message's own pose in its frame */
   pose: Pose;
-  /** Tells apart distinct records with the same times (see payloadFingerprint) */
-  fingerprint: number;
   slot: number;
   start: number;
   count: number;
@@ -32,10 +30,7 @@ type RingScan = {
   stride: number;
 };
 
-export type RingScanInfo = Pick<
-  RingScan,
-  "receiveTime" | "messageTime" | "frameId" | "pose" | "fingerprint"
->;
+export type RingScanInfo = Pick<RingScan, "receiveTime" | "messageTime" | "frameId" | "pose">;
 
 /**
  * Scans whose pose row is (re)computed per frame. New scans and ones still missing a transform go
@@ -84,6 +79,21 @@ function transformsKey(
   currentTime: bigint,
 ): { version: number; time: bigint | undefined } {
   return { version: tree.version, time: tree.isComplete() ? currentTime : undefined };
+}
+
+/** Byte-wise equality of two typed arrays (NaN positions compare equal to themselves) */
+export function sameBytes(a: ArrayBufferView, b: ArrayBufferView): boolean {
+  if (a.byteLength !== b.byteLength) {
+    return false;
+  }
+  const x = new Uint8Array(a.buffer, a.byteOffset, a.byteLength);
+  const y = new Uint8Array(b.buffer, b.byteOffset, b.byteLength);
+  for (let i = 0; i < x.length; i++) {
+    if (x[i] !== y[i]) {
+      return false;
+    }
+  }
+  return true;
 }
 
 /** Writes the top 3 rows of an affine matrix (three.js stores columns) */
@@ -211,13 +221,27 @@ export class DecayPointRing extends Renderable<BaseUserData, /*TRenderer=*/ unde
     return this.#livePoints;
   }
 
-  /** Whether the ring holds this record: its times and payload fingerprint */
-  public has(receiveTime: bigint, messageTime: bigint, fingerprint: number): boolean {
+  /**
+   * Whether the ring holds this scan: same receive time and header stamp, and (only on such a tie,
+   * so playback pays nothing) the same points and colors. Distinct records can share both times,
+   * e.g. the segments of one sweep published together.
+   */
+  public holds(
+    receiveTime: bigint,
+    messageTime: bigint,
+    positions: Float32Array,
+    colors: Uint8Array,
+  ): boolean {
     return this.#scans.some(
       (scan) =>
         scan.receiveTime === receiveTime &&
         scan.messageTime === messageTime &&
-        scan.fingerprint === fingerprint,
+        scan.count * 3 === positions.length &&
+        sameBytes(
+          this.#positions.subarray(scan.start * 3, (scan.start + scan.count) * 3),
+          positions,
+        ) &&
+        sameBytes(this.#colors.subarray(scan.start * 4, (scan.start + scan.count) * 4), colors),
     );
   }
 
@@ -265,7 +289,7 @@ export class DecayPointRing extends Renderable<BaseUserData, /*TRenderer=*/ unde
       return;
     }
     // The same message pushed again (e.g. read back after a seek twice)
-    if (this.has(info.receiveTime, info.messageTime, info.fingerprint)) {
+    if (this.holds(info.receiveTime, info.messageTime, positions, colors)) {
       return;
     }
     if (++this.#sinceKept < this.#stride) {

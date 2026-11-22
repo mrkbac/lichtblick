@@ -106,7 +106,6 @@ function run(Ring: RingClass, sc: Scenario) {
         messageTime: scanNext,
         frameId: "lidar",
         pose: makePose(),
-        fingerprint: 0,
       };
       ring.push(info, positions.subarray(0, n * 3), colors.subarray(0, n * 4));
       workMs += performance.now() - t0;
