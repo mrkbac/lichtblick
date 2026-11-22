@@ -86,5 +86,6 @@ export function resolveChartDatum(item: unknown): ChartDatum | undefined {
   if (Number.isNaN(chartValue)) {
     return { y: chartValue, value: null };
   }
-  return { y: chartValue, value: item };
+  // Stamps are kept as `Time`, so the legend, hover, copy and delta read ROS 2 ones too
+  return { y: chartValue, value: stampToTime(item) ?? item };
 }

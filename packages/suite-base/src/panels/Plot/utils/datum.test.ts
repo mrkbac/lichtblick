@@ -89,6 +89,13 @@ describe("Chart Value Utilities", () => {
       expect(resolveChartDatum("not-a-number")).toEqual({ y: NaN, value: null });
     });
 
+    it("should keep ROS 2 stamps as Time, so legend, hover and copy can read them", () => {
+      expect(resolveChartDatum({ sec: 10, nanosec: 5e8 })).toEqual({
+        y: 10.5,
+        value: { sec: 10, nsec: 5e8 },
+      });
+    });
+
     it("should resolve Time objects to seconds", () => {
       const time: Time = { sec: 10, nsec: 5e8 };
       expect(resolveChartDatum(time)).toEqual({ y: 10.5, value: time });

@@ -26,7 +26,9 @@ function asTime(value: object): Time | undefined {
   if (Array.isArray(value) || ArrayBuffer.isView(value)) {
     return undefined; // Object.keys would list every element
   }
-  return Object.keys(value).length === 2 ? stampToTime(value) : undefined;
+  const time = Object.keys(value).length === 2 ? stampToTime(value) : undefined;
+  // Only whole sec/nsec are a time; anything else (e.g. { sec: 1.5, nsec: 0 }) is a plain object
+  return time && Number.isInteger(time.sec) && Number.isInteger(time.nsec) ? time : undefined;
 }
 
 /** `sec.nsec` with the sign of the whole value: { sec: -1, nsec: 5e8 } is -0.5 s. */
