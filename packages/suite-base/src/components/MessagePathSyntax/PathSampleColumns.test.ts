@@ -39,10 +39,71 @@ describe("PathSampleColumns", () => {
       [3, 1],
       [5, 1],
       [6, 0],
-      [7, 0],
       [8, 0],
       [9, 2],
     ]);
+    expect(columns.isExact()).toBe(true);
+  });
+
+  it("keeps signed and full unsigned 32-bit seconds", () => {
+    const stamps = [
+      { sec: -1, nsec: 5 },
+      { sec: -(2 ** 31), nsec: 999_999_999 },
+      { sec: 4_294_967_295, nsec: 0 },
+      { sec: 0, nsec: 0 },
+    ];
+    const columns = PathSampleColumns.from(
+      stamps.map((headerStamp, i) => sample(i - 1, 1, { headerStamp })),
+    );
+    expect(stamps.map((_, i) => columns.headerStamp(i))).toEqual(stamps);
+    expect(columns.receiveTime(0)).toEqual({ sec: -1, nsec: 7 });
+  });
+
+  it("keeps every value change exactly while the changes fit", () => {
+    const columns = new PathSampleColumns(100);
+    const changes: number[] = [];
+    let value = 0;
+    for (let i = 0; i < 10_000; i++) {
+      // 60 runs alternating true/false, each 100-250 samples long.
+      if (i % 167 === 0) {
+        value = 1 - value;
+        changes.push(i);
+      }
+      columns.push(sample(i, value === 1));
+    }
+    const kept = columns.toArray();
+    const keptChanges = kept
+      .filter((s, i) => i === 0 || s.value !== kept[i - 1]!.value)
+      .map((s) => s.receiveTime.sec);
+    expect(keptChanges).toEqual(changes);
+    expect(kept.at(-1)?.receiveTime.sec).toBe(9_999);
+    expect(columns.isExact()).toBe(true);
+  });
+
+  it("says when thinning may have merged changes", () => {
+    const columns = new PathSampleColumns(100);
+    for (let i = 0; i < 1000; i++) {
+      columns.push(sample(i, i % 2 === 0));
+    }
+    expect(columns.isExact()).toBe(false);
+  });
+
+  it("keeps the header-stamped samples of a run", () => {
+    const columns = new PathSampleColumns(8);
+    for (let i = 0; i < 40; i++) {
+      const stamped = i === 20 || i === 21;
+      columns.push(sample(i, "A", stamped ? { headerStamp: { sec: i, nsec: 0 } } : {}));
+    }
+    const stamps = columns.toArray().filter((s) => s.headerStamp != undefined);
+    expect(stamps.length).toBeGreaterThan(0);
+  });
+
+  it("keeps the value table bounded when overwritten samples have unique values", () => {
+    const columns = new PathSampleColumns(100);
+    for (let i = 0; i < 200_000; i++) {
+      columns.push(sample(i, i));
+    }
+    expect(columns.distinctValues()).toBeLessThanOrEqual(1025);
   });
 
   it("keeps the whole span when every sample is a change", () => {

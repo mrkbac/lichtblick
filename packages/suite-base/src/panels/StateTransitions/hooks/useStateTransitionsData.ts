@@ -50,6 +50,7 @@ function useStateTransitionsData(
         minY: undefined,
         pathState: [],
         matchStarts: [],
+        matchesExact: true,
       };
     }
 
@@ -57,6 +58,7 @@ function useStateTransitionsData(
     const outDatasets: ChartDatasets = [];
     const outPathState: PathState[] = [];
     const matchStarts = new Set<number>();
+    let matchesExact = true;
 
     paths.forEach((path, pathIndex) => {
       const y = -(pathIndex + 1) * ROW_SPACING;
@@ -77,6 +79,12 @@ function useStateTransitionsData(
 
       const items = itemsByPath[path.value];
       const isArray = datasetContainsArray([...blocksForPath, items]);
+      if (
+        hasCondition &&
+        [...blocksForPath, items].some((samples) => samples?.isExact() === false)
+      ) {
+        matchesExact = false;
+      }
 
       outPathState.push({
         path,
@@ -111,6 +119,7 @@ function useStateTransitionsData(
       minY: outMinY,
       pathState: outPathState,
       matchStarts: [...matchStarts].sort((a, b) => a - b),
+      matchesExact,
     };
   }, [decodedBlocks, itemsByPath, paths, startTime, showPoints, darkenLabels]);
 }

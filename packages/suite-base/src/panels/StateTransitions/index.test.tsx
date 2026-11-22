@@ -72,6 +72,7 @@ vi.mock("@lichtblick/suite-base/panels/StateTransitions/hooks/useStateTransition
     data: { datasets: [{ data: [{ x: 1, y: 0, value: "A" }] }] },
     minY: 0,
     matchStarts: [1, 5],
+    matchesExact: true,
   }),
 }));
 vi.mock("@lichtblick/suite-base/panels/StateTransitions/hooks/useChartScalesAndBounds", () => ({

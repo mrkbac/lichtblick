@@ -11,9 +11,9 @@ import { fontMonospace } from "@lichtblick/theme";
 
 export const EMPTY_ITEMS_BY_PATH: SamplesByPath = {};
 /**
- * Samples kept per path (20 bytes each), live or over a recorded range. Past this, runs of a
- * repeated value are thinned first (the chart looks the same unless points are shown), then every
- * other sample, so the whole history stays visible.
+ * Samples kept per path (20 bytes each), live or over a recorded range. Past this, repeats are
+ * thinned first (value changes and matches stay exact), then every other sample, so the whole
+ * history stays visible. See PathSampleColumns.
  */
 export const MAX_SAMPLES_PER_PATH = 1_000_000;
 /** How often the chart takes live updates. */

@@ -37,9 +37,14 @@ export function toPathSample(
   };
 }
 
-// One sample = receive sec, receive nsec, header sec, header nsec, value index.
+// One sample = receive sec, receive nsec, header sec, header nsec (NO_STAMP without one), value
+// index. Seconds keep their low 32 bits and bit 31 of the nsec word (nsec < 1e9 < 2^31) marks a
+// negative second, so signed ROS 2 stamps and unsigned ROS 1 ones (up to 2^32 - 1) both round-trip.
+// (Float64 storage would be simpler but made ingest about 5x slower.)
 const STRIDE = 5;
 const NO_STAMP = 0xffffffff;
+const NEGATIVE = 0x80000000;
+const U32 = 0x100000000;
 const INITIAL_CAPACITY = 1024;
 /** Recently seen values checked before the value maps. */
 const RECENT = 4;
@@ -49,12 +54,27 @@ const INVALID: SampleValue = { count: 1, value: undefined, constantName: undefin
  * Samples of one message path, oldest first, in 20 bytes each: timestamps in a typed array and
  * each distinct value stored once.
  *
- * At most `maxSamples` are kept. Reaching it first drops samples that repeat the value on both
- * sides (they only matter for drawn points, not for where states change), then, if that frees
- * too little, every other sample across the whole history; from then on only every `stride`-th new
- * sample is kept (plus always the newest), so density stays even over time. A long history keeps
- * its full span at a lower resolution instead of losing its start.
+ * At most `maxSamples` are kept. Each time the budget is reached, the history is thinned one level
+ * further, and from then on new samples are thinned the same way as they arrive:
+ * 1. Drop samples between two with the same value (and the same header stamp presence). Every run
+ *    of a value keeps its first and last sample.
+ * 2. Also drop the last sample of a run unless a gap (null) follows: the next run's start ends it.
+ *    Every value change is still kept exactly, so condition matches stay exact (`isExact`).
+ * 3. Keep every other sample across the whole history; from then on only every `stride`-th new one
+ *    (plus always the newest). The span stays whole at a lower resolution, but changes can merge.
  */
+function writeTime(data: Uint32Array, at: number, { sec, nsec }: Time): void {
+  data[at] = sec;
+  data[at + 1] = sec < 0 ? nsec + NEGATIVE : nsec;
+}
+
+function readTime(data: Uint32Array, at: number): Time {
+  const nsec = data[at + 1]!;
+  return nsec >= NEGATIVE
+    ? { sec: data[at]! - U32, nsec: nsec - NEGATIVE }
+    : { sec: data[at]!, nsec };
+}
+
 export class PathSampleColumns {
   public readonly maxSamples: number;
   #data = new Uint32Array(INITIAL_CAPACITY * STRIDE);
@@ -71,6 +91,8 @@ export class PathSampleColumns {
   #recentCount = new Int32Array(RECENT);
   #recentIndex = new Int32Array(RECENT).fill(-1);
   #nextRecent = 0;
+  /** How far thinning has gone (see the class comment); 0 keeps every sample. */
+  #level = 0;
   #stride = 1;
   /** Samples pushed since the last one kept for good. */
   #sinceKept = 0;
@@ -94,45 +116,64 @@ export class PathSampleColumns {
     return this.#length;
   }
 
+  /** Size of the value table (for tests). */
+  public distinctValues(): number {
+    return this.#values.length;
+  }
+
+  /** False once thinning may have merged value changes (level 3). */
+  public isExact(): boolean {
+    return this.#level < 3;
+  }
+
   /** Appends a message's decoded value; samples must arrive in message order. */
   public pushMessage(message: MessageEvent, queriedData: readonly MessagePathDataItem[]): void {
     this.push(toPathSample(message, queriedData));
   }
 
   public push(sample: PathSample): void {
-    // The newest sample is held provisionally until it is the stride-th one.
-    if (this.#sinceKept > 0) {
-      this.#length--;
-    }
-    if (this.#length >= this.maxSamples) {
-      this.#thin();
+    // Samples overwritten below leave their values behind: drop unused ones once they pile up.
+    if (this.#values.length >= Math.max(INITIAL_CAPACITY, 2 * this.#length)) {
+      this.#compactValues();
     }
     if ((this.#length + 1) * STRIDE > this.#data.length) {
-      const capacity = Math.min(this.maxSamples, (this.#data.length / STRIDE) * 2);
+      // One spare slot: the new sample is written before thinning makes room.
+      const capacity = Math.min(this.maxSamples + 1, (this.#data.length / STRIDE) * 2);
       const grown = new Uint32Array(capacity * STRIDE);
       grown.set(this.#data);
       this.#data = grown;
     }
-    const at = this.#length * STRIDE;
+    const n = this.#length;
     const data = this.#data;
-    data[at] = sample.receiveTime.sec;
-    data[at + 1] = sample.receiveTime.nsec;
-    data[at + 2] = sample.headerStamp?.sec ?? 0;
-    data[at + 3] = sample.headerStamp?.nsec ?? NO_STAMP;
-    data[at + 4] = this.#valueIndex(sample);
+    writeTime(data, n * STRIDE, sample.receiveTime);
+    if (sample.headerStamp) {
+      writeTime(data, n * STRIDE + 2, sample.headerStamp);
+    } else {
+      data[n * STRIDE + 3] = NO_STAMP;
+    }
+    data[n * STRIDE + 4] = this.#valueIndex(sample);
     this.#length++;
+
+    // The previous newest sample was held provisionally until it was the stride-th one, or is
+    // one the current thinning level drops.
+    if (this.#sinceKept > 0 || (this.#level > 0 && n >= 2 && this.#canDrop(n - 2, n - 1, n))) {
+      data.copyWithin((n - 1) * STRIDE, n * STRIDE, (n + 1) * STRIDE);
+      this.#length--;
+    }
+    if (this.#length > this.maxSamples) {
+      this.#thin();
+    }
     if (this.#stride > 1) {
       this.#sinceKept = (this.#sinceKept + 1) % this.#stride;
     }
   }
 
   public receiveTime(i: number): Time {
-    return { sec: this.#data[i * STRIDE]!, nsec: this.#data[i * STRIDE + 1]! };
+    return readTime(this.#data, i * STRIDE);
   }
 
   public headerStamp(i: number): Time | undefined {
-    const nsec = this.#data[i * STRIDE + 3]!;
-    return nsec === NO_STAMP ? undefined : { sec: this.#data[i * STRIDE + 2]!, nsec };
+    return this.hasHeaderStamp(i) ? readTime(this.#data, i * STRIDE + 2) : undefined;
   }
 
   /** Equal for two samples exactly when their SampleValue is the same. */
@@ -213,28 +254,42 @@ export class PathSampleColumns {
     return index;
   }
 
+  /** Whether sample `i` can go at the current level, given the kept one before and the next. */
+  #canDrop(prev: number, i: number, next: number): boolean {
+    const id = this.valueId(i);
+    const stamped = this.hasHeaderStamp(i);
+    if (id !== this.valueId(prev) || stamped !== this.hasHeaderStamp(prev)) {
+      return false; // i starts a run
+    }
+    if (this.#level >= 2) {
+      // A run's last sample is only needed to end it before a gap.
+      // eslint-disable-next-line @lichtblick/strict-equality
+      return this.sampleValue(next).value !== null;
+    }
+    return id === this.valueId(next) && stamped === this.hasHeaderStamp(next);
+  }
+
   #thin(): void {
     const data = this.#data;
-    const n = this.#length;
     const target = Math.floor((this.maxSamples * 3) / 4);
 
-    // Drop samples whose value equals both neighbours'.
-    let kept = 0;
-    for (let i = 0; i < n; i++) {
-      const value = data[i * STRIDE + 4];
-      const isRepeat =
-        i > 0 &&
-        i < n - 1 &&
-        value === data[(i - 1) * STRIDE + 4] &&
-        value === data[(i + 1) * STRIDE + 4];
-      if (!isRepeat) {
-        data.copyWithin(kept * STRIDE, i * STRIDE, (i + 1) * STRIDE);
-        kept++;
+    while (this.#level < 2 && this.#length > target) {
+      this.#level++;
+      const n = this.#length;
+      let kept = 1;
+      for (let i = 1; i < n; i++) {
+        if (i === n - 1 || !this.#canDrop(kept - 1, i, i + 1)) {
+          data.copyWithin(kept * STRIDE, i * STRIDE, (i + 1) * STRIDE);
+          kept++;
+        }
       }
+      this.#length = kept;
     }
 
     // Still too dense: keep every other sample (and the newest) until there is room.
+    let kept = this.#length;
     while (kept > target) {
+      this.#level = 3;
       let half = 0;
       for (let i = 0; i < kept; i += 2) {
         data.copyWithin(half * STRIDE, i * STRIDE, (i + 1) * STRIDE);

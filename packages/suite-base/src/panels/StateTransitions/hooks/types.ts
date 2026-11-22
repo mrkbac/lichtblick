@@ -12,4 +12,6 @@ export type UseStateTransitionsData = {
   minY: number | undefined;
   /** Sorted seconds-since-start where any condition series becomes true. */
   matchStarts: number[];
+  /** False when thinning a long history may have merged some matches. */
+  matchesExact: boolean;
 };

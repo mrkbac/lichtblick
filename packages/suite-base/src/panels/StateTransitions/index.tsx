@@ -159,7 +159,7 @@ function StateTransitions(props: StateTransitionPanelProps) {
 
   const showPoints = config.showPoints === true;
 
-  const { pathState, data, minY, matchStarts } = useStateTransitionsData(
+  const { pathState, data, minY, matchStarts, matchesExact } = useStateTransitionsData(
     paths,
     startTime,
     newItemsByPath,
@@ -340,6 +340,7 @@ function StateTransitions(props: StateTransitionPanelProps) {
                   data-testid="state-transitions-match-count"
                   color="textSecondary"
                 >
+                  {matchesExact ? "" : "≈"}
                   {matchesSoFar}/{matchStarts.length}
                 </Typography>
                 <PanelIconButton
