@@ -32,6 +32,14 @@ export type PanelInfo = {
   /** Set this to true if a panel has custom toolbar items and so cannot be renamed. */
   hasCustomToolbar?: boolean;
 
+  /**
+   * Offer the panel under "Open in …" for topics and fields (e.g. in the topic list). `topic`:
+   * topics whose schema the panel's `docs` list; `field`: leaf fields; `path`: any topic or field.
+   * Without `multiple` only one item at a time. The new panel gets them through its message path
+   * drop.
+   */
+  openIn?: { kind: "topic" | "field" | "path"; multiple?: boolean };
+
   /** Keep the panel loadable from saved layouts but don't offer it in the panel list. */
   hidden?: boolean;
 

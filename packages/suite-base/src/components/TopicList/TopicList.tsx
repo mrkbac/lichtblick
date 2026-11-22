@@ -31,7 +31,7 @@ import { MessagePathRow } from "./MessagePathRow";
 import { useStyles } from "./TopicList.style";
 import { TopicRow } from "./TopicRow";
 import { useMultiSelection } from "./useMultiSelection";
-import { useOpenMessagePathsInPanel } from "./useOpenMessagePathsInPanel";
+import { useOpenMessagePathsInPanel, usePrefetchOpenInSchemas } from "./useOpenMessagePathsInPanel";
 import { useTopicListSearch } from "./useTopicListSearch";
 
 export function TopicList(): React.JSX.Element {
@@ -84,28 +84,43 @@ export function TopicList(): React.JSX.Element {
     );
   }, [getSelectedIndexes, latestTreeItems]);
 
-  const handleContextMenu = useCallback(
-    (event: MouseEvent, index: number) => {
-      event.preventDefault();
-
+  const openMenu = useCallback(
+    (position: PopoverPosition, index: number) => {
       const latestSelectedIndexes = getSelectedIndexes();
       // Select only the clicked item if it was not already selected
       if (!latestSelectedIndexes.has(index)) {
         onSelect({ index, modKey: false, shiftKey: false });
       }
-      setContextMenuState({
-        position: { left: event.clientX, top: event.clientY },
-        items: getSelectedItemsAsDraggedMessagePaths(),
-      });
+      setContextMenuState({ position, items: getSelectedItemsAsDraggedMessagePaths() });
     },
     [getSelectedIndexes, getSelectedItemsAsDraggedMessagePaths, onSelect],
+  );
+
+  const handleContextMenu = useCallback(
+    (event: MouseEvent, index: number) => {
+      event.preventDefault();
+      openMenu({ left: event.clientX, top: event.clientY }, index);
+    },
+    [openMenu],
+  );
+
+  const handleOpenInPanelClick = useCallback(
+    (event: MouseEvent<HTMLElement>, index: number) => {
+      event.stopPropagation();
+      const rect = event.currentTarget.getBoundingClientRect();
+      openMenu({ left: rect.left, top: rect.bottom }, index);
+    },
+    [openMenu],
   );
 
   const openMessagePathsInPanel = useOpenMessagePathsInPanel();
   const handleDoubleClick = useCallback(() => {
     // The two clicks before the double-click already updated the selection
-    openMessagePathsInPanel(getSelectedItemsAsDraggedMessagePaths());
+    void openMessagePathsInPanel(getSelectedItemsAsDraggedMessagePaths());
   }, [getSelectedItemsAsDraggedMessagePaths, openMessagePathsInPanel]);
+
+  // Load the panels' schemas before the first right-click or double-click needs them
+  const prefetchOpenInSchemas = usePrefetchOpenInSchemas();
 
   const handleContextMenuClose = useCallback(() => {
     setContextMenuState(undefined);
@@ -136,6 +151,9 @@ export function TopicList(): React.JSX.Element {
               onContextMenu={(event) => {
                 handleContextMenu(event, index);
               }}
+              onOpenInPanelClick={(event) => {
+                handleOpenInPanelClick(event, index);
+              }}
             />
           );
         case "schema":
@@ -155,7 +173,14 @@ export function TopicList(): React.JSX.Element {
       }
       return null;
     },
-    [handleContextMenu, handleDoubleClick, onSelect, selectedIndexes, treeItems],
+    [
+      handleContextMenu,
+      handleDoubleClick,
+      handleOpenInPanelClick,
+      onSelect,
+      selectedIndexes,
+      treeItems,
+    ],
   );
 
   if (playerPresence === PlayerPresence.NOT_PRESENT) {
@@ -201,7 +226,7 @@ export function TopicList(): React.JSX.Element {
 
   return (
     <MessagePathSelectionProvider getSelectedItems={getSelectedItemsAsDraggedMessagePaths}>
-      <div className={classes.root}>
+      <div className={classes.root} onPointerEnter={prefetchOpenInSchemas}>
         <SearchBar
           id="topic-filter"
           placeholder={t("searchBarPlaceholder")}
@@ -242,6 +267,7 @@ export function TopicList(): React.JSX.Element {
           onClose={handleContextMenuClose}
           anchorPosition={contextMenuState.position}
           messagePaths={contextMenuState.items}
+          doubleClickOpens
         />
       )}
     </MessagePathSelectionProvider>

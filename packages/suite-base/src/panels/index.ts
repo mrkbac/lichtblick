@@ -99,6 +99,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
   {
     title: t("3D"),
     type: "3D",
+    openIn: { kind: "topic", multiple: true },
     icon: Cube20Regular,
     keywords: ["scene", "pointcloud", "lidar", "markers", "rviz"],
     description: t("3DPanelDescription"),
@@ -121,6 +122,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
   {
     title: t("ROSDiagnosticSummary"),
     type: "DiagnosticSummary",
+    openIn: { kind: "topic", multiple: true },
     icon: Stethoscope20Regular,
     description: t("ROSDiagnosticSummaryDescription"),
     thumbnail: diagnosticSummaryThumbnail,
@@ -132,6 +134,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
   {
     title: t("image"),
     type: "Image",
+    openIn: { kind: "topic" },
     icon: Image20Regular,
     keywords: ["camera", "video", "picture"],
     description: t("imageDescription"),
@@ -143,6 +146,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
   {
     title: t("cameraGrid"),
     type: "CameraGrid",
+    openIn: { kind: "topic", multiple: true },
     icon: Grid20Regular,
     keywords: ["cameras", "images", "multi camera"],
     description: t("cameraGridDescription"),
@@ -154,6 +158,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
   {
     title: t("indicator"),
     type: "Indicator",
+    openIn: { kind: "field" },
     icon: Lightbulb20Regular,
     description: t("indicatorDescription"),
     thumbnail: indicatorThumbnail,
@@ -187,6 +192,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
   {
     title: t("gauge"),
     type: "Gauge",
+    openIn: { kind: "field" },
     icon: Gauge20Regular,
     description: t("gaugeDescription"),
     thumbnail: gaugeThumbnail,
@@ -208,6 +214,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
   {
     title: t("map"),
     type: "map",
+    openIn: { kind: "topic", multiple: true },
     icon: Map20Regular,
     keywords: ["gps", "navsat", "geo"],
     description: t("mapDescription"),
@@ -229,6 +236,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
   {
     title: t("plot"),
     type: "Plot",
+    openIn: { kind: "field", multiple: true },
     icon: DataLine20Regular,
     keywords: ["chart", "graph", "timeseries", "line"],
     description: t("plotDescription"),
@@ -272,6 +280,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
   {
     title: t("rawMessages"),
     type: "RawMessages",
+    openIn: { kind: "path" },
     icon: Braces20Regular,
     keywords: ["json", "inspect", "echo"],
     description: t("rawMessagesDescription"),
@@ -297,6 +306,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
   {
     title: t("audio"),
     type: "Audio",
+    openIn: { kind: "topic" },
     icon: Speaker220Regular,
     description: t("audioDescription"),
     thumbnail: audioThumbnail,
@@ -307,6 +317,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
   {
     title: t("log"),
     type: "RosOut",
+    openIn: { kind: "topic", multiple: true },
     icon: TextBulletListLtr20Regular,
     keywords: ["rosout", "console", "logs"],
     description: t("logDescription"),
@@ -318,6 +329,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
   {
     title: t("stateTransitions"),
     type: "StateTransitions",
+    openIn: { kind: "field", multiple: true },
     icon: Timeline20Regular,
     keywords: ["enum", "states", "timeline"],
     description: t("stateTransitionsDescription"),
@@ -329,6 +341,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
   {
     title: t("table"),
     type: "Table",
+    openIn: { kind: "path" },
     icon: Table20Regular,
     description: t("tableDescription"),
     thumbnail: tableThumbnail,
@@ -351,6 +364,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
   {
     title: t("transformTree"),
     type: "TransformTree",
+    openIn: { kind: "topic", multiple: true },
     icon: BranchFork20Regular,
     keywords: ["tf", "tf_static", "frames", "transforms"],
     description: t("transformTreeDescription"),

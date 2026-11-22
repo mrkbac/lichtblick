@@ -8,94 +8,138 @@ import {
   useCurrentLayoutActions,
   useSelectedPanels,
 } from "@lichtblick/suite-base/context/CurrentLayoutContext";
-import * as foxglove from "@lichtblick/suite-base/panels/ThreeDeeRender/foxglove";
-import * as ros from "@lichtblick/suite-base/panels/ThreeDeeRender/ros";
+import { PanelInfo, usePanelCatalog } from "@lichtblick/suite-base/context/PanelCatalogContext";
 import {
   dropOnFirstAcceptingPanel,
   queuePanelDrop,
 } from "@lichtblick/suite-base/services/messagePathDragging/panelDropRegistry";
-import { getPanelIdForType } from "@lichtblick/suite-base/util/layout";
+import { getPanelIdForType, getPanelTypeFromId } from "@lichtblick/suite-base/util/layout";
 
-const IMAGE_SCHEMAS = new Set([
-  ...ros.IMAGE_DATATYPES,
-  ...ros.COMPRESSED_IMAGE_DATATYPES,
-  ...foxglove.RAW_IMAGE_DATATYPES,
-  ...foxglove.COMPRESSED_IMAGE_DATATYPES,
-  ...foxglove.COMPRESSED_VIDEO_DATATYPES,
-]);
+/** Schemas each panel reads, by panel type; from the panels' lazily loaded docs. */
+export type SchemasByPanelType = ReadonlyMap<string, ReadonlySet<string>>;
 
-// ponytail: static list, ignores user message converters; ask the 3D renderer if that matters.
-const SCENE_SCHEMAS = new Set([
-  ...ros.TF_DATATYPES,
-  ...ros.TRANSFORM_STAMPED_DATATYPES,
-  ...ros.MARKER_DATATYPES,
-  ...ros.MARKER_ARRAY_DATATYPES,
-  ...ros.OCCUPANCY_GRID_DATATYPES,
-  ...ros.VOXEL_GRID_DATATYPES,
-  ...ros.POINTCLOUD_DATATYPES,
-  ...ros.LASERSCAN_DATATYPES,
-  ...ros.VELODYNE_SCAN_DATATYPES,
-  ...ros.POSE_STAMPED_DATATYPES,
-  ...ros.POSE_WITH_COVARIANCE_STAMPED_DATATYPES,
-  ...ros.POSE_ARRAY_DATATYPES,
-  ...ros.NAV_PATH_DATATYPES,
-  ...ros.POLYGON_STAMPED_DATATYPES,
-  ...foxglove.FRAME_TRANSFORM_DATATYPES,
-  ...foxglove.FRAME_TRANSFORMS_DATATYPES,
-  ...foxglove.POINTCLOUD_DATATYPES,
-  ...foxglove.LASERSCAN_DATATYPES,
-  ...foxglove.SCENE_UPDATE_DATATYPES,
-  ...foxglove.POSE_IN_FRAME_DATATYPES,
-  ...foxglove.POSES_IN_FRAME_DATATYPES,
-  ...foxglove.GRID_DATATYPES,
-  ...foxglove.VOXEL_GRID_DATATYPES,
-]);
+const schemasByPanel = new WeakMap<PanelInfo, Promise<ReadonlySet<string>>>();
 
-/** Picks the panel type a new panel should have to show the given message paths. */
-export function getPanelTypeForPaths(paths: readonly DraggedMessagePath[]): string {
-  const allTopicsOf = (schemas: ReadonlySet<string>) =>
-    paths.every((p) => p.isTopic && p.rootSchemaName != undefined && schemas.has(p.rootSchemaName));
-
-  if (paths.length === 1 && allTopicsOf(IMAGE_SCHEMAS)) {
-    return "Image";
+async function loadSchemas(panel: PanelInfo): Promise<ReadonlySet<string>> {
+  let schemas = schemasByPanel.get(panel);
+  if (!schemas) {
+    schemas = (panel.docs?.() ?? Promise.resolve(undefined)).then(
+      (docs) => new Set(docs?.default.schemas ?? []),
+      () => new Set<string>(),
+    );
+    schemasByPanel.set(panel, schemas);
   }
-  if (allTopicsOf(SCENE_SCHEMAS)) {
-    return "3D";
+  return schemas;
+}
+
+/** Loads the schemas of every panel offered for topics. Cached, so cheap after the first call. */
+export async function loadOpenInSchemas(panels: readonly PanelInfo[]): Promise<SchemasByPanelType> {
+  const topicPanels = panels.filter((panel) => panel.openIn?.kind === "topic");
+  const schemas = await Promise.all(topicPanels.map(loadSchemas));
+  return new Map(topicPanels.map((panel, i) => [panel.type, schemas[i]!]));
+}
+
+/** Returns a callback that starts loading the schemas, e.g. when the pointer nears a topic. */
+export function usePrefetchOpenInSchemas(): () => void {
+  const panelCatalog = usePanelCatalog();
+  return useCallback(() => {
+    void loadOpenInSchemas(panelCatalog.getPanels());
+  }, [panelCatalog]);
+}
+
+function acceptsPath(panel: PanelInfo, schemas: SchemasByPanelType, path: DraggedMessagePath) {
+  switch (panel.openIn?.kind) {
+    case "topic":
+      return (
+        path.isTopic &&
+        path.rootSchemaName != undefined &&
+        schemas.get(panel.type)?.has(path.rootSchemaName) === true
+      );
+    case "field":
+      return path.isLeaf;
+    case "path":
+      return true;
+    case undefined:
+      return false;
   }
-  if (paths.every((p) => p.isLeaf)) {
-    return "Plot";
-  }
-  return "RawMessages";
+}
+
+/** The panels that can show all of `paths`, in catalog order. */
+export function getOpenInPanels(
+  panels: readonly PanelInfo[],
+  schemas: SchemasByPanelType,
+  paths: readonly DraggedMessagePath[],
+): PanelInfo[] {
+  return panels.filter(
+    (panel) =>
+      panel.hidden !== true &&
+      paths.length > 0 &&
+      (paths.length === 1 || panel.openIn?.multiple === true) &&
+      paths.every((path) => acceptsPath(panel, schemas, path)),
+  );
+}
+
+// Most specific first: an image topic also opens in 3D, a log topic also in Raw Messages.
+const DEFAULT_PREFERENCE = ["Image", "Audio", "RosOut", "map", "CameraGrid", "3D", "Plot"];
+
+/** The panel type a double-click opens `paths` in. */
+export function getDefaultPanelType(offered: readonly PanelInfo[]): string {
+  const types = offered.map((panel) => panel.type);
+  return (
+    DEFAULT_PREFERENCE.find((type) => types.includes(type)) ??
+    offered.find((panel) => panel.openIn?.kind === "topic")?.type ??
+    "RawMessages"
+  );
 }
 
 /**
- * Shows message paths in the selected panel if it accepts them, otherwise in a new panel of the
- * matching type. The new panel gets selected so further paths are added to it.
+ * Shows message paths in a panel of `type`, or the default type for them: in the selected panel
+ * if it accepts them, otherwise in a new panel next to it. The new panel gets selected so further
+ * paths are added to it.
  */
-export function useOpenMessagePathsInPanel(): (paths: readonly DraggedMessagePath[]) => void {
+export function useOpenMessagePathsInPanel(): (
+  paths: readonly DraggedMessagePath[],
+  type?: string,
+) => Promise<void> {
   const { addPanel } = useCurrentLayoutActions();
   const { getSelectedPanelIds, setSelectedPanelIds } = useSelectedPanels();
+  const panelCatalog = usePanelCatalog();
 
   return useCallback(
-    (paths: readonly DraggedMessagePath[]) => {
-      if (paths.length === 0 || dropOnFirstAcceptingPanel(getSelectedPanelIds(), paths)) {
+    async (paths: readonly DraggedMessagePath[], requestedType?: string) => {
+      if (paths.length === 0) {
         return;
       }
-      // Raw Messages only shows one path at a time
-      const type = getPanelTypeForPaths(paths);
-      const shownPaths = type === "RawMessages" ? paths.slice(0, 1) : paths;
+      const selected = getSelectedPanelIds();
+      const candidates =
+        requestedType == undefined
+          ? selected
+          : selected.filter((id) => getPanelTypeFromId(id) === requestedType);
+      if (dropOnFirstAcceptingPanel(candidates, paths)) {
+        return;
+      }
+      const panels = panelCatalog.getPanels();
+      const type =
+        requestedType ??
+        getDefaultPanelType(getOpenInPanels(panels, await loadOpenInSchemas(panels), paths));
+      const shownPaths =
+        panelCatalog.getPanelByType(type)?.openIn?.multiple === true ? paths : paths.slice(0, 1);
       const id = getPanelIdForType(type);
-      // The 3D panel only accepts image drops, so show its topics through the initial config
+      const placement =
+        selected[0] != undefined
+          ? { position: "right" as const, targetPanelId: selected[0] }
+          : undefined;
+      // The 3D scene only knows which topics it can draw once it has subscribed, so it gets them
+      // through the initial config.
       if (type === "3D") {
         const topics = Object.fromEntries(shownPaths.map((p) => [p.topicName, { visible: true }]));
-        addPanel({ id, config: { topics } });
-        setSelectedPanelIds([id]);
-        return;
+        addPanel({ id, config: { topics }, ...placement });
+      } else {
+        addPanel({ id, ...placement });
+        queuePanelDrop(id, shownPaths);
       }
-      addPanel({ id });
       setSelectedPanelIds([id]);
-      queuePanelDrop(id, shownPaths);
     },
-    [addPanel, getSelectedPanelIds, setSelectedPanelIds],
+    [addPanel, getSelectedPanelIds, panelCatalog, setSelectedPanelIds],
   );
 }

@@ -8,11 +8,13 @@
 import {
   ChevronLeft16Regular,
   ChevronRight16Regular,
+  Open16Regular,
   ReOrderDotsVertical16Regular,
 } from "@fluentui/react-icons";
 import { Badge, IconButton, Tooltip, Typography } from "@mui/material";
 import { FzfResultItem } from "fzf";
 import { useCallback, useMemo } from "react";
+import { useTranslation } from "react-i18next";
 
 import { quoteTopicNameIfNeeded } from "@lichtblick/message-path";
 import { HighlightChars } from "@lichtblick/suite-base/components/HighlightChars";
@@ -36,6 +38,7 @@ export function TopicRow({
   onClick,
   onDoubleClick,
   onContextMenu,
+  onOpenInPanelClick,
 }: {
   topicResult: FzfResultItem<Topic>;
   style: React.CSSProperties;
@@ -43,8 +46,11 @@ export function TopicRow({
   onClick: React.MouseEventHandler<HTMLDivElement>;
   onDoubleClick?: React.MouseEventHandler<HTMLDivElement>;
   onContextMenu: React.MouseEventHandler<HTMLDivElement>;
+  /** Shows the "Open in" menu below the clicked button. */
+  onOpenInPanelClick?: React.MouseEventHandler<HTMLButtonElement>;
 }): React.JSX.Element {
   const { cx, classes } = useTopicListStyles();
+  const { t } = useTranslation("topicList");
 
   const topic = topicResult.item;
 
@@ -193,6 +199,20 @@ export function TopicRow({
           </Tooltip>
         </Stack>
       </Stack>
+      {onOpenInPanelClick && (
+        <Tooltip title={t("openInPanelTooltip")}>
+          <IconButton
+            size="small"
+            aria-label={t("openInPanel")}
+            onClick={onOpenInPanelClick}
+            onMouseDown={handleButtonMouseDown}
+            onDoubleClick={handleButtonMouseDown}
+            className={cx(classes.navIconButton, classes.hoverButton)}
+          >
+            <Open16Regular />
+          </IconButton>
+        </Tooltip>
+      )}
       <div data-testid="TopicListDragHandle" className={classes.dragHandle}>
         <ReOrderDotsVertical16Regular />
       </div>
