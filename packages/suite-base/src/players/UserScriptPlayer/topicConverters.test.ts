@@ -413,6 +413,80 @@ describe("UserScriptPlayer topic converter preloading", () => {
     ).toEqual(["good"]);
   });
 
+  const failOnBad = () =>
+    vi.fn(() => (event: { message: unknown }) => {
+      const { value } = event.message as { value: string };
+      if (value === "bad") {
+        throw new Error("bad input");
+      }
+      return { value };
+    });
+
+  it("does not retry an unchanged failed block when another block loads", async () => {
+    const create = failOnBad();
+    const { fakePlayer } = await setup(converterArgs({ create }), [
+      { topic: "/out", preloadType: "full" },
+    ]);
+    const bad = block([input("bad", 1)]);
+    const startTime = { sec: 0, nsec: 0 };
+    await fakePlayer.emit({
+      activeData: activeData([]),
+      progress: { messageCache: { startTime, blocks: [bad, undefined] } },
+    });
+    expect(create).toHaveBeenCalledTimes(1);
+
+    await fakePlayer.emit({
+      activeData: activeData([]),
+      progress: { messageCache: { startTime, blocks: [bad, block([input("good", 2)])] } },
+    });
+    expect(create).toHaveBeenCalledTimes(2);
+  });
+
+  it("caches a healthy block while a converter fails elsewhere at the same time", async () => {
+    // The backfill's failing conversion is released from inside the block's first stage, so it
+    // runs while the block's second (chained) stage is still awaited.
+    const blockConverting = Promise.withResolvers<void>();
+    const create = vi.fn(() => (event: { message: unknown }) => {
+      const { value } = event.message as { value: string };
+      if (value === "bad") {
+        throw new Error("bad input");
+      }
+      blockConverting.resolve();
+      return { value };
+    });
+    const { fakePlayer, player } = await setup(
+      [converterArgs({ create }), chainedArgs],
+      [{ topic: "/chained", preloadType: "full" }],
+    );
+    const good = block([input("good", 1)]);
+    const startTime = { sec: 0, nsec: 0 };
+    Object.assign(fakePlayer, {
+      getBackfillMessages: async () => {
+        await blockConverting.promise;
+        return [input("bad", 0)];
+      },
+    });
+    await fakePlayer.emit({ activeData: activeData([]) }); // registers the converters
+
+    await Promise.all([
+      player.getBackfillMessages({
+        topics: new Map([["/out", { topic: "/out" }]]),
+        time: { sec: 0, nsec: 0 },
+      }),
+      fakePlayer.emit({
+        activeData: activeData([]),
+        progress: { messageCache: { startTime, blocks: [good] } },
+      }),
+    ]);
+    create.mockClear();
+
+    await fakePlayer.emit({
+      activeData: activeData([]),
+      progress: { messageCache: { startTime, blocks: [good, undefined] } },
+    });
+    expect(create).not.toHaveBeenCalled();
+  });
+
   it("stops adding converter outputs once the output is no longer preloaded", async () => {
     const { fakePlayer, player, states } = await setup(converterArgs(), [
       { topic: "/out", preloadType: "full" },

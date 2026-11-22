@@ -93,6 +93,7 @@ export function buildTopicConverterRegistration(
   const buildMessageProcessor = () => {
     let convert: ReturnType<typeof converter.create> | undefined;
     let createdWith: unknown[] = [];
+    let failed = false;
 
     const processMessages: ProcessMessages = async (msgEvents, globalVariables) => {
       const outputs: MessageEvent[] = [];
@@ -119,6 +120,7 @@ export function buildTopicConverterRegistration(
           }
         }
       } catch (err: unknown) {
+        failed = true;
         onError(err);
       }
       return outputs;
@@ -129,6 +131,7 @@ export function buildTopicConverterRegistration(
       terminate: () => {
         convert = undefined;
       },
+      failed: () => failed,
     };
   };
 
