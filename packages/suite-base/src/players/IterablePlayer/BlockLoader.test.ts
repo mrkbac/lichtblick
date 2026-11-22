@@ -1024,6 +1024,13 @@ describe("BlockLoader", () => {
       expect(blocks[0]).toEqual("heavy,light");
     });
 
+    it("still loads a topic that fits when another one in the same block doesn't", async () => {
+      // A block with 13 bytes of "big" and 8 of "small": only "small" fits a 12-byte budget
+      const messages = [sized("big", 0, 13), sized("small", 0, 8)];
+
+      expect((await loadSettled(messages, 12, 0))[0]).toEqual("small");
+    });
+
     it("settles when several topics each want more than their share", async () => {
       const { loader, loading, settled } = setup({ a: 10, b: 10, c: 3 }, 100);
       loader.setPlayhead({ sec: 5, nsec: 0 });

@@ -564,19 +564,15 @@ export class BlockLoader {
         const full = !budget.fits(0);
 
         if (full) {
-          // Drop this block's partial read. The topics holding at least their share of the budget
-          // stop here for this pass, the others load on.
+          // Drop this block's read. The topic holding the most stops here for this pass; the block
+          // is read again for the others, which may fit without it.
           budget.release(sizeInBytes);
-          const fairShare = budget.capacity / topics.size;
           const loadedBytes = this.#topicBytes();
-          const heavy = [...topicsToFetch.keys()].filter(
-            (topic) =>
-              (loadedBytes.get(topic) ?? 0) + this.#bytesOf(messagesByTopic[topic] ?? []) >=
-              fairShare,
-          );
-          const distance = this.#distance(currentBlockId, playhead);
-          for (const topic of heavy.length > 0 ? heavy : topicsToFetch.keys()) {
-            cappedAt.set(topic, distance);
+          const bytesOf = (topic: string) =>
+            (loadedBytes.get(topic) ?? 0) + this.#bytesOf(messagesByTopic[topic] ?? []);
+          const heaviest = _.maxBy([...topicsToFetch.keys()], bytesOf);
+          if (heaviest != undefined) {
+            cappedAt.set(heaviest, this.#distance(currentBlockId, playhead));
           }
           this.#alertManager.addAlert("cache-full", {
             severity: "warn",
