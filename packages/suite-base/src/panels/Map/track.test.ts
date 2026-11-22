@@ -188,6 +188,36 @@ describe("thinTrack over budget with many short runs", () => {
       expect(store.lngLat(indices[start + 1]!)).toEqual([1, 0]);
     });
   });
+
+  it("keeps a bend into the viewport between two ends outside it", () => {
+    // Groups of A(-1,-1) → B(0,0) → C(1,-1): only B is in view; A→C alone would miss the view.
+    // Then a detour around it via D and E.
+    const points: [number, number][] = [
+      [-1, -1],
+      [0, 0],
+      [1, -1],
+      [1, 50],
+      [-1, 50],
+    ];
+    const store = storeOf(150_000, (i) => points[i % 5]!);
+    const viewport = { west: -0.1, east: 0.1, south: -0.1, north: 0.1 };
+    const { indices, runs } = thinTrack(store, {
+      zoom: 18,
+      minPixels: 1,
+      budget: 50_000,
+      viewport,
+    });
+    expect(indices.length).toBeLessThanOrEqual(50_000);
+    expect(runs.length).toBeGreaterThan(10_000);
+    runs.forEach((start, r) => {
+      const end = runs[r + 1] ?? indices.length;
+      expect([...indices.subarray(start, end)].map((i) => store.lngLat(i))).toEqual([
+        [-1, -1],
+        [0, 0],
+        [1, -1],
+      ]);
+    });
+  });
 });
 
 describe("thinViewCovers", () => {

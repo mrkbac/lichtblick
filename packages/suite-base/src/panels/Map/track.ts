@@ -324,9 +324,10 @@ export function thinTrack(
 }
 
 /**
- * At most `budget` of `indices` that still draw every run as a line: each run keeps its two ends
- * and the rest of the budget goes to points inside runs, evenly. With more runs than that, an
- * even selection of whole runs (as their two ends) is drawn, so no crossing line becomes a dot.
+ * At most `budget` of `indices` that still draw every run as its shape: each run keeps its two
+ * ends and its middle point (so a bend into the viewport between two ends outside it survives),
+ * and the rest of the budget goes to the other points inside runs, evenly. With more runs than
+ * fit that way, an even selection of runs is drawn, each as its ends and middle.
  */
 function sampleEvenly(
   indices: readonly number[],
@@ -334,29 +335,42 @@ function sampleEvenly(
   budget: number,
 ): { indices: Uint32Array; runs: number[] } {
   const runEnd = (r: number) => (runs[r + 1] ?? indices.length) - 1;
+  const shapeCost = (r: number) => Math.min(3, runEnd(r) - runs[r]! + 1);
+  let shapes = 0;
+  for (let r = 0; r < runs.length; r++) {
+    shapes += shapeCost(r);
+  }
+  // Every runStride-th run, sized so their shapes fit.
+  let runStride = Math.max(1, Math.ceil(shapes / budget));
+  const chosenCost = () => {
+    let cost = 0;
+    for (let r = 0; r < runs.length; r += runStride) {
+      cost += shapeCost(r);
+    }
+    return cost;
+  };
+  let cost = chosenCost();
+  while (cost > budget) {
+    runStride++;
+    cost = chosenCost();
+  }
+  // Points beyond the shapes, only when every run is drawn.
+  const others = runStride === 1 ? indices.length - shapes : 0;
+  const sampleOthers = others > 0 && budget > cost;
+  const otherStride = sampleOthers ? Math.ceil(others / (budget - cost)) : 1;
   const sampled: number[] = [];
   const sampledRuns: number[] = [];
-  const endsOnly = runs.length * 2 > budget;
-  const runStride = endsOnly ? Math.ceil((runs.length * 2) / budget) : 1;
-  // Points inside runs, and how many of them fit after the run ends.
-  const inner =
-    indices.length - runs.reduce((n, start, r) => n + Math.min(2, runEnd(r) - start + 1), 0);
-  const innerStride = endsOnly
-    ? Infinity
-    : Math.max(1, Math.ceil(inner / Math.max(1, budget - runs.length * 2)));
-  let innerSeen = 0;
+  let othersSeen = 0;
   for (let r = 0; r < runs.length; r += runStride) {
     const start = runs[r]!;
     const end = runEnd(r);
+    const middle = (start + end) >> 1;
     sampledRuns.push(sampled.length);
-    sampled.push(indices[start]!);
-    for (let j = start + 1; j < end; j++) {
-      if (innerSeen++ % innerStride === 0) {
+    for (let j = start; j <= end; j++) {
+      const shape = j === start || j === end || j === middle;
+      if (shape || (sampleOthers && othersSeen++ % otherStride === 0)) {
         sampled.push(indices[j]!);
       }
-    }
-    if (end > start) {
-      sampled.push(indices[end]!);
     }
   }
   return { indices: Uint32Array.from(sampled), runs: sampledRuns };

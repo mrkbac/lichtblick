@@ -102,6 +102,36 @@ describe("trackFeatures", () => {
   });
 });
 
+describe("trackFeatures colored by value", () => {
+  it("draws infinite readings in the topic color, like unknown ones", () => {
+    const store = storeOf([
+      [0, 0],
+      [1, 0],
+      [2, 0],
+    ]);
+    const { points } = trackFeatures([
+      {
+        store,
+        version: store.version,
+        length: 3,
+        tailReplacements: 0,
+        indices: Uint32Array.of(0, 1, 2),
+        runs: [0],
+        color: "#ff0000",
+        style: { history: "points" },
+        colorScale: {
+          values: Float64Array.of(Infinity, -Infinity, NaN),
+          range: [0, 1],
+          reverse: false,
+          unit: "",
+        },
+      },
+    ]);
+    const colors = new Set(points.features.map((f) => f.properties?.c as string));
+    expect(colors.size).toBe(1);
+  });
+});
+
 describe("trackFeatures with a store changed after thinning", () => {
   it("skips the track instead of drawing other fixes", () => {
     const store = storeOf([
@@ -211,6 +241,26 @@ describe("resolveTrackFix", () => {
 });
 
 describe("trackFixKey", () => {
+  it("changes when the newest row is replaced by a fix with the same time", () => {
+    const store = new TrackStore("/fix", 4);
+    const push = (longitude: number) => {
+      store.push({
+        topic: "/fix",
+        schemaName: "sensor_msgs/NavSatFix",
+        receiveTime: { sec: 1, nsec: 0 },
+        sizeInBytes: 0,
+        message: { longitude, latitude: 0 },
+      });
+    };
+    const keys: string[] = [];
+    for (let i = 0; i < 20; i++) {
+      push(i);
+      keys.push(trackFixKey(store, store.length - 1));
+    }
+    // Every push puts another fix in the newest row, so its key is always new.
+    expect(new Set(keys).size).toBe(keys.length);
+  });
+
   it("changes when the newest row is replaced by a later fix", () => {
     const store = new TrackStore("/fix", 4);
     const push = (sec: number) => {

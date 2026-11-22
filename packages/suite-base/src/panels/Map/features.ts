@@ -334,7 +334,8 @@ export function trackFeatures(
     const base = lightColor(color);
     const colorAt = (i: number) => {
       const value = colorScale?.values[i] ?? NaN;
-      if (!colorScale || isNaN(value)) {
+      // Infinite readings aren't on the scale: draw them like unknown ones.
+      if (!colorScale || !isFinite(value)) {
         return base;
       }
       const t = normalize(value, colorScale.range);
@@ -529,9 +530,11 @@ export function resolveTrackFix(
 }
 
 /**
- * Identity of a track fix for hover state: its topic, index and receive time. An index alone can
- * stand for another fix after the newest row is replaced in place or the store is thinned.
+ * Identity of a track fix for hover state. An index alone can stand for another fix after the
+ * store is thinned (`version`) or the newest row is replaced in place (`tailReplacements`, which
+ * also tells apart a replacement with the same receive time).
  */
 export function trackFixKey(store: TrackStore, fix: number): string {
-  return `${store.topic}\0${fix}\0${store.columns.sec[fix]}\0${store.columns.nsec[fix]}`;
+  const replacement = fix === store.length - 1 ? store.tailReplacements : -1;
+  return `${store.topic}\0${store.version}\0${fix}\0${replacement}`;
 }
