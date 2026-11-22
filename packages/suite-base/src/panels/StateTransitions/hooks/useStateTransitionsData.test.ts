@@ -37,7 +37,6 @@ describe("useStateTransitionsData", () => {
       minY: undefined,
       pathState: [],
       matchStarts: [],
-      matchesExact: true,
     });
   });
 

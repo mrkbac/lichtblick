@@ -50,7 +50,6 @@ function useStateTransitionsData(
         minY: undefined,
         pathState: [],
         matchStarts: [],
-        matchesExact: true,
       };
     }
 
@@ -58,7 +57,6 @@ function useStateTransitionsData(
     const outDatasets: ChartDatasets = [];
     const outPathState: PathState[] = [];
     const matchStarts = new Set<number>();
-    let matchesExact = true;
 
     paths.forEach((path, pathIndex) => {
       const y = -(pathIndex + 1) * ROW_SPACING;
@@ -67,24 +65,11 @@ function useStateTransitionsData(
       const hasCondition = parseCondition(path.condition) != undefined;
       const blocksForPath = decodedBlocks.map((decodedBlock) => decodedBlock[path.value]);
 
-      const newBlockDataSet = messagesToDataset({
-        blocks: blocksForPath,
-        path,
-        pathIndex,
-        startTime,
-        y,
-        showPoints,
-        darkenLabels,
-      });
+      const datasetArgs = { path, pathIndex, startTime, y, showPoints, darkenLabels };
+      const newBlockDataSet = messagesToDataset({ ...datasetArgs, blocks: blocksForPath });
 
       const items = itemsByPath[path.value];
       const isArray = datasetContainsArray([...blocksForPath, items]);
-      if (
-        hasCondition &&
-        [...blocksForPath, items].some((samples) => samples?.isExact() === false)
-      ) {
-        matchesExact = false;
-      }
 
       outPathState.push({
         path,
@@ -92,25 +77,30 @@ function useStateTransitionsData(
       });
       outDatasets.push(newBlockDataSet);
       if (hasCondition) {
-        addMatchStarts(newBlockDataSet, matchStarts);
+        // Thinned columns can merge matches: find them in the exact record of value changes.
+        const changeBlocks = blocksForPath.map((samples) => samples?.changes());
+        const isThinned = changeBlocks.some((changes, i) => changes !== blocksForPath[i]);
+        addMatchStarts(
+          isThinned
+            ? messagesToDataset({ ...datasetArgs, blocks: changeBlocks, showPoints: false })
+            : newBlockDataSet,
+          matchStarts,
+        );
       }
 
       if (items == undefined) {
         return;
       }
 
-      const newPathDataSet = messagesToDataset({
-        blocks: [items],
-        path,
-        pathIndex,
-        startTime,
-        y,
-        showPoints,
-        darkenLabels,
-      });
+      const newPathDataSet = messagesToDataset({ ...datasetArgs, blocks: [items] });
       outDatasets.push(newPathDataSet);
       if (hasCondition) {
-        addMatchStarts(newPathDataSet, matchStarts);
+        addMatchStarts(
+          items.changes() === items
+            ? newPathDataSet
+            : messagesToDataset({ ...datasetArgs, blocks: [items.changes()], showPoints: false }),
+          matchStarts,
+        );
       }
     });
 
@@ -119,7 +109,6 @@ function useStateTransitionsData(
       minY: outMinY,
       pathState: outPathState,
       matchStarts: [...matchStarts].sort((a, b) => a - b),
-      matchesExact,
     };
   }, [decodedBlocks, itemsByPath, paths, startTime, showPoints, darkenLabels]);
 }

@@ -51,21 +51,18 @@ const RECENT = 4;
 const INVALID: SampleValue = { count: 1, value: undefined, constantName: undefined };
 
 /**
- * Samples of one message path, oldest first, in 20 bytes each: timestamps in a typed array and
- * each distinct value stored once.
- *
- * At most `maxSamples` are kept. Each time the budget is reached, the history is thinned one level
- * further, and from then on new samples are thinned the same way as they arrive:
- * 1. Drop samples between two with the same value (and the same header stamp presence). Every run
- *    of a value keeps its first and last sample.
- * 2. Also drop the last sample of a run unless a gap (null) follows: the next run's start ends it.
- *    Every value change is still kept exactly, so condition matches stay exact (`isExact`).
- * 3. Keep every other sample across the whole history; from then on only every `stride`-th new one
- *    (plus always the newest). The span stays whole at a lower resolution, but changes can merge.
+ * Writes a time if it has a 32-bit form; a bigint (int64 schemas) is converted. Returns false for
+ * anything else (out of range, not a number), which the caller treats as no time.
  */
-function writeTime(data: Uint32Array, at: number, { sec, nsec }: Time): void {
+function writeTime(data: Uint32Array, at: number, time: Time): boolean {
+  const sec = typeof time.sec === "bigint" ? Number(time.sec) : time.sec;
+  const nsec = typeof time.nsec === "bigint" ? Number(time.nsec) : time.nsec;
+  if (!(sec >= -NEGATIVE && sec < U32 && nsec >= 0 && nsec < NEGATIVE)) {
+    return false;
+  }
   data[at] = sec;
   data[at + 1] = sec < 0 ? nsec + NEGATIVE : nsec;
+  return true;
 }
 
 function readTime(data: Uint32Array, at: number): Time {
@@ -75,6 +72,20 @@ function readTime(data: Uint32Array, at: number): Time {
     : { sec: data[at]!, nsec };
 }
 
+/**
+ * Samples of one message path, oldest first, in 20 bytes each: timestamps in a typed array and
+ * each distinct value stored once.
+ *
+ * At most `maxSamples` are kept. Each time the budget is reached, the history is thinned one level
+ * further, and from then on new samples are thinned the same way as they arrive:
+ * 1. Drop samples between two with the same value (and the same header stamp presence). Every run
+ *    of a value keeps its first and last sample.
+ * 2. Also drop the last sample of a run unless a gap (null) follows: the next run's start ends it.
+ *    Every value change is still kept exactly.
+ * 3. Keep every other sample across the whole history; from then on only every `stride`-th new one
+ *    (plus always the newest). The span stays whole at a lower resolution, but changes can merge
+ *    in these samples, so from here on every change is also kept apart, exactly (`changes()`).
+ */
 export class PathSampleColumns {
   public readonly maxSamples: number;
   #data = new Uint32Array(INITIAL_CAPACITY * STRIDE);
@@ -91,11 +102,15 @@ export class PathSampleColumns {
   #recentCount = new Int32Array(RECENT);
   #recentIndex = new Int32Array(RECENT).fill(-1);
   #nextRecent = 0;
+  /** The recent slot that matched last; checked first. */
+  #lastRecent = 0;
   /** How far thinning has gone (see the class comment); 0 keeps every sample. */
   #level = 0;
   #stride = 1;
   /** Samples pushed since the last one kept for good. */
   #sinceKept = 0;
+  /** Every value change, from level 3 on. */
+  #changes: PathSampleColumns | undefined;
 
   public constructor(maxSamples: number) {
     if (!Number.isInteger(maxSamples) || maxSamples < 4) {
@@ -121,21 +136,43 @@ export class PathSampleColumns {
     return this.#values.length;
   }
 
-  /** False once thinning may have merged value changes (level 3). */
-  public isExact(): boolean {
-    return this.#level < 3;
+  /**
+   * Samples with every value change kept exactly, for finding where a condition starts to hold:
+   * these columns, or once they are thinned past that, a separate record of only the changes.
+   */
+  public changes(): PathSampleColumns {
+    return this.#changes ?? this;
   }
 
   /** Appends a message's decoded value; samples must arrive in message order. */
   public pushMessage(message: MessageEvent, queriedData: readonly MessagePathDataItem[]): void {
-    this.push(toPathSample(message, queriedData));
+    const only = queriedData.length === 1 ? queriedData[0] : undefined;
+    this.#append(
+      message.receiveTime,
+      getTimestampForMessage(message.message),
+      queriedData.length,
+      only?.value,
+      only?.constantName,
+    );
   }
 
   public push(sample: PathSample): void {
-    // Samples overwritten below leave their values behind: drop unused ones once they pile up.
-    if (this.#values.length >= Math.max(INITIAL_CAPACITY, 2 * this.#length)) {
-      this.#compactValues();
-    }
+    this.#append(
+      sample.receiveTime,
+      sample.headerStamp,
+      sample.count,
+      sample.value,
+      sample.constantName,
+    );
+  }
+
+  #append(
+    receiveTime: Time,
+    headerStamp: Time | undefined,
+    count: number,
+    value: unknown,
+    constantName: string | undefined,
+  ): void {
     if ((this.#length + 1) * STRIDE > this.#data.length) {
       // One spare slot: the new sample is written before thinning makes room.
       const capacity = Math.min(this.maxSamples + 1, (this.#data.length / STRIDE) * 2);
@@ -145,14 +182,15 @@ export class PathSampleColumns {
     }
     const n = this.#length;
     const data = this.#data;
-    writeTime(data, n * STRIDE, sample.receiveTime);
-    if (sample.headerStamp) {
-      writeTime(data, n * STRIDE + 2, sample.headerStamp);
-    } else {
+    if (!writeTime(data, n * STRIDE, receiveTime)) {
+      return;
+    }
+    if (!headerStamp || !writeTime(data, n * STRIDE + 2, headerStamp)) {
       data[n * STRIDE + 3] = NO_STAMP;
     }
-    data[n * STRIDE + 4] = this.#valueIndex(sample);
+    data[n * STRIDE + 4] = this.#valueIndex(value, constantName, count);
     this.#length++;
+    this.#changes?.#append(receiveTime, headerStamp, count, value, constantName);
 
     // The previous newest sample was held provisionally until it was the stride-th one, or is
     // one the current thinning level drops.
@@ -204,30 +242,46 @@ export class PathSampleColumns {
     return Array.from({ length: this.#length }, (_, i) => this.at(i)!);
   }
 
-  #valueIndex(sample: SampleValue): number {
+  #valueIndex(value: unknown, constantName: string | undefined, count: number): number {
     // States mostly repeat or alternate between a few values: check the recent ones before the maps.
-    const { value, constantName, count } = sample;
+    const last = this.#lastRecent;
+    if (
+      value === this.#recentValue[last] &&
+      constantName === this.#recentConstantName[last] &&
+      count === this.#recentCount[last] &&
+      this.#recentIndex[last] !== -1
+    ) {
+      return this.#recentIndex[last]!;
+    }
     for (let slot = 0; slot < RECENT; slot++) {
       if (
-        this.#recentIndex[slot] !== -1 &&
         value === this.#recentValue[slot] &&
         constantName === this.#recentConstantName[slot] &&
-        count === this.#recentCount[slot]
+        count === this.#recentCount[slot] &&
+        this.#recentIndex[slot] !== -1
       ) {
+        this.#lastRecent = slot;
         return this.#recentIndex[slot]!;
       }
     }
-    const index = this.#lookUpValueIndex(sample);
+    // Samples dropped by thinning leave their values behind: forget unused ones once they pile up.
+    if (this.#values.length >= Math.max(INITIAL_CAPACITY, 2 * this.#length)) {
+      this.#compactValues();
+    }
+    const index = this.#lookUpValueIndex(value, constantName, count);
     const slot = this.#nextRecent;
     this.#nextRecent = (slot + 1) % RECENT;
-    this.#recentValue[slot] = value;
+    this.#lastRecent = slot;
+    // An object is stored as INVALID, like undefined: don't keep it alive here either.
+    // eslint-disable-next-line @lichtblick/strict-equality
+    this.#recentValue[slot] = typeof value === "object" && value !== null ? undefined : value;
     this.#recentConstantName[slot] = constantName;
     this.#recentCount[slot] = count;
     this.#recentIndex[slot] = index;
     return index;
   }
 
-  #lookUpValueIndex({ count, value, constantName }: SampleValue): number {
+  #lookUpValueIndex(value: unknown, constantName: string | undefined, count: number): number {
     if (count !== 1) {
       let index = this.#indexByCount.get(count);
       if (index == undefined) {
@@ -261,12 +315,12 @@ export class PathSampleColumns {
     if (id !== this.valueId(prev) || stamped !== this.hasHeaderStamp(prev)) {
       return false; // i starts a run
     }
-    if (this.#level >= 2) {
-      // A run's last sample is only needed to end it before a gap.
-      // eslint-disable-next-line @lichtblick/strict-equality
-      return this.sampleValue(next).value !== null;
+    if (id === this.valueId(next) && stamped === this.hasHeaderStamp(next)) {
+      return true; // i is inside a run
     }
-    return id === this.valueId(next) && stamped === this.hasHeaderStamp(next);
+    // At level 2 a run's last sample is only kept to end it before a gap.
+    // eslint-disable-next-line @lichtblick/strict-equality
+    return this.#level >= 2 && this.sampleValue(next).value !== null;
   }
 
   #thin(): void {
@@ -284,6 +338,17 @@ export class PathSampleColumns {
         }
       }
       this.#length = kept;
+    }
+
+    if (this.#length > target && !this.#changes) {
+      // Every sample left is a change: keep them apart before halving merges some.
+      // ponytail: the changes record has no budget; it grows 20 bytes per value change.
+      const changes = new PathSampleColumns(Number.MAX_SAFE_INTEGER);
+      changes.#level = 2;
+      for (let i = 0; i < this.#length; i++) {
+        changes.push(this.at(i)!);
+      }
+      this.#changes = changes;
     }
 
     // Still too dense: keep every other sample (and the newest) until there is room.
@@ -320,7 +385,8 @@ export class PathSampleColumns {
       const at = i * STRIDE + 4;
       const old = this.#data[at]!;
       if (remap[old] === -1) {
-        remap[old] = this.#valueIndex(oldValues[old]!);
+        const { value, constantName, count } = oldValues[old]!;
+        remap[old] = this.#lookUpValueIndex(value, constantName, count);
       }
       this.#data[at] = remap[old]!;
     }

@@ -42,7 +42,7 @@ describe("PathSampleColumns", () => {
       [8, 0],
       [9, 2],
     ]);
-    expect(columns.isExact()).toBe(true);
+    expect(columns.changes()).toBe(columns);
   });
 
   it("keeps signed and full unsigned 32-bit seconds", () => {
@@ -77,15 +77,46 @@ describe("PathSampleColumns", () => {
       .map((s) => s.receiveTime.sec);
     expect(keptChanges).toEqual(changes);
     expect(kept.at(-1)?.receiveTime.sec).toBe(9_999);
-    expect(columns.isExact()).toBe(true);
+    expect(columns.changes()).toBe(columns);
   });
 
-  it("says when thinning may have merged changes", () => {
+  it("keeps every change apart once halving merges them", () => {
     const columns = new PathSampleColumns(100);
     for (let i = 0; i < 1000; i++) {
-      columns.push(sample(i, i % 2 === 0));
+      columns.push(sample(i, i % 3));
     }
-    expect(columns.isExact()).toBe(false);
+    expect(columns.size()).toBeLessThanOrEqual(100);
+    const changes = columns.changes().toArray();
+    expect(changes.map((s) => [s.receiveTime.sec, s.value])).toEqual(
+      Array.from({ length: 1000 }, (_, i) => [i, i % 3]),
+    );
+  });
+
+  it("thins runs of null like any other value", () => {
+    const columns = new PathSampleColumns(100);
+    for (let i = 0; i < 10_000; i++) {
+      // Mostly gaps, with a short run of 1 every 1000 samples.
+      columns.push(sample(i, i % 1000 < 3 ? 1 : null));
+    }
+    expect(columns.changes()).toBe(columns);
+    const kept = columns.toArray();
+    expect(kept.filter((s) => s.value === 1).length).toBeGreaterThanOrEqual(10);
+    expect(kept.at(-1)?.receiveTime.sec).toBe(9_999);
+  });
+
+  it("treats a stamp without a 32-bit form as missing, and converts bigints", () => {
+    const columns = PathSampleColumns.from([
+      sample(1, 1, { headerStamp: { sec: 5n as unknown as number, nsec: 6 } }),
+      sample(2, 1, { headerStamp: { sec: 2 ** 32, nsec: 0 } }),
+      sample(3, 1, { headerStamp: { sec: 2 ** 40, nsec: 0 } }),
+      sample(4, 1, { headerStamp: { sec: 1, nsec: Number.NaN } }),
+    ]);
+    expect(columns.toArray().map((s) => s.headerStamp)).toEqual([
+      { sec: 5, nsec: 6 },
+      undefined,
+      undefined,
+      undefined,
+    ]);
   });
 
   it("keeps the header-stamped samples of a run", () => {
