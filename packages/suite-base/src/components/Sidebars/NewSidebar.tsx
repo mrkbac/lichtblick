@@ -82,7 +82,7 @@ export function NewSidebar<K extends string>({
     >
       <Stack direction="row" justifyContent="space-between" alignItems="center">
         <Tabs
-          ref={tabsRef}
+          slotProps={{ scroller: { ref: tabsRef } }}
           className={classes.tabs}
           textColor="inherit"
           // A narrow sidebar scrolls its tabs instead of cutting the last one off.

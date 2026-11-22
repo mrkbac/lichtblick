@@ -70,12 +70,7 @@ export function TabOverflowMenu({
       if (Math.abs(event.deltaY) <= Math.abs(event.deltaX)) {
         return;
       }
-      const scroller = [strip, ...strip.querySelectorAll<HTMLElement>("*")].find(
-        (el) => el.scrollWidth > el.clientWidth + 1,
-      );
-      if (scroller) {
-        scroller.scrollLeft += event.deltaY;
-      }
+      strip.scrollLeft += event.deltaY;
     };
     strip.addEventListener("scroll", update, { capture: true, passive: true });
     strip.addEventListener("wheel", onWheel, { passive: true });
