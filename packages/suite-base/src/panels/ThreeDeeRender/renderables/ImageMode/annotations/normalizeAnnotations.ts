@@ -19,6 +19,7 @@ import { mightActuallyBePartial } from "@lichtblick/suite-base/util/mightActuall
 
 import type { Annotation, PathKey, PointsAnnotation } from "./types";
 import { IMAGE_ANNOTATIONS_DATATYPES } from "../../../foxglove";
+import { normalizeTime } from "../../../normalizeMessages";
 import { IMAGE_MARKER_ARRAY_DATATYPES, IMAGE_MARKER_DATATYPES } from "../../../ros";
 
 /** For backwards compatibility with previously published type definitions, older studio versions, and webviz */
@@ -141,7 +142,7 @@ function normalizeFoxgloveImageAnnotations(message: Partial<ImageAnnotations>): 
 }
 
 function normalizeTimestamp(stamp: Time | bigint): Time {
-  return typeof stamp === "bigint" ? fromNanoSec(stamp) : stamp;
+  return typeof stamp === "bigint" ? fromNanoSec(stamp) : normalizeTime(stamp);
 }
 
 function normalizeRosImageMarkerArray(message: ImageMarkerArray): Annotation[] {
@@ -175,7 +176,7 @@ function normalizeRosImageMarker(
     case ImageMarkerType.CIRCLE:
       return {
         type: "circle",
-        stamp: message.header.stamp,
+        stamp: normalizeTime(message.header.stamp),
         fillColor: message.filled ? message.fill_color : undefined,
         outlineColor: message.outline_color,
         radius: message.scale,
@@ -186,7 +187,7 @@ function normalizeRosImageMarker(
     case ImageMarkerType.TEXT:
       return {
         type: "text",
-        stamp: message.header.stamp,
+        stamp: normalizeTime(message.header.stamp),
         position: message.position,
         text: message.text?.data ?? "",
         textColor: message.outline_color,
@@ -198,7 +199,7 @@ function normalizeRosImageMarker(
     case ImageMarkerType.POINTS:
       return {
         type: "points",
-        stamp: message.header.stamp,
+        stamp: normalizeTime(message.header.stamp),
         style: "points",
         points: message.points,
         outlineColors: message.outline_colors,
@@ -213,7 +214,7 @@ function normalizeRosImageMarker(
       const style = imageMarkerTypeToStyle(message.type);
       return {
         type: "points",
-        stamp: message.header.stamp,
+        stamp: normalizeTime(message.header.stamp),
         style,
         points: message.points,
         outlineColors: message.outline_colors,

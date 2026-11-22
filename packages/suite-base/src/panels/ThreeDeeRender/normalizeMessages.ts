@@ -8,6 +8,8 @@
 import type { Time } from "@foxglove/rostime";
 import { FrameTransform, FrameTransforms, NumericType } from "@foxglove/schemas";
 
+import { stampToTime } from "@lichtblick/suite-base/util/time";
+
 import type { PartialMessage } from "./SceneExtension";
 import {
   ColorRGBA,
@@ -36,12 +38,12 @@ export type LegacyFrameTransform = {
   transform: LegacyTransform;
 };
 
-/** ROS 1 and Foxglove stamps use `nsec`; the ROS 2 CDR decoder gives `nanosec`. */
+/**
+ * A stamp or duration as `Time` (see `stampToTime`), with missing parts as 0: a duration such as a
+ * marker `lifetime` may carry only nanoseconds.
+ */
 export function normalizeTime(time: (Partial<Time> & { nanosec?: number }) | undefined): Time {
-  if (!time) {
-    return { sec: 0, nsec: 0 };
-  }
-  return { sec: time.sec ?? 0, nsec: time.nsec ?? time.nanosec ?? 0 };
+  return stampToTime(time) ?? { sec: time?.sec ?? 0, nsec: time?.nsec ?? time?.nanosec ?? 0 };
 }
 
 export function normalizeByteArray(byteArray: unknown): Uint8Array {
