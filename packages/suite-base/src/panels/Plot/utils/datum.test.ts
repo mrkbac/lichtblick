@@ -1,9 +1,6 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import { isTime, toSec } from "@foxglove/rostime";
-import type { Mock } from "vitest";
-
 import { Time } from "@lichtblick/suite";
 import {
   getChartValue,
@@ -12,26 +9,7 @@ import {
 } from "@lichtblick/suite-base/panels/Plot/utils/datum";
 import { BasicBuilder } from "@lichtblick/test-builders";
 
-vi.mock("@foxglove/rostime", () => ({
-  isTime: vi.fn(),
-  toSec: vi.fn(),
-}));
-
 describe("Chart Value Utilities", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  const setupMocks = (options: {
-    isTimeMockReturnValue: boolean;
-    toSecMockReturnValue?: number;
-  }) => {
-    (isTime as unknown as Mock).mockReturnValue(options.isTimeMockReturnValue);
-    if (options.toSecMockReturnValue != undefined) {
-      (toSec as Mock).mockReturnValue(options.toSecMockReturnValue);
-    }
-  };
-
   describe("isChartValue", () => {
     it("should return true if value is null", () => {
       expect(isChartValue(null)).toBe(true);
@@ -43,16 +21,13 @@ describe("Chart Value Utilities", () => {
       expect(isChartValue(BasicBuilder.string())).toBe(true);
     });
 
-    it("should return true for Time objects", () => {
+    it("should return true for Time objects, ROS 2 ones too", () => {
       const time: Time = { sec: 10, nsec: 500 };
-      setupMocks({ isTimeMockReturnValue: true });
-
       expect(isChartValue(time)).toBe(true);
-      expect(isTime).toHaveBeenCalledWith(time);
+      expect(isChartValue({ sec: 10, nanosec: 500 })).toBe(true);
     });
 
     it("should return false for unsupported object types", () => {
-      setupMocks({ isTimeMockReturnValue: false });
       expect(isChartValue({})).toBe(false);
     });
 
@@ -77,17 +52,12 @@ describe("Chart Value Utilities", () => {
       expect(getChartValue("not-a-number")).toBeNaN();
     });
 
-    it("should return the correct value for Time objects", () => {
-      const time: Time = { sec: 10, nsec: 500 };
-      setupMocks({ isTimeMockReturnValue: true, toSecMockReturnValue: 10.5 });
-
-      expect(getChartValue(time)).toBe(10.5);
-      expect(isTime).toHaveBeenCalledWith(time);
-      expect(toSec).toHaveBeenCalledWith(time);
+    it("should return seconds for Time objects, ROS 2 ones too", () => {
+      expect(getChartValue({ sec: 10, nsec: 5e8 })).toBe(10.5);
+      expect(getChartValue({ sec: 10, nanosec: 5e8 })).toBe(10.5);
     });
 
     it("should return undefined for unsupported object types", () => {
-      setupMocks({ isTimeMockReturnValue: false });
       expect(getChartValue({})).toBeUndefined();
     });
 
@@ -119,10 +89,15 @@ describe("Chart Value Utilities", () => {
       expect(resolveChartDatum("not-a-number")).toEqual({ y: NaN, value: null });
     });
 
-    it("should resolve Time objects using toSec", () => {
-      const time: Time = { sec: 10, nsec: 500 };
-      setupMocks({ isTimeMockReturnValue: true, toSecMockReturnValue: 10.5 });
+    it("should keep ROS 2 stamps as Time, so legend, hover and copy can read them", () => {
+      expect(resolveChartDatum({ sec: 10, nanosec: 5e8 })).toEqual({
+        y: 10.5,
+        value: { sec: 10, nsec: 5e8 },
+      });
+    });
 
+    it("should resolve Time objects to seconds", () => {
+      const time: Time = { sec: 10, nsec: 5e8 };
       expect(resolveChartDatum(time)).toEqual({ y: 10.5, value: time });
     });
   });

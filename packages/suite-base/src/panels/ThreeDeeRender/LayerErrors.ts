@@ -52,6 +52,7 @@ export class NodeError {
 }
 
 export type LayerErrorEvents = {
+  add: (path: Path, errorId: string) => void;
   update: (path: Path, errorId: string, errorMessage: string) => void;
   remove: (path: Path, errorId: string) => void;
   clear: (path: Path) => void;
@@ -78,9 +79,10 @@ export class LayerErrors extends EventEmitter<LayerErrorEvents> {
     // Create the error map if it does not already exist
     node.errorsById ??= new Map();
 
-    // Onlu log the first error message per path+id for performance
+    // Log the first error message per path+id.
     const prevErrorMessage = node.errorsById.get(errorId);
     if (prevErrorMessage == undefined) {
+      this.emit("add", path, errorId);
       log.warn(`[${path.join(" > ")}] ${errorMessage}`);
     }
 
@@ -96,9 +98,12 @@ export class LayerErrors extends EventEmitter<LayerErrorEvents> {
     this.add(TOPIC_PATH, errorId, errorMessage);
   }
 
+  public getError(path: Path, errorId: string): string | undefined {
+    return this.#getNode(path)?.errorsById?.get(errorId);
+  }
+
   public hasError(path: Path, errorId: string): boolean {
-    const node = this.#getNode(path);
-    return node?.errorsById?.has(errorId) === true;
+    return this.getError(path, errorId) != undefined;
   }
 
   public remove(path: Path, errorId: string): void {
@@ -168,4 +173,42 @@ export class LayerErrors extends EventEmitter<LayerErrorEvents> {
     }
     return node;
   }
+}
+
+/**
+ * Report errors that are still active `graceMs` after they were raised. Most layer errors on a good
+ * recording are transient (a transform, camera info or frame that arrives a moment after the first
+ * message) and resolve on their own, so they stay in the settings tree but never reach the log.
+ * @returns unsubscribe
+ */
+export function reportPersistentErrors<T>(
+  errors: LayerErrors,
+  report: (path: Path, errorId: string, errorMessage: string, raisedAt: T) => void,
+  graceMs: number,
+  now: () => T,
+): () => void {
+  const pending = new Map<string, ReturnType<typeof setTimeout>>();
+  const onAdd = (path: Path, errorId: string) => {
+    const pathCopy = [...path]; // callers reuse path arrays
+    const raisedAt = now(); // reported as of when it was raised, not graceMs later
+    const key = `${pathCopy.join("\0")}\0${errorId}`;
+    clearTimeout(pending.get(key));
+    pending.set(
+      key,
+      setTimeout(() => {
+        pending.delete(key);
+        const message = errors.getError(pathCopy, errorId);
+        if (message != undefined) {
+          report(pathCopy, errorId, message, raisedAt);
+        }
+      }, graceMs),
+    );
+  };
+  errors.on("add", onAdd);
+  return () => {
+    errors.off("add", onAdd);
+    for (const timeout of pending.values()) {
+      clearTimeout(timeout);
+    }
+  };
 }

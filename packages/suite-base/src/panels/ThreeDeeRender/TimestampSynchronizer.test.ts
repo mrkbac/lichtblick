@@ -39,6 +39,14 @@ describe("syncTimestamp", () => {
     ).toBe(4n * S);
     expect(syncTimestamp({ ...msg("a", 0, 9), message: { data: 1 } })).toBe(9n * S);
   });
+
+  it("reads ROS 2 { sec, nanosec } stamps", () => {
+    const ros2 = { sec: 3, nanosec: 1 };
+    expect(syncTimestamp({ ...msg("a", 0, 9), message: { header: { stamp: ros2 } } })).toBe(
+      3n * S + 1n,
+    );
+    expect(syncTimestamp({ ...msg("a", 0, 9), message: { timestamp: ros2 } })).toBe(3n * S + 1n);
+  });
 });
 
 describe("TimestampSynchronizer", () => {

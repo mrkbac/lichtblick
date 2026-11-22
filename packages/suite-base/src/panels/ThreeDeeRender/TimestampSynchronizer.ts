@@ -5,7 +5,7 @@ import { AVLTree } from "@foxglove/avl";
 import { toNanoSec, type Time } from "@foxglove/rostime";
 
 import type { MessageEvent } from "@lichtblick/suite";
-import { getTimestampForMessage } from "@lichtblick/suite-base/util/time";
+import { getTimestampForMessage, stampToTime } from "@lichtblick/suite-base/util/time";
 
 /** Stamps this far behind a topic's latest received one are treated as never getting a match. */
 export const SYNC_WINDOW_NS = 10_000_000_000n;
@@ -24,12 +24,7 @@ type Stamped = { timestamp?: Partial<Time> };
 export function syncTimestamp(event: MessageEvent): bigint {
   const message = event.message as (Stamped & { entities?: Stamped[] }) | undefined;
   const timestamp = message?.timestamp ?? message?.entities?.[0]?.timestamp;
-  const stamp =
-    getTimestampForMessage(message) ??
-    (typeof timestamp?.sec === "number" && typeof timestamp.nsec === "number"
-      ? (timestamp as Time)
-      : undefined) ??
-    event.receiveTime;
+  const stamp = getTimestampForMessage(message) ?? stampToTime(timestamp) ?? event.receiveTime;
   return toNanoSec(stamp);
 }
 
