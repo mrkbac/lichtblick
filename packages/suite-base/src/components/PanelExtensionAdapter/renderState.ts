@@ -373,7 +373,7 @@ function initRenderStateBuilder(): BuildRenderStateFn {
             // Given that messagesByTopic should be in order by receiveTime, we need to
             // combine all of the messages into a single array and sorted by receive time.
             forEachSortedArrays(
-              topicsToPreloadForPanel.map((topic) => block.messagesByTopic[topic] ?? []),
+              sources.map((source) => source ?? []),
               (a, b) => compare(a.receiveTime, b.receiveTime),
               (messageEvent) => {
                 // Message blocks may contain topics that we are not subscribed to so we
@@ -392,9 +392,9 @@ function initRenderStateBuilder(): BuildRenderStateFn {
           }
           allFramesByBlock[index] = { sources, frames: blockFrames };
         }
-        const loadedBlocks = allFramesByBlock.filter((entry) => entry != undefined);
-        unchanged &&=
-          loadedBlocks.length === prevFramesByBlock.filter((e) => e != undefined).length;
+        unchanged &&= prevFramesByBlock.every(
+          (entry, i) => entry == undefined || allFramesByBlock[i] != undefined,
+        );
         // When only other panels' topics loaded, keep the array and skip the render.
         // Deprecated in Foxglove's API only; still part of Lichtblick's.
         // eslint-disable-next-line @typescript-eslint/no-deprecated
@@ -405,7 +405,7 @@ function initRenderStateBuilder(): BuildRenderStateFn {
           // IterablePlayer).
           // eslint-disable-next-line @typescript-eslint/no-deprecated
           renderState.allFrames = ([] as MessageEvent[]).concat(
-            ...loadedBlocks.map(({ frames }) => frames),
+            ...filterMap(allFramesByBlock, (entry) => entry?.frames),
           );
         }
       }
