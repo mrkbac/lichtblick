@@ -170,6 +170,14 @@ export class PathSampleColumns {
     return changes == undefined || !changes.#forgotChanges;
   }
 
+  /**
+   * True for a changes record that forgot its oldest changes: its first sample is the last
+   * forgotten one, kept only for the state before the first kept change, not as a change itself.
+   */
+  public startsWithContext(): boolean {
+    return this.#forgotChanges;
+  }
+
   /** Appends a message's decoded value; samples must arrive in message order. */
   public pushMessage(message: MessageEvent, queriedData: readonly MessagePathDataItem[]): void {
     const only = queriedData.length === 1 ? queriedData[0] : undefined;
@@ -234,7 +242,12 @@ export class PathSampleColumns {
     if (this.#provisional) {
       // Merging (level 3): the kept sample before also stands for the previous newest one, which
       // this one replaces as the newest (so the chart still reaches the latest time).
-      if (!this.sameValue(n - 2, n - 1)) {
+      const mixed = !this.sameValue(n - 2, n - 1) || this.isMixed(n - 2);
+      if (!this.hasHeaderStamp(n - 2) && this.hasHeaderStamp(n - 1)) {
+        // Keep a header-stamped sample for the merged stretch, so a row drawn by stamp can't vanish.
+        this.#move(n - 2, n - 1);
+      }
+      if (mixed) {
         this.#setMixed(n - 2);
       }
       this.#move(n - 1, n);
@@ -408,7 +421,7 @@ export class PathSampleColumns {
     if (this.#isChangesRecord) {
       // Forget the oldest changes; the merged chart samples still cover that time. The last
       // forgotten one stays as the first sample, so the state before the first kept change is
-      // known (`hasAllChanges` tells readers not to treat that first sample as a change).
+      // known (`startsWithContext` tells readers not to treat that first sample as a change).
       const drop = this.#length - target - 1;
       this.#data.copyWithin(0, drop * STRIDE, this.#length * STRIDE);
       this.#numbers?.copyWithin(0, drop, this.#length);
@@ -449,7 +462,10 @@ export class PathSampleColumns {
       let half = 0;
       for (let i = 0; i < kept; i += 2) {
         const mixed = i + 1 < kept && !this.sameValue(i, i + 1);
-        this.#move(half, i);
+        // Keep a header-stamped sample if the pair has one, so a row drawn by stamp can't vanish.
+        const keep =
+          i + 1 < kept && !this.hasHeaderStamp(i) && this.hasHeaderStamp(i + 1) ? i + 1 : i;
+        this.#move(half, keep);
         if (mixed) {
           this.#setMixed(half);
         }

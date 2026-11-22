@@ -199,6 +199,17 @@ describe("PathSampleColumns", () => {
     expect(kept).toContain(26);
   });
 
+  it("keeps header-stamped samples when merging, so a row drawn by stamp can't vanish", () => {
+    const columns = new PathSampleColumns(100);
+    for (let i = 0; i < 10_000; i++) {
+      // Every sample changes, and only even ones have a header stamp.
+      columns.push(sample(i, i % 2, i % 2 === 0 ? { headerStamp: { sec: i, nsec: 0 } } : {}));
+    }
+    const kept = columns.toArray();
+    expect(kept.length).toBeLessThanOrEqual(100);
+    expect(kept.filter((s) => s.headerStamp != undefined).length).toBeGreaterThan(kept.length / 2);
+  });
+
   it("keeps the value table bounded when overwritten samples have unique values", () => {
     const columns = new PathSampleColumns(100);
     for (let i = 0; i < 200_000; i++) {

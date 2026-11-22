@@ -58,11 +58,11 @@ function addMatches(
     addMatchStarts(exact, out);
     return;
   }
-  // The record's first sample only carries the state from before its oldest kept change, so
-  // a match there would be made up by the cut: take matches up to it from the drawn samples.
-  const cutX = exact.data.find((datum) => datum != undefined)?.x ?? Infinity;
-  addMatchStarts(exact, out, (x) => x > cutX);
-  addMatchStarts(drawn, out, (x) => x <= cutX);
+  // The record only starts at its oldest kept change: matches before it come from the drawn
+  // samples. (Its first sample carries the state from before the cut and is never a match.)
+  const firstChangeX = exact.data.find((datum) => datum != undefined)?.x ?? Infinity;
+  addMatchStarts(exact, out);
+  addMatchStarts(drawn, out, (x) => x < firstChangeX);
 }
 
 function useStateTransitionsData(

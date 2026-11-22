@@ -131,6 +131,13 @@ export function messagesToDataset(args: MessageDatasetArgs): ChartDataset {
       const value = condition ? conditionMatches(condition, rawValue, rawConstantName) : rawValue;
       const constantName = condition ? undefined : rawConstantName;
 
+      if (i === 0 && messages.startsWithContext()) {
+        // Only the state before the first kept change: carry it, don't draw it as a change.
+        lastValue = value;
+        lastIndex = i;
+        continue;
+      }
+
       const color = condition && value === false ? CONDITION_FALSE_COLOR : getColor(value);
       const label = createLabel(constantName, value);
 

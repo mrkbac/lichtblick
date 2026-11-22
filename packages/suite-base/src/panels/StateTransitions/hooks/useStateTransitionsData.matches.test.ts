@@ -58,4 +58,39 @@ describe("useStateTransitionsData matches", () => {
       expect(result.current.matchStarts.filter((x) => x % 3 !== 1)).toEqual([]);
     }
   });
+
+  it("finds the first stamped match after the cut when the record's first sample is unstamped", () => {
+    // Drawn by header stamp: only even samples are stamped, and they alternate 1, 0, 1, 0, so
+    // "== 1" starts at every x with x % 4 == 0. Whichever sample the cut keeps first (stamped or
+    // not), every match after it must be found.
+    const cuts = new Set<number>();
+    for (let budget = 40; budget < 44; budget++) {
+      for (let total = 300; total < 308; total++) {
+        const columns = new PathSampleColumns(budget);
+        columns.trackChanges();
+        for (let i = 0; i < total; i++) {
+          columns.push({
+            receiveTime: { sec: i, nsec: 0 },
+            headerStamp: i % 2 === 0 ? { sec: i, nsec: 0 } : undefined,
+            count: 1,
+            value: Math.floor((i + 2) / 2) % 2,
+            constantName: undefined,
+          });
+        }
+        const path = { value: "/a.b", condition: "== 1", timestampMethod: "headerStamp" as const };
+        const { result } = renderHook(() =>
+          useStateTransitionsData([path], { sec: 0, nsec: 0 }, {}, [{ "/a.b": columns }], false),
+        );
+        const cut = columns.changes().at(0)!.receiveTime.sec;
+        cuts.add(cut % 4);
+        const expected = Array.from({ length: total }, (_, x) => x).filter(
+          (x) => x % 4 === 0 && x > cut,
+        );
+        expect(result.current.matchStarts.filter((x) => x % 4 !== 0)).toEqual([]);
+        expect(result.current.matchStarts.filter((x) => x > cut)).toEqual(expected);
+      }
+    }
+    // Covered: an unstamped first sample right before a match.
+    expect(cuts.has(3)).toBe(true);
+  });
 });
