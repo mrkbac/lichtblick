@@ -120,7 +120,7 @@ describe("CustomDatasetsBuilderImpl", () => {
 
   it("downsamples lines to what the viewport can show, keeping both ends", () => {
     // GIVEN a dense circle walked 20 times
-    const builder = build({ xPath: "/b.x", xParsed: unwrap(parseMessagePath("/b.x")) });
+    const builder = build({ xParsed: unwrap(parseMessagePath("/b.x")) });
     const n = 200_000;
     const items: ValueItem[] = [];
     for (let i = 0; i < n; i++) {
