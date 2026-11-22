@@ -179,6 +179,30 @@ describe("DecayPointRing", () => {
     expect(ring.scanCount()).toBe(3);
   });
 
+  it("keeps thinning that one point set's size forced, with a larger point budget", () => {
+    const { ring } = makeRing({ maxEntries: 100, maxPoints: 100_000_000 });
+    for (let i = 1; i <= 5; i++) {
+      push(ring, BigInt(i), 1_000_000); // the buffers stop at 4M points (mocked set size)
+    }
+    expect(ring.stride()).toBe(2);
+
+    ring.enforceLimits({ maxPoints: 100_000_000, reservePoints: 0 });
+
+    expect(ring.stride()).toBe(2);
+  });
+
+  it("empties without thinning when the latest scan alone exceeds the budget", () => {
+    const { ring } = makeRing({ maxEntries: 100, maxPoints: 10 });
+    for (let i = 1; i <= 4; i++) {
+      push(ring, BigInt(i), 1);
+    }
+
+    ring.enforceLimits({ maxPoints: 10, reservePoints: 50 });
+
+    expect(ring.scanCount()).toBe(0);
+    expect(ring.stride()).toBe(1);
+  });
+
   it("uploads only the poses of slots in use", () => {
     const { ring, points } = makeRing();
     push(ring, 1n, 1);
