@@ -49,3 +49,37 @@ export function plottableFields(
   collect(structureItem, "", fields);
   return fields.map((field) => path + field);
 }
+
+/**
+ * The series a typed path adds, or undefined when it isn't a valid series: a number (reference
+ * line, e.g. `.5` or `1e+3`), a plottable field, or a message (one series per numeric field).
+ * Paths with modifiers are taken as they are.
+ */
+export function resolvePlotPaths(
+  path: string,
+  structures: Readonly<Record<string, MessagePathStructureItemMessage>>,
+  topics: readonly Topic[],
+): string[] | undefined {
+  if (path.trim() !== "" && Number.isFinite(Number(path))) {
+    return [path];
+  }
+  const parsed = parseMessagePath(path);
+  if (!parsed) {
+    return undefined;
+  }
+  if (parsed.modifier != undefined || parsed.messagePath.some((part) => part.type === "modifier")) {
+    return [path];
+  }
+  const fields = plottableFields(path, structures, topics);
+  if (fields) {
+    return fields.length > 0 ? fields : undefined;
+  }
+  const schemaName = topics.find((topic) => topic.name === parsed.topicName)?.schemaName;
+  const root = schemaName != undefined ? structures[schemaName] : undefined;
+  const { valid, structureItem } = traverseStructure(root, parsed.messagePath);
+  return valid &&
+    structureItem?.structureType === "primitive" &&
+    PLOTABLE_ROS_TYPES.includes(structureItem.primitiveType)
+    ? [path]
+    : undefined;
+}

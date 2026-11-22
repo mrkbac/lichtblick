@@ -68,7 +68,20 @@ const setup = (overrides = {}) => {
 };
 
 vi.mock("@lichtblick/suite-base/PanelAPI", () => ({
-  useDataSourceInfo: () => ({ topics: [], datatypes: new Map() }),
+  useDataSourceInfo: () => ({
+    topics: ["/a", "/b", "/c"].map((name) => ({ name, schemaName: "pkg/Xy" })),
+    datatypes: new Map([
+      [
+        "pkg/Xy",
+        {
+          definitions: [
+            { name: "x", type: "float64" },
+            { name: "y", type: "float64" },
+          ],
+        },
+      ],
+    ]),
+  }),
 }));
 
 vi.mock("@lichtblick/suite-base/components/MessagePathSyntax/MessagePathInput", () => ({
@@ -158,6 +171,45 @@ describe("PlotLegend", () => {
 
     expect(saveConfig).toHaveBeenCalledWith({ paths: [{ value: "/a.y", enabled: true }] });
     expect(screen.queryByLabelText("Message path")).toBeNull();
+  });
+
+  it("keeps the series when an incomplete path is left", async () => {
+    const saveConfig = vi.fn();
+    const user = userEvent.setup();
+    setup({ paths: [{ value: "/a.x", enabled: true }], saveConfig });
+
+    await user.click(screen.getByText("/a.x"));
+    const input = screen.getByLabelText("Message path");
+    await user.clear(input);
+    await user.type(input, "/a.");
+    await user.click(document.body);
+
+    expect(saveConfig).not.toHaveBeenCalled();
+    expect(screen.getByText("/a.x")).toBeDefined();
+  });
+
+  it("expands a message into one series per field, keeping the timestamp settings", async () => {
+    const saveConfig = vi.fn();
+    const user = userEvent.setup();
+    const series = {
+      value: "/a.x",
+      enabled: true,
+      timestampMethod: "customField" as const,
+      timestampPath: ".stamp",
+    };
+    setup({ paths: [series], saveConfig });
+
+    await user.click(screen.getByText("/a.x"));
+    const input = screen.getByLabelText("Message path");
+    await user.clear(input);
+    await user.type(input, "/b{Enter}");
+
+    expect(saveConfig).toHaveBeenCalledWith({
+      paths: [
+        { ...series, value: "/b.x" },
+        { ...series, value: "/b.y" },
+      ],
+    });
   });
 
   it("adds a series inline and cancels with Escape", async () => {

@@ -216,6 +216,7 @@ export function PlotLegendRow({
         value: field,
         enabled: true,
         timestampMethod: path.timestampMethod,
+        timestampPath: path.timestampPath,
       })),
     );
     savePaths(newPaths);

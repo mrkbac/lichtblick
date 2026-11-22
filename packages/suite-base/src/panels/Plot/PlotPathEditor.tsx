@@ -3,13 +3,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { makeStyles } from "tss-react/mui";
 
-import { parseMessagePath } from "@lichtblick/message-path";
 import * as PanelAPI from "@lichtblick/suite-base/PanelAPI";
 import MessagePathInput from "@lichtblick/suite-base/components/MessagePathSyntax/MessagePathInput";
 import { messagePathStructures } from "@lichtblick/suite-base/components/MessagePathSyntax/messagePathsForDatatype";
 import { PLOTABLE_ROS_TYPES } from "@lichtblick/suite-base/panels/shared/constants";
 
-import { plottableFields } from "./utils/plottableFields";
+import { resolvePlotPaths } from "./utils/plottableFields";
 
 // A message is accepted too: it adds one series per numeric field, e.g. x, y and z
 const VALID_TYPES = [...PLOTABLE_ROS_TYPES, "message"];
@@ -58,16 +57,16 @@ export function PlotPathEditor({
     }
     done.current = true;
     const path = latestValue.current.trim();
-    if (
-      how === "cancel" ||
-      path === "" ||
-      path === initialValue ||
-      parseMessagePath(path) == undefined
-    ) {
+    // An incomplete or invalid path (e.g. `/topic.`) leaves the series as it was
+    const resolved =
+      how === "cancel" || path === initialValue
+        ? undefined
+        : resolvePlotPaths(path, structures, topics);
+    if (!resolved) {
       onCancel();
       return;
     }
-    onCommit(plottableFields(path, structures, topics) ?? [path]);
+    onCommit(resolved);
   };
 
   return (
