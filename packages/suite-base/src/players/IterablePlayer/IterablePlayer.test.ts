@@ -1652,24 +1652,34 @@ describe("IterablePlayer", () => {
       });
       await store.done;
 
-      // Test getBatchIterator for topic1
+      // Range reads that start together share one read of the recording
       const iterator1 = player.getBatchIterator("topic1");
-      expect(iterator1).toBeDefined();
-
-      // Test getBatchIterator for topic2
       const iterator2 = player.getBatchIterator("topic2");
-      expect(iterator2).toBeDefined();
+      const topics = async (iterator: AsyncIterableIterator<Readonly<IteratorResult>>) => {
+        const read: string[] = [];
+        for await (const result of iterator) {
+          if (result.type === "message-event") {
+            read.push(result.msgEvent.topic);
+          }
+        }
+        return read;
+      };
 
-      // Verify calls with different topics
-      expect(mockMessageIterator).toHaveBeenCalledWith({
-        topics: new Map([["topic1", { topic: "topic1" }]]),
-        consumptionType: "full",
-      });
-
-      expect(mockMessageIterator).toHaveBeenCalledWith({
-        topics: new Map([["topic2", { topic: "topic2" }]]),
-        consumptionType: "full",
-      });
+      expect(await Promise.all([topics(iterator1!), topics(iterator2!)])).toEqual([
+        ["topic1"],
+        ["topic2"],
+      ]);
+      expect(mockMessageIterator.mock.calls).toEqual([
+        [
+          {
+            topics: new Map([
+              ["topic1", { topic: "topic1" }],
+              ["topic2", { topic: "topic2" }],
+            ]),
+            consumptionType: "full",
+          },
+        ],
+      ]);
     });
 
     it("should handle iterator that yields different result types", async () => {
@@ -1830,7 +1840,7 @@ describe("IterablePlayer", () => {
       });
       await store.done;
 
-      player.getBatchIterator("test_topic");
+      await player.getBatchIterator("test_topic")?.next();
 
       // Verify that consumptionType is "full"
       expect(mockMessageIterator).toHaveBeenCalledWith({
