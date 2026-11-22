@@ -24,8 +24,9 @@ export const DEFAULT_MAX_STORAGE_TIME: Duration = 300n * BigInt(1e9);
 
 /**
  * Live frames keep every transform received in this long before their newest one (scrubbing back
- * and short decay times need full rate), and older ones at most
- * {@link THINNED_TRANSFORM_SPACING} apart, which interpolation bridges. A 200 Hz frame keeps 30 s
+ * and short decay times need full rate), and older ones one per
+ * {@link THINNED_TRANSFORM_SPACING} plus where held values start and end (steps stay exact);
+ * interpolation bridges the rest. A 200 Hz frame keeps 30 s
  * at 200 Hz and the rest of its window at 20 Hz: ~11k instead of 60k samples.
  */
 export const FULL_RATE_TRANSFORM_TIME: Duration = 30n * BigInt(1e9);
@@ -228,6 +229,8 @@ export class TransformTree {
     this.#complete = complete;
     this.#visibility.complete = complete;
     this.#visibility.receivedUntil = complete ? this.#receivedUntil : undefined;
+    // Thinning for the live window does not carry over to a preloaded history, or back
+    this.decimations = 0;
     if (!complete) {
       this.clear();
     }

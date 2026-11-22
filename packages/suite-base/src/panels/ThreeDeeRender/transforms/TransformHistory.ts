@@ -6,6 +6,8 @@ import { Time } from "./time";
 
 // [time, receiveTime, x, y, z, qx, qy, qz, qw] per sample
 const STRIDE = 9;
+const TIME = 0;
+const RECEIVE = 1;
 const VALUES = 2;
 const INITIAL_CAPACITY = 4;
 /**
@@ -33,9 +35,11 @@ export class TransformHistory {
   #size = 0;
   /** Keep one appended sample per this many; the newest one is always kept */
   #keepEvery = 1;
-  /** Samples older than this (ns before the newest) keep at least #thinSpacing ns between them */
+  /** Samples older than this (ns before the newest) keep one per #thinSpacing ns (see #compact) */
   #thinAfter = Infinity;
   #thinSpacing = 0;
+  /** Relative time up to which samples were already thinned, so compaction copies them as they are */
+  #thinnedUntil = -Infinity;
   /** Relative time the newest sample must reach before removeOlderThan has anything to remove */
   #pruneAt = -Infinity;
   /** Appended samples merged into the newest one since it was appended */
@@ -55,8 +59,9 @@ export class TransformHistory {
   }
 
   /**
-   * Thin by age: samples more than `fullRateDuration` ns older than the newest keep at least
-   * `spacing` ns between them. Applied while compacting, which copies the samples anyway.
+   * Thin by age: samples more than `fullRateDuration` ns older than the newest keep one per
+   * `spacing` ns interval, plus both ends of runs of equal values. Applied while compacting, which
+   * copies the samples anyway.
    */
   public setAgeThinning(fullRateDuration: number, spacing: number): void {
     this.#thinAfter = fullRateDuration;
@@ -120,13 +125,17 @@ export class TransformHistory {
     if (this.#receiveBase == undefined) {
       return this.#size;
     }
-    const until = Number(receivedUntil - this.#receiveBase);
+    return this.#countAtMost(RECEIVE, Number(receivedUntil - this.#receiveBase));
+  }
+
+  /** Number of leading samples whose `column` value is at most `value` (it is non-decreasing) */
+  #countAtMost(column: number, value: number): number {
     const d = this.#data;
     let low = 0;
     let high = this.#size;
     while (low < high) {
       const mid = (low + high) >>> 1;
-      if (d[mid * STRIDE + 1]! <= until) {
+      if (d[mid * STRIDE + column]! <= value) {
         low = mid + 1;
       } else {
         high = mid;
@@ -142,6 +151,9 @@ export class TransformHistory {
   public set(time: Time, transform: Transform, receiveTime?: Time): void {
     if (this.#size === 0) {
       this.#base = time;
+      // The prune deadline and thinned prefix are relative to the old base
+      this.#pruneAt = -Infinity;
+      this.#thinnedUntil = -Infinity;
     }
     if (receiveTime != undefined) {
       this.#receiveBase ??= receiveTime;
@@ -209,6 +221,8 @@ export class TransformHistory {
     }
     this.#data.copyWithin(index * STRIDE, (index + 1) * STRIDE, this.#size * STRIDE);
     this.#size--;
+    // The prune deadline came from samples that may be gone
+    this.#pruneAt = -Infinity;
     this.#shrink();
     return true;
   }
@@ -257,6 +271,7 @@ export class TransformHistory {
     this.#size = 0;
     this.#receiveBase = undefined;
     this.#pruneAt = -Infinity;
+    this.#thinnedUntil = -Infinity;
     this.#buffer = new Float64Array(STRIDE * INITIAL_CAPACITY);
     this.#data = this.#buffer;
   }
@@ -345,8 +360,8 @@ export class TransformHistory {
 
   /**
    * Copies the samples to the start of a buffer of `capacity` samples (the current one if it has
-   * that size), dropping samples older than #thinAfter that are closer than #thinSpacing to the
-   * previous kept one.
+   * that size). Samples older than #thinAfter keep one per #thinSpacing interval, plus the first
+   * and last sample of each run of equal values, so held values and steps stay exact.
    */
   #compact(capacity: number): void {
     const src = this.#data;
@@ -354,29 +369,33 @@ export class TransformHistory {
     const inPlace = capacity * STRIDE === this.#buffer.length;
     const dest = inPlace ? this.#buffer : new Float64Array(STRIDE * capacity);
     const srcOffset = src.byteOffset / Float64Array.BYTES_PER_ELEMENT;
-    // First sample within #thinAfter of the newest; the ones before it are thinned
-    let recent = 0;
-    if (this.#thinAfter !== Infinity && size > 0) {
-      const cutoff = src[(size - 1) * STRIDE]! - this.#thinAfter;
-      let high = size;
-      while (recent < high) {
-        const mid = (recent + high) >>> 1;
-        if (src[mid * STRIDE]! < cutoff) {
-          recent = mid + 1;
-        } else {
-          high = mid;
-        }
-      }
+    // Samples up to #thinAfter before the newest are thinned (the newest one never is). Those up to
+    // #thinnedUntil already were and are copied as they are.
+    const cutoff =
+      this.#thinAfter === Infinity || size === 0
+        ? -Infinity
+        : src[(size - 1) * STRIDE]! - this.#thinAfter;
+    const recent = this.#countAtMost(TIME, cutoff);
+    const thinned = Math.min(recent, this.#countAtMost(TIME, this.#thinnedUntil));
+    this.#thinnedUntil = Math.max(this.#thinnedUntil, cutoff);
+    if (!inPlace) {
+      dest.set(src.subarray(0, thinned * STRIDE));
+    } else if (srcOffset !== 0 && thinned > 0) {
+      dest.copyWithin(0, srcOffset, srcOffset + thinned * STRIDE);
     }
-    let write = 0;
-    let lastKept = -Infinity;
-    for (let read = 0; read < recent; read++) {
+    let write = thinned;
+    let lastBucket =
+      thinned > 0 ? Math.floor(src[(thinned - 1) * STRIDE]! / this.#thinSpacing) : -Infinity;
+    for (let read = thinned; read < recent; read++) {
       const o = read * STRIDE;
-      const time = src[o]!;
-      if (time - lastKept < this.#thinSpacing) {
+      const bucket = Math.floor(src[o]! / this.#thinSpacing);
+      // read + 1 < size: the newest sample is never in the thinned part
+      const samePrevious = read > 0 && this.#sameValues(o, o - STRIDE);
+      const sameNext = this.#sameValues(o, o + STRIDE);
+      if (bucket === lastBucket && samePrevious === sameNext) {
         continue;
       }
-      lastKept = time;
+      lastBucket = bucket;
       const w = write * STRIDE;
       if (!inPlace || w !== srcOffset + o) {
         // dest is at or before src when they share the buffer, so copying forward is safe

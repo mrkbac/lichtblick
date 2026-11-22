@@ -185,6 +185,75 @@ describe("TransformTree", () => {
     expect(tfTree.frame("b")!.latestTimeAtOrBefore(t - 2n * sec)).toBe(t - 2n * sec);
   });
 
+  it("keeps steps exact in thinned live history", () => {
+    // 100 Hz: x = 150 until 10 s, held at 200 from 10.01 s to 20 s, then moving until 60 s
+    const ms = 1_000_000n;
+    const tfTree = new TransformTree();
+    for (let i = 0; i <= 6000; i++) {
+      const x = i <= 1000 ? 150 : i < 2000 ? 200 : i;
+      tfTree.addTransform("b", "a", BigInt(i) * 10n * ms, new Transform([x, 0, 0], [0, 0, 0, 1]));
+    }
+    const frame = tfTree.frame("b")!;
+    const lower: [bigint, Transform] = [0n, Transform.Empty()];
+    const upper: [bigint, Transform] = [0n, Transform.Empty()];
+    // 45 s before the newest transform, in the thinned part
+    expect(frame.findClosestTransforms(lower, upper, 15_000n * ms, 0n)).toBe(true);
+    expect(lower[1].position()[0]).toBe(200);
+    expect(upper[1].position()[0]).toBe(200);
+    // The step itself stays where it was
+    expect(frame.latestTimeAtOrBefore(10_009n * ms)).toBe(10_000n * ms);
+  });
+
+  it("thins older live transforms to one per spacing interval, also for slower streams", () => {
+    // 30 Hz for 120 s: thinning keeps 20 Hz, not every other sample (15 Hz)
+    const sec = BigInt(1e9);
+    const tfTree = new TransformTree();
+    const count = 30 * 120;
+    for (let i = 0; i < count; i++) {
+      tfTree.addTransform(
+        "b",
+        "a",
+        (BigInt(i) * sec) / 30n,
+        new Transform([i, 0, 0], [0, 0, 0, 1]),
+      );
+    }
+    const frame = tfTree.frame("b")!;
+    let kept = 0;
+    for (let t: bigint | undefined = 20n * sec; t != undefined && t >= 10n * sec; ) {
+      kept++;
+      t = frame.latestTimeAtOrBefore(t - 1n);
+    }
+    // 10 s of thinned history at 20 Hz
+    expect(kept).toBeGreaterThanOrEqual(10 * 20);
+    expect(kept).toBeLessThan(10 * 30);
+  });
+
+  it("keeps pruning after transforms were removed or the history started over", () => {
+    const sec = BigInt(1e9);
+    const at = (x: number) => new Transform([x, 0, 0], [0, 0, 0, 1]);
+    const feed = (tfTree: TransformTree, from: bigint) => {
+      for (let i = 1n; i <= 1000n; i++) {
+        tfTree.addTransform("b", "a", from + i * sec, at(Number(i)));
+      }
+      return tfTree.frame("b")!.transformsSize();
+    };
+    // Emptied (a child keeps the frame), then started over at a much later stamp
+    const emptied = new TransformTree(10n * sec);
+    emptied.addTransform("c", "b", 0n, at(0));
+    emptied.addTransform("b", "a", 0n, at(0));
+    emptied.addTransform("b", "a", 1000n * sec, at(1));
+    emptied.removeTransform("b", "a", 0n);
+    emptied.removeTransform("b", "a", 1000n * sec);
+    expect(emptied.frame("b")!.transformsSize()).toBe(0);
+    expect(feed(emptied, 5000n * sec)).toBeLessThanOrEqual(12);
+    // The newest transform removed, then earlier ones added
+    const removed = new TransformTree(10n * sec);
+    removed.addTransform("b", "a", 0n, at(0));
+    removed.addTransform("b", "a", 2000n * sec, at(1));
+    removed.removeTransform("b", "a", 2000n * sec);
+    expect(feed(removed, 0n)).toBeLessThanOrEqual(12);
+  });
+
   it("drops late transforms that arrive already outside the storage window", () => {
     const sec = BigInt(1e9);
     const tfTree = new TransformTree(10n * sec);
@@ -330,6 +399,20 @@ describe("TransformTree", () => {
       expect(tfTree.addTransform("a", "b", 20n * sec, at(3), 20n * sec)).toBe(
         AddTransformResult.CYCLE_DETECTED,
       );
+    });
+
+    it("starts preloading unthinned after a thinned live history", () => {
+      const tfTree = new TransformTree(300n * sec, 100);
+      for (let i = 0; i <= 300; i++) {
+        tfTree.addTransform("b", "a", BigInt(i) * sec, at(i));
+      }
+      expect(tfTree.decimations).toBeGreaterThan(0);
+      tfTree.setComplete(true);
+      expect(tfTree.decimations).toBe(0);
+      tfTree.addTransform("c", "a", 0n, at(0));
+      tfTree.addTransform("c", "a", 1n, at(1));
+      tfTree.addTransform("c", "a", 2n, at(2));
+      expect(tfTree.frame("c")!.transformsSize()).toBe(3);
     });
 
     it("clears the tree when leaving complete mode", () => {
