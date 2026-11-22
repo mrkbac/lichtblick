@@ -100,7 +100,8 @@ function isDescendantKey(path: string, key: string): boolean {
     return false;
   }
   const parts = path.split(PATH_NAME_AGGREGATOR);
-  const arrayDepth = range.arrayPath === "" ? 0 : range.arrayPath.split(PATH_NAME_AGGREGATOR).length;
+  const arrayDepth =
+    range.arrayPath === "" ? 0 : range.arrayPath.split(PATH_NAME_AGGREGATOR).length;
   if (parts.length <= arrayDepth) {
     return false;
   }

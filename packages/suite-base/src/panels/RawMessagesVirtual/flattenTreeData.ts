@@ -11,10 +11,7 @@ import {
   diffLabels,
   TreeNode,
 } from "@lichtblick/suite-base/panels/RawMessagesCommon/types";
-import {
-  rangeKey,
-  typedArrayToArray,
-} from "@lichtblick/suite-base/panels/RawMessagesCommon/utils";
+import { rangeKey, typedArrayToArray } from "@lichtblick/suite-base/panels/RawMessagesCommon/utils";
 import { isTypedArray } from "@lichtblick/suite-base/types/isTypedArray";
 
 const DIFF_STATUS_BY_LABEL: Record<string, DiffStatus> = {
