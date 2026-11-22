@@ -78,7 +78,14 @@ export function useShareLink(): {
     }
     const { link, layoutIncluded } = buildShareLink(
       window.location.href,
-      { ...sourceURLState(playerState.urlState, selectedEventId), time },
+      {
+        ...sourceURLState(
+          playerState.urlState,
+          selectedEventId,
+          playerState.activeData?.compareSides,
+        ),
+        time,
+      },
       encodedLayout,
     );
     try {
