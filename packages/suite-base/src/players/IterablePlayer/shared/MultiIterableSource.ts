@@ -432,6 +432,7 @@ export class MultiIterableSource<T extends ISerializedIterableSource, P>
       publishersByTopic: new Map(),
       topics: [],
       topicStats: new Map(),
+      indexedBackfill: initializations.every((init) => init.indexedBackfill === true),
     };
 
     for (const init of initializations) {

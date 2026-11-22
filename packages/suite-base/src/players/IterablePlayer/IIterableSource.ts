@@ -40,6 +40,12 @@ export type Initialization = {
   name?: string;
   metadata?: ReadonlyArray<Readonly<Metadata>>;
 
+  /**
+   * getBackfillMessages finds each topic's latest message through an index, so its cost doesn't
+   * grow with the data before the requested time. Unset means it may scan (e.g. unindexed files).
+   */
+  indexedBackfill?: boolean;
+
   /** Publisher names by topic **/
   publishersByTopic: Map<string, Set<string>>;
 

@@ -31,7 +31,8 @@ export function subtractMilliseconds(time: Time, milliseconds: number): Time {
     nsec += NANOSECONDS_PER_SECOND;
     sec -= 1;
   }
-  return { sec, nsec };
+  // The input's nsec may be fractional (computed times): keep an integer nanosecond count
+  return { sec, nsec: Math.round(nsec) };
 }
 
 /**

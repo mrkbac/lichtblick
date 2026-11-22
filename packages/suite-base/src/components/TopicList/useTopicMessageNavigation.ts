@@ -35,7 +35,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useImmer } from "use-immer";
 
 import Logger from "@lichtblick/log";
-import { useMessagePipeline } from "@lichtblick/suite-base/components/MessagePipeline";
+import {
+  MessagePipelineContext,
+  useMessagePipeline,
+} from "@lichtblick/suite-base/components/MessagePipeline";
 import {
   selectCurrentTime,
   selectEndTime,
@@ -58,6 +61,7 @@ import {
   TopicBoundaries,
   UseTopicMessageNavigationReturn,
 } from "@lichtblick/suite-base/components/TopicList/types";
+import { PLAYER_CAPABILITIES } from "@lichtblick/suite-base/players/constants";
 
 const log = Logger.getLogger(__filename);
 
@@ -67,6 +71,8 @@ const logNavigationError = (direction: "next" | "previous", error: unknown): voi
 };
 
 const selectNothing = () => undefined;
+const selectHasIndexedBackfill = (ctx: MessagePipelineContext): boolean =>
+  ctx.playerState.capabilities.includes(PLAYER_CAPABILITIES.indexedBackfill);
 
 const ZERO_TIME: Time = Object.freeze({ sec: 0, nsec: 0 });
 
@@ -117,6 +123,7 @@ export function useTopicMessageNavigation({
   const getBatchIterator = useMessagePipeline(selectGetBatchIterator);
   const getInspectionIterator = useMessagePipeline(selectInspectionIterator);
   const getMessageAtTime = useMessagePipeline(selectGetMessageAtTime);
+  const hasIndexedBackfill = useMessagePipeline(selectHasIndexedBackfill);
 
   // Navigation only needs receive times. The inspection iterator skips decoding payloads (a
   // camera frame costs nothing to step over); sources without it get decoded batches.
@@ -147,7 +154,16 @@ export function useTopicMessageNavigation({
     (topic: string, updates: Partial<TopicBoundaries>) => {
       setBoundariesCache((draft) => {
         const existing = draft.get(topic) ?? {};
-        draft.set(topic, { ...existing, ...updates });
+        const next = { ...existing, ...updates };
+        // Writing equal values would still make a new state and re-run discovery
+        if (
+          sameTime(existing.first, next.first) &&
+          sameTime(existing.last, next.last) &&
+          sameTime(existing.lastAtEnd, next.lastAtEnd)
+        ) {
+          return;
+        }
+        draft.set(topic, next);
       });
     },
     [setBoundariesCache],
@@ -194,18 +210,33 @@ export function useTopicMessageNavigation({
       floor: Time = ZERO_TIME,
       initialWindowMs: number = DEFAULT_WINDOW_MS,
     ): Promise<Time | undefined> => {
-      // The indexed backward lookup is fast, but approximate for some sources (overlapping files,
-      // unindexed reads, converters). Use it as a lower bound and read only the gap after it,
-      // which picks up anything newer it missed.
-      const candidate = (await getMessageAtTime(topic, time, signal))?.receiveTime;
-      if (candidate && compare(candidate, time) <= 0) {
-        const gap = await lastMessageIn(signal, topic, addTime(candidate, ONE_NANOSECOND), time);
-        return gap.aborted && signal.aborted ? undefined : (gap.found ?? candidate);
+      // Only on sources whose backfill uses an index: elsewhere it may decode everything up to
+      // `time`. Even indexed backfill is approximate for some sources (overlapping files,
+      // converters), so its answer is a lower bound: read only the gap after it, which picks up
+      // anything newer it missed.
+      if (hasIndexedBackfill) {
+        let candidate: Time | undefined;
+        try {
+          candidate = (await getMessageAtTime(topic, time, signal))?.receiveTime;
+        } catch (error) {
+          if (signal.aborted) {
+            return undefined;
+          }
+          const message = error instanceof Error ? error.message : String(error);
+          log.warn(`Indexed lookup failed, scanning instead: ${message}`);
+        }
+        if (candidate && compare(candidate, time) <= 0) {
+          const gap = await lastMessageIn(signal, topic, addTime(candidate, ONE_NANOSECOND), time);
+          return gap.aborted && signal.aborted ? undefined : (gap.found ?? candidate);
+        }
       }
 
-      // No candidate (no indexed lookup for this topic, or nothing before `time`): backward windows
-      // that grow geometrically and don't overlap, so the bytes read scale with the distance to the
-      // message instead of the length of the recording before it.
+      if (compare(time, floor) < 0) {
+        return undefined;
+      }
+      // No candidate: backward windows that grow geometrically and don't overlap, so the bytes
+      // read scale with the distance to the message instead of the length of the recording
+      // before it.
       let end = time;
       // Terminates: windows grow geometrically until one reaches the floor.
       for (let windowMs = initialWindowMs; ; windowMs *= WINDOW_GROWTH_FACTOR) {
@@ -224,7 +255,7 @@ export function useTopicMessageNavigation({
         end = start;
       }
     },
-    [getMessageAtTime, lastMessageIn],
+    [hasIndexedBackfill, getMessageAtTime, lastMessageIn],
   );
 
   // Read through a ref so discovery doesn't restart on every tick of a growing source, where
@@ -236,10 +267,10 @@ export function useTopicMessageNavigation({
   const hasEndTime = endTime != undefined;
 
   const discoverBoundaries = useCallback(
-    async (signal: AbortSignal, topic: string) => {
+    async (signal: AbortSignal, topic: string, cachedFirst: Time | undefined) => {
       const { topicStats: stats, endTime: end } = latestRef.current;
       const topicStatsEntry = stats?.get(topic);
-      let first = topicStatsEntry?.firstMessageTime;
+      let first = topicStatsEntry?.firstMessageTime ?? cachedFirst;
       let last = topicStatsEntry?.lastMessageTime;
 
       if (!first) {
@@ -268,10 +299,11 @@ export function useTopicMessageNavigation({
         last = await findMessageAtOrBefore(signal, topic, end, first, windowMs);
       }
 
-      // Cache complete results only; the effect retries once the end time is known. `lastAtEnd`
-      // records the end this was checked against, so growth past it invalidates `last`.
-      if (!signal.aborted && first && last) {
-        updateBoundariesCache(topic, { first, last, lastAtEnd: end });
+      // `lastAtEnd` records the end `last` was checked against, so growth past it invalidates
+      // `last`. Without an end yet, `first` is cached alone and the effect retries for `last`
+      // once the end time is known.
+      if (!signal.aborted && first) {
+        updateBoundariesCache(topic, last ? { first, last, lastAtEnd: end } : { first });
       }
     },
     [iterateTimes, findMessageAtOrBefore, updateBoundariesCache],
@@ -285,7 +317,7 @@ export function useTopicMessageNavigation({
     }
 
     const abortController = new AbortController();
-    discoverBoundaries(abortController.signal, topicName).catch((error: unknown) => {
+    discoverBoundaries(abortController.signal, topicName, cached?.first).catch((error: unknown) => {
       if (!abortController.signal.aborted) {
         const message = error instanceof Error ? error.message : String(error);
         log.warn(`Error discovering message boundaries: ${message}`);

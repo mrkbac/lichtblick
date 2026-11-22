@@ -9,6 +9,7 @@ import type { Mock } from "vitest";
 
 import { useMessagePipeline } from "@lichtblick/suite-base/components/MessagePipeline";
 import { IteratorResult } from "@lichtblick/suite-base/players/IterablePlayer/IIterableSource";
+import { PLAYER_CAPABILITIES } from "@lichtblick/suite-base/players/constants";
 import RosTimeBuilder from "@lichtblick/suite-base/testing/builders/RosTimeBuilder";
 import { BasicBuilder } from "@lichtblick/test-builders";
 
@@ -36,6 +37,8 @@ type MessagePipelineMockData = {
   pausePlayback?: Mock;
   seekPlayback?: Mock;
   messages?: Time[];
+  /** When true, the player advertises an indexed getMessageAtTime. */
+  indexedBackfill?: boolean;
   /** When true, the player offers a payload-free inspection iterator over `messages`. */
   supportsInspection?: boolean;
   customIterator?: () => AsyncIterableIterator<Readonly<IteratorResult>>;
@@ -124,6 +127,7 @@ function setup(options: SetupOptions = {}) {
     seekPlayback = vi.fn(),
     messages = [],
     supportsInspection = false,
+    indexedBackfill = false,
     customIterator,
   } = pipelineData;
 
@@ -149,6 +153,7 @@ function setup(options: SetupOptions = {}) {
   (useMessagePipeline as Mock).mockImplementation((selector) =>
     selector({
       playerState: {
+        capabilities: indexedBackfill ? [PLAYER_CAPABILITIES.indexedBackfill] : [],
         activeData: {
           currentTime,
           startTime,
@@ -428,6 +433,7 @@ describe("useTopicMessageNavigation", () => {
       (useMessagePipeline as Mock).mockImplementation((selector) =>
         selector({
           playerState: {
+            capabilities: [],
             activeData: {
               currentTime: RosTimeBuilder.time(),
               topicStats: new Map([[topicName, { numMessages: BasicBuilder.number() }]]),
@@ -665,6 +671,7 @@ describe("useTopicMessageNavigation", () => {
           startTime: { sec: 0, nsec: 0 },
           currentTime,
           topicStats: new Map([[topicName, { numMessages: 2, firstMessageTime: older }]]),
+          indexedBackfill: true,
           messages: [older, newest],
         },
       });
@@ -699,6 +706,7 @@ describe("useTopicMessageNavigation", () => {
           startTime: { sec: 0, nsec: 0 },
           currentTime,
           topicStats: new Map([[topicName, { numMessages: 3, firstMessageTime: t1 }]]),
+          indexedBackfill: true,
           messages: [t1, previous, currentTime],
         },
       });
@@ -722,6 +730,83 @@ describe("useTopicMessageNavigation", () => {
         start: { sec: 40, nsec: 1 },
         end: { sec: 99, nsec: 999_999_999 },
       });
+    });
+
+    it("does not call getMessageAtTime on sources without an indexed lookup", async () => {
+      // Given - e.g. an unindexed file, where backfill may decode everything up to the time
+      const t1: Time = { sec: 1, nsec: 0 };
+      const t2: Time = { sec: 2, nsec: 0 };
+      const topicName = `/${BasicBuilder.string()}`;
+      const { result, seekPlayback, getMessageAtTime } = setup({
+        topicName,
+        selected: true,
+        pipelineData: {
+          currentTime: t2,
+          topicStats: new Map([[topicName, { numMessages: 2, firstMessageTime: t1 }]]),
+          messages: [t1, t2],
+        },
+      });
+
+      // When
+      await act(async () => {
+        await result.current.handlePreviousMessage();
+      });
+
+      // Then
+      expect(seekPlayback).toHaveBeenCalledWith(t1);
+      expect(getMessageAtTime).not.toHaveBeenCalled();
+    });
+
+    it("falls back to windows when the indexed lookup fails", async () => {
+      // Given
+      const t1: Time = { sec: 1, nsec: 0 };
+      const t2: Time = { sec: 2, nsec: 0 };
+      const topicName = `/${BasicBuilder.string()}`;
+      const { result, seekPlayback, getMessageAtTime } = setup({
+        topicName,
+        selected: true,
+        pipelineData: {
+          currentTime: t2,
+          topicStats: new Map([[topicName, { numMessages: 2, firstMessageTime: t1 }]]),
+          indexedBackfill: true,
+          messages: [t1, t2],
+        },
+      });
+      getMessageAtTime.mockRejectedValue(new Error("worker gone"));
+
+      // When
+      await act(async () => {
+        await result.current.handlePreviousMessage();
+      });
+
+      // Then
+      expect(seekPlayback).toHaveBeenCalledWith(t1);
+      expect(mockWarn).toHaveBeenCalledWith(expect.stringContaining("worker gone"));
+    });
+
+    it("reads nothing when asked for a message before the topic's first one", async () => {
+      // Given - at the first message, with the boundary known from stats
+      const t1: Time = { sec: 5, nsec: 0 };
+      const topicName = `/${BasicBuilder.string()}`;
+      const { result, seekPlayback, getBatchIterator } = setup({
+        topicName,
+        selected: true,
+        pipelineData: {
+          startTime: { sec: 0, nsec: 0 },
+          currentTime: t1,
+          topicStats: new Map([[topicName, { numMessages: 1, firstMessageTime: t1 }]]),
+          messages: [t1],
+        },
+      });
+
+      // When
+      await act(async () => {
+        await result.current.handlePreviousMessage();
+      });
+
+      // Then
+      expect(getBatchIterator).not.toHaveBeenCalled();
+      expect(seekPlayback).not.toHaveBeenCalled();
     });
 
     it("widens windows geometrically without reading from the start", async () => {
@@ -770,6 +855,7 @@ describe("useTopicMessageNavigation", () => {
       (useMessagePipeline as Mock).mockImplementation((selector) =>
         selector({
           playerState: {
+            capabilities: [],
             activeData: {
               currentTime: RosTimeBuilder.time(),
               topicStats: new Map([[topicName, { numMessages: BasicBuilder.number() }]]),
@@ -990,6 +1076,35 @@ describe("useTopicMessageNavigation", () => {
 
       // Then
       expect(result.current.canNavigateNext).toBe(true);
+    });
+
+    it("caches the first message on its own, so previous turns off at it", async () => {
+      // Given - no end time yet, so the last message can't be looked up
+      const t1: Time = { sec: 1, nsec: 0 };
+      const t2: Time = { sec: 2, nsec: 0 };
+      const topicName = `/${BasicBuilder.string()}`;
+
+      // When
+      const { result } = setup({
+        topicName,
+        selected: true,
+        pipelineData: {
+          startTime: { sec: 0, nsec: 0 },
+          currentTime: t1,
+          topicStats: new Map([[topicName, { numMessages: 2 }]]),
+          messages: [t1, t2],
+        },
+      });
+
+      // Then - before discovery the recording start (0) allows "previous"; at the first message
+      // it must not
+      await waitFor(() => {
+        expect(result.current.canNavigatePrevious).toBe(false);
+      });
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+      expect(result.current.canNavigatePrevious).toBe(false);
     });
 
     it("does not restart discovery when the end time advances", async () => {

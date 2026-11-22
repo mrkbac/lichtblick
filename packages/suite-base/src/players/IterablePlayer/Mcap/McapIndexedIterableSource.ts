@@ -396,6 +396,7 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
         [...index.publishersByTopic].map(([topic, publishers]) => [topic, new Set(publishers)]),
       ),
       topicStats,
+      indexedBackfill: true,
       // What the caller reports as changed is only its new chunks, unless earlier ones changed too
       updatedRanges: revived ? undefined : [],
     };
