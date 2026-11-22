@@ -2,10 +2,9 @@ name: Perf budget label
 
 # Keeps the required perf-budget check (ci.yml) in line with the `perf-budget-accepted` label:
 # when the label is added or removed, waits for the PR's whole CI run to finish (a re-run requested
-# while other jobs still run can be rejected), then re-runs perf-budget
-# if its result no longer matches the label (failed over budget but now labelled, or passed by the
-# label that is now gone). The job reads the label itself when it finishes, and the annotation it
-# leaves says what it decided.
+# while other jobs still run is rejected), then re-runs perf-budget, which reads the label itself
+# when it finishes. It always re-runs instead of guessing whether the old result depended on the
+# label: after a partial re-run, perf-budget is a copy without the annotations that would say so.
 #
 # A separate workflow so label events never create a `perf-budget` check run (a skipped run would
 # count as passing for the required check and hide a failed one). It uses pull_request_target so
@@ -34,7 +33,6 @@ jobs:
       cancel-in-progress: true
     permissions:
       actions: write # re-run the perf-budget job
-      checks: read # read the annotation the job left
       pull-requests: read # read the labels and head commit
     env:
       GH_TOKEN: ${{ github.token }}
@@ -66,15 +64,5 @@ jobs:
             echo "perf-budget didn't run in $run (tests failed, cancelled, awaiting approval); nothing to reconcile"
             exit 0
           fi
-          id=$(jq -r .id <<<"$job")
-          conclusion=$(jq -r .conclusion <<<"$job")
-          labelled=$(gh pr view "$PR" --json labels --jq 'any(.labels[]; .name == "perf-budget-accepted")')
-          titles=$(gh api --paginate "repos/$GH_REPO/check-runs/$id/annotations" --jq '.[].title')
-          echo "perf-budget: $conclusion; label present: $labelled; annotations: $(echo $titles)"
-          if { [ "$labelled" = true ] && [ "$conclusion" = failure ] && grep -qx perf-budget-waivable <<<"$titles"; } ||
-            { [ "$labelled" = false ] && [ "$conclusion" = success ] && grep -qx perf-budget-accepted <<<"$titles"; }; then
-            echo "Result doesn't match the label; re-running perf-budget"
-            gh run rerun "$run" --job "$id"
-          else
-            echo "Result matches the label"
-          fi
+          echo "Re-running perf-budget in run $run so it reads the current label"
+          gh run rerun "$run" --job "$(jq -r .id <<<"$job")"

@@ -107,8 +107,7 @@ jobs:
         # Exit code 3 means over budget (and nothing worse), which a deliberate trade-off may accept
         # with the `perf-budget-accepted` label. Not comparable (2), a failed base build or a crash
         # always fail. The label is read now, not from the event, so a
-        # re-run (perf-budget-label.yml) sees the current state. The annotation titles tell
-        # perf-budget-label.yml what this run decided. Other failures are never accepted.
+        # re-run (perf-budget-label.yml) sees the current state. The annotations say which way it went.
         run: |
           set +e
           node --expose-gc ci/perf-budget.ts --base "$(git merge-base HEAD "$BASE")"
