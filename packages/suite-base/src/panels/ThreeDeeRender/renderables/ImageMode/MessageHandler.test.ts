@@ -20,6 +20,7 @@ import { MessageEvent } from "@lichtblick/suite";
 import { HUDItemManager } from "@lichtblick/suite-base/panels/ThreeDeeRender/HUDItemManager";
 import {
   MessageHandler,
+  MessageRenderState,
   SYNC_BYTES,
   WAITING_FOR_BOTH_HUD_ITEM,
   WAITING_FOR_CALIBRATION_HUD_ITEM,
@@ -364,18 +365,22 @@ describe("MessageHandler: synchronized = true", () => {
     expect(emitted.at(-1)).toEqual(fromNanoSec(12n * SEC));
   });
 
-  it("shows waiting for sync once a stalled annotation topic lets the match age out", () => {
+  it("shows waiting for sync as soon as a stalled annotation topic lets the match age out", () => {
     const messageHandler = syncedHandler();
+    const emitted: MessageRenderState[] = [];
+    messageHandler.addListener((state) => emitted.push(state));
     messageHandler.handleRawImage(imageAt(SEC));
     messageHandler.handleAnnotations(annotationsAt(SEC));
-    expect(renderedStamp(messageHandler)).toEqual(fromNanoSec(SEC));
-    // Annotations stop; images keep coming
-    for (let sec = 2n; sec <= 12n; sec++) {
+    expect((emitted.at(-1)?.image?.message as RawImage).timestamp).toEqual(fromNanoSec(SEC));
+    // Annotations stop; images keep coming. The image at 11 s is the last within the window.
+    for (let sec = 2n; sec <= 11n; sec++) {
       messageHandler.handleRawImage(imageAt(sec * SEC));
     }
-    const state = messageHandler.getRenderStateAndUpdateHUD();
-    expect(state.image).toBeUndefined();
-    expect(state.missingAnnotationTopics).toEqual(["annotations"]);
+    expect((emitted.at(-1)?.image?.message as RawImage).timestamp).toEqual(fromNanoSec(SEC));
+    // The message that expires it reports that in the same render, without waiting for another
+    messageHandler.handleRawImage(imageAt(12n * SEC));
+    expect(emitted.at(-1)?.image).toBeUndefined();
+    expect(emitted.at(-1)?.missingAnnotationTopics).toEqual(["annotations"]);
   });
 
   it("reports waiting for images once the camera stops and the match ages out", () => {
@@ -388,13 +393,14 @@ describe("MessageHandler: synchronized = true", () => {
     messageHandler.handleRawImage(imageAt(SEC));
     messageHandler.handleAnnotations(annotationsAt(SEC));
     expect(renderedStamp(messageHandler)).toEqual(fromNanoSec(SEC));
+    const emitted: MessageRenderState[] = [];
+    messageHandler.addListener((state) => emitted.push(state));
     // Images stop; annotations keep coming
     for (let sec = 2n; sec <= 12n; sec++) {
       messageHandler.handleAnnotations(annotationsAt(sec * SEC));
     }
-    const state = messageHandler.getRenderStateAndUpdateHUD();
-    expect(state.image).toBeUndefined();
-    expect(state.waitingForImage).toBe(true);
+    expect(emitted.at(-1)?.image).toBeUndefined();
+    expect(emitted.at(-1)?.waitingForImage).toBe(true);
     expect(hud.getHUDItems()).toEqual([WAITING_FOR_IMAGE_EMPTY_HUD_ITEM]);
   });
 

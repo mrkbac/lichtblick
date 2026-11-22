@@ -120,6 +120,14 @@ describe("TimestampSynchronizer", () => {
     expect(stamps(sync.filter([msg("b", 1)]))).toEqual([`a@${S}`, `b@${S}`]);
   });
 
+  it("releases a set completed in a batch even if a later message of it would evict it", () => {
+    const sync = new TimestampSynchronizer();
+    sync.setTopics(new Set(["a", "b"]));
+    sync.filter([msg("a", 1)]);
+    // b completes 1, then a@12 would push a@1 out of the window
+    expect(stamps(sync.filter([msg("b", 1), msg("a", 12)]))).toEqual([`a@${S}`, `b@${S}`]);
+  });
+
   it("releases the newest set completed in a batch whatever the arrival order", () => {
     const sync = new TimestampSynchronizer();
     sync.setTopics(new Set(["a", "b"]));

@@ -266,18 +266,24 @@ export class MessageHandler {
   /**
    * Drops stamps more than SYNC_WINDOW_NS behind `latest` (the newest stamp received just now, not
    * the tree's max, so one future-stamped message can't evict everything after it) and the oldest
-   * ones past SYNC_BYTES, so sets that never complete cannot pile up. The newest stays. Runs after
-   * matching, so a set completed by the same message that would evict it is still shown.
+   * ones past SYNC_BYTES, so sets that never complete cannot pile up. The newest stays, and so does
+   * `keep` (the oldest entry once older ones are pruned): a set completed by the same message that
+   * would evict it is still shown, and goes on the next eviction.
    */
-  #evictOldSyncItems(latest: Time | undefined): void {
+  /** Returns whether anything was evicted */
+  #evictOldSyncItems(latest: Time | undefined, keep: Time | undefined): boolean {
     const cutoff = latest ? toNanoSec(latest) - SYNC_WINDOW_NS : undefined;
+    let evicted = false;
     while (
       this.#tree.size > 1 &&
+      (keep == undefined || compareTime(this.#tree.minKey()!, keep) !== 0) &&
       ((cutoff != undefined && toNanoSec(this.#tree.minKey()!) < cutoff) ||
         this.#treeBytes > SYNC_BYTES)
     ) {
       this.#shiftSyncItem();
+      evicted = true;
     }
+    return evicted;
   }
 
   #shiftSyncItem(): void {
@@ -528,6 +534,8 @@ export class MessageHandler {
     const complete = (item: SynchronizationItem | undefined): item is SynchronizationItem =>
       item?.image != undefined && visible.every((topic) => item.annotationsByTopic.has(topic));
 
+    // Completed in this render: kept through this render's eviction
+    let newMatch: Time | undefined;
     if (this.#rescan) {
       this.#rescan = false;
       this.#match = undefined;
@@ -538,6 +546,7 @@ export class MessageHandler {
           break;
         }
       }
+      newMatch = this.#match;
     } else {
       for (const stamp of this.#touched) {
         if (
@@ -545,6 +554,7 @@ export class MessageHandler {
           complete(this.#tree.get(stamp))
         ) {
           this.#match = stamp;
+          newMatch = stamp;
         }
       }
     }
@@ -556,15 +566,15 @@ export class MessageHandler {
     }
     this.#touched.length = 0;
 
-    // Captured before eviction, which may drop it: shown for this render only
-    const matched = this.#match && this.#tree.get(this.#match);
+    let matched = this.#match && this.#tree.get(this.#match);
     if (complete(matched)) {
       while (isLessThan(this.#tree.minKey()!, this.#match!)) {
         this.#shiftSyncItem();
       }
     }
-    if (this.#tree.size > 0) {
-      this.#evictOldSyncItems(latest);
+    // Checked after eviction: a set shown earlier that just expired is reported right away
+    if (this.#tree.size > 0 && this.#evictOldSyncItems(latest, newMatch) && this.#match) {
+      matched = this.#tree.get(this.#match);
     }
     if (complete(matched)) {
       return { found: true, messages: matched };

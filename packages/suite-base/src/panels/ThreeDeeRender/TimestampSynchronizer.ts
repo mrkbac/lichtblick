@@ -71,9 +71,6 @@ export class TimestampSynchronizer {
     const out: MessageEvent[] = [];
     // A set can only complete at a stamp inserted now: older complete ones were already released
     let newest: bigint | undefined;
-    // Earlier candidates of this batch, only needed if eviction removes a part of `newest`
-    let older: bigint[] | undefined;
-    let evicted = false;
     for (const event of events) {
       if (!this.#topics.has(event.topic)) {
         out.push(event);
@@ -87,35 +84,19 @@ export class TimestampSynchronizer {
       const stamp = syncTimestamp(event);
       buffer.bytes += event.sizeInBytes - (buffer.events.get(stamp)?.sizeInBytes ?? 0);
       buffer.events.set(stamp, event);
-      if (this.#allHave(stamp)) {
-        if (newest == undefined) {
-          newest = stamp;
-        } else if (stamp > newest) {
-          (older ??= []).push(newest);
-          newest = stamp;
-        } else if (stamp < newest) {
-          (older ??= []).push(stamp);
-        }
+      if ((newest == undefined || stamp > newest) && this.#allHave(stamp)) {
+        newest = stamp;
       }
-      // From this message, not the buffer's max: one future-stamped message must not evict the rest
+      // From this message, not the buffer's max: one future-stamped message must not evict the rest.
+      // The newest message always stays, even past the byte budget, and so does the set completed
+      // in this batch (everything older than it goes on release anyway).
       const cutoff = stamp - SYNC_WINDOW_NS;
-      // The newest message always stays, even past the byte budget
       while (
         buffer.events.size > 1 &&
+        buffer.events.minKey() !== newest &&
         (buffer.events.minKey()! < cutoff || buffer.bytes > SYNC_BYTES_PER_TOPIC)
       ) {
         buffer.bytes -= buffer.events.shift()![1].sizeInBytes;
-        evicted = true;
-      }
-    }
-    if (evicted && newest != undefined && !this.#allHave(newest)) {
-      // A later message in the batch evicted part of it: take the newest still complete
-      const candidates = older ?? [];
-      newest = undefined;
-      for (const stamp of candidates) {
-        if ((newest == undefined || stamp > newest) && this.#allHave(stamp)) {
-          newest = stamp;
-        }
       }
     }
     if (newest != undefined) {
