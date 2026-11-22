@@ -57,31 +57,6 @@ function folderOf(file: Recording): string | undefined {
 }
 
 /**
- * The `ds.url` value for several URLs: joined by commas, with a comma inside a URL escaped as
- * `%2C` (the same URL to the server) so the list splits back into the same URLs
- */
-export function joinUrls(urls: readonly string[]): string {
-  return urls.map((url) => url.replaceAll(",", "%2C")).join(",");
-}
-
-/**
- * The URLs in a `ds.url` list. A comma starts a new URL only where a scheme (`https://`) follows,
- * so a URL with a comma of its own stays whole, escaped by joinUrls or not.
- */
-export function splitUrls(value: string): string[] {
-  const urls: string[] = [];
-  for (const part of value.split(",")) {
-    const last = urls.at(-1);
-    if (last != undefined && !/^[a-z][a-z\d+.-]*:\/\//i.test(part)) {
-      urls[urls.length - 1] = `${last},${part}`;
-    } else {
-      urls.push(part);
-    }
-  }
-  return urls;
-}
-
-/**
  * The `ds.compareNames` value for side names: joined by commas, with commas (and `%`) in a name
  * escaped so names keep them. A new param rather than `ds.compare`, whose older plain lists keep
  * meaning what they did (e.g. `%41` stays `%41`).
@@ -108,6 +83,21 @@ export function compareNamesOf(
   }
   const plain = params?.compare;
   return plain == undefined || plain === "" || plain === "true" ? undefined : plain.split(",");
+}
+
+export function remoteCompareNames(
+  urls: readonly string[],
+  params: Record<string, string | undefined> | undefined,
+): string[] | undefined {
+  if (urls.length < 2) {
+    return undefined;
+  }
+  const names =
+    compareNamesOf(params) ??
+    (params?.compare === "true"
+      ? uniqueNames(urls.map((url) => basename(new URL(url).pathname)))
+      : undefined);
+  return names?.length === urls.length ? names : undefined;
 }
 
 // The handle each opened file was read from, so a comparison of them can be stored in recents
@@ -182,8 +172,8 @@ export function mergeArgs(
   return source.type === "connection"
     ? {
         type: "connection",
+        urls: unique.filter((r) => typeof r === "string"),
         params: {
-          url: joinUrls(unique.filter((r) => typeof r === "string")),
           ...(withCookies && { includeCredentials: "true" }),
         },
       }
@@ -207,7 +197,7 @@ export function draftToCompare(draft: CompareDraft): { files: Recording[]; compa
   const files: Recording[] = [];
   const compare: string[] = [];
   sides.forEach((side, index) => {
-    for (const file of [...draft.shared, ...side.files]) {
+    for (const file of new Set([...draft.shared, ...side.files])) {
       files.push(file);
       compare.push(names[index]!);
     }

@@ -21,7 +21,7 @@ import {
   usePlayerSelection,
 } from "@lichtblick/suite-base/context/PlayerSelectionContext";
 import { isRecordingSource } from "@lichtblick/suite-base/players/constants";
-import { PlayerURLState } from "@lichtblick/suite-base/players/types";
+import { CompareSide, PlayerURLState } from "@lichtblick/suite-base/players/types";
 import {
   AppURLState,
   readableHref,
@@ -31,6 +31,8 @@ import {
 const selectCanSeek = (ctx: MessagePipelineContext) =>
   isRecordingSource(ctx.playerState.capabilities);
 const selectUrlState = (ctx: MessagePipelineContext) => ctx.playerState.urlState;
+const selectCompareSides = (ctx: MessagePipelineContext) =>
+  ctx.playerState.activeData?.compareSides;
 const selectSelectedEventId = (store: EventsStore) => store.selectedEventId;
 
 /** Writes app state into the address bar without adding a history entry. */
@@ -54,10 +56,19 @@ export function isLocalFileSource(
 export function sourceURLState(
   urlState: PlayerURLState,
   selectedEventId: string | undefined,
+  compareSides?: readonly CompareSide[],
 ): AppURLState {
+  const parameters: Record<string, string | string[] | undefined> = {
+    ...urlState.parameters,
+    eventId: selectedEventId,
+  };
+  if (urlState.sourceId === "remote-file" && compareSides != undefined) {
+    const offsets = compareSides.map((side) => side.offsetSec);
+    parameters.compareOffsets = offsets.some((offset) => offset !== 0) ? offsets.join() : undefined;
+  }
   return {
     ds: urlState.sourceId,
-    dsParams: _.pickBy({ ...urlState.parameters, eventId: selectedEventId }, _.isString),
+    dsParams: _.pickBy(parameters, _.isString),
     dsParamsArray: _.pickBy(urlState.parameters, _.isArray),
   };
 }
@@ -68,6 +79,7 @@ export function sourceURLState(
 export function useStateToURLSynchronization(): void {
   const playerUrlState = useMessagePipeline(selectUrlState);
   const stablePlayerUrlState = useDeepMemo(playerUrlState);
+  const compareSides = useMessagePipeline(selectCompareSides);
   const canSeek = useMessagePipeline(selectCanSeek);
   const currentTime = useMessagePipeline(selectCurrentTime);
   const [debouncedCurrentTime] = useDebounce(currentTime, 500, {
@@ -108,6 +120,6 @@ export function useStateToURLSynchronization(): void {
       return;
     }
 
-    updateUrl(sourceURLState(stablePlayerUrlState, selectedEventId));
-  }, [availableSources, selectedEventId, stablePlayerUrlState]);
+    updateUrl(sourceURLState(stablePlayerUrlState, selectedEventId, compareSides));
+  }, [availableSources, compareSides, selectedEventId, stablePlayerUrlState]);
 }

@@ -72,12 +72,15 @@ import { UserScripts } from "@lichtblick/suite-base/types/panels";
 import { updateAppURLState } from "@lichtblick/suite-base/util/appURLState";
 import {
   Recording,
-  compareNamesOf,
   recordingName,
   rememberHandle,
-  splitUrls,
+  remoteCompareNames,
 } from "@lichtblick/suite-base/util/compareSides";
-import { recentArgs, recentFileTitle } from "@lichtblick/suite-base/util/recentSources";
+import {
+  connectionRecentArgs,
+  recentArgs,
+  recentFileTitle,
+} from "@lichtblick/suite-base/util/recentSources";
 import { takeSourcePick } from "@lichtblick/suite-base/util/sourcePick";
 import { toError } from "@lichtblick/suite-base/util/toError";
 
@@ -377,20 +380,22 @@ export default function PlayerManager(
           case "connection": {
             const newPlayer = initializePlayer({
               params: args.params,
+              ...(args.urls != undefined && { urls: args.urls }),
               sourceMetadata: args.sourceMetadata,
             });
             // Remote recordings (not live connections) can be compared like local files
             const url = args.params?.url;
+            const urls = args.urls ?? (url == undefined ? [] : [url]);
             const withCookies = args.params?.includeCredentials === "true";
             // One remote file can also be exported
             const remoteFile: RemoteFileSelection | undefined =
-              foundSource.id === "remote-file" && url != undefined && splitUrls(url).length === 1
-                ? { url, credentials: withCookies ? "include" : undefined }
+              foundSource.id === "remote-file" && urls.length === 1
+                ? { url: urls[0]!, credentials: withCookies ? "include" : undefined }
                 : undefined;
-            if (url != undefined && foundSource.supportedFileTypes != undefined) {
-              const urls = splitUrls(url);
-              const compare = compareNamesOf(args.params);
-              commitSelection(urls, compare?.length === urls.length ? compare : undefined, {
+            const isRecording = urls.length > 0 && foundSource.supportedFileTypes != undefined;
+            const compare = isRecording ? remoteCompareNames(urls, args.params) : undefined;
+            if (isRecording) {
+              commitSelection(urls, compare, {
                 withCookies,
                 remoteFile,
               });
@@ -400,13 +405,15 @@ export default function PlayerManager(
             setBasePlayer(newPlayer);
             writeLastFile(undefined);
 
-            if (args.params?.url) {
+            if (urls.length > 0) {
               const recentId = addRecent({
                 type: "connection",
                 sourceId: foundSource.id,
-                title: args.params.url,
+                title:
+                  urls.length === 1 ? urls[0]! : recentFileTitle(urls.map(recordingName), compare),
                 label: foundSource.displayName,
-                extra: args.params,
+                extra: isRecording ? _.omit(args.params, "url") : args.params,
+                ...(isRecording && { urls }),
               });
               setCurrentRecentId(recentId);
             }
@@ -720,10 +727,7 @@ function createSelectRecentCallback(
 
     switch (foundRecent.type) {
       case "connection": {
-        void selectSource(foundRecent.sourceId, {
-          type: "connection",
-          params: foundRecent.extra,
-        });
+        void selectSource(foundRecent.sourceId, connectionRecentArgs(foundRecent));
         break;
       }
       case "file": {

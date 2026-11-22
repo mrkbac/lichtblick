@@ -36,13 +36,11 @@ export function pwaProtocolUrl(targetURL: string, appURL: URL): URL | undefined 
         return undefined;
       }
       if (key === "layoutUrl" || key === "ds.url") {
-        for (const address of key === "ds.url" ? value.split(",") : [value]) {
-          const url = new URL(address);
-          const schemes =
-            key === "layoutUrl" ? ["http:", "https:"] : ["http:", "https:", "ws:", "wss:"];
-          if (!schemes.includes(url.protocol) || url.username !== "" || url.password !== "") {
-            return undefined;
-          }
+        const url = new URL(value);
+        const schemes =
+          key === "layoutUrl" ? ["http:", "https:"] : ["http:", "https:", "ws:", "wss:"];
+        if (!schemes.includes(url.protocol) || url.username !== "" || url.password !== "") {
+          return undefined;
         }
       }
     }

@@ -104,14 +104,11 @@ export function parseAppURLState(url: URL): AppURLState | undefined {
   const timeString = url.searchParams.get("time");
   const time = parseTimeUrlString(timeString ?? undefined);
   const dsParams: Record<string, string> = {};
+  const urls = url.searchParams.getAll("ds.url").filter(Boolean);
   url.searchParams.forEach((v, k) => {
     if (k && v && k.startsWith("ds.")) {
       const cleanKey = k.replace(/^ds./, "");
-      if (dsParams[cleanKey] == undefined) {
-        dsParams[cleanKey] = v;
-      } else if (cleanKey === "url") {
-        dsParams[cleanKey] = dsParams[cleanKey] + "," + v;
-      } else {
+      if (cleanKey !== "url" || urls.length === 1) {
         dsParams[cleanKey] = v;
       }
     }
@@ -124,6 +121,7 @@ export function parseAppURLState(url: URL): AppURLState | undefined {
       layoutUrl,
       mcapBundleId,
       dsParams: _.isEmpty(dsParams) ? undefined : dsParams,
+      dsParamsArray: urls.length > 1 ? { urls } : undefined,
     },
     _.isEmpty,
   );

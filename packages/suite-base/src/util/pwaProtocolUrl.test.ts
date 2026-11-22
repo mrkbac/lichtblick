@@ -13,7 +13,7 @@ const callback = (protocol: string) =>
 
 describe("pwaProtocolUrl", () => {
   it("decodes once, preserves repeated URLs and signed query parameters, and uses the app path", () => {
-    const remoteURL = "https://data.example/one.mcap?token=a%2Fb&part=2";
+    const remoteURL = "https://data.example/one,1.mcap?token=a%2Fb,https://example.com&part=2";
     const protocol = new URL("web+lichtblick://open");
     protocol.searchParams.append("ds", "remote-file");
     protocol.searchParams.append("ds.url", remoteURL);
@@ -24,7 +24,7 @@ describe("pwaProtocolUrl", () => {
     expect(result.hash).toBe("");
     expect(parseAppURLState(result)).toMatchObject({
       ds: "remote-file",
-      dsParams: { url: `${remoteURL},https://data.example/two.mcap` },
+      dsParamsArray: { urls: [remoteURL, "https://data.example/two.mcap"] },
       time: { sec: 123, nsec: 0 },
     });
   });
@@ -57,7 +57,7 @@ describe("pwaProtocolUrl", () => {
     "web+lichtblick://open?ds.url=file:///tmp/data.mcap",
     "web+lichtblick://open?ds.url=https://user:password@example.com/data.mcap",
     "web+lichtblick://open?ds.url=not-a-url",
-    "web+lichtblick://open?ds.url=https://example.com/a.mcap,javascript:alert(1)",
+    "web+lichtblick://open?ds.url=https://example.com/a.mcap&ds.url=javascript:alert(1)",
   ])("rejects unsafe or unsupported input: %s", (protocol) => {
     expect(pwaProtocolUrl(callback(protocol), appURL)).toBeUndefined();
   });

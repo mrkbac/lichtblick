@@ -3,6 +3,7 @@
 import {
   detectConnection,
   formatTimeAgo,
+  connectionRecentArgs,
   splitRecentTitle,
   hostUrl,
   looksLikeHost,
@@ -133,5 +134,26 @@ describe("looksLikeHost", () => {
     expect(hostUrl("robot.local", "foxglove-websocket")).toBe("ws://robot.local:8765");
     expect(hostUrl("robot.local", "rosbridge-websocket")).toBe("ws://robot.local:9090");
     expect(hostUrl("robot.local", "ros1-socket")).toBe("http://robot.local:11311");
+  });
+});
+
+describe("connection recent arguments", () => {
+  it("reopens older joined URL lists with their comparison settings", () => {
+    const urls = ["https://example.com/run,1.mcap", "https://example.com/run2.mcap"];
+    expect(
+      connectionRecentArgs({
+        sourceId: "remote-file",
+        extra: { url: urls.join(), compareNames: "A,B" },
+      }),
+    ).toEqual({ type: "connection", params: { compareNames: "A,B" }, urls });
+  });
+
+  it("preserves the contents of a new remote recent's URL list", () => {
+    const urls = ["https://example.com/run.mcap?tag=a,https://example.com/b.mcap"];
+    expect(connectionRecentArgs({ sourceId: "remote-file", urls })).toEqual({
+      type: "connection",
+      params: {},
+      urls,
+    });
   });
 });
