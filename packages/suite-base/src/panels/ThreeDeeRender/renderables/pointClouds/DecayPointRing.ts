@@ -81,6 +81,21 @@ function transformsKey(
   return { version: tree.version, time: tree.isComplete() ? currentTime : undefined };
 }
 
+/** Byte-wise equality of two typed arrays (NaN positions compare equal to themselves) */
+export function sameBytes(a: ArrayBufferView, b: ArrayBufferView): boolean {
+  if (a.byteLength !== b.byteLength) {
+    return false;
+  }
+  const x = new Uint8Array(a.buffer, a.byteOffset, a.byteLength);
+  const y = new Uint8Array(b.buffer, b.byteOffset, b.byteLength);
+  for (let i = 0; i < x.length; i++) {
+    if (x[i] !== y[i]) {
+      return false;
+    }
+  }
+  return true;
+}
+
 /** Writes the top 3 rows of an affine matrix (three.js stores columns) */
 function writePoseRows(out: Float32Array, offset: number, m: THREE.Matrix4): void {
   const e = m.elements;
@@ -206,6 +221,30 @@ export class DecayPointRing extends Renderable<BaseUserData, /*TRenderer=*/ unde
     return this.#livePoints;
   }
 
+  /**
+   * Whether the ring holds this scan: same receive time and header stamp, and (only on such a tie,
+   * so playback pays nothing) the same points and colors. Distinct records can share both times,
+   * e.g. the segments of one sweep published together.
+   */
+  public holds(
+    receiveTime: bigint,
+    messageTime: bigint,
+    positions: Float32Array,
+    colors: Uint8Array,
+  ): boolean {
+    return this.#scans.some(
+      (scan) =>
+        scan.receiveTime === receiveTime &&
+        scan.messageTime === messageTime &&
+        scan.count * 3 === positions.length &&
+        sameBytes(
+          this.#positions.subarray(scan.start * 3, (scan.start + scan.count) * 3),
+          positions,
+        ) &&
+        sameBytes(this.#colors.subarray(scan.start * 4, (scan.start + scan.count) * 4), colors),
+    );
+  }
+
   /** The ring keeps 1 in this many scans (1 until it is first over its limits) */
   public stride(): number {
     return this.#stride;
@@ -238,13 +277,19 @@ export class DecayPointRing extends Renderable<BaseUserData, /*TRenderer=*/ unde
   }
 
   /**
-   * Copies a decoded scan into the ring, unless thinning skips it. Thins the history when the ring
-   * is out of slots, or out of space after growing up to the point budget.
+   * Copies a decoded scan into the ring, unless thinning skips it or the ring already has a scan
+   * received at that time. Thins the history when the ring is out of slots, or out of space after
+   * growing up to the point budget. A scan older than the newest (read back after a seek) is placed
+   * in age order.
    */
   public push(info: RingScanInfo, positions: Float32Array, colors: Uint8Array): void {
     const count = positions.length / 3;
     // One point set can't address more; such a scan is only ever drawn as the latest
     if (count === 0 || count > MAX_SET_POINTS) {
+      return;
+    }
+    // The same message pushed again (e.g. read back after a seek twice)
+    if (this.holds(info.receiveTime, info.messageTime, positions, colors)) {
       return;
     }
     if (++this.#sinceKept < this.#stride) {
@@ -263,7 +308,12 @@ export class DecayPointRing extends Renderable<BaseUserData, /*TRenderer=*/ unde
     // A reused slot still has its last scan's row: hidden until this scan is placed
     this.#points.poses()!.fill(0, slot * POSE_FLOATS, (slot + 1) * POSE_FLOATS);
     this.#points.markPoses(slot, 1);
-    this.#scans.push({
+    // Scans read back after a seek can be older than the newest: keep the list in age order
+    let at = this.#scans.length;
+    while (at > 0 && this.#scans[at - 1]!.receiveTime > info.receiveTime) {
+      at--;
+    }
+    this.#scans.splice(at, 0, {
       ...info,
       slot,
       start,
@@ -559,8 +609,8 @@ export class DecayPointRing extends Renderable<BaseUserData, /*TRenderer=*/ unde
 
   /**
    * Start of a free range of `count` points: after the newest scan, else at the start (space freed
-   * by expired scans), else any other free gap, else in grown buffers, else evicting the oldest
-   * scans once at the budget.
+   * by expired scans), else any other free gap, else in grown buffers, else (at the budget) after
+   * packing the live scans, thinning or dropping first only as far as needed (see below).
    */
   #allocate(count: number, { mayThin }: { mayThin: boolean }): number {
     const fits = (start: number) =>

@@ -24,7 +24,8 @@ export async function readTransformRange(args: {
   topics: readonly TransformTopic[];
   start?: bigint;
   end?: bigint;
-  onBatch: (batch: readonly MessageEvent[], source: TransformTopic) => void;
+  /** The next batch is read once a returned promise settles */
+  onBatch: (batch: readonly MessageEvent[], source: TransformTopic) => void | Promise<void>;
   /** Called when a topic is read to its end without errors */
   onTopicDone?: (source: TransformTopic) => void;
   signal: AbortSignal;
@@ -51,7 +52,7 @@ export async function readTransformRange(args: {
                   break;
                 }
                 if (batch.length > 0) {
-                  onBatch(batch, source);
+                  await onBatch(batch, source);
                 }
               }
               if (!signal.aborted) {
@@ -60,7 +61,7 @@ export async function readTransformRange(args: {
             } catch (err: unknown) {
               // Leave the unread part to the reads around seeks
               failed = true;
-              log.error(`Reading transforms from ${source.topic} failed:`, err);
+              log.error(`Reading ${source.topic} failed:`, err);
             } finally {
               resolve();
             }
@@ -100,13 +101,16 @@ export async function readTransformsBefore(args: {
   topics: readonly TransformTopic[];
   time: bigint;
   floor: bigint;
+  /** The first window reaches at least this far back (e.g. a decay time) */
+  minLookback?: bigint;
   isMissing: () => boolean;
   onBatch: (batch: readonly MessageEvent[]) => void;
   signal: AbortSignal;
 }): Promise<boolean> {
-  const { time, floor, isMissing, signal } = args;
+  const { time, floor, minLookback = 0n, isMissing, signal } = args;
+  const lookbacks = new Set(SEEK_LOOKBACK_NS.map((l) => (l > minLookback ? l : minLookback)));
   let end = time;
-  for (const lookback of SEEK_LOOKBACK_NS) {
+  for (const lookback of lookbacks) {
     const start = time - lookback > floor ? time - lookback : floor;
     if (start > end) {
       return true;

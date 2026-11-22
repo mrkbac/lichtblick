@@ -55,6 +55,31 @@ describe("readTransformRange", () => {
     expect(onTopicDone.mock.calls.map(([source]) => source.topic)).toEqual(["/a", "/b"]);
   });
 
+  it("reads the next batch only once an async batch callback settles", async () => {
+    const events: string[] = [];
+    const subscribeRange = vi.fn((args: SubscribeMessageRangeArgs) => {
+      void args.onNewRangeIterator(
+        (async function* () {
+          for (const second of [1, 2]) {
+            events.push(`read ${second}`);
+            yield [MessageEventBuilder.messageEvent({ receiveTime: { sec: second, nsec: 0 } })];
+          }
+        })(),
+      );
+      return () => {};
+    });
+    await readTransformRange({
+      subscribeRange,
+      topics: [{ topic: "/points" }],
+      onBatch: async (batch) => {
+        await Promise.resolve();
+        events.push(`done ${batch[0]!.receiveTime.sec}`);
+      },
+      signal: new AbortController().signal,
+    });
+    expect(events).toEqual(["read 1", "done 1", "read 2", "done 2"]);
+  });
+
   it("resolves at once for a source without ranges", async () => {
     const subscribeRange = vi.fn(() => () => {});
     await readTransformRange({
@@ -169,6 +194,25 @@ describe("readTransformsBefore", () => {
     expect(ok).toBe(false);
     expect(subscribeRange).toHaveBeenCalledTimes(1);
     (console.error as ReturnType<typeof vi.fn>).mockClear();
+  });
+
+  it("starts with a window as long as the longest decay time", async () => {
+    const { subscribeRange, reads } = fakeSource();
+    let windows = 0;
+    await readTransformsBefore({
+      subscribeRange,
+      topics: [{ topic: "/tf" }],
+      time: 500n * sec,
+      floor: -1n,
+      minLookback: 60n * sec,
+      isMissing: () => ++windows < 2,
+      onBatch: vi.fn(),
+      signal: new AbortController().signal,
+    });
+    expect(reads.map(({ start, end }) => [start, end])).toEqual([
+      [440n * sec, 500n * sec],
+      [372n * sec, 440n * sec - 1n],
+    ]);
   });
 
   it("never reads before the complete history", async () => {
