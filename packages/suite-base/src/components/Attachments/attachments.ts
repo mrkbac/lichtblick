@@ -33,9 +33,11 @@ export async function attachmentData(
   }
   const header = new Uint8Array(await file.slice(offset, start).arrayBuffer());
   const view = new DataView(header.buffer);
+  const recordLength = view.getBigUint64(1, true);
   if (
     header[0] !== Opcode.ATTACHMENT ||
-    view.getBigUint64(1, true) !== BigInt(headerSize - 9 + sizeBytes + 4) ||
+    recordLength < BigInt(headerSize - 9 + sizeBytes + 4) ||
+    recordLength > BigInt(file.size - offset - 9) ||
     view.getUint32(nameStart - 4, true) !== nameBytes.length ||
     !nameBytes.every((byte, i) => header[nameStart + i] === byte) ||
     view.getUint32(typeStart - 4, true) !== typeBytes.length ||

@@ -4,6 +4,7 @@
 import {
   BlobReadable,
   ChunkCache,
+  McapRecordBuilder,
   McapWriter,
   TempBuffer,
   openCachedMcapReader,
@@ -68,6 +69,27 @@ describe("attachments", () => {
     const data = await attachmentData(file, listed![0]!);
     expect(data?.type).toBe(attachments[0]!.mediaType);
     expect(await data?.text()).toBe(attachments[0]!.data);
+  });
+
+  it("lists and opens an unindexed attachment with trailing extension bytes", async () => {
+    const builder = new McapRecordBuilder({ padRecords: true });
+    builder.writeMagic();
+    builder.writeHeader({ profile: "", library: "test" });
+    const offset = builder.buffer.byteLength;
+    builder.writeAttachment({
+      logTime: 0n,
+      createTime: 0n,
+      name: "notes.txt",
+      mediaType: "text/plain",
+      data: new TextEncoder().encode("notes"),
+    });
+    const file = new Blob([builder.buffer.slice()]);
+    const source = new McapIterableSource({ type: "file", file });
+    const { recordingFiles } = await source.initialize();
+    const info = { offset, name: "notes.txt", mediaType: "text/plain", sizeBytes: 5 };
+    expect(recordingFiles?.[0]?.attachments).toEqual([info]);
+    expect(await (await attachmentData(file, info))?.text()).toBe("notes");
+    expect(await attachmentData(file.slice(0, -1), info)).toBeUndefined();
   });
 
   it("finds nothing where the file no longer has the attachment", async () => {

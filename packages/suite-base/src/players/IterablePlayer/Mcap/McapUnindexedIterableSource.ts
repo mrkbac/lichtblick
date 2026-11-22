@@ -856,7 +856,7 @@ async function readAttachmentInfo(
   );
   const mediaType = mediaHeader.string();
   const sizeBytes = Number(mediaHeader.uint64());
-  if (sizeBytes !== length - mediaTypeAt - mediaTypeLength - trailerBytes) {
+  if (sizeBytes > length - mediaTypeAt - mediaTypeLength - trailerBytes) {
     return undefined;
   }
   return { offset, name, mediaType, sizeBytes };

@@ -61,6 +61,7 @@ async function makeDb3({
     INSERT INTO topics VALUES (2, '/rare', 'std_msgs/msg/String', 'cdr', '[]');
     INSERT INTO topics VALUES (3, '/dense', 'std_msgs/msg/String', 'cdr', '[]');
     INSERT INTO topics VALUES (4, '/tied', 'std_msgs/msg/String', 'cdr', '[]');
+    INSERT INTO topics VALUES (5, '/empty', 'std_msgs/msg/String', 'cdr', '[]');
   `);
   const insert = db.prepare("INSERT INTO messages (topic_id, timestamp, data) VALUES (?, ?, ?)");
   for (let i = 0; i <= 1000; i++) {
@@ -104,6 +105,7 @@ topics_with_message_count:
   - {topic_metadata: {name: /rare}, message_count: 2}
   - {topic_metadata: {name: /dense}, message_count: 14097}
   - {topic_metadata: {name: /tied}, message_count: 1}
+  - {topic_metadata: {name: /empty}, message_count: 0}
 `;
 
 describe("RosDb3IterableSource", () => {
@@ -135,6 +137,29 @@ describe("RosDb3IterableSource", () => {
       time: { sec: 180, nsec: 0 },
     });
     expect(backfill.map((message) => message.receiveTime)).toEqual([{ sec: 150, nsec: 0 }]);
+  });
+
+  it("reuses an empty backfill prefix without skipping newer messages", async () => {
+    const source = new RosDb3IterableSource([new BytesFile(await makeDb3({ metadata }))]);
+    await source.initialize();
+    const pages = vi.spyOn(SqliteSqljs.prototype, "backfillPage");
+    const empty = new Map([["/empty", { topic: "/empty" }]]);
+    await expect(
+      source.getBackfillMessages({ topics: empty, time: { sec: 200, nsec: 0 } }),
+    ).resolves.toEqual([]);
+    expect(pages).toHaveBeenCalled();
+    pages.mockClear();
+    await expect(
+      source.getBackfillMessages({ topics: empty, time: { sec: 160, nsec: 0 } }),
+    ).resolves.toEqual([]);
+    expect(pages).not.toHaveBeenCalled();
+
+    const rare = new Map([["/rare", { topic: "/rare" }]]);
+    await expect(
+      source.getBackfillMessages({ topics: rare, time: { sec: 100, nsec: 0 } }),
+    ).resolves.toEqual([]);
+    const later = await source.getBackfillMessages({ topics: rare, time: { sec: 180, nsec: 0 } });
+    expect(later.map((message) => message.receiveTime)).toEqual([{ sec: 150, nsec: 0 }]);
   });
 
   it("rejects stale counts after an append within the existing time range", async () => {

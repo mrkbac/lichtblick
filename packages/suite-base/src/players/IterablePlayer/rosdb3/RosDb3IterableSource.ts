@@ -138,7 +138,11 @@ export class RosDb3IterableSource implements ISerializedIterableSource {
   #files: File[];
   #bag?: Rosbag2;
   /** Each file and its topics that might have messages. */
-  #dbs: { db: SqliteSqljs; topics: ReadonlySet<string> }[] = [];
+  #dbs: {
+    db: SqliteSqljs;
+    topics: ReadonlySet<string>;
+    emptyThrough: Map<string, bigint>;
+  }[] = [];
   #start: Time = { sec: 0, nsec: 0 };
   #end: Time = { sec: 0, nsec: 0 };
   #textEncoder = new TextEncoder();
@@ -173,7 +177,11 @@ export class RosDb3IterableSource implements ISerializedIterableSource {
       const counts = metadataCounts ?? (await db.messageCounts());
       // Only counts from the messages table prove a topic has no messages. Embedded metadata
       // can be out of date even when its total and time range still look right.
-      this.#dbs.push({ db, topics: metadataCounts ? names : new Set(counts.keys()) });
+      this.#dbs.push({
+        db,
+        topics: metadataCounts ? names : new Set(counts.keys()),
+        emptyThrough: new Map(),
+      });
       for (const [topic, count] of counts) {
         messageCounts.set(topic, (messageCounts.get(topic) ?? 0) + count);
       }
@@ -310,15 +318,18 @@ export class RosDb3IterableSource implements ISerializedIterableSource {
     // .db3 files only index time: read back from `time` in pages of rows until every topic has a
     // message or the file's start is reached, yielding between pages even when none matched
     const latest = new Map<string, MessageEvent<Uint8Array>>();
-    for (const { db, topics: fileTopics } of this.#dbs) {
+    const seekTimestamp = toNanoSec(time);
+    for (const { db, topics: fileTopics, emptyThrough } of this.#dbs) {
       // Per file: a split recording's files may overlap in time
+      const requested = [...topics.keys()].filter((topic) => fileTopics.has(topic));
       const found = new Set<string>();
-      let next: { timestamp: bigint; id?: number } | undefined = { timestamp: toNanoSec(time) };
+      let next: { timestamp: bigint; id?: number } | undefined = { timestamp: seekTimestamp };
       while (next != undefined) {
-        // A topic this file has no messages for would only make the scan read to its start
-        const missing = [...topics.keys()].filter(
-          (topic) => !found.has(topic) && fileTopics.has(topic),
-        );
+        const { timestamp } = next;
+        const missing = requested.filter((topic) => {
+          const knownEmpty = emptyThrough.get(topic);
+          return !found.has(topic) && (knownEmpty == undefined || timestamp > knownEmpty);
+        });
         if (missing.length === 0) {
           break;
         }
@@ -340,6 +351,14 @@ export class RosDb3IterableSource implements ISerializedIterableSource {
           });
         }
         next = page.next;
+      }
+      // An immutable file's scanned prefix is still empty on later seeks. A seek further ahead
+      // still searches the newer interval before reaching that prefix.
+      for (const topic of requested) {
+        const knownEmpty = emptyThrough.get(topic);
+        if (!found.has(topic) && (knownEmpty == undefined || knownEmpty < seekTimestamp)) {
+          emptyThrough.set(topic, seekTimestamp);
+        }
       }
     }
     return [...latest.values()].sort((a, b) => compare(a.receiveTime, b.receiveTime));
