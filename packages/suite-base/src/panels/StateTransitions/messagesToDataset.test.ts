@@ -109,6 +109,42 @@ describe("incremental live datasets", () => {
     expect(active.hasAllChanges()).toBe(false);
   });
 
+  it("keeps cached segments aligned as the live playback start moves", () => {
+    const active = new PathSampleColumns(1000);
+    const append = (i: number) => {
+      active.push({
+        receiveTime: { sec: 1_800_000_000 + i, nsec: i * 123_456 },
+        headerStamp: undefined,
+        count: 1,
+        value: Math.floor(i / 3) % 2,
+        constantName: undefined,
+      });
+    };
+    for (let i = 0; i < 900; i++) {
+      append(i);
+    }
+    const args = {
+      startTime: { sec: 1_800_000_000, nsec: 123 },
+      pathIndex: 0,
+      path: { value: "/topic.state", condition: "== 1", timestampMethod: "receiveTime" as const },
+      y: -9,
+      blocks: [active],
+      showPoints: false,
+    };
+    const cache: LiveDatasetCache = {};
+    const first = messagesToDataset(args, cache);
+    append(900);
+    append(901);
+    const shifted = { ...args, startTime: { sec: 1_800_000_150, nsec: 123_456_789 } };
+    const sampleValue = vi.spyOn(active, "sampleValue");
+    const next = messagesToDataset(shifted, cache);
+
+    expect(sampleValue.mock.calls.length).toBeLessThanOrEqual(4);
+    expect(first.data[0]?.x).toBeLessThan(0);
+    expect(next.data[0]?.x).toBeLessThan(-150);
+    expect(next).toEqual(messagesToDataset(shifted));
+  });
+
   it("converts only new samples and the mutable tail on a dense live redraw", () => {
     const active = new PathSampleColumns(100_000);
     const append = (i: number) => {
