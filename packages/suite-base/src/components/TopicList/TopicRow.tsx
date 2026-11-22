@@ -128,12 +128,14 @@ export function TopicRow({
             return false;
           }
           void handleNextMessage();
+          return true;
         },
         "playback.previousTopicMessage": (event) => {
           if (event.defaultPrevented || isPreviousDisabled) {
             return false;
           }
           void handlePreviousMessage();
+          return true;
         },
       }),
     [handleNextMessage, handlePreviousMessage, isNextDisabled, isPreviousDisabled],
