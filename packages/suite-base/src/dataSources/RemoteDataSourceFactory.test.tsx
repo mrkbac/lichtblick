@@ -207,6 +207,18 @@ describe("RemoteDataSourceFactory", () => {
     expect(initArgs.credentials).toBeUndefined();
   });
 
+  it("plays and rewrites the URL with compareNames when compare is also given", async () => {
+    const urls = ["a", "b", "c"].map((name) => `https://example.com/${name}.mcap`);
+    await factory.initialize(
+      setupArgs({ url: urls.join(","), compare: "true", compareNames: "A%2C1,B,C" }),
+    );
+
+    const [{ initArgs }] = (WorkerSerializedIterableSource as Mock).mock.calls[0]!;
+    expect(initArgs.compare).toEqual(["A,1", "B", "C"]);
+    const [{ urlParams }] = (IterablePlayer as Mock).mock.calls[0]!;
+    expect(urlParams).toEqual({ urls, compareNames: "A%2C1,B,C" });
+  });
+
   it("should return undefined if args.params.url is undefined", async () => {
     const mockArgs = setupArgs();
 

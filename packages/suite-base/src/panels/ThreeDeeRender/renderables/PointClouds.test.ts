@@ -11,10 +11,16 @@ import { DEFAULT_POINT_SETTINGS } from "@lichtblick/suite-base/panels/ThreeDeeRe
 import { TransformTree } from "@lichtblick/suite-base/panels/ThreeDeeRender/transforms";
 import { updatePose } from "@lichtblick/suite-base/panels/ThreeDeeRender/updatePose";
 
-import { createStixelMaterial, PointCloudHistoryRenderable } from "./PointClouds";
+import { createStixelMaterial, PointCloudHistoryRenderable, PointClouds } from "./PointClouds";
 import { getColorConverter } from "./colorMode";
 import { DecayPointRing } from "./pointClouds/DecayPointRing";
-import { DECAY_LIMITED } from "./pointExtensionUtils";
+import { DECAY_LIMITED, payloadFingerprint } from "./pointExtensionUtils";
+
+// A spy around the payload hash, to check playback doesn't compute it
+vi.mock("./pointExtensionUtils", async (importOriginal) => {
+  const original = await importOriginal<typeof import("./pointExtensionUtils")>();
+  return { ...original, payloadFingerprint: vi.fn(original.payloadFingerprint) };
+});
 
 vi.mock("@lichtblick/suite-base/panels/ThreeDeeRender/updatePose", () => ({
   updatePose: vi.fn(),
@@ -245,6 +251,91 @@ describe("PointCloudHistoryRenderable decay", () => {
     expect(latest.instanceDetails(0)).toMatchObject({ x: 42, y: 2, z: 3 });
   });
 
+  it("puts an older scan (read back after a seek) straight into the ring, keeping the latest", () => {
+    const { renderable, settings } = decode(makeCloud(), { colorMode: "flat", decayTime: 10 });
+    renderable.updatePointCloud(makeCloud(), undefined, settings, 10n);
+    const older = makeCloud();
+    new DataView(older.data.buffer).setFloat32(0, 42, true);
+
+    renderable.addOlderScan(older, settings, 5n);
+
+    const ring = renderable.children.find((child) => child instanceof DecayPointRing)!;
+    expect(ring.scanCount()).toBe(1);
+    expect(ring.oldestReceiveTime()).toBe(5n);
+    expect(ring.points().positionAttribute().array[0]).toBe(42);
+    const latest = renderable.children[0] as unknown as {
+      instanceDetails: (instanceId: number) => Record<string, unknown> | undefined;
+    };
+    expect(latest.instanceDetails(0)).toMatchObject({ x: POSITIONS[0]![0] });
+  });
+
+  it("adds an older scan's stixels to the stixel history too", () => {
+    const { renderable, settings } = decode(makeCloud(), {
+      colorMode: "flat",
+      decayTime: 10,
+      stixelsEnabled: true,
+    });
+    renderable.updatePointCloud(makeCloud(), undefined, settings, 10n);
+    const before = renderable.children.length;
+
+    renderable.addOlderScan(makeCloud(), settings, 5n);
+
+    // The decay ring and one stixels renderable for the older scan
+    expect(renderable.children.length).toBe(before + 2);
+
+    // Read back again (e.g. a later decay change re-reads the window): nothing is added
+    renderable.addOlderScan(makeCloud(), settings, 5n);
+    expect(renderable.children.length).toBe(before + 2);
+  });
+
+  it("skips an older scan that playback already moved into the history", () => {
+    const { renderable, settings } = decode(makeCloud(), {
+      colorMode: "flat",
+      decayTime: 10,
+      stixelsEnabled: true,
+    });
+    renderable.updatePointCloud(makeCloud(), undefined, settings, 5n);
+    renderable.pushHistory(makeCloud(), settings, 10n); // the 5n scan moves into the history
+    renderable.updatePointCloud(makeCloud(), undefined, settings, 10n);
+    const ring = renderable.children.find((child) => child instanceof DecayPointRing)!;
+    const before = renderable.children.length;
+
+    renderable.addOlderScan(makeCloud(), settings, 5n); // the paced read reaches it afterwards
+
+    expect(ring.scanCount()).toBe(1);
+    expect(renderable.children.length).toBe(before);
+  });
+
+  it("skips an older scan that can't be drawn without blanking the latest one", () => {
+    const { renderable, settings } = decode(makeCloud(), { colorMode: "flat", decayTime: 10 });
+    renderable.updatePointCloud(makeCloud(), undefined, settings, 10n);
+    const broken = { ...makeCloud(), point_step: 7 }; // data isn't a multiple of it
+
+    renderable.addOlderScan(broken, settings, 5n);
+
+    expect(renderable.children.some((child) => child instanceof DecayPointRing)).toBe(false);
+    const latest = renderable.children[0] as unknown as {
+      geometry: { drawRange: { count: number } };
+    };
+    expect(latest.geometry.drawRange.count).toBe(POSITIONS.length);
+  });
+
+  it("computes no payload hash during playback, only for scans whose times tie", () => {
+    const { renderable, settings } = decode(makeCloud(), {
+      colorMode: "flat",
+      decayTime: 10,
+      stixelsEnabled: true,
+    });
+    vi.mocked(payloadFingerprint).mockClear();
+    for (let i = 1; i <= 5; i++) {
+      renderable.pushHistory(makeCloud(), settings, BigInt(i));
+      renderable.updatePointCloud(makeCloud(), undefined, settings, BigInt(i));
+    }
+    renderable.addOlderScan(makeCloud(), settings, 0n); // read back, older than all of them
+
+    expect(vi.mocked(payloadFingerprint)).not.toHaveBeenCalled();
+  });
+
   it("drops the ring and its limit notice when the decay time is turned off", () => {
     const errors = new LayerErrors();
     const path = ["topics", "/points"];
@@ -300,5 +391,31 @@ describe("PointCloudHistoryRenderable decay", () => {
     // Long after: the history is empty because its window passed, not because of the budget
     renderable.startFrame(100_000_000_000n, "map", "map");
     expect(errors.hasError(path, DECAY_LIMITED)).toBe(false);
+  });
+});
+
+describe("PointClouds read-back history", () => {
+  it("leaves the drawn scan and anything newer to playback (through timestamp sync)", () => {
+    const addMessageEvent = vi.fn();
+    const extension = new PointClouds({
+      ...rendererMock,
+      hud: {},
+      config: { topics: {} },
+      topics: [],
+      addMessageEvent,
+      settings: { ...rendererMock.settings, setNodesForKey: vi.fn() },
+    } as unknown as Renderer);
+    const messageEvent = {
+      topic: "/points",
+      schemaName: "sensor_msgs/PointCloud2",
+      receiveTime: { sec: 5, nsec: 0 },
+      message: makeCloud(),
+      sizeInBytes: 0,
+    };
+
+    // Nothing drawn yet: neither drawn nor queued from the read
+    expect(extension.addHistoricalMessage(messageEvent)).toBeUndefined();
+    expect(addMessageEvent).not.toHaveBeenCalled();
+    expect(extension.renderables.size).toBe(0);
   });
 });

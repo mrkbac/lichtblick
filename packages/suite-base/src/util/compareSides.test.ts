@@ -1,6 +1,18 @@
 // SPDX-License-Identifier: MPL-2.0
 
-import { draftFromFiles, draftToCompare } from "./compareSides";
+import type { IDataSourceFactory } from "@lichtblick/suite-base/context/PlayerSelectionContext";
+
+import {
+  compareNamesOf,
+  draftFromFiles,
+  draftToCompare,
+  encodeCompareNames,
+  joinUrls,
+  splitUrls,
+  mergeArgs,
+  recordingExtension,
+  recordingName,
+} from "./compareSides";
 
 // Node's File has no webkitRelativePath
 const file = (name: string) =>
@@ -56,6 +68,104 @@ describe("compare drafts", () => {
     expect(draftFromFiles([a, b]).sides).toEqual([
       { name: "", files: [a] },
       { name: "", files: [b] },
+    ]);
+  });
+
+  it("mixes remote URLs into a side and names them after their file", () => {
+    const url = "https://example.com/runs/drive%201.mcap?token=x";
+    const draft = {
+      shared: [],
+      sides: [
+        { name: "", files: [url] },
+        { name: "", files: [a] },
+      ],
+    };
+    const { files, compare } = draftToCompare(draft);
+    expect(files).toEqual([url, a]);
+    expect(compare).toEqual(["drive 1.mcap", "a.mcap"]);
+    expect(draftFromFiles(files, compare)).toEqual(draft);
+    expect(draftFromFiles([url, a])).toEqual(draft);
+  });
+});
+
+describe("recording names", () => {
+  it("reads the file name and extension of URLs and files", () => {
+    expect(recordingName("https://example.com/a/b.mcap?x=1")).toBe("b.mcap");
+    expect(recordingExtension("https://example.com/a/b.mcap?x=1")).toBe(".mcap");
+    expect(recordingName(file("c.bag"))).toBe("c.bag");
+    expect(recordingExtension(file("c.bag"))).toBe(".bag");
+  });
+});
+
+describe("side names in params", () => {
+  it("keeps commas and percent signs in compareNames", () => {
+    const names = ["a.mcap", "B, tuned", "100% load"];
+    const compareNames = encodeCompareNames(names);
+    expect(compareNames).toBe("a.mcap,B%2C tuned,100%25 load");
+    expect(compareNamesOf({ compareNames })).toEqual(names);
+  });
+
+  it("reads older plain compare lists as they are, keeping labels like %41 apart from A", () => {
+    expect(compareNamesOf({ compare: "A,%41" })).toEqual(["A", "%41"]);
+    expect(compareNamesOf({ compare: "true" })).toBeUndefined();
+    expect(compareNamesOf({})).toBeUndefined();
+  });
+
+  it("prefers compareNames over compare, whatever compare says", () => {
+    expect(compareNamesOf({ compare: "true", compareNames: "A,B,C" })).toEqual(["A", "B", "C"]);
+    expect(compareNamesOf({ compare: "X,Y", compareNames: "A,B,C" })).toEqual(["A", "B", "C"]);
+  });
+});
+
+describe("recording names of URLs", () => {
+  it("falls back to the raw file name when it has a literal %", () => {
+    expect(recordingName("https://example.com/runs/100%.mcap")).toBe("100%.mcap");
+  });
+});
+
+describe("mergeArgs", () => {
+  const remote = { id: "remote", type: "connection" } as IDataSourceFactory;
+  const local = { id: "mcap", type: "file" } as IDataSourceFactory;
+
+  it("keeps the cookie setting of merged remote recordings, each URL once", () => {
+    expect(
+      mergeArgs(remote, ["https://e.com/a.mcap", "https://e.com/a.mcap"], { withCookies: true }),
+    ).toEqual({
+      type: "connection",
+      params: { url: "https://e.com/a.mcap", includeCredentials: "true" },
+    });
+    expect(mergeArgs(remote, ["https://e.com/a.mcap"], { withCookies: false })).toEqual({
+      type: "connection",
+      params: { url: "https://e.com/a.mcap" },
+    });
+  });
+
+  it("merges files (and URLs mixed in) as file args", () => {
+    const f = file("a.mcap");
+    expect(mergeArgs(local, [f, "https://e.com/b.mcap", f], { withCookies: false })).toEqual({
+      type: "file",
+      files: [f, "https://e.com/b.mcap"],
+    });
+  });
+});
+
+describe("joinUrls", () => {
+  it("keeps a URL with a comma whole when the list is split on commas", () => {
+    const joined = joinUrls(["https://e.com/run,1.mcap", "https://e.com/b.mcap"]);
+    expect(joined.split(",")).toEqual(["https://e.com/run%2C1.mcap", "https://e.com/b.mcap"]);
+    expect(recordingName(joined.split(",")[0]!)).toBe("run,1.mcap");
+  });
+});
+
+describe("splitUrls", () => {
+  it("starts a new URL only at a scheme, so commas inside a URL stay", () => {
+    expect(splitUrls("https://e.com/run,1.mcap,https://e.com/b.mcap")).toEqual([
+      "https://e.com/run,1.mcap",
+      "https://e.com/b.mcap",
+    ]);
+    expect(splitUrls(joinUrls(["https://e.com/a,b.mcap", "http://e.com/c.mcap"]))).toEqual([
+      "https://e.com/a%2Cb.mcap",
+      "http://e.com/c.mcap",
     ]);
   });
 });

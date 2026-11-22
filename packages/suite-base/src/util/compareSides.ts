@@ -1,5 +1,41 @@
 // SPDX-License-Identifier: MPL-2.0
 
+import type {
+  DataSourceArgs,
+  IDataSourceFactory,
+} from "@lichtblick/suite-base/context/PlayerSelectionContext";
+import { basename, extname } from "@lichtblick/suite-base/util/path";
+
+/** A recording to open or compare: a local file, or the URL of a remote one */
+export type Recording = File | string;
+
+function urlPath(url: string): string {
+  try {
+    return new URL(url).pathname;
+  } catch {
+    return url;
+  }
+}
+
+/** File name of a recording, e.g. `drive.mcap` for `https://example.com/runs/drive.mcap?x=1` */
+export function recordingName(recording: Recording): string {
+  if (typeof recording !== "string") {
+    return recording.name;
+  }
+  const name = basename(urlPath(recording));
+  try {
+    return decodeURIComponent(name) || recording;
+  } catch {
+    // A literal `%` that isn't an escape
+    return name || recording;
+  }
+}
+
+/** Extension of a recording's file name, e.g. `.mcap` */
+export function recordingExtension(recording: Recording): string {
+  return extname(typeof recording === "string" ? urlPath(recording) : recording.name);
+}
+
 // The folder each opened file came from, for files that don't carry it in webkitRelativePath
 // (e.g. files read from a dropped folder)
 const folderOfFile = new WeakMap<Blob, string>();
@@ -8,13 +44,70 @@ export function rememberFolder(file: Blob, folder: string): void {
   folderOfFile.set(file, folder);
 }
 
-function folderOf(file: File): string | undefined {
+function folderOf(file: Recording): string | undefined {
+  if (typeof file === "string") {
+    return undefined;
+  }
   const known = folderOfFile.get(file);
   if (known != undefined) {
     return known;
   }
   const parts = file.webkitRelativePath.split("/");
   return parts.length > 1 ? parts[0] : undefined;
+}
+
+/**
+ * The `ds.url` value for several URLs: joined by commas, with a comma inside a URL escaped as
+ * `%2C` (the same URL to the server) so the list splits back into the same URLs
+ */
+export function joinUrls(urls: readonly string[]): string {
+  return urls.map((url) => url.replaceAll(",", "%2C")).join(",");
+}
+
+/**
+ * The URLs in a `ds.url` list. A comma starts a new URL only where a scheme (`https://`) follows,
+ * so a URL with a comma of its own stays whole, escaped by joinUrls or not.
+ */
+export function splitUrls(value: string): string[] {
+  const urls: string[] = [];
+  for (const part of value.split(",")) {
+    const last = urls.at(-1);
+    if (last != undefined && !/^[a-z][a-z\d+.-]*:\/\//i.test(part)) {
+      urls[urls.length - 1] = `${last},${part}`;
+    } else {
+      urls.push(part);
+    }
+  }
+  return urls;
+}
+
+/**
+ * The `ds.compareNames` value for side names: joined by commas, with commas (and `%`) in a name
+ * escaped so names keep them. A new param rather than `ds.compare`, whose older plain lists keep
+ * meaning what they did (e.g. `%41` stays `%41`).
+ */
+export function encodeCompareNames(names: readonly string[]): string {
+  return names.map((name) => name.replaceAll("%", "%25").replaceAll(",", "%2C")).join(",");
+}
+
+/**
+ * The side names in a remote source's params: `compareNames` (see encodeCompareNames), else the
+ * plain `compare` list. `compare=true` (one side per file) names none.
+ */
+export function compareNamesOf(
+  params: Record<string, string | undefined> | undefined,
+): string[] | undefined {
+  if (params?.compareNames != undefined) {
+    return params.compareNames.split(",").map((name) => {
+      try {
+        return decodeURIComponent(name);
+      } catch {
+        return name;
+      }
+    });
+  }
+  const plain = params?.compare;
+  return plain == undefined || plain === "" || plain === "true" ? undefined : plain.split(",");
 }
 
 // The handle each opened file was read from, so a comparison of them can be stored in recents
@@ -24,9 +117,14 @@ export function rememberHandle(file: Blob, handle: FileSystemFileHandle): void {
   handleOfFile.set(file, handle);
 }
 
-/** The handles of `files`, or undefined when any of them was not read from a handle */
-export function handlesOf(files: readonly File[]): FileSystemFileHandle[] | undefined {
-  const handles = files.map((file) => handleOfFile.get(file));
+/**
+ * The handles of `files` (URLs stay as they are), or undefined when any file was not read from a
+ * handle
+ */
+export function handlesOf(
+  files: readonly Recording[],
+): (FileSystemFileHandle | string)[] | undefined {
+  const handles = files.map((file) => (typeof file === "string" ? file : handleOfFile.get(file)));
   return handles.every((h) => h != undefined) ? handles : undefined;
 }
 
@@ -34,7 +132,7 @@ export function handlesOf(files: readonly File[]): FileSystemFileHandle[] | unde
  * The side name of each file when comparing them: its folder when the files come from more than
  * one folder (each folder is merged into one side), else its own name (each file is a side).
  */
-export function defaultCompareSides(files: readonly File[]): string[] {
+export function defaultCompareSides(files: readonly Recording[]): string[] {
   const folders = files.map(folderOf);
   const distinctFolders = new Set(
     folders.filter((folder): folder is string => folder != undefined),
@@ -46,7 +144,7 @@ export function defaultCompareSides(files: readonly File[]): string[] {
       if (folder != undefined) {
         return folder;
       }
-      const base = files[index]!.name;
+      const base = recordingName(files[index]!);
       let name = base;
       for (let count = 2; taken.has(name); count++) {
         name = `${base} (${count})`;
@@ -55,7 +153,7 @@ export function defaultCompareSides(files: readonly File[]): string[] {
       return name;
     });
   }
-  return uniqueNames(files.map((file) => file.name));
+  return uniqueNames(files.map(recordingName));
 }
 
 /** `names` with repeats made unique: x, x (2), x (3), … */
@@ -71,19 +169,42 @@ export function uniqueNames(names: readonly string[]): string[] {
   });
 }
 
+/**
+ * Args to open `recordings` with `source` merged into one recording (each once), e.g. a comparison
+ * merged again. Remote ones keep their cookie setting.
+ */
+export function mergeArgs(
+  source: IDataSourceFactory,
+  recordings: readonly Recording[],
+  { withCookies }: { withCookies: boolean },
+): DataSourceArgs {
+  const unique = [...new Set(recordings)];
+  return source.type === "connection"
+    ? {
+        type: "connection",
+        params: {
+          url: joinUrls(unique.filter((r) => typeof r === "string")),
+          ...(withCookies && { includeCredentials: "true" }),
+        },
+      }
+    : { type: "file", files: unique };
+}
+
 /** Recordings to compare as the compare dialog edits them */
 export type CompareDraft = {
-  /** Files added to every side, e.g. a base recording the sides add their own topics to */
-  shared: File[];
+  /** Files added to every side, e.g. a map or calibration file every recording needs */
+  shared: Recording[];
   /** One entry per side; a side of several files is merged into one recording */
-  sides: { name: string; files: File[] }[];
+  sides: { name: string; files: Recording[] }[];
+  /** The remote recordings (URLs) fetched with cookies (`ds.includeCredentials`) */
+  withCookies?: readonly string[];
 };
 
 /** The files to open and the side name of each (see FileDataSourceArgs.compare) */
-export function draftToCompare(draft: CompareDraft): { files: File[]; compare: string[] } {
+export function draftToCompare(draft: CompareDraft): { files: Recording[]; compare: string[] } {
   const sides = draft.sides.filter((side) => side.files.length > 0);
-  const names = uniqueNames(sides.map((side) => side.name.trim() || side.files[0]!.name));
-  const files: File[] = [];
+  const names = uniqueNames(sides.map((side) => side.name.trim() || recordingName(side.files[0]!)));
+  const files: Recording[] = [];
   const compare: string[] = [];
   sides.forEach((side, index) => {
     for (const file of [...draft.shared, ...side.files]) {
@@ -98,7 +219,10 @@ export function draftToCompare(draft: CompareDraft): { files: File[]; compare: s
  * The draft for files already open: grouped by their side names when compared (a file in every
  * side is shared), else grouped as defaultCompareSides() would.
  */
-export function draftFromFiles(files: readonly File[], compare?: readonly string[]): CompareDraft {
+export function draftFromFiles(
+  files: readonly Recording[],
+  compare?: readonly string[],
+): CompareDraft {
   const names =
     compare?.length === files.length && compare.length > 0 ? compare : defaultCompareSides(files);
   const sideNames = [...new Set(names)];
@@ -114,7 +238,10 @@ export function draftFromFiles(files: readonly File[], compare?: readonly string
     sides: sideNames.map((name, index) => {
       const own = filesOf[index]!.filter((file) => !shared.includes(file));
       // A name that came from the side's first file stays empty, so it follows the files
-      return { name: own[0]?.name === name ? "" : name, files: own };
+      return {
+        name: own[0] != undefined && recordingName(own[0]) === name ? "" : name,
+        files: own,
+      };
     }),
   };
 }

@@ -109,6 +109,25 @@ describe("MultiIterableSource", () => {
       });
       expect(initializations).toHaveLength(2);
     });
+    it("opens files and URLs mixed in order, so a comparison can mix them", async () => {
+      const file = new Blob([BasicBuilder.string()]);
+      const url = BasicBuilder.string();
+      const multiSource = new MultiIterableSource(
+        { type: "files", files: [url, file], compare: ["A", "B"] },
+        mockSourceConstructor,
+      );
+
+      await multiSource["loadMultipleSources"]();
+
+      expect(mockSourceConstructor).toHaveBeenNthCalledWith(
+        1,
+        expect.objectContaining({ type: "url", url, cacheSizeInBytes: expect.any(Number) }),
+      );
+      expect(mockSourceConstructor).toHaveBeenNthCalledWith(
+        2,
+        expect.objectContaining({ type: "file", file }),
+      );
+    });
     it("should load multiple url sources", async () => {
       const url1 = BasicBuilder.string();
       const url2 = BasicBuilder.string();

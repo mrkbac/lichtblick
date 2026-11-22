@@ -69,6 +69,11 @@ function scan(count: number, value: number) {
   };
 }
 
+function pts(count: number): [Float32Array, Uint8Array] {
+  const { positions, colors } = scan(count, 0);
+  return [positions, colors];
+}
+
 function push(ring: DecayPointRing, time: bigint, count: number, frameId = "lidar") {
   const { positions, colors } = scan(count, Number(time));
   ring.push({ receiveTime: time, messageTime: time, frameId, pose: makePose() }, positions, colors);
@@ -92,6 +97,37 @@ describe("DecayPointRing", () => {
     ring.updatePoses(transformTree, 0n, "map", "map");
     expect(ring.drawCount()).toBe(5);
     expect(ring.visible).toBe(true);
+  });
+
+  it("keeps distinct records with the same times apart by their content", () => {
+    const { ring } = makeRing();
+    const info = { receiveTime: 1n, messageTime: 1n, frameId: "lidar", pose: makePose() };
+    const first = scan(2, 10);
+    const second = scan(2, 20);
+    ring.push(info, first.positions, first.colors); // e.g. two segments of one sweep
+    ring.push(info, second.positions, second.colors);
+    ring.push(info, second.positions, second.colors); // the second one again
+
+    expect(ring.scanCount()).toBe(2);
+    expect(ring.holds(1n, 1n, second.positions, second.colors)).toBe(true);
+    expect(ring.holds(1n, 1n, scan(2, 30).positions, scan(2, 30).colors)).toBe(false);
+  });
+
+  it("places scans older than the newest in age order and skips ones it already has", () => {
+    const { ring } = makeRing();
+    push(ring, 5n, 1); // e.g. the latest scan before the seek read's older ones arrive
+    push(ring, 2n, 1);
+    push(ring, 3n, 1);
+    push(ring, 3n, 1);
+
+    expect(ring.scanCount()).toBe(3);
+    expect(ring.oldestReceiveTime()).toBe(2n);
+    // A different scan received at the same time is kept
+    ring.push({ receiveTime: 3n, messageTime: 99n, frameId: "lidar", pose: makePose() }, ...pts(1));
+    expect(ring.scanCount()).toBe(4);
+    ring.expire(4n);
+    expect(ring.scanCount()).toBe(1);
+    expect(ring.oldestReceiveTime()).toBe(5n);
   });
 
   it("hides expired scans", () => {
@@ -628,7 +664,12 @@ describe("DecayPointRing", () => {
     const { ring } = makeRing({ maxEntries: 100, maxPoints: 70_000_000 });
     const pushZeros = (time: bigint, count: number) => {
       ring.push(
-        { receiveTime: time, messageTime: time, frameId: "lidar", pose: makePose() },
+        {
+          receiveTime: time,
+          messageTime: time,
+          frameId: "lidar",
+          pose: makePose(),
+        },
         new Float32Array(count * 3),
         new Uint8Array(count * 4),
       );

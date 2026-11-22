@@ -15,10 +15,10 @@ import { usePlayerSelection } from "@lichtblick/suite-base/context/PlayerSelecti
 
 /** The opened file, if it can be exported: currently a single local MCAP file. */
 export function useExportableFile(): File | undefined {
-  const { selectedFiles } = usePlayerSelection();
+  const { selectedRecordings } = usePlayerSelection();
   // ponytail: single file only; merging several open files is a later step.
-  const file = selectedFiles?.length === 1 ? selectedFiles[0] : undefined;
-  return file && /\.mcap$/i.test(file.name) ? file : undefined;
+  const file = selectedRecordings?.length === 1 ? selectedRecordings[0] : undefined;
+  return typeof file === "object" && /\.mcap$/i.test(file.name) ? file : undefined;
 }
 
 /** An MCAP recording the export dialog can read: a local file or a remote URL. */

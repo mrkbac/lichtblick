@@ -17,6 +17,7 @@ import {
   addMultiFileHydrationOverrides,
 } from "@lichtblick/suite-base/players/IterablePlayer/shared/multiFileHydrationOptions";
 import { Player } from "@lichtblick/suite-base/players/types";
+import { recordingName } from "@lichtblick/suite-base/util/compareSides";
 
 class McapLocalDataSourceFactory implements IDataSourceFactory {
   private readonly multiFileHydrationOverrides?: MultiFileHydrationOverrides;
@@ -47,15 +48,20 @@ class McapLocalDataSourceFactory implements IDataSourceFactory {
     if (args.file) {
       files.push(args.file);
     }
-    if (files.length === 0) {
+    const { recordings } = args;
+    if (files.length === 0 && recordings == undefined) {
       return;
     }
 
     const source = new WorkerSerializedIterableSource({
       initWorker: createMcapSourceWorker,
       // A single file is opened on its own, so it can follow the file while it grows
-      initArgs:
-        files.length === 1
+      initArgs: recordings
+        ? addMultiFileHydrationOverrides(
+            { recordings, compare: args.compare },
+            this.multiFileHydrationOverrides,
+          )
+        : files.length === 1
           ? { file: files[0], handle: args.handle }
           : addMultiFileHydrationOverrides(
               { files, compare: args.compare },
@@ -65,7 +71,7 @@ class McapLocalDataSourceFactory implements IDataSourceFactory {
 
     return new IterablePlayer({
       source,
-      name: files.map((file) => file.name).join(", "),
+      name: (recordings ?? files).map(recordingName).join(", "),
       sourceId: this.id,
       readAheadDuration: { sec: 120, nsec: 0 },
       // MCAP can carry foxglove.CompressedVideo. Some codecs (e.g. H.265) cannot decode a P/B-frame
