@@ -209,6 +209,12 @@ export class SceneExtension<
    *   does not move relative to any parent frame. The fixed frame is the root frame of the render
    *   frame.
    */
+  /**
+   * Called once the WebGPU device is ready, so content checked against its limits before then (see
+   * Renderer.checkTextureSize) can be checked again.
+   */
+  public gpuReady(): void {}
+
   public startFrame(
     currentTime: bigint,
     renderFrameId: AnyFrameId,

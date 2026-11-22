@@ -18,8 +18,32 @@ export type AnnotationEntry = {
   annotations: Annotation[];
 };
 
-/** How many messages per annotation topic are kept to find one matching a late image. */
-export const ANNOTATION_HISTORY = 20;
+/**
+ * Annotation messages stamped this far behind their topic's newest are dropped: an image that late
+ * is treated as never coming.
+ */
+export const ANNOTATION_WINDOW_NS = 10_000_000_000n;
+/** Backstop for streams whose stamps don't advance, where the time window never drops anything. */
+export const MAX_ANNOTATION_HISTORY = 1000;
+
+/**
+ * Drops the entries more than the window behind the newest. Shown image stamps don't cut it
+ * shorter: a delayed image with an older stamp can still arrive. The newest entry always stays for
+ * unsynced drawing.
+ */
+export function pruneAnnotationHistory(history: AnnotationEntry[]): void {
+  const newest = history[history.length - 1]?.stampNs;
+  const cutoff = newest == undefined ? undefined : newest - ANNOTATION_WINDOW_NS;
+  let drop = Math.max(0, history.length - MAX_ANNOTATION_HISTORY);
+  while (drop < history.length - 1) {
+    const stamp = history[drop]!.stampNs;
+    if (stamp != undefined && (cutoff == undefined || stamp >= cutoff)) {
+      break;
+    }
+    drop++;
+  }
+  history.splice(0, drop);
+}
 
 export function annotationTopicNames(topics: Immutable<Topic[]> | undefined): string[] {
   return (topics ?? [])

@@ -35,6 +35,8 @@ async function requestDevice(): Promise<GPUDevice | undefined> {
     requiredLimits: {
       maxStorageBufferBindingSize: adapter.limits.maxStorageBufferBindingSize,
       maxBufferSize: adapter.limits.maxBufferSize,
+      // WebGPU's default is 8192; occupancy grids and grid maps upload one texel per cell
+      maxTextureDimension2D: adapter.limits.maxTextureDimension2D,
     },
   });
   void device.lost.then(() => {

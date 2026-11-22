@@ -15,7 +15,11 @@ describe("getGpuDevice", () => {
       value: {
         requestAdapter: async () => ({
           features: new Set(),
-          limits: { maxStorageBufferBindingSize: 1, maxBufferSize: 1 },
+          limits: {
+            maxStorageBufferBindingSize: 1,
+            maxBufferSize: 1,
+            maxTextureDimension2D: 16384,
+          },
           requestDevice,
         }),
       },
@@ -26,5 +30,10 @@ describe("getGpuDevice", () => {
     await expect(getGpuDevice()).resolves.toBe(device);
     await expect(getGpuDevice()).resolves.toBe(device);
     expect(requestDevice).toHaveBeenCalledTimes(2);
+    expect(requestDevice).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        requiredLimits: expect.objectContaining({ maxTextureDimension2D: 16384 }),
+      }),
+    );
   });
 });
