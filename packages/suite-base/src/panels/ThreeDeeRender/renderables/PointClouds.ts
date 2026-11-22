@@ -9,7 +9,7 @@ import { Time, toNanoSec } from "@foxglove/rostime";
 import { NumericType, PackedElementField, PointCloud } from "@foxglove/schemas";
 import * as THREE from "three/webgpu";
 
-import { SettingsTreeAction, MessageEvent } from "@lichtblick/suite";
+import { SettingsTreeAction } from "@lichtblick/suite";
 import { DynamicBufferGeometry } from "@lichtblick/suite-base/panels/ThreeDeeRender/DynamicBufferGeometry";
 import {
   createGeometry,
@@ -29,7 +29,7 @@ import {
   LayerSettingsPointExtension,
   POINT_CLOUD_REQUIRED_FIELDS,
 } from "@lichtblick/suite-base/panels/ThreeDeeRender/settingsNodes/topics";
-import type { RosObject, RosValue } from "@lichtblick/suite-base/players/types";
+import type { MessageEvent, RosObject, RosValue } from "@lichtblick/suite-base/players/types";
 
 import {
   autoSelectColorSettings,

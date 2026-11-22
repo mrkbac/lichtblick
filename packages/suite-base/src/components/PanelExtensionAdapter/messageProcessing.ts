@@ -8,9 +8,9 @@
 import * as _ from "lodash-es";
 import { Opaque } from "ts-essentials";
 
-import { Immutable, MessageEvent, MessageConverterContext, Subscription } from "@lichtblick/suite";
+import { Immutable, MessageConverterContext, Subscription } from "@lichtblick/suite";
 import { GlobalVariables } from "@lichtblick/suite-base/hooks/useGlobalVariables";
-import { Topic as PlayerTopic } from "@lichtblick/suite-base/players/types";
+import type { MessageEvent, Topic as PlayerTopic } from "@lichtblick/suite-base/players/types";
 import { InstalledMessageConverter } from "@lichtblick/suite-base/types/messageConverters";
 import { formatTimeRaw } from "@lichtblick/suite-base/util/time";
 

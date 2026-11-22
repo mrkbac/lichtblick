@@ -19,7 +19,7 @@ import {
   parseRecord,
 } from "@lichtblick/mcap-core";
 import { loadDecompressHandlers, parseChannel, ParsedChannel } from "@lichtblick/mcap-support";
-import { MessageEvent, Metadata } from "@lichtblick/suite";
+import { Metadata } from "@lichtblick/suite";
 import {
   GetBackfillMessagesArgs,
   Initialization,
@@ -28,7 +28,7 @@ import {
   MessageIteratorArgs,
   TopicWithDecodingInfo,
 } from "@lichtblick/suite-base/players/IterablePlayer/IIterableSource";
-import { PlayerAlert, TopicStats } from "@lichtblick/suite-base/players/types";
+import { MessageEvent, PlayerAlert, TopicStats } from "@lichtblick/suite-base/players/types";
 import { RosDatatypes } from "@lichtblick/suite-base/types/RosDatatypes";
 import type { ReadOptions } from "@lichtblick/suite-base/util/CachedFilelike.types";
 import { toError } from "@lichtblick/suite-base/util/toError";

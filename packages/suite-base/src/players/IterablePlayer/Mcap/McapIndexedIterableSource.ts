@@ -10,7 +10,7 @@ import { Time, fromNanoSec, toNanoSec, toRFC3339String, compare } from "@foxglov
 import Logger from "@lichtblick/log";
 import { type McapIndexedReader, McapTypes } from "@lichtblick/mcap-core";
 import { ParsedChannel, parseChannel } from "@lichtblick/mcap-support";
-import { MessageEvent, Metadata } from "@lichtblick/suite";
+import { Metadata } from "@lichtblick/suite";
 import {
   GetBackfillMessagesArgs,
   Initialization,
@@ -20,7 +20,12 @@ import {
   SKIM_TAIL_NS,
   TopicWithDecodingInfo,
 } from "@lichtblick/suite-base/players/IterablePlayer/IIterableSource";
-import { PlayerAlert, RecordingFileInfo, TopicStats } from "@lichtblick/suite-base/players/types";
+import {
+  MessageEvent,
+  PlayerAlert,
+  RecordingFileInfo,
+  TopicStats,
+} from "@lichtblick/suite-base/players/types";
 import { RosDatatypes } from "@lichtblick/suite-base/types/RosDatatypes";
 import type { ReadOptions } from "@lichtblick/suite-base/util/CachedFilelike.types";
 import { toError } from "@lichtblick/suite-base/util/toError";

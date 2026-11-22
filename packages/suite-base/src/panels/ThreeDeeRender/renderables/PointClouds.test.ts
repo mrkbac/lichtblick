@@ -430,7 +430,8 @@ describe("PointClouds read-back history", () => {
     handler(event);
     expect(ring.scanCount()).toBe(1);
     expect(latest.geometry.drawRange.count).toBe(POSITIONS.length);
-    handler({ ...event, recordId: "record:3", receiveTime: { sec: 6, nsec: 0 } });
+    const later = { ...event, recordId: "record:3", receiveTime: { sec: 6, nsec: 0 } };
+    handler(later);
     expect(ring.scanCount()).toBe(2);
   });
 

@@ -9,7 +9,7 @@ import { Time, toNanoSec } from "@foxglove/rostime";
 import { LaserScan as FoxgloveLaserScan } from "@foxglove/schemas";
 import * as THREE from "three/webgpu";
 
-import { SettingsTreeAction, MessageEvent } from "@lichtblick/suite";
+import { SettingsTreeAction } from "@lichtblick/suite";
 import {
   createGeometry,
   PointsRenderable,
@@ -25,7 +25,7 @@ import {
   DEFAULT_POINT_SETTINGS,
   LayerSettingsPointExtension,
 } from "@lichtblick/suite-base/panels/ThreeDeeRender/settingsNodes/topics";
-import type { RosObject, RosValue } from "@lichtblick/suite-base/players/types";
+import type { MessageEvent, RosObject, RosValue } from "@lichtblick/suite-base/players/types";
 import { emptyPose } from "@lichtblick/suite-base/util/Pose";
 
 import { getColorConverter } from "./colorMode";

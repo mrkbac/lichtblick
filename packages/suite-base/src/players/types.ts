@@ -40,6 +40,8 @@ import { NotificationSeverity } from "@lichtblick/suite-base/util/sendNotificati
 export type MessageEvent<T = unknown> = SuiteMessageEvent<T> & {
   /** Exact serialized payload size before decoding, when supplied by the data source. */
   serializedSizeInBytes?: number;
+  /** Opaque identifier of a recording record, stable across reads in the same player. */
+  recordId?: string;
 };
 
 export type MessageDefinitionsByTopic = {

@@ -8,7 +8,6 @@
 import i18next from "i18next";
 import * as THREE from "three/webgpu";
 
-import type { MessageEvent } from "@lichtblick/suite";
 import { DynamicBufferGeometry } from "@lichtblick/suite-base/panels/ThreeDeeRender/DynamicBufferGeometry";
 import { BaseUserData, Renderable } from "@lichtblick/suite-base/panels/ThreeDeeRender/Renderable";
 import type { Renderer } from "@lichtblick/suite-base/panels/ThreeDeeRender/Renderer";
@@ -18,6 +17,7 @@ import {
 } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/transforms";
 import { MAX_DURATION } from "@lichtblick/suite-base/panels/ThreeDeeRender/transforms";
 import { updatePose } from "@lichtblick/suite-base/panels/ThreeDeeRender/updatePose";
+import type { MessageEvent } from "@lichtblick/suite-base/players/types";
 
 import { colorHasTransparency } from "./colorMode";
 import type { DecayPointRing, RingStyle } from "./pointClouds/DecayPointRing";
