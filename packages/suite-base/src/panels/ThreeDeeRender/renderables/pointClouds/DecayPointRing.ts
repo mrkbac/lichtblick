@@ -571,8 +571,8 @@ export class DecayPointRing extends Renderable<BaseUserData, /*TRenderer=*/ unde
 
   /**
    * Start of a free range of `count` points: after the newest scan, else at the start (space freed
-   * by expired scans), else any other free gap, else in grown buffers, else evicting the oldest
-   * scans once at the budget.
+   * by expired scans), else any other free gap, else in grown buffers, else (at the budget) after
+   * packing the live scans, thinning or dropping first only as far as needed (see below).
    */
   #allocate(count: number, { mayThin }: { mayThin: boolean }): number {
     const fits = (start: number) =>
