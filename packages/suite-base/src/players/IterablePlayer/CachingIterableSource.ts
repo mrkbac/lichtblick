@@ -92,6 +92,10 @@ class CachingIterableSource<MessageType = unknown>
   // Topics and skim interval of the latest messageIterator(); loadedRanges() counts only the
   // blocks that serve them
   #want?: { topics: ReadonlySet<string>; skimInterval?: Time };
+  // False when no block can hold results #want doesn't need: skips scanning for them per message
+  #maybeUnwanted = false;
+  // The block #fillBlock() is merging into; its items can't be dropped while it reads
+  #fillingBlock?: CacheBlock<MessageType>;
 
   // The producer loads results into the cache and the consumer reads from the cache.
   #cache: CacheBlock<MessageType>[] = [];
@@ -202,6 +206,7 @@ class CachingIterableSource<MessageType = unknown>
     const want: ReadonlySet<string> = new Set(args.topics.keys());
     if (!_.isEqual(this.#want, { topics: want, skimInterval: args.skimInterval })) {
       this.#want = { topics: want, skimInterval: args.skimInterval };
+      this.#maybeUnwanted = true;
       this.#markLoadedRangesDirty();
     }
 
@@ -688,12 +693,21 @@ class CachingIterableSource<MessageType = unknown>
     }
 
     // Results on topics no longer wanted are dropped before the next read stores anything
+    return this.#evictableCandidates().length > 0 || this.#trimmableBlocks().length > 0;
+  }
+
+  /** Blocks with results on topics the latest messageIterator() doesn't want */
+  #trimmableBlocks(): CacheBlock<MessageType>[] {
     const want = this.#want?.topics;
-    return (
-      this.#evictableCandidates().length > 0 ||
-      (want != undefined &&
-        this.#cache.some((block) => CachingIterableSource.#Lacks(want, block.topics)))
+    if (!want || !this.#maybeUnwanted) {
+      return [];
+    }
+    const blocks = this.#cache.filter(
+      (block) => block !== this.#fillingBlock && CachingIterableSource.#Lacks(want, block.topics),
     );
+    // The filling block sets it again when its fill ends
+    this.#maybeUnwanted = blocks.length > 0;
+    return blocks;
   }
 
   /** The evictable block ids, most evictable first; recomputed only when blocks changed */
@@ -781,8 +795,8 @@ class CachingIterableSource<MessageType = unknown>
   #maybePurgeCache(opt: { activeBlock?: CacheBlock<MessageType>; sizeInBytes: number }): boolean {
     const { activeBlock, sizeInBytes } = opt;
 
-    if (!this.#budget.fits(sizeInBytes)) {
-      this.#trimUnwanted(activeBlock);
+    if (this.#maybeUnwanted && !this.#budget.fits(sizeInBytes)) {
+      this.#trimUnwanted();
     }
     let purged = false;
     while (!this.#budget.fits(sizeInBytes)) {
@@ -807,22 +821,19 @@ class CachingIterableSource<MessageType = unknown>
    * so re-subscribing is free; under budget pressure they go before any wanted block, including
    * those from the read head on, which can't be evicted.
    */
-  #trimUnwanted(activeBlock: CacheBlock<MessageType> | undefined): void {
+  #trimUnwanted(): void {
     const want = this.#want?.topics;
     if (!want) {
       return;
     }
-    for (const block of this.#cache) {
-      // The active block's items are indexed by the read in progress
-      if (block === activeBlock || !CachingIterableSource.#Lacks(want, block.topics)) {
-        continue;
-      }
+    for (const block of this.#trimmableBlocks()) {
       block.items = block.items.filter(([, result]) => CachingIterableSource.#Wanted(result, want));
       const size = CachingIterableSource.#SumSizes(block.items);
       this.#budget.release(block.size - size);
       block.size = size;
       block.topics = new Set([...block.topics].filter((topic) => want.has(topic)));
     }
+    this.#maybeUnwanted = false;
   }
 
   /**
@@ -840,6 +851,7 @@ class CachingIterableSource<MessageType = unknown>
     if (compare(block.start, readHead) < 0) {
       this.#splitBlock(block, readHead);
     }
+    this.#fillingBlock = block;
     const missing: TopicSelection = new Map(
       [...args.topics].filter(([topic]) => !block.topics.has(topic)),
     );
@@ -857,8 +869,10 @@ class CachingIterableSource<MessageType = unknown>
     let pendingSize = 0;
 
     // Moves the merged results up to timeNs into a block of their own, cut from the front of block
+    // Set once all of block is filled: it holds the merged results, nothing more to cut from it
+    let blockFilled = false;
     const commit = (timeNs: bigint) => {
-      if (timeNs < toNanoSec(block.start)) {
+      if (blockFilled || timeNs < toNanoSec(block.start)) {
         return;
       }
       const items = merged.splice(
@@ -868,7 +882,8 @@ class CachingIterableSource<MessageType = unknown>
       const size = CachingIterableSource.#SumSizes(items);
       mergedSize -= size;
       let filled = block;
-      if (timeNs < toNanoSec(block.end)) {
+      blockFilled = timeNs >= toNanoSec(block.end);
+      if (!blockFilled) {
         filled = this.#splitBlock(block, fromNanoSec(timeNs + 1n));
         oldIdx -= filled.items.length;
       }
@@ -877,6 +892,7 @@ class CachingIterableSource<MessageType = unknown>
       // Source results' bytes are in #budget already, block's moved along with them
       filled.size = size;
       filled.lastAccess = Date.now();
+      this.#maybeUnwanted = true;
       this.#markLoadedRangesDirty();
     };
 
@@ -894,7 +910,7 @@ class CachingIterableSource<MessageType = unknown>
         const next = await source.next();
         // undefined: the source is done, merge the rest of block up to end
         const result = next.done === true ? undefined : next.value;
-        const timeNs =
+        const resultNs =
           result == undefined
             ? endNs
             : result.type === "message-event"
@@ -902,10 +918,16 @@ class CachingIterableSource<MessageType = unknown>
               : result.type === "stamp"
                 ? toNanoSec(result.stamp)
                 : lastTime;
-        // Merge block's results up to timeNs first (inline: a generator per result is slow)
+        // An out-of-order result is stored at the latest time, like the source read path does,
+        // so merged stays sorted
+        const timeNs = resultNs > lastTime ? resultNs : lastTime;
+        // Merge block's results before timeNs first (inline: a generator per result is slow).
+        // Those at timeNs too unless a message comes next: a cached stamp at timeNs must not
+        // come before it, as the player ends a tick at a stamp.
+        const mergeUntilNs = result?.type === "message-event" ? timeNs - 1n : timeNs;
         for (; oldIdx < block.items.length; ++oldIdx) {
           const item = block.items[oldIdx]!;
-          if (item[0] > timeNs) {
+          if (item[0] > mergeUntilNs) {
             break;
           }
           merged.push(item);
@@ -943,6 +965,8 @@ class CachingIterableSource<MessageType = unknown>
       commit(filledNs);
       // Unfilled source results are dropped; block keeps its own results after filledNs
       this.#budget.release(pendingSize);
+      this.#fillingBlock = undefined;
+      this.#maybeUnwanted = true;
       this.#candidatesStale = true;
       this.#markLoadedRangesDirty();
       try {
@@ -978,11 +1002,15 @@ class CachingIterableSource<MessageType = unknown>
     return head;
   }
 
-  /** Whether block has every message a read with skimInterval wants (a denser skim is fine) */
+  /**
+   * Whether block has every message a read with skimInterval wants. A skimmed block only serves
+   * the same interval: sources pick messages relative to window boundaries, so a shorter interval
+   * doesn't cover a longer one.
+   */
   static #SkimServes(block: CacheBlock<unknown>, skimInterval: Time | undefined): boolean {
     return (
       !block.skimInterval ||
-      (skimInterval != undefined && compare(block.skimInterval, skimInterval) <= 0)
+      (skimInterval != undefined && compare(block.skimInterval, skimInterval) === 0)
     );
   }
 
