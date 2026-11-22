@@ -181,6 +181,24 @@ describe("PathSampleColumns", () => {
     expect(stamps.length).toBeGreaterThan(0);
   });
 
+  it("keeps the last stamped sample of a run before unstamped repeats", () => {
+    const columns = new PathSampleColumns(12);
+    // Runs of 3 thin to level 2 (run ends dropped) without needing to merge.
+    for (let i = 0; i < 24; i++) {
+      columns.push(sample(i, Math.floor(i / 3)));
+    }
+    // Then a run of "A" whose header stamps stop part way.
+    for (let i = 24; i < 29; i++) {
+      columns.push(sample(i, "A", i < 27 ? { headerStamp: { sec: i, nsec: 0 } } : {}));
+    }
+    columns.push(sample(29, "B"));
+    expect(columns.changes()).toBe(columns);
+    const kept = columns.toArray().map((s) => s.receiveTime.sec);
+    expect(kept).not.toContain(1); // run ends are dropped: this is level 2
+    // 26 is where "A" ends when drawn by header stamp.
+    expect(kept).toContain(26);
+  });
+
   it("keeps the value table bounded when overwritten samples have unique values", () => {
     const columns = new PathSampleColumns(100);
     for (let i = 0; i < 200_000; i++) {

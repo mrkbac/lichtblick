@@ -24,10 +24,14 @@ import {
   StateTransitionPath,
 } from "@lichtblick/suite-base/panels/StateTransitions/types";
 
-/** Collects the x of every segment where a condition series turns true (before `beforeX`). */
-export function addMatchStarts(dataset: ChartDataset, out: Set<number>, beforeX = Infinity): void {
+/** Collects the x of every segment where a condition series turns true (within `keep`). */
+export function addMatchStarts(
+  dataset: ChartDataset,
+  out: Set<number>,
+  keep: (x: number) => boolean = () => true,
+): void {
   for (const datum of dataset.data) {
-    if (datum?.value === true && datum.label != undefined && datum.x < beforeX) {
+    if (datum?.value === true && datum.label != undefined && keep(datum.x)) {
       out.add(datum.x);
     }
   }
@@ -50,10 +54,15 @@ function addMatches(
     return;
   }
   const exact = messagesToDataset({ ...args, blocks: changeBlocks, showPoints: false });
-  addMatchStarts(exact, out);
-  if (blocks.some((samples) => samples?.hasAllChanges() === false)) {
-    addMatchStarts(drawn, out, exact.data.find((datum) => datum != undefined)?.x);
+  if (blocks.every((samples) => samples?.hasAllChanges() !== false)) {
+    addMatchStarts(exact, out);
+    return;
   }
+  // The record's first sample only carries the state from before its oldest kept change, so
+  // a match there would be made up by the cut: take matches up to it from the drawn samples.
+  const cutX = exact.data.find((datum) => datum != undefined)?.x ?? Infinity;
+  addMatchStarts(exact, out, (x) => x > cutX);
+  addMatchStarts(drawn, out, (x) => x <= cutX);
 }
 
 function useStateTransitionsData(

@@ -397,19 +397,22 @@ export class PathSampleColumns {
     if (this.sameValue(i, next) && stamped === this.hasHeaderStamp(next)) {
       return true; // i is inside a run
     }
-    // At level 2 a run's last sample is only kept to end it before a gap.
-    return this.#level >= 2 && !this.#isGap(next);
+    // At level 2 a run's last sample is only kept to end it before a gap, or before a sample
+    // that differs in having a header stamp (it is where the run ends when drawn by stamp).
+    return this.#level >= 2 && !this.#isGap(next) && stamped === this.hasHeaderStamp(next);
   }
 
   #thin(): void {
     const target = Math.floor((this.maxSamples * 3) / 4);
 
     if (this.#isChangesRecord) {
-      // Forget the oldest changes; the merged chart samples still cover that time.
-      const drop = this.#length - target;
+      // Forget the oldest changes; the merged chart samples still cover that time. The last
+      // forgotten one stays as the first sample, so the state before the first kept change is
+      // known (`hasAllChanges` tells readers not to treat that first sample as a change).
+      const drop = this.#length - target - 1;
       this.#data.copyWithin(0, drop * STRIDE, this.#length * STRIDE);
       this.#numbers?.copyWithin(0, drop, this.#length);
-      this.#length = target;
+      this.#length = target + 1;
       this.#forgotChanges = true;
       this.#compactValues();
       return;

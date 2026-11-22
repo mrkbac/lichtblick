@@ -35,4 +35,35 @@ describe("Downsampler", () => {
       expect(dataset.data).toHaveLength(transitions);
     }
   });
+
+  it("draws dense stretches on the row even when the row starts with a gap", () => {
+    const data = [
+      { x: 0, y: Number.NaN },
+      // Many changes within one pixel: drawn as one grey [...] stretch.
+      ...Array.from({ length: 50 }, (_, i) => ({
+        x: 10 + i * 0.001,
+        y: -3,
+        label: String(i % 2),
+        value: i % 2,
+      })),
+      { x: 20, y: -3, label: "0", value: 0 },
+    ];
+    const downsampler = new Downsampler();
+    downsampler.update({
+      datasets: [{ data }],
+      datasetBounds: {
+        width: 100,
+        height: 100,
+        bounds: { x: { min: 0, max: 20 }, y: { min: -5, max: 0 } },
+      },
+      scales: {
+        x: { min: 0, max: 20, pixelMin: 0, pixelMax: 100 },
+        y: { min: -5, max: 0, pixelMin: 100, pixelMax: 0 },
+      },
+    });
+    const [row] = downsampler.downsample() ?? [];
+    const dense = row?.data.filter((datum) => datum?.label === "[...]") ?? [];
+    expect(dense.length).toBeGreaterThan(0);
+    expect(dense.every((datum) => datum?.y === -3)).toBe(true);
+  });
 });

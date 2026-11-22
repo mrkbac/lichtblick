@@ -78,7 +78,8 @@ export class Downsampler {
         // grey out stretches that fit the chart's width. The width still caps each row.
         MAX_POINTS,
       );
-      const yValue = dataset.data[0]?.y ?? 0;
+      // The row's y, from a point that isn't a gap (a gap's y is NaN).
+      const yValue = dataset.data.find((datum) => datum != undefined && !isNaN(datum.y))?.y ?? 0;
       const resolved = downsampled.map(({ x, index, states }) => {
         if (index == undefined) {
           return {

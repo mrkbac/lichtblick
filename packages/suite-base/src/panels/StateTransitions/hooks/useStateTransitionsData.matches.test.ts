@@ -34,4 +34,28 @@ describe("useStateTransitionsData matches", () => {
     expect(expected.length).toBeGreaterThan(0);
     expect(result.current.matchStarts).toEqual(expected);
   });
+
+  it("doesn't count a match where the changes record cut off its oldest changes", () => {
+    // 0, 1, 2 cycling with "> 0": true only turns on at 1; 1 -> 2 stays true. Wherever the
+    // record's cut lands, no match may appear at a 2.
+    for (let budget = 40; budget < 46; budget++) {
+      const columns = new PathSampleColumns(budget);
+      columns.trackChanges();
+      for (let i = 0; i < 300; i++) {
+        columns.push({
+          receiveTime: { sec: i, nsec: 0 },
+          headerStamp: undefined,
+          count: 1,
+          value: i % 3,
+          constantName: undefined,
+        });
+      }
+      const path = { value: "/a.b", condition: "> 0", timestampMethod: "receiveTime" as const };
+      const { result } = renderHook(() =>
+        useStateTransitionsData([path], { sec: 0, nsec: 0 }, {}, [{ "/a.b": columns }], false),
+      );
+      expect(result.current.matchStarts.length).toBeGreaterThan(0);
+      expect(result.current.matchStarts.filter((x) => x % 3 !== 1)).toEqual([]);
+    }
+  });
 });
