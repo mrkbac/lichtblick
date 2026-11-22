@@ -43,7 +43,7 @@ class TestSource implements IDeserializedIterableSource {
   }
 }
 
-const consoleErrorMock = console.error as ReturnType<typeof vi.fn>;
+const consoleWarnMock = console.warn as ReturnType<typeof vi.fn>;
 
 describe("BlockLoader", () => {
   it("should make an empty block loader", async () => {
@@ -387,8 +387,8 @@ describe("BlockLoader", () => {
         }
       },
     });
-    expect(consoleErrorMock.mock.calls[0] ?? []).toContain("cache-full");
-    consoleErrorMock.mockClear();
+    expect(consoleWarnMock.mock.calls[0] ?? []).toContain("cache-full");
+    consoleWarnMock.mockClear();
     expect.assertions(3);
   });
 
@@ -688,8 +688,8 @@ describe("BlockLoader", () => {
         }
       },
     });
-    expect(consoleErrorMock.mock.calls[0] ?? []).toContain("cache-full");
-    consoleErrorMock.mockClear();
+    expect(consoleWarnMock.mock.calls[0] ?? []).toContain("cache-full");
+    consoleWarnMock.mockClear();
 
     // Load the same topic but with message slicing. The whole messages already loaded hold the
     // requested fields, so they are kept; only the missing block is loaded, sliced, and the full
@@ -804,5 +804,104 @@ describe("BlockLoader", () => {
     // arrays should be unchanged.
     expect(firstBlockLoad?.[0]?.messagesByTopic["a"]).toBe(lastBlocks?.[0]?.messagesByTopic["a"]);
     expect(firstBlockLoad?.[1]?.messagesByTopic["a"]).toBe(lastBlocks?.[1]?.messagesByTopic["a"]);
+  });
+
+  describe("with a budget smaller than the recording", () => {
+    // One message per second and topic over 10 blocks of one second each
+    function setup(sizes: Record<string, number>, cacheSizeBytes: number) {
+      const source = new TestSource();
+      const messages: MessageEvent[] = [];
+      for (let sec = 0; sec < 10; sec++) {
+        for (const [topic, sizeInBytes] of Object.entries(sizes)) {
+          messages.push({
+            topic,
+            receiveTime: { sec, nsec: 0 },
+            message: undefined,
+            sizeInBytes,
+            schemaName: "foo",
+          });
+        }
+      }
+      source.messageIterator = async function* (args) {
+        for (const msgEvent of messages) {
+          if (
+            args.topics.has(msgEvent.topic) &&
+            (!args.start || msgEvent.receiveTime.sec >= args.start.sec) &&
+            (!args.end || msgEvent.receiveTime.sec <= args.end.sec)
+          ) {
+            yield { type: "message-event", msgEvent };
+          }
+        }
+      };
+      const loader = new BlockLoader({
+        maxBlocks: 10,
+        cacheSizeBytes,
+        minBlockDurationNs: 1,
+        source,
+        start: { sec: 0, nsec: 0 },
+        end: { sec: 9, nsec: 999_999_999 },
+        alertManager: new PlayerAlertManager(),
+      });
+      loader.setTopics(new Map(Object.keys(sizes).map((topic) => [topic, { topic }])));
+      let blocks: Immutable<(MessageBlock | undefined)[]> = [];
+      const loading = loader.startLoading({
+        progress: async (progress) => {
+          blocks = progress.messageCache?.blocks ?? [];
+        },
+      });
+      /** Per block, the topics it holds, once loading has settled */
+      const settled = async () => {
+        let last = "";
+        await vi.waitFor(() => {
+          const now = JSON.stringify(blocks.map((block) => block?.messagesByTopic)) ?? "";
+          const same = now === last;
+          last = now;
+          expect(same).toBe(true);
+        });
+        return blocks.map((block) =>
+          Object.keys(block?.messagesByTopic ?? {})
+            .sort()
+            .join(","),
+        );
+      };
+      return { loader, loading, settled };
+    }
+
+    it("keeps the blocks around the playhead, forward first, and follows a seek", async () => {
+      const { loader, loading, settled } = setup({ a: 10 }, 40);
+      loader.setPlayhead({ sec: 5, nsec: 0 });
+
+      // Blocks 5-7 ahead, and 4 behind (counts as far as two ahead)
+      expect(await settled()).toEqual(["", "", "", "", "a", "a", "a", "a", "", ""]);
+
+      loader.setPlayhead({ sec: 1, nsec: 0 });
+      expect(await settled()).toEqual(["a", "a", "a", "a", "", "", "", "", "", ""]);
+
+      await loader.stopLoading();
+      await loading;
+      expect(consoleWarnMock.mock.calls.some((call) => call.includes("cache-full"))).toBe(true);
+      consoleWarnMock.mockClear();
+    });
+
+    it("keeps a light topic loaded everywhere when a heavy one fills the budget", async () => {
+      const { loader, loading, settled } = setup({ heavy: 20, light: 1 }, 100);
+
+      expect(await settled()).toEqual([
+        "heavy,light",
+        "heavy,light",
+        "heavy,light",
+        "heavy,light",
+        "light",
+        "light",
+        "light",
+        "light",
+        "light",
+        "light",
+      ]);
+
+      await loader.stopLoading();
+      await loading;
+      consoleWarnMock.mockClear();
+    });
   });
 });
