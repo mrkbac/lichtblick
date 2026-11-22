@@ -172,6 +172,45 @@ describe("MarkerBatches", () => {
     expect(new THREE.Vector3().setFromMatrixPosition(matrix).x).toBeCloseTo(0.01, 5);
   });
 
+  it("keeps the instances already written when a batch grows", () => {
+    for (let id = 1; id <= 40; id++) {
+      topic.addMarkerMessage(marker(id, MarkerType.CUBE), 0n);
+    }
+    topic.startFrame(0n, "map", "map");
+
+    const cubes = instanced().find(
+      (object) => object instanceof THREE.Mesh && (object as THREE.InstancedMesh).count === 40,
+    ) as THREE.InstancedMesh;
+    const matrix = new THREE.Matrix4();
+    const color = new THREE.Color();
+    for (let i = 0; i < 40; i++) {
+      cubes.getMatrixAt(i, matrix);
+      // Marker ids 1..40 sit at x = id; the batch origin is marker 1
+      expect(new THREE.Vector3().setFromMatrixPosition(matrix).x).toBe(i);
+      cubes.getColorAt(i, color);
+      expect(color.r).toBeCloseTo(1, 6);
+    }
+  });
+
+  it("draws reflected and far-away markers on their own", () => {
+    topic.addMarkerMessage(marker(1, MarkerType.CUBE), 0n);
+    topic.addMarkerMessage({ ...marker(2, MarkerType.CUBE), scale: { x: -1, y: 1, z: 1 } }, 0n);
+    topic.addMarkerMessage(
+      {
+        ...marker(3, MarkerType.CUBE),
+        pose: { position: { x: 1e6, y: 0, z: 0 }, orientation: { x: 0, y: 0, z: 0, w: 1 } },
+      },
+      0n,
+    );
+    topic.startFrame(0n, "map", "map");
+
+    expect((byId(1) as RenderableCube).mesh.layers.mask).toBe(1 << LAYER_PICK_ONLY);
+    expect((byId(2) as RenderableCube).mesh.layers.mask).toBe(1 << LAYER_DEFAULT);
+    expect((byId(3) as RenderableCube).mesh.layers.mask).toBe(1 << LAYER_DEFAULT);
+    const cubes = instanced().find((object) => object instanceof THREE.Mesh) as THREE.InstancedMesh;
+    expect(cubes.count).toBe(1);
+  });
+
   it("restores a deleted marker's own draw before the pool hands it out", () => {
     topic.addMarkerMessage(marker(1, MarkerType.CUBE), 0n);
     topic.startFrame(0n, "map", "map");

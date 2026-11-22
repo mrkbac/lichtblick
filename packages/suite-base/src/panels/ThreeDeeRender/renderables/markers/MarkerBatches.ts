@@ -69,12 +69,19 @@ function reserve(object: Instanced, count: number): void {
     return;
   }
   const next = Math.max(count, Math.ceil(capacity * 1.5) + 16);
-  object.instanceMatrix = new THREE.InstancedBufferAttribute(new Float32Array(next * 16), 16);
+  // Keep the instances written so far this fill
+  const matrices = new Float32Array(next * 16);
+  matrices.set(object.instanceMatrix.array);
+  object.instanceMatrix = new THREE.InstancedBufferAttribute(matrices, 16);
   object.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
   // Meshes take a color per instance; outlines share the outline material's
   if (object instanceof THREE.InstancedMesh) {
     // Floats: WebGPU has no 3-component 8-bit vertex format
-    const color = new THREE.InstancedBufferAttribute(new Float32Array(next * 3), 3);
+    const colors = new Float32Array(next * 3);
+    if (object.instanceColor) {
+      colors.set(object.instanceColor.array);
+    }
+    const color = new THREE.InstancedBufferAttribute(colors, 3);
     color.setUsage(THREE.DynamicDrawUsage);
     object.instanceColor = color;
   }
@@ -98,6 +105,9 @@ function markUsed(attribute: THREE.BufferAttribute, count: number): void {
   attribute.addUpdateRange(0, count * attribute.itemSize);
   attribute.needsUpdate = true;
 }
+
+/** Beyond this distance from a batch's origin (m), float32 offsets lose sub-millimeter precision */
+const MAX_BATCH_EXTENT = 10_000;
 
 const tempMatrix = new THREE.Matrix4();
 const tempPosition = new THREE.Vector3();
@@ -130,16 +140,25 @@ export class MarkerBatches extends THREE.Object3D {
   /** Draws `marker` through a batch if it can be, or on its own otherwise */
   public addMarker(marker: BatchableMarker): void {
     const { mesh, outline } = marker;
-    const opaque = marker.userData.marker.color.a >= 1;
-    setPickOnly(mesh, { pickOnly: opaque });
-    if (outline) {
-      setPickOnly(outline, { pickOnly: opaque });
+    // Transparent markers must be sorted, and reflected ones (negative scale) need flipped
+    // winding: both draw on their own, as do markers too far from the batch origin for float32
+    const { color } = marker.userData.marker;
+    const { x, y, z } = marker.scale;
+    let batch = color.a >= 1 && x * y * z > 0 ? this.#batchFor(mesh, outline) : undefined;
+    if (
+      batch &&
+      batch.meshCount > 0 &&
+      marker.position.distanceTo(batch.origin) > MAX_BATCH_EXTENT
+    ) {
+      batch = undefined;
     }
-    if (!opaque) {
+    setPickOnly(mesh, { pickOnly: batch != undefined });
+    if (outline) {
+      setPickOnly(outline, { pickOnly: batch != undefined });
+    }
+    if (!batch) {
       return;
     }
-
-    const batch = this.#batchFor(mesh, outline);
     if (batch.meshCount === 0) {
       batch.origin.copy(marker.position);
     }
