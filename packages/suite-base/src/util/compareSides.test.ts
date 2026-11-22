@@ -7,6 +7,7 @@ import {
   draftFromFiles,
   draftToCompare,
   encodeCompareNames,
+  joinUrls,
   mergeArgs,
   recordingExtension,
   recordingName,
@@ -144,5 +145,13 @@ describe("mergeArgs", () => {
       type: "file",
       files: [f, "https://e.com/b.mcap"],
     });
+  });
+});
+
+describe("joinUrls", () => {
+  it("keeps a URL with a comma whole when the list is split on commas", () => {
+    const joined = joinUrls(["https://e.com/run,1.mcap", "https://e.com/b.mcap"]);
+    expect(joined.split(",")).toEqual(["https://e.com/run%2C1.mcap", "https://e.com/b.mcap"]);
+    expect(recordingName(joined.split(",")[0]!)).toBe("run,1.mcap");
   });
 });

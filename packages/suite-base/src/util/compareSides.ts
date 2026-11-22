@@ -57,6 +57,14 @@ function folderOf(file: Recording): string | undefined {
 }
 
 /**
+ * The `ds.url` value for several URLs: joined by commas, with a comma inside a URL escaped as
+ * `%2C` (the same URL to the server) so the list splits back into the same URLs
+ */
+export function joinUrls(urls: readonly string[]): string {
+  return urls.map((url) => url.replaceAll(",", "%2C")).join(",");
+}
+
+/**
  * The `ds.compareNames` value for side names: joined by commas, with commas (and `%`) in a name
  * escaped so names keep them. A new param rather than `ds.compare`, whose older plain lists keep
  * meaning what they did (e.g. `%41` stays `%41`).
@@ -158,7 +166,7 @@ export function mergeArgs(
     ? {
         type: "connection",
         params: {
-          url: unique.filter((r) => typeof r === "string").join(","),
+          url: joinUrls(unique.filter((r) => typeof r === "string")),
           ...(withCookies && { includeCredentials: "true" }),
         },
       }

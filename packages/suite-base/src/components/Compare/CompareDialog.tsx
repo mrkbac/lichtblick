@@ -36,6 +36,7 @@ import {
   draftToCompare,
   encodeCompareNames,
   handlesOf,
+  joinUrls,
   recordingExtension,
   recordingName,
   rememberHandle,
@@ -560,7 +561,7 @@ function CompareDialogContent({ initial }: { initial: CompareDraft }): React.JSX
               selectSource(remoteSource.id, {
                 type: "connection",
                 params: {
-                  url: urls.join(","),
+                  url: joinUrls(urls),
                   compareNames: encodeCompareNames(compare),
                   ...(withCookies.length > 0 && { includeCredentials: "true" }),
                 },

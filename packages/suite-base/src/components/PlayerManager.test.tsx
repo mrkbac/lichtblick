@@ -105,7 +105,7 @@ describe("PlayerManager", () => {
     storedRecents.recentsLoaded = true;
     sessionStorage.setItem(
       "lichtblick.lastFileSource",
-      JSON.stringify({ sourceId: "ok", title: "r.bag", recentId: "r1" }),
+      '{"sourceId":"ok","title":"r.bag","recentId":"r1"}',
     );
     const deliver = vi.fn();
     useSourcePick.setState({ pick: { label: "recording B", deliver } });
