@@ -3,7 +3,8 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import { render } from "@testing-library/react";
+import { MenuItem, MenuList, Slider } from "@mui/material";
+import { fireEvent, render, screen } from "@testing-library/react";
 import type { Mock } from "vitest";
 
 import KeyListener, { KeyListenerProps } from "./KeyListener";
@@ -55,6 +56,27 @@ describe("KeyListener", () => {
         new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true, cancelable: true }),
       );
       tree.remove();
+
+      // Then
+      expect(mockHandler).not.toHaveBeenCalled();
+    });
+
+    it("should leave arrow keys to a focused slider or menu", () => {
+      // Given: playback-style shortcuts on the arrow keys
+      setup({ global: true, keyDownHandlers: { arrowright: mockHandler, arrowdown: mockHandler } });
+      render(
+        <>
+          <Slider defaultValue={2} max={10} />
+          <MenuList>
+            <MenuItem>first</MenuItem>
+            <MenuItem>second</MenuItem>
+          </MenuList>
+        </>,
+      );
+
+      // When
+      fireEvent.keyDown(screen.getByRole("slider"), { key: "ArrowRight" });
+      fireEvent.keyDown(screen.getByText("first"), { key: "ArrowDown" });
 
       // Then
       expect(mockHandler).not.toHaveBeenCalled();

@@ -140,7 +140,8 @@ export const VirtualizedTree = memo(function VirtualizedTree({
     [flatData, virtualizer],
   );
 
-  // Arrow-key tree navigation (WAI-ARIA tree pattern): the tree is a single tab stop.
+  // Keyboard tree navigation (WAI-ARIA tree pattern): the tree is a single tab stop. Left/Right and
+  // Space stay with playback (stepping and play/pause while reading messages); Enter expands.
   const onKeyDown = useCallback(
     (event: React.KeyboardEvent) => {
       if (event.altKey || event.ctrlKey || event.metaKey) {
@@ -150,7 +151,6 @@ export const VirtualizedTree = memo(function VirtualizedTree({
       if (!node) {
         return;
       }
-      const expanded = node.isExpandable && isShownExpanded(node.key, node.value);
       switch (event.key) {
         case "ArrowDown":
           focusRow(Math.min(activeIndex + 1, flatData.length - 1));
@@ -164,32 +164,18 @@ export const VirtualizedTree = memo(function VirtualizedTree({
         case "End":
           focusRow(flatData.length - 1);
           break;
-        case "ArrowRight":
-          if (node.isExpandable && !expanded) {
-            toggle(node.key, node.value);
-          } else if (expanded) {
-            focusRow(activeIndex + 1);
-          }
-          break;
-        case "ArrowLeft":
-          if (expanded) {
-            toggle(node.key, node.value);
-          } else if (node.parentPath) {
-            focusRow(flatData.findIndex((other) => other.key === node.parentPath));
-          }
-          break;
         case "Enter":
-        case " ":
-          if (node.isExpandable) {
-            toggle(node.key, node.value);
+          if (!node.isExpandable) {
+            return;
           }
+          toggle(node.key, node.value);
           break;
         default:
           return;
       }
       event.preventDefault();
     },
-    [activeIndex, flatData, focusRow, isShownExpanded, toggle],
+    [activeIndex, flatData, focusRow, toggle],
   );
 
   // Breadcrumb of the topmost visible row's ancestors, so deep rows keep their context.
