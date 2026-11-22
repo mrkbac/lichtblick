@@ -21,7 +21,7 @@ async function pipe(bytes: BlobPart, stream: GenericTransformStream): Promise<Re
 /** Compresses layout data into a URL-safe string. */
 export async function encodeSharedLayout(data: unknown): Promise<string> {
   const compressed = await (
-    await pipe(JSON.stringify(data), new CompressionStream("deflate-raw"))
+    await pipe(JSON.stringify(data) ?? "null", new CompressionStream("deflate-raw"))
   ).arrayBuffer();
   let binary = "";
   for (const byte of new Uint8Array(compressed)) {
