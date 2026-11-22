@@ -6,7 +6,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import * as _ from "lodash-es";
-import { useCallback, useEffect } from "react";
+import { useCallback } from "react";
 
 import { useShallowMemo } from "@lichtblick/hooks";
 import { LOCAL_STORAGE_PROFILE_DATA } from "@lichtblick/suite-base/constants/browserStorageKeys";
@@ -37,19 +37,6 @@ export default function UserProfileLocalStorageProvider({
     },
     [],
   );
-
-  // On first load stamp firstSeenTime timestamp. We consider the time at which
-  // we stamp firstTime as the first time the user has opened the app if at that
-  // time there is no currentLayoutId already set in the profile.
-  useEffect(() => {
-    setUserProfile((old) => ({
-      ...old,
-      firstSeenTime: old.firstSeenTime ?? new Date().toISOString(),
-      firstSeenTimeIsFirstLoad: old.firstSeenTimeIsFirstLoad ?? old.currentLayoutId == undefined,
-    })).catch((err: unknown) => {
-      console.error(err);
-    });
-  }, [setUserProfile]);
 
   const storage = useShallowMemo({
     getUserProfile,
