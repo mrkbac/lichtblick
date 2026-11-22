@@ -14,7 +14,9 @@
  *    - See: @lichtblick/mcap-core McapIndexedReader.Initialize() - reads footer from end of file before chunk data
  *
  * 2. Navigation Optimization Strategy
- *    - Next message: Direct seek using getBatchIterator({ start: currentTime }) - O(1) complexity
+ *    - All time-only reads use the payload-free inspection iterator when the player has one
+ *    - Next message: Direct seek from currentTime; stops at the first message after it once the
+ *      topic's last message time is known
  *    - Previous message: getMessageAtTime (indexed backward lookup). Sources without one get
  *      backward windows that grow geometrically, sized from topic density when known, so the
  *      read is proportional to the distance to the previous message, never the whole prefix.
@@ -37,6 +39,7 @@ import {
   selectEndTime,
   selectGetBatchIterator,
   selectGetMessageAtTime,
+  selectInspectionIterator,
   selectPausePlayback,
   selectSeekPlayback,
   selectStartTime,
@@ -105,6 +108,15 @@ export function useTopicMessageNavigation({
   const pausePlayback = useMessagePipeline(selectPausePlayback);
   const getBatchIterator = useMessagePipeline(selectGetBatchIterator);
   const getMessageAtTime = useMessagePipeline(selectGetMessageAtTime);
+  const getInspectionIterator = useMessagePipeline(selectInspectionIterator);
+
+  // Navigation only needs receive times. The inspection iterator skips decoding payloads (a
+  // camera frame costs nothing to step over); sources without it get decoded batches.
+  const iterateTimes = useCallback(
+    (topic: string, options?: { start?: Time; end?: Time }) =>
+      getInspectionIterator?.([topic], options) ?? getBatchIterator(topic, options),
+    [getInspectionIterator, getBatchIterator],
+  );
 
   const cachedBoundaries = boundariesCache.get(topicName);
   const firstMessageTime = cachedBoundaries?.first;
@@ -154,7 +166,7 @@ export function useTopicMessageNavigation({
           start = floor;
         }
 
-        const iterator = getBatchIterator(topic, { start, end });
+        const iterator = iterateTimes(topic, { start, end });
         if (!iterator) {
           return undefined;
         }
@@ -182,7 +194,7 @@ export function useTopicMessageNavigation({
         end = start;
       }
     },
-    [getBatchIterator, getMessageAtTime],
+    [iterateTimes, getMessageAtTime],
   );
 
   const discoverBoundaries = useCallback(
@@ -192,7 +204,7 @@ export function useTopicMessageNavigation({
       let last = stats?.lastMessageTime;
 
       if (!first) {
-        const iterator = getBatchIterator(topic);
+        const iterator = iterateTimes(topic);
         if (!iterator) {
           return;
         }
@@ -218,7 +230,7 @@ export function useTopicMessageNavigation({
         updateBoundariesCache(topic, { first, last });
       }
     },
-    [topicStats, endTime, getBatchIterator, findMessageAtOrBefore, updateBoundariesCache],
+    [topicStats, endTime, iterateTimes, findMessageAtOrBefore, updateBoundariesCache],
   );
 
   useEffect(() => {
@@ -277,6 +289,7 @@ export function useTopicMessageNavigation({
     return !isAtPlaybackStart && !isAtFirstTopicMessage;
   }, [currentTime, startTime, topicStats, topicName, firstMessageTime]);
 
+  const knownLast = topicStats?.get(topicName)?.lastMessageTime ?? lastMessageTime;
   const findNextMessage = useCallback(
     async (
       signal: AbortSignal,
@@ -284,7 +297,7 @@ export function useTopicMessageNavigation({
     ): Promise<{ targetTime: Time; isLastMessage: boolean } | undefined> => {
       // OPTIMIZATION: Seek directly to currentTime instead of iterating from beginning
       // This is O(1) for indexed MCAP files vs O(n) for full iteration
-      const iterator = getBatchIterator(topicName, { start: current });
+      const iterator = iterateTimes(topicName, { start: current });
       if (!iterator) {
         return undefined;
       }
@@ -311,6 +324,10 @@ export function useTopicMessageNavigation({
         }
 
         targetTime = result.msgEvent.receiveTime;
+        if (knownLast) {
+          // The last message is known, so there is no need to read one more to find out.
+          return { targetTime, isLastMessage: compare(targetTime, knownLast) >= 0 };
+        }
       }
 
       if (!targetTime) {
@@ -319,7 +336,7 @@ export function useTopicMessageNavigation({
 
       return { targetTime, isLastMessage: !foundMessageAfterTarget };
     },
-    [getBatchIterator, topicName],
+    [iterateTimes, topicName, knownLast],
   );
 
   const handleNextMessage = useCallback(async () => {

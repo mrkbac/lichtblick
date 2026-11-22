@@ -37,6 +37,8 @@ type MessagePipelineMockData = {
   messages?: Time[];
   /** When true, getMessageAtTime answers from `messages`; otherwise it resolves undefined (unsupported). */
   supportsMessageAtTime?: boolean;
+  /** When true, the player offers a payload-free inspection iterator over `messages`. */
+  supportsInspection?: boolean;
   customIterator?: () => AsyncIterableIterator<Readonly<IteratorResult>>;
 };
 
@@ -123,6 +125,7 @@ function setup(options: SetupOptions = {}) {
     seekPlayback = vi.fn(),
     messages = [],
     supportsMessageAtTime = false,
+    supportsInspection = false,
     customIterator,
   } = pipelineData;
 
@@ -134,6 +137,14 @@ function setup(options: SetupOptions = {}) {
           consumption.yielded++;
         }),
       );
+  const inspect = createMockBatchIterator(messages, topicName, () => {
+    consumption.yielded++;
+  });
+  const getInspectionIterator = supportsInspection
+    ? vi.fn((topics: readonly string[], opts?: { start?: Time; end?: Time }) =>
+        inspect(topics[0]!, opts),
+      )
+    : undefined;
   const getMessageAtTime = vi.fn(async (topic: string, time: Time) => {
     if (!supportsMessageAtTime) {
       return undefined;
@@ -157,6 +168,7 @@ function setup(options: SetupOptions = {}) {
       pausePlayback,
       seekPlayback,
       getBatchIterator,
+      getInspectionIterator,
       getMessageAtTime,
     }),
   );
@@ -176,6 +188,7 @@ function setup(options: SetupOptions = {}) {
     seekPlayback,
     getBatchIterator,
     getMessageAtTime,
+    getInspectionIterator,
     consumption,
   };
 }
@@ -500,6 +513,67 @@ describe("useTopicMessageNavigation", () => {
       // Then
       expect(pausePlayback).not.toHaveBeenCalled();
       expect(seekPlayback).not.toHaveBeenCalled();
+    });
+
+    it("reads only the next message once the last message time is known", async () => {
+      // Given
+      const messages: Time[] = [1, 2, 3, 4].map((sec) => ({ sec, nsec: 0 }));
+      const topicName = `/${BasicBuilder.string()}`;
+
+      const { result, seekPlayback, consumption } = setup({
+        topicName,
+        selected: true,
+        pipelineData: {
+          currentTime: messages[0],
+          // Stats know both ends, so boundary discovery reads nothing
+          topicStats: new Map([
+            [
+              topicName,
+              { numMessages: 4, firstMessageTime: messages[0], lastMessageTime: messages[3] },
+            ],
+          ]),
+          messages,
+        },
+      });
+
+      // When
+      await act(async () => {
+        await result.current.handleNextMessage();
+      });
+
+      // Then - the message at currentTime is skipped, then exactly one is taken
+      expect(seekPlayback).toHaveBeenCalledWith(messages[1]);
+      expect(consumption.yielded).toBe(2);
+    });
+
+    it("reads times through the payload-free inspection iterator when the player has one", async () => {
+      // Given
+      const t1: Time = { sec: 1, nsec: 0 };
+      const t2: Time = { sec: 2, nsec: 0 };
+      const topicName = `/${BasicBuilder.string()}`;
+
+      const { result, seekPlayback, getBatchIterator, getInspectionIterator } = setup({
+        topicName,
+        selected: true,
+        pipelineData: {
+          currentTime: t1,
+          topicStats: new Map([
+            [topicName, { numMessages: 2, firstMessageTime: t1, lastMessageTime: t2 }],
+          ]),
+          messages: [t1, t2],
+          supportsInspection: true,
+        },
+      });
+
+      // When
+      await act(async () => {
+        await result.current.handleNextMessage();
+      });
+
+      // Then
+      expect(seekPlayback).toHaveBeenCalledWith(t2);
+      expect(getInspectionIterator).toHaveBeenCalledWith([topicName], { start: t1 });
+      expect(getBatchIterator).not.toHaveBeenCalled();
     });
   });
 
