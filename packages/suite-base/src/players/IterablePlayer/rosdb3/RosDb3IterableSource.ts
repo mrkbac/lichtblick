@@ -26,6 +26,9 @@ import {
 } from "../IIterableSource";
 import { BlockCachedFile } from "./BlockCachedFile";
 
+/** Backfill rows read between yields to the event loop */
+const BACKFILL_YIELD_ROWS = 256;
+
 function dataTypeToFullName(dataType: string): string {
   const parts = dataType.split("/");
   if (parts.length === 2) {
@@ -195,6 +198,7 @@ export class RosDb3IterableSource implements ISerializedIterableSource {
     // every topic has a message or the recording's start is reached
     const latest = new Map<string, MessageEvent<Uint8Array>>();
     let windowEnd = addTime(time, { sec: 0, nsec: 1 });
+    let rows = 0;
     for (let windowSec = 1; compare(windowEnd, this.#start) > 0; windowSec *= 2) {
       const missing = [...topics.keys()].filter((topic) => !latest.has(topic));
       if (missing.length === 0 || abortSignal?.aborted === true) {
@@ -208,6 +212,11 @@ export class RosDb3IterableSource implements ISerializedIterableSource {
         topics: missing,
         rawMessages: true,
       })) {
+        // sql.js reads synchronously: let the worker take a superseding seek's abort now and then
+        if (++rows % BACKFILL_YIELD_ROWS === 0) {
+          await new Promise((resolve) => setTimeout(resolve, 0));
+        }
+        // Leaving the loop frees the window's statement
         abortSignal?.throwIfAborted();
         const prev = latest.get(msg.topic.name);
         if (!prev || compare(msg.timestamp, prev.receiveTime) >= 0) {

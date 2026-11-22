@@ -1,5 +1,5 @@
 diff --git a/dist/SqliteSqljs.js b/dist/SqliteSqljs.js
-index c7e424e49f519e40f15629d272c563077f3f5222..5b53b1d0c853e99323102e6bc333517255f9c6db 100644
+index c7e424e49f519e40f15629d272c563077f3f5222..ae45e08c192474c7fb0c173fde4f0697d47792b1 100644
 --- a/dist/SqliteSqljs.js
 +++ b/dist/SqliteSqljs.js
 @@ -143,7 +143,10 @@ class SqliteSqljs {
@@ -14,3 +14,29 @@ index c7e424e49f519e40f15629d272c563077f3f5222..5b53b1d0c853e99323102e6bc3335172
          const [minNsec, maxNsec] = res;
          return [(0, rostime_1.fromNanoSec)(BigInt(minNsec ?? 0n)), (0, rostime_1.fromNanoSec)(BigInt(maxNsec ?? 0n))];
      }
+@@ -175,9 +178,13 @@ class SqlJsMessageRowIterator {
+         return this;
+     }
+     next() {
+-        if (!this.statement.step()) {
++        if (this.freed === true) {
+             return { value: undefined, done: true };
+         }
++        if (!this.statement.step()) {
++            // Free the statement once its rows run out, not only when the reader stops early
++            return this.return();
++        }
+         const [topic_id, timestamp, data] = this.statement.get();
+         return {
+             value: { topic_id: BigInt(topic_id), timestamp: BigInt(timestamp), data },
+@@ -185,6 +192,10 @@ class SqlJsMessageRowIterator {
+         };
+     }
+     return() {
++        if (this.freed === true) {
++            return { value: undefined, done: true };
++        }
++        this.freed = true;
+         this.statement.freemem();
+         this.statement.free();
+         return { value: undefined, done: true };

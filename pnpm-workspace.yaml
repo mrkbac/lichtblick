@@ -5,38 +5,39 @@ packages:
   - web
   - benchmark
 
-# Dependencies are pinned to exact versions; `pnpm add` should keep doing that.
-savePrefix: ""
-# Don't install missing peers: the default would pull in webpack (we build with rspack) and
-# electron-builder's optional Squirrel.Windows target.
-autoInstallPeers: false
-
-overrides:
-  # monaco-editor pins a vulnerable dompurify (GHSA-cg2g-xh64-v4q7, GHSA-mrv2-3pqr-j5jr).
-  "dompurify@<3.4.17": 3.4.17
-  # @actions/tool-cache 2.x pulls undici 5 (several high advisories, e.g. GHSA-2m5v-pch6-74hx).
-  "undici@<6.29.1": 6.29.1
-  # Bundle one copy of each instead of two (both copies shipped in the web build):
-  # omgidl-serialization pins cdr 3.5.0, rosbag2 asks for schemas ^1, utif for pako ^1.
-  "@foxglove/omgidl-serialization>@foxglove/cdr": 3.5.1
-  "@foxglove/rosbag2>@foxglove/schemas": 2.3.1
-  "utif>pako": ^2.2.0
-
 auditConfig:
   ignoreGhsas:
     # picomatch ReDoS, no patched release (<= 4.0.7 is every version). Only build tooling uses it
     # (electron-builder, Storybook docgen) with our own glob patterns. Drop once picomatch ships a fix.
     - GHSA-fc5q-39xc-vjpf
+# Don't install missing peers: the default would pull in webpack (we build with rspack) and
+# electron-builder's optional Squirrel.Windows target.
+autoInstallPeers: false
 
 # esbuild (only used by Storybook) works without its postinstall check; listing it silences the
 # "ignored build scripts" warning.
 ignoredBuiltDependencies:
   - esbuild
 
+overrides:
+  # monaco-editor pins a vulnerable dompurify (GHSA-cg2g-xh64-v4q7, GHSA-mrv2-3pqr-j5jr).
+  # Bundle one copy of each instead of two (both copies shipped in the web build):
+  # omgidl-serialization pins cdr 3.5.0, rosbag2 asks for schemas ^1, utif for pako ^1.
+  "@foxglove/omgidl-serialization>@foxglove/cdr": 3.5.1
+  "@foxglove/rosbag2>@foxglove/schemas": 2.3.1
+  "dompurify@<3.4.17": 3.4.17
+  # @actions/tool-cache 2.x pulls undici 5 (several high advisories, e.g. GHSA-2m5v-pch6-74hx).
+  "undici@<6.29.1": 6.29.1
+  "utif>pako": ^2.2.0
+
 patchedDependencies:
   "@foxglove/rosbag2-web@5.0.0": patches/@foxglove__rosbag2-web@5.0.0.patch
+  "@foxglove/rosbag2@6.0.0": patches/@foxglove__rosbag2@6.0.0.patch
 
 # TypeScript looks for @types packages in parent node_modules folders. Hoist them to the root so
 # each workspace doesn't have to repeat the shared ones. Runtime packages stay strict (isolated).
 publicHoistPattern:
   - "@types/*"
+
+# Dependencies are pinned to exact versions; `pnpm add` should keep doing that.
+savePrefix: ""

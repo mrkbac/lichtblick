@@ -52,6 +52,7 @@ async function makeDb3(): Promise<Uint8Array<ArrayBuffer>> {
     CREATE INDEX timestamp_idx ON messages (timestamp ASC);
     INSERT INTO topics VALUES (1, '/fast', 'std_msgs/msg/String', 'cdr', '[]');
     INSERT INTO topics VALUES (2, '/rare', 'std_msgs/msg/String', 'cdr', '[]');
+    INSERT INTO topics VALUES (3, '/burst', 'std_msgs/msg/String', 'cdr', '[]');
   `);
   const insert = db.prepare("INSERT INTO messages (topic_id, timestamp, data) VALUES (?, ?, ?)");
   for (let i = 0; i <= 1000; i++) {
@@ -59,6 +60,10 @@ async function makeDb3(): Promise<Uint8Array<ArrayBuffer>> {
     insert.run([1, (ns(100) + BigInt(i) * 100_000_000n).toString(), new Uint8Array(5000).fill(i)]);
   }
   insert.run([2, ns(101).toString(), new Uint8Array([1])]);
+  // 300 rows within 0.3 s, long before the end: one backfill window reads them all
+  for (let i = 0; i < 300; i++) {
+    insert.run([3, (ns(100) + BigInt(i) * 1_000_000n).toString(), new Uint8Array([3])]);
+  }
   insert.run([2, ns(150).toString(), new Uint8Array([2])]);
   insert.free();
   return db.export() as Uint8Array<ArrayBuffer>;
@@ -122,6 +127,32 @@ describe("RosDb3IterableSource", () => {
       time: { sec: 100, nsec: 0 },
     });
     expect(none).toEqual([]);
+  });
+
+  it("stops a backfill when the seek is superseded mid-window", async () => {
+    const { source } = await open();
+    const abort = new AbortController();
+    const realSetTimeout = globalThis.setTimeout;
+    // The backfill yields every 256 rows; the superseding seek's abort lands during that yield
+    vi.spyOn(globalThis, "setTimeout").mockImplementation(((fn: () => void, ms?: number) => {
+      abort.abort();
+      return realSetTimeout(fn, ms);
+    }) as typeof setTimeout);
+    await expect(
+      source.getBackfillMessages({
+        topics: new Map([["/burst", { topic: "/burst" }]]),
+        time: { sec: 150, nsec: 0 },
+        abortSignal: abort.signal,
+      }),
+    ).rejects.toThrow();
+    vi.mocked(globalThis.setTimeout).mockRestore();
+
+    // The aborted window's statement is freed: the next backfill reads normally
+    const messages = await source.getBackfillMessages({
+      topics: new Map([["/burst", { topic: "/burst" }]]),
+      time: { sec: 150, nsec: 0 },
+    });
+    expect(messages.map((m) => m.receiveTime)).toEqual([{ sec: 100, nsec: 299_000_000 }]);
   });
 
   it("reads the file in blocks", async () => {
