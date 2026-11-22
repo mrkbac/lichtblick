@@ -179,11 +179,12 @@ export function flattenTreeData(
     const span = rangeSpan(end - start);
     for (let rangeStart = start; rangeStart < end; rangeStart += span) {
       const rangeEnd = Math.min(rangeStart + span, end);
-      const range = `${rangeStart}..${rangeEnd - 1}`;
-      const key = path ? `${range}${PATH_NAME_AGGREGATOR}${path}` : range;
+      const label = `[${rangeStart} … ${rangeEnd - 1}]`;
+      // Nested under the enclosing range, so the breadcrumb shows every range level
+      const key = rowParent ? `${label}${PATH_NAME_AGGREGATOR}${rowParent}` : label;
       nodes.push({
         key,
-        label: `[${rangeStart} … ${rangeEnd - 1}]`,
+        label,
         value: undefined,
         depth: rowDepth,
         isExpandable: true,

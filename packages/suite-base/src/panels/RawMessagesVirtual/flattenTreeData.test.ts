@@ -732,15 +732,15 @@ describe("flattenTreeData", () => {
 
       // Then
       expect(result).toHaveLength(10);
-      expect(result[0]).toMatchObject({ key: "0..99", label: "[0 … 99]", isRange: true });
-      expect(result[9]).toMatchObject({ key: "900..999", label: "[900 … 999]" });
+      expect(result[0]).toMatchObject({ key: "[0 … 99]", label: "[0 … 99]", isRange: true });
+      expect(result[9]).toMatchObject({ key: "[900 … 999]", label: "[900 … 999]" });
     });
 
     it("shows the elements of an expanded range under their usual keys", () => {
       // Given
       const values = new Float32Array(1000).map((_, i) => i);
       expandedNodes.add("values");
-      expandedNodes.add(`100..199${PATH_NAME_AGGREGATOR}values`);
+      expandedNodes.add(`[100 … 199]${PATH_NAME_AGGREGATOR}values`);
 
       // When
       const result = flattenTreeData({ values }, (key) => expandedNodes.has(key));
@@ -753,25 +753,30 @@ describe("flattenTreeData", () => {
         value: 150,
         depth: 2,
         keyPath: [150, "values"],
-        parentPath: `100..199${PATH_NAME_AGGREGATOR}values`,
+        parentPath: `[100 … 199]${PATH_NAME_AGGREGATOR}values`,
       });
     });
 
     it("nests ranges so huge arrays stay at most a hundred rows per level", () => {
       // Given
       const data = new Uint8Array(3_200_000);
-      expandedNodes.add("1000000..1999999");
+      expandedNodes.add("[1000000 … 1999999]");
+      expandedNodes.add(`[1000000 … 1009999]${PATH_NAME_AGGREGATOR}[1000000 … 1999999]`);
 
       // When
       const result = flattenTreeData(data, (key) => expandedNodes.has(key));
 
-      // Then: 4 ranges of a million, one of them split into 100 ranges of 10,000
-      expect(result).toHaveLength(104);
+      // Then: 4 ranges of a million, one split into 100 ranges of 10,000, one of those into 100
+      expect(result).toHaveLength(204);
       expect(result.map((node) => node.label).slice(0, 3)).toEqual([
         "[0 … 999999]",
         "[1000000 … 1999999]",
         "[1000000 … 1009999]",
       ]);
+      // Each range is keyed under the one enclosing it, for the breadcrumb
+      expect(result[3]?.parentPath).toBe(
+        `[1000000 … 1009999]${PATH_NAME_AGGREGATOR}[1000000 … 1999999]`,
+      );
     });
   });
 
