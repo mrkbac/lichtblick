@@ -5,7 +5,8 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { useMediaQuery } from "@mui/material";
+import { useMediaQuery, useTheme } from "@mui/material";
+import { useCallback } from "react";
 
 import { AppSetting } from "@lichtblick/suite-base/AppSetting";
 import { useAppConfigurationValue } from "@lichtblick/suite-base/hooks";
@@ -16,4 +17,13 @@ export function ColorSchemeThemeProvider({ children }: React.PropsWithChildren):
   const systemSetting = useMediaQuery("(prefers-color-scheme: dark)", { noSsr: true });
   const isDark = colorScheme === "dark" || (colorScheme === "system" && systemSetting);
   return <ThemeProvider isDark={isDark}>{children}</ThemeProvider>;
+}
+
+/** Switches the app to the opposite of the theme it shows now (also when following the system). */
+export function useToggleColorScheme(): () => void {
+  const mode = useTheme().palette.mode;
+  const [, setColorScheme] = useAppConfigurationValue<string>(AppSetting.COLOR_SCHEME);
+  return useCallback(() => {
+    void setColorScheme(mode === "dark" ? "light" : "dark");
+  }, [mode, setColorScheme]);
 }

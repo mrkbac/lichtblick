@@ -9,6 +9,8 @@
 export const general = {
   foxglove: "Foxglove",
   learnMore: "Learn more",
+  moreTabs: "Tabs that don't fit",
+  closeSidebar: "Close sidebar",
   noDefaultLayoutParameter:
     "The layout '{{layoutName}}' specified in the app parameters does not exist.",
   shareLinkCopied: "Link copied",

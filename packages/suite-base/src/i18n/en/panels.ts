@@ -45,9 +45,8 @@ export const panels = {
   ROSDiagnosticSummaryDescription: "Display a summary of all ROS DiagnosticArray messages.",
   stateTransitions: "State Transitions",
   stateTransitionsDescription: "Track when values change over time.",
-  studioPlaybackPerformance: "Studio - Playback Performance",
-  studioPlaybackPerformanceDescription:
-    "Display playback and data-streaming performance statistics.",
+  playbackPerformance: "Playback Performance",
+  playbackPerformanceDescription: "Display playback and data-streaming performance statistics.",
   stack: "Stack",
   stackDescription: "Scroll through panels stacked vertically, side by side, or in a grid.",
   tab: "Tab",

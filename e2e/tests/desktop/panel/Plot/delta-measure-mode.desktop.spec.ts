@@ -19,7 +19,9 @@ const openPlotWithSeries = async (
   await sidebar.openPanelSettingsTab();
   await mainWindow.getByText("Plot", { exact: true }).nth(0).click();
   await mainWindow.getByTestId("add-series").click();
-  await mainWindow.getByPlaceholder("/some/topic.msgs[0].field").fill(SERIES_PATH);
+  const seriesInput = mainWindow.getByPlaceholder("Field, or a message to add all its fields");
+  await seriesInput.fill(SERIES_PATH);
+  await seriesInput.press("Enter");
   await expect(mainWindow.getByTestId("plot-legend-row-path-label")).toHaveText(SERIES_PATH);
 };
 

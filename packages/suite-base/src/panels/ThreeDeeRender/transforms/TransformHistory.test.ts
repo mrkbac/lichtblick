@@ -80,4 +80,44 @@ describe("TransformHistory", () => {
     history.set(5n, at(2), 30n);
     expect(history.receivedCount(25n)).toBe(0);
   });
+
+  it("finds the same index as a linear scan for steady and irregular rates", () => {
+    let seed = 1;
+    const random = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+    for (const irregular of [false, true]) {
+      const history = new TransformHistory();
+      const times: bigint[] = [];
+      let t = 1000n;
+      for (let i = 0; i < 500; i++) {
+        t += irregular ? BigInt(1 + Math.floor(random() ** 4 * 10_000)) : 10n;
+        times.push(t);
+        history.set(t, at(i));
+      }
+      for (let q = 0n; q < t + 20n; q += irregular ? 7n : 3n) {
+        const idx = times.findIndex((time) => time >= q);
+        const expected = idx === -1 ? ~times.length : times[idx] === q ? idx : ~idx;
+        expect(history.binarySearch(q)).toBe(expected);
+      }
+    }
+  });
+
+  it("releases storage after thinning and pruning", () => {
+    const history = new TransformHistory();
+    for (let t = 0; t < 1000; t++) {
+      history.set(BigInt(t), at(t));
+    }
+    history.decimate();
+    history.decimate();
+    expect(history.capacity()).toBeLessThan(2 * history.size());
+    history.removeFirst(history.size() - 10);
+    expect(history.capacity()).toBeLessThan(2 * history.size());
+    // Pruned from the front and refilled, it compacts instead of growing
+    for (let t = 1000; t < 5000; t++) {
+      history.set(BigInt(t), at(t));
+      history.removeOlderThan(100);
+    }
+    expect(history.capacity()).toBeLessThan(2 * history.size());
+    expect(history.timeAt(history.size() - 1)).toBe(4999n);
+    expect(history.timeAt(0)).toBeLessThanOrEqual(4899n);
+  });
 });

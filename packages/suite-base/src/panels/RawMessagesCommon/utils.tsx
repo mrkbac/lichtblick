@@ -54,6 +54,64 @@ export function isNodeExpanded(
   return expansion[key] === NodeState.Expanded;
 }
 
+const RANGE_ID = /^@(\d+)\+(\d+)$/;
+
+/**
+ * Key of an index range (elements `start` to `start + span - 1`) of an array, under `parent`: the
+ * array's key or the enclosing range's. Built from start and span, not the array length, so it
+ * stays the same when the length changes.
+ */
+export function rangeKey(start: number, span: number, parent: string): string {
+  const id = `@${start}+${span}`;
+  return parent ? `${id}${PATH_NAME_AGGREGATOR}${parent}` : id;
+}
+
+/** For a range key: the elements it covers and the key of their array. */
+export function parseRangeKey(
+  key: string,
+): { start: number; end: number; arrayPath: string } | undefined {
+  const parts = key.split(PATH_NAME_AGGREGATOR);
+  const match = RANGE_ID.exec(parts[0]!);
+  if (!match) {
+    return undefined;
+  }
+  let arrayStart = 1;
+  while (arrayStart < parts.length && RANGE_ID.test(parts[arrayStart]!)) {
+    arrayStart++;
+  }
+  const start = Number(match[1]);
+  return {
+    start,
+    end: start + Number(match[2]),
+    arrayPath: parts.slice(arrayStart).join(PATH_NAME_AGGREGATOR),
+  };
+}
+
+/**
+ * Whether `path` is in the subtree of node `key`. Keys are child-first ("child~parent"); elements
+ * under a range keep their array's keys ("150~values"), so a range owns them by index.
+ */
+function isDescendantKey(path: string, key: string): boolean {
+  if (path.endsWith(`${PATH_NAME_AGGREGATOR}${key}`)) {
+    return true;
+  }
+  const range = parseRangeKey(key);
+  if (!range) {
+    return false;
+  }
+  const parts = path.split(PATH_NAME_AGGREGATOR);
+  const arrayDepth =
+    range.arrayPath === "" ? 0 : range.arrayPath.split(PATH_NAME_AGGREGATOR).length;
+  if (parts.length <= arrayDepth) {
+    return false;
+  }
+  if (arrayDepth > 0 && parts.slice(-arrayDepth).join(PATH_NAME_AGGREGATOR) !== range.arrayPath) {
+    return false;
+  }
+  const index = parts[parts.length - arrayDepth - 1]!;
+  return /^\d+$/.test(index) && Number(index) >= range.start && Number(index) < range.end;
+}
+
 /**
  * Flip the shown state of node `key`. "all" and "none" first become an explicit map (using
  * `paths`, all known node keys), so the rest of the tree keeps its current state.
@@ -74,9 +132,8 @@ export function toggleNodeExpansion(
   next[key] = shown ? NodeState.Collapsed : NodeState.Expanded;
   if (shown) {
     // Collapsing hides the subtree; forget its descendants so re-expanding starts compact.
-    // Keys are child-first ("child~parent"), so descendants end with "~key".
     for (const path of Object.keys(next)) {
-      if (path.endsWith(`${PATH_NAME_AGGREGATOR}${key}`)) {
+      if (isDescendantKey(path, key)) {
         delete next[path];
       }
     }

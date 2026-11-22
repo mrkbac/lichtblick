@@ -13,6 +13,7 @@ import { useEffect } from "react";
 import type { Mock } from "vitest";
 
 import { Condvar } from "@lichtblick/den/async";
+import { PanelRemounter } from "@lichtblick/suite-base/components/PanelRemounter";
 import {
   CurrentLayoutActions,
   LayoutData,
@@ -34,6 +35,7 @@ import {
   FAVORITES_TIMEOUT_MS,
   MAX_SUPPORTED_LAYOUT_VERSION,
 } from "@lichtblick/suite-base/providers/CurrentLayoutProvider/constants";
+import { PanelStateContextProvider } from "@lichtblick/suite-base/providers/PanelStateContextProvider";
 import { ILayoutManager, LayoutFavorites } from "@lichtblick/suite-base/services/ILayoutManager";
 import {
   deleteLayoutHistory,
@@ -110,10 +112,13 @@ function renderTest({
   mockLayoutManager,
   mockUserProfile,
   mockAppParameters = {},
+  siblings,
 }: {
   mockLayoutManager: ILayoutManager;
   mockUserProfile: UserProfileStorage;
   mockAppParameters?: Record<string, string>;
+  /** Rendered next to the hook, inside the provider */
+  siblings?: React.ReactNode;
 }) {
   const childMounted = new Condvar();
   const childMountedWait = childMounted.wait();
@@ -142,7 +147,10 @@ function renderTest({
             <SnackbarProvider>
               <LayoutManagerContext.Provider value={mockLayoutManager}>
                 <UserProfileStorageContext.Provider value={mockUserProfile}>
-                  <CurrentLayoutProvider loaders={[]}>{children}</CurrentLayoutProvider>
+                  <CurrentLayoutProvider loaders={[]}>
+                    {children}
+                    {siblings}
+                  </CurrentLayoutProvider>
                 </UserProfileStorageContext.Provider>
               </LayoutManagerContext.Provider>
             </SnackbarProvider>
@@ -220,6 +228,7 @@ describe("CurrentLayoutProvider", () => {
           id: "example",
           data: expectedState,
           name: "Example layout",
+          externalEdit: true,
         },
       });
     });
@@ -364,6 +373,133 @@ describe("CurrentLayoutProvider", () => {
       result.current.actions.redoLayoutChange();
     });
     expect(config()).toEqual({ "ExamplePanel!1": { foo: "changed" } });
+  });
+
+  it("remounts a panel whose config undo or redo replaces, but not on its own saves", async () => {
+    mockLayoutManager.getLayouts.mockImplementation(async () => [
+      {
+        id: "example",
+        name: "Test layout",
+        data: { data: TEST_LAYOUT },
+        permission: "CREATOR_WRITE",
+      },
+    ]);
+    mockLayoutManager.getLayout.mockResolvedValue({
+      id: "example",
+      name: "Test layout",
+      baseline: { data: TEST_LAYOUT, updatedAt: new Date(10).toISOString() },
+    });
+    mockLayoutManager.updateLayout.mockImplementation(async () => ({
+      id: "example",
+      name: "Test layout",
+      baseline: { data: TEST_LAYOUT, updatedAt: new Date(10).toISOString() },
+    }));
+    mockUserProfile.getUserProfile.mockResolvedValue({ currentLayoutId: "example" });
+    let mounts = 0;
+    // Like a panel that reads its config only on mount (3D, extension panels, Raw Messages).
+    function ReadsConfigOnMount() {
+      useEffect(() => {
+        mounts++;
+      }, []);
+      return <></>;
+    }
+
+    const { result } = renderTest({
+      mockLayoutManager,
+      mockUserProfile,
+      siblings: (
+        <PanelStateContextProvider>
+          <PanelRemounter id="ExamplePanel!1">
+            <ReadsConfigOnMount />
+          </PanelRemounter>
+        </PanelStateContextProvider>
+      ),
+    });
+    await act(async () => {
+      await result.current.childMounted;
+    });
+    await waitFor(() => {
+      expect(result.current.layoutState.selectedLayout?.loading).toBe(false);
+    });
+    const save = (foo: string) => {
+      act(() => {
+        result.current.actions.savePanelConfigs({
+          configs: [{ id: "ExamplePanel!1", config: { foo } }],
+        });
+      });
+    };
+    save("initial");
+    save("changed");
+    expect(mounts).toBe(1);
+
+    act(() => {
+      result.current.actions.undoLayoutChange();
+    });
+    expect(mounts).toBe(2);
+    act(() => {
+      result.current.actions.redoLayoutChange();
+    });
+    expect(mounts).toBe(3);
+    save("again");
+    expect(mounts).toBe(3);
+  });
+
+  it("doesn't remount a panel that undo removes from the layout", async () => {
+    mockLayoutManager.getLayouts.mockImplementation(async () => [
+      {
+        id: "example",
+        name: "Test layout",
+        data: { data: TEST_LAYOUT },
+        permission: "CREATOR_WRITE",
+      },
+    ]);
+    mockLayoutManager.getLayout.mockResolvedValue({
+      id: "example",
+      name: "Test layout",
+      baseline: { data: TEST_LAYOUT, updatedAt: new Date(10).toISOString() },
+    });
+    mockLayoutManager.updateLayout.mockImplementation(async () => ({
+      id: "example",
+      name: "Test layout",
+      baseline: { data: TEST_LAYOUT, updatedAt: new Date(10).toISOString() },
+    }));
+    mockUserProfile.getUserProfile.mockResolvedValue({ currentLayoutId: "example" });
+    let mounts = 0;
+    function ReadsConfigOnMount() {
+      useEffect(() => {
+        mounts++;
+      }, []);
+      return <></>;
+    }
+
+    const { result } = renderTest({
+      mockLayoutManager,
+      mockUserProfile,
+      siblings: (
+        <PanelStateContextProvider>
+          <PanelRemounter id="ExamplePanel!2">
+            <ReadsConfigOnMount />
+          </PanelRemounter>
+        </PanelStateContextProvider>
+      ),
+    });
+    await act(async () => {
+      await result.current.childMounted;
+    });
+    await waitFor(() => {
+      expect(result.current.layoutState.selectedLayout?.loading).toBe(false);
+    });
+    act(() => {
+      result.current.actions.addPanel({ id: "ExamplePanel!2", config: { foo: "added" } });
+    });
+    act(() => {
+      result.current.actions.undoLayoutChange();
+    });
+
+    expect(result.current.layoutState.selectedLayout?.data?.configById["ExamplePanel!2"]).toBe(
+      undefined,
+    );
+    expect(mounts).toBe(1);
   });
 
   it("continues the selected layout's saved history", async () => {

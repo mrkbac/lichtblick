@@ -116,7 +116,7 @@ export default function Start(): React.JSX.Element {
       (recent): CatalogRecording => ({
         ...catalogMatch(recent, catalogByName),
         id: recent.id,
-        name: splitRecentTitle(recent.title).primary,
+        name: recent.name ?? splitRecentTitle(recent.title).primary,
         source: { type: "remote-file", url: recent.title },
       }),
     );
@@ -141,7 +141,9 @@ export default function Start(): React.JSX.Element {
     !topRecent && showCatalog && query.trim() !== ""
       ? filterRecordings(folder.recordings, query)[0]
       : undefined;
-  const topMatch = topRecent ? splitRecentTitle(topRecent.title).primary : topRecording?.name;
+  const topMatch = topRecent
+    ? (topRecent.name ?? splitRecentTitle(topRecent.title).primary)
+    : topRecording?.name;
   const openTopMatch = () => {
     if (topRecent) {
       selectRecent(topRecent.id);

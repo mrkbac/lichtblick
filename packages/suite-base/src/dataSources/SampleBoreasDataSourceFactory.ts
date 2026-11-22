@@ -16,6 +16,7 @@ import {
   SAMPLE_BOREAS_DATA_SOURCE_URL,
 } from "@lichtblick/suite-base/dataSources/constants";
 import { IterablePlayer } from "@lichtblick/suite-base/players/IterablePlayer";
+import { createMcapSourceWorker } from "@lichtblick/suite-base/players/IterablePlayer/Mcap/createMcapSourceWorker";
 import { WorkerSerializedIterableSource } from "@lichtblick/suite-base/players/IterablePlayer/WorkerIterableSource";
 import { expandVideoSeekBackfill } from "@lichtblick/suite-base/players/IterablePlayer/videoSeekBackfill";
 
@@ -37,14 +38,7 @@ class SampleBoreasDataSourceFactory implements IDataSourceFactory {
     const bagUrl = SAMPLE_BOREAS_DATA_SOURCE_URL;
 
     const source = new WorkerSerializedIterableSource({
-      initWorker: () => {
-        return new Worker(
-          new URL(
-            "@lichtblick/suite-base/players/IterablePlayer/Mcap/McapIterableSourceWorker.worker",
-            import.meta.url,
-          ),
-        );
-      },
+      initWorker: createMcapSourceWorker,
       initArgs: { url: bagUrl },
     });
 
