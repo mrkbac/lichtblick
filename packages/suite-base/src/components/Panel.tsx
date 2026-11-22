@@ -45,6 +45,7 @@ import { MessagePathDropConfig } from "@lichtblick/suite-base/components/PanelEx
 import PanelLogs from "@lichtblick/suite-base/components/PanelLogs";
 import { PanelOverlay, PanelOverlayProps } from "@lichtblick/suite-base/components/PanelOverlay";
 import { PanelRoot } from "@lichtblick/suite-base/components/PanelRoot";
+import { PanelPlayerState } from "@lichtblick/suite-base/components/PlayerStatus/PanelPlayerState";
 import {
   loadPanelLogsHeight,
   savePanelLogsHeight,
@@ -707,6 +708,8 @@ export default function Panel<
                 >
                   {panelBody}
                 </PanelErrorBoundary>
+                {/* Containers hold panels that show it themselves */}
+                {!isContainerPanel(childId) && <PanelPlayerState />}
                 {process.env.NODE_ENV !== "production" && (
                   <div className={classes.perfInfo} ref={perfInfo} />
                 )}
