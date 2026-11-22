@@ -48,10 +48,14 @@ describe("UpdateIndicator", () => {
     const reload = vi.fn();
     vi.spyOn(window, "location", "get").mockReturnValue({ reload } as unknown as Location);
     const waiting = fakeWorker();
-    mockRegistration({ active: fakeWorker(), waiting });
+    const registration: { active: unknown; waiting?: unknown } = { active: fakeWorker(), waiting };
+    mockRegistration(registration);
     renderIndicator();
     expect((await screen.findByTestId("update-indicator")).dataset.updateKind).toBe("waiting");
 
+    // another window activated it: nothing waits any more
+    waiting.state = "activated";
+    registration.waiting = undefined;
     act(() => {
       navigator.serviceWorker.dispatchEvent(new Event("controllerchange"));
     });
@@ -244,6 +248,29 @@ describe("UpdateIndicator", () => {
     });
     (console.warn as Mock).mockClear();
     unregister();
+  });
+
+  it("updates a stale window to a newer waiting version, not the intermediate one", async () => {
+    const reload = vi.fn();
+    vi.spyOn(window, "location", "get").mockReturnValue({ reload } as unknown as Location);
+    const registration: { active: unknown; waiting?: unknown } = { active: fakeWorker() };
+    mockRegistration(registration);
+    renderIndicator();
+    act(() => {
+      navigator.serviceWorker.dispatchEvent(new Event("controllerchange"));
+    });
+    const button = screen.getByTestId("update-indicator");
+    expect(button.dataset.updateKind).toBe("activated");
+    // a newer deploy is waiting by the time the user clicks
+    const newer = fakeWorker();
+    registration.waiting = newer;
+
+    fireEvent.click(button);
+    await waitFor(() => {
+      expect(newer.postMessage).toHaveBeenCalledWith({ type: "SKIP_WAITING" });
+    });
+    expect(reload).not.toHaveBeenCalled();
+    vi.restoreAllMocks();
   });
 
   it("stays hidden on the very first install", async () => {

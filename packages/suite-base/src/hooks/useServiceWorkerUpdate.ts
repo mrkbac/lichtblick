@@ -214,11 +214,11 @@ function isMissingAssetMessage(data: unknown): data is MissingAssetMessage {
 /**
  * A window left on an older build keeps running until the user updates it, but a file it loads
  * later (a lazy chunk, a worker, a wasm module, a fetched asset) may be gone from the host. The
- * service worker sees every such request and reports a missing file: to the window that asked
- * (`direct`), or, when a worker asked, to every window (it can't tell which window owns the
- * worker). Switch to the latest version then (the session is saved first). A broadcast switches
- * every window known to be stale, not only the one whose worker asked; a window on the current
- * build is never interrupted.
+ * service worker sees every such request and reports a missing file to the window that asked, or
+ * that created the worker that asked (`direct`; sw-worker-owners.js). Switch to the latest version
+ * then (the session is saved first). Only when it can't tell the owner (the idle service worker
+ * forgot it) does it report to every window, and then every window known to be stale switches; a
+ * window on the current build is never interrupted.
  * The script `error` listener in suite-web's index.tsx covers pages without a service worker.
  */
 export function recoverFromMissingAssets(): void {
@@ -321,49 +321,55 @@ export function useServiceWorkerUpdate(): ServiceWorkerUpdate | undefined {
     };
   }, []);
 
-  if (activatedElsewhere) {
+  // A newer version may be waiting even in a window that another window already updated:
+  // updating applies the newest one, so it never lands on the intermediate build
+  if (waiting) {
     return {
-      kind: "activated",
+      kind: "waiting",
       update: () => {
-        if (updateInFlight) {
-          return;
-        }
-        updateInFlight = true;
-        void saveSessionBeforeReload().then(reloadPage);
+        startUpdate(waiting);
       },
     };
   }
-  return waiting
+  return activatedElsewhere
     ? {
-        kind: "waiting",
+        kind: "activated",
         update: () => {
-          if (updateInFlight) {
-            return;
-          }
-          updateInFlight = true;
-          void saveSessionBeforeReload()
-            .then(async () => {
-              let worker: ServiceWorker | null | undefined = waiting;
-              // A newer deploy may have replaced it during the save: update to that one instead
-              if (worker.state === "redundant") {
-                worker = (await navigator.serviceWorker.getRegistration())?.waiting;
-              }
-              // Another window may have activated it during the save: it no longer waits, and
-              // SKIP_WAITING would change nothing, so no controllerchange would reload this one
-              if (worker?.state === "installed") {
-                applyServiceWorkerUpdate(worker);
-              } else {
-                reloadPage();
-              }
-            })
-            .catch((error: unknown) => {
-              // e.g. the registration lookup failed: let the user try again
-              log.warn("Update failed", error);
-              updateInFlight = false;
-            });
+          startUpdate(undefined);
         },
       }
     : undefined;
+}
+
+/**
+ * Saves the session, then switches this window to the newest version: activates the waiting worker
+ * (`candidate`, or whatever waits by then) or, when none waits, reloads into the active one.
+ */
+function startUpdate(candidate: ServiceWorker | undefined): void {
+  if (updateInFlight) {
+    return;
+  }
+  updateInFlight = true;
+  void saveSessionBeforeReload()
+    .then(async () => {
+      // A newer deploy may have replaced the candidate during the save, or another window
+      // activated it (SKIP_WAITING would then change nothing, so no controllerchange would reload
+      // this one): take whatever waits now
+      let worker: ServiceWorker | null | undefined = candidate;
+      if (worker?.state !== "installed") {
+        worker = (await navigator.serviceWorker.getRegistration())?.waiting;
+      }
+      if (worker?.state === "installed") {
+        applyServiceWorkerUpdate(worker);
+      } else {
+        reloadPage();
+      }
+    })
+    .catch((error: unknown) => {
+      // e.g. the registration lookup failed: let the user try again
+      log.warn("Update failed", error);
+      updateInFlight = false;
+    });
 }
 
 /** Tests only: module state outlives a test. */
