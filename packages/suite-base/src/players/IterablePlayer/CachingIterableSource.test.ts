@@ -5,7 +5,9 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { MessageEvent } from "@lichtblick/suite";
+import { compare } from "@foxglove/rostime";
+
+import { MessageEvent, Time } from "@lichtblick/suite";
 import { mockTopicSelection } from "@lichtblick/suite-base/test/mocks/mockTopicSelection";
 
 import { CachingIterableSource } from "./CachingIterableSource";
@@ -18,6 +20,63 @@ import {
 } from "./IIterableSource";
 
 const TEST_CACHE_BYTES = 600 * 1024 * 1024;
+
+/**
+ * A source with `count` messages per topic, one per topic at each second 0..count-1, that records
+ * the topics and bytes of every read
+ */
+function recordingSource(topicNames: string[], count: number) {
+  const reads: { topics: string[]; bytes: number; skimInterval?: Time }[] = [];
+  const source = new TestSource();
+  source.messageIterator = async function* (args: MessageIteratorArgs) {
+    const read = {
+      topics: [...args.topics.keys()],
+      bytes: 0,
+      ...(args.skimInterval && { skimInterval: args.skimInterval }),
+    };
+    reads.push(read);
+    for (let sec = 0; sec < count; sec++) {
+      const receiveTime = { sec, nsec: 0 };
+      if (
+        (args.start && compare(receiveTime, args.start) < 0) ||
+        (args.end && compare(receiveTime, args.end) > 0)
+      ) {
+        continue;
+      }
+      for (const topic of topicNames) {
+        if (args.topics.has(topic)) {
+          read.bytes += 100;
+          yield {
+            type: "message-event",
+            msgEvent: { topic, receiveTime, message: sec, sizeInBytes: 100, schemaName: "foo" },
+          };
+        }
+      }
+    }
+  };
+  return { source, reads };
+}
+
+function totalBytes(reads: { bytes: number }[]): number {
+  return reads.reduce((sum, read) => sum + read.bytes, 0);
+}
+
+/** Reads the iterator to the end and returns the topics of its messages */
+async function readTopics(
+  iterator: AsyncIterableIterator<Readonly<IteratorResult>>,
+  limit = Infinity,
+) {
+  const topics: string[] = [];
+  for await (const result of iterator) {
+    if (result.type === "message-event") {
+      topics.push(result.msgEvent.topic);
+    }
+    if (topics.length >= limit) {
+      break;
+    }
+  }
+  return topics;
+}
 
 class TestSource implements IIterableSource {
   public waitForUpdate?: () => Promise<Initialization | undefined>;
@@ -224,48 +283,20 @@ describe("CachingIterableSource", () => {
     }
   });
 
-  it("should purge the cache when topics change", async () => {
-    const source = new TestSource();
-    const bufferedSource = new CachingIterableSource(source, { maxTotalSize: TEST_CACHE_BYTES });
+  it("keeps the cache when topics shrink", async () => {
+    const { source, reads } = recordingSource(["a", "b"], 10);
+    const cache = new CachingIterableSource(source, { maxTotalSize: TEST_CACHE_BYTES });
+    await cache.initialize();
+    await readTopics(cache.messageIterator({ topics: mockTopicSelection("a", "b") }));
+    const size = cache.getCacheSize();
+    reads.length = 0;
 
-    await bufferedSource.initialize();
+    const topics = await readTopics(cache.messageIterator({ topics: mockTopicSelection("a") }));
 
-    source.messageIterator = async function* messageIterator(
-      _args: MessageIteratorArgs,
-    ): AsyncIterableIterator<Readonly<IteratorResult>> {
-      yield {
-        type: "message-event",
-        msgEvent: {
-          topic: "a",
-          receiveTime: { sec: 0, nsec: 1 },
-          message: undefined,
-          sizeInBytes: 0,
-          schemaName: "foo",
-        },
-      };
-    };
-
-    {
-      const messageIterator = bufferedSource.messageIterator({
-        topics: mockTopicSelection("a"),
-      });
-
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      for await (const _ of messageIterator) {
-        // no-op
-      }
-
-      expect(bufferedSource.loadedRanges()).toEqual([{ start: 0, end: 1 }]);
-    }
-
-    {
-      const messageIterator = bufferedSource.messageIterator({
-        topics: new Map(),
-      });
-
-      await messageIterator.next();
-      expect(bufferedSource.loadedRanges()).toEqual([{ start: 0, end: 0 }]);
-    }
+    expect(reads).toEqual([]);
+    expect(topics).toEqual(Array(10).fill("a"));
+    expect(cache.getCacheSize()).toBe(size);
+    expect(cache.loadedRanges()).toEqual([{ start: 0, end: 1 }]);
   });
 
   it("should yield correct messages when starting a new iterator before the the cached items", async () => {
@@ -1167,5 +1198,168 @@ describe("CachingIterableSource", () => {
     }
     expect(onChange).toHaveBeenCalledTimes(3);
     expect(bufferedSource.loadedRanges()).toEqual([{ start: 0, end: 1 }]);
+  });
+
+  describe("topic changes", () => {
+    it("reads only the added topic for cached ranges", async () => {
+      const { source, reads } = recordingSource(["a", "b"], 10);
+      const cache = new CachingIterableSource(source, { maxTotalSize: TEST_CACHE_BYTES });
+      await cache.initialize();
+      await readTopics(cache.messageIterator({ topics: mockTopicSelection("a") }));
+      reads.length = 0;
+
+      const results: IteratorResult[] = [];
+      for await (const result of cache.messageIterator({ topics: mockTopicSelection("a", "b") })) {
+        results.push(result);
+      }
+
+      // Then only b is read, a comes from the cache, merged in time order
+      expect(reads.map((read) => read.topics)).toEqual([["b"]]);
+      const events = results.flatMap((r) => (r.type === "message-event" ? [r.msgEvent] : []));
+      expect(events.map((e) => `${e.topic}${e.receiveTime.sec}`)).toEqual(
+        Array.from({ length: 10 }, (_, sec) => [`a${sec}`, `b${sec}`]).flat(),
+      );
+      expect(cache.getCacheSize()).toBe(2000);
+
+      // And both topics are cached now
+      reads.length = 0;
+      await readTopics(cache.messageIterator({ topics: mockTopicSelection("b") }));
+      expect(reads).toEqual([]);
+    });
+
+    it("reads nothing again when a topic is toggled off and on", async () => {
+      // Given 4 topics cached for the whole source
+      const { source, reads } = recordingSource(["a", "b", "c", "d"], 10);
+      const cache = new CachingIterableSource(source, { maxTotalSize: TEST_CACHE_BYTES });
+      await cache.initialize();
+      const all = mockTopicSelection("a", "b", "c", "d");
+      await readTopics(cache.messageIterator({ topics: all }));
+      reads.length = 0;
+
+      // When d is toggled off for the first half and on again
+      await readTopics(cache.messageIterator({ topics: mockTopicSelection("a", "b", "c") }), 15);
+      await readTopics(cache.messageIterator({ topics: all }));
+
+      // Then nothing is read again (before: 4000 + 4000 bytes)
+      expect(totalBytes(reads)).toBe(0);
+    });
+
+    it("keeps the cache and budget consistent when a fill is stopped early", async () => {
+      const { source, reads } = recordingSource(["a", "b"], 10);
+      const cache = new CachingIterableSource(source, { maxTotalSize: TEST_CACHE_BYTES });
+      await cache.initialize();
+      await readTopics(cache.messageIterator({ topics: mockTopicSelection("a") }));
+
+      // When the consumer stops halfway through filling b (e.g. a seek)
+      const topics = await readTopics(
+        cache.messageIterator({
+          topics: mockTopicSelection("a", "b"),
+          start: { sec: 3, nsec: 0 },
+        }),
+        5,
+      );
+      expect(topics).toEqual(["a", "b", "a", "b", "a"]);
+      // a@3..4 and b@3 are filled; b@4 was read but not stored
+      expect(cache.getCacheSize()).toBe(1000 + 100);
+
+      // Then reading everything again reads b only where it's missing, once
+      reads.length = 0;
+      const results = await readTopics(
+        cache.messageIterator({ topics: mockTopicSelection("a", "b") }),
+      );
+      expect(results).toEqual(Array(10).fill(["a", "b"]).flat());
+      expect(reads.map((read) => read.topics)).toEqual([["b"], ["b"]]);
+      expect(totalBytes(reads)).toBe(900);
+      expect(cache.getCacheSize()).toBe(2000);
+      expect(cache.loadedRanges()).toEqual([{ start: 0, end: 1 }]);
+    });
+
+    it("splits filled blocks at the block size limit", async () => {
+      const { source } = recordingSource(["a", "b"], 10);
+      const cache = new CachingIterableSource(source, {
+        maxTotalSize: TEST_CACHE_BYTES,
+        maxBlockSize: 1000,
+      });
+      await cache.initialize();
+      await readTopics(cache.messageIterator({ topics: mockTopicSelection("a") }));
+
+      await readTopics(cache.messageIterator({ topics: mockTopicSelection("a", "b") }));
+
+      expect(cache.getCacheSize()).toBe(2000);
+      expect(cache.loadedRanges()).toEqual([{ start: 0, end: 1 }]);
+      expect(await readTopics(cache.messageIterator({ topics: mockTopicSelection("b") }))).toEqual(
+        Array(10).fill("b"),
+      );
+    });
+
+    it("counts only blocks with every wanted topic as loaded", async () => {
+      const { source } = recordingSource(["a", "b"], 10);
+      const cache = new CachingIterableSource(source, { maxTotalSize: TEST_CACHE_BYTES });
+      await cache.initialize();
+      await readTopics(cache.messageIterator({ topics: mockTopicSelection("a") }));
+
+      const iterator = cache.messageIterator({ topics: mockTopicSelection("a", "b") });
+      await iterator.next();
+
+      expect(cache.loadedRanges()).toEqual([{ start: 0, end: 0 }]);
+      await iterator.return?.(undefined);
+    });
+
+    it("backfills a topic a block lacks from the source", async () => {
+      const { source } = recordingSource(["a", "b"], 10);
+      const cache = new CachingIterableSource(source, { maxTotalSize: TEST_CACHE_BYTES });
+      await cache.initialize();
+      await readTopics(cache.messageIterator({ topics: mockTopicSelection("a") }));
+      const backfill = vi.fn().mockResolvedValue([]);
+      source.getBackfillMessages = backfill;
+
+      const messages = await cache.getBackfillMessages({
+        topics: mockTopicSelection("a", "b"),
+        time: { sec: 5, nsec: 0 },
+      });
+
+      expect(messages.map((m) => m.topic)).toEqual(["a"]);
+      expect(backfill).toHaveBeenCalledWith(
+        expect.objectContaining({ topics: mockTopicSelection("b") }),
+      );
+    });
+  });
+
+  describe("skim interval changes", () => {
+    it("serves a skimmed read from full blocks without reading", async () => {
+      const { source, reads } = recordingSource(["a"], 10);
+      const cache = new CachingIterableSource(source, { maxTotalSize: TEST_CACHE_BYTES });
+      await cache.initialize();
+      await readTopics(cache.messageIterator({ topics: mockTopicSelection("a") }));
+      reads.length = 0;
+
+      const topics = await readTopics(
+        cache.messageIterator({
+          topics: mockTopicSelection("a"),
+          skimInterval: { sec: 2, nsec: 0 },
+        }),
+      );
+
+      expect(reads).toEqual([]);
+      expect(topics).toHaveLength(10);
+    });
+
+    it("reads skimmed ranges again for a full read", async () => {
+      const { source, reads } = recordingSource(["a"], 10);
+      const cache = new CachingIterableSource(source, { maxTotalSize: TEST_CACHE_BYTES });
+      await cache.initialize();
+      await readTopics(
+        cache.messageIterator({
+          topics: mockTopicSelection("a"),
+          skimInterval: { sec: 2, nsec: 0 },
+        }),
+      );
+      reads.length = 0;
+
+      await readTopics(cache.messageIterator({ topics: mockTopicSelection("a") }));
+
+      expect(reads).toEqual([{ topics: ["a"], bytes: 1000 }]);
+      expect(cache.getCacheSize()).toBe(1000);
+    });
   });
 });
