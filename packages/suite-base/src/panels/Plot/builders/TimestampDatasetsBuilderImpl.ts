@@ -21,9 +21,9 @@ import {
   SeriesItem,
   Viewport,
 } from "./IDatasetsBuilder";
+import { DataItem, PointColumns, iteratePoints, lowerBound, upperBound } from "./columns";
 import { buildDatasetStyle, isDerivedSeries } from "./utils";
 import { Dataset } from "../types";
-import { DataItem, PointColumns, iteratePoints, lowerBound, upperBound } from "./columns";
 import { AnalysisColumns, computeHistogram, computeSpectrum } from "../utils/analysis";
 import { Datum, OriginalValue } from "../utils/datum";
 
