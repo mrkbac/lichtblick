@@ -149,24 +149,37 @@ export class RemoteFileReadable {
     if (skim) {
       this.#lastPrefetchMs = Date.now();
     }
+    let batchBytes = 0;
     for (const range of ranges) {
       const start = Number(range.offset);
       const end = start + Number(range.length);
+      // Ranges already downloaded count too: a batch never pushes out its own earlier ranges
+      batchBytes += end - start;
+      if (batchBytes > PREFETCH_MAX_BYTES) {
+        break;
+      }
       if (this.#prefetched.has(start)) {
         continue;
       }
-      const data = this.#prefetchQueue
-        .runExclusive(async () => await this.#fetchRange(start, end))
-        .catch(() => undefined);
-      this.#prefetched.set(start, { start, end, data });
-      this.#prefetchedBytes += end - start;
+      // Make room before queueing, so nothing is downloaded only to be dropped
       for (const [key, oldest] of this.#prefetched) {
-        if (this.#prefetchedBytes <= PREFETCH_MAX_BYTES) {
+        if (this.#prefetchedBytes + (end - start) <= PREFETCH_MAX_BYTES) {
           break;
         }
         this.#prefetched.delete(key);
         this.#prefetchedBytes -= oldest.end - oldest.start;
       }
+      const prefetched: Prefetched = { start, end, data: Promise.resolve(undefined) };
+      prefetched.data = this.#prefetchQueue
+        .runExclusive(async () =>
+          // Dropped from the budget while it waited in the queue: don't download it
+          this.#prefetched.get(start) === prefetched
+            ? await this.#fetchRange(start, end)
+            : undefined,
+        )
+        .catch(() => undefined);
+      this.#prefetched.set(start, prefetched);
+      this.#prefetchedBytes += end - start;
     }
   }
 

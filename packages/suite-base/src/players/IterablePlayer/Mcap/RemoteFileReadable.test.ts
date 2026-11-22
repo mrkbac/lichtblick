@@ -238,6 +238,58 @@ describe("RemoteFileReadable", () => {
       expect(mockRead).toHaveBeenCalledWith(500, 5, { background: false });
     });
 
+    it("stops a batch at the byte budget instead of evicting its own ranges", async () => {
+      const fetchMock = vi
+        .fn()
+        .mockImplementation(async () => new Response(new Uint8Array(1), { status: 206 }));
+      globalThis.fetch = fetchMock;
+      const readable = new RemoteFileReadable(testUrl);
+      const mib100 = 100n * 1024n * 1024n;
+
+      readable.prefetch([
+        { offset: 0n, length: mib100 },
+        { offset: mib100, length: mib100 },
+      ]);
+      await vi.waitFor(() => {
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+      });
+      readable.prefetch([{ offset: 0n, length: mib100 }]);
+      await Promise.resolve();
+
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
+    it("doesn't download a range dropped from the budget while it was queued", async () => {
+      const pending: (() => void)[] = [];
+      const fetchMock = vi.fn().mockImplementation(
+        async () =>
+          await new Promise<Response>((resolve) => {
+            pending.push(() => {
+              resolve(new Response(new Uint8Array(1), { status: 206 }));
+            });
+          }),
+      );
+      globalThis.fetch = fetchMock;
+      const readable = new RemoteFileReadable(testUrl);
+      const mib100 = 100n * 1024n * 1024n;
+
+      // Four small downloads take every slot, so the next ranges wait in the queue
+      readable.prefetch([0n, 10n, 20n, 30n].map((offset) => ({ offset, length: 1n })));
+      await vi.waitFor(() => {
+        expect(pending).toHaveLength(4);
+      });
+      readable.prefetch([{ offset: 1000n, length: mib100 }]);
+      readable.prefetch([{ offset: 1000n + mib100, length: mib100 }]);
+      while (pending.length > 0) {
+        pending.shift()!();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      }
+
+      const ranges = fetchMock.mock.calls.map(([, init]) => (init as RequestInit).headers);
+      expect(ranges).not.toContainEqual({ range: `bytes=1000-${999n + mib100}` });
+      expect(ranges).toContainEqual({ range: `bytes=${1000n + mib100}-${999n + 2n * mib100}` });
+    });
+
     it("falls back to the cached reader when the server ignores the range", async () => {
       globalThis.fetch = vi.fn().mockResolvedValue(new Response(new Uint8Array(1024)));
       const readable = new RemoteFileReadable(testUrl);

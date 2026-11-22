@@ -490,5 +490,15 @@ describe("McapIndexedIterableSource", () => {
     expect(offsets).toEqual(expect.arrayContaining([holding(200n), holding(1500n)]));
     // Not every chunk before the backfill time
     expect(offsets.length).toBeLessThan(reader.chunkIndexes.length / 4);
+
+    // Only chunks holding a requested topic
+    prefetch.mockClear();
+    await source.getBackfillMessages({
+      topics: new Map([["slow", { topic: "slow" }]]),
+      time: { sec: 1, nsec: 500_000_000 },
+    });
+    expect(
+      (prefetch.mock.calls[0]![0] as { offset: bigint }[]).map((range) => range.offset),
+    ).toEqual([holding(200n)]);
   });
 });

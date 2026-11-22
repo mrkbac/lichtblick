@@ -715,10 +715,19 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
     const end = toNanoSec(time);
     // The topics are read one after the other; fetch each one's latest chunks (and the chunks
     // spanning `time`, which every topic's reverse read looks at first) at once up front
-    this.#prefetch?.(
-      this.#skimChunks(new Set(topics.keys()), 0n, end, end + 1n).map(chunkByteRange),
-      { skim: false },
-    );
+    if (this.#prefetch) {
+      const topicNames = new Set(topics.keys());
+      const channels = new Set<number>();
+      for (const [id, { channel }] of this.#channelInfoById) {
+        if (topicNames.has(channel.topic)) {
+          channels.add(id);
+        }
+      }
+      const chunks = this.#skimChunks(topicNames, 0n, end, end + 1n).filter((chunk) =>
+        [...chunk.messageIndexOffsets.keys()].some((id) => channels.has(id)),
+      );
+      this.#prefetch(chunks.map(chunkByteRange), { skim: false });
+    }
 
     const messages: MessageEvent<Uint8Array>[] = [];
     for (const topic of topics.keys()) {
