@@ -244,18 +244,19 @@ export class DecayPointRing extends Renderable<BaseUserData, /*TRenderer=*/ unde
   }): void {
     this.#maxPoints = maxPoints;
     while (this.#scans.length > 0 && this.#livePoints + reservePoints > maxPoints) {
-      if (this.#scans.length > 1) {
+      // Thinning can't make room next to a latest scan that alone fills the budget
+      if (this.#scans.length > 1 && reservePoints < maxPoints) {
         this.#thin();
       } else {
         this.#evictOldest({ budget: true });
       }
     }
-    // Twice the density must fit with a quarter to spare, so this doesn't undo the last thinning
-    // (which leaves the history about half full) and flip back and forth
-    const roomFor = (used: number, limit: number) => used * 2 * 4 <= limit * 3;
+    // Twice the density must fit in half the limits, so this doesn't undo the last thinning (which
+    // leaves the history at least about 3/8 full) and flip back and forth
+    const roomFor = (used: number, limit: number) => used * 4 <= limit;
     if (
       this.#stride > 1 &&
-      roomFor(this.#livePoints + reservePoints, maxPoints) &&
+      roomFor(this.#livePoints + reservePoints, Math.min(maxPoints, MAX_SET_POINTS)) &&
       roomFor(this.#scans.length, this.#limits.maxEntries)
     ) {
       this.#stride /= 2;
@@ -411,8 +412,10 @@ export class DecayPointRing extends Renderable<BaseUserData, /*TRenderer=*/ unde
         return this.#livePoints;
       }
     }
-    // At the budget: thin, then pack the live scans so the freed space is one range
-    while (this.#livePoints + count > this.#capacity && this.#scans.length > 1) {
+    // At the budget with no free range that fits: pack the live scans so the free space is one
+    // range. Packing re-uploads every point, so first thin while the history fills over 3/4 of the
+    // buffers: the next pack is then far off instead of a few scans away.
+    while (this.#scans.length > 1 && (this.#livePoints + count) * 4 > this.#capacity * 3) {
       this.#thin();
     }
     if (this.#livePoints + count > this.#capacity) {
