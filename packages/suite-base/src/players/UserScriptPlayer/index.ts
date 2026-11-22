@@ -283,9 +283,9 @@ export default class UserScriptPlayer implements Player {
   // a script may set its own alert or clear its alert
   #alertStore = new Map<string, PlayerAlert>();
 
-  // Last message per subscribed topic, to rerun an edited user script on its (possibly new) inputs.
-  // Kept only while user scripts exist; these are the messages panels and the message pipeline
-  // hold anyway, so it costs little. Pruned (see #pruneLastMessages) once nobody subscribes.
+  // Last message per delivered topic, to rerun an edited user script (the first one too) on its
+  // possibly new inputs. These are the messages panels and the message pipeline hold anyway, so it
+  // costs little; pruned like the pipeline's own cache (see #pruneLastMessages).
   #lastMessageByInputTopic = new Map<string, MessageEvent>();
   // Aliased topic name -> the topic it is aliased from. An alias and its source carry the same
   // events, so pruning treats them as one topic.
@@ -1160,11 +1160,8 @@ export default class UserScriptPlayer implements Player {
 
         this.#userScriptIdsNeedUpdate.clear();
 
-        // Only edited user scripts are rerun on these; without scripts, keep nothing.
-        if (Object.keys(state.userScripts).length > 0) {
-          for (const message of messages) {
-            this.#lastMessageByInputTopic.set(message.topic, message);
-          }
+        for (const message of messages) {
+          this.#lastMessageByInputTopic.set(message.topic, message);
         }
 
         // These are new messages generated from input messages
@@ -1274,16 +1271,12 @@ export default class UserScriptPlayer implements Player {
   }
 
   /**
-   * Without user scripts, drop every last message. With them, on a recording, drop those of topics
-   * nobody subscribes to any more (they can be large, e.g. an image), counting an alias and its
-   * source as one topic: subscribing again backfills them. Like the message pipeline, a live source
-   * keeps them, since it never sends a latched message again.
+   * On a recording, drop the last messages of topics nobody subscribes to any more (they can be
+   * large, e.g. an image), counting an alias and its source as one topic: subscribing again
+   * backfills them. Like the message pipeline, a live source keeps them, since it never sends a
+   * latched message again.
    */
   #pruneLastMessages(state: ProtectedState, subscriptions: Immutable<SubscribePayload[]>): void {
-    if (Object.keys(state.userScripts).length === 0) {
-      this.#lastMessageByInputTopic.clear();
-      return;
-    }
     if (!isRecordingSource(this.#playerState?.capabilities ?? [])) {
       return;
     }

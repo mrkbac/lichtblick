@@ -857,6 +857,33 @@ describe("UserScriptPlayer", () => {
         return { userScriptPlayer, lastOutput };
       }
 
+      it("reruns the first script of a paused recording on a topic a panel already shows", async () => {
+        const fakePlayer = new FakePlayer();
+        fakePlayer.setCapabilities([PLAYER_CAPABILITIES.playbackControl]);
+        const userScriptPlayer = new UserScriptPlayer(fakePlayer, defaultUserScriptActions);
+        const emitted: (readonly MessageEvent[])[] = [];
+        userScriptPlayer.setListener(async (state) => {
+          emitted.push(state.activeData?.messages ?? []);
+        });
+        // No scripts yet; a panel shows /np_input, so subscribing to it again backfills nothing.
+        userScriptPlayer.setSubscriptions([output, { topic: "/np_input" }]);
+        await fakePlayer.emit({
+          activeData: {
+            ...basicPlayerState,
+            isPlaying: false,
+            messages: [upstreamFirst],
+            topics: [{ name: "/np_input", schemaName: "foo" }],
+            datatypes: new Map(Object.entries({ foo: { definitions: [] } })),
+          },
+        });
+        await save(userScriptPlayer, scriptCode("v1"));
+        await save(userScriptPlayer, scriptCode("v2"));
+
+        expect(outputValues(emitted.at(-1)!.filter((m) => m.topic === output.topic))).toEqual([
+          "v2",
+        ]);
+      });
+
       it("reruns on a new input that another panel already shows", async () => {
         const { userScriptPlayer, lastOutput } = await setupPaused();
         await save(userScriptPlayer, scriptCode("v2", "/other"));
@@ -883,6 +910,8 @@ describe("UserScriptPlayer", () => {
 
       it("reruns on the source topic after switching the input away from its alias", async () => {
         const fakePlayer = new FakePlayer();
+        // A recording, so the cache is pruned: the source topic is only kept as the alias's twin.
+        fakePlayer.setCapabilities([PLAYER_CAPABILITIES.playbackControl]);
         const userScriptPlayer = new UserScriptPlayer(fakePlayer, defaultUserScriptActions);
         const emitted: (readonly MessageEvent[])[] = [];
         userScriptPlayer.setListener(async (state) => {
