@@ -5,16 +5,17 @@
 import { renderHook } from "@testing-library/react";
 
 import MockMessagePipelineProvider from "@lichtblick/suite-base/components/MessagePipeline/MockMessagePipelineProvider";
+import { PLAYER_CAPABILITIES } from "@lichtblick/suite-base/players/constants";
 import { PlayerAlert, PlayerPresence } from "@lichtblick/suite-base/players/types";
 
 import { PlayerStatusKind, shortSourceName, usePlayerStatus } from "./usePlayerStatus";
 
-const seek = () => {};
 const failed: PlayerAlert = { severity: "error", message: "Connection failed" };
 
 function statusOf(props: {
   presence: PlayerPresence;
   live?: boolean;
+  liveHistory?: boolean;
   noActiveData?: boolean;
   alerts?: PlayerAlert[];
 }): { kind: PlayerStatusKind; error?: PlayerAlert } {
@@ -23,7 +24,13 @@ function statusOf(props: {
       <MockMessagePipelineProvider
         name="ws://robot.example:8765"
         presence={props.presence}
-        seekPlayback={props.live === true ? undefined : seek}
+        capabilities={
+          props.liveHistory === true
+            ? [PLAYER_CAPABILITIES.playbackControl, PLAYER_CAPABILITIES.liveHistory]
+            : props.live === true
+              ? []
+              : [PLAYER_CAPABILITIES.playbackControl]
+        }
         noActiveData={props.noActiveData}
         alerts={props.alerts}
       >
@@ -46,6 +53,8 @@ describe("usePlayerStatus", () => {
     [{ presence: PlayerPresence.BUFFERING }, "ready"],
     [{ presence: PlayerPresence.PRESENT }, "ready"],
     [{ presence: PlayerPresence.PRESENT, live: true, noActiveData: true }, "live"],
+    // a live source with seekable history is still live
+    [{ presence: PlayerPresence.PRESENT, liveHistory: true }, "live"],
     [{ presence: PlayerPresence.RECONNECTING, live: true }, "reconnecting"],
     [{ presence: PlayerPresence.ERROR }, "failed"],
   ] as const)("%o → %s", (props, kind) => {

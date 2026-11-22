@@ -200,7 +200,7 @@ export default function Panel<
     const type = PanelComponent.panelType;
     const needsPlayer =
       !isContainerPanel(childId) &&
-      !["Notes", "GlobalVariableSliderPanel", "UserScriptEditor", "3D"].includes(type);
+      !["Notes", "GlobalVariableSliderPanel", "NodePlayground", "3D"].includes(type);
     const title = useMemo(
       () => panelCatalog.getPanelByType(type)?.title ?? "",
       [panelCatalog, type],
