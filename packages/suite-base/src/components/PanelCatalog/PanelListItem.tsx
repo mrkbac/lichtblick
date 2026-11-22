@@ -16,6 +16,7 @@ import {
   Typography,
 } from "@mui/material";
 import { useCallback, useEffect, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import { makeStyles } from "tss-react/mui";
 
 import { fuzzyPositions, HighlightChars } from "@lichtblick/suite-base/components/HighlightChars";
@@ -43,6 +44,10 @@ const useStyles = makeStyles<void, "dragIcon">()((theme, _params, classes) => {
       minWidth: theme.spacing(3.5),
       color: theme.palette.text.secondary,
     },
+    topicCount: {
+      marginInline: theme.spacing(1),
+      whiteSpace: "nowrap",
+    },
     highlight: {
       backgroundColor: "transparent",
       color: theme.palette.primary.main,
@@ -58,11 +63,22 @@ type Props = {
   highlighted?: boolean;
   onClick: () => void;
   onDragStart?: () => void;
+  /** How many topics of the open data the panel can show */
+  topicCount?: number;
 };
 
 export function PanelListItem(props: Props): React.JSX.Element {
-  const { searchQuery, panel, onClick, onDragStart, checked = false, highlighted = false } = props;
+  const {
+    searchQuery,
+    panel,
+    onClick,
+    onDragStart,
+    checked = false,
+    highlighted = false,
+    topicCount,
+  } = props;
   const { classes } = useStyles();
+  const { t } = useTranslation("addPanel");
   const scrollRef = useRef<HTMLDivElement>(null);
   // Dropping is handled by the panel layout, which reads the panel from the drag data.
   const handleDragStart = useCallback(
@@ -109,7 +125,8 @@ export function PanelListItem(props: Props): React.JSX.Element {
   return (
     <Tooltip
       placement="right"
-      enterDelay={500}
+      enterDelay={250}
+      enterNextDelay={0}
       leaveDelay={0}
       slots={{ transition: Fade }}
       title={
@@ -148,6 +165,11 @@ export function PanelListItem(props: Props): React.JSX.Element {
               />
             </span>
           </ListItemText>
+          {topicCount != undefined && (
+            <Typography variant="caption" color="text.secondary" className={classes.topicCount}>
+              {t("topicCount", { count: topicCount })}
+            </Typography>
+          )}
 
           <ReOrderDotsVertical16Filled className={classes.dragIcon} />
         </ListItemButton>
