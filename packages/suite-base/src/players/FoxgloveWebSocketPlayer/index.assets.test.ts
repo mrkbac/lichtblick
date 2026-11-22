@@ -120,7 +120,7 @@ describe("FoxgloveWebSocketPlayer assets", () => {
     ws.receive(fetchAssetResponse(1, new Uint8Array([1, 2, 3])));
     await expect(asset).resolves.toMatchObject({ data: new Uint8Array([1, 2, 3]) });
 
-    ws.receive(serviceCallResponse(7, 1, JSON.stringify({ ok: true })));
+    ws.receive(serviceCallResponse(7, 1, '{"ok":true}'));
     await expect(call).resolves.toEqual({ ok: true });
   });
 });
