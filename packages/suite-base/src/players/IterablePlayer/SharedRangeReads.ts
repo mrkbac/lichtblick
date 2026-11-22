@@ -6,14 +6,14 @@ import { Time } from "@foxglove/rostime";
 import { TopicSelection } from "@lichtblick/suite-base/players/types";
 import { toError } from "@lichtblick/suite-base/util/toError";
 
-import { IteratorResult } from "./IIterableSource";
+import { IteratorResult as ReadResult } from "./IIterableSource";
 
 type Range = { start?: Time; end?: Time };
 
 type ReadRange = (
   topics: TopicSelection,
   range: Range,
-) => AsyncIterableIterator<Readonly<IteratorResult>>;
+) => AsyncIterableIterator<Readonly<ReadResult>>;
 
 /** Bytes of messages one reader may have waiting before the shared read waits for it */
 const MAX_QUEUED_BYTES = 16 * 1024 * 1024;
@@ -38,7 +38,7 @@ export class SharedRangeReads {
     this.#readRange = readRange;
   }
 
-  public read(topic: string, range: Range): AsyncIterableIterator<Readonly<IteratorResult>> {
+  public read(topic: string, range: Range): AsyncIterableIterator<Readonly<ReadResult>> {
     const key = `${timeKey(range.start)}-${timeKey(range.end)}`;
     let shared = this.#gathering.get(key);
     if (!shared) {
@@ -58,9 +58,9 @@ function timeKey(time: Time | undefined): string {
   return time ? `${time.sec}.${time.nsec}` : "";
 }
 
-class Reader implements AsyncIterableIterator<Readonly<IteratorResult>> {
+class Reader implements AsyncIterableIterator<Readonly<ReadResult>> {
   public readonly topic: string;
-  public queue: Readonly<IteratorResult>[] = [];
+  public queue: Readonly<ReadResult>[] = [];
   public queuedBytes = 0;
   #ended = false;
   #error?: Error;
@@ -74,7 +74,7 @@ class Reader implements AsyncIterableIterator<Readonly<IteratorResult>> {
     this.#onLeave = onLeave;
   }
 
-  public push(result: Readonly<IteratorResult>): void {
+  public push(result: Readonly<ReadResult>): void {
     this.queue.push(result);
     if (result.type === "message-event") {
       this.queuedBytes += result.msgEvent.sizeInBytes;
@@ -88,7 +88,7 @@ class Reader implements AsyncIterableIterator<Readonly<IteratorResult>> {
     this.#wake?.();
   }
 
-  public async next(): Promise<IteratorResult<Readonly<IteratorResult>>> {
+  public async next(): Promise<IteratorResult<Readonly<ReadResult>>> {
     while (this.queue.length === 0 && !this.#ended) {
       await new Promise<void>((resolve) => {
         this.#wake = resolve;
@@ -109,7 +109,7 @@ class Reader implements AsyncIterableIterator<Readonly<IteratorResult>> {
     return { done: true, value: undefined };
   }
 
-  public async return(): Promise<IteratorResult<Readonly<IteratorResult>>> {
+  public async return(): Promise<IteratorResult<Readonly<ReadResult>>> {
     this.#ended = true;
     this.queue = [];
     this.queuedBytes = 0;
