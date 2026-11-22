@@ -24,6 +24,8 @@ import { RosDatatypes } from "@lichtblick/suite-base/types/RosDatatypes";
 import type { ReadOptions } from "@lichtblick/suite-base/util/CachedFilelike.types";
 import { toError } from "@lichtblick/suite-base/util/toError";
 
+import type { PrefetchOptions } from "./RemoteFileReadable.types";
+
 const log = Logger.getLogger(__filename);
 
 // Skim reads the last 50ms of each window: enough for every fast topic (and every publisher on
@@ -76,7 +78,7 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
   #start?: Time;
   #end?: Time;
   #avgChunkDurationNs = 0n;
-  #prefetch?: (ranges: ByteRange[]) => void;
+  #prefetch?: (ranges: ByteRange[], options?: PrefetchOptions) => void;
   #recover?: RecoverReader;
   #recovering?: Promise<void>;
   #checkChunk?: CheckChunk;
@@ -107,7 +109,7 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
 
   /**
    * @param options.prefetch Fetches byte ranges ahead of time so the reader later hits a local
-   * copy. Remote sources pass it so skimming can fetch upcoming chunks in parallel.
+   * copy. Remote sources pass it so skimming and backfill can fetch the chunks they need in parallel.
    * @param options.checkChunk Checks the chunks around a read that keeps failing: a corrupt one
    * is dropped from the index (and added to `options.corruptChunks`) and reading resumes, without
    * scanning the file.
@@ -117,7 +119,7 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
   public constructor(
     reader: McapIndexedReader,
     options?: {
-      prefetch?: (ranges: ByteRange[]) => void;
+      prefetch?: (ranges: ByteRange[], options?: PrefetchOptions) => void;
       recover?: RecoverReader;
       checkChunk?: CheckChunk;
       corruptChunks?: Set<bigint>;
@@ -710,6 +712,12 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
     args: GetBackfillMessagesArgs,
   ): Promise<MessageEvent<Uint8Array>[]> {
     const { topics, time } = args;
+    const end = toNanoSec(time);
+    // The topics are read one after the other; fetch each one's latest chunks at once up front
+    this.#prefetch?.(
+      this.#skimChunks(new Set(topics.keys()), 0n, end, end + 1n).map(chunkByteRange),
+      { skim: false },
+    );
 
     const messages: MessageEvent<Uint8Array>[] = [];
     for (const topic of topics.keys()) {
@@ -719,7 +727,7 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
       for await (const message of this.#readMessages({
         // Explicit: a live reader's default lower bound is the start when it was opened
         startingAt: 0n,
-        endingAt: toNanoSec(time),
+        endingAt: end,
         topics: [topic],
         reverse: true,
       })) {

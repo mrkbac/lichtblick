@@ -11,3 +11,5 @@ export type RemoteFileReadableOptions = {
   readAheadEnabled?: boolean;
   readAheadBufferBytes?: number;
 };
+
+export type PrefetchOptions = { skim?: boolean };
