@@ -647,7 +647,11 @@ export class ImageRenderable extends Renderable<ImageUserData> {
   ): Promise<void> {
     try {
       const skipRender = options?.skipRender ?? false;
-      const result = await this.decodeImage(image, resizeWidth);
+      const result = await this.decodeImage(image, resizeWidth, skipRender);
+      if (result == undefined) {
+        // A video frame decoded only to keep the decoder's reference chain: nothing to show.
+        return;
+      }
       if (this.isDisposed() || this.#displayedImageSequenceNumber > seq) {
         // Disposed meanwhile, or a newer image is already shown: this result is never displayed.
         this.#releaseBitmap(result);
@@ -874,10 +878,16 @@ export class ImageRenderable extends Renderable<ImageUserData> {
     }
   }
 
+  /**
+   * With `skipRender`, a video frame that decodes normally only advances the decoder and returns
+   * undefined instead of a bitmap nobody would see.
+   */
   protected async decodeImage(
     image: AnyImage,
     resizeWidth?: number,
-  ): Promise<ImageBitmap | ImageData> {
+    // eslint-disable-next-line @lichtblick/no-boolean-parameters
+    skipRender = false,
+  ): Promise<ImageBitmap | ImageData | undefined> {
     if ("format" in image) {
       if (this.#codec == undefined) {
         if (isCompressedDepthFormat(image.format)) {
@@ -954,6 +964,7 @@ export class ImageRenderable extends Renderable<ImageUserData> {
           videoPlayer,
           this.#videoFirstMessageTime,
           resizeWidth,
+          { skipBitmap: skipRender },
         );
       }
     }

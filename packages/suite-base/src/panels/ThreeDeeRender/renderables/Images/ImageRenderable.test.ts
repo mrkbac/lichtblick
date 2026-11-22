@@ -941,6 +941,38 @@ describe("ImageRenderable error handling", () => {
     self.createImageBitmap = originalCreateImageBitmap;
   });
 
+  it("creates a bitmap only for the frame a decode burst ends on", async () => {
+    const renderable = new ImageRenderable(mockUserData.topic, mockRenderer, { ...mockUserData });
+    const decode = vi.fn(async (_data: Uint8Array, timestampMicros: number) =>
+      createDecodedVideoFrame(timestampMicros),
+    );
+    renderable.videoPlayer = {
+      isInitialized: vi.fn().mockReturnValue(true),
+      init: vi.fn().mockResolvedValue(undefined),
+      decode,
+      codedSize: vi.fn(),
+      resetForSeek: vi.fn(),
+      lastImageBitmap: undefined,
+      lastVideoFrame: undefined,
+    } as unknown as ImageRenderable["videoPlayer"];
+    const originalCreateImageBitmap = self.createImageBitmap;
+    const shown = new ImageBitmap();
+    const createImageBitmapSpy = vi.fn().mockResolvedValue(shown);
+    self.createImageBitmap = createImageBitmapSpy;
+
+    // e.g. a seek backfill: the keyframe and the delta frames up to the seek target, in one frame
+    renderable.setImage(createH265Frame(h265Keyframe, { sec: 0, nsec: 0 }));
+    renderable.setImage(createH265Frame(h265DeltaFrame, { sec: 0, nsec: 16666666 }));
+    renderable.setImage(createH265Frame(h265DeltaFrame, { sec: 0, nsec: 33333333 }));
+    renderable.flushPendingDecodes();
+    await renderable.settleVideoDecodes();
+
+    expect(decode).toHaveBeenCalledTimes(3);
+    expect(createImageBitmapSpy).toHaveBeenCalledTimes(1);
+    expect(renderable.getDecodedImage()).toBe(shown);
+    self.createImageBitmap = originalCreateImageBitmap;
+  });
+
   it("should replay h265 GOP when seeking to a P frame", async () => {
     const renderable = new ImageRenderable(mockUserData.topic, mockRenderer, { ...mockUserData });
     const replayFrame = createDecodedVideoFrame(33333);
