@@ -94,9 +94,9 @@ describe("TransformTree", () => {
       );
     }
     const size = tfTree.frame("b")!.transformsSize();
-    // 10 s window plus up to a quarter window of slack before the amortized trim runs.
+    // 10 s window plus up to an eighth window of slack before the amortized trim runs.
     expect(size).toBeGreaterThanOrEqual(100);
-    expect(size).toBeLessThanOrEqual(126);
+    expect(size).toBeLessThanOrEqual(113);
   });
 
   it("keeps the whole storage window of a fast live frame", () => {
@@ -127,6 +127,24 @@ describe("TransformTree", () => {
     expect(frame.transformsSize()).toBeLessThanOrEqual(100);
     expect(frame.latestTimeAtOrBefore(0n)).toBe(0n);
     expect(frame.latestTimeAtOrBefore(1000n * sec)).toBe(300n * sec);
+  });
+
+  it("keeps every live transform again once the thinned window ages out", () => {
+    const sec = BigInt(1e9);
+    const tfTree = new TransformTree(10n * sec, 100);
+    let t = 0n;
+    const add = (hz: bigint, seconds: bigint) => {
+      for (const end = t + seconds * sec; t < end; t += sec / hz) {
+        tfTree.addTransform("b", "a", t, new Transform([Number(t), 0, 0], [0, 0, 0, 1]));
+      }
+    };
+    // 20 Hz over a 10 s window is 200 transforms, twice the budget
+    add(20n, 30n);
+    expect(tfTree.decimations).toBeGreaterThan(0);
+    // The rate falls to 1 Hz: 10 transforms per window
+    add(1n, 60n);
+    expect(tfTree.decimations).toBe(0);
+    expect(tfTree.frame("b")!.latestTimeAtOrBefore(t - 2n * sec)).toBe(t - 2n * sec);
   });
 
   it("keeps the transform just before the storage window for interpolation", () => {

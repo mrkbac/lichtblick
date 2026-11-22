@@ -101,6 +101,18 @@ export class TransformTree {
     this.#sampleCount += frame.transformsSize() - sizeBefore;
     if (this.#sampleCount > this.#sampleBudget) {
       this.#decimate();
+    } else if (
+      !this.#complete &&
+      this.decimations > 0 &&
+      this.#sampleCount < this.#sampleBudget / 4
+    ) {
+      // A live window shrank well below the budget (thinned or dropped transforms aged out, or the
+      // rate fell): keep twice as many new transforms again. Kept ones stay thinned until they
+      // age out.
+      this.decimations--;
+      for (const other of this.#frames.values()) {
+        other.setKeepEvery(2 ** this.decimations);
+      }
     }
 
     return cycleDetected
@@ -233,8 +245,7 @@ export class TransformTree {
 
   #decimate(): void {
     // ponytail: halves every frame, also sparse ones; per-frame budgets if a dense frame starves
-    // slow ones of resolution. A live tree stays thinned until it is cleared (seek or topic change),
-    // even once old transforms age out of its window.
+    // slow ones of resolution.
     this.decimations++;
     for (const frame of this.#frames.values()) {
       this.#sampleCount -= frame.decimate(2 ** this.decimations);
