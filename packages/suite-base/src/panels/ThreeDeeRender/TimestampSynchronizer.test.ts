@@ -4,17 +4,17 @@
 import type { MessageEvent } from "@lichtblick/suite";
 
 import {
-  MAX_SYNC_STAMPS_PER_TOPIC,
+  SYNC_BYTES_PER_TOPIC,
   syncTimestamp,
   TimestampSynchronizer,
 } from "./TimestampSynchronizer";
 
-function msg(topic: string, sec: number, receiveSec = 100): MessageEvent {
+function msg(topic: string, sec: number, receiveSec = 100, sizeInBytes = 0): MessageEvent {
   return {
     topic,
     schemaName: "test",
     receiveTime: { sec: receiveSec, nsec: 0 },
-    sizeInBytes: 0,
+    sizeInBytes,
     message: { header: { stamp: { sec, nsec: 0 }, frame_id: "" } },
   };
 }
@@ -70,13 +70,39 @@ describe("TimestampSynchronizer", () => {
     expect(stamps(sync.filter([msg("b", 3)]))).toEqual([`a@${3n * S}`, `b@${3n * S}`]);
   });
 
-  it("keeps at most MAX_SYNC_STAMPS_PER_TOPIC stamps per topic, evicting the oldest", () => {
+  it("drops stamps more than the sync window behind a topic's newest", () => {
     const sync = new TimestampSynchronizer();
     sync.setTopics(new Set(["a", "b"]));
-    for (let sec = 0; sec <= MAX_SYNC_STAMPS_PER_TOPIC; sec++) {
+    for (let sec = 0; sec <= 11; sec++) {
       sync.filter([msg("a", sec)]);
     }
+    // 0 is 11 s behind, 1 is exactly 10 s behind and stays
     expect(sync.filter([msg("b", 0)])).toEqual([]);
+    expect(stamps(sync.filter([msg("b", 1)]))).toEqual([`a@${S}`, `b@${S}`]);
+  });
+
+  it("drops the oldest stamps past the byte budget but keeps the newest", () => {
+    const sync = new TimestampSynchronizer();
+    sync.setTopics(new Set(["a", "b"]));
+    const third = SYNC_BYTES_PER_TOPIC / 3;
+    for (let sec = 1; sec <= 4; sec++) {
+      sync.filter([msg("a", sec, 100, third)]);
+    }
+    expect(sync.filter([msg("b", 1)])).toEqual([]);
+    expect(stamps(sync.filter([msg("b", 2)]))).toEqual([`a@${2n * S}`, `b@${2n * S}`]);
+
+    sync.filter([msg("a", 9, 100, 2 * SYNC_BYTES_PER_TOPIC)]);
+    expect(stamps(sync.filter([msg("b", 9)]))).toEqual([`a@${9n * S}`, `b@${9n * S}`]);
+  });
+
+  it("counts a replaced stamp's bytes once", () => {
+    const sync = new TimestampSynchronizer();
+    sync.setTopics(new Set(["a", "b"]));
+    const half = SYNC_BYTES_PER_TOPIC / 2;
+    sync.filter([msg("a", 1, 100, half)]);
+    for (let i = 0; i < 5; i++) {
+      sync.filter([msg("a", 2, 100, half)]);
+    }
     expect(stamps(sync.filter([msg("b", 1)]))).toEqual([`a@${S}`, `b@${S}`]);
   });
 

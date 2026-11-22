@@ -18,7 +18,6 @@ import {
   RawImage,
   ImageAnnotations as FoxgloveImageAnnotations,
 } from "@foxglove/schemas";
-import * as _ from "lodash-es";
 
 import { Immutable, MessageEvent } from "@lichtblick/suite";
 import {
@@ -56,6 +55,7 @@ import {
   WAITING_FOR_SYNC_EMPTY_HUD_ID,
 } from "./constants";
 import { PartialMessageEvent } from "../../SceneExtension";
+import { SYNC_WINDOW_NS } from "../../TimestampSynchronizer";
 import { CompressedImage as RosCompressedImage, Image as RosImage, CameraInfo } from "../../ros";
 import { t3D } from "../../t3D";
 
@@ -142,10 +142,11 @@ export const WAITING_FOR_SYNC_EMPTY_HUD_ITEM: HUDItem = {
  * annotations are handed off to the SceneExtension for rendering.
  */
 /**
- * Cap on stamps buffered while waiting for a synchronized image + annotations set. ~10 s at 30 Hz;
- * annotations later than that are treated as never arriving.
+ * Image bytes buffered while waiting for a synchronized image + annotations set; the oldest stamps
+ * go first past it. Together with {@link SYNC_WINDOW_NS} (annotations later than that are treated
+ * as never arriving) it bounds memory when an annotation topic stalls.
  */
-export const MAX_SYNC_ENTRIES = 300;
+export const SYNC_IMAGE_BYTES = 256 * 1024 * 1024;
 
 export class MessageHandler {
   /** settings that should reflect image mode config */
@@ -162,6 +163,9 @@ export class MessageHandler {
 
   /** sorted tree that holds state for synchronized messages. Used to find most recent synchronized set of image and annotations. */
   readonly #tree: AVLTree<Time, SynchronizationItem>;
+
+  /** Total `data` bytes of the images in `#tree` */
+  #treeImageBytes = 0;
 
   /** listener functions that are called when the state changes. */
   #listeners: RenderStateListener[] = [];
@@ -234,26 +238,39 @@ export class MessageHandler {
 
   #addImageToTree(normalizedImageMessage: MessageEvent<AnyImage>) {
     const image = normalizedImageMessage.message;
-    const item = this.#tree.get(getTimestampFromImage(image));
+    const stamp = getTimestampFromImage(image);
+    const item = this.#tree.get(stamp);
     if (item) {
+      this.#treeImageBytes -= imageBytes(item.image);
       item.image = normalizedImageMessage;
     } else {
-      this.#setSyncItem(getTimestampFromImage(image), {
-        image: normalizedImageMessage,
-        annotationsByTopic: new Map(),
-      });
+      this.#tree.set(stamp, { image: normalizedImageMessage, annotationsByTopic: new Map() });
     }
+    this.#treeImageBytes += imageBytes(normalizedImageMessage);
+    this.#evictOldSyncItems();
   }
 
   /**
-   * The only way to insert into `#tree`: keeps it at MAX_SYNC_ENTRIES by dropping the oldest stamps,
-   * so images whose annotations never arrive cannot pile up, and the per-message scan stays bounded.
+   * Drops stamps more than SYNC_WINDOW_NS behind the newest and the oldest ones past
+   * SYNC_IMAGE_BYTES, so images whose annotations never arrive cannot pile up. The newest stays.
    */
-  #setSyncItem(stamp: Time, item: SynchronizationItem): void {
-    this.#tree.set(stamp, item);
-    while (this.#tree.size > MAX_SYNC_ENTRIES) {
-      this.#tree.shift();
+  #evictOldSyncItems(): void {
+    const cutoff = toNanoSec(this.#tree.maxKey()!) - SYNC_WINDOW_NS;
+    while (
+      this.#tree.size > 1 &&
+      (toNanoSec(this.#tree.minKey()!) < cutoff || this.#treeImageBytes > SYNC_IMAGE_BYTES)
+    ) {
+      this.#shiftSyncItem();
     }
+  }
+
+  #shiftSyncItem(): void {
+    this.#treeImageBytes -= imageBytes(this.#tree.shift()?.[1].image);
+  }
+
+  #clearSyncItems(): void {
+    this.#tree.clear();
+    this.#treeImageBytes = 0;
   }
 
   public handleCameraInfo = (message: PartialMessageEvent<CameraInfo>): void => {
@@ -296,12 +313,15 @@ export class MessageHandler {
           image: undefined,
           annotationsByTopic: new Map(),
         };
-        this.#setSyncItem(stamp, item);
+        this.#tree.set(stamp, item);
       }
       item.annotationsByTopic.set(topic, {
         originalMessage: messageEvent,
         annotations: group,
       });
+    }
+    if (groups.size > 0) {
+      this.#evictOldSyncItems();
     }
 
     this.#emitState();
@@ -312,7 +332,7 @@ export class MessageHandler {
 
     if (newConfig.synchronize != undefined && newConfig.synchronize !== this.#config.synchronize) {
       this.#oldRenderState = undefined;
-      this.#tree.clear();
+      this.#clearSyncItems();
       if (newConfig.synchronize && this.#lastReceivedMessages.image != undefined) {
         this.#addImageToTree(this.#lastReceivedMessages.image);
       }
@@ -324,6 +344,7 @@ export class MessageHandler {
       for (const item of this.#tree.values()) {
         item.image = undefined;
       }
+      this.#treeImageBytes = 0;
       this.#lastReceivedMessages.image = undefined;
       changed = true;
     }
@@ -378,7 +399,7 @@ export class MessageHandler {
     this.#lastReceivedMessages = {
       annotationsByTopic: new Map(),
     };
-    this.#tree.clear();
+    this.#clearSyncItems();
     this.#oldRenderState = undefined;
     this.#emitState();
   }
@@ -441,7 +462,7 @@ export class MessageHandler {
 
   #getRenderState(): Readonly<Partial<MessageHandlerState>> {
     if (this.#config.synchronize === true) {
-      const result = findSynchronizedSetAndRemoveOlderItems(this.#tree, this.#visibleAnnotations());
+      const result = this.#findSynchronizedSetAndRemoveOlderItems(this.#visibleAnnotations());
       if (result.found) {
         return {
           cameraInfo: this.#lastReceivedMessages.cameraInfo,
@@ -456,6 +477,42 @@ export class MessageHandler {
       };
     }
     return { ...this.#lastReceivedMessages };
+  }
+
+  /**
+   * Finds the newest entry with an image and every visible annotation topic, and removes all older
+   * entries. Without one, reports which topics the newest image is missing.
+   */
+  #findSynchronizedSetAndRemoveOlderItems(visibleAnnotations: Set<string>): SynchronizationResult {
+    const visible = [...visibleAnnotations];
+    let presentAnnotationTopics: string[] | undefined;
+    let missingAnnotationTopics: string[] | undefined;
+    // Newest first: a steady stream matches on its first entry
+    for (let entry = this.#tree.maxEntry(); entry; entry = this.#tree.findLessThan(entry[0])) {
+      const { image, annotationsByTopic } = entry[1];
+      if (!image) {
+        continue;
+      }
+      if (missingAnnotationTopics == undefined) {
+        presentAnnotationTopics = [];
+        missingAnnotationTopics = [];
+        for (const topic of visible) {
+          (annotationsByTopic.has(topic) ? presentAnnotationTopics : missingAnnotationTopics).push(
+            topic,
+          );
+        }
+        if (missingAnnotationTopics.length > 0) {
+          continue;
+        }
+      } else if (!visible.every((topic) => annotationsByTopic.has(topic))) {
+        continue;
+      }
+      while (isLessThan(this.#tree.minKey()!, entry[0])) {
+        this.#shiftSyncItem();
+      }
+      return { found: true, messages: entry[1] };
+    }
+    return { found: false, missingAnnotationTopics, presentAnnotationTopics };
   }
 
   #visibleAnnotations(): Set<string> {
@@ -488,44 +545,6 @@ type SynchronizationResult =
       missingAnnotationTopics: string[] | undefined;
     };
 
-/**
- * Find the newest entry where we have everything synchronized and remove all older entries from tree.
- * @param tree - AVL tree that stores a [image?, annotations?] in sorted order by timestamp.
- * @param visibleAnnotations - visible annotation topics
- * @returns - the newest synchronized item with all active annotations and image, or set of missing annotations if synchronization failed
- */
-function findSynchronizedSetAndRemoveOlderItems(
-  tree: AVLTree<Time, SynchronizationItem>,
-  visibleAnnotations: Set<string>,
-): SynchronizationResult {
-  let validEntry: [Time, SynchronizationItem] | undefined = undefined;
-  let presentAnnotationTopics: string[] | undefined;
-  let missingAnnotationTopics: string[] | undefined;
-  for (const entry of tree.entries()) {
-    const messageState = entry[1];
-    if (!messageState.image) {
-      continue;
-    }
-    [presentAnnotationTopics, missingAnnotationTopics] = _.partition(
-      Array.from(visibleAnnotations),
-      (topic) => messageState.annotationsByTopic.has(topic),
-    );
-
-    // If we have an image and all the messages for annotation topics then we have a synchronized set.
-    if (missingAnnotationTopics.length === 0) {
-      validEntry = entry;
-    }
-  }
-
-  if (validEntry) {
-    // We've got a set of synchronized messages, remove any older items from the tree
-    let minKey = tree.minKey();
-    while (minKey && isLessThan(minKey, validEntry[0])) {
-      tree.shift();
-      minKey = tree.minKey();
-    }
-    return { found: true, messages: validEntry[1] };
-  }
-
-  return { found: false, missingAnnotationTopics, presentAnnotationTopics };
+function imageBytes(image: Readonly<MessageEvent<AnyImage>> | undefined): number {
+  return image?.message.data.byteLength ?? 0;
 }

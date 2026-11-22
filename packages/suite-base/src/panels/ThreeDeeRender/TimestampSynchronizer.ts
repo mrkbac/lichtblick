@@ -1,13 +1,19 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
+import { AVLTree } from "@foxglove/avl";
 import { toNanoSec, type Time } from "@foxglove/rostime";
 
 import type { MessageEvent } from "@lichtblick/suite";
 import { getTimestampForMessage } from "@lichtblick/suite-base/util/time";
 
-/** Unique timestamps buffered per topic while waiting for a match (~10 s at 25 Hz). */
-export const MAX_SYNC_STAMPS_PER_TOPIC = 250;
+/** Stamps older than this behind a topic's newest one are treated as never getting a match. */
+export const SYNC_WINDOW_NS = 10_000_000_000n;
+/** Bytes buffered per topic while waiting for a match; the oldest stamps go first past it. */
+export const SYNC_BYTES_PER_TOPIC = 256 * 1024 * 1024;
+
+/** Messages of one topic by stamp, with their total size. */
+type Buffer = { events: AVLTree<bigint, MessageEvent>; bytes: number };
 
 type Stamped = { timestamp?: Partial<Time> };
 
@@ -33,7 +39,7 @@ export function syncTimestamp(event: MessageEvent): bigint {
  */
 export class TimestampSynchronizer {
   #topics: ReadonlySet<string> = new Set();
-  #buffers = new Map<string, Map<bigint, MessageEvent>>();
+  #buffers = new Map<string, Buffer>();
   #matched = false;
 
   /** Topics to synchronize. Fewer than two disables synchronization. */
@@ -77,18 +83,19 @@ export class TimestampSynchronizer {
       buffered = true;
       let buffer = this.#buffers.get(event.topic);
       if (!buffer) {
-        buffer = new Map();
+        buffer = { events: new AVLTree((a, b) => (a < b ? -1 : a > b ? 1 : 0)), bytes: 0 };
         this.#buffers.set(event.topic, buffer);
       }
-      buffer.set(syncTimestamp(event), event);
-      if (buffer.size > MAX_SYNC_STAMPS_PER_TOPIC) {
-        let oldest: bigint | undefined;
-        for (const stamp of buffer.keys()) {
-          if (oldest == undefined || stamp < oldest) {
-            oldest = stamp;
-          }
-        }
-        buffer.delete(oldest!);
+      const stamp = syncTimestamp(event);
+      buffer.bytes += event.sizeInBytes - (buffer.events.get(stamp)?.sizeInBytes ?? 0);
+      buffer.events.set(stamp, event);
+      const cutoff = buffer.events.maxKey()! - SYNC_WINDOW_NS;
+      // The newest message always stays, even past the byte budget
+      while (
+        buffer.events.size > 1 &&
+        (buffer.events.minKey()! < cutoff || buffer.bytes > SYNC_BYTES_PER_TOPIC)
+      ) {
+        buffer.bytes -= buffer.events.shift()![1].sizeInBytes;
       }
     }
     if (buffered) {
@@ -98,26 +105,28 @@ export class TimestampSynchronizer {
   }
 
   #releaseNewestMatch(out: MessageEvent[]): void {
-    const buffers = [...this.#topics].map((topic) => this.#buffers.get(topic));
-    if (buffers.some((buffer) => buffer == undefined)) {
-      return;
-    }
-    const [first, ...rest] = buffers as Map<bigint, MessageEvent>[];
-    let newest: bigint | undefined;
-    for (const stamp of first!.keys()) {
-      if ((newest == undefined || stamp > newest) && rest.every((buffer) => buffer.has(stamp))) {
-        newest = stamp;
+    const buffers: Buffer[] = [];
+    for (const topic of this.#topics) {
+      const buffer = this.#buffers.get(topic);
+      if (!buffer) {
+        return;
       }
+      buffers.push(buffer);
     }
-    if (newest == undefined) {
+    const [first, ...rest] = buffers;
+    // Newest first, so a steady stream matches on its first try
+    let entry = first!.events.maxEntry();
+    while (entry && !rest.every((buffer) => buffer.events.has(entry![0]))) {
+      entry = first!.events.findLessThan(entry[0]);
+    }
+    if (!entry) {
       return;
     }
-    for (const buffer of buffers as Map<bigint, MessageEvent>[]) {
-      out.push(buffer.get(newest)!);
-      for (const stamp of buffer.keys()) {
-        if (stamp <= newest) {
-          buffer.delete(stamp);
-        }
+    const newest = entry[0];
+    for (const buffer of buffers) {
+      out.push(buffer.events.get(newest)!);
+      while (buffer.events.size > 0 && buffer.events.minKey()! <= newest) {
+        buffer.bytes -= buffer.events.shift()![1].sizeInBytes;
       }
     }
     this.#matched = true;
