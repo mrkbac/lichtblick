@@ -7,13 +7,17 @@
 
 import CloseIcon from "@mui/icons-material/Close";
 import { Badge, Divider, IconButton, Tab, Tabs } from "@mui/material";
-import { useCallback, useMemo, useRef } from "react";
+import { Suspense, lazy, useCallback, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
 
 import { useStyles } from "@lichtblick/suite-base/components/Sidebars/NewSidebar.style";
 import { NewSidebarProps } from "@lichtblick/suite-base/components/Sidebars/types";
 import Stack from "@lichtblick/suite-base/components/Stack";
-import { TabOverflowMenu } from "@lichtblick/suite-base/components/TabOverflowMenu";
+
+// Only shows when the tabs overflow: kept out of the startup bundle
+const TabOverflowMenu = lazy(async () => ({
+  default: (await import("@lichtblick/suite-base/components/TabOverflowMenu")).TabOverflowMenu,
+}));
 
 function Noop(): React.JSX.Element | undefined {
   return undefined;
@@ -93,7 +97,9 @@ export function NewSidebar<K extends string>({
         >
           {memoizedTabs}
         </Tabs>
-        <TabOverflowMenu stripRef={tabsRef} className={classes.iconButton} />
+        <Suspense fallback={undefined}>
+          <TabOverflowMenu stripRef={tabsRef} className={classes.iconButton} />
+        </Suspense>
         <IconButton
           className={classes.iconButton}
           aria-label={t("closeSidebar")}

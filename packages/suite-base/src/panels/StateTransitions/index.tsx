@@ -159,8 +159,7 @@ function StateTransitions(props: StateTransitionPanelProps) {
     };
   }, [paths.length]);
 
-  // The live history grows in place every frame and the chart redraws all of it, so take live
-  // updates at most every LIVE_REDRAW_MS instead of once per message.
+  // Publish live chart updates at most every LIVE_REDRAW_MS instead of once per message.
   const [throttledItemsByPath] = useDebounce(itemsByPath, LIVE_REDRAW_MS, {
     maxWait: LIVE_REDRAW_MS,
   });
@@ -168,7 +167,7 @@ function StateTransitions(props: StateTransitionPanelProps) {
 
   const showPoints = config.showPoints === true;
 
-  const { pathState, data, minY, matchStarts } = useStateTransitionsData(
+  const { pathState, data, minY, matchStarts, matchesApproximate } = useStateTransitionsData(
     paths,
     startTime,
     newItemsByPath,
@@ -349,7 +348,9 @@ function StateTransitions(props: StateTransitionPanelProps) {
                   variant="caption"
                   data-testid="state-transitions-match-count"
                   color="textSecondary"
+                  title={matchesApproximate ? t("matchesApproximate") : undefined}
                 >
+                  {matchesApproximate && "≈"}
                   {matchesSoFar}/{matchStarts.length}
                 </Typography>
                 <PanelIconButton

@@ -1525,6 +1525,39 @@ describe("ThreeDeeRender", () => {
         expect(customRendererInstance.queueAnimationFrame).toHaveBeenCalled();
       });
 
+      it("only reads the added slice when a decay window grows", async () => {
+        const { mockContext, customRendererInstance } = renderWithDecay({
+          "/scan": { visible: true, decayTime: 30 },
+        });
+        await start(mockContext);
+        seek(mockContext, customRendererInstance);
+        await waitFor(() => {
+          expect(mockContext.unstable_subscribeMessageRange).toHaveBeenCalledWith(
+            expect.objectContaining({ start: { sec: 70, nsec: 0 } }),
+          );
+        });
+        vi.mocked(mockContext.unstable_subscribeMessageRange).mockClear();
+
+        act(() => {
+          customRendererInstance.currentTime = 100_000_000_000n;
+          customRendererInstance.config = {
+            ...customRendererInstance.config,
+            topics: { "/scan": { visible: true, decayTime: 50 } },
+          };
+          customRendererInstance.emit("configChange", customRendererInstance);
+        });
+
+        await waitFor(() => {
+          expect(mockContext.unstable_subscribeMessageRange).toHaveBeenCalledExactlyOnceWith(
+            expect.objectContaining({
+              topic: "/scan",
+              start: { sec: 50, nsec: 0 },
+              end: { sec: 69, nsec: 999_999_999 },
+            }),
+          );
+        });
+      });
+
       it("reads the transforms of a new or longer decay window too, e.g. while paused", async () => {
         const layer = {
           historySchemas: new Set(["sensor_msgs/LaserScan"]),

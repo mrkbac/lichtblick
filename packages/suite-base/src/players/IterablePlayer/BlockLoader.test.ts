@@ -1038,7 +1038,14 @@ describe("BlockLoader", () => {
       expect((await loadSettled(messages, 12, 0)).slice(0, 2)).toEqual(["a,b", "a"]);
     });
 
-    it("stops the topic that would hold the most when each part of a block fits alone", async () => {
+    it("keeps more topics in a block when the topic with the most history has a small slice", async () => {
+      const messages = [sized("a", 0, 6), sized("a", 1, 1), sized("b", 1, 3), sized("c", 1, 3)];
+
+      const blocks = await loadSettled(messages, 10, 0);
+      expect(blocks[1]).toBe("a,b");
+    });
+
+    it("favors the lower projected footprint when only one slice fits", async () => {
       // "b": 6 bytes at the playhead and 2 farther away; block 1 has 6 bytes of "a" and 5 of "b".
       // "a" fits by taking "b"'s 2 far bytes, leaving each topic 6.
       const messages = [sized("b", 0, 6), sized("a", 1, 6), sized("b", 1, 5), sized("b", 5, 2)];
@@ -1046,6 +1053,45 @@ describe("BlockLoader", () => {
       const blocks = await loadSettled(messages, 12, 0);
       expect(blocks[0]).toContain("b");
       expect(blocks[1]).toContain("a");
+    });
+
+    it("matches the best fitting subset for small layouts after loading the playhead", async () => {
+      let seed = 9;
+      const nextSize = () => ((seed = (seed * 16807) % 2147483647) % 9) + 1;
+      const topics = ["a", "b", "c", "d"];
+      for (let round = 0; round < 20; round++) {
+        const atPlayhead = topics.map(() => nextSize());
+        const incoming = topics.map(() => nextSize());
+        const available = 2 * nextSize();
+        const budget = atPlayhead.reduce((sum, bytes) => sum + bytes, available);
+        const messages = [
+          ...topics.map((topic, index) => sized(topic, 0, atPlayhead[index]!)),
+          ...topics.map((topic, index) => sized(topic, 1, incoming[index]!)),
+        ];
+        const score = (selected: string[]) => ({
+          count: selected.length,
+          footprint: Math.max(
+            0,
+            ...selected.map((topic) => {
+              const index = topics.indexOf(topic);
+              return atPlayhead[index]! + incoming[index]!;
+            }),
+          ),
+        });
+
+        const feasible = Array.from({ length: 2 ** topics.length }, (_, mask) =>
+          topics.filter((_topic, index) => (mask & (1 << index)) !== 0),
+        ).filter(
+          (subset) =>
+            subset.reduce((sum, topic) => sum + incoming[topics.indexOf(topic)]!, 0) <= available,
+        );
+        const best = feasible
+          .map(score)
+          .sort((a, b) => (a.count === b.count ? a.footprint - b.footprint : b.count - a.count))[0];
+
+        const blocks = await loadSettled(messages, budget, 0);
+        expect(score((blocks[1] ?? "").split(",").filter(Boolean))).toEqual(best);
+      }
     });
 
     it("never goes over budget and always loads the playhead block when it fits", async () => {

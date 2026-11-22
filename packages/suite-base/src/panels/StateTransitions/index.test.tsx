@@ -56,6 +56,7 @@ vi.mock(
 );
 vi.mock("@lichtblick/suite-base/panels/StateTransitions/hooks/useDecodedMessageRange");
 let mockCurrentTime = 0;
+let mockMatchesApproximate = false;
 vi.mock("@lichtblick/suite-base/panels/StateTransitions/hooks/useStateTransitionsTime", () => ({
   __esModule: true,
   default: () => ({
@@ -72,6 +73,7 @@ vi.mock("@lichtblick/suite-base/panels/StateTransitions/hooks/useStateTransition
     data: { datasets: [{ data: [{ x: 1, y: 0, value: "A" }] }] },
     minY: 0,
     matchStarts: [1, 5],
+    matchesApproximate: mockMatchesApproximate,
   }),
 }));
 vi.mock("@lichtblick/suite-base/panels/StateTransitions/hooks/useChartScalesAndBounds", () => ({
@@ -148,6 +150,7 @@ describe("StateTransitions", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockCurrentTime = 0;
+    mockMatchesApproximate = false;
     mockUseDecodedMessageRange.mockReturnValue([{}]);
     mockUsePathSampleHistory.mockReturnValue({});
   });
@@ -261,6 +264,15 @@ describe("StateTransitions", () => {
   it.each([undefined, "=> 2"])("hides match navigation for condition %s", (condition) => {
     renderPanel({ paths: [{ value: "/a.b", condition, timestampMethod: "receiveTime" }] });
     expect(screen.queryByTestId("state-transitions-match-count")).toBeNull();
+  });
+
+  it("indicates when the match count and navigation are approximate", () => {
+    mockMatchesApproximate = true;
+    renderPanel({ paths: [{ value: "/a.b", condition: "> 2", timestampMethod: "receiveTime" }] });
+
+    const count = screen.getByTestId("state-transitions-match-count");
+    expect(count).toHaveTextContent("≈0/2");
+    expect(count).toHaveAttribute("title", expect.stringContaining("navigation may miss matches"));
   });
 
   it("shows the match count and seeks between matches with buttons and N / Shift+N", () => {

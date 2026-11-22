@@ -14,6 +14,7 @@ import type { HistoryLimits } from "../pointExtensionUtils";
 
 /** One accumulated scan: a contiguous range of the ring's buffers */
 type RingScan = {
+  recordId?: string;
   receiveTime: bigint;
   messageTime: bigint;
   frameId: string;
@@ -30,7 +31,10 @@ type RingScan = {
   stride: number;
 };
 
-export type RingScanInfo = Pick<RingScan, "receiveTime" | "messageTime" | "frameId" | "pose">;
+export type RingScanInfo = Pick<
+  RingScan,
+  "receiveTime" | "messageTime" | "frameId" | "pose" | "recordId"
+>;
 
 /**
  * Scans whose pose row is (re)computed per frame. New scans and ones still missing a transform go
@@ -134,6 +138,7 @@ export class DecayPointRing extends Renderable<BaseUserData, /*TRenderer=*/ unde
   #colors = new Uint8Array(0);
   #slots = new Uint16Array(0);
   #scans: RingScan[] = [];
+  readonly #records = new Map<string, RingScan>();
   #freeSlots: number[];
   readonly #points: RasterPoints;
   /** Receive time of the newest scan evicted to stay in budget, not because it expired */
@@ -196,6 +201,7 @@ export class DecayPointRing extends Renderable<BaseUserData, /*TRenderer=*/ unde
   public override dispose(): void {
     // A disposed ring can stay reachable (e.g. as the selection), so drop the point arrays too
     this.#scans = [];
+    this.#records.clear();
     this.#livePoints = 0;
     this.#resize(0);
     this.#points.dispose();
@@ -245,6 +251,19 @@ export class DecayPointRing extends Renderable<BaseUserData, /*TRenderer=*/ unde
     );
   }
 
+  public holdsRecord(recordId: string): boolean {
+    return this.#records.has(recordId);
+  }
+
+  /** A historical scan that playback now draws as its latest belongs only in that layer. */
+  public removeRecord(recordId: string): void {
+    const scan = this.#records.get(recordId);
+    if (scan) {
+      this.#scans.splice(this.#scans.indexOf(scan), 1);
+      this.#free(scan);
+    }
+  }
+
   /** The ring keeps 1 in this many scans (1 until it is first over its limits) */
   public stride(): number {
     return this.#stride;
@@ -289,7 +308,11 @@ export class DecayPointRing extends Renderable<BaseUserData, /*TRenderer=*/ unde
       return;
     }
     // The same message pushed again (e.g. read back after a seek twice)
-    if (this.holds(info.receiveTime, info.messageTime, positions, colors)) {
+    if (
+      info.recordId != undefined
+        ? this.holdsRecord(info.recordId)
+        : this.holds(info.receiveTime, info.messageTime, positions, colors)
+    ) {
       return;
     }
     if (++this.#sinceKept < this.#stride) {
@@ -313,7 +336,7 @@ export class DecayPointRing extends Renderable<BaseUserData, /*TRenderer=*/ unde
     while (at > 0 && this.#scans[at - 1]!.receiveTime > info.receiveTime) {
       at--;
     }
-    this.#scans.splice(at, 0, {
+    const scan: RingScan = {
       ...info,
       slot,
       start,
@@ -321,7 +344,11 @@ export class DecayPointRing extends Renderable<BaseUserData, /*TRenderer=*/ unde
       posedAt: undefined,
       failedAt: undefined,
       stride: this.#stride,
-    });
+    };
+    this.#scans.splice(at, 0, scan);
+    if (info.recordId != undefined) {
+      this.#records.set(info.recordId, scan);
+    }
     this.#livePoints += count;
 
     this.#positions.set(positions, start * 3);
@@ -777,6 +804,9 @@ export class DecayPointRing extends Renderable<BaseUserData, /*TRenderer=*/ unde
   }
 
   #free(scan: RingScan): void {
+    if (scan.recordId != undefined) {
+      this.#records.delete(scan.recordId);
+    }
     this.#livePoints -= scan.count;
     this.#slots.fill(this.#hiddenSlot, scan.start, scan.start + scan.count);
     this.#points.markSlots(scan.start, scan.count);

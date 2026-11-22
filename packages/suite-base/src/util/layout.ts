@@ -38,6 +38,22 @@ export function isPlainObject(value: unknown): value is Record<string, unknown> 
   return typeof value === "object" && value != undefined && !Array.isArray(value);
 }
 
+/** Layout files and the organization API store the approval requirement alongside panel data. */
+export function encodeLayoutTrust(
+  data: LayoutData,
+  { untrusted }: { untrusted?: true },
+): LayoutData & { untrusted?: true } {
+  return untrusted === true ? { ...data, untrusted: true } : data;
+}
+
+/** Keep storage metadata out of the editable panel data. */
+export function decodeLayoutTrust({ untrusted, ...data }: LayoutData & { untrusted?: unknown }): {
+  data: LayoutData;
+  untrusted?: true;
+} {
+  return { data, ...(untrusted === true && { untrusted: true }) };
+}
+
 /**
  * Validates that a parsed value has the shape required by {@link LayoutData} before it is
  * installed. Throws an Error whose message lists every missing or invalid field so the caller can

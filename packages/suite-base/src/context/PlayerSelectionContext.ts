@@ -24,6 +24,8 @@ export type DataSourceFactoryInitializeArgs = {
   // Compare `files` (or `recordings`) side by side instead of merging them into one recording: the side name of
   // each file, in order. Files with the same side name are merged into one side.
   compare?: readonly string[];
+  /** Remote recordings, in source order. The single-URL form can still pass params.url. */
+  urls?: readonly string[];
   params?: Record<string, string | undefined>;
   sourceMetadata?: Record<string, unknown>[];
 };
@@ -91,8 +93,16 @@ export interface IDataSourceFactory {
   // don't set it only merge, and comparing their files is refused instead of silently merging.
   supportsCompare?: boolean;
 
-  // Initialize a player.
-  initialize: (args: DataSourceFactoryInitializeArgs) => Player | undefined;
+  /**
+   * Initialize a player. May resolve asynchronously, e.g. to load the player's code on first use;
+   * the caller drops (closes) a player whose selection was superseded meanwhile.
+   */
+  initialize: (
+    args: DataSourceFactoryInitializeArgs,
+  ) => Player | undefined | Promise<Player | undefined>;
+
+  /** Starts loading what `initialize` needs, so opening the source later is fast. */
+  prefetch?: () => void;
 }
 
 /**
@@ -128,6 +138,8 @@ type FileDataSourceArgs = {
 
 type ConnectionDataSourceArgs = {
   type: "connection";
+  /** Remote recordings, in source order. The single-URL form can still pass params.url. */
+  urls?: readonly string[];
   params?: Record<string, string | undefined>;
   sourceMetadata?: Record<string, unknown>[];
   /** The caller brings its own layout (e.g. a link): a sample source doesn't switch to its own. */

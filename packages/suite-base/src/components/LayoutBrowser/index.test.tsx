@@ -412,9 +412,9 @@ describe("LayoutBrowser", () => {
       });
     });
 
-    it("expands shared section when sharing a layout", async () => {
+    it("expands shared section and preserves script trust when sharing a layout", async () => {
       // GIVEN
-      const layout = LayoutBuilder.layout();
+      const layout = LayoutBuilder.layout({ untrusted: true });
       const newLayout = LayoutBuilder.layout();
       const promptMock = vi.fn().mockResolvedValue("Shared Layout");
       (usePrompt as Mock).mockReturnValue([promptMock, undefined]);
@@ -434,6 +434,9 @@ describe("LayoutBrowser", () => {
       // THEN
       await waitFor(() => {
         expect(setSharedExpandedMock).toHaveBeenCalledWith(true);
+        expect(mockLayoutManager.saveNewLayout).toHaveBeenCalledWith(
+          expect.objectContaining({ untrusted: true }),
+        );
       });
     });
 

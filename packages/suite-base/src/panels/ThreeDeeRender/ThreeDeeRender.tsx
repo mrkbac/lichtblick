@@ -69,7 +69,11 @@ import {
 import type { LayerSettingsTransform } from "./renderables/FrameAxes";
 import { PublishClickEventMap, PublishClickType } from "./renderables/PublishClickTool";
 import { DEFAULT_PUBLISH_SETTINGS } from "./renderables/PublishSettings";
-import { DecayHistoryIngest, isDecayHistoryIngest } from "./renderables/pointExtensionUtils";
+import {
+  DecayHistoryIngest,
+  isDecayHistoryIngest,
+  pointDecayTime,
+} from "./renderables/pointExtensionUtils";
 import { THREE_DEE_SHORTCUTS } from "./shortcuts";
 import { readTransformRange, readTransformsBefore, TransformTopic } from "./transformHistoryReads";
 import { Shared3DPanelState, ThreeDeeRenderProps } from "./types";
@@ -620,7 +624,7 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
     }
   }
   for (const { topic, convertTo } of topicsToSubscribe ?? []) {
-    const decayTime = (config.topics[topic] as { decayTime?: number } | undefined)?.decayTime ?? 0;
+    const decayTime = pointDecayTime(config.topics[topic]);
     const schema = convertTo ?? topics?.find((candidate) => candidate.name === topic)?.schemaName;
     const ingest = historyLayers.find(
       (layer) => schema != undefined && layer.historySchemas.has(schema),
@@ -636,14 +640,16 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
   // The layers decode each batch straight into the history (never through the renderer's message
   // queue, so nothing piles up while frames wait, e.g. in a background tab); the drawn scan and
   // anything newer stay playback's. After a seek, the reads start once the seek's frame has drawn
-  // the latest scans. With `only`, read just those topics and keep the reads in flight (a decay
-  // time changed, not the time).
+  // the latest scans. When decay grows, read only the added interval and keep the current
+  // reads in flight.
   const transformTopicsRef = useLatest(transformTopics);
+  const failedDecayReadsRef = useRef(new Set<string>());
   const readDecayHistory = useCallback(
-    (time: bigint, only?: ReadonlySet<string>) => {
-      if (only == undefined || decayReadRef.current?.signal.aborted !== false) {
+    (time: bigint, previousWindows?: ReadonlyMap<string, bigint>) => {
+      if (previousWindows == undefined || decayReadRef.current?.signal.aborted !== false) {
         decayReadRef.current?.abort();
         decayReadRef.current = new AbortController();
+        failedDecayReadsRef.current.clear();
       }
       const abort = decayReadRef.current;
       const sources = decayTopicsRef.current;
@@ -652,7 +658,7 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
         return;
       }
       const read = async () => {
-        if (only == undefined) {
+        if (previousWindows == undefined) {
           await nextFrame(renderer, abort.signal);
           if (abort.signal.aborted) {
             return;
@@ -661,26 +667,41 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
         let oldestStamp: bigint | undefined;
         await Promise.all(
           sources
-            .filter(({ topic }) => only == undefined || only.has(topic))
-            .map(
-              async ({ decayNs, ingest, ...source }) =>
-                await readTransformRange({
-                  subscribeRange: context.unstable_subscribeMessageRange,
-                  topics: [source],
-                  start: time - decayNs,
-                  end: time,
-                  signal: abort.signal,
-                  onBatch: (batch) => {
-                    for (const messageEvent of batch) {
-                      const stamp = ingest.addHistoricalMessage(messageEvent);
-                      if (stamp != undefined && (oldestStamp == undefined || stamp < oldestStamp)) {
-                        oldestStamp = stamp;
-                      }
+            .filter(({ topic }) => previousWindows == undefined || previousWindows.has(topic))
+            .map(async ({ decayNs, ingest, ...source }) => {
+              const failed = failedDecayReadsRef.current;
+              const previous = failed.has(source.topic)
+                ? 0n
+                : (previousWindows?.get(source.topic) ?? 0n);
+              // Range reads are inclusive. The old window already includes time - previous.
+              const end = previous > 0n ? time - previous - 1n : time;
+              if (end < 0n) {
+                return;
+              }
+              const ok = await readTransformRange({
+                subscribeRange: context.unstable_subscribeMessageRange,
+                topics: [source],
+                start: time - decayNs,
+                end,
+                signal: abort.signal,
+                onBatch: (batch) => {
+                  for (const messageEvent of batch) {
+                    const stamp = ingest.addHistoricalMessage(messageEvent);
+                    if (stamp != undefined && (oldestStamp == undefined || stamp < oldestStamp)) {
+                      oldestStamp = stamp;
                     }
-                    renderer.queueAnimationFrame();
-                  },
-                }),
-            ),
+                  }
+                  renderer.queueAnimationFrame();
+                },
+              });
+              if (!abort.signal.aborted) {
+                if (!ok) {
+                  failed.add(source.topic);
+                } else if (previous === 0n) {
+                  failed.delete(source.topic);
+                }
+              }
+            }),
         );
         // The transform reads go back to the longest decay time by receive time; scans can be
         // stamped earlier than they were received, so also read back to their oldest stamp
@@ -764,9 +785,8 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
   // starts a new read, so the cleanup cannot cancel it (a passive cleanup would run after).
   useLayoutEffect(() => () => seekReadRef.current?.abort(), [readTransformsAfterSeek]);
 
-  // A new or longer decay time shows its window at once, read for just that topic (scans already
-  // in the history are skipped before decoding), with the transforms of the new window so the
-  // older scans are placed (e.g. while paused); with no decayed topic left, the reads stop
+  // Read the added history and its transforms when decay grows, including while paused.
+  // With no decayed topic left, the reads stop.
   const decayReadNsRef = useRef(new Map<string, bigint>());
   // A new renderer starts with empty histories: every decayed topic counts as new
   useEffect(() => {
@@ -776,12 +796,13 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
     if (!renderer) {
       return;
     }
-    const grown = new Set<string>();
+    const grown = new Map<string, bigint>();
     const readNs = new Map<string, bigint>();
     for (const { topic, decayNs } of decayTopicsRef.current) {
       readNs.set(topic, decayNs);
-      if (decayNs > (decayReadNsRef.current.get(topic) ?? 0n)) {
-        grown.add(topic);
+      const previous = decayReadNsRef.current.get(topic) ?? 0n;
+      if (decayNs > previous) {
+        grown.set(topic, previous);
       }
     }
     decayReadNsRef.current = readNs;

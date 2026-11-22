@@ -69,7 +69,7 @@ import {
   selectStartPlayback,
 } from "@lichtblick/suite-base/components/MessagePipeline/selectors";
 import { MonitorSetupProvider } from "@lichtblick/suite-base/components/MonitorSetupContext";
-import { PanelGuide } from "@lichtblick/suite-base/components/PanelDocs/PanelDocs";
+import { PanelGuide } from "@lichtblick/suite-base/components/PanelDocs/PanelGuide";
 import PanelLayout from "@lichtblick/suite-base/components/PanelLayout";
 import PanelSettings from "@lichtblick/suite-base/components/PanelSettings";
 import { COMPACT_PANELS_ATTRIBUTE } from "@lichtblick/suite-base/components/PanelToolbar/constants";
@@ -501,6 +501,7 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
     | {
         ds: string | undefined;
         dsParams: Record<string, string> | undefined;
+        urls?: readonly string[];
         sourceMetadata?: Record<string, unknown>[];
         layoutUrl?: string;
       }
@@ -510,6 +511,7 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
       ? {
           ds: targetUrlState.ds,
           dsParams: targetUrlState.dsParams,
+          urls: targetUrlState.dsParamsArray?.urls,
           layoutUrl: targetUrlState.layoutUrl,
         }
       : undefined,
@@ -531,6 +533,7 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
         ? {
             ds: state.ds,
             dsParams: state.dsParams,
+            urls: state.dsParamsArray?.urls,
             layoutUrl: state.layoutUrl,
           }
         : undefined,
@@ -567,7 +570,8 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
         const urls = mcaps.map((mcap) => mcap.url);
         setUnappliedSourceArgs({
           ds: "remote-file",
-          dsParams: { url: urls.join(",") },
+          dsParams: undefined,
+          urls,
           sourceMetadata: mcaps.map((mcap) => mcap.metadata),
         });
       } catch (error) {
@@ -725,13 +729,14 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
     let shouldUpdate = false;
 
     // Apply any available data source args
-    const { ds, dsParams, sourceMetadata } = unappliedSourceArgs;
+    const { ds, dsParams, sourceMetadata, urls } = unappliedSourceArgs;
     if (ds) {
       log.debug("Initialising source from url", unappliedSourceArgs);
       const open = ({ installed }: { installed: boolean }) => {
         selectSource(ds, {
           type: "connection",
           params: dsParams,
+          ...(urls != undefined && { urls }),
           sourceMetadata,
           // The link's layout is what the sender wants shown, not the sample's own.
           ...(installed && { keepLayout: true }),

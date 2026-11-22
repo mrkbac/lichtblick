@@ -37,6 +37,7 @@ describe("useStateTransitionsData", () => {
       minY: undefined,
       pathState: [],
       matchStarts: [],
+      matchesApproximate: false,
     });
   });
 

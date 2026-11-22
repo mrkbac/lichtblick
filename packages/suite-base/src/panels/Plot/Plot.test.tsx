@@ -161,6 +161,7 @@ describe("Plot Component", () => {
       resetBounds: vi.fn(),
       setZoomMode: vi.fn(),
       getXValueAtPixel: vi.fn(),
+      on: vi.fn(),
     };
     mockPlotCoordinatorCtor.mockImplementation(function () {
       return mockCoordinatorInstance;
@@ -272,6 +273,25 @@ describe("Plot Component", () => {
 
     // Then
     expect(screen.queryByTestId("plot-legend")).toBeNull();
+  });
+
+  it("warns about approximate live values even when the legend is hidden", () => {
+    renderPlot(new PlotConfigBuilder().withLegendDisplay("none").build());
+    const on = mockCoordinatorInstance.on as Mock<
+      (event: string, listener: (indices: readonly number[]) => void) => void
+    >;
+    const listener = on.mock.calls.find(([event]) => event === "approximateSeriesChanged")?.[1];
+    expect(screen.queryByRole("img", { name: "approximateLiveSeries" })).toBeNull();
+
+    act(() => {
+      listener?.([0]);
+    });
+    expect(screen.getByRole("img", { name: "approximateLiveSeries" })).toBeDefined();
+
+    act(() => {
+      listener?.([]);
+    });
+    expect(screen.queryByRole("img", { name: "approximateLiveSeries" })).toBeNull();
   });
 
   it("Given no zoom When rendering Then the toolbar has no reset button", () => {

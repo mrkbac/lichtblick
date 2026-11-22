@@ -14,7 +14,11 @@ import {
   IRemoteLayoutStorage,
   RemoteLayout,
 } from "@lichtblick/suite-base/services/IRemoteLayoutStorage";
-import { validateLayoutData } from "@lichtblick/suite-base/util/layout";
+import {
+  decodeLayoutTrust,
+  encodeLayoutTrust,
+  validateLayoutData,
+} from "@lichtblick/suite-base/util/layout";
 
 import {
   OrganizationApiClient,
@@ -103,7 +107,11 @@ export class OrganizationLayoutStorage
       "/v1/organizations/{organizationId}/layouts",
       {
         params: { path: { organizationId } },
-        body: { id: params.id, displayName: params.name, data: params.data },
+        body: {
+          id: params.id,
+          displayName: params.name,
+          data: encodeLayoutTrust(params.data, params),
+        },
       },
     );
     if (data) {
@@ -136,7 +144,10 @@ export class OrganizationLayoutStorage
           // Full replacement: unchanged fields are resent from the last known version.
           body: {
             displayName: params.name ?? layout.displayName,
-            data: params.data ?? layout.data,
+            data: {
+              ...(params.data ?? layout.data),
+              ...((params.untrusted ?? layout.data.untrusted === true) && { untrusted: true }),
+            },
           },
         }),
     );
@@ -353,7 +364,7 @@ export class OrganizationLayoutStorage
       externalId: layout.id,
       organizationId: layout.organizationId,
       name: cleanText(layout.displayName, 200),
-      data: validateLayoutData(layout.data),
+      ...decodeLayoutTrust(validateLayoutData(layout.data)),
       permission: this.canWrite(layout.organizationId) ? "ORG_WRITE" : "ORG_READ",
       savedAt: layout.updatedAt as ISO8601Timestamp,
     };

@@ -65,6 +65,8 @@ type Series = {
   keepEvery: number;
   /** Samples folded into the newest current row so far */
   headInputs: number;
+  /** Recomputing the current values lost inputs already removed by thinning. */
+  currentApproximate: boolean;
 };
 
 /**
@@ -388,6 +390,20 @@ export class TimestampDatasetsBuilderImpl {
     return datasets;
   }
 
+  public getViewportResult(viewport: Immutable<Viewport>): {
+    datasetsByConfigIndex: Dataset[];
+    approximateSeries: number[];
+  } {
+    const datasetsByConfigIndex = this.getViewportDatasets(viewport);
+    const approximateSeries: number[] = [];
+    for (const series of this.#seriesByKey.values()) {
+      if (series.config.enabled && series.currentApproximate && isDerivedSeries(series.config)) {
+        approximateSeries.push(series.config.configIndex);
+      }
+    }
+    return { datasetsByConfigIndex, approximateSeries };
+  }
+
   /** The first datum of a cross-message modifier has no previous datum, so it has no value */
   #firstIdx(series: Series): number {
     return NEEDS_PREVIOUS.includes(series.config.parsed.modifier ?? "") ? 1 : 0;
@@ -599,7 +615,12 @@ export class TimestampDatasetsBuilderImpl {
       derived.upTo = fullLength;
       derived.current = undefined;
     }
-    derived.current ??= { upTo: fullLength, state: cloneDeriveState(derived.state) };
+    if (!derived.current) {
+      // Late rows or changes to the derivation invalidate its running state. Once live rows
+      // have been thinned, restarting can only use the rows we still have.
+      series.currentApproximate = series.keepEvery > 1;
+      derived.current = { upTo: fullLength, state: cloneDeriveState(derived.state) };
+    }
     const { current } = derived;
     deriveRows(
       points,
@@ -716,6 +737,7 @@ export class TimestampDatasetsBuilderImpl {
         }
         series.keepEvery = 1;
         series.headInputs = 0;
+        series.currentApproximate = false;
         break;
       }
       case "reset-full": {
@@ -753,8 +775,6 @@ export class TimestampDatasetsBuilderImpl {
         }
         if (split > 0) {
           points.insert(fullLength, items.slice(0, split), points.length);
-          // ponytail: rows merged into the middle restart current derived values from the full
-          // rows, over the rows still kept. Exact unless the series was thinned before.
           if (series.derived) {
             series.derived.current = undefined;
           }
@@ -799,6 +819,11 @@ export class TimestampDatasetsBuilderImpl {
           }
           points.remove(fullLength, idx);
         }
+        if (points.length === fullLength) {
+          series.keepEvery = 1;
+          series.headInputs = 0;
+          series.currentApproximate = false;
+        }
         break;
       }
       case "shift-x": {
@@ -826,6 +851,7 @@ export class TimestampDatasetsBuilderImpl {
             fullLength: 0,
             keepEvery: 1,
             headInputs: 0,
+            currentApproximate: false,
           };
           series.config = config;
           newSeries.set(config.key, series);

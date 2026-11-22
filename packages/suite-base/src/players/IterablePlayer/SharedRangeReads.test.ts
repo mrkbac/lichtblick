@@ -86,6 +86,42 @@ describe("SharedRangeReads", () => {
     expect((await stopping.next()).done).toBe(true);
   });
 
+  it("aborts the source only once the last reader cancels", async () => {
+    const opened = Promise.withResolvers<AbortSignal>();
+    const closed = Promise.withResolvers<void>();
+    const shared = new SharedRangeReads(async function* (_topics, _range, signal) {
+      const stop = Promise.withResolvers<void>();
+      signal.addEventListener(
+        "abort",
+        () => {
+          stop.resolve();
+        },
+        { once: true },
+      );
+      opened.resolve(signal);
+      try {
+        await stop.promise;
+        yield* [];
+      } finally {
+        closed.resolve();
+      }
+    });
+    const a = shared.read("a", {});
+    const b = shared.read("b", {});
+    const pulls = [a.next(), b.next()];
+    const signal = await opened.promise;
+
+    await a.return?.();
+    expect(signal.aborted).toBe(false);
+    await b.return?.();
+    expect(signal.aborted).toBe(true);
+    await closed.promise;
+    await expect(Promise.all(pulls)).resolves.toEqual([
+      { done: true, value: undefined },
+      { done: true, value: undefined },
+    ]);
+  });
+
   it("resolves overlapping pulls in order", async () => {
     const { shared } = setup();
     const reader = shared.read("a", {});

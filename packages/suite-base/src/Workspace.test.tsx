@@ -634,7 +634,8 @@ describe("Workspace - session-based MCAP resolution", () => {
     await waitFor(() => {
       expect(mockSelectSource).toHaveBeenCalledWith("remote-file", {
         type: "connection",
-        params: { url: "https://example.com/file1.mcap,https://example.com/file2.mcap" },
+        params: undefined,
+        urls: ["https://example.com/file1.mcap", "https://example.com/file2.mcap"],
         sourceMetadata: [{ robot: "r1" }, { robot: "r2" }],
       });
     });

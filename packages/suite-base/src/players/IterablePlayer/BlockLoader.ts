@@ -36,6 +36,7 @@ import {
 } from "@lichtblick/suite-base/players/types";
 
 import { IDeserializedIterableSource, MessageIteratorArgs } from "./IIterableSource";
+import { selectPreloadTopics } from "./selectPreloadTopics";
 
 const log = Log.getLogger(__filename);
 
@@ -564,30 +565,14 @@ export class BlockLoader {
         const full = !budget.fits(0);
 
         if (full) {
-          // Drop this block's read. The topics whose part of it can't fit even on its own stop
-          // here for this pass; if each would fit on its own, the one that would then hold the most
-          // stops. The block is read again for the others.
+          // Retry this block with the best subset that can fit. Keep the stopped topics capped
+          // for this pass so that their history ends here.
           budget.release(sizeInBytes);
           const distance = this.#distance(currentBlockId, this.#playheadBlock());
-          const slice = (topic: string) => messagesByTopic[topic] ?? [];
-          const fitsAlone = (topic: string) => {
-            const used = budget.used() + this.#bytesOf(slice(topic));
-            return (
-              used <= budget.capacity ||
-              this.#planEviction(distance, { [topic]: slice(topic) }, used, budget.capacity).fits
-            );
-          };
-          const fetched = [...topicsToFetch.keys()];
-          let stop = fetched.filter((topic) => !fitsAlone(topic));
-          if (stop.length === 0) {
-            const loadedBytes = this.#topicBytes();
-            const most = _.maxBy(
-              fetched,
-              (topic) => (loadedBytes.get(topic) ?? 0) + this.#bytesOf(slice(topic)),
-            );
-            stop = most != undefined ? [most] : [];
-          }
-          for (const topic of stop) {
+          const selected = this.#selectTopics(distance, messagesByTopic, budget);
+          for (const topic of [...topicsToFetch.keys()].filter(
+            (candidate) => !selected.has(candidate),
+          )) {
             cappedAt.set(topic, this.#distance(currentBlockId, playhead));
           }
           this.#alertManager.addAlert("cache-full", {
@@ -709,8 +694,7 @@ export class BlockLoader {
       for (const topic of Object.keys(block.messagesByTopic)) {
         if (
           (topicBytes.get(topic) ?? 0) > fairShare &&
-          // Nearer data only of other topics, and never at the playhead
-          (blockDistance > distance || (!(topic in loading) && blockDistance > 0))
+          blockDistance > this.#evictionThreshold(topic, loading, distance)
         ) {
           victims.push({ id, topic, distance: blockDistance });
         }
@@ -735,6 +719,67 @@ export class BlockLoader {
       plan.push(victim);
     }
     return { plan, fits: used - freed <= capacity };
+  }
+
+  #selectTopics(
+    distance: number,
+    loading: Record<string, MessageEvent[]>,
+    budget: ByteBudget,
+  ): Set<string> {
+    const held = this.#topicBytes();
+    const playhead = this.#playheadBlock();
+    const fairShare = budget.capacity / Math.max(1, this.#topics.size);
+    const cached = this.#blocks
+      .flatMap((block, id) => {
+        const blockDistance = this.#distance(id, playhead);
+        return blockDistance > 0 && block ? [{ block, distance: blockDistance }] : [];
+      })
+      .sort((a, b) => b.distance - a.distance);
+
+    // A topic's eviction room depends only on its own bytes and whether we admit its new slice.
+    // Calculate that room using the same farthest-first rule as #planEviction.
+    const released = (topicBytes: Map<string, number>, nextDistance: number) => {
+      const result = new Map<string, number>();
+      for (const entry of cached) {
+        for (const [topic, messages] of Object.entries(entry.block.messagesByTopic)) {
+          const remaining = topicBytes.get(topic) ?? 0;
+          if (
+            remaining > fairShare &&
+            entry.distance > this.#evictionThreshold(topic, loading, nextDistance)
+          ) {
+            const bytes = this.#bytesOf(messages);
+            topicBytes.set(topic, remaining - bytes);
+            result.set(topic, (result.get(topic) ?? 0) + bytes);
+          }
+        }
+      }
+      return result;
+    };
+    const admittedBytes = new Map(held);
+    for (const [topic, messages] of Object.entries(loading)) {
+      admittedBytes.set(topic, (held.get(topic) ?? 0) + this.#bytesOf(messages));
+    }
+    const ifSkipped = released(new Map(held), 0);
+    const ifAdmitted = released(new Map(admittedBytes), distance);
+    const available =
+      budget.capacity -
+      budget.used() +
+      [...ifSkipped.values()].reduce((sum, bytes) => sum + bytes, 0);
+    const costs = Object.entries(loading).map(([topic, messages]) => ({
+      topic,
+      cost: this.#bytesOf(messages) + (ifSkipped.get(topic) ?? 0) - (ifAdmitted.get(topic) ?? 0),
+      projectedBytes: admittedBytes.get(topic) ?? 0,
+    }));
+    return selectPreloadTopics(costs, available);
+  }
+
+  #evictionThreshold(
+    topic: string,
+    loading: Record<string, MessageEvent[]>,
+    distance: number,
+  ): number {
+    // Admitted topics can only lose farther slices. The playhead is protected for every topic.
+    return Object.hasOwn(loading, topic) ? distance : 0;
   }
 
   /** Loaded bytes per topic, across all blocks */

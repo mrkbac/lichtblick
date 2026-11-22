@@ -35,6 +35,8 @@ export class BagIterableSource implements ISerializedIterableSource {
   readonly #source: BagSource;
 
   #bag: Bag | undefined;
+  #bagOptions: ConstructorParameters<typeof Bag>[1];
+  #remoteReader?: CachedFilelike;
   #datatypesByConnectionId = new Map<number, string>();
   #textEncoder = new TextEncoder();
 
@@ -63,12 +65,13 @@ export class BagIterableSource implements ISerializedIterableSource {
       // Call open on the remote reader to see if we can access the remote file
       await remoteReader.open();
 
+      this.#remoteReader = remoteReader;
       fileLike = remoteReader;
     } else {
       fileLike = new BlobReader(this.#source.file);
     }
 
-    this.#bag = new Bag(fileLike, {
+    this.#bagOptions = {
       parse: false,
       decompress: {
         bz2: (buffer: Uint8Array, size: number) => {
@@ -78,8 +81,8 @@ export class BagIterableSource implements ISerializedIterableSource {
           return new Uint8Array(decompressLZ4(buffer, size));
         },
       },
-    });
-
+    };
+    this.#bag = new Bag(fileLike, this.#bagOptions);
     await this.#bag.open();
 
     const alerts: PlayerAlert[] = [];
@@ -187,19 +190,42 @@ export class BagIterableSource implements ISerializedIterableSource {
   async *#messageIterator(
     opt: MessageIteratorArgs & { reverse: boolean },
   ): AsyncGenerator<Readonly<IteratorResult<Uint8Array>>> {
-    if (!this.#bag) {
+    const original = this.#bag;
+    if (!original) {
       throw new Error("Invariant: uninitialized");
     }
-
+    const abort = opt.abort;
+    const remote = this.#remoteReader;
+    abort?.throwIfAborted();
+    let bag = original;
+    if (abort && remote) {
+      // Give this iterator its own cancellable view of the shared byte cache and loaded index.
+      bag = new Bag(
+        {
+          size: () => remote.size(),
+          read: async (offset, length) =>
+            await remote.read(offset, length, {
+              signal: abort,
+              background: opt.consumptionType === "full",
+            }),
+        },
+        this.#bagOptions,
+      );
+      bag.connections = original.connections;
+      bag.chunkInfos = original.chunkInfos;
+      bag.startTime = original.startTime;
+      bag.endTime = original.endTime;
+    }
     const end = opt.end;
 
-    const iterator = this.#bag.messageIterator({
+    const iterator = bag.messageIterator({
       topics: Array.from(opt.topics.keys()),
       reverse: opt.reverse,
       start: opt.start,
     });
 
     for await (const bagMsgEvent of iterator) {
+      abort?.throwIfAborted();
       const connectionId = bagMsgEvent.connectionId;
 
       if (end && compare(bagMsgEvent.timestamp, end) > 0) {

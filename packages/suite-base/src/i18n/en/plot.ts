@@ -19,6 +19,7 @@ export const plot = {
   shadeSeries: "Shaded series",
   shadeSeriesMissing: "No series with this message path.",
   automatic: "Automatic",
+  approximateLiveSeries: "Approximate values from thinned live history: {{series}}",
   axisLabel: "Axis label",
   axisScales: "Axis scales",
   center: "Center",

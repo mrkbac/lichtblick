@@ -240,8 +240,8 @@ export class IterablePlayer implements Player {
   // channels, which its initialize() and waitForUpdate() parse for all readers.
   readonly #unbufferedSource: IDeserializedIterableSource;
   /** Range reads (getBatchIterator) that start together share one pass over the recording */
-  readonly #rangeReads = new SharedRangeReads((topics, range) =>
-    this.#unbufferedSource.messageIterator({ topics, consumptionType: "full", ...range }),
+  readonly #rangeReads = new SharedRangeReads((topics, range, abort) =>
+    this.#unbufferedSource.messageIterator({ topics, consumptionType: "full", ...range, abort }),
   );
   // #unbufferedSource once initialized
   #messageRangeSource?: IDeserializedIterableSource;

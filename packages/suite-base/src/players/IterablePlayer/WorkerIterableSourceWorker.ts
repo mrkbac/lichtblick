@@ -74,7 +74,7 @@ export class WorkerIterableSourceWorker<MessageType = unknown> {
     args: Omit<Immutable<MessageIteratorArgs>, "abort">,
     abort?: AbortSignal,
   ): ComlinkTransferIteratorCursor<MessageType> & Comlink.ProxyMarked {
-    const iter = this.#source.messageIterator(args);
+    const iter = this.#source.messageIterator({ ...args, abort });
     const cursor = new ComlinkTransferIteratorCursor(new IteratorCursor<MessageType>(iter, abort));
     return Comlink.proxy(cursor);
   }

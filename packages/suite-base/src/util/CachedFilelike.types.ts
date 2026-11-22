@@ -32,6 +32,7 @@ export interface ILogger {
 }
 
 export type ReadOptions = {
+  signal?: AbortSignal;
   /** A read nobody waits on to play (e.g. a whole-file scan): it yields the connection to the rest */
   background?: boolean;
 };

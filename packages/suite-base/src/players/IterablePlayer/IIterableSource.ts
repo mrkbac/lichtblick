@@ -68,6 +68,9 @@ export type Initialization = {
 };
 
 export type MessageIteratorArgs = {
+  /** Stops in-flight reads if supported by the source. */
+  abort?: AbortSignal;
+
   /** Which topics to return from the iterator */
   topics: TopicSelection;
 
@@ -221,9 +224,7 @@ export interface IIterableSource<MessageType = unknown> {
    * This improves performance for some workflows (i.e. message reading over webworkers) by avoiding
    * individual "next" calls per message.
    */
-  getMessageCursor?: (
-    args: Immutable<MessageIteratorArgs> & { abort?: AbortSignal },
-  ) => IMessageCursor<MessageType>;
+  getMessageCursor?: (args: Immutable<MessageIteratorArgs>) => IMessageCursor<MessageType>;
 
   /**
    * Optional, for a source that grows after initialize() (e.g. a file whose index is still being
@@ -270,6 +271,7 @@ export type IterableSourceInitializeArgs = {
   // Compare `files`/`urls`/`recordings` side by side instead of merging them: the side name of each, in order.
   // Entries with the same name are merged into one side (see MultiSource).
   compare?: readonly string[];
+  compareOffsets?: readonly number[];
   // Fetch credentials for `url`/`urls`, e.g. "include" to send cookies (`ds.includeCredentials`)
   credentials?: RequestCredentials;
   // Optional overrides for multi-file hydration tuning (see MultiSourceHydrationOptions in
