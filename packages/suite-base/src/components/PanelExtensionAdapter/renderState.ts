@@ -345,9 +345,7 @@ function initRenderStateBuilder(): BuildRenderStateFn {
       if ((newBlocks != undefined && prevBlocks !== newBlocks) || conversionsChanged) {
         shouldRender.value = true;
         const blocksToProcess = newBlocks ?? prevBlocks ?? [];
-        // Deprecated in Foxglove's API only; still part of Lichtblick's.
-        // eslint-disable-next-line @typescript-eslint/no-deprecated
-        const frames: MessageEvent[] = (renderState.allFrames = []);
+        const framesByBlock: MessageEvent[][] = [];
         // only populate allFrames with topics that the panel wants to preload
         const topicsToPreloadForPanel = Array.from(
           new Set<string>(
@@ -384,10 +382,13 @@ function initRenderStateBuilder(): BuildRenderStateFn {
             allFramesByBlock.set(block, newBlockFrames);
             blockFrames = newBlockFrames;
           }
-          for (const messageEvent of blockFrames) {
-            frames.push(messageEvent);
-          }
+          framesByBlock.push(blockFrames);
         }
+        // This runs on every preload progress update: one native concat is several times faster
+        // than pushing every message.
+        // Deprecated in Foxglove's API only; still part of Lichtblick's.
+        // eslint-disable-next-line @typescript-eslint/no-deprecated
+        renderState.allFrames = ([] as MessageEvent[]).concat(...framesByBlock);
       }
       prevBlocks = newBlocks;
     }
