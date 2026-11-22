@@ -53,13 +53,31 @@ describe("WorkerSocketAdapter", () => {
     });
   });
 
+  it("WorkerSocketAdapter should hand each message of a batch to onmessage, in order", () => {
+    const socket = new WorkerSocketAdapter(wsUrl);
+    const received: unknown[] = [];
+    socket.onmessage = (event) => received.push(event);
+    const first = new ArrayBuffer(4);
+    const second = BasicBuilder.string();
+
+    workerMock.onmessage?.({
+      data: { type: "messages", data: [first, second] },
+    });
+
+    expect(received).toEqual([{ data: first }, { data: second }]);
+  });
+
   it.each([
     [
       {
         data: { type: "open", protocol: BasicBuilder.string() },
       } as MessageEvent<FromWorkerMessage>,
     ],
-    [{ data: { type: "message", data: BasicBuilder.string() } } as MessageEvent<FromWorkerMessage>],
+    [
+      {
+        data: { type: "messages", data: [BasicBuilder.string()] },
+      } as MessageEvent<FromWorkerMessage>,
+    ],
     [{ data: { type: "close", data: undefined } } as MessageEvent<FromWorkerMessage>],
   ])("WorkerSocketAdapter should handle '%s' event", (event) => {
     workerMock.onmessage?.(event);

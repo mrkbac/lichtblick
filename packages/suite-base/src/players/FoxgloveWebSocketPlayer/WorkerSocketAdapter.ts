@@ -51,9 +51,10 @@ export default class WorkerSocketAdapter implements IWebSocket {
             this.onerror(event.data);
           }
           break;
-        case "message":
-          if (this.onmessage) {
-            this.onmessage(event.data);
+        case "messages":
+          for (const data of event.data.data) {
+            // The handler may close the socket (and drop this adapter's handlers) mid-batch
+            this.onmessage?.({ data });
           }
           break;
       }
