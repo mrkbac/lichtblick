@@ -13,7 +13,8 @@ vi.mock("react-i18next", () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
 
-const fakeWorker = () => Object.assign(new EventTarget(), { state: "", postMessage: vi.fn() });
+const fakeWorker = () =>
+  Object.assign(new EventTarget(), { state: "installed", postMessage: vi.fn() });
 
 function mockRegistration(registration: { active?: unknown; waiting?: unknown }) {
   Object.defineProperty(navigator, "serviceWorker", {
@@ -53,6 +54,35 @@ describe("UpdateIndicator", () => {
       expect(reload).toHaveBeenCalledTimes(1);
     });
     expect(waiting.postMessage).not.toHaveBeenCalled();
+    vi.restoreAllMocks();
+  });
+
+  // also before any test applies an update here (module state)
+  it("reloads when another window activates the update while this one saves", async () => {
+    const reload = vi.fn();
+    vi.spyOn(window, "location", "get").mockReturnValue({ reload } as unknown as Location);
+    let finishSave = () => {};
+    const unregister = setSaveSessionBeforeReload(async () => {
+      await new Promise<void>((resolve) => {
+        finishSave = resolve;
+      });
+    });
+    const waiting = fakeWorker();
+    mockRegistration({ active: fakeWorker(), waiting });
+    renderIndicator();
+
+    fireEvent.click(await screen.findByTestId("update-indicator"));
+    waiting.state = "activated";
+    act(() => {
+      navigator.serviceWorker.dispatchEvent(new Event("controllerchange"));
+    });
+    expect(reload).not.toHaveBeenCalled();
+    finishSave();
+    await waitFor(() => {
+      expect(reload).toHaveBeenCalledTimes(1);
+    });
+    expect(waiting.postMessage).not.toHaveBeenCalled();
+    unregister();
     vi.restoreAllMocks();
   });
 

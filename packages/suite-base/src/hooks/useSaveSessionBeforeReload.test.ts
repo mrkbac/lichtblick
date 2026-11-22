@@ -27,6 +27,8 @@ vi.mock("@lichtblick/suite-base/components/MessagePipeline", () => ({
     playerState: {
       capabilities: [PLAYER_CAPABILITIES.setSpeed, PLAYER_CAPABILITIES.playbackControl],
       activeData: { currentTime: { sec: 12, nsec: 345_000_000 }, isPlaying: true },
+      urlState: { sourceId: "mcap-local-file" },
+      name: "example.mcap",
     },
   }),
 }));
@@ -50,7 +52,7 @@ describe("useSaveSessionBeforeReload", () => {
     expect(new URL(window.location.href).searchParams.get("time")).toBe(
       "1970-01-01T00:00:12.345000000Z",
     );
-    expect(takeResumePlayback()).toBe(true);
+    expect(takeResumePlayback()).toBe(JSON.stringify(["mcap-local-file", "example.mcap"]));
     vi.useRealTimers();
   });
 });

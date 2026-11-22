@@ -7,6 +7,7 @@ import { LAYOUT_SAVE_MAX_WAIT_MS } from "@lichtblick/suite-base/components/Curre
 import { useMessagePipelineGetter } from "@lichtblick/suite-base/components/MessagePipeline";
 import { useLayoutManager } from "@lichtblick/suite-base/context/LayoutManagerContext";
 import {
+  playerSourceKey,
   rememberPlaybackForReload,
   setSaveSessionBeforeReload,
 } from "@lichtblick/suite-base/hooks/useServiceWorkerUpdate";
@@ -39,7 +40,9 @@ export function useSaveSessionBeforeReload(): void {
         const activeData = playerState.activeData;
         if (activeData && isRecordingSource(playerState.capabilities)) {
           updateUrl({ time: activeData.currentTime });
-          rememberPlaybackForReload({ playing: activeData.isPlaying });
+          rememberPlaybackForReload(
+            activeData.isPlaying ? playerSourceKey(playerState) : undefined,
+          );
         }
       }),
     [getMessagePipeline, layoutManager],

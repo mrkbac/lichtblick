@@ -4,6 +4,7 @@
 import { useEffect, useState } from "react";
 
 import Logger from "@lichtblick/log";
+import type { PlayerState } from "@lichtblick/suite-base/players/types";
 
 const log = Logger.getLogger(__filename);
 
@@ -69,11 +70,23 @@ async function saveSessionBeforeReload(): Promise<void> {
 
 const RESUME_PLAYBACK_KEY = "lichtblick.resumePlaybackAfterReload";
 
-/** Per tab: the reload that follows resumes playback (see takeResumePlayback). */
-export function rememberPlaybackForReload({ playing }: { playing: boolean }): void {
+/**
+ * Identifies the recording a player plays, across a reload (the player id is new each load).
+ * Undefined while the player has no source.
+ */
+export function playerSourceKey(playerState: PlayerState): string | undefined {
+  const sourceId = playerState.urlState?.sourceId;
+  return sourceId == undefined ? undefined : JSON.stringify([sourceId, playerState.name ?? ""]);
+}
+
+/**
+ * Per tab: the reload that follows resumes playback of `source` (a playerSourceKey), see
+ * takeResumePlayback. Undefined when it was not playing.
+ */
+export function rememberPlaybackForReload(source: string | undefined): void {
   try {
-    if (playing) {
-      sessionStorage.setItem(RESUME_PLAYBACK_KEY, "1");
+    if (source != undefined) {
+      sessionStorage.setItem(RESUME_PLAYBACK_KEY, source);
     } else {
       sessionStorage.removeItem(RESUME_PLAYBACK_KEY);
     }
@@ -82,14 +95,17 @@ export function rememberPlaybackForReload({ playing }: { playing: boolean }): vo
   }
 }
 
-/** Whether the recording was playing when this tab reloaded for an update. Reads it only once. */
-export function takeResumePlayback(): boolean {
+/**
+ * The playerSourceKey of the recording that was playing when this tab reloaded for an update, so
+ * only that recording resumes. Reads it only once.
+ */
+export function takeResumePlayback(): string | undefined {
   try {
-    const playing = sessionStorage.getItem(RESUME_PLAYBACK_KEY) != undefined;
+    const source = sessionStorage.getItem(RESUME_PLAYBACK_KEY) ?? undefined;
     sessionStorage.removeItem(RESUME_PLAYBACK_KEY);
-    return playing;
+    return source;
   } catch {
-    return false;
+    return undefined;
   }
 }
 
@@ -235,7 +251,13 @@ export function useServiceWorkerUpdate(): ServiceWorkerUpdate | undefined {
         kind: "waiting",
         update: () => {
           void saveSessionBeforeReload().then(() => {
-            applyServiceWorkerUpdate(waiting);
+            // Another window may have activated it during the save: it no longer waits, and
+            // SKIP_WAITING would change nothing, so no controllerchange would reload this one
+            if (waiting.state === "installed") {
+              applyServiceWorkerUpdate(waiting);
+            } else {
+              window.location.reload();
+            }
           });
         },
       }

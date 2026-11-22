@@ -97,10 +97,10 @@ describe("reloadToLatestVersion", () => {
 
 describe("takeResumePlayback", () => {
   it("resumes only the reload right after a playing update", () => {
-    rememberPlaybackForReload({ playing: true });
-    expect(takeResumePlayback()).toBe(true);
-    expect(takeResumePlayback()).toBe(false);
-    rememberPlaybackForReload({ playing: false });
-    expect(takeResumePlayback()).toBe(false);
+    rememberPlaybackForReload("source");
+    expect(takeResumePlayback()).toBe("source");
+    expect(takeResumePlayback()).toBeUndefined();
+    rememberPlaybackForReload(undefined);
+    expect(takeResumePlayback()).toBeUndefined();
   });
 });
