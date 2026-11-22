@@ -245,7 +245,9 @@ async function main(): Promise<void> {
     "| --- | ---: | ---: | ---: | ---: | --- |",
   ];
   let failed = 0;
-  for (const [metric, byVariant] of Object.entries(samples)) {
+  for (const [metric, byVariant] of Object.entries(samples).sort(([a], [b]) =>
+    a.localeCompare(b),
+  )) {
     const unit = unitOf(metric);
     const budget = BUDGETS[unit];
     const head = byVariant.head ?? [];
