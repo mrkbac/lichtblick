@@ -39,6 +39,13 @@ describe("normalizeLogEvent", () => {
     );
   });
 
+  it("keeps node name and file", () => {
+    const message = { level: 2, msg: "a", name: "node", file: "main.cpp", line: 3 };
+    expect(normalizeLogEvent(event("rosgraph_msgs/Log", message))).toEqual(
+      expect.objectContaining({ name: "node", file: "main.cpp", line: 3 }),
+    );
+  });
+
   it("caches the result per event", () => {
     const e = event("rosgraph_msgs/Log", { level: 2, msg: "a" });
     expect(normalizeLogEvent(e)).toBe(normalizeLogEvent(e));

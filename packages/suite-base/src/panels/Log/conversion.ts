@@ -92,6 +92,28 @@ export function getNormalizedStamp(raw: Partial<RawLog>): Time {
 
 const cache = new WeakMap<MessageEvent, NormalizedLogMessage>();
 
+// Decoders return a new string per message, so a node name or file repeated in millions of log
+// lines would be stored millions of times.
+// ponytail: grows with the number of distinct names/files (a few hundred in practice); stops
+// adding past MAX_INTERNED so a source with unique names can't grow it without bound.
+const MAX_INTERNED = 10_000;
+const interned = new Map<string, string>();
+
+/** One shared copy of `value` for all messages that repeat it. */
+function intern(value: string | undefined): string | undefined {
+  if (value == undefined) {
+    return value;
+  }
+  const shared = interned.get(value);
+  if (shared != undefined) {
+    return shared;
+  }
+  if (interned.size < MAX_INTERNED) {
+    interned.set(value, value);
+  }
+  return value;
+}
+
 /** Normalize a log message event. Results are cached per event object. */
 export function normalizeLogEvent(event: MessageEvent): NormalizedLogMessage {
   let normalized = cache.get(event);
@@ -103,8 +125,8 @@ export function normalizeLogEvent(event: MessageEvent): NormalizedLogMessage {
       message: getNormalizedMessage(raw),
       stamp: getNormalizedStamp(raw),
       level: getNormalizedLevel(event.schemaName, raw),
-      name: raw.name,
-      file: raw.file,
+      name: intern(raw.name),
+      file: intern(raw.file),
       line: raw.line,
     };
     cache.set(event, normalized);
