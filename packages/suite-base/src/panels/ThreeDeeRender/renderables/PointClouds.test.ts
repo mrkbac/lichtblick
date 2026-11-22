@@ -395,6 +395,46 @@ describe("PointCloudHistoryRenderable decay", () => {
 });
 
 describe("PointClouds read-back history", () => {
+  it("draws history without a seek-frame scan and keeps byte-identical records distinct", () => {
+    const topic = "/points";
+    const extension = new PointClouds({
+      ...rendererMock,
+      hud: {},
+      config: {
+        topics: { [topic]: { decayTime: 10, colorMode: "flat", colorField: "intensity" } },
+      },
+      topics: [],
+      settings: { ...rendererMock.settings, setNodesForKey: vi.fn() },
+    } as unknown as Renderer);
+    const event = {
+      topic,
+      schemaName: "sensor_msgs/PointCloud2",
+      receiveTime: { sec: 5, nsec: 0 },
+      message: makeCloud(),
+      sizeInBytes: 0,
+      recordId: "record:1",
+    };
+
+    expect(extension.addHistoricalMessage(event)).toBe(0n);
+    extension.addHistoricalMessage({ ...event, recordId: "record:2" });
+    extension.addHistoricalMessage(event);
+    const renderable = extension.renderables.get(topic)!;
+    const ring = renderable.children.find((child) => child instanceof DecayPointRing)!;
+    expect(ring.scanCount()).toBe(2);
+    const latest = renderable.children[0] as unknown as {
+      geometry: { drawRange: { count: number } };
+    };
+    expect(latest.geometry.drawRange.count).toBe(0);
+
+    const handler = extension.getSubscriptions()[0]!.subscription.handler;
+    handler(event);
+    expect(ring.scanCount()).toBe(1);
+    expect(latest.geometry.drawRange.count).toBe(POSITIONS.length);
+    const later = { ...event, recordId: "record:3", receiveTime: { sec: 6, nsec: 0 } };
+    handler(later);
+    expect(ring.scanCount()).toBe(2);
+  });
+
   it("leaves the drawn scan and anything newer to playback (through timestamp sync)", () => {
     const addMessageEvent = vi.fn();
     const extension = new PointClouds({

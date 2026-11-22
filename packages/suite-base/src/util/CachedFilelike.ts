@@ -52,6 +52,7 @@ type ReadRequest = {
   // A one-off fetch for this read failed, so it is left to the main connection.
   sideFetchFailed?: boolean;
   background: boolean;
+  signal?: AbortSignal;
   // Its bytes were cached when it came in, so the main connection did not serve it
   cached: boolean;
 };
@@ -151,6 +152,10 @@ export default class CachedFilelike implements Filelike {
     if (this.#closed) {
       return Promise.reject(new Error("CachedFilelike is closed"));
     }
+    const signal = options?.signal;
+    if (signal?.aborted === true) {
+      return Promise.reject(toError(signal.reason));
+    }
     if (length === 0) {
       return Promise.resolve(new Uint8Array());
     }
@@ -165,7 +170,7 @@ export default class CachedFilelike implements Filelike {
       // exceeds a small per-source cache slice in a many-file remote session) cannot be served
       // through the VirtualLRUBuffer. Rather than failing, fetch the exact range directly without
       // caching. Memory stays transient and the cache budget is unchanged.
-      return this.#readUncached(range);
+      return this.#readUncached(range, signal);
     }
 
     // Potentially performance-sensitive; await can be expensive
@@ -178,14 +183,44 @@ export default class CachedFilelike implements Filelike {
             return;
           }
 
-          this.#readRequests.push({
+          signal?.throwIfAborted();
+          const finish = () => signal?.removeEventListener("abort", cancel);
+          const cancel = () => {
+            this.#readRequests = this.#readRequests.filter((other) => other !== request);
+            request.reject(toError(signal?.reason));
+            const connection = this.#currentConnection;
+            if (
+              connection &&
+              !this.#readRequests.some(
+                ({ range: other }) =>
+                  other.end > connection.remainingRange.start &&
+                  other.end <= connection.remainingRange.end,
+              )
+            ) {
+              this.#currentConnection = undefined;
+              // Stop an abandoned download without starting read-ahead again.
+              this.#lastResolvedCallbackEnd = undefined;
+              connection.stream.destroy();
+            }
+            this.#updateState();
+          };
+          const request: ReadRequest = {
             range,
-            resolve,
-            reject,
+            resolve: (data) => {
+              finish();
+              resolve(data);
+            },
+            reject: (error) => {
+              finish();
+              reject(error);
+            },
             requestTime: Date.now(),
             background: options?.background === true,
             cached: this.#virtualBuffer.hasData(range.start, range.end),
-          });
+            signal,
+          };
+          signal?.addEventListener("abort", cancel, { once: true });
+          this.#readRequests.push(request);
           this.#updateState();
         })
         .catch((err: unknown) => {
@@ -223,8 +258,9 @@ export default class CachedFilelike implements Filelike {
 
   // Reads a byte range directly from the underlying file reader without caching. Used for single
   // reads larger than the LRU cache budget, which cannot be represented in the VirtualLRUBuffer.
-  async #readUncached(range: Range): Promise<Uint8Array> {
+  async #readUncached(range: Range, signal?: AbortSignal): Promise<Uint8Array> {
     await this.open();
+    signal?.throwIfAborted();
     if (this.#closed) {
       throw new Error("CachedFilelike is closed");
     }
@@ -247,6 +283,7 @@ export default class CachedFilelike implements Filelike {
         }
         settled = true;
         this.#activeUncachedReads.delete(active);
+        signal?.removeEventListener("abort", cancel);
         stream.destroy();
         action();
       };
@@ -255,6 +292,10 @@ export default class CachedFilelike implements Filelike {
           reject(err);
         });
       };
+      const cancel = () => {
+        active.cancel(toError(signal?.reason));
+      };
+      signal?.addEventListener("abort", cancel, { once: true });
       this.#activeUncachedReads.add(active);
 
       stream.on("error", (error: Error) => {
@@ -337,6 +378,9 @@ export default class CachedFilelike implements Filelike {
       .filter(({ sideFetch }) => sideFetch !== true)
       .sort((a, b) => Number(a.background) - Number(b.background));
     const next = waiting[0];
+    if (!next && !this.#currentConnection && this.#lastResolvedCallbackEnd == undefined) {
+      return;
+    }
     const now = Date.now();
     const servesForeground = now - this.#lastForegroundServeTime < MAIN_CONNECTION_IDLE_MS;
 
@@ -377,7 +421,7 @@ export default class CachedFilelike implements Filelike {
     request.sideFetch = true;
     const kind = request.background ? "background" : "foreground";
     this.#sideFetches[kind]++;
-    this.#readUncached(request.range)
+    this.#readUncached(request.range, request.signal)
       .then((data) => {
         // The main connection may have delivered this range first; then the read is resolved already.
         this.#virtualBuffer.copyFrom(data, request.range.start);
@@ -385,6 +429,9 @@ export default class CachedFilelike implements Filelike {
         request.resolve(data);
       })
       .catch((error: unknown) => {
+        if (request.signal?.aborted === true) {
+          return;
+        }
         // Leave the read to the main connection, which has its own retry handling.
         this.#log.info(`Side fetch @ ${rangeToString(request.range)} failed: ${String(error)}`);
         request.sideFetch = false;

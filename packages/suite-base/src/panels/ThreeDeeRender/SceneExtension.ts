@@ -9,9 +9,10 @@ import * as _ from "lodash-es";
 import * as THREE from "three";
 import { DeepPartial, Writable } from "ts-essentials";
 
-import { MessageEvent, SettingsTreeAction } from "@lichtblick/suite";
+import { SettingsTreeAction } from "@lichtblick/suite";
 import { PanelContextMenuItem } from "@lichtblick/suite-base/components/PanelContextMenu";
 import { DraggedMessagePath } from "@lichtblick/suite-base/components/PanelExtensionAdapter";
+import type { MessageEvent } from "@lichtblick/suite-base/players/types";
 
 import type { AnyRendererSubscription, RendererConfig } from "./IRenderer";
 import { Path } from "./LayerErrors";

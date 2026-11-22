@@ -144,6 +144,7 @@ export class UlogIterableSource implements IIterableSource {
     const startTime = toMicros(start, "ceil");
     const endTime = toMicros(end, "floor");
     for await (const msg of this.#ulog.readMessages({
+      signal: args.abort,
       startTime,
       endTime,
       msgIds: this.#msgIds(topics.keys()),

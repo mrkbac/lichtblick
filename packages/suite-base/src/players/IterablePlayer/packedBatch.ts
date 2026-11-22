@@ -21,6 +21,7 @@ export type PackedBatch<MessageType> = {
   /** Per message: receive sec, receive nsec, publish sec, publish nsec (NaN if none), size */
   numbers: Float64Array;
   messages: MessageType[];
+  recordIds?: (string | undefined)[];
   /** Results that are not plain message events, by their position in the batch */
   others: [position: number, result: IteratorResult<MessageType>][];
 };
@@ -37,6 +38,7 @@ export function packBatch<MessageType>(batch: readonly IteratorResult<MessageTyp
   const nameIndexes = new Uint32Array(batch.length);
   const numbers = new Float64Array(batch.length * STRIDE);
   const messages: MessageType[] = [];
+  let recordIds: (string | undefined)[] | undefined;
   const others: PackedBatch<MessageType>["others"] = [];
   // A set: messages may share one backing buffer, and listing it twice makes postMessage throw
   const buffers = new Set<ArrayBufferLike>();
@@ -66,6 +68,10 @@ export function packBatch<MessageType>(batch: readonly IteratorResult<MessageTyp
     numbers[n + 2] = publishTime?.sec ?? NaN;
     numbers[n + 3] = publishTime?.nsec ?? NaN;
     numbers[n + 4] = sizeInBytes;
+    if (result.msgEvent.recordId != undefined) {
+      recordIds ??= [];
+      recordIds[i] = result.msgEvent.recordId;
+    }
     messages.push(message);
     if (message instanceof Uint8Array) {
       buffers.add(message.buffer);
@@ -73,14 +79,14 @@ export function packBatch<MessageType>(batch: readonly IteratorResult<MessageTyp
   }
 
   const transfer = [...buffers, nameIndexes.buffer, numbers.buffer] as Transferable[];
-  return { packed: { names, nameIndexes, numbers, messages, others }, transfer };
+  return { packed: { names, nameIndexes, numbers, messages, recordIds, others }, transfer };
 }
 
 /** The batch `packBatch` packed, in its original order */
 export function unpackBatch<MessageType>(
   packed: PackedBatch<MessageType>,
 ): IteratorResult<MessageType>[] {
-  const { names, nameIndexes, numbers, messages, others } = packed;
+  const { names, nameIndexes, numbers, messages, recordIds, others } = packed;
   const batch: IteratorResult<MessageType>[] = [];
   let next = 0;
   for (const [position, result] of others) {
@@ -109,6 +115,10 @@ export function unpackBatch<MessageType>(
       sizeInBytes: numbers[n + 4]!,
       schemaName: names[nameIndex + 1]!,
     };
+    const recordId = recordIds?.[i];
+    if (recordId != undefined) {
+      msgEvent.recordId = recordId;
+    }
     return { type: "message-event", msgEvent };
   }
 }
@@ -125,6 +135,7 @@ const FIELDS = {
   message: "packed",
   sizeInBytes: "packed",
   originalMessageEvent: "unpacked",
+  recordId: "packed",
   topicConfig: "unpacked",
   serializedSizeInBytes: "unpacked",
 } as const satisfies Record<keyof MessageEvent, "packed" | "unpacked">;
