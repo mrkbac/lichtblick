@@ -9,7 +9,10 @@ import {
   IDataSourceFactory,
   DataSourceFactoryInitializeArgs,
 } from "@lichtblick/suite-base/context/PlayerSelectionContext";
-import FoxgloveWebSocketPlayer from "@lichtblick/suite-base/players/FoxgloveWebSocketPlayer";
+import {
+  loadFoxgloveWebSocketPlayer,
+  prefetch,
+} from "@lichtblick/suite-base/dataSources/playerModules";
 import { Player } from "@lichtblick/suite-base/players/types";
 
 export default class FoxgloveWebSocketDataSourceFactory implements IDataSourceFactory {
@@ -42,7 +45,12 @@ export default class FoxgloveWebSocketDataSourceFactory implements IDataSourceFa
     ],
   };
 
-  public initialize(args: DataSourceFactoryInitializeArgs): Player | undefined {
+  public prefetch = (): void => {
+    prefetch(loadFoxgloveWebSocketPlayer);
+  };
+
+  public async initialize(args: DataSourceFactoryInitializeArgs): Promise<Player | undefined> {
+    const FoxgloveWebSocketPlayer = await loadFoxgloveWebSocketPlayer();
     const url = args.params?.url;
     if (!url) {
       return;

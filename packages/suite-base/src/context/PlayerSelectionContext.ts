@@ -79,8 +79,16 @@ export interface IDataSourceFactory {
   // don't set it only merge, and comparing their files is refused instead of silently merging.
   supportsCompare?: boolean;
 
-  // Initialize a player.
-  initialize: (args: DataSourceFactoryInitializeArgs) => Player | undefined;
+  /**
+   * Initialize a player. May resolve asynchronously, e.g. to load the player's code on first use;
+   * the caller drops (closes) a player whose selection was superseded meanwhile.
+   */
+  initialize: (
+    args: DataSourceFactoryInitializeArgs,
+  ) => Player | undefined | Promise<Player | undefined>;
+
+  /** Starts loading what `initialize` needs, so opening the source later is fast. */
+  prefetch?: () => void;
 }
 
 /**

@@ -252,6 +252,29 @@ export default function PlayerManager(
   // superseded and won't apply its player or layout late.
   const selectionSeq = useRef(0);
 
+  // Player code loads on demand (see dataSources/playerModules). Once the app is idle after
+  // starting, load it for the file and sample sources, so opening one rarely waits for a chunk.
+  // Connection sources load theirs when picked.
+  useEffect(() => {
+    const prefetchAll = () => {
+      for (const source of playerSources) {
+        if (source.type !== "connection") {
+          source.prefetch?.();
+        }
+      }
+    };
+    if (typeof requestIdleCallback === "function") {
+      const handle = requestIdleCallback(prefetchAll, { timeout: 5000 });
+      return () => {
+        cancelIdleCallback(handle);
+      };
+    }
+    const timer = setTimeout(prefetchAll, 2000);
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [playerSources]);
+
   const selectSource = useCallback(
     async (sourceId: string, args?: DataSourceArgs) => {
       log.debug(`Select Source: ${sourceId}`);
@@ -267,12 +290,24 @@ export default function PlayerManager(
         return;
       }
 
-      const initializePlayer = (initArgs: DataSourceFactoryInitializeArgs) => {
-        const newPlayer = foundSource.initialize(initArgs);
+      // Start loading the player's code while the rest of the selection (permission prompts,
+      // reading file handles) runs
+      foundSource.prefetch?.();
+
+      // Factories may load their player's code first. Resolves undefined when a newer selection
+      // or a close superseded this one meanwhile; a player built for it anyway is closed again.
+      const initializePlayer = async (
+        initArgs: DataSourceFactoryInitializeArgs,
+      ): Promise<{ player: Player | undefined } | undefined> => {
+        const newPlayer = await foundSource.initialize(initArgs);
+        if (!isMounted() || seq !== selectionSeq.current) {
+          newPlayer?.close();
+          return undefined;
+        }
         if (newPlayer) {
           analytics.logEvent(AppEvent.PLAYER_CONSTRUCTED, { player: sourceId });
         }
-        return newPlayer;
+        return { player: newPlayer };
       };
       // Only once the new player exists: a failed initialize keeps the current player running,
       // and it still needs its selection (Compare, Export).
@@ -290,10 +325,21 @@ export default function PlayerManager(
 
       // Sample sources don't need args or prompts to initialize
       if (foundSource.type === "sample") {
-        const newPlayer = initializePlayer({});
+        let initialized;
+        try {
+          initialized = await initializePlayer({});
+        } catch (error) {
+          if (seq === selectionSeq.current) {
+            enqueueSnackbar(toError(error).message, { variant: "error" });
+          }
+          return;
+        }
+        if (!initialized) {
+          return;
+        }
         commitSelection();
 
-        setBasePlayer(newPlayer);
+        setBasePlayer(initialized.player);
         writeLastFile(undefined);
 
         // Show the sample in the layout made for it. Its id is remembered per source, so an
@@ -363,10 +409,13 @@ export default function PlayerManager(
       try {
         switch (args.type) {
           case "connection": {
-            const newPlayer = initializePlayer({
+            const initialized = await initializePlayer({
               params: args.params,
               sourceMetadata: args.sourceMetadata,
             });
+            if (!initialized) {
+              return;
+            }
             const url = args.params?.url;
             commitSelection(
               undefined,
@@ -378,7 +427,7 @@ export default function PlayerManager(
                   }
                 : undefined,
             );
-            setBasePlayer(newPlayer);
+            setBasePlayer(initialized.player);
             writeLastFile(undefined);
 
             if (args.params?.url) {
@@ -440,15 +489,18 @@ export default function PlayerManager(
 
               const compare =
                 multiFile && foundSource.supportsCompare === true ? args.compare : undefined;
-              const newPlayer = initializePlayer({
+              const initialized = await initializePlayer({
                 file: multiFile ? undefined : files[0],
                 handle: multiFile ? undefined : handles?.[0],
                 files: multiFile ? files : undefined,
                 compare,
               });
+              if (!initialized) {
+                return;
+              }
               commitSelection(files, compare);
 
-              setBasePlayer(newPlayer);
+              setBasePlayer(initialized.player);
 
               // Only handles can be reopened after a reload
               if (handles) {

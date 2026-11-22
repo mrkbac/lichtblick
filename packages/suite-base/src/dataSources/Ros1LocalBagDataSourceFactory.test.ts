@@ -18,7 +18,7 @@ describe("Ros1LocalBagDataSourceFactory", () => {
     factory = new Ros1LocalBagDataSourceFactory();
   });
 
-  it("should have correct metadata", () => {
+  it("should have correct metadata", async () => {
     expect(factory.id).toBe("ros1-local-bagfile");
     expect(factory.type).toBe("file");
     expect(factory.displayName).toBe("ROS 1 Bag");
@@ -26,24 +26,24 @@ describe("Ros1LocalBagDataSourceFactory", () => {
     expect(factory.supportedFileTypes).toEqual([".bag"]);
   });
 
-  it("should return undefined if no files are provided", () => {
-    const result = factory.initialize({
+  it("should return undefined if no files are provided", async () => {
+    const result = await factory.initialize({
       files: [],
     });
 
     expect(result).toBeUndefined();
   });
 
-  it("should return undefined if no file is provided", () => {
-    const result = factory.initialize({
+  it("should return undefined if no file is provided", async () => {
+    const result = await factory.initialize({
       file: undefined,
     });
 
     expect(result).toBeUndefined();
   });
 
-  it("should return undefined if undefined file is provided", () => {
-    const result = factory.initialize({
+  it("should return undefined if undefined file is provided", async () => {
+    const result = await factory.initialize({
       files: [undefined as unknown as File],
     });
 
@@ -57,13 +57,13 @@ describe("Ros1LocalBagDataSourceFactory", () => {
     {
       files: [new File([BasicBuilder.string()], `${BasicBuilder.string()}.bag`)],
     },
-  ])("should return an IterablePlayer", (args: DataSourceFactoryInitializeArgs) => {
+  ])("should return an IterablePlayer", async (args: DataSourceFactoryInitializeArgs) => {
     const expectedInitArgs = {
       ...(args.file ? { file: args.file } : undefined),
       ...(args.files ? { file: args.files[0] } : undefined),
     };
 
-    const player = factory.initialize(args);
+    const player = await factory.initialize(args);
 
     expect(player).toBeInstanceOf(IterablePlayer);
     expect(WorkerSerializedIterableSource).toHaveBeenCalledWith({

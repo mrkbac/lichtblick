@@ -9,7 +9,7 @@ import {
   IDataSourceFactory,
   DataSourceFactoryInitializeArgs,
 } from "@lichtblick/suite-base/context/PlayerSelectionContext";
-import RosbridgePlayer from "@lichtblick/suite-base/players/RosbridgePlayer";
+import { loadRosbridgePlayer, prefetch } from "@lichtblick/suite-base/dataSources/playerModules";
 import { Player } from "@lichtblick/suite-base/players/types";
 
 class RosbridgeDataSourceFactory implements IDataSourceFactory {
@@ -41,7 +41,12 @@ class RosbridgeDataSourceFactory implements IDataSourceFactory {
     ],
   };
 
-  public initialize(args: DataSourceFactoryInitializeArgs): Player | undefined {
+  public prefetch = (): void => {
+    prefetch(loadRosbridgePlayer);
+  };
+
+  public async initialize(args: DataSourceFactoryInitializeArgs): Promise<Player | undefined> {
+    const RosbridgePlayer = await loadRosbridgePlayer();
     const url = args.params?.url;
     if (!url) {
       return;

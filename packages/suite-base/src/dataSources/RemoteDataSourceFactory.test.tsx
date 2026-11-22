@@ -34,19 +34,19 @@ describe("checkExtensionMatch", () => {
     factory = new RemoteDataSourceFactory();
   });
 
-  it("should return the extension if the comparing extension is undefined", () => {
+  it("should return the extension if the comparing extension is undefined", async () => {
     const result = (factory as any).checkExtensionMatch(".mcap");
 
     expect(result).toBe(".mcap");
   });
 
-  it("should return the extension when the comparator and comparing extensions are equal", () => {
+  it("should return the extension when the comparator and comparing extensions are equal", async () => {
     const result = (factory as any).checkExtensionMatch(".mcap", ".mcap");
 
     expect(result).toBe(".mcap");
   });
 
-  it("should throw an error if the comparator and comparing extensions are different", () => {
+  it("should throw an error if the comparator and comparing extensions are different", async () => {
     expect(() => (factory as any).checkExtensionMatch(".mcap", ".bag")).toThrow(
       "All sources need to be from the same type",
     );
@@ -70,12 +70,12 @@ describe("RemoteDataSourceFactory", () => {
     vi.clearAllMocks();
     factory = new RemoteDataSourceFactory();
   });
-  it("should initialize and return a player with a single remote .mcap file", () => {
+  it("should initialize and return a player with a single remote .mcap file", async () => {
     const mockArgs = setupArgs({
       url: "https://example.com/test.mcap",
     });
 
-    const result = factory.initialize(mockArgs);
+    const result = await factory.initialize(mockArgs);
 
     expect(WorkerSerializedIterableSource).toHaveBeenCalledWith({
       initWorker: expect.any(Function),
@@ -94,12 +94,12 @@ describe("RemoteDataSourceFactory", () => {
     expect(result).toBe(mockPlayer);
   });
 
-  it("should initialize and return a player with a single remote .bag file", () => {
+  it("should initialize and return a player with a single remote .bag file", async () => {
     const mockArgs = setupArgs({
       url: "https://example.com/test.bag",
     });
 
-    const result = factory.initialize(mockArgs);
+    const result = await factory.initialize(mockArgs);
 
     expect(WorkerSerializedIterableSource).toHaveBeenCalledWith({
       initWorker: expect.any(Function),
@@ -118,12 +118,12 @@ describe("RemoteDataSourceFactory", () => {
     expect(result).toBe(mockPlayer);
   });
 
-  it("should initialize and return a player with multiple files", () => {
+  it("should initialize and return a player with multiple files", async () => {
     const mockArgs = setupArgs({
       url: "https://example.com/test1.mcap,https://example.com/test2.mcap",
     });
 
-    const result = factory.initialize(mockArgs);
+    const result = await factory.initialize(mockArgs);
 
     expect(IterablePlayer).toHaveBeenCalledWith({
       source: mockSource,
@@ -137,7 +137,7 @@ describe("RemoteDataSourceFactory", () => {
     expect(result).toBe(mockPlayer);
   });
 
-  it("should pass configured hydration overrides into multi-url initArgs", () => {
+  it("should pass configured hydration overrides into multi-url initArgs", async () => {
     factory = new RemoteDataSourceFactory({
       maxHydratedSources: 4,
       maxHydratedBytes: 5678,
@@ -147,7 +147,7 @@ describe("RemoteDataSourceFactory", () => {
       url: "https://example.com/test1.mcap,https://example.com/test2.mcap",
     });
 
-    factory.initialize(mockArgs);
+    await factory.initialize(mockArgs);
 
     expect(WorkerSerializedIterableSource).toHaveBeenCalledWith({
       initWorker: expect.any(Function),
@@ -160,13 +160,13 @@ describe("RemoteDataSourceFactory", () => {
     });
   });
 
-  it("should send cookies and keep the flag in the URL when ds.includeCredentials=true", () => {
+  it("should send cookies and keep the flag in the URL when ds.includeCredentials=true", async () => {
     const mockArgs = setupArgs({
       url: "https://example.com/test1.mcap,https://example.com/test2.mcap",
       includeCredentials: "true",
     });
 
-    factory.initialize(mockArgs);
+    await factory.initialize(mockArgs);
 
     expect(WorkerSerializedIterableSource).toHaveBeenCalledWith({
       initWorker: expect.any(Function),
@@ -185,8 +185,10 @@ describe("RemoteDataSourceFactory", () => {
     );
   });
 
-  it("should title the player with ds.name and keep it in the URL", () => {
-    factory.initialize(setupArgs({ url: "https://example.com/test.mcap", name: "Sample drive" }));
+  it("should title the player with ds.name and keep it in the URL", async () => {
+    await factory.initialize(
+      setupArgs({ url: "https://example.com/test.mcap", name: "Sample drive" }),
+    );
 
     expect(IterablePlayer).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -196,35 +198,39 @@ describe("RemoteDataSourceFactory", () => {
     );
   });
 
-  it("should not send cookies unless ds.includeCredentials is exactly true", () => {
-    factory.initialize(setupArgs({ url: "https://example.com/test.bag", includeCredentials: "1" }));
+  it("should not send cookies unless ds.includeCredentials is exactly true", async () => {
+    await factory.initialize(
+      setupArgs({ url: "https://example.com/test.bag", includeCredentials: "1" }),
+    );
 
     const [{ initArgs }] = (WorkerSerializedIterableSource as Mock).mock.calls[0]!;
     expect(initArgs.credentials).toBeUndefined();
   });
 
-  it("should return undefined if args.params.url is undefined", () => {
+  it("should return undefined if args.params.url is undefined", async () => {
     const mockArgs = setupArgs();
 
-    const result = factory.initialize(mockArgs);
+    const result = await factory.initialize(mockArgs);
 
     expect(result).toBeUndefined();
   });
 
-  it("should throw an error if the multiple sources don't have the same file extension", () => {
+  it("should throw an error if the multiple sources don't have the same file extension", async () => {
     const mockArgs = setupArgs({
       url: "https://example.com/test.mcap,https://example.com/test.bag",
     });
 
-    expect(() => factory.initialize(mockArgs)).toThrow("All sources need to be from the same type");
+    await expect(factory.initialize(mockArgs)).rejects.toThrow(
+      "All sources need to be from the same type",
+    );
   });
 
   it.each([".db3", ".ulg", ".csv"])(
     "should explain that %s files can't be opened from a URL",
-    (ext) => {
+    async (ext) => {
       const mockArgs = setupArgs({ url: `https://example.com/test${ext}` });
 
-      expect(() => factory.initialize(mockArgs)).toThrow(
+      await expect(factory.initialize(mockArgs)).rejects.toThrow(
         `${ext} files can't be opened from a URL yet`,
       );
     },

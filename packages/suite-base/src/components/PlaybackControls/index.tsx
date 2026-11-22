@@ -29,11 +29,10 @@ import {
   Previous20Regular,
 } from "@fluentui/react-icons";
 import { Time, compare, fromNanoSec, toNanoSec } from "@foxglove/rostime";
-import { useCallback, useEffect, useMemo } from "react";
+import { Suspense, lazy, useCallback, useEffect, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 
-import { ExportRecordingDialog } from "@lichtblick/suite-base/components/ExportRecordingDialog/ExportRecordingDialog";
-import { useExportSource } from "@lichtblick/suite-base/components/ExportRecordingDialog/exportRecording";
+import { useExportSource } from "@lichtblick/suite-base/components/ExportRecordingDialog/exportSource";
 import {
   clampTimeToCut,
   useTrimStore,
@@ -68,6 +67,13 @@ import { RepeatAdapter } from "./RepeatAdapter";
 import { ScrubPreviewMenu } from "./ScrubPreviewMenu";
 import Scrubber from "./Scrubber";
 import { TrimBar, useTrimKeyHandlers } from "./TrimRange";
+
+// Only loads when an export is started: the export code stays out of the startup bundle
+const ExportRecordingDialog = lazy(async () => ({
+  default: (
+    await import("@lichtblick/suite-base/components/ExportRecordingDialog/ExportRecordingDialog")
+  ).ExportRecordingDialog,
+}));
 
 const selectHasLiveHistory = (ctx: MessagePipelineContext) =>
   ctx.playerState.capabilities.includes(PLAYER_CAPABILITIES.liveHistory);
@@ -303,7 +309,9 @@ export default function PlaybackControls({
           </Stack>
         </Stack>
         {exportOpen && exportSource && (
-          <ExportRecordingDialog source={exportSource} onClose={closeExport} />
+          <Suspense fallback={undefined}>
+            <ExportRecordingDialog source={exportSource} onClose={closeExport} />
+          </Suspense>
         )}
       </div>
     </>
