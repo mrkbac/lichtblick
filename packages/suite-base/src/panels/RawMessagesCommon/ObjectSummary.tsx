@@ -4,6 +4,7 @@
 import { memo, useMemo } from "react";
 
 import useGetItemStringWithTimezone from "@lichtblick/suite-base/components/JsonTree/useGetItemStringWithTimezone";
+import { isTypedArray } from "@lichtblick/suite-base/types/isTypedArray";
 
 import { useStyles } from "./ObjectSummary.style";
 
@@ -23,9 +24,10 @@ function ObjectSummary({ value }: ObjectSummaryProps): React.JSX.Element | null 
       return null;
     }
 
-    const itemString = Array.isArray(value)
-      ? `[] ${value.length} items`
-      : `{} ${Object.keys(value).length} keys`;
+    const itemString =
+      Array.isArray(value) || isTypedArray(value)
+        ? `[] ${value.length} items`
+        : `{} ${Object.keys(value).length} keys`;
 
     return getItemString("", value, "", itemString);
   }, [value, getItemString]);

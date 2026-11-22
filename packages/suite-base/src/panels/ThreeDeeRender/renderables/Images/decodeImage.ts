@@ -118,13 +118,19 @@ export function prepareVideoFrame(
   }
 }
 
+/**
+ * Decodes one video frame. With `skipBitmap` the frame only advances the decoder (its reference
+ * chain) and undefined is returned, which saves a full-resolution ImageBitmap for frames that are
+ * never shown, e.g. the GOP leading up to a seek target.
+ */
 export async function decodeCompressedVideoToBitmap(
   frameMsg: Pick<CompressedVideo, "timestamp">,
   preparedFrame: PreparedVideoFrame,
   videoPlayer: VideoPlayer,
   firstMessageTime: bigint,
   resizeWidth?: number,
-): Promise<ImageBitmap> {
+  { skipBitmap = false }: { skipBitmap?: boolean } = {},
+): Promise<ImageBitmap | undefined> {
   if (!videoPlayer.isInitialized()) {
     return await emptyVideoFrame(videoPlayer, resizeWidth);
   }
@@ -138,21 +144,48 @@ export async function decodeCompressedVideoToBitmap(
     preparedFrame.type,
   );
   try {
-    const frameToRender = videoFrame ?? videoPlayer.lastVideoFrame;
-    if (!frameToRender) {
-      return videoPlayer.lastImageBitmap ?? (await emptyVideoFrame(videoPlayer, resizeWidth));
+    if (skipBitmap) {
+      return undefined;
     }
-    // Skip re-encoding the same frame when the decoder produced nothing new.
-    if (!videoFrame && videoPlayer.lastImageBitmap) {
-      return videoPlayer.lastImageBitmap;
-    }
-    const imageBitmap = await globalThis.createImageBitmap(frameToRender, { resizeWidth });
-    videoPlayer.lastImageBitmap?.close();
-    videoPlayer.lastImageBitmap = imageBitmap;
-    return imageBitmap;
+    return videoFrame
+      ? await paintVideoBitmap(videoPlayer, videoFrame, resizeWidth)
+      : await latestVideoBitmap(videoPlayer, resizeWidth);
   } finally {
     videoFrame?.close();
   }
+}
+
+/** Makes `frame` the player's `lastImageBitmap`, closing the previous one. */
+export async function paintVideoBitmap(
+  videoPlayer: VideoPlayer,
+  frame: VideoFrame,
+  resizeWidth?: number,
+): Promise<ImageBitmap> {
+  const imageBitmap = await globalThis.createImageBitmap(frame, { resizeWidth });
+  videoPlayer.lastImageBitmap?.close();
+  videoPlayer.lastImageBitmap = imageBitmap;
+  videoPlayer.lastImageBitmapTimestampMicros = frame.timestamp;
+  return imageBitmap;
+}
+
+/**
+ * The newest decoded picture, for frames that bring none of their own (decode timeout, B-frames,
+ * empty frames). Frames decoded with `skipBitmap` move `lastVideoFrame` ahead of
+ * `lastImageBitmap`, so the bitmap is reused only while it still shows `lastVideoFrame`.
+ */
+export async function latestVideoBitmap(
+  videoPlayer: VideoPlayer,
+  resizeWidth?: number,
+): Promise<ImageBitmap> {
+  const frame = videoPlayer.lastVideoFrame;
+  if (
+    frame &&
+    (videoPlayer.lastImageBitmap == undefined ||
+      videoPlayer.lastImageBitmapTimestampMicros !== frame.timestamp)
+  ) {
+    return await paintVideoBitmap(videoPlayer, frame, resizeWidth);
+  }
+  return videoPlayer.lastImageBitmap ?? (await emptyVideoFrame(videoPlayer, resizeWidth));
 }
 
 const MIN_MAX_8_BIT = { minValue: 0, maxValue: 255 };

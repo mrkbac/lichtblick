@@ -4,6 +4,7 @@
 .webpack/
 .webpack-desktop/
 benchmark/.artifacts/
+benchmark/.perf/
 ci/apt/packages
 dist/
 node_modules/

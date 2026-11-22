@@ -430,4 +430,76 @@ describe("McapIndexedIterableSource", () => {
     ]);
     expect(skim.bytesRead).toBeLessThan(full.bytesRead / 3);
   });
+  it("prefetches each topic's latest chunk before reading backfill", async () => {
+    const tempBuffer = new TempBuffer();
+    const writer = new McapWriter({ writable: tempBuffer, startChannelId: 1, chunkSize: 500 });
+    await writer.start({ library: "", profile: "" });
+    for (const topic of ["fast", "slow"]) {
+      await writer.registerChannel({
+        messageEncoding: "json",
+        schemaId: 0,
+        metadata: new Map(),
+        topic,
+      });
+    }
+    for (let ms = 0n; ms < 2000n; ms += 10n) {
+      const logTime = ms * 1_000_000n;
+      const message = { data: new Uint8Array(100), logTime, publishTime: logTime, sequence: 0 };
+      await writer.addMessage({ channelId: 1, ...message });
+      if (ms === 200n) {
+        await writer.addMessage({ channelId: 2, ...message });
+      }
+    }
+    await writer.end();
+
+    const readable = new BlobReadable(new Blob([tempBuffer.get().slice()]));
+    const reader = await McapIndexedReader.Initialize({
+      readable,
+      decompressHandlers: await loadDecompressHandlers(),
+    });
+    const prefetch = vi.fn();
+    const source = new McapIndexedIterableSource(reader, { prefetch });
+    await source.initialize();
+
+    const messages = await source.getBackfillMessages({
+      topics: new Map([
+        ["fast", { topic: "fast" }],
+        ["slow", { topic: "slow" }],
+      ]),
+      time: { sec: 1, nsec: 500_000_000 },
+    });
+
+    expect(
+      messages.map(({ topic, receiveTime }) => [
+        topic,
+        receiveTime.sec * 1000 + receiveTime.nsec / 1e6,
+      ]),
+    ).toEqual([
+      ["slow", 200],
+      ["fast", 1500],
+    ]);
+    expect(prefetch).toHaveBeenCalledTimes(1);
+    const [ranges, options] = prefetch.mock.calls[0]!;
+    expect(options).toEqual({ skim: false });
+    // The chunks holding the messages read: the one at 1500ms and the one at 200ms
+    const holding = (ms: bigint) =>
+      reader.chunkIndexes.find(
+        (chunk) =>
+          chunk.messageStartTime <= ms * 1_000_000n && chunk.messageEndTime >= ms * 1_000_000n,
+      )!.chunkStartOffset;
+    const offsets = (ranges as { offset: bigint }[]).map((range) => range.offset);
+    expect(offsets).toEqual(expect.arrayContaining([holding(200n), holding(1500n)]));
+    // Not every chunk before the backfill time
+    expect(offsets.length).toBeLessThan(reader.chunkIndexes.length / 4);
+
+    // Only chunks holding a requested topic
+    prefetch.mockClear();
+    await source.getBackfillMessages({
+      topics: new Map([["slow", { topic: "slow" }]]),
+      time: { sec: 1, nsec: 500_000_000 },
+    });
+    expect(
+      (prefetch.mock.calls[0]![0] as { offset: bigint }[]).map((range) => range.offset),
+    ).toEqual([holding(200n)]);
+  });
 });

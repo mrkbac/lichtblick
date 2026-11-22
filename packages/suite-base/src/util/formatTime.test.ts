@@ -56,6 +56,20 @@ describe("formatTime.formatDate", () => {
   });
 });
 
+describe("formatTime.formatDurationCompact", () => {
+  it.each([
+    [{ sec: 8, nsec: 4e8 }, "8.4 s"],
+    [{ sec: 59, nsec: 999e6 }, "1:00"],
+    [{ sec: 59, nsec: 9e8 }, "59.9 s"],
+    [{ sec: 754, nsec: 6e8 }, "12:35"],
+    [{ sec: 3 * 3600 + 2 * 60 + 1, nsec: 0 }, "3:02:01"],
+    [{ sec: 2 * 86_400 + 3 * 3600 + 4 * 60 + 5, nsec: 0 }, "2d 3:04:05"],
+    [{ sec: -5, nsec: 0 }, "-5.0 s"],
+  ])("formats %o as %s", (stamp, expected) => {
+    expect(formatTime.formatDurationCompact(stamp)).toBe(expected);
+  });
+});
+
 describe("formatTime.formatDuration", () => {
   it("uses milliseconds and pads values with zeros", () => {
     expect(formatTime.formatDuration({ sec: 0, nsec: 0 })).toEqual("0:00:00.000");
