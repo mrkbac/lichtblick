@@ -7,12 +7,17 @@
 
 import CloseIcon from "@mui/icons-material/Close";
 import { Dialog, DialogContent, DialogTitle, IconButton } from "@mui/material";
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import { makeStyles } from "tss-react/mui";
 
 import { Immutable } from "@lichtblick/suite";
-import { WsMixedContentHelp } from "@lichtblick/suite-base/components/WsMixedContentHelp";
 import { PlayerAlert } from "@lichtblick/suite-base/players/types";
+
+// Loaded on demand: it's only needed after the browser blocked a ws:// connection
+const WsMixedContentHelp = lazy(async () => ({
+  default: (await import("@lichtblick/suite-base/components/WsMixedContentHelp"))
+    .WsMixedContentHelp,
+}));
 
 const useStyles = makeStyles()({
   dialogTitle: {
@@ -47,7 +52,9 @@ export default function WssErrorModal(
         </IconButton>
       </DialogTitle>
       <DialogContent>
-        <WsMixedContentHelp url={guide.url} />
+        <Suspense>
+          <WsMixedContentHelp url={guide.url} />
+        </Suspense>
       </DialogContent>
     </Dialog>
   );
