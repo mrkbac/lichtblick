@@ -484,7 +484,9 @@ export class Renderer extends EventEmitter<RendererEvents> {
       this.#hoverHandler(cursorCoords);
     });
 
-    this.#picker = new Picker(this.gl, this.#scene);
+    this.#picker = new Picker(this.gl, this.#scene, (camera, hidden) => {
+      this.pointRaster.preparePick(camera, hidden);
+    });
     this.pointRaster = new PointRaster(this.gl, this.#scene, {
       logDepth: config.scene.logDepth === true,
     });
@@ -2256,19 +2258,6 @@ export class Renderer extends EventEmitter<RendererEvents> {
     // Batched markers draw as instances but pick as themselves
     camera.layers.enable(LAYER_PICK_ONLY);
     try {
-      // The raster reads world matrices and the projection before render() would refresh them
-      // (same as #drawScene); a camera's first render also switches it to WebGPU clip space
-      this.#scene.updateMatrixWorld();
-      if (camera.parent == undefined) {
-        camera.updateMatrixWorld();
-      }
-      if (camera.coordinateSystem !== this.gl.coordinateSystem) {
-        camera.coordinateSystem = this.gl.coordinateSystem;
-        camera.updateProjectionMatrix();
-      }
-      // Points are picked from the raster's screen buffers, rasterized for this camera with only
-      // the pickable, non-hidden sets (the next frame redraws them for display)
-      this.pointRaster.preparePick(camera, hidden ?? new Set());
       // The pick is drawn synchronously; only its readback is awaited
       return await this.#picker.pick(cursorCoords.x, cursorCoords.y, camera, hidden);
     } catch (error) {
