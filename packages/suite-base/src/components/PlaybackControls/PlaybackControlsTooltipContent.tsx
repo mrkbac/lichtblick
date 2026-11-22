@@ -9,6 +9,7 @@ import { compare as compareTimes, subtract as subtractTimes, toSec, Time } from 
 import { Divider, Typography } from "@mui/material";
 import * as _ from "lodash-es";
 import { Fragment, useEffect, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import { makeStyles } from "tss-react/mui";
 
 import {
@@ -96,6 +97,7 @@ export function PlaybackControlsTooltipContent(params: {
   const startTime = useMessagePipeline(selectStartTime);
   const compare = useCompare();
   const density = useDensity();
+  const { t } = useTranslation("playbackTime");
   const endTime = useMessagePipeline(selectEndTime);
   const { classes } = useStyles();
 
@@ -151,7 +153,7 @@ export function PlaybackControlsTooltipContent(params: {
       density.buckets.length - 1,
     );
     if (isGap(density, Math.max(bucket, 0))) {
-      tooltipItems.push({ type: "item", title: "Data", value: "none or very little" });
+      tooltipItems.push({ type: "item", title: t("data"), value: t("dataGap") });
     }
   }
 

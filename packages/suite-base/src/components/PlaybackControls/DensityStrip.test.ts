@@ -44,6 +44,11 @@ describe("DensityStrip", () => {
     );
   });
 
+  it("shows nothing for a zero-duration recording", () => {
+    const at = { sec: 1, nsec: 0 };
+    expect(combineDensity([file(1, 1, [1])], at, at)).toBe(undefined);
+  });
+
   it("shows nothing without file indexes", () => {
     const { messageBytes: _messageBytes, ...withoutIndex } = file(0, 1, [1]);
     expect(combineDensity([withoutIndex], { sec: 0, nsec: 0 }, { sec: 1, nsec: 0 })).toBe(

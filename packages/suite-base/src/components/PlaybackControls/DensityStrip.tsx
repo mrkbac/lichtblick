@@ -41,6 +41,9 @@ export function combineDensity(
 ): Float32Array | undefined {
   const total = new Float32Array(DENSITY_BUCKETS);
   const range = toSec(subtract(end, start));
+  if (!(range > 0)) {
+    return undefined;
+  }
   let any = false;
   for (const file of files) {
     if (!file.messageBytes || !file.start || !file.end) {

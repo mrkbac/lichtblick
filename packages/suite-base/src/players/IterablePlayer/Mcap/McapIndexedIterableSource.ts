@@ -292,6 +292,7 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
     const reader = this.#reader;
     const index = this.#index;
     const newChunks = reader.chunkIndexes.slice(index.chunks);
+    const previousStart = index.startTime;
     for (const chunk of newChunks) {
       if (index.startTime == undefined || chunk.messageStartTime < index.startTime) {
         index.startTime = chunk.messageStartTime;
@@ -311,12 +312,20 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
     }
     index.chunks = reader.chunkIndexes.length;
     if (index.startTime != undefined && index.endTime != undefined) {
-      index.density ??= new GrowingHistogram(
-        Number(index.startTime),
-        Number(index.endTime - index.startTime),
-      );
-      for (const chunk of newChunks) {
-        index.density.add(
+      // The histogram can't grow backwards: rebuild it from all chunks when the start moved
+      // earlier (rare: live indexing found an earlier chunk), else add only the new chunks
+      let density = index.density;
+      let chunks = newChunks;
+      if (!density || index.startTime !== previousStart) {
+        density = new GrowingHistogram(
+          Number(index.startTime),
+          Number(index.endTime - index.startTime),
+        );
+        chunks = reader.chunkIndexes;
+      }
+      index.density = density;
+      for (const chunk of chunks) {
+        density.add(
           Number(chunk.messageStartTime),
           Number(chunk.messageEndTime),
           Number(chunk.uncompressedSize),
