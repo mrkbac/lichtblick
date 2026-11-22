@@ -54,6 +54,7 @@ async function makeDb3(): Promise<Uint8Array<ArrayBuffer>> {
     INSERT INTO topics VALUES (1, '/fast', 'std_msgs/msg/String', 'cdr', '[]');
     INSERT INTO topics VALUES (2, '/rare', 'std_msgs/msg/String', 'cdr', '[]');
     INSERT INTO topics VALUES (3, '/dense', 'std_msgs/msg/String', 'cdr', '[]');
+    INSERT INTO topics VALUES (4, '/tied', 'std_msgs/msg/String', 'cdr', '[]');
   `);
   const insert = db.prepare("INSERT INTO messages (topic_id, timestamp, data) VALUES (?, ?, ?)");
   for (let i = 0; i <= 1000; i++) {
@@ -66,6 +67,11 @@ async function makeDb3(): Promise<Uint8Array<ArrayBuffer>> {
     insert.run([3, (ns(120) + BigInt(i) * 1_000_000n).toString(), new Uint8Array([3])]);
   }
   insert.run([2, ns(150).toString(), new Uint8Array([2])]);
+  // /tied's only row, then 4,097 /dense rows at the same time: more than one backfill page
+  insert.run([4, ns(99).toString(), new Uint8Array([4])]);
+  for (let i = 0; i < 4097; i++) {
+    insert.run([3, ns(99).toString(), new Uint8Array([3])]);
+  }
   insert.free();
   return db.export() as Uint8Array<ArrayBuffer>;
 }
@@ -165,10 +171,46 @@ describe("RosDb3IterableSource", () => {
     const db = new SqliteSqljs(new BlockCachedFile(new BytesFile(db3)));
     await db.open();
     // The 100 rows back from 135 s (51 /fast, 49 /dense) hold no /rare: the page ends anyway
-    const page = db.backfillPage({ sec: 135, nsec: 0 }, ["/rare"], 100);
+    const page = db.backfillPage({ timestamp: ns(135) }, ["/rare"], 100);
     expect(page.found).toEqual([]);
-    expect(page.next).toEqual({ sec: 129, nsec: 950_999_999 });
+    expect(page.next?.timestamp).toBe(129_951_000_000n);
     await db.close();
+  });
+
+  it("doesn't skip rows tied at a backfill page boundary", async () => {
+    const { source } = await open();
+    const messages = await source.getBackfillMessages({
+      topics: new Map([["/tied", { topic: "/tied" }]]),
+      time: { sec: 99, nsec: 0 },
+    });
+    expect(messages.map((m) => m.receiveTime)).toEqual([{ sec: 99, nsec: 0 }]);
+  });
+
+  it("only scans the files of a split recording that have the topic", async () => {
+    const SQL = await initSqlJs({ wasmBinary: wasm });
+    const other = new SQL.Database();
+    other.run(`
+      CREATE TABLE topics(id INTEGER PRIMARY KEY, name TEXT NOT NULL, type TEXT NOT NULL,
+        serialization_format TEXT NOT NULL, offered_qos_profiles TEXT NOT NULL);
+      CREATE TABLE messages(id INTEGER PRIMARY KEY, topic_id INTEGER NOT NULL,
+        timestamp INTEGER NOT NULL, data BLOB NOT NULL);
+      CREATE INDEX timestamp_idx ON messages (timestamp ASC);
+      INSERT INTO topics VALUES (1, '/fast', 'std_msgs/msg/String', 'cdr', '[]');
+      INSERT INTO messages VALUES (1, 1, ${ns(300)}, x'00');
+    `);
+    const source = new RosDb3IterableSource([
+      new BytesFile(db3),
+      new BytesFile(other.export() as Uint8Array<ArrayBuffer>),
+    ]);
+    await source.initialize();
+    const pages = vi.spyOn(SqliteSqljs.prototype, "backfillPage");
+    const messages = await source.getBackfillMessages({
+      topics: new Map([["/rare", { topic: "/rare" }]]),
+      time: { sec: 400, nsec: 0 },
+    });
+    expect(messages.map((m) => m.receiveTime)).toEqual([{ sec: 150, nsec: 0 }]);
+    // All pages came from the first file
+    expect(new Set(pages.mock.contexts).size).toBe(1);
   });
 
   it("reads the file in blocks", async () => {
