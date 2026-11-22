@@ -5,6 +5,8 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+import * as THREE from "three";
+
 import { RenderableMarker, getMarkerId } from "./markers/RenderableMarker";
 import { RenderableMeshResource } from "./markers/RenderableMeshResource";
 import { missingTransformMessage, MISSING_TRANSFORM } from "./transforms";
@@ -12,7 +14,11 @@ import { BaseUserData, Renderable } from "../Renderable";
 import type { Renderer } from "../Renderer";
 import { Marker, MarkerAction, MarkerType } from "../ros";
 import { BaseSettings } from "../settings";
-import { updatePose } from "../updatePose";
+import { makePose, Pose } from "../transforms";
+
+const IDENTITY_POSE: Pose = makePose();
+const tempPosition = new THREE.Vector3();
+const tempQuaternion = new THREE.Quaternion();
 
 export type LayerSettingsMarker = BaseSettings & {
   color: string | undefined;
@@ -56,9 +62,21 @@ export class MarkersNamespace {
   }
 }
 
+/** Inputs that decide every marker's pose; a frame with the same ones changes nothing */
+type PoseInputs = {
+  currentTime: bigint;
+  renderFrameId: string;
+  fixedFrameId: string;
+  transformsVersion: number;
+  topicsConfig: unknown;
+  ros: boolean;
+};
+
 export class TopicMarkers extends Renderable<MarkerTopicUserData> {
   public override pickable = false;
   public namespaces = new Map<string, MarkersNamespace>();
+  /** Inputs of the last pose update; cleared whenever a marker is added, changed or removed */
+  #posedWith: PoseInputs | undefined;
 
   public override dispose(): void {
     for (const ns of this.namespaces.values()) {
@@ -71,6 +89,7 @@ export class TopicMarkers extends Renderable<MarkerTopicUserData> {
   }
 
   public addMarkerMessage(marker: Marker, receiveTime: bigint): void {
+    this.#posedWith = undefined;
     switch (marker.action) {
       case MarkerAction.ADD:
       case MarkerAction.MODIFY:
@@ -94,6 +113,7 @@ export class TopicMarkers extends Renderable<MarkerTopicUserData> {
   }
 
   public update(): void {
+    this.#posedWith = undefined;
     // Updates each individual marker renderable using `originalMarker` and the
     // current topic settings
     for (const ns of this.namespaces.values()) {
@@ -107,8 +127,53 @@ export class TopicMarkers extends Renderable<MarkerTopicUserData> {
     this.visible = this.userData.settings.visible;
     if (!this.visible) {
       this.renderer.settings.errors.clearTopic(this.topic);
+      this.#posedWith = undefined;
       return;
     }
+
+    // Paused with a moving camera (or any repaint that changes nothing here): every pose, expiry
+    // and visibility below would come out the same, so skip the walk over all markers
+    const transformsVersion = this.renderer.transformTree.version;
+    // Not the whole config: a camera move replaces it
+    const topicsConfig = this.renderer.config.topics;
+    const last = this.#posedWith;
+    if (
+      last?.currentTime === currentTime &&
+      last.renderFrameId === renderFrameId &&
+      last.fixedFrameId === fixedFrameId &&
+      last.transformsVersion === transformsVersion &&
+      last.topicsConfig === topicsConfig &&
+      last.ros === this.renderer.ros
+    ) {
+      return;
+    }
+
+    // Markers of one message share a frame and stamp: resolve each (frame, stamp) transform once,
+    // not once per marker. `false` caches a missing transform.
+    const frameTransforms = new Map<string, Map<bigint, Pose | false>>();
+    const frameTransform = (frameId: string, srcTime: bigint): Pose | false => {
+      let byTime = frameTransforms.get(frameId);
+      if (!byTime) {
+        byTime = new Map();
+        frameTransforms.set(frameId, byTime);
+      }
+      let transform = byTime.get(srcTime);
+      if (transform == undefined) {
+        const pose = makePose();
+        transform =
+          this.renderer.transformTree.apply(
+            pose,
+            IDENTITY_POSE,
+            renderFrameId,
+            fixedFrameId,
+            frameId,
+            currentTime,
+            srcTime,
+          ) != undefined && pose;
+        byTime.set(srcTime, transform);
+      }
+      return transform;
+    };
 
     // Report missing transforms once per frame: per-marker add/remove would emit (and rebuild the
     // settings tree) once per marker whenever a topic mixes resolvable and unresolvable frames
@@ -135,21 +200,23 @@ export class TopicMarkers extends Renderable<MarkerTopicUserData> {
 
         const frameId = this.renderer.normalizeFrameId(marker.header.frame_id);
         const srcTime = marker.frame_locked ? currentTime : renderable.userData.messageTime;
-        const updated = updatePose(
-          renderable,
-          this.renderer.transformTree,
-          renderFrameId,
-          fixedFrameId,
-          frameId,
-          currentTime,
-          srcTime,
-        );
-        renderable.visible = updated;
-        if (!updated) {
+        const transform = frameTransform(frameId, srcTime);
+        renderable.visible = transform !== false;
+        if (transform === false) {
           missingTransform ??= missingTransformMessage(renderFrameId, fixedFrameId, frameId);
-        } else {
-          anyUpdated = true;
+          continue;
         }
+        anyUpdated = true;
+        // The marker pose in its frame, carried into the render frame
+        const { position: p, orientation: q } = transform;
+        const pose = renderable.userData.pose;
+        tempQuaternion.set(q.x, q.y, q.z, q.w);
+        tempPosition
+          .set(pose.position.x, pose.position.y, pose.position.z)
+          .applyQuaternion(tempQuaternion);
+        renderable.position.set(p.x + tempPosition.x, p.y + tempPosition.y, p.z + tempPosition.z);
+        const o = pose.orientation;
+        renderable.quaternion.set(o.x, o.y, o.z, o.w).premultiply(tempQuaternion).normalize();
       }
     }
     if (missingTransform != undefined) {
@@ -157,6 +224,14 @@ export class TopicMarkers extends Renderable<MarkerTopicUserData> {
     } else if (anyUpdated) {
       this.renderer.settings.errors.removeFromTopic(this.topic, MISSING_TRANSFORM);
     }
+    this.#posedWith = {
+      currentTime,
+      renderFrameId,
+      fixedFrameId,
+      transformsVersion,
+      topicsConfig,
+      ros: this.renderer.ros,
+    };
   }
 
   #addOrUpdateMarker(marker: Marker, receiveTime: bigint): void {
@@ -187,6 +262,7 @@ export class TopicMarkers extends Renderable<MarkerTopicUserData> {
   }
 
   #deleteMarker(ns: string, id: number): boolean {
+    this.#posedWith = undefined;
     const namespace = this.namespaces.get(ns);
     if (namespace) {
       const renderable = namespace.markersById.get(id);
@@ -201,6 +277,7 @@ export class TopicMarkers extends Renderable<MarkerTopicUserData> {
   }
 
   #deleteAllMarkers(ns: string): void {
+    this.#posedWith = undefined;
     const clearNamespace = (namespace: MarkersNamespace): void => {
       for (const renderable of namespace.markersById.values()) {
         this.remove(renderable);

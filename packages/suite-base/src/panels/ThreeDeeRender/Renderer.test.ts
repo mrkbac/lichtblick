@@ -1726,53 +1726,6 @@ describe("3D Renderer", () => {
     renderer.dispose();
   });
 
-  it("reports warning when transform history reaches capacity", () => {
-    // Given: A renderer
-    const renderer = new Renderer({ ...defaultRendererProps, canvas });
-
-    // Note: The current implementation has a bug - the overflow warning check happens AFTER
-    // CoordinateFrame.addTransform() completes, which means AFTER trimming has occurred.
-    // Since trimming happens when size >= maxCapacity, the size will never equal maxCapacity
-    // after addTransform returns (it will be ~75% of capacity after trimming).
-    // Therefore, this warning path is currently unreachable in the code.
-
-    // To test that the check EXISTS (even though it can't currently trigger), we would need
-    // to somehow get transformsSize() to equal maxCapacity without triggering the trim,
-    // which is not possible with the current implementation.
-
-    // Instead, we'll verify that the warning would be correctly formatted IF it were to trigger
-    // by checking the error constants exist and constructing what the error would look like
-    const testFrameId = "test_frame";
-    const frame = renderer.transformTree.getOrCreateFrame(testFrameId);
-    const maxCapacity = frame.maxCapacity;
-
-    // Simulate what the error would be if it triggered
-    const expectedErrorMessage = `[Warning] Transform history is at capacity (${maxCapacity}), old TFs will be dropped`;
-    expect(expectedErrorMessage).toContain("Transform history is at capacity");
-    expect(expectedErrorMessage).toContain(`${maxCapacity}`);
-
-    // Verify the error path exists in the code by checking that we don't get an error
-    // (since the condition can never be true with current implementation)
-    for (let i = 0; i < maxCapacity * 2; i++) {
-      renderer.addTransform(
-        "parent",
-        testFrameId,
-        BigInt(i),
-        { x: 0, y: 0, z: 0 },
-        { x: 0, y: 0, z: 0, w: 1 },
-      );
-    }
-
-    const overflowError = renderer.settings.errors.errors.errorAtPath([
-      "transforms",
-      `frame:${testFrameId}`,
-    ]);
-    // Due to the implementation bug, this will be undefined
-    expect(overflowError).toBeUndefined();
-
-    renderer.dispose();
-  });
-
   it("returns cannot drop status when no extension supports path", () => {
     // Given: A renderer instance
     const renderer = new Renderer({ ...defaultRendererProps, canvas });
@@ -2268,6 +2221,32 @@ describe("Renderer.addTransformMessages", () => {
     expect(updates).toHaveBeenCalledTimes(1);
   });
 
+  it("repaints for history batches at most every 250 ms, plus once after the last", () => {
+    vi.useFakeTimers();
+    const renderer = new Renderer({ ...defaultRendererProps, canvas });
+    const queue = vi.spyOn(renderer, "queueAnimationFrame").mockImplementation(() => {});
+    renderer.currentTime = 10n;
+
+    // Any batch can change what is on screen, also one received after the current time
+    renderer.addTransformMessages([createTFMessageEvent("root", "a", 11n, [11n])]);
+    renderer.addTransformMessages([createTFMessageEvent("root", "a", 5n, [5n])]);
+    renderer.addTransformMessages([createTFMessageEvent("root", "a", 6n, [6n])]);
+    expect(queue).toHaveBeenCalledTimes(1);
+
+    // One trailing repaint shows the batches that waited
+    vi.advanceTimersByTime(250);
+    expect(queue).toHaveBeenCalledTimes(2);
+    vi.advanceTimersByTime(1000);
+    expect(queue).toHaveBeenCalledTimes(2);
+
+    // An empty batch changes nothing
+    renderer.addTransformMessages([]);
+    expect(queue).toHaveBeenCalledTimes(2);
+
+    renderer.dispose();
+    vi.useRealTimers();
+  });
+
   it("reports which frames the messages gave a transform", () => {
     const renderer = new Renderer({ ...defaultRendererProps, canvas });
     const touched = new Set<string>();
@@ -2302,6 +2281,21 @@ describe("Renderer.addTransformMessages", () => {
     renderer.handleSeek(100n);
     expect(renderer.transformTree.frame("removed")).toBeUndefined();
     expect(renderer.transformTree.frame("kept")).toBeDefined();
+  });
+
+  it("announces the cleared tree on a backward seek without static transforms", () => {
+    // The panel reads the thinning count from the tree on this event
+    const renderer = new Renderer({ ...defaultRendererProps, canvas });
+    renderer.setCurrentTime(100n);
+    renderer.addTransform("root", "a", 90n, { x: 0, y: 0, z: 0 }, { x: 0, y: 0, z: 0, w: 1 });
+    const updates = vi.fn();
+    renderer.on("transformTreeUpdated", updates);
+
+    renderer.setCurrentTime(50n);
+    renderer.handleSeek(100n);
+
+    expect(renderer.transformTree.frame("a")).toBeUndefined();
+    expect(updates).toHaveBeenCalledTimes(1);
   });
 
   it("is idempotent for transforms read twice", () => {

@@ -102,6 +102,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 export default class RosbridgePlayer implements Player {
   #url: string; // WebSocket URL.
   #rosClient?: roslib.Ros; // The roslibjs client when we're connected.
+  #latestClient?: roslib.Ros; // The newest roslibjs client, connected or still connecting.
   #id: string = randomUUID(); // Unique ID for this player.
   #isRefreshing = false; // True if currently refreshing the node graph.
   #listener?: (arg0: PlayerState) => Promise<void>; // Listener for _emitState().
@@ -172,10 +173,13 @@ export default class RosbridgePlayer implements Player {
 
     // `workersocket` will open the actual WebSocket connection in a WebWorker.
     const rosClient = new roslib.Ros({ url: this.#url, transportLibrary: "workersocket" });
+    this.#latestClient = rosClient;
 
     rosClient.on("connection", () => {
       log.info(`Connected to ${this.#url}`);
       if (this.#closed) {
+        // Closed while connecting: drop the socket and its worker
+        rosClient.close();
         return;
       }
       this.#presence = PlayerPresence.PRESENT;
@@ -501,9 +505,7 @@ export default class RosbridgePlayer implements Player {
   public close(): void {
     this.#closed = true;
     this.#cancelTopicsPoll();
-    if (this.#rosClient) {
-      this.#rosClient.close();
-    }
+    this.#latestClient?.close();
     if (this.#emitTimer != undefined) {
       clearTimeout(this.#emitTimer);
       this.#emitTimer = undefined;

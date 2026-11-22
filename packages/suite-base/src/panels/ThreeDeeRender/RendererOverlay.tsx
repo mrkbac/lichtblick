@@ -16,7 +16,7 @@ import {
   Tooltip,
   useTheme,
 } from "@mui/material";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { makeStyles } from "tss-react/mui";
 
@@ -47,6 +47,7 @@ import { HoverTooltip } from "./Interactions/HoverTooltip";
 import type { HoverEntityInfo } from "./Interactions/types";
 import { MeasurePanel } from "./MeasurePanel";
 import type { PickedRenderable } from "./Picker";
+import type { Renderer } from "./Renderer";
 import { useRenderer, useRendererEvent } from "./RendererContext";
 import { Stats } from "./Stats";
 import { IMAGE_BUTTONS, MeasureIcon, THREE_DEE_BUTTONS } from "./buttons";
@@ -244,8 +245,13 @@ function RendererHoverTooltip({ canvas }: { canvas: HTMLCanvasElement | null }):
 
 /**
  * Provides DOM overlay elements on top of the 3D scene (e.g. stats, debug GUI).
+ *
+ * Memoized: the panel re-renders on every frame, and the overlay's toolbars and hover tooltip
+ * (MUI buttons and tooltips) change only with their own props and renderer events.
  */
-export function RendererOverlay(props: Readonly<Props>): React.JSX.Element {
+export const RendererOverlay = memo(function RendererOverlay(
+  props: Readonly<Props>,
+): React.JSX.Element {
   const { t } = useTranslation("threeDee");
   const { classes } = useStyles();
   const [clickedPosition, setClickedPosition] = useState<{
@@ -261,6 +267,17 @@ export function RendererOverlay(props: Readonly<Props>): React.JSX.Element {
   );
   const [interactionsTabType, setInteractionsTabType] = useState<TabType | undefined>(undefined);
   const renderer = useRenderer();
+  // The fixed frame appears once transforms arrive; the overlay re-renders only when that changes
+  const [hasFixedFrame, setHasFixedFrame] = useState(renderer?.fixedFrameId != undefined);
+  useEffect(() => {
+    setHasFixedFrame(renderer?.fixedFrameId != undefined);
+  }, [renderer]);
+  useRendererEvent(
+    "endFrame",
+    useCallback((_currentTime: bigint, frameRenderer: Renderer) => {
+      setHasFixedFrame(frameRenderer.fixedFrameId != undefined);
+    }, []),
+  );
 
   useEffect(() => {
     // Selections refer to objects owned by the previous renderer.
@@ -386,8 +403,7 @@ export function RendererOverlay(props: Readonly<Props>): React.JSX.Element {
   const MeasureFramesIcon = THREE_DEE_BUTTONS.measureFrames.icon;
 
   // Publish control is only available if the canPublish prop is true and we have a fixed frame in the renderer
-  const showPublishControl =
-    props.interfaceMode === "3d" && props.canPublish && renderer?.fixedFrameId != undefined;
+  const showPublishControl = props.interfaceMode === "3d" && props.canPublish && hasFixedFrame;
   const publishControls = showPublishControl && (
     <>
       <Tooltip placement="left" title={publishLabel}>
@@ -650,4 +666,4 @@ export function RendererOverlay(props: Readonly<Props>): React.JSX.Element {
       {resetViewButton}
     </>
   );
-}
+});

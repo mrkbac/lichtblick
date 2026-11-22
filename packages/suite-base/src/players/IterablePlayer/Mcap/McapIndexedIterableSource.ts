@@ -379,6 +379,7 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
           name: attachment.name,
           mediaType: attachment.mediaType,
           sizeBytes: Number(attachment.dataSize),
+          offset: Number(attachment.offset),
         })),
       },
     ];
