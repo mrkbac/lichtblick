@@ -77,7 +77,6 @@ export class RenderableLineStrip extends RenderableMarker {
   }
 
   public override update(newMarker: Marker, receiveTime: bigint | undefined): void {
-    const prevMarker = this.userData.marker;
     super.update(newMarker, receiveTime);
     const marker = this.userData.marker;
 
@@ -96,7 +95,7 @@ export class RenderableLineStrip extends RenderableMarker {
       this.line.visible = true;
     }
 
-    if (transparent !== markerHasTransparency(prevMarker)) {
+    if (transparent !== this.line.material.transparent) {
       this.linePrepass.material.transparent = transparent;
       this.linePrepass.material.depthWrite = !transparent;
       this.linePrepass.material.needsUpdate = true;

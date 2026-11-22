@@ -210,8 +210,8 @@ describe("MarkerBatches", () => {
 
     const batches = topic.children.find((child) => child instanceof MarkerBatches)!;
     const lines = batches.children.filter((child) => child instanceof LineSegments2);
-    expect(lines.map((pass) => pass.geometry.instanceCount)).toEqual([2, 2, 1, 1]);
-    expect(lines.map((pass) => pass.renderOrder)).toEqual([1, 2, 1, 2]);
+    expect(lines.map((pass) => pass.geometry.instanceCount)).toEqual([2, 2]);
+    expect(lines.map((pass) => pass.renderOrder)).toEqual([1, 2]);
     const first = lines[0]!;
     expect(first.position.x).toBe(1);
     const start = first.geometry.getAttribute("instanceStart");
@@ -220,6 +220,67 @@ describe("MarkerBatches", () => {
     expect((byId(1) as RenderableLineList).line.layers.mask).toBe(1 << LAYER_PICK_ONLY);
     expect((byId(2) as RenderableLineStrip).line.layers.mask).toBe(1 << LAYER_PICK_ONLY);
     expect((byId(3) as RenderableLineList).line.layers.mask).toBe(1 << LAYER_DEFAULT);
+  });
+
+  it("keeps a singleton and an oversized path in their original GPU buffers", () => {
+    const small = marker(1, MarkerType.LINE_LIST);
+    const large = marker(2, MarkerType.LINE_LIST);
+    const start = { x: 0, y: 0, z: 0 };
+    const end = { x: 1, y: 0, z: 0 };
+    small.points = [start, end];
+    large.points = Array.from({ length: 16_384 }, (_, i) => (i % 2 === 0 ? start : end));
+    topic.addMarkerMessage(small, 0n);
+    topic.addMarkerMessage(large, 0n);
+    topic.startFrame(0n, "map", "map");
+    topic.startFrame(1n, "map", "map");
+
+    const batches = topic.children.find((child) => child instanceof MarkerBatches)!;
+    expect(batches.children).toHaveLength(0);
+    expect((byId(1) as RenderableLineList).line.layers.mask).toBe(1 << LAYER_DEFAULT);
+    expect((byId(2) as RenderableLineList).line.layers.mask).toBe(1 << LAYER_DEFAULT);
+  });
+
+  it("leaves fine lines in their local buffers when a batch would collapse the endpoints", () => {
+    const first = marker(1, MarkerType.LINE_LIST);
+    first.pose.position.x = 1_000_000;
+    first.points = [
+      { x: 0, y: 0, z: 0 },
+      { x: 1, y: 0, z: 0 },
+    ];
+    const second = marker(2, MarkerType.LINE_LIST);
+    second.pose.position.x = 1_004_000;
+    second.points = [
+      { x: 0, y: 0, z: 0 },
+      { x: 0.00005, y: 0, z: 0 },
+    ];
+    topic.addMarkerMessage(first, 0n);
+    topic.addMarkerMessage(second, 0n);
+    topic.startFrame(0n, "map", "map");
+
+    expect(topic.children.find((child) => child instanceof MarkerBatches)?.children).toHaveLength(
+      0,
+    );
+    expect((byId(1) as RenderableLineList).line.layers.mask).toBe(1 << LAYER_DEFAULT);
+    expect((byId(2) as RenderableLineList).line.layers.mask).toBe(1 << LAYER_DEFAULT);
+  });
+
+  it("keeps a strip translucent after it becomes empty and returns", () => {
+    const points = [
+      { x: 0, y: 0, z: 0 },
+      { x: 1, y: 0, z: 0 },
+    ];
+    topic.addMarkerMessage({ ...marker(1, MarkerType.LINE_STRIP), points }, 0n);
+    topic.addMarkerMessage(marker(1, MarkerType.LINE_STRIP, 0.5), 0n);
+    topic.addMarkerMessage({ ...marker(1, MarkerType.LINE_STRIP, 0.5), points }, 0n);
+    topic.addMarkerMessage({ ...marker(2, MarkerType.LINE_STRIP), points }, 0n);
+    topic.startFrame(0n, "map", "map");
+
+    const translucent = (byId(1) as RenderableLineStrip).line;
+    expect(translucent.material.transparent).toBe(true);
+    expect(translucent.layers.mask).toBe(1 << LAYER_DEFAULT);
+    expect(topic.children.find((child) => child instanceof MarkerBatches)?.children).toHaveLength(
+      0,
+    );
   });
 
   it("stores instances relative to the batch origin, so map-scale coordinates keep precision", () => {
@@ -276,8 +337,11 @@ describe("MarkerBatches", () => {
     expect((byId(1) as RenderableCube).mesh.layers.mask).toBe(1 << LAYER_PICK_ONLY);
     expect((byId(2) as RenderableCube).mesh.layers.mask).toBe(1 << LAYER_DEFAULT);
     expect((byId(3) as RenderableCube).mesh.layers.mask).toBe(1 << LAYER_PICK_ONLY);
-    const cubes = instanced().filter((object) => object instanceof THREE.Mesh);
+    const cubes = instanced().filter((object) => object instanceof THREE.InstancedMesh);
     expect(cubes.map((batch) => batch.position.x)).toEqual([1, 1e6]);
+    expect(cubes.every((batch) => batch.frustumCulled && batch.boundingSphere != undefined)).toBe(
+      true,
+    );
     topic.addMarkerMessage({ ...marker(3, MarkerType.CUBE), action: MarkerAction.DELETE }, 0n);
     topic.startFrame(0n, "map", "map");
     expect(topic.children.find((child) => child instanceof MarkerBatches)?.children).toHaveLength(
