@@ -207,4 +207,15 @@ describe("RemoteDataSourceFactory", () => {
 
     expect(() => factory.initialize(mockArgs)).toThrow("All sources need to be from the same type");
   });
+
+  it.each([".db3", ".ulg", ".csv"])(
+    "should explain that %s files can't be opened from a URL",
+    (ext) => {
+      const mockArgs = setupArgs({ url: `https://example.com/test${ext}` });
+
+      expect(() => factory.initialize(mockArgs)).toThrow(
+        `${ext} files can't be opened from a URL yet`,
+      );
+    },
+  );
 });

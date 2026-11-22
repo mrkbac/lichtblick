@@ -100,7 +100,12 @@ class RemoteDataSourceFactory implements IDataSourceFactory {
       nextExtension = this.checkExtensionMatch(extension, nextExtension);
     });
 
-    const initWorker = initWorkers[extension]!;
+    const initWorker = initWorkers[extension];
+    if (initWorker == undefined) {
+      throw new Error(
+        `${extension === "" ? "Files without an extension" : `${extension} files`} can't be opened from a URL yet. Open .bag or .mcap files from a URL, or open the file from disk.`,
+      );
+    }
 
     // `ds.compare=true` compares the files side by side, one side per file; a comma list names the
     // side of each file instead (files with the same name are merged into that side)
