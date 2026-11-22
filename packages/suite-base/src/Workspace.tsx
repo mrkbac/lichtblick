@@ -93,7 +93,12 @@ import { useDefaultWebLaunchPreference } from "@lichtblick/suite-base/hooks/useD
 import useElectronFilesToOpen from "@lichtblick/suite-base/hooks/useElectronFilesToOpen";
 import { useHandleFiles } from "@lichtblick/suite-base/hooks/useHandleFiles";
 import { useLayoutTransfer } from "@lichtblick/suite-base/hooks/useLayoutTransfer";
+import { useSaveSessionBeforeReload } from "@lichtblick/suite-base/hooks/useSaveSessionBeforeReload";
 import useSeekTimeFromCLI from "@lichtblick/suite-base/hooks/useSeekTimeFromCLI";
+import {
+  playerSourceKey,
+  takeResumePlayback,
+} from "@lichtblick/suite-base/hooks/useServiceWorkerUpdate";
 import { useStructureItemsStoreManager } from "@lichtblick/suite-base/panels/Plot/hooks/useStructureItemsStoreManager";
 import { PlayerPresence } from "@lichtblick/suite-base/players/types";
 import { PanelStateContextProvider } from "@lichtblick/suite-base/providers/PanelStateContextProvider";
@@ -105,6 +110,7 @@ import useBroadcast from "@lichtblick/suite-base/util/broadcast/useBroadcast";
 import isDesktopApp from "@lichtblick/suite-base/util/isDesktopApp";
 import { shortcutKeyHandlers } from "@lichtblick/suite-base/util/keyboardShortcuts";
 import { pwaProtocolUrl } from "@lichtblick/suite-base/util/pwaProtocolUrl";
+import { decodeSharedLayout, sharedLayoutFromHash } from "@lichtblick/suite-base/util/shareLink";
 
 import { useWorkspaceActions } from "./context/Workspace/useWorkspaceActions";
 import { severityToBadgeColor } from "./utils";
@@ -454,6 +460,14 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
   );
 
   const deepLink = props.deepLinks?.[0];
+  // The layout a share link carries in its fragment (see util/shareLink), read once at launch.
+  const [sharedLinkLayout] = useState(() => {
+    try {
+      return deepLink == undefined ? undefined : sharedLayoutFromHash(new URL(deepLink).hash);
+    } catch {
+      return undefined;
+    }
+  });
   const targetUrlState = useMemo(() => {
     if (launchedURL) {
       return parseAppURLState(launchedURL);
@@ -558,6 +572,81 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
 
   const selectEvent = useEvents(selectSelectEvent);
 
+  /**
+   * Saves and selects a layout opened from a link, replacing earlier copies with the same name so
+   * reopening links doesn't pile up layouts. Anyone can make such a link, so the layout is marked
+   * untrusted: its user scripts wait for the user's approval.
+   */
+  const installLayoutText = useCallback(
+    async (text: string, filename: string, signal: AbortSignal) => {
+      const dotIndex = filename.lastIndexOf(".");
+      const layoutName = dotIndex > 0 ? filename.slice(0, dotIndex) : filename;
+
+      // Find existing layouts with the same name before saving (safe deduplication)
+      const existingLayouts = await layoutManager.getLayouts();
+      const matchingLayouts = existingLayouts.filter((layout) => layout.name === layoutName);
+
+      // Delegate JSON parsing, saving, and selection to parseAndInstallLayout
+      const file = new File([text], filename, { type: "application/json" });
+      const newLayout = await parseAndInstallLayout(file, "local", signal, { untrusted: true });
+
+      // Only delete old layouts after successful save to avoid data loss
+      if (newLayout) {
+        for (const layout of matchingLayouts) {
+          signal.throwIfAborted();
+          await layoutManager.deleteLayout({ id: layout.id });
+        }
+      }
+    },
+    [layoutManager, parseAndInstallLayout],
+  );
+
+  /**
+   * Whether the share link's layout got installed. Only the source the link opens waits for it,
+   * once, so later launches show their own (e.g. a sample's) layout.
+   */
+  const sharedLayoutInstall = useRef<Promise<{ installed: boolean }>>(undefined);
+
+  // A share link carries its layout in the fragment (see util/shareLink). Install it once, then
+  // drop the fragment so a reload or a newly copied link doesn't reinstall a stale copy.
+  // The fragment comes with the launch link: the page URL on the web, the `lichtblick://` link
+  // on desktop.
+  useEffect(() => {
+    const encoded = sharedLinkLayout;
+    if (encoded == undefined) {
+      return;
+    }
+    if (sharedLayoutFromHash(window.location.hash) != undefined) {
+      const url = new URL(window.location.href);
+      url.hash = "";
+      window.history.replaceState(undefined, "", url.href);
+    }
+
+    layoutRequest.current?.abort();
+    const controller = new AbortController();
+    layoutRequest.current = controller;
+    sharedLayoutInstall.current = (async () => {
+      try {
+        const text = await decodeSharedLayout(encoded);
+        controller.signal.throwIfAborted();
+        const file = new File([text], "Shared layout.json", { type: "application/json" });
+        // Anyone can make a link: its user scripts wait for the user's approval.
+        const layout = await parseAndInstallLayout(file, "local", controller.signal, {
+          untrusted: true,
+        });
+        return { installed: layout != undefined };
+      } catch (error) {
+        if (!controller.signal.aborted) {
+          log.error("Could not open the layout from the link", error);
+          enqueueSnackbar("Could not open the layout from the link", { variant: "error" });
+        }
+        return { installed: false };
+      }
+    })();
+    // Only the link the app was opened with carries a layout.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   /** Only the current launch may install a downloaded layout or replace saved copies. */
   const fetchLayoutFromUrl = useCallback(
     async (layoutUrl: string) => {
@@ -599,26 +688,9 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
         const rawFilename = parsedUrl.pathname.split("/").pop();
         const filename =
           rawFilename != undefined && rawFilename !== "" ? rawFilename : "layout.json";
-        const dotIndex = filename.lastIndexOf(".");
-        const layoutName = dotIndex > 0 ? filename.slice(0, dotIndex) : filename;
-
-        // Find existing layouts with the same name before saving (safe deduplication)
-        const existingLayouts = await layoutManager.getLayouts();
-        const matchingLayouts = existingLayouts.filter((layout) => layout.name === layoutName);
-
-        // Delegate JSON parsing, saving, and selection to parseAndInstallLayout
         const text = await response.text();
         signal.throwIfAborted();
-        const file = new File([text], filename, { type: "application/json" });
-        const newLayout = await parseAndInstallLayout(file, "local", signal);
-
-        // Only delete old layouts after successful save to avoid data loss
-        if (newLayout) {
-          for (const layout of matchingLayouts) {
-            signal.throwIfAborted();
-            await layoutManager.deleteLayout({ id: layout.id });
-          }
-        }
+        await installLayoutText(text, filename, signal);
       } catch (error) {
         if (signal.aborted) {
           return;
@@ -627,7 +699,7 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
         enqueueSnackbar("Failed to load layout from URL", { variant: "error" });
       }
     },
-    [layoutManager, parseAndInstallLayout, enqueueSnackbar],
+    [installLayoutText, enqueueSnackbar],
   );
 
   // Load data source from URL.
@@ -639,14 +711,26 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
     let shouldUpdate = false;
 
     // Apply any available data source args
-    if (unappliedSourceArgs.ds) {
+    const { ds, dsParams, sourceMetadata } = unappliedSourceArgs;
+    if (ds) {
       log.debug("Initialising source from url", unappliedSourceArgs);
-      selectSource(unappliedSourceArgs.ds, {
-        type: "connection",
-        params: unappliedSourceArgs.dsParams,
-        sourceMetadata: unappliedSourceArgs.sourceMetadata,
-      });
-      selectEvent(unappliedSourceArgs.dsParams?.eventId);
+      const open = ({ installed }: { installed: boolean }) => {
+        selectSource(ds, {
+          type: "connection",
+          params: dsParams,
+          sourceMetadata,
+          // The link's layout is what the sender wants shown, not the sample's own.
+          ...(installed && { keepLayout: true }),
+        });
+        selectEvent(dsParams?.eventId);
+      };
+      const layoutInstall = sharedLayoutInstall.current;
+      sharedLayoutInstall.current = undefined;
+      if (layoutInstall) {
+        void layoutInstall.then(open);
+      } else {
+        open({ installed: false });
+      }
       shouldUpdate = true;
     }
     // Apply any available layout URL
@@ -660,6 +744,11 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
       setUnappliedSourceArgs({ ds: undefined, dsParams: undefined, layoutUrl: undefined });
     }
   }, [fetchLayoutFromUrl, selectEvent, selectSource, unappliedSourceArgs, setUnappliedSourceArgs]);
+
+  useSaveSessionBeforeReload();
+  // An update reload resumes playback once it is back at the URL time, but only of the recording
+  // that was playing: if that one fails to reopen, the next one the user opens must not start
+  const [resumeSource, setResumeSource] = useState(takeResumePlayback);
 
   // Seek to time in URL.
   useEffect(() => {
@@ -678,7 +767,13 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
     log.debug(`Seeking to url time:`, unappliedTime.time);
     seek(unappliedTime.time);
     setUnappliedTime({ time: undefined });
-  }, [playerId, playerPresence, seek, unappliedTime]);
+    if (resumeSource != undefined) {
+      setResumeSource(undefined);
+      if (playerSourceKey(getMessagePipeline().playerState) === resumeSource) {
+        play?.();
+      }
+    }
+  }, [getMessagePipeline, play, playerId, playerPresence, resumeSource, seek, unappliedTime]);
 
   useSeekTimeFromCLI();
 

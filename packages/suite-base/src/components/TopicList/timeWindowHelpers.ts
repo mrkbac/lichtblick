@@ -1,39 +1,37 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import { Time, compare } from "@foxglove/rostime";
+import { Time } from "@foxglove/rostime";
 
 // Time conversion constants
 const NANOSECONDS_PER_MILLISECOND = 1_000_000;
 const NANOSECONDS_PER_SECOND = 1_000_000_000;
 
 // Window size constants (in milliseconds)
-const DEFAULT_WINDOW_MS = 500;
+export const DEFAULT_WINDOW_MS = 500;
 const MIN_WINDOW_MS = 100;
 const MAX_WINDOW_MS = 30 * 1000; // 30 seconds
-const WINDOW_CAP_MS = 60 * 1000; // 1 minute
 
 // Adaptive window calculation constants
 const DEFAULT_TARGET_MESSAGES = 10;
-const DEFAULT_MAX_WINDOWS = 4;
-const WINDOW_GROWTH_FACTOR = 5;
+export const WINDOW_GROWTH_FACTOR = 5;
 
 /**
  * Subtracts milliseconds from a Time, handling nanosecond overflow correctly.
  */
 export function subtractMilliseconds(time: Time, milliseconds: number): Time {
-  // Round to ensure we get integer values (milliseconds may be floating point from calculations)
-  const nanoseconds = Math.round(milliseconds * NANOSECONDS_PER_MILLISECOND);
-  let nsec = time.nsec - nanoseconds;
-  let sec = time.sec;
-
-  // Handle nanosecond underflow
-  while (nsec < 0) {
+  // Split into whole seconds and a sub-second remainder so huge windows stay O(1) and exact.
+  const wholeSeconds = Math.floor(milliseconds / 1000);
+  const remainderNs = Math.round(
+    (milliseconds - wholeSeconds * 1000) * NANOSECONDS_PER_MILLISECOND,
+  );
+  let sec = time.sec - wholeSeconds;
+  let nsec = time.nsec - remainderNs;
+  if (nsec < 0) {
     nsec += NANOSECONDS_PER_SECOND;
     sec -= 1;
   }
-
-  // Ensure nsec is an integer (avoid floating point precision issues)
+  // The input's nsec may be fractional (computed times): keep an integer nanosecond count
   return { sec, nsec: Math.round(nsec) };
 }
 
@@ -79,37 +77,4 @@ export function calculateOptimalWindowMs(params: {
   const windowMs = Math.max(MIN_WINDOW_MS, Math.min(MAX_WINDOW_MS, estimatedWindowSec * 1000));
 
   return windowMs;
-}
-
-/**
- * Creates a sequence of progressively larger time windows for adaptive search.
- */
-export function createWindowSizes(
-  initialWindowMs: number,
-  maxWindows: number = DEFAULT_MAX_WINDOWS,
-): number[] {
-  const windows: number[] = [initialWindowMs];
-
-  for (let i = 1; i < maxWindows; i++) {
-    const nextWindow = initialWindowMs * Math.pow(WINDOW_GROWTH_FACTOR, i);
-    windows.push(Math.min(nextWindow, WINDOW_CAP_MS));
-  }
-
-  return windows;
-}
-
-/**
- * Checks if a time window would reach before a boundary time.
- */
-export function wouldReachBoundary(
-  currentTime: Time,
-  windowMs: number,
-  boundaryTime: Time | undefined,
-): boolean {
-  if (!boundaryTime) {
-    return false;
-  }
-
-  const windowStart = subtractMilliseconds(currentTime, windowMs);
-  return compare(windowStart, boundaryTime) <= 0;
 }

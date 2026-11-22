@@ -19,8 +19,9 @@ import { DeepPartial } from "ts-essentials";
 import { MessageEvent } from "@lichtblick/suite";
 import { HUDItemManager } from "@lichtblick/suite-base/panels/ThreeDeeRender/HUDItemManager";
 import {
-  MAX_SYNC_ENTRIES,
   MessageHandler,
+  MessageRenderState,
+  SYNC_BYTES,
   WAITING_FOR_BOTH_HUD_ITEM,
   WAITING_FOR_CALIBRATION_HUD_ITEM,
   WAITING_FOR_IMAGE_EMPTY_HUD_ITEM,
@@ -286,39 +287,185 @@ describe("MessageHandler: synchronized = true", () => {
     expect(state.cameraInfo).not.toBeUndefined();
   });
 
-  it("drops the oldest buffered images when annotations never arrive", () => {
+  const SEC = 1_000_000_000n;
+  const syncedHandler = () => {
+    const messageHandler = new MessageHandler(
+      { synchronize: true, annotations: { annotations: { visible: true } } },
+      new HUDItemManager(() => {}),
+    );
+    messageHandler.setAvailableAnnotationTopics(["annotations"]);
+    return messageHandler;
+  };
+  const imageAt = (time: bigint, data?: Uint8Array) =>
+    wrapInMessageEvent<RawImage>("image", "foxglove.RawImage", time, {
+      timestamp: fromNanoSec(time),
+      data,
+    });
+  const annotationsAt = (time: bigint) =>
+    wrapInMessageEvent(
+      "annotations",
+      "foxglove.ImageAnnotations",
+      time,
+      createCircleAnnotations([time]),
+    ) as MessageEvent<ImageAnnotations>;
+  const renderedStamp = (messageHandler: MessageHandler) =>
+    (messageHandler.getRenderStateAndUpdateHUD().image?.message as RawImage | undefined)?.timestamp;
+
+  it("drops buffered images more than the sync window behind the newest", () => {
+    const messageHandler = syncedHandler();
+    for (let sec = 0n; sec <= 11n; sec++) {
+      messageHandler.handleRawImage(imageAt(sec * SEC));
+    }
+    // 0 is 11 s behind the newest, 1 exactly 10 s and still kept
+    messageHandler.handleAnnotations(annotationsAt(0n));
+    expect(renderedStamp(messageHandler)).toBeUndefined();
+    messageHandler.handleAnnotations(annotationsAt(SEC));
+    expect(renderedStamp(messageHandler)).toEqual(fromNanoSec(SEC));
+  });
+
+  it("drops the oldest buffered images past the byte budget", () => {
+    const messageHandler = syncedHandler();
+    // One buffer shared by every image: only byteLength matters
+    const third = new Uint8Array(SYNC_BYTES / 3);
+    for (let time = 1n; time <= 4n; time++) {
+      messageHandler.handleRawImage(imageAt(time, third));
+    }
+    messageHandler.handleAnnotations(annotationsAt(1n));
+    expect(renderedStamp(messageHandler)).toBeUndefined();
+    messageHandler.handleAnnotations(annotationsAt(2n));
+    expect(renderedStamp(messageHandler)).toEqual(fromNanoSec(2n));
+
+    // Freed bytes count again: three more images fit next to 3 and 4 once 2 is released
+    messageHandler.handleAnnotations(annotationsAt(4n));
+    expect(renderedStamp(messageHandler)).toEqual(fromNanoSec(4n));
+    for (let time = 5n; time <= 7n; time++) {
+      messageHandler.handleRawImage(imageAt(time, third));
+    }
+    messageHandler.handleAnnotations(annotationsAt(5n));
+    expect(renderedStamp(messageHandler)).toEqual(fromNanoSec(5n));
+  });
+
+  it("shows a set completed by the message whose other stamps evict it", () => {
+    const messageHandler = syncedHandler();
+    const emitted: unknown[] = [];
+    messageHandler.addListener((state) => {
+      emitted.push((state.image?.message as RawImage | undefined)?.timestamp);
+    });
+    messageHandler.handleRawImage(imageAt(SEC));
+    messageHandler.handleAnnotations(
+      wrapInMessageEvent(
+        "annotations",
+        "foxglove.ImageAnnotations",
+        12n * SEC,
+        createCircleAnnotations([SEC, 12n * SEC]),
+      ) as MessageEvent<ImageAnnotations>,
+    );
+    expect(emitted.at(-1)).toEqual(fromNanoSec(SEC));
+    messageHandler.handleRawImage(imageAt(12n * SEC));
+    expect(emitted.at(-1)).toEqual(fromNanoSec(12n * SEC));
+  });
+
+  it("shows waiting for sync as soon as a stalled annotation topic lets the match age out", () => {
+    const messageHandler = syncedHandler();
+    const emitted: MessageRenderState[] = [];
+    messageHandler.addListener((state) => emitted.push(state));
+    messageHandler.handleRawImage(imageAt(SEC));
+    messageHandler.handleAnnotations(annotationsAt(SEC));
+    expect((emitted.at(-1)?.image?.message as RawImage).timestamp).toEqual(fromNanoSec(SEC));
+    // Annotations stop; images keep coming. The image at 11 s is the last within the window.
+    for (let sec = 2n; sec <= 11n; sec++) {
+      messageHandler.handleRawImage(imageAt(sec * SEC));
+    }
+    expect((emitted.at(-1)?.image?.message as RawImage).timestamp).toEqual(fromNanoSec(SEC));
+    // The message that expires it reports that in the same render, without waiting for another
+    messageHandler.handleRawImage(imageAt(12n * SEC));
+    expect(emitted.at(-1)?.image).toBeUndefined();
+    expect(emitted.at(-1)?.missingAnnotationTopics).toEqual(["annotations"]);
+  });
+
+  it("reports waiting for images once the camera stops and the match ages out", () => {
     const hud = new HUDItemManager(() => {});
     const messageHandler = new MessageHandler(
       { synchronize: true, annotations: { annotations: { visible: true } } },
       hud,
     );
     messageHandler.setAvailableAnnotationTopics(["annotations"]);
-    const imageCount = BigInt(MAX_SYNC_ENTRIES + 50);
-    for (let time = 1n; time <= imageCount; time++) {
-      messageHandler.handleRawImage(
-        wrapInMessageEvent<RawImage>("image", "foxglove.RawImage", time, {
-          timestamp: fromNanoSec(time),
-        }),
-      );
+    messageHandler.handleRawImage(imageAt(SEC));
+    messageHandler.handleAnnotations(annotationsAt(SEC));
+    expect(renderedStamp(messageHandler)).toEqual(fromNanoSec(SEC));
+    const emitted: MessageRenderState[] = [];
+    messageHandler.addListener((state) => emitted.push(state));
+    // Images stop; annotations keep coming
+    for (let sec = 2n; sec <= 12n; sec++) {
+      messageHandler.handleAnnotations(annotationsAt(sec * SEC));
     }
-    const annotationsAt = (time: bigint) =>
-      wrapInMessageEvent(
-        "annotations",
-        "foxglove.ImageAnnotations",
-        time,
-        createCircleAnnotations([time]),
-      ) as MessageEvent<ImageAnnotations>;
+    expect(emitted.at(-1)?.image).toBeUndefined();
+    expect(emitted.at(-1)?.waitingForImage).toBe(true);
+    expect(hud.getHUDItems()).toEqual([WAITING_FOR_IMAGE_EMPTY_HUD_ITEM]);
+  });
 
-    // Exactly the newest MAX_SYNC_ENTRIES images are kept: the one before them is gone...
-    const oldestKept = imageCount - BigInt(MAX_SYNC_ENTRIES) + 1n;
-    messageHandler.handleAnnotations(annotationsAt(oldestKept - 1n));
-    expect(messageHandler.getRenderStateAndUpdateHUD().image).toBeUndefined();
-
-    // ...and the oldest kept one still completes a set.
-    messageHandler.handleAnnotations(annotationsAt(oldestKept));
-    expect(messageHandler.getRenderStateAndUpdateHUD().image?.message).toMatchObject({
-      timestamp: fromNanoSec(oldestKept),
+  it("charges an annotation message in full while any of its stamps is buffered", () => {
+    const messageHandler = syncedHandler();
+    const sized = (message: MessageEvent<ImageAnnotations>, sizeInBytes: number) => ({
+      ...message,
+      sizeInBytes,
     });
+    // One message covering stamps 1 and 4
+    messageHandler.handleAnnotations(
+      sized(
+        wrapInMessageEvent(
+          "annotations",
+          "foxglove.ImageAnnotations",
+          4n,
+          createCircleAnnotations([1n, 4n]),
+        ) as MessageEvent<ImageAnnotations>,
+        Math.floor(SYNC_BYTES * 0.6),
+      ),
+    );
+    messageHandler.handleRawImage(imageAt(1n));
+    messageHandler.handleAnnotations(annotationsAt(2n));
+    messageHandler.handleRawImage(imageAt(2n));
+    expect(renderedStamp(messageHandler)).toEqual(fromNanoSec(2n));
+    // Stamp 1 is released, but stamp 4 still holds the whole message: an image of 45% doesn't fit
+    messageHandler.handleRawImage(imageAt(3n, new Uint8Array(Math.floor(SYNC_BYTES * 0.45))));
+    messageHandler.handleAnnotations(annotationsAt(3n));
+    expect(renderedStamp(messageHandler)).toBeUndefined();
+  });
+
+  it("keeps matching after one future-stamped image", () => {
+    const messageHandler = syncedHandler();
+    messageHandler.handleRawImage(imageAt(1000n * SEC));
+    messageHandler.handleRawImage(imageAt(SEC));
+    messageHandler.handleAnnotations(annotationsAt(SEC));
+    expect(renderedStamp(messageHandler)).toEqual(fromNanoSec(SEC));
+  });
+
+  it("counts annotations waiting for their image against the byte budget", () => {
+    const messageHandler = syncedHandler();
+    for (let time = 1n; time <= 4n; time++) {
+      messageHandler.handleAnnotations({
+        ...annotationsAt(time),
+        sizeInBytes: Math.floor(SYNC_BYTES / 3),
+      });
+    }
+    messageHandler.handleRawImage(imageAt(1n));
+    expect(renderedStamp(messageHandler)).toBeUndefined();
+    messageHandler.handleRawImage(imageAt(2n));
+    expect(renderedStamp(messageHandler)).toEqual(fromNanoSec(2n));
+  });
+
+  it("matches the newest complete set when older images are still waiting", () => {
+    const messageHandler = syncedHandler();
+    for (let time = 1n; time <= 3n; time++) {
+      messageHandler.handleRawImage(imageAt(time));
+    }
+    messageHandler.handleAnnotations(annotationsAt(2n));
+    expect(renderedStamp(messageHandler)).toEqual(fromNanoSec(2n));
+    // 1 was older than the match and is gone
+    messageHandler.handleAnnotations(annotationsAt(1n));
+    expect(renderedStamp(messageHandler)).toEqual(fromNanoSec(2n));
+    messageHandler.handleAnnotations(annotationsAt(3n));
+    expect(renderedStamp(messageHandler)).toEqual(fromNanoSec(3n));
   });
 
   it("handles and shows image in state with no active annotations", () => {

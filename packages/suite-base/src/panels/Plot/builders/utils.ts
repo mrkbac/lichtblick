@@ -4,7 +4,12 @@
 import { STREAM_MODIFIERS } from "@lichtblick/message-path";
 import { Immutable, MessageEvent } from "@lichtblick/suite";
 
-import { GetViewportDatasetsResult, SeriesConfigKey, SeriesItem } from "./IDatasetsBuilder";
+import {
+  GetViewportDatasetsResult,
+  MessageRangeOptions,
+  SeriesConfigKey,
+  SeriesItem,
+} from "./IDatasetsBuilder";
 import { CurrentFrameSeriesItem } from "./types";
 import { Dataset } from "../types";
 
@@ -13,12 +18,6 @@ import { Dataset } from "../types";
  * Used by IndexDatasetsBuilder and CurrentCustomDatasetsBuilder.
  */
 const emptyPaths = new Set<string>();
-
-/**
- * Caps how many current-frame (unpreloaded) datums a series accumulates so memory does not grow
- * indefinitely. Shared by builders that separately track current and full (preloaded) buffers.
- */
-export const MAX_CURRENT_DATUMS_PER_SERIES = 50_000;
 
 /**
  * True when the plotted y is computed across samples (a stream modifier like `.@derivative`, or a
@@ -55,36 +54,6 @@ export function buildDatasetStyle(config: Immutable<SeriesItem>): Omit<Dataset, 
     pointBackgroundColor: showLine ? contrastColor : color,
     pointBorderColor: "transparent",
   };
-}
-
-/**
- * Series entry shared by builders that accumulate both a "full" (preloaded) and "current"
- * (unpreloaded) buffer of items. Used by CustomDatasetsBuilderImpl and TimestampDatasetsBuilderImpl.
- */
-type FullAndCurrentSeries<TItem> = {
-  config: Immutable<SeriesItem>;
-  current: TItem[];
-  full: TItem[];
-};
-
-/**
- * Rebuilds a series map from a new config array, preserving each series' existing current/full
- * buffers for matching keys.
- */
-export function updateSeriesConfig<TItem>(
-  existing: ReadonlyMap<SeriesConfigKey, FullAndCurrentSeries<TItem>>,
-  series: Immutable<SeriesItem[]>,
-): Map<SeriesConfigKey, FullAndCurrentSeries<TItem>> {
-  const newSeries = new Map<SeriesConfigKey, FullAndCurrentSeries<TItem>>();
-
-  for (const config of series) {
-    let existingSeries = existing.get(config.key);
-    existingSeries ??= { config, current: [], full: [] };
-    existingSeries.config = config;
-    newSeries.set(config.key, existingSeries);
-  }
-
-  return newSeries;
 }
 
 /**
@@ -192,12 +161,15 @@ type SeriesFullAction<T> =
 export function buildFullSeriesActions<TItem>(
   series: Immutable<Array<{ config: Immutable<SeriesItem> }>>,
   topic: string,
-  options: { isReset: boolean },
+  options: Immutable<MessageRangeOptions>,
   getItems: (config: Immutable<SeriesItem>) => TItem[],
 ): SeriesFullAction<TItem>[] {
   const actions: SeriesFullAction<TItem>[] = [];
   for (const s of series) {
-    if (s.config.parsed.topicName !== topic) {
+    if (
+      s.config.parsed.topicName !== topic ||
+      (options.seriesKeys != undefined && !options.seriesKeys.has(s.config.key))
+    ) {
       continue;
     }
     if (options.isReset) {

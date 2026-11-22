@@ -11,11 +11,20 @@ import { createRoot } from "react-dom/client";
 import Logger from "@lichtblick/log";
 import type { IDataSourceFactory } from "@lichtblick/suite-base";
 import CssBaseline from "@lichtblick/suite-base/components/CssBaseline";
-import { reloadToLatestVersion } from "@lichtblick/suite-base/hooks/useServiceWorkerUpdate";
+import {
+  recoverFromMissingAssets,
+  reloadToLatestVersion,
+} from "@lichtblick/suite-base/hooks/useServiceWorkerUpdate";
 import waitForFonts from "@lichtblick/suite-base/util/waitForFonts";
 
 import { CompatibilityBanner } from "./CompatibilityBanner";
-import { ASSET_LIST_FILE, type AssetList, HASHED_FILE, RUNTIME_CACHE_NAME } from "./assetCache";
+import {
+  ASSET_LIST_FILE,
+  type AssetList,
+  HASHED_FILE,
+  PREFETCH_HEADER,
+  RUNTIME_CACHE_NAME,
+} from "./assetCache";
 import { canRenderApp } from "./canRenderApp";
 
 const log = Logger.getLogger(__filename);
@@ -67,7 +76,10 @@ async function cacheAsset(cachePromise: Promise<Cache>, url: string): Promise<vo
   try {
     const cache = await cachePromise;
     // file names are content-hashed, so the HTTP cache copy is always valid: no second download
-    const response = await fetch(url, { cache: "force-cache" });
+    const response = await fetch(url, {
+      cache: "force-cache",
+      headers: { [PREFETCH_HEADER]: "1" },
+    });
     // same rule as the service worker: the host answers unknown paths with index.html
     if (response.ok && response.headers.get("content-type")?.startsWith("text/html") !== true) {
       await cache.put(url, response);
@@ -154,6 +166,8 @@ export async function main(getParams: () => Promise<MainParams> = async () => ({
     navigator.serviceWorker.register("sw.js").catch((err: unknown) => {
       log.error("Service worker registration failed", err);
     });
+    // a window left on an older build switches when a file it needs is gone from the host
+    recoverFromMissingAssets();
     if (!navigator.serviceWorker.controller) {
       cacheLoadedAssets();
     }

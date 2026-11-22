@@ -6,19 +6,21 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import CloseIcon from "@mui/icons-material/Close";
-import { Dialog, DialogContent, DialogTitle, IconButton, Stack, Typography } from "@mui/material";
-import { useState } from "react";
+import { Dialog, DialogContent, DialogTitle, IconButton } from "@mui/material";
+import { lazy, Suspense, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { makeStyles } from "tss-react/mui";
 
 import { Immutable } from "@lichtblick/suite";
 import { PlayerAlert } from "@lichtblick/suite-base/players/types";
 
-import WssErrorModalScreenshot from "./WssErrorModal.png";
+// Loaded on demand: it's only needed after the browser blocked a ws:// connection
+const WsMixedContentHelp = lazy(async () => ({
+  default: (await import("@lichtblick/suite-base/components/WsMixedContentHelp"))
+    .WsMixedContentHelp,
+}));
 
 const useStyles = makeStyles()({
-  image: {
-    maxWidth: "24rem",
-  },
   dialogTitle: {
     display: "flex",
     justifyContent: "space-between",
@@ -26,54 +28,35 @@ const useStyles = makeStyles()({
   },
 });
 
+/** Explains, once per page, how to connect when the browser blocks ws:// from this https page. */
 export default function WssErrorModal(
   props: Readonly<Immutable<{ playerAlerts?: PlayerAlert[] }>>,
 ): React.JSX.Element {
   const { playerAlerts } = props;
   const { classes } = useStyles();
+  const { t } = useTranslation("wsMixedContent");
+  const [dismissed, setDismissed] = useState(false);
 
-  const [open, setOpen] = useState(true);
-  const [hasDismissedWssErrorModal, setHasDismissedWssErrorModal] = useState(false);
-
-  const handleClose = () => {
-    setOpen(false);
-    setHasDismissedWssErrorModal(true);
-  };
-
-  const hasWssConnectionProblem = playerAlerts?.find(
-    (alert) => alert.severity === "error" && alert.message === "Insecure WebSocket connection",
-  );
-
-  if (hasDismissedWssErrorModal || !hasWssConnectionProblem) {
+  const guide = playerAlerts?.find((alert) => alert.guide?.type === "wsMixedContent")?.guide;
+  if (dismissed || guide == undefined) {
     return <></>;
   }
 
+  const close = () => {
+    setDismissed(true);
+  };
   return (
-    <Dialog open={open} onClose={handleClose}>
+    <Dialog open onClose={close} maxWidth="sm">
       <DialogTitle className={classes.dialogTitle}>
-        WebSocket SSL Error
-        <IconButton
-          onClick={() => {
-            setOpen(false);
-          }}
-          edge="end"
-        >
+        {t("dialogTitle")}
+        <IconButton aria-label={t("close")} onClick={close} edge="end">
           <CloseIcon />
         </IconButton>
       </DialogTitle>
       <DialogContent>
-        <Stack spacing={2} useFlexGap>
-          <Typography variant="body1" color="textSecondary">
-            By default, Chrome prevents a secure <code>https://</code> page from connecting to an
-            insecure <code>ws://</code> WebSocket server. To allow the connection, enable
-            &quot;Unsafe Scripts&quot; for this page.
-          </Typography>
-          <Typography variant="body1" color="textSecondary">
-            Click the shield icon at the end of your address bar, and then click &quot;Load Unsafe
-            Scripts.&quot;
-          </Typography>
-          <img src={WssErrorModalScreenshot} alt="WSS screenshot" className={classes.image} />
-        </Stack>
+        <Suspense>
+          <WsMixedContentHelp url={guide.url} />
+        </Suspense>
       </DialogContent>
     </Dialog>
   );

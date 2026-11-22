@@ -66,8 +66,20 @@ export function validateLayoutData(data: unknown): LayoutData {
     errors.push(`missing or invalid fields: ${quotedFields}`);
   }
 
-  if ("userNodes" in data && !isPlainObject(data.userNodes)) {
-    errors.push(`invalid "userNodes"`);
+  if ("userNodes" in data) {
+    // Each script is rendered and run (after approval) as {name, sourceCode}; a bad entry would
+    // crash the app before the user is ever asked.
+    const valid =
+      isPlainObject(data.userNodes) &&
+      Object.values(data.userNodes).every(
+        (script) =>
+          isPlainObject(script) &&
+          typeof script.name === "string" &&
+          typeof script.sourceCode === "string",
+      );
+    if (!valid) {
+      errors.push(`invalid "userNodes"`);
+    }
   }
 
   // Older files store the react-mosaic-component tree, which is converted when loaded

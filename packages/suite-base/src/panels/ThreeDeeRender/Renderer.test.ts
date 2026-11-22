@@ -792,6 +792,50 @@ describe("3D Renderer", () => {
       renderer.dispose();
     });
 
+    it("lets scene extensions recheck GPU limits once the device is ready", async () => {
+      const renderer = new Renderer({ ...defaultRendererProps, canvas });
+      const ready = [...renderer.sceneExtensions.values()].map((extension) =>
+        vi.spyOn(extension, "gpuReady"),
+      );
+      await renderer.ready;
+      for (const spy of ready) {
+        expect(spy).toHaveBeenCalledTimes(1);
+      }
+      renderer.dispose();
+    });
+
+    it("reports point layers the raster couldn't draw, and clears that once they are drawn", async () => {
+      const visibility = vi.spyOn(document, "visibilityState", "get").mockReturnValue("visible");
+      const renderer = new Renderer({ ...defaultRendererProps, canvas });
+      await renderer.ready;
+      const layer = new THREE.Object3D();
+      layer.userData.settingsPath = ["topics", "/points"];
+      const points = new THREE.Object3D();
+      // Child renderables may carry an empty path; the layer's is the one to report on
+      points.userData.settingsPath = [];
+      layer.add(points);
+      const prepare = vi.spyOn(renderer.pointRaster, "prepare").mockImplementation(() => {
+        renderer.pointRaster.skipped.set(points as never, "tooManySets");
+      });
+      const errorAt = () => renderer.settings.errors.errors.errorAtPath(["topics", "/points"]);
+      try {
+        renderer.animationFrame();
+        expect(errorAt()).toMatch(/point layers/);
+
+        // Settings errors are cleared on seek; a layer still skipped gets its warning back
+        renderer.settings.errors.clear();
+        renderer.animationFrame();
+        expect(errorAt()).toMatch(/point layers/);
+
+        prepare.mockImplementation(() => {});
+        renderer.animationFrame();
+        expect(errorAt()).toBeUndefined();
+      } finally {
+        renderer.dispose();
+        visibility.mockRestore();
+      }
+    });
+
     it("reports a loss after startup and stops drawing", async () => {
       const renderer = new Renderer({ ...defaultRendererProps, canvas });
       await renderer.ready;

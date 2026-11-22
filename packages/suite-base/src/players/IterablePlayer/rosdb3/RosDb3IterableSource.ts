@@ -8,7 +8,7 @@
 import { MessageDefinition } from "@foxglove/message-definition";
 import { ROS2_TO_DEFINITIONS, Rosbag2, SqliteSqljs } from "@foxglove/rosbag2-web";
 import { stringify } from "@foxglove/rosmsg";
-import { Time, add as addTime } from "@foxglove/rostime";
+import { Time, add as addTime, compare, toNanoSec } from "@foxglove/rostime";
 
 import { MessageEvent } from "@lichtblick/suite";
 import { APP_CONFIG } from "@lichtblick/suite-base/constants/config";
@@ -24,6 +24,15 @@ import {
   MessageIteratorArgs,
   TopicWithDecodingInfo,
 } from "../IIterableSource";
+import { BlockCachedFile } from "./BlockCachedFile";
+
+/** Rows of any topic a backfill page scans: bounds the synchronous SQLite work between yields */
+const BACKFILL_PAGE_ROWS = 4096;
+
+/** Lets the worker take a superseding seek's abort message: sql.js reads synchronously */
+async function yieldToWorker(): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, 0));
+}
 
 function dataTypeToFullName(dataType: string): string {
   const parts = dataType.split("/");
@@ -36,6 +45,8 @@ function dataTypeToFullName(dataType: string): string {
 export class RosDb3IterableSource implements ISerializedIterableSource {
   #files: File[];
   #bag?: Rosbag2;
+  /** Each file with its message count per topic */
+  #dbs: { db: SqliteSqljs; counts: Map<string, number> }[] = [];
   #start: Time = { sec: 0, nsec: 0 };
   #end: Time = { sec: 0, nsec: 0 };
   #textEncoder = new TextEncoder();
@@ -53,14 +64,23 @@ export class RosDb3IterableSource implements ISerializedIterableSource {
     const sqlWasm = await (await res.blob()).arrayBuffer();
     await SqliteSqljs.Initialize({ wasmBinary: sqlWasm });
 
-    const dbs = this.#files.map((file) => new SqliteSqljs(file));
+    const dbs = this.#files.map((file) => new SqliteSqljs(new BlockCachedFile(file)));
     const bag = new Rosbag2(dbs);
     await bag.open();
     this.#bag = bag;
 
     const [start, end] = await this.#bag.timeRange();
     const topicDefs = await this.#bag.readTopics();
-    const messageCounts = await this.#bag.messageCounts();
+    // Per file, so a backfill skips files without the topics it looks for
+    const messageCounts = new Map<string, number>();
+    this.#dbs = [];
+    for (const db of dbs) {
+      const counts = await db.messageCounts();
+      this.#dbs.push({ db, counts });
+      for (const [topic, count] of counts) {
+        messageCounts.set(topic, (messageCounts.get(topic) ?? 0) + count);
+      }
+    }
     let hasAnyMessages = false;
     for (const count of messageCounts.values()) {
       if (count > 0) {
@@ -182,9 +202,49 @@ export class RosDb3IterableSource implements ISerializedIterableSource {
     }
   }
 
-  public async getBackfillMessages(
-    _args: GetBackfillMessagesArgs,
-  ): Promise<MessageEvent<Uint8Array>[]> {
-    return [];
+  public async getBackfillMessages({
+    topics,
+    time,
+    abortSignal,
+  }: GetBackfillMessagesArgs): Promise<MessageEvent<Uint8Array>[]> {
+    if (this.#bag == undefined) {
+      throw new Error(`Rosbag2DataProvider is not initialized`);
+    }
+    // .db3 files only index time: read back from `time` in pages of rows until every topic has a
+    // message or the file's start is reached, yielding between pages even when none matched
+    const latest = new Map<string, MessageEvent<Uint8Array>>();
+    for (const { db, counts } of this.#dbs) {
+      // Per file: a split recording's files may overlap in time
+      const found = new Set<string>();
+      let next: { timestamp: bigint; id?: number } | undefined = { timestamp: toNanoSec(time) };
+      while (next != undefined) {
+        // A topic this file has no messages for would only make the scan read to its start
+        const missing = [...topics.keys()].filter(
+          (topic) => !found.has(topic) && (counts.get(topic) ?? 0) > 0,
+        );
+        if (missing.length === 0) {
+          break;
+        }
+        await yieldToWorker();
+        abortSignal?.throwIfAborted();
+        const page = db.backfillPage(next, missing, BACKFILL_PAGE_ROWS);
+        for (const msg of page.found) {
+          found.add(msg.topic.name);
+          const prev = latest.get(msg.topic.name);
+          if (prev && compare(prev.receiveTime, msg.timestamp) > 0) {
+            continue;
+          }
+          latest.set(msg.topic.name, {
+            topic: msg.topic.name,
+            receiveTime: msg.timestamp,
+            message: msg.data,
+            sizeInBytes: msg.data.byteLength,
+            schemaName: msg.topic.type,
+          });
+        }
+        next = page.next;
+      }
+    }
+    return [...latest.values()].sort((a, b) => compare(a.receiveTime, b.receiveTime));
   }
 }

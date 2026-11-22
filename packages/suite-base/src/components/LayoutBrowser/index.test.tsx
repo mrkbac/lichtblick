@@ -258,6 +258,26 @@ describe("LayoutBrowser", () => {
       expect(dispatchMock).toHaveBeenCalledWith({ type: "shift-multi-action" });
     });
 
+    it("keeps a linked layout's copy untrusted on duplicate action", async () => {
+      // GIVEN a layout opened from a link, whose scripts need approval
+      const layout = {
+        ...LayoutBuilder.layout({ id: "id1" as LayoutID }),
+        untrusted: true as const,
+      };
+      mockLayoutManager.getLayout = vi.fn().mockResolvedValue(layout);
+      mockLayoutManager.saveNewLayout = vi.fn().mockResolvedValue(LayoutBuilder.layout());
+
+      // WHEN
+      renderWithMultiAction({ action: "duplicate", ids: ["id1"] });
+
+      // THEN the copy's scripts need approval too
+      await waitFor(() => {
+        expect(mockLayoutManager.saveNewLayout).toHaveBeenCalledWith(
+          expect.objectContaining({ untrusted: true }),
+        );
+      });
+    });
+
     it("shows error snackbar and dispatches clear-multi-action on failure", async () => {
       // GIVEN
       const errorMessage = "Something went wrong";

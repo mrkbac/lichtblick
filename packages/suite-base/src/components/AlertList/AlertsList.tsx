@@ -23,6 +23,7 @@ import EmptyState from "@lichtblick/suite-base/components/EmptyState";
 import { useMessagePipeline } from "@lichtblick/suite-base/components/MessagePipeline";
 import Stack from "@lichtblick/suite-base/components/Stack";
 import { useAlertsActions, useAlertsStore } from "@lichtblick/suite-base/context/AlertsContext";
+import { PlayerAlertGuide } from "@lichtblick/suite-base/players/types";
 import { DetailsType, NotificationSeverity } from "@lichtblick/suite-base/util/sendNotification";
 
 import { AlertDetails } from "./AlertDetails";
@@ -37,6 +38,7 @@ export type ListAlert = {
   message: string;
   error?: DetailsType;
   tip?: string;
+  guide?: PlayerAlertGuide;
   /** Present for session alerts, which are removed from the store on dismiss. */
   tag?: string;
   /** Present for player alerts, which are hidden by content key on dismiss. */
@@ -131,7 +133,7 @@ export function AlertsList(): React.JSX.Element {
             </div>
           </div>
           <Divider />
-          <AlertDetails details={alert.error} tip={alert.tip} />
+          <AlertDetails details={alert.error} tip={alert.tip} guide={alert.guide} />
         </Accordion>
       ))}
     </Stack>

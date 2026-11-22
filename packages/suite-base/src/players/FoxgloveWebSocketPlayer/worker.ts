@@ -71,6 +71,12 @@ self.onmessage = (event: MessageEvent<ToWorkerMessage>) => {
           type: "error",
           error: err ?? { message: "Insecure WebSocket connection" },
         });
+        // No socket exists to emit a close, so report one: the player then shows the failure and
+        // schedules its retry instead of waiting forever.
+        send({
+          type: "close",
+          data: { code: 1006, reason: err instanceof Error ? err.message : "", wasClean: false },
+        });
       }
       break;
     case "close":

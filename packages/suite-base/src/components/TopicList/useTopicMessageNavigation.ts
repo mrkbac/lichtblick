@@ -2,55 +2,38 @@
 // SPDX-License-Identifier: MPL-2.0
 
 /**
- * Topic Message Navigation Hook
- *
- * PERFORMANCE OPTIMIZATION NOTES:
- *
- * 1. MCAP Footer Loading (Remote & Local Files)
- *    - MCAP files load the footer FIRST, even for remote connections via HTTP range requests
- *    - The footer contains the summary section with ChunkIndexes that include messageStartTime/messageEndTime
- *    - This means topicStats.firstMessageTime and topicStats.lastMessageTime are available IMMEDIATELY
- *      after initialization, without needing to iterate through all messages
- *    - See: @lichtblick/mcap-core McapIndexedReader.Initialize() - reads footer from end of file before chunk data
- *
- * 2. Navigation Optimization Strategy
- *    - Next message: Direct seek using getBatchIterator({ start: currentTime }) - O(1) complexity
- *    - Previous message: Adaptive windowing strategy with progressive expansion (100ms → 60s)
- *    - Window sizes calculated based on topic density from topicStats when available
- *
- * 3. Boundaries Cache
- *    - boundariesCache serves as fallback for discovering actual message boundaries
- *    - For MCAP files, topicStats provides accurate boundaries from footer (preferred)
- *    - Cache is useful for non-MCAP sources or when topicStats is unavailable
+ * Topic Message Navigation Hook: next/previous message on one topic, and whether either is
+ * possible. The reads themselves live in topicNavigationReads, loaded on first use so they stay
+ * out of startup; this hook holds the state, the boundaries cache and the pipeline wiring.
  */
 
-import { Time, compare } from "@foxglove/rostime";
+import { Time, compare, subtract as subtractTime } from "@foxglove/rostime";
 import { enableMapSet } from "immer";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useImmer } from "use-immer";
 
 import Logger from "@lichtblick/log";
-import { useMessagePipeline } from "@lichtblick/suite-base/components/MessagePipeline";
+import {
+  MessagePipelineContext,
+  useMessagePipeline,
+} from "@lichtblick/suite-base/components/MessagePipeline";
 import {
   selectCurrentTime,
   selectEndTime,
   selectGetBatchIterator,
+  selectGetMessageAtTime,
+  selectInspectionIterator,
   selectPausePlayback,
   selectSeekPlayback,
   selectStartTime,
   selectTopicStats,
 } from "@lichtblick/suite-base/components/MessagePipeline/selectors";
-import { RESULT_TYPE_MESSAGE_EVENT } from "@lichtblick/suite-base/components/TopicList/constants";
-import {
-  calculateOptimalWindowMs,
-  createWindowSizes,
-  subtractMilliseconds,
-  wouldReachBoundary,
-} from "@lichtblick/suite-base/components/TopicList/timeWindowHelpers";
+import type { NavigationReads } from "@lichtblick/suite-base/components/TopicList/topicNavigationReads";
 import {
   TopicBoundaries,
   UseTopicMessageNavigationReturn,
 } from "@lichtblick/suite-base/components/TopicList/types";
+import { PLAYER_CAPABILITIES } from "@lichtblick/suite-base/players/constants";
 
 const log = Logger.getLogger(__filename);
 
@@ -60,6 +43,16 @@ const logNavigationError = (direction: "next" | "previous", error: unknown): voi
 };
 
 const selectNothing = () => undefined;
+const selectHasIndexedBackfill = (ctx: MessagePipelineContext): boolean =>
+  ctx.playerState.capabilities.includes(PLAYER_CAPABILITIES.indexedBackfill);
+
+const sameTime = (a: Time | undefined, b: Time | undefined): boolean =>
+  a == undefined || b == undefined ? a === b : compare(a, b) === 0;
+const ONE_NANOSECOND: Time = Object.freeze({ sec: 0, nsec: 1 });
+
+// Only needed once someone navigates or selects a topic, so not part of startup
+const loadReads = async () =>
+  await import("@lichtblick/suite-base/components/TopicList/topicNavigationReads");
 
 enableMapSet();
 
@@ -99,10 +92,33 @@ export function useTopicMessageNavigation({
   const seekPlayback = useMessagePipeline(selectSeekPlayback);
   const pausePlayback = useMessagePipeline(selectPausePlayback);
   const getBatchIterator = useMessagePipeline(selectGetBatchIterator);
+  const getInspectionIterator = useMessagePipeline(selectInspectionIterator);
+  const getMessageAtTime = useMessagePipeline(selectGetMessageAtTime);
+  const hasIndexedBackfill = useMessagePipeline(selectHasIndexedBackfill);
+
+  // Navigation only needs receive times. The inspection iterator skips decoding payloads (a
+  // camera frame costs nothing to step over); sources without it get decoded batches. Recorded
+  // topics can be inspected; virtual ones (user-script or converter outputs) can't. Creating the
+  // iterator reads nothing.
+  const reads = useMemo<NavigationReads>(
+    () => ({
+      iterateTimes: (topic, options) =>
+        getInspectionIterator?.([topic], options) ?? getBatchIterator(topic, options),
+      getMessageAtTime,
+      hasIndexedBackfill,
+      isRecorded: (topic) => getInspectionIterator?.([topic]) != undefined,
+    }),
+    [getInspectionIterator, getBatchIterator, getMessageAtTime, hasIndexedBackfill],
+  );
 
   const cachedBoundaries = boundariesCache.get(topicName);
   const firstMessageTime = cachedBoundaries?.first;
-  const lastMessageTime = cachedBoundaries?.last;
+  // A cached last message is only valid for the end time it was found against: once a recording
+  // grows past that end, newer messages may exist.
+  const lastMessageTime =
+    cachedBoundaries?.last && sameTime(cachedBoundaries.lastAtEnd, endTime)
+      ? cachedBoundaries.last
+      : undefined;
 
   // The boundaries cache avoids expensive re-iteration through all messages when
   // switching between topics. Merges partial boundary updates, preserving existing
@@ -116,53 +132,72 @@ export function useTopicMessageNavigation({
     (topic: string, updates: Partial<TopicBoundaries>) => {
       setBoundariesCache((draft) => {
         const existing = draft.get(topic) ?? {};
-        draft.set(topic, { ...existing, ...updates });
+        const next = { ...existing, ...updates };
+        // Writing equal values would still make a new state and re-run discovery
+        if (
+          sameTime(existing.first, next.first) &&
+          sameTime(existing.last, next.last) &&
+          sameTime(existing.lastAtEnd, next.lastAtEnd)
+        ) {
+          return;
+        }
+        draft.set(topic, next);
       });
     },
     [setBoundariesCache],
   );
 
+  // Read through a ref so discovery doesn't restart on every tick of a growing source, where
+  // endTime and topicStats change constantly.
+  const latestRef = useRef({ topicStats, endTime });
+  useEffect(() => {
+    latestRef.current = { topicStats, endTime };
+  });
+  const hasEndTime = endTime != undefined;
+
   const discoverBoundaries = useCallback(
-    async (signal: AbortSignal, topic: string) => {
-      const iterator = getBatchIterator(topic);
-      if (!iterator) {
-        return;
-      }
-
-      let first: Time | undefined;
-      let last: Time | undefined;
-
-      for await (const result of iterator) {
-        if (signal.aborted) {
-          return;
-        }
-        if (result.type === RESULT_TYPE_MESSAGE_EVENT) {
-          const time = result.msgEvent.receiveTime;
-          first ??= time;
-          last = time;
-        }
-      }
-
-      if (first != undefined || last != undefined) {
-        updateBoundariesCache(topic, { first, last });
+    async (signal: AbortSignal, topic: string, cachedFirst: Time | undefined) => {
+      const { topicStats: stats, endTime: end } = latestRef.current;
+      const { discoverTopicBoundaries } = await loadReads();
+      const found = await discoverTopicBoundaries(reads, signal, topic, {
+        stats: stats?.get(topic),
+        first: cachedFirst,
+        end,
+      });
+      // `lastAtEnd` records the end `last` was checked against, so growth past it invalidates
+      // `last`. Without an end yet, `first` is cached alone and the effect retries for `last`
+      // once the end time is known.
+      if (!signal.aborted && found?.first) {
+        updateBoundariesCache(
+          topic,
+          found.last
+            ? { first: found.first, last: found.last, lastAtEnd: end }
+            : { first: found.first },
+        );
       }
     },
-    [getBatchIterator, updateBoundariesCache],
+    [reads, updateBoundariesCache],
   );
 
   useEffect(() => {
-    const alreadyCached = boundariesCache.has(topicName);
-    if (!selected || !isTopicSubscribed || alreadyCached) {
+    // Navigation may cache one end on its own; only skip once both are known.
+    const cached = boundariesCache.get(topicName);
+    if (!selected || !isTopicSubscribed || (cached?.first && cached.last)) {
       return;
     }
 
     const abortController = new AbortController();
-    void discoverBoundaries(abortController.signal, topicName);
+    discoverBoundaries(abortController.signal, topicName, cached?.first).catch((error: unknown) => {
+      if (!abortController.signal.aborted) {
+        const message = error instanceof Error ? error.message : String(error);
+        log.warn(`Error discovering message boundaries: ${message}`);
+      }
+    });
 
     return () => {
       abortController.abort();
     };
-  }, [topicName, selected, discoverBoundaries, boundariesCache, isTopicSubscribed]);
+  }, [topicName, selected, discoverBoundaries, boundariesCache, isTopicSubscribed, hasEndTime]);
 
   const canNavigateNext = useMemo(() => {
     if (!currentTime) {
@@ -206,49 +241,13 @@ export function useTopicMessageNavigation({
     return !isAtPlaybackStart && !isAtFirstTopicMessage;
   }, [currentTime, startTime, topicStats, topicName, firstMessageTime]);
 
+  const knownLast = topicStats?.get(topicName)?.lastMessageTime ?? lastMessageTime;
   const findNextMessage = useCallback(
-    async (
-      signal: AbortSignal,
-      current: Time,
-    ): Promise<{ targetTime: Time; isLastMessage: boolean } | undefined> => {
-      // OPTIMIZATION: Seek directly to currentTime instead of iterating from beginning
-      // This is O(1) for indexed MCAP files vs O(n) for full iteration
-      const iterator = getBatchIterator(topicName, { start: current });
-      if (!iterator) {
-        return undefined;
-      }
-
-      let targetTime: Time | undefined;
-      let foundMessageAfterTarget = false;
-
-      for await (const result of iterator) {
-        if (signal.aborted) {
-          return undefined;
-        }
-        if (result.type !== RESULT_TYPE_MESSAGE_EVENT) {
-          continue;
-        }
-
-        const isAfterCurrent = compare(result.msgEvent.receiveTime, current) > 0;
-        if (!isAfterCurrent) {
-          continue;
-        }
-
-        if (targetTime) {
-          foundMessageAfterTarget = true;
-          break;
-        }
-
-        targetTime = result.msgEvent.receiveTime;
-      }
-
-      if (!targetTime) {
-        return undefined;
-      }
-
-      return { targetTime, isLastMessage: !foundMessageAfterTarget };
+    async (signal: AbortSignal, current: Time) => {
+      const nav = await loadReads();
+      return await nav.findNextMessage(reads, signal, topicName, current, knownLast);
     },
-    [getBatchIterator, topicName],
+    [reads, topicName, knownLast],
   );
 
   const handleNextMessage = useCallback(async () => {
@@ -268,13 +267,13 @@ export function useTopicMessageNavigation({
 
       if (!result) {
         if (!lastMessageTime) {
-          updateBoundariesCache(topicName, { last: currentTime });
+          updateBoundariesCache(topicName, { last: currentTime, lastAtEnd: endTime });
         }
         return;
       }
 
       if (result.isLastMessage && !lastMessageTime) {
-        updateBoundariesCache(topicName, { last: result.targetTime });
+        updateBoundariesCache(topicName, { last: result.targetTime, lastAtEnd: endTime });
       }
 
       pausePlayback();
@@ -294,6 +293,7 @@ export function useTopicMessageNavigation({
     pausePlayback,
     findNextMessage,
     lastMessageTime,
+    endTime,
     updateBoundariesCache,
     createNavigationSignal,
   ]);
@@ -308,135 +308,27 @@ export function useTopicMessageNavigation({
 
     try {
       const stats = topicStats?.get(topicName);
-
-      // Calculate optimal initial window size based on topic statistics.
-      // For MCAP files, these stats come from the footer (loaded first), providing
-      // accurate message density without requiring full iteration.
-      let initialWindowMs = 500;
-
-      if (stats?.numMessages != undefined && stats.firstMessageTime && stats.lastMessageTime) {
-        initialWindowMs = calculateOptimalWindowMs({
-          numMessages: stats.numMessages,
-          firstMessageTime: stats.firstMessageTime,
-          lastMessageTime: stats.lastMessageTime,
-          targetMessagesInWindow: 10,
-        });
-      }
-
-      // Create progressively larger windows for adaptive search
-      const windowSizes = createWindowSizes(initialWindowMs);
-
-      let targetTime: Time | undefined;
-      let firstBoundary: Time | undefined;
-
-      // Try each window size until we find a message
-      for (const windowMs of windowSizes) {
-        if (signal.aborted) {
-          return;
-        }
-
-        // Check if this window would go past the topic's first message.
-        // NOTE: We only use the cached firstMessageTime here (from actual message discovery),
-        // not stats.firstMessageTime which is the global MCAP time (not topic-specific).
-        // The global time is an approximation that may not reflect actual topic boundaries.
-        if (wouldReachBoundary(currentTime, windowMs, firstMessageTime)) {
-          // This window reaches the beginning, make it the last attempt
-          // Use startTime (global playback start) as fallback if no cached boundary exists
-          const searchStart = firstMessageTime ?? startTime;
-          const iterator = getBatchIterator(topicName, {
-            start: searchStart,
-            end: currentTime,
-          });
-
-          if (iterator) {
-            for await (const result of iterator) {
-              if (result.type !== RESULT_TYPE_MESSAGE_EVENT) {
-                continue;
-              }
-
-              const messageTime = result.msgEvent.receiveTime;
-              firstBoundary ??= messageTime;
-
-              const isBeforeCurrent = compare(messageTime, currentTime) < 0;
-              if (!isBeforeCurrent) {
-                break;
-              }
-
-              targetTime = messageTime;
-            }
-          }
-          break; // Stop searching, we've reached the beginning
-        }
-
-        // OPTIMIZATION: Search only within the time window
-        const windowStart = subtractMilliseconds(currentTime, windowMs);
-        const iterator = getBatchIterator(topicName, {
-          start: windowStart,
-          end: currentTime,
-        });
-
-        if (!iterator) {
-          return;
-        }
-
-        // Iterate only messages within this window
-        for await (const result of iterator) {
-          if (result.type !== RESULT_TYPE_MESSAGE_EVENT) {
-            continue;
-          }
-
-          const messageTime = result.msgEvent.receiveTime;
-          firstBoundary ??= messageTime;
-
-          const isBeforeCurrent = compare(messageTime, currentTime) < 0;
-          if (!isBeforeCurrent) {
-            break;
-          }
-
-          targetTime = messageTime;
-        }
-
-        if (targetTime) {
-          break;
-        }
-      }
-
-      // FALLBACK: If no message found in any window and we haven't done a full search yet,
-      // search from the beginning (startTime) to currentTime
-      if (!targetTime && !firstMessageTime && startTime) {
-        const fallbackIterator = getBatchIterator(topicName, {
-          start: startTime,
-          end: currentTime,
-        });
-
-        if (fallbackIterator) {
-          for await (const result of fallbackIterator) {
-            if (signal.aborted) {
-              return;
-            }
-            if (result.type !== RESULT_TYPE_MESSAGE_EVENT) {
-              continue;
-            }
-
-            const messageTime = result.msgEvent.receiveTime;
-            firstBoundary ??= messageTime;
-
-            const isBeforeCurrent = compare(messageTime, currentTime) < 0;
-            if (!isBeforeCurrent) {
-              break;
-            }
-
-            targetTime = messageTime;
-          }
-        }
-      }
+      const nav = await loadReads();
+      // Size the first window from the topic's message density (count from the summary, time
+      // span from stats or the discovered boundaries). Per-topic first times from stats are
+      // exact: live players record the first one they see, CSV requires increasing times, and
+      // merged or shifted sources keep the earliest.
+      const first = firstMessageTime ?? stats?.firstMessageTime;
+      const targetTime = await nav.findMessageAtOrBefore(
+        reads,
+        signal,
+        topicName,
+        subtractTime(currentTime, ONE_NANOSECOND),
+        first ?? startTime,
+        nav.initialWindowMs(
+          stats?.numMessages,
+          stats?.firstMessageTime ?? firstMessageTime,
+          stats?.lastMessageTime ?? lastMessageTime,
+        ),
+      );
 
       if (signal.aborted) {
         return;
-      }
-
-      if (firstBoundary && !firstMessageTime) {
-        updateBoundariesCache(topicName, { first: firstBoundary });
       }
 
       if (!targetTime) {
@@ -458,11 +350,11 @@ export function useTopicMessageNavigation({
     topicName,
     seekPlayback,
     pausePlayback,
-    getBatchIterator,
+    reads,
     firstMessageTime,
+    lastMessageTime,
     startTime,
     topicStats,
-    updateBoundariesCache,
     createNavigationSignal,
   ]);
 

@@ -508,6 +508,13 @@ export class FoxgloveGrid extends SceneExtension<FoxgloveGridRenderable> {
     }
   };
 
+  public override gpuReady(): void {
+    for (const renderable of this.renderables.values()) {
+      const { foxgloveGrid, receiveTime, settings } = renderable.userData;
+      this.#updateFoxgloveGridRenderable(renderable, foxgloveGrid, receiveTime, settings);
+    }
+  }
+
   #handleFoxgloveGrid = (messageEvent: PartialMessageEvent<Grid>): void => {
     const topic = messageEvent.topic;
     const foxgloveGrid = normalizeFoxgloveGrid(messageEvent.message);
@@ -665,6 +672,15 @@ export class FoxgloveGrid extends SceneExtension<FoxgloveGridRenderable> {
     const { row_stride, column_count: cols } = foxgloveGrid;
     const rows = foxgloveGrid.data.byteLength / row_stride;
 
+    // The mesh, since startFrame sets the renderable's visibility from its settings every frame
+    renderable.userData.mesh.visible = this.renderer.checkTextureSize(
+      renderable.userData.topic,
+      cols,
+      rows,
+    );
+    if (!renderable.userData.mesh.visible) {
+      return;
+    }
     renderable.updateMaterial(settings);
     renderable.updateUniforms(foxgloveGrid, settings);
     renderable.updateTexture(foxgloveGrid, settings);

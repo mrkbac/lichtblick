@@ -63,6 +63,13 @@ const replaceUndefinedWithEmptyDataset = (dataset: Dataset | undefined) => datas
 
 /** Window size of a sliding time window that has no size set yet */
 
+type RangeSubscription = {
+  cancel: () => void;
+  /** Series this read feeds; updated in place when series are removed */
+  seriesKeys: Set<SeriesConfigKey>;
+  active: boolean;
+};
+
 /**
  * PlotCoordinator interfaces commands and updates between the dataset builder and the chart
  * renderer. Uses subscribeMessageRange for full dataset history.
@@ -120,14 +127,11 @@ export class PlotCoordinator extends EventEmitter<PlotCoordinatorEventTypes> {
   private destroyed = false;
 
   private readonly subscribeMessageRange: UseSubscribeMessageRange;
-  private readonly rangeSubscriptionCancels = new Map<
-    string,
-    {
-      cancel: () => void;
-      seriesKeys: ReadonlySet<SeriesConfigKey>;
-      active: boolean;
-    }
-  >();
+  /**
+   * Range reads per topic. The first one also feeds the x-axis; later ones were started for series
+   * added after it, so adding a series reads only what that series needs.
+   */
+  private readonly rangeSubscriptionCancels = new Map<string, RangeSubscription[]>();
   private startTime: Immutable<Time> | undefined;
   private seriesKeysByTopic = new Map<string, Set<SeriesConfigKey>>();
   /** Tracks activeData.topics reference to detect when topics change (e.g. user script update).*/
@@ -146,8 +150,10 @@ export class PlotCoordinator extends EventEmitter<PlotCoordinatorEventTypes> {
 
   /** Stop the coordinator from sending any future updates to the renderer. */
   public destroy(): void {
-    for (const { cancel } of this.rangeSubscriptionCancels.values()) {
-      cancel();
+    for (const entries of this.rangeSubscriptionCancels.values()) {
+      for (const { cancel } of entries) {
+        cancel();
+      }
     }
     this.rangeSubscriptionCancels.clear();
     this.destroyed = true;
@@ -187,12 +193,14 @@ export class PlotCoordinator extends EventEmitter<PlotCoordinatorEventTypes> {
       }
       this.lastTopicsRef = activeData.topics;
 
-      for (const [topicName, entry] of this.rangeSubscriptionCancels) {
+      for (const [topicName, entries] of this.rangeSubscriptionCancels) {
         const oldTopic = oldTopicsByName.get(topicName);
         const newTopic = activeData.topics.find((t) => t.name === topicName);
         // Invalidate if the topic is new or its object reference changed
         if (oldTopic == undefined || oldTopic !== newTopic) {
-          entry.active = false;
+          for (const entry of entries) {
+            entry.active = false;
+          }
         }
       }
     }
@@ -890,29 +898,14 @@ export class PlotCoordinator extends EventEmitter<PlotCoordinatorEventTypes> {
   }
 
   private cancelTopicSubscription(topic: string): void {
-    this.rangeSubscriptionCancels.get(topic)?.cancel();
+    for (const { cancel } of this.rangeSubscriptionCancels.get(topic) ?? []) {
+      cancel();
+    }
     this.rangeSubscriptionCancels.delete(topic);
   }
 
-  private seriesKeysChanged(
-    previousKeys: ReadonlySet<SeriesConfigKey>,
-    currentKeys: ReadonlySet<SeriesConfigKey>,
-  ): boolean {
-    if (previousKeys.size !== currentKeys.size) {
-      return true;
-    }
-    for (const key of currentKeys) {
-      if (!previousKeys.has(key)) {
-        return true;
-      }
-    }
-    return false;
-  }
-
   private subscribeTopicRanges(seriesKeysByTopic: Map<string, Set<SeriesConfigKey>>): void {
-    const handleMessageRange = this.datasetsBuilder.handleMessageRange?.bind(this.datasetsBuilder);
-
-    if (!handleMessageRange) {
+    if (!this.datasetsBuilder.handleMessageRange) {
       return;
     }
 
@@ -923,53 +916,77 @@ export class PlotCoordinator extends EventEmitter<PlotCoordinatorEventTypes> {
       }
     }
 
-    // Start subscriptions only for new or changed topics
     for (const [topic, currentKeys] of seriesKeysByTopic) {
-      const existing = this.rangeSubscriptionCancels.get(topic);
-      if (existing?.seriesKeys) {
-        // Retry if previous subscription was inactive (no-op cancel from missing getBatchIterator)
-        if (!this.seriesKeysChanged(existing.seriesKeys, currentKeys) && existing.active) {
+      const entries: RangeSubscription[] = [];
+      const known = new Set<SeriesConfigKey>();
+      for (const [index, entry] of (this.rangeSubscriptionCancels.get(topic) ?? []).entries()) {
+        // Removed series need no read; their data goes with the series config
+        for (const key of entry.seriesKeys) {
+          if (currentKeys.has(key)) {
+            known.add(key);
+          } else {
+            entry.seriesKeys.delete(key);
+          }
+        }
+        const primary = index === 0;
+        if (!primary && entry.seriesKeys.size === 0) {
+          entry.cancel();
           continue;
         }
-        this.cancelTopicSubscription(topic);
+        // Retry an inactive read (no-op cancel from missing getBatchIterator, or the topic changed)
+        if (!entry.active) {
+          entry.cancel();
+          entries.push(this.startTopicRange(topic, entry.seriesKeys, { readsXAxis: primary }));
+          continue;
+        }
+        entries.push(entry);
       }
 
-      // Use a mutable container so the async onNewRangeIterator callback can update `active`
-      // after it fires. Without this, `active` would always be `false` because it's captured
-      // synchronously before the async callback runs, causing every frame to cancel and
-      // recreate all subscriptions.
-      const entry: {
-        cancel: () => void;
-        seriesKeys: ReadonlySet<SeriesConfigKey>;
-        active: boolean;
-      } = {
-        cancel: () => {},
-        seriesKeys: new Set(currentKeys),
-        active: false,
-      };
-
-      const cancel = this.subscribeMessageRange({
-        topic,
-        onNewRangeIterator: async (batchIterator) => {
-          entry.active = true;
-          let isReset = true;
-          for await (const batch of batchIterator) {
-            if (this.isDestroyed()) {
-              return;
-            }
-            const startTime = this.startTime;
-            if (!startTime) {
-              continue;
-            }
-            handleMessageRange(batch, { isReset }, startTime);
-            isReset = false;
-            this.queueDispatchDownsample();
-          }
-        },
-      });
-
-      entry.cancel = cancel;
-      this.rangeSubscriptionCancels.set(topic, entry);
+      const added = new Set([...currentKeys].filter((key) => !known.has(key)));
+      if (entries.length === 0) {
+        entries.push(this.startTopicRange(topic, added, { readsXAxis: true }));
+      } else if (added.size > 0) {
+        entries.push(this.startTopicRange(topic, added, { readsXAxis: false }));
+      }
+      this.rangeSubscriptionCancels.set(topic, entries);
     }
+  }
+
+  /** Read `topic` for `seriesKeys` (the primary read also feeds the x-axis) */
+  private startTopicRange(
+    topic: string,
+    seriesKeys: Set<SeriesConfigKey>,
+    { readsXAxis }: { readsXAxis: boolean },
+  ): RangeSubscription {
+    // Use a mutable container so the async onNewRangeIterator callback can update `active`
+    // after it fires. Without this, `active` would always be `false` because it's captured
+    // synchronously before the async callback runs, causing every frame to cancel and
+    // recreate all subscriptions.
+    const entry: RangeSubscription = { cancel: () => {}, seriesKeys, active: false };
+
+    entry.cancel = this.subscribeMessageRange({
+      topic,
+      onNewRangeIterator: async (batchIterator) => {
+        entry.active = true;
+        let isReset = true;
+        for await (const batch of batchIterator) {
+          if (this.isDestroyed()) {
+            return;
+          }
+          const startTime = this.startTime;
+          if (!startTime) {
+            continue;
+          }
+          this.datasetsBuilder.handleMessageRange?.(
+            batch,
+            { isReset, seriesKeys, readsXAxis },
+            startTime,
+          );
+          isReset = false;
+          this.queueDispatchDownsample();
+        }
+      },
+    });
+    return entry;
   }
 }

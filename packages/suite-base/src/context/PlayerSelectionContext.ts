@@ -117,9 +117,13 @@ type ConnectionDataSourceArgs = {
   type: "connection";
   params?: Record<string, string | undefined>;
   sourceMetadata?: Record<string, unknown>[];
+  /** The caller brings its own layout (e.g. a link): a sample source doesn't switch to its own. */
+  keepLayout?: boolean;
 };
 
 export type DataSourceArgs = FileDataSourceArgs | ConnectionDataSourceArgs;
+
+export type RemoteFileSelection = { url: string; credentials?: RequestCredentials };
 
 /**
  * PlayerSelectionContext exposes the available data sources and a function to set the current data source
@@ -139,6 +143,9 @@ export interface PlayerSelection {
 
   /** Local files backing the current data source, if it was opened from files */
   selectedFiles?: readonly File[];
+
+  /** The remote file backing the current data source, if it was opened from one URL */
+  selectedRemoteFile?: RemoteFileSelection;
 
   /** The side name of each of `selectedFiles` when they are compared side by side */
   selectedCompare?: readonly string[];

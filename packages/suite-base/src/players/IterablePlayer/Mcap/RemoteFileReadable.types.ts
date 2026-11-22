@@ -10,6 +10,8 @@ export type RemoteFileReadableOptions = {
   cacheSizeInBytes?: number;
   readAheadEnabled?: boolean;
   readAheadBufferBytes?: number;
+  /** Cancels the requests that open the file */
+  signal?: AbortSignal;
 };
 
 export type PrefetchOptions = { skim?: boolean };

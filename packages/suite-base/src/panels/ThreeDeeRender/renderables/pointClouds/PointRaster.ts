@@ -107,6 +107,11 @@ export class PointRaster {
   readonly #passes: SetPasses[] = [];
   /** Camera layers the screen buffers were last rasterized for */
   public preparedLayers = -1;
+  /**
+   * Visible point sets prepare() couldn't draw: past MAX_POINT_SETS, or positions larger than the
+   * device's storage binding limit. Added to, never cleared here; the caller clears it per frame.
+   */
+  public readonly skipped = new Map<RasterPoints, "tooManySets" | "tooLarge">();
 
   public constructor(
     renderer: THREE.WebGPURenderer,
@@ -196,11 +201,21 @@ export class PointRaster {
         points.drawCount === 0 ||
         (points.capacity() === 0 && !points.source()) ||
         !points.layers.test(camera.layers) ||
-        drawn.length >= MAX_POINT_SETS ||
-        points.positionAttribute().array.byteLength > maxBinding ||
         (pickHidden != undefined &&
           (points.userData.picking === false || isInside(points, pickHidden)))
       ) {
+        return;
+      }
+      const skip =
+        points.positionAttribute().array.byteLength > maxBinding
+          ? "tooLarge"
+          : drawn.length >= MAX_POINT_SETS
+            ? "tooManySets"
+            : undefined;
+      if (skip) {
+        if (pickHidden == undefined) {
+          this.skipped.set(points, skip);
+        }
         return;
       }
       const index = drawn.length;

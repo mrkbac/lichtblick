@@ -6,6 +6,8 @@ import { Time } from "@foxglove/rostime";
 export type TopicBoundaries = {
   first?: Time;
   last?: Time;
+  /** The end time `last` was found against; once the recording grows past it, `last` is stale. */
+  lastAtEnd?: Time;
 };
 
 export interface UseTopicMessageNavigationReturn {

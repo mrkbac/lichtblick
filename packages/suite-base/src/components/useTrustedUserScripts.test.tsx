@@ -17,9 +17,9 @@ import { useTrustedUserScripts } from "./useTrustedUserScripts";
 const scripts: UserScripts = { a: { name: "Speed", sourceCode: "export default () => 1;" } };
 const changed: UserScripts = { a: { name: "Speed", sourceCode: "export default () => 2;" } };
 
-function setup(permission: LayoutPermission) {
+function setup(permission: LayoutPermission, extra: Partial<Layout> = {}) {
   const layoutManager = {
-    getLayout: async (id: string) => ({ id, permission }) as unknown as Layout,
+    getLayout: async (id: string) => ({ id, permission, ...extra }) as unknown as Layout,
   } as unknown as ILayoutManager;
   type Props = { userScripts: UserScripts; edited: boolean };
   const hook = renderHook(
@@ -95,6 +95,19 @@ describe("useTrustedUserScripts", () => {
       expect(hook.result.current.prompt).toBeDefined();
     });
     expect(hook.result.current.scripts).toEqual({});
+  });
+
+  it("asks before running scripts of a layout opened from a link", async () => {
+    const { hook, showPrompt } = setup("CREATOR_WRITE", { untrusted: true });
+    await waitFor(() => {
+      expect(hook.result.current.prompt).toBeDefined();
+    });
+    expect(hook.result.current.scripts).toEqual({});
+
+    showPrompt();
+    expect(screen.getByText("Run user scripts from this linked layout?")).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: "Run scripts" }));
+    expect(hook.result.current.scripts).toBe(scripts);
   });
 
   it("keeps scripts off after Don't run", async () => {

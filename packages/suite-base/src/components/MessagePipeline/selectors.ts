@@ -70,6 +70,7 @@ export const selectSeekPlayback = (ctx: Ctx): Ctx["seekPlayback"] => ctx.seekPla
 export const selectPausePlayback = (ctx: Ctx): Ctx["pausePlayback"] => ctx.pausePlayback;
 export const selectStartPlayback = (ctx: Ctx): Ctx["startPlayback"] => ctx.startPlayback;
 export const selectGetBatchIterator = (ctx: Ctx): Ctx["getBatchIterator"] => ctx.getBatchIterator;
+export const selectGetMessageAtTime = (ctx: Ctx): Ctx["getMessageAtTime"] => ctx.getMessageAtTime;
 export const selectInspectionIterator = (ctx: Ctx): Ctx["getInspectionIterator"] =>
   ctx.getInspectionIterator;
 export const selectSortedTopics = (ctx: Ctx): Ctx["sortedTopics"] => ctx.sortedTopics;

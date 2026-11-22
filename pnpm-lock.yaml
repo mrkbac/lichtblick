@@ -5,11 +5,22 @@ settings:
   excludeLinksFromLockfile: false
 
 overrides:
-  dompurify@<3.4.17: 3.4.17
-  undici@<6.29.1: 6.29.1
   '@foxglove/omgidl-serialization>@foxglove/cdr': 3.5.1
   '@foxglove/rosbag2>@foxglove/schemas': 2.3.1
+  dompurify@<3.4.17: 3.4.17
+  undici@<6.29.1: 6.29.1
   utif>pako: ^2.2.0
+
+patchedDependencies:
+  '@foxglove/rosbag2-web@5.0.0':
+    hash: 1751474afd65ea6adb445201585759bc15a8c61b522196057aae6bc7a14f2f91
+    path: patches/@foxglove__rosbag2-web@5.0.0.patch
+  '@foxglove/rosbag2@6.0.0':
+    hash: a05249625d5e99f9147be96e9ef6c877d8f88dfe4780fb0bb87b304070346ca9
+    path: patches/@foxglove__rosbag2@6.0.0.patch
+  '@foxglove/ulog@2.3.2':
+    hash: a0e41ee7471d62292e44e84f8c45e7090552c3d2fa2d217ea33f9677c3e88c6b
+    path: patches/@foxglove__ulog@2.3.2.patch
 
 importers:
 
@@ -463,7 +474,7 @@ importers:
         version: 0.4.2
       '@foxglove/rosbag2-web':
         specifier: 5.0.0
-        version: 5.0.0
+        version: 5.0.0(patch_hash=1751474afd65ea6adb445201585759bc15a8c61b522196057aae6bc7a14f2f91)
       '@foxglove/roslibjs':
         specifier: 0.0.4
         version: 0.0.4
@@ -493,7 +504,7 @@ importers:
         version: 0.6.1(three@0.187.0)
       '@foxglove/ulog':
         specifier: 2.3.2
-        version: 2.3.2
+        version: 2.3.2(patch_hash=a0e41ee7471d62292e44e84f8c45e7090552c3d2fa2d217ea33f9677c3e88c6b)
       '@foxglove/velodyne-cloud':
         specifier: 1.0.1
         version: 1.0.1
@@ -9420,12 +9431,12 @@ snapshots:
       '@foxglove/omgidl-parser': 1.2.2
       md5-typescript: 1.0.5
 
-  '@foxglove/rosbag2-web@5.0.0':
+  '@foxglove/rosbag2-web@5.0.0(patch_hash=1751474afd65ea6adb445201585759bc15a8c61b522196057aae6bc7a14f2f91)':
     dependencies:
-      '@foxglove/rosbag2': 6.0.0
+      '@foxglove/rosbag2': 6.0.0(patch_hash=a05249625d5e99f9147be96e9ef6c877d8f88dfe4780fb0bb87b304070346ca9)
       '@foxglove/sql.js': 0.0.4
 
-  '@foxglove/rosbag2@6.0.0':
+  '@foxglove/rosbag2@6.0.0(patch_hash=a05249625d5e99f9147be96e9ef6c877d8f88dfe4780fb0bb87b304070346ca9)':
     dependencies:
       '@foxglove/rosmsg-msgs-common': 3.3.0
       '@foxglove/rosmsg2-serialization': 3.1.2
@@ -9482,7 +9493,7 @@ snapshots:
       '@mapbox/tiny-sdf': 2.0.6
       three: 0.187.0
 
-  '@foxglove/ulog@2.3.2': {}
+  '@foxglove/ulog@2.3.2(patch_hash=a0e41ee7471d62292e44e84f8c45e7090552c3d2fa2d217ea33f9677c3e88c6b)': {}
 
   '@foxglove/velodyne-cloud@1.0.1': {}
 

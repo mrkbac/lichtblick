@@ -48,7 +48,10 @@ export class RemoteFileReadable {
     this.#url = url;
     this.#credentials = options?.credentials;
     this.#cacheSizeInBytes = options?.cacheSizeInBytes ?? DEFAULT_CACHE_SIZE_BYTES;
-    const fileReader = new BrowserHttpReader(url, { credentials: this.#credentials });
+    const fileReader = new BrowserHttpReader(url, {
+      credentials: this.#credentials,
+      signal: options?.signal,
+    });
     this.#remoteReader = new CachedFilelike({
       fileReader,
       cacheSizeInBytes: this.#cacheSizeInBytes,

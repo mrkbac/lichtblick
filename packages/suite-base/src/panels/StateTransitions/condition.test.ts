@@ -3,11 +3,12 @@
 
 import { fromSec } from "@foxglove/rostime";
 
-import { MessagePathDataItem } from "@lichtblick/suite-base/components/MessagePathSyntax/useCachedGetMessagePathDataItems";
 import {
   PathSample,
+  PathSampleColumns,
   toPathSample,
-} from "@lichtblick/suite-base/components/MessagePathSyntax/usePathSampleHistory";
+} from "@lichtblick/suite-base/components/MessagePathSyntax/PathSampleColumns";
+import { MessagePathDataItem } from "@lichtblick/suite-base/components/MessagePathSyntax/useCachedGetMessagePathDataItems";
 import { addMatchStarts } from "@lichtblick/suite-base/panels/StateTransitions/hooks/useStateTransitionsData";
 import { MessageEvent } from "@lichtblick/suite-base/players/types";
 import MessageEventBuilder from "@lichtblick/suite-base/testing/builders/MessageEventBuilder";
@@ -90,7 +91,7 @@ describe("condition bands", () => {
       startTime,
       y: 0,
       pathIndex: 0,
-      blocks: [blocks],
+      blocks: [PathSampleColumns.from(blocks)],
       showPoints: false,
     });
 

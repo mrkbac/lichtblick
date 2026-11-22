@@ -167,6 +167,8 @@ export class BagIterableSource implements ISerializedIterableSource {
     return {
       topics: Array.from(topics.values()),
       topicStats,
+      // Reverse reads walk the bag's chunk index
+      indexedBackfill: true,
       start: this.#bag.startTime ?? { sec: 0, nsec: 0 },
       end: this.#bag.endTime ?? { sec: 0, nsec: 0 },
       alerts,

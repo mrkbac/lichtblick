@@ -63,6 +63,32 @@ describe("createMessageRangeIterator", () => {
     expect(typeof result.cancel).toBe("function");
   });
 
+  it("closes the read when cancelled while it waits for a message", async () => {
+    // A read that never delivers: only closing it ends the iteration
+    let closed = false;
+    const rawBatchIterator: AsyncIterableIterator<Readonly<IteratorResult>> = {
+      next: async () => await new Promise<never>(() => {}),
+      return: async () => {
+        closed = true;
+        return { done: true, value: undefined };
+      },
+      [Symbol.asyncIterator]() {
+        return this;
+      },
+    };
+    const { iterable, cancel } = createMessageRangeIterator({
+      topic: mockTopic,
+      rawBatchIterator,
+      sortedTopics: mockSortedTopics,
+      messageConverters: mockMessageConverters,
+    });
+    void iterable[Symbol.asyncIterator]().next();
+
+    cancel();
+
+    expect(closed).toBe(true);
+  });
+
   it("should handle cancellation", async () => {
     const mockMessage: MessageEvent = MessageEventBuilder.messageEvent({ topic: mockTopic });
 

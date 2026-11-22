@@ -38,7 +38,7 @@ import {
   HUDItemManager,
   HUDItem,
 } from "@lichtblick/suite-base/panels/ThreeDeeRender/HUDItemManager";
-import { LayerErrors } from "@lichtblick/suite-base/panels/ThreeDeeRender/LayerErrors";
+import { LayerErrors, Path } from "@lichtblick/suite-base/panels/ThreeDeeRender/LayerErrors";
 import { DEFAULT_MESH_UP_AXIS } from "@lichtblick/suite-base/panels/ThreeDeeRender/defaults";
 import { ICameraHandler } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/ICameraHandler";
 import type { DocumentedNodes } from "@lichtblick/suite-base/panels/shared/documentedSettings";
@@ -74,6 +74,7 @@ import { DARK_OUTLINE, LIGHT_OUTLINE, stringToRgb } from "./color";
 import { HOVER_PICK_THROTTLE_MS } from "./constants";
 import { FRAME_TRANSFORMS_DATATYPES, FRAME_TRANSFORM_DATATYPES } from "./foxglove";
 import { getGpuDevice } from "./gpuDevice";
+import { LAYER_DEFAULT, LAYER_PICK_ONLY, LAYER_SELECTED } from "./layers";
 import { DetailLevel } from "./lod";
 import {
   normalizeFrameTransform,
@@ -87,7 +88,7 @@ import { MeasurementTool } from "./renderables/MeasurementTool";
 import { PublishClickTool } from "./renderables/PublishClickTool";
 import { Urdfs } from "./renderables/Urdfs";
 import { MarkerPool } from "./renderables/markers/MarkerPool";
-import { PointRaster } from "./renderables/pointClouds/PointRaster";
+import { MAX_POINT_SETS, PointRaster } from "./renderables/pointClouds/PointRaster";
 import {
   Header,
   MarkerArray,
@@ -122,8 +123,6 @@ const LIGHT_BACKDROP = new THREE.Color(palette.light.background?.default);
 const DARK_BACKDROP = new THREE.Color(palette.dark.background?.default);
 
 // Define rendering layers for multipass rendering used for the selection effect
-const LAYER_DEFAULT = 0;
-const LAYER_SELECTED = 1;
 
 const FOLLOW_TF_PATH = ["general", "followTf"];
 /** Expected until the first transform arrives, so it is not reported in the panel log. */
@@ -210,6 +209,20 @@ function isStaticTransformTopic(topic: string): boolean {
  * An extensible 3D renderer attached to a `HTMLCanvasElement`,
  * `WebGLRenderingContext`, and `SettingsTree`.
  */
+const TEXTURE_TOO_LARGE = "TEXTURE_TOO_LARGE";
+const POINTS_NOT_DRAWN = "POINTS_NOT_DRAWN";
+
+/** Settings path of the renderable `object` belongs to; children may carry an empty one */
+function settingsPathOf(object: THREE.Object3D): Path | undefined {
+  for (let node: THREE.Object3D | null = object; node; node = node.parent) {
+    const path = (node.userData as { settingsPath?: Path }).settingsPath;
+    if (path && path.length > 0) {
+      return path;
+    }
+  }
+  return undefined;
+}
+
 export class Renderer extends EventEmitter<RendererEvents> {
   public readonly interfaceMode: InterfaceMode;
   #canvas: HTMLCanvasElement;
@@ -219,6 +232,8 @@ export class Renderer extends EventEmitter<RendererEvents> {
   public readonly gl: THREE.WebGPURenderer;
   /** Set once the WebGPU device is ready; until then frames update the scene without drawing */
   #gpuReady = false;
+  /** Layers with a POINTS_NOT_DRAWN error, by joined path */
+  #skippedPointPaths = new Map<string, Path>();
   /** GPU milliseconds of the last measured frame (render + compute), when stats are enabled */
   public gpuTimeMs: number | undefined;
   #measuringGpu = false;
@@ -578,6 +593,9 @@ export class Renderer extends EventEmitter<RendererEvents> {
       }
       this.#advanceNodeFrame = stopThreeAnimationLoop(this.gl);
       this.#gpuReady = true;
+      for (const extension of this.sceneExtensions.values()) {
+        extension.gpuReady();
+      }
       this.queueAnimationFrame();
     } catch (error) {
       log.error(error);
@@ -586,6 +604,28 @@ export class Renderer extends EventEmitter<RendererEvents> {
         new Error(i18next.t("threeDee:webGpuStartFailed", { error: toError(error).message })),
       );
     }
+  }
+
+  /**
+   * Whether a `width` x `height` texture fits the GPU, reporting a settings error on `topic` when
+   * it doesn't (WebGPU rejects it, which would invalidate the whole frame). Until the device is
+   * ready this checks against WebGPU's guaranteed 8192; SceneExtension.gpuReady runs it again.
+   */
+  public checkTextureSize(topic: string, width: number, height: number): boolean {
+    const limit =
+      (this.gl.backend as { device?: GPUDevice | null }).device?.limits.maxTextureDimension2D ??
+      8192;
+    const fits = width <= limit && height <= limit;
+    if (fits) {
+      this.settings.errors.removeFromTopic(topic, TEXTURE_TOO_LARGE);
+    } else {
+      this.settings.errors.addToTopic(
+        topic,
+        TEXTURE_TOO_LARGE,
+        `${width} x ${height} cells is larger than this GPU's texture limit of ${limit} per side`,
+      );
+    }
+    return fits;
   }
 
   #reportGpuError(error: Error): void {
@@ -1860,6 +1900,7 @@ export class Renderer extends EventEmitter<RendererEvents> {
     if (camera.parent == undefined) {
       camera.updateMatrixWorld();
     }
+    this.pointRaster.skipped.clear();
     this.pointRaster.prepare(camera);
     this.gl.render(this.#scene, camera);
 
@@ -1870,7 +1911,39 @@ export class Renderer extends EventEmitter<RendererEvents> {
       this.pointRaster.prepare(camera);
       this.gl.render(this.#scene, camera);
     }
+    this.#reportSkippedPoints();
   };
+
+  /** Settings errors on the layers whose points the raster couldn't draw this frame */
+  #reportSkippedPoints(): void {
+    const skipped = this.pointRaster.skipped;
+    if (skipped.size === 0 && this.#skippedPointPaths.size === 0) {
+      return;
+    }
+    const current = new Map<string, Path>();
+    for (const [points, reason] of skipped) {
+      const path = settingsPathOf(points);
+      if (!path) {
+        continue;
+      }
+      const key = path.join("\n");
+      current.set(key, path);
+      // A no-op while unchanged; re-adds it after something cleared the layer's errors
+      this.settings.errors.add(
+        path,
+        POINTS_NOT_DRAWN,
+        reason === "tooLarge"
+          ? "Too many points to draw at once on this GPU; reduce the decay time or point count"
+          : `Only ${MAX_POINT_SETS} point layers can be drawn at once; hide some to show this one`,
+      );
+    }
+    for (const [key, path] of this.#skippedPointPaths) {
+      if (!current.has(key)) {
+        this.settings.errors.remove(path, POINTS_NOT_DRAWN);
+      }
+    }
+    this.#skippedPointPaths = current;
+  }
 
   /** iterates through all subscription message queues, processes them, and calls their handler for each message in the frame */
   #handleSubscriptionQueues(): void {
@@ -2180,6 +2253,8 @@ export class Renderer extends EventEmitter<RendererEvents> {
       return undefined;
     }
     camera.layers.set(LAYER_DEFAULT);
+    // Batched markers draw as instances but pick as themselves
+    camera.layers.enable(LAYER_PICK_ONLY);
     try {
       // The raster reads world matrices and the projection before render() would refresh them
       // (same as #drawScene); a camera's first render also switches it to WebGPU clip space
@@ -2356,8 +2431,9 @@ function selectObject(object: THREE.Object3D) {
 
 function deselectObject(object: THREE.Object3D) {
   object.layers.set(LAYER_DEFAULT);
+  // Back to its own layer: a batched mesh draws through its batch again
   object.traverse((child) => {
-    child.layers.set(LAYER_DEFAULT);
+    child.layers.set(child.userData.pickOnly === true ? LAYER_PICK_ONLY : LAYER_DEFAULT);
   });
 }
 

@@ -117,6 +117,8 @@ export function createMessageRangeIterator(params: CreateMessageRangeIteratorPar
     iterable: messageEventIterable,
     cancel: () => {
       cancelled = true;
+      // Stops the read now, even while it waits for its next message
+      rawBatchIterator.return?.().catch(() => {});
     },
   };
 }
