@@ -22,6 +22,8 @@ const event: MessageEvent = {
 describe("timeFromFieldValue", () => {
   it("reads times, integer nanoseconds and float seconds", () => {
     expect(timeFromFieldValue({ sec: 1, nsec: 2 })).toEqual({ sec: 1, nsec: 2 });
+    // ROS 2 builtin_interfaces/Time
+    expect(timeFromFieldValue({ sec: 1, nanosec: 2 })).toEqual({ sec: 1, nsec: 2 });
     expect(timeFromFieldValue(1_500_000_000n)).toEqual({ sec: 1, nsec: 500_000_000 });
     expect(timeFromFieldValue(2.25)).toEqual({ sec: 2, nsec: 250_000_000 });
   });

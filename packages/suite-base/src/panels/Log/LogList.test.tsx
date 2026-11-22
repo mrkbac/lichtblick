@@ -293,4 +293,36 @@ describe("LogList Component", () => {
       expect(style("Test log message 1").opacity).not.toBe("0.5");
     });
   });
+
+  it("reads only a few rows when just the playhead moves", () => {
+    // Given a long list, with reads of its rows counted (jsdom rows have no height otherwise)
+    vi.spyOn(Element.prototype, "getBoundingClientRect").mockReturnValue(
+      new DOMRect(0, 0, 100, 20),
+    );
+    const rows = Array.from({ length: 1_000 }, (_, i) => createMockLogMessage(i, 2));
+    let reads = 0;
+    const items = new Proxy(rows, {
+      get(target, key, receiver) {
+        if (typeof key === "string" && /^\d+$/.test(key)) {
+          reads++;
+        }
+        return Reflect.get(target, key, receiver) as unknown;
+      },
+    });
+    const listFor = (sec: number) => (
+      <ThemeProvider isDark>
+        <MockPanelContextProvider>
+          <LogList items={items} onSeek={vi.fn()} currentTime={{ sec, nsec: 0 }} />
+        </MockPanelContextProvider>
+      </ThemeProvider>
+    );
+    const { rerender } = render(listFor(2_500));
+
+    // When only the playhead moves
+    reads = 0;
+    rerender(listFor(2_501));
+
+    // Then the rows are not all walked again
+    expect(reads).toBeLessThan(200);
+  });
 });

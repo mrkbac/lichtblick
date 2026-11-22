@@ -56,7 +56,7 @@ export function addMessages(
     for (const status of statusArray) {
       const info = computeDiagnosticInfo(
         status,
-        stampToTime(header.stamp) ?? header.stamp,
+        stampToTime(header.stamp) ?? event.receiveTime,
         event.receiveTime,
         event.topic,
       );

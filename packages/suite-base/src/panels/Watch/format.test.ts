@@ -32,6 +32,11 @@ describe("formatValue", () => {
     expect(formatValue(undefined, undefined)).toBe("—");
     expect(formatValue({ sec: 1, nsec: 5 }, undefined)).toBe("1.000000005");
     // ROS 2 builtin_interfaces/Time
+    // Fractional parts are not a time: shown as a plain object, without throwing
+    expect(formatValue({ sec: 1.5, nsec: 0 }, undefined)).toBe("{sec, nsec}");
+    // Negative durations keep the sign of the whole value
+    expect(formatValue({ sec: -1, nsec: 5e8 }, undefined)).toBe("-0.500000000");
+    expect(formatValue({ sec: -2, nsec: 0 }, undefined)).toBe("-2.000000000");
     expect(formatValue({ sec: 1, nanosec: 5 }, undefined)).toBe("1.000000005");
   });
 

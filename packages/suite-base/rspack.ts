@@ -160,7 +160,10 @@ export function makeConfig(
   _: unknown,
   argv: RspackArgv,
   options: Options,
-): Pick<Configuration, "resolve" | "module" | "plugins" | "node" | "ignoreWarnings"> {
+): Pick<
+  Configuration,
+  "resolve" | "module" | "plugins" | "node" | "ignoreWarnings" | "optimization"
+> {
   initModuleLocals(options.packageDir);
   // After initModuleLocals, currentDirHref and localRequireInstance are guaranteed to be set.
   const dirHref = currentDirHref!;
@@ -299,6 +302,16 @@ export function makeConfig(
         ...buildEnvVars(),
       }),
     ],
+    optimization: {
+      splitChunks: {
+        // Lazy chunks only (the default "async"), except workers named "*-worker"
+        // (webpackChunkName): a worker loads its split chunks one by one with blocking
+        // importScripts, each a request (a round trip on a first visit), and the MCAP source
+        // worker needed ~20 before it could open a file. Such a worker stays one file, at the cost
+        // of its own copy of the code it shares; its lazy imports are still separate chunks.
+        chunks: (chunk) => !chunk.canBeInitial() && chunk.name?.endsWith("-worker") !== true,
+      },
+    },
     node: {
       __dirname: true,
       __filename: true,

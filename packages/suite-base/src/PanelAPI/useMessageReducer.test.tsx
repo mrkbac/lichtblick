@@ -19,7 +19,12 @@ import { renderHook, act } from "@testing-library/react";
 import { PropsWithChildren, useState } from "react";
 import type { Mock } from "vitest";
 
-import { MessagePipelineProvider } from "@lichtblick/suite-base/components/MessagePipeline";
+import { PanelVisibleContext } from "@lichtblick/suite-base/components/DockPanelContext";
+import {
+  MessagePipelineContext,
+  MessagePipelineProvider,
+  useMessagePipelineBatchedWhenHidden,
+} from "@lichtblick/suite-base/components/MessagePipeline";
 import FakePlayer from "@lichtblick/suite-base/components/MessagePipeline/FakePlayer";
 import MockMessagePipelineProvider from "@lichtblick/suite-base/components/MessagePipeline/MockMessagePipelineProvider";
 import AppConfigurationContext from "@lichtblick/suite-base/context/AppConfigurationContext";
@@ -199,6 +204,143 @@ describe("useMessageReducer", () => {
       [2, messageBar],
     ]);
     expect(result.current).toEqual(3);
+  });
+
+  it("keeps reducing while hidden but hands out the result at most once per interval", () => {
+    // Given: a hidden panel
+    const message = (value: number): MessageEvent => ({
+      topic: "/foo",
+      receiveTime: { sec: value, nsec: 0 },
+      message: { value },
+      schemaName: "foo",
+      sizeInBytes: 0,
+    });
+    const now = vi.spyOn(performance, "now").mockReturnValue(0);
+    const restore = vi.fn().mockReturnValue(0);
+    const addMessage = vi.fn().mockImplementation((_, msg) => msg.message.value);
+    let messages: MessageEvent[] = [];
+    let visible = false;
+    const { result, rerender } = renderHook(
+      () => PanelAPI.useMessageReducer({ topics: ["/foo"], restore, addMessage }),
+      {
+        wrapper: ({ children }: PropsWithChildren) => (
+          <PanelVisibleContext.Provider value={visible}>
+            <MockMessagePipelineProvider messages={messages}>
+              {children}
+            </MockMessagePipelineProvider>
+          </PanelVisibleContext.Provider>
+        ),
+      },
+    );
+
+    // When: frames arrive within one interval
+    now.mockReturnValue(100);
+    messages = [message(1)];
+    rerender();
+    now.mockReturnValue(200);
+    messages = [message(2)];
+    rerender();
+
+    // Then: every message is reduced, the panel still shows the last handed-out value
+    expect(addMessage).toHaveBeenCalledTimes(2);
+    expect(result.current).toBe(0);
+
+    // When: the interval has passed
+    now.mockReturnValue(1100);
+    messages = [message(3)];
+    rerender();
+    // Then
+    expect(result.current).toBe(3);
+
+    // When: a frame arrives right after, then the panel is shown
+    now.mockReturnValue(1200);
+    messages = [message(4)];
+    rerender();
+    expect(result.current).toBe(3);
+    visible = true;
+    rerender();
+    // Then: it shows everything right away
+    expect(result.current).toBe(4);
+    expect(addMessage).toHaveBeenCalledTimes(4);
+    now.mockRestore();
+  });
+
+  it("hands every value to a hidden panel that opts out of batching", () => {
+    // Given
+    const msg: MessageEvent = {
+      topic: "/foo",
+      receiveTime: { sec: 1, nsec: 0 },
+      message: { value: 1 },
+      schemaName: "foo",
+      sizeInBytes: 0,
+    };
+    const restore = vi.fn().mockReturnValue(0);
+    const addMessage = vi.fn().mockImplementation((_, m) => m.message.value);
+    let messages: MessageEvent[] = [];
+    const { result, rerender } = renderHook(
+      () =>
+        PanelAPI.useMessageReducer({
+          topics: ["/foo"],
+          restore,
+          addMessage,
+          batchWhenHidden: false,
+        }),
+      {
+        wrapper: ({ children }: PropsWithChildren) => (
+          <PanelVisibleContext.Provider value={false}>
+            <MockMessagePipelineProvider messages={messages}>
+              {children}
+            </MockMessagePipelineProvider>
+          </PanelVisibleContext.Provider>
+        ),
+      },
+    );
+
+    // When
+    messages = [msg];
+    rerender();
+
+    // Then
+    expect(result.current).toBe(1);
+  });
+
+  it("hands a hidden panel the new value right away when its flush key changes (a seek)", () => {
+    // Given
+    const now = vi.spyOn(performance, "now").mockReturnValue(0);
+    let currentTime = { sec: 1, nsec: 0 };
+    // Stands in for lastSeekTime, which changes in the same pipeline state as the seek's time
+    const flushKey = (ctx: MessagePipelineContext) =>
+      (ctx.playerState.activeData?.currentTime.sec ?? 0) >= 9 ? "seek" : "start";
+    const { result, rerender } = renderHook(
+      () =>
+        useMessagePipelineBatchedWhenHidden((ctx) => ctx.playerState.activeData?.currentTime, {
+          flushKey,
+        }),
+      {
+        wrapper: ({ children }: PropsWithChildren) => (
+          <PanelVisibleContext.Provider value={false}>
+            <MockMessagePipelineProvider currentTime={currentTime}>
+              {children}
+            </MockMessagePipelineProvider>
+          </PanelVisibleContext.Provider>
+        ),
+      },
+    );
+
+    // When: playback moves on within the interval
+    now.mockReturnValue(100);
+    currentTime = { sec: 2, nsec: 0 };
+    rerender();
+    // Then: still the held value
+    expect(result.current).toEqual({ sec: 1, nsec: 0 });
+
+    // When: a seek, still within the interval
+    now.mockReturnValue(200);
+    currentTime = { sec: 9, nsec: 0 };
+    rerender();
+    // Then
+    expect(result.current).toEqual({ sec: 9, nsec: 0 });
+    now.mockRestore();
   });
 
   it("calls addMessages for messages added later", async () => {

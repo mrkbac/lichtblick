@@ -109,6 +109,24 @@ describe("VirtualizedTree", () => {
       expect(rows).toHaveLength(3);
     });
 
+    it("shows index ranges of long arrays without a value", () => {
+      // Given
+      const renderValue = vi.fn();
+      useVirtualizer.mockReturnValue({
+        getVirtualItems: vi.fn(() => [{ index: 0, key: "0", size: 24, start: 0 }]),
+        getTotalSize: vi.fn(() => 24),
+        scrollToIndex: vi.fn(),
+        measureElement: vi.fn(),
+      });
+
+      // When
+      renderVirtualizedTree({ data: new Float32Array(1000), renderValue });
+
+      // Then
+      expect(screen.getByRole("treeitem")).toHaveTextContent("[0 … 99]");
+      expect(renderValue).not.toHaveBeenCalled();
+    });
+
     it("should apply custom fontSize when provided", () => {
       // Given
       const data = { field: BasicBuilder.string() };
@@ -708,6 +726,55 @@ describe("VirtualizedTree", () => {
       expect(screen.queryByText("name")).not.toBeInTheDocument();
       expect(screen.getByLabelText("Expand status")).toBeInTheDocument();
       expect(onToggleExpand).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("when a long array shows index ranges", () => {
+    function showAllRows(scrollOffset = 0) {
+      useVirtualizer.mockImplementation(({ count }: { count: number }) => ({
+        getVirtualItems: vi.fn(() =>
+          Array.from({ length: count }, (_v, index) => ({
+            index,
+            key: String(index),
+            size: 24,
+            start: index * 24,
+            end: (index + 1) * 24,
+          })),
+        ),
+        getTotalSize: vi.fn(() => count * 24),
+        scrollToIndex: vi.fn(),
+        measureElement: vi.fn(),
+        scrollOffset,
+      }));
+    }
+
+    it("opens the range holding a search match", () => {
+      // Given a match at element 150, inside the collapsed range [100 … 199]
+      showAllRows();
+      const values = Array.from({ length: 1000 }, (_v, i) => (i === 150 ? "valx" : i));
+
+      // When searching for it
+      renderVirtualizedTree({ data: { values }, search: "val" });
+
+      // Then the range is open and the match shown
+      expect(screen.getByLabelText("Collapse [100 … 199]")).toBeInTheDocument();
+      expect(screen.getByText("150")).toBeInTheDocument();
+      expect(screen.getByLabelText("Expand [200 … 299]")).toBeInTheDocument();
+    });
+
+    it("names the range in the breadcrumb of rows inside it", () => {
+      // Given element 107 at the top, inside the open range [100 … 199] of `values`
+      showAllRows(10 * 24);
+
+      // When
+      renderVirtualizedTree({
+        data: { values: new Float32Array(1000) },
+        expandedNodes: new Set(["values", "@100+100~values"]),
+      });
+
+      // Then
+      expect(screen.getByRole("button", { name: "values" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "[100 … 199]" })).toBeInTheDocument();
     });
   });
 

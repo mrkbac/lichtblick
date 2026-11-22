@@ -21,6 +21,7 @@ import { useSeriesDrag } from "@lichtblick/suite-base/panels/shared/useSeriesDra
 import { getLineColor } from "@lichtblick/suite-base/util/plotColors";
 import { customTypography } from "@lichtblick/theme";
 
+import { PlotPathEditor } from "./PlotPathEditor";
 import { formatStat } from "./RangeStats";
 import { PLOT_BUTTONS } from "./buttons";
 import { PlotPath, plotPathDisplayName } from "./utils/config";
@@ -28,6 +29,7 @@ import { PlotPath, plotPathDisplayName } from "./utils/config";
 const {
   toggleSeries: ToggleButton,
   addSeries: AddButton,
+  seriesSettings: SettingsButton,
   deleteSeries: DeleteButton,
 } = PLOT_BUTTONS;
 
@@ -40,6 +42,10 @@ type PlotLegendRowProps = Immutable<{
   value?: unknown;
   valueSource: "hover" | "current";
   savePaths: (paths: PlotPath[]) => void;
+  editing: boolean;
+  onStartEdit: () => void;
+  onEndEdit: () => void;
+  supportsStreamModifiers: boolean;
 }>;
 
 export const ROW_HEIGHT = 30;
@@ -135,7 +141,7 @@ const useStyles = makeStyles<void, "plotName" | "actionButton">()((theme, _param
 
     [`.${buttonBaseClasses.root}`]: {
       height: ROW_HEIGHT,
-      width: ROW_HEIGHT,
+      width: 24,
 
       ":hover": {
         backgroundColor: theme.palette.action.hover,
@@ -172,6 +178,10 @@ export function PlotLegendRow({
   savePaths,
   value,
   valueSource,
+  editing,
+  onStartEdit,
+  onEndEdit,
+  supportsStreamModifiers,
 }: PlotLegendRowProps): React.JSX.Element {
   const { openPanelSettings } = useWorkspaceActions();
   const { id: panelId } = usePanelContext();
@@ -179,12 +189,38 @@ export function PlotLegendRow({
   const { classes, cx } = useStyles();
   const { t } = useTranslation("plot");
   const toggleTitle = usePanelButtonTitle(ToggleButton);
-  const addTitle = usePanelButtonTitle(AddButton);
+  const settingsTitle = usePanelButtonTitle(SettingsButton);
   const deleteTitle = usePanelButtonTitle(DeleteButton);
 
-  // When there are no series configured we render an extra row to show an "add series" button.
-  const isAddSeriesRow = paths.length === 0;
-  const { dragRef, isDragging } = useSeriesDrag(isAddSeriesRow ? undefined : path.value);
+  const { dragRef, isDragging } = useSeriesDrag(editing ? undefined : path.value);
+
+  const openSettings = () => {
+    setSelectedPanelIds([panelId]);
+    openPanelSettings();
+    onClickPath();
+  };
+
+  // Editing to a message replaces the series with one per numeric field
+  const commitEdit = (values: string[]) => {
+    onEndEdit();
+    const [first, ...rest] = values;
+    if (first == undefined) {
+      return;
+    }
+    const newPaths = paths.slice();
+    newPaths.splice(
+      index,
+      1,
+      { ...path, value: first },
+      ...rest.map((field) => ({
+        value: field,
+        enabled: true,
+        timestampMethod: path.timestampMethod,
+        timestampPath: path.timestampPath,
+      })),
+    );
+    savePaths(newPaths);
+  };
 
   const handleDeletePath: MouseEventHandler<HTMLButtonElement> = (ev) => {
     // Deleting a path is a "quick action" and we want to avoid opening the settings sidebar
@@ -207,11 +243,7 @@ export function PlotLegendRow({
       className={cx(classes.root, {
         [classes.showPlotValue]: showPlotValuesInLegend,
       })}
-      onClick={() => {
-        setSelectedPanelIds([panelId]);
-        openPanelSettings();
-        onClickPath();
-      }}
+      onClick={openSettings}
     >
       <div className={classes.listIcon}>
         <Checkbox
@@ -245,15 +277,30 @@ export function PlotLegendRow({
         })}
         style={{ gridColumn: !showPlotValuesInLegend ? "span 2" : undefined }}
       >
-        <Typography
-          noWrap={showPlotValuesInLegend}
-          variant="body2"
-          className={cx({ [classes.disabledPathLabel]: !path.enabled })}
-          data-testid="plot-legend-row-path-label"
-          style={{ flex: "auto" }}
-        >
-          {isAddSeriesRow ? t("clickToAddASeries") : plotPathDisplayName(path, index)}
-        </Typography>
+        {editing ? (
+          <PlotPathEditor
+            initialValue={path.value}
+            placeholder={t("addSeriesPlaceholder")}
+            supportsStreamModifiers={supportsStreamModifiers}
+            onCommit={commitEdit}
+            onCancel={onEndEdit}
+          />
+        ) : (
+          <Typography
+            noWrap={showPlotValuesInLegend}
+            variant="body2"
+            className={cx({ [classes.disabledPathLabel]: !path.enabled })}
+            data-testid="plot-legend-row-path-label"
+            style={{ flex: "auto" }}
+            title={t("editSeriesHint")}
+            onClick={(event) => {
+              event.stopPropagation();
+              onStartEdit();
+            }}
+          >
+            {plotPathDisplayName(path, index)}
+          </Typography>
+        )}
         {hasMismatchedDataLength && (
           <Tooltip
             placement="top"
@@ -275,26 +322,87 @@ export function PlotLegendRow({
         </div>
       )}
       <div className={classes.actionButton}>
-        {index === paths.length ? (
-          <ButtonBase
-            title={addTitle}
-            aria-label={addTitle}
-            onClick={onClickPath}
-            data-testid="add-series"
-          >
-            <AddButton.icon />
-          </ButtonBase>
+        <ButtonBase
+          title={settingsTitle}
+          aria-label={settingsTitle}
+          onClick={(event) => {
+            event.stopPropagation();
+            openSettings();
+          }}
+          data-testid="series-settings"
+        >
+          <SettingsButton.icon />
+        </ButtonBase>
+        <ButtonBase
+          title={deleteTitle}
+          aria-label={deleteTitle}
+          onClick={handleDeletePath}
+          data-testid="delete-series"
+        >
+          <DeleteButton.icon />
+        </ButtonBase>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The legend's last row: "Add series", which turns into an inline path input. In a floating
+ * legend it only shows while the legend is hovered or focused, unless the plot has no series.
+ */
+export function PlotLegendAddRow({
+  editing,
+  hideWhenIdle,
+  onStartEdit,
+  onEndEdit,
+  onAdd,
+  supportsStreamModifiers,
+}: {
+  editing: boolean;
+  hideWhenIdle: boolean;
+  onStartEdit: () => void;
+  onEndEdit: () => void;
+  onAdd: (values: string[]) => void;
+  supportsStreamModifiers: boolean;
+}): React.JSX.Element {
+  const { classes } = useStyles();
+  const { t } = useTranslation("plot");
+  const addTitle = usePanelButtonTitle(AddButton);
+  return (
+    <div
+      className={classes.root}
+      data-hide-when-idle={hideWhenIdle && !editing ? true : undefined}
+      onClick={onStartEdit}
+    >
+      <div className={classes.listIcon}>
+        <ButtonBase
+          className={classes.checkbox}
+          title={addTitle}
+          aria-label={addTitle}
+          data-testid="add-series"
+        >
+          <AddButton.icon />
+        </ButtonBase>
+      </div>
+      <div className={classes.plotName}>
+        {editing ? (
+          <PlotPathEditor
+            initialValue=""
+            placeholder={t("addSeriesPlaceholder")}
+            supportsStreamModifiers={supportsStreamModifiers}
+            onCommit={(values) => {
+              onEndEdit();
+              onAdd(values);
+            }}
+            onCancel={onEndEdit}
+          />
         ) : (
-          <ButtonBase
-            title={deleteTitle}
-            aria-label={deleteTitle}
-            onClick={handleDeletePath}
-            data-testid="delete-series"
-          >
-            <DeleteButton.icon />
-          </ButtonBase>
+          <Typography variant="body2" color="text.secondary">
+            {t("addSeries")}
+          </Typography>
         )}
       </div>
+      <div />
     </div>
   );
 }

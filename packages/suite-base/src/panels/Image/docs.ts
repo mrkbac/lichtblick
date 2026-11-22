@@ -17,6 +17,8 @@ const docs: PanelDocs = {
     ...ALL_SUPPORTED_CALIBRATION_SCHEMAS,
     ...ALL_SUPPORTED_ANNOTATION_SCHEMAS,
   ],
+  // Annotations and calibrations need an image, so only an image topic opens a new Image panel
+  openInSchemas: ALL_SUPPORTED_IMAGE_SCHEMAS,
   buttons: Object.values(IMAGE_BUTTONS),
   settings: imageGuideSettings,
   sections: [
