@@ -9,7 +9,7 @@ import React from "react";
 import type { MockedFunction } from "vitest";
 
 import PanelContext from "@lichtblick/suite-base/components/PanelContext";
-import { usePanelGuideStore } from "@lichtblick/suite-base/components/PanelDocs/PanelDocs";
+import { usePanelGuideStore } from "@lichtblick/suite-base/components/PanelDocs/PanelGuide";
 import { PanelToolbarControls } from "@lichtblick/suite-base/components/PanelToolbar/PanelToolbarControls";
 import { useSelectedPanels } from "@lichtblick/suite-base/context/CurrentLayoutContext";
 import PanelCatalogContext from "@lichtblick/suite-base/context/PanelCatalogContext";

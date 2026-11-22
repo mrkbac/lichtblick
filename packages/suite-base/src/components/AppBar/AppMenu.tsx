@@ -19,7 +19,7 @@ import { useTrimStore } from "@lichtblick/suite-base/components/ExportRecordingD
 import { useKeyboardShortcutsStore } from "@lichtblick/suite-base/components/KeyboardShortcuts/KeyboardShortcuts";
 import { APP_SHORTCUTS } from "@lichtblick/suite-base/components/KeyboardShortcuts/appShortcuts";
 import { useLiveRecordingsDialog } from "@lichtblick/suite-base/components/LiveRecordingsDialog";
-import { usePanelGuideStore } from "@lichtblick/suite-base/components/PanelDocs/PanelDocs";
+import { usePanelGuideStore } from "@lichtblick/suite-base/components/PanelDocs/PanelGuide";
 import { RecentSourceLabel } from "@lichtblick/suite-base/components/RecentSourceLabel";
 import { useCurrentLayoutActions } from "@lichtblick/suite-base/context/CurrentLayoutContext";
 import { usePlayerSelection } from "@lichtblick/suite-base/context/PlayerSelectionContext";
