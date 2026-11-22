@@ -78,6 +78,7 @@ import rosDatatypesToMessageDefinition from "@lichtblick/suite-base/util/rosData
 import { toError } from "@lichtblick/suite-base/util/toError";
 
 import ExtensionProxySocket, {
+  isMixedContentWs,
   needsExtensionProxy,
   PROXY_MISSING_REASON,
 } from "./ExtensionProxySocket";
@@ -332,21 +333,14 @@ export default class FoxgloveWebSocketPlayer implements Player {
       this.#parameters = new Map();
     });
 
+    // Browsers reject a mixed-content socket with an error ("An insecure WebSocket connection may
+    // not be initiated…" in Chrome, "The operation is insecure." in Firefox) before closing it.
+    let blockedAsMixedContent = false;
     this.#client.on("error", (err) => {
       log.error(err);
-
-      if (
-        (err as unknown as undefined | { message?: string })?.message != undefined &&
-        err.message.includes("insecure WebSocket connection")
-      ) {
-        this.#alerts.addAlert("ws:connection-failed", {
-          severity: "error",
-          message: "Insecure WebSocket connection",
-          tip: `Check that the WebSocket server at ${
-            this.#url
-          } is reachable and supports protocol version one of: ${subprotocols.join(", ")}.`,
-        });
-        this.#emitState();
+      const message = (err as unknown as undefined | { message?: unknown })?.message;
+      if (typeof message === "string" && /insecure/i.test(message) && isMixedContentWs(this.#url)) {
+        blockedAsMixedContent = true;
       }
     });
 
@@ -374,16 +368,23 @@ export default class FoxgloveWebSocketPlayer implements Player {
       this.#client = undefined;
       this.#serverControlsPlayback = false;
 
-      this.#alerts.addAlert("ws:connection-failed", {
-        severity: "error",
-        message: "Connection failed",
-        tip:
-          (event as { reason?: unknown } | undefined)?.reason === PROXY_MISSING_REASON
-            ? `Browsers block ws:// from an https page. Install the WebSocket proxy extension (chrome-extension/ in the Lichtblick repo) and reload the page, or use wss://.`
-            : `Check that the WebSocket server at ${
-                this.#url
-              } is reachable and supports protocol version one of: ${subprotocols.join(", ")}.`,
-      });
+      const reason = (event as { reason?: unknown } | undefined)?.reason;
+      if (blockedAsMixedContent || reason === PROXY_MISSING_REASON) {
+        this.#alerts.addAlert("ws:connection-failed", {
+          severity: "error",
+          message: "Your browser blocked ws:// from this https page",
+          tip: `Browsers only allow unencrypted ws:// connections from an https page to localhost. Install the Licht WebSocket proxy extension (chrome-extension/ in the repository), allow "Insecure content" in this site's settings, or serve ${this.#url} over wss://. Then reload the page.`,
+          guide: { type: "wsMixedContent", url: this.#url },
+        });
+      } else {
+        this.#alerts.addAlert("ws:connection-failed", {
+          severity: "error",
+          message: "Connection failed",
+          tip: `Check that the WebSocket server at ${
+            this.#url
+          } is reachable and supports protocol version one of: ${subprotocols.join(", ")}.`,
+        });
+      }
 
       this.#emitState();
       this.#openTimeout = setTimeout(this.#open, 3000);

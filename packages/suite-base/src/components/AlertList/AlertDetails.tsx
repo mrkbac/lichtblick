@@ -5,15 +5,17 @@ import { AccordionDetails } from "@mui/material";
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 
+import { WsMixedContentHelp } from "@lichtblick/suite-base/components/WsMixedContentHelp";
+import { PlayerAlertGuide } from "@lichtblick/suite-base/players/types";
 import { DetailsType } from "@lichtblick/suite-base/util/sendNotification";
 
 import { useStyles } from "./AlertsList.style";
 
 export function AlertDetails(
-  props: Readonly<{ details: DetailsType; tip?: string }>,
+  props: Readonly<{ details: DetailsType; tip?: string; guide?: PlayerAlertGuide }>,
 ): React.JSX.Element {
   const { t } = useTranslation("alertsList");
-  const { details, tip } = props;
+  const { details, tip, guide } = props;
   const { classes } = useStyles();
 
   const content = useMemo((): React.ReactNode => {
@@ -28,9 +30,13 @@ export function AlertDetails(
   const hasContent = content != undefined;
   return (
     <AccordionDetails className={classes.accordionDetails}>
-      {hasTip && <div className={classes.detailsText}>{tip}</div>}
+      {guide?.type === "wsMixedContent" ? (
+        <WsMixedContentHelp url={guide.url} />
+      ) : (
+        hasTip && <div className={classes.detailsText}>{tip}</div>
+      )}
       {hasContent && <div className={classes.detailsText}>{content}</div>}
-      {!hasTip && !hasContent && t("noDetailsProvided")}
+      {guide == undefined && !hasTip && !hasContent && t("noDetailsProvided")}
     </AccordionDetails>
   );
 }

@@ -138,6 +138,10 @@ describe("FoxgloveWebSocketPlayer worker", () => {
       dispatch({ type: "open", data: { wsUrl } });
       // Then
       expect(postMessageMock).toHaveBeenCalledWith({ type: "error", error: constructorError });
+      expect(postMessageMock).toHaveBeenCalledWith({
+        type: "close",
+        data: { code: 1006, reason: "Insecure WebSocket connection", wasClean: false },
+      });
     });
   });
 

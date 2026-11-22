@@ -48,6 +48,7 @@ function collectCombinedAlerts(
         message: alert.message,
         error: alert.error,
         tip: alert.tip,
+        guide: alert.guide,
         playerAlertKey,
       });
     }

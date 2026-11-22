@@ -7,6 +7,8 @@
 
 import { IWebSocket } from "@foxglove/ws-protocol";
 
+import { PROXY_ORIGINS } from "@lichtblick/suite-base/players/wsProxyOrigins";
+
 // Page half of the WebSocket proxy extension in chrome-extension/. Chrome blocks an https
 // page from opening ws:// to a non-loopback host (mixed content); the extension can, so we
 // hand it a MessagePort and run the socket's traffic over that port.
@@ -36,16 +38,17 @@ function isLoopback(hostname: string): boolean {
 
 // Origins the extension's content script runs on (chrome-extension/manifest.json). Elsewhere
 // keep the direct socket: Chrome may still allow it (e.g. local network access).
-const PROXY_ORIGINS = new Set(["https://licht.marko.im"]);
+// Set once a proxy attach times out. Later attempts on this page then connect directly, so the
+// browser's "Insecure content → Allow" site setting still works without the extension. Installing
+// the extension needs a page reload anyway, which resets this.
+let extensionMissing = false;
 
-/** True when this page can use the proxy and the browser would block the socket directly. */
-export function needsExtensionProxy(
-  url: string,
-  pageOrigin: string | undefined = typeof window === "undefined"
-    ? undefined
-    : window.location.origin,
-): boolean {
-  if (pageOrigin == undefined || !PROXY_ORIGINS.has(pageOrigin)) {
+const pageOrigin = (): string | undefined =>
+  typeof window === "undefined" ? undefined : window.location.origin;
+
+/** True when browsers block this socket as mixed content: an https page opening a non-loopback ws://. */
+export function isMixedContentWs(url: string, origin: string | undefined = pageOrigin()): boolean {
+  if (origin?.startsWith("https:") !== true) {
     return false;
   }
   let parsed: URL;
@@ -55,6 +58,24 @@ export function needsExtensionProxy(
     return false;
   }
   return parsed.protocol === "ws:" && !isLoopback(parsed.hostname);
+}
+
+/** True when this page can use the proxy and the browser would block the socket directly. */
+export function needsExtensionProxy(
+  url: string,
+  origin: string | undefined = pageOrigin(),
+): boolean {
+  return (
+    !extensionMissing &&
+    origin != undefined &&
+    PROXY_ORIGINS.has(origin) &&
+    isMixedContentWs(url, origin)
+  );
+}
+
+/** Test hook: forget an earlier attach timeout. */
+export function resetExtensionMissingForTests(): void {
+  extensionMissing = false;
 }
 
 export default class ExtensionProxySocket implements IWebSocket {
@@ -80,6 +101,7 @@ export default class ExtensionProxySocket implements IWebSocket {
     ]);
     // No content script answered: the extension isn't installed or doesn't run on this origin.
     this.#attachTimeout = setTimeout(() => {
+      extensionMissing = true;
       this.#finish({ code: 1006, reason: PROXY_MISSING_REASON, wasClean: false });
     }, ATTACH_TIMEOUT_MS);
   }
