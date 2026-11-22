@@ -93,7 +93,12 @@ import { useDefaultWebLaunchPreference } from "@lichtblick/suite-base/hooks/useD
 import useElectronFilesToOpen from "@lichtblick/suite-base/hooks/useElectronFilesToOpen";
 import { useHandleFiles } from "@lichtblick/suite-base/hooks/useHandleFiles";
 import { useLayoutTransfer } from "@lichtblick/suite-base/hooks/useLayoutTransfer";
+import { useSaveSessionBeforeReload } from "@lichtblick/suite-base/hooks/useSaveSessionBeforeReload";
 import useSeekTimeFromCLI from "@lichtblick/suite-base/hooks/useSeekTimeFromCLI";
+import {
+  playerSourceKey,
+  takeResumePlayback,
+} from "@lichtblick/suite-base/hooks/useServiceWorkerUpdate";
 import { useStructureItemsStoreManager } from "@lichtblick/suite-base/panels/Plot/hooks/useStructureItemsStoreManager";
 import { PlayerPresence } from "@lichtblick/suite-base/players/types";
 import { PanelStateContextProvider } from "@lichtblick/suite-base/providers/PanelStateContextProvider";
@@ -661,6 +666,11 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
     }
   }, [fetchLayoutFromUrl, selectEvent, selectSource, unappliedSourceArgs, setUnappliedSourceArgs]);
 
+  useSaveSessionBeforeReload();
+  // An update reload resumes playback once it is back at the URL time, but only of the recording
+  // that was playing: if that one fails to reopen, the next one the user opens must not start
+  const [resumeSource, setResumeSource] = useState(takeResumePlayback);
+
   // Seek to time in URL.
   useEffect(() => {
     if (unappliedTime.time == undefined || !seek) {
@@ -678,7 +688,13 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
     log.debug(`Seeking to url time:`, unappliedTime.time);
     seek(unappliedTime.time);
     setUnappliedTime({ time: undefined });
-  }, [playerId, playerPresence, seek, unappliedTime]);
+    if (resumeSource != undefined) {
+      setResumeSource(undefined);
+      if (playerSourceKey(getMessagePipeline().playerState) === resumeSource) {
+        play?.();
+      }
+    }
+  }, [getMessagePipeline, play, playerId, playerPresence, resumeSource, seek, unappliedTime]);
 
   useSeekTimeFromCLI();
 

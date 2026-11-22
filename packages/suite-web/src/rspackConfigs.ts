@@ -37,6 +37,14 @@ import { ASSET_LIST_FILE, type AssetList, HASHED_FILE, RUNTIME_CACHE_NAME } from
 const STARTUP_JS_BUDGET_BYTES = 3_950_000;
 
 /**
+ * Unhashed scripts in public/ that the service worker imports, in this order, before workbox's own
+ * fetch listener: view-link-redirect.js redirects /<org>/view links before the app-shell fallback,
+ * sw-worker-owners.js remembers which window created each worker. web/.cloudflare/_headers keeps
+ * them uncached so new deploys reach them.
+ */
+const SW_IMPORT_SCRIPTS = ["view-link-redirect.js", "sw-worker-owners.js"];
+
+/**
  * Files (name to size) the app needs to start: the entry chunk group plus the "startup-*" groups
  * index.tsx imports, with their fonts and other assets. Source maps excluded.
  */
@@ -159,7 +167,7 @@ export const mainConfig =
               (name) =>
                 /\.(js|mjs|wasm|woff2|ttf)$/.test(name) &&
                 !HASHED_FILE.test(`/${name}`) &&
-                name !== "view-link-redirect.js",
+                !SW_IMPORT_SCRIPTS.includes(name),
             );
             if (frozen.length > 0) {
               throw new Error(
@@ -180,7 +188,7 @@ export const mainConfig =
                 "index.html",
                 "main.*.js",
                 "manifest.webmanifest",
-                "view-link-redirect.js",
+                ...SW_IMPORT_SCRIPTS,
                 "favicon*",
                 "*icon-*.png",
                 // startup waits for every font face (see waitForFonts.ts)
@@ -193,8 +201,8 @@ export const mainConfig =
               swDest: path.join(params.outputPath, "sw.js"),
               // serve the precached app shell for any navigation (deep links, file_handlers launches)
               navigateFallback: "index.html",
-              // registers its fetch listener first, so /<org>/view links redirect before the fallback
-              importScripts: ["view-link-redirect.js"],
+              // their fetch listeners run before workbox's (see SW_IMPORT_SCRIPTS)
+              importScripts: SW_IMPORT_SCRIPTS,
               cleanupOutdatedCaches: true,
               runtimeCaching: [
                 {
@@ -216,6 +224,45 @@ export const mainConfig =
                           response.headers.get("content-type")?.startsWith("text/html") !== true
                             ? response
                             : null,
+                        // That index.html means the asking page runs an older build whose file is
+                        // gone. Tell it, so it switches (recoverFromMissingAssets); a worker can't
+                        // reload, so a request from one is reported to every window. Self-contained:
+                        // workbox copies this source into sw.js.
+                        fetchDidSucceed: async ({ request, response, event }) => {
+                          if (
+                            response.headers.get("content-type")?.startsWith("text/html") !==
+                              true ||
+                            // the page's own prefetch (PREFETCH_HEADER), not a file it needs
+                            request.headers.has("x-lichtblick-prefetch")
+                          ) {
+                            return response;
+                          }
+                          type Client = { type: string; postMessage: (message: unknown) => void };
+                          const sw = self as unknown as {
+                            clients: { matchAll: (options: { type: string }) => Promise<Client[]> };
+                            // sw-worker-owners.js
+                            lichtblickOwningWindow?: (
+                              clientId: string,
+                            ) => Promise<Client | undefined>;
+                          };
+                          const clientId = (event as { clientId?: string } | undefined)?.clientId;
+                          // a worker's request goes to the window that created the worker
+                          const owner = clientId
+                            ? await sw.lichtblickOwningWindow?.(clientId)
+                            : undefined;
+                          const direct = owner != undefined;
+                          const targets = owner
+                            ? [owner]
+                            : await sw.clients.matchAll({ type: "window" });
+                          for (const target of targets) {
+                            target.postMessage({
+                              type: "lichtblick.missingAsset",
+                              url: request.url,
+                              direct,
+                            });
+                          }
+                          return response;
+                        },
                       },
                     ],
                   },

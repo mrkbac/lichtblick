@@ -24,6 +24,7 @@ import { useAppConfigurationValue } from "@lichtblick/suite-base/hooks";
 import useAlertCount from "@lichtblick/suite-base/hooks/useAlertCount";
 import { useHandleFiles } from "@lichtblick/suite-base/hooks/useHandleFiles";
 import { useLayoutTransfer } from "@lichtblick/suite-base/hooks/useLayoutTransfer";
+import { rememberPlaybackForReload } from "@lichtblick/suite-base/hooks/useServiceWorkerUpdate";
 import { PlayerPresence } from "@lichtblick/suite-base/players/types";
 import { parseAppURLState } from "@lichtblick/suite-base/util/appURLState";
 
@@ -503,6 +504,40 @@ describe("Workspace - session-based MCAP resolution", () => {
     expect(mockSelectSource).toHaveBeenCalledTimes(1);
     expect(seek).toHaveBeenCalledExactlyOnceWith({ sec: 123, nsec: 0 });
   });
+
+  it.each([
+    { name: "example.mcap", resumes: true },
+    // the original file failed to reopen and the user opened another one
+    { name: "other.mcap", resumes: false },
+  ])(
+    "after an update reload, resumes playback only of the same recording ($name)",
+    ({ name, resumes }) => {
+      const seek = vi.fn();
+      const play = vi.fn();
+      const pipeline = {
+        ...mockPipelineContext,
+        playerState: {
+          ...mockPipelineContext.playerState,
+          presence: PlayerPresence.PRESENT,
+          urlState: { sourceId: "mcap-local-file" },
+          name,
+        },
+        seekPlayback: seek,
+        startPlayback: play,
+      };
+      (useMessagePipeline as Mock).mockImplementation(
+        (selector: (ctx: typeof pipeline) => unknown) => selector(pipeline),
+      );
+      (useMessagePipelineGetter as Mock).mockReturnValue(() => pipeline);
+      (parseAppURLState as Mock).mockReturnValue({ time: { sec: 7, nsec: 0 } });
+      rememberPlaybackForReload(JSON.stringify(["mcap-local-file", "example.mcap"]));
+
+      render(<Workspace deepLinks={["http://localhost/?time=7"]} />);
+
+      expect(seek).toHaveBeenCalledExactlyOnceWith({ sec: 7, nsec: 0 });
+      expect(play).toHaveBeenCalledTimes(resumes ? 1 : 0);
+    },
+  );
 
   it("preserves file launches and reports file read errors", async () => {
     const setConsumer = vi.fn();
