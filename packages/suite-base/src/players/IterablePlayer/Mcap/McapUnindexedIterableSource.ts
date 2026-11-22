@@ -30,6 +30,7 @@ import {
 } from "@lichtblick/suite-base/players/IterablePlayer/IIterableSource";
 import { PlayerAlert, TopicStats } from "@lichtblick/suite-base/players/types";
 import { RosDatatypes } from "@lichtblick/suite-base/types/RosDatatypes";
+import type { ReadOptions } from "@lichtblick/suite-base/util/CachedFilelike.types";
 import { toError } from "@lichtblick/suite-base/util/toError";
 
 const DURATION_YEAR_SEC = 365 * 24 * 60 * 60;
@@ -43,8 +44,9 @@ const READ_WINDOW_BYTES = 8 * 1024 * 1024;
 const LOOKAHEAD_MESSAGES = 4096;
 
 type Options = {
-  readable: McapTypes.IReadable;
+  readable: McapTypes.IReadable<ReadOptions>;
   chunkCache?: ChunkCache;
+  recordIdPrefix?: string;
   /** Read only the first `size` bytes (e.g. the readable records of a damaged file) */
   size?: number;
 };
@@ -421,10 +423,14 @@ export class McapUnindexedIterableSource implements ISerializedIterableSource {
     }
     const wanted = this.#wantedChannels(args.topics);
     const endNs = toNanoSec(end);
-    const reader = new WindowedReader(this.#options.readable, this.#size);
+    const readOptions: ReadOptions = {
+      signal: args.abort,
+      background: args.consumptionType === "full",
+    };
+    const reader = new WindowedReader(this.#options.readable, this.#size, readOptions);
     for (
       let i = lowerBound(index, toNanoSec(start));
-      i < index.count && index.logTimes[i]! <= endNs;
+      i < index.count && index.logTimes[i]! <= endNs && args.abort?.aborted !== true;
       i++
     ) {
       if (wanted[index.channels[i]!] !== 1) {
@@ -538,7 +544,7 @@ export class McapUnindexedIterableSource implements ISerializedIterableSource {
     if (chunk === -1) {
       return await reader.read(position, length, readUntil);
     }
-    const records = await this.#chunkRecords(chunk);
+    const records = await this.#chunkRecords(chunk, reader.readOptions);
     reader.chunk = { index: chunk, records };
     return records.subarray(position, position + length);
   }
@@ -549,6 +555,8 @@ export class McapUnindexedIterableSource implements ISerializedIterableSource {
     const info = this.#channelInfoById.get(index.channels[i]!)!;
     // A copy: the event's buffer is transferred to the main thread, which detaches it
     const message = record.slice(MESSAGE_DATA_AT);
+    const chunk = index.chunks[i]!;
+    const position = index.positions[i]!;
     return {
       topic: info.channel.topic,
       receiveTime: fromNanoSec(index.logTimes[i]!),
@@ -556,6 +564,9 @@ export class McapUnindexedIterableSource implements ISerializedIterableSource {
       message,
       sizeInBytes: message.byteLength,
       schemaName: info.schemaName ?? "",
+      ...(this.#options.recordIdPrefix != undefined && {
+        recordId: `${this.#options.recordIdPrefix}:${chunk === -1 ? "record" : this.#chunkOffsets[chunk]}:${position}`,
+      }),
     };
   }
 
@@ -564,10 +575,14 @@ export class McapUnindexedIterableSource implements ISerializedIterableSource {
     return view && new Uint8Array(view.buffer, view.byteOffset, view.byteLength);
   }
 
-  async #chunkRecords(i: number): Promise<Uint8Array> {
+  async #chunkRecords(i: number, readOptions?: ReadOptions): Promise<Uint8Array> {
     const cached = this.#cachedRecords(i);
     if (cached) {
       return cached;
+    }
+    // Cancellable reads must not abort a chunk load another reader still needs.
+    if (readOptions?.signal) {
+      return await this.#loadChunk(i, readOptions);
     }
     // Concurrent readers (playback, backfill) share one load, so a chunk is read and counted once
     let load = this.#chunkLoads.get(i);
@@ -578,10 +593,11 @@ export class McapUnindexedIterableSource implements ISerializedIterableSource {
     return await load;
   }
 
-  async #loadChunk(i: number): Promise<Uint8Array> {
+  async #loadChunk(i: number, readOptions?: ReadOptions): Promise<Uint8Array> {
     const bytes = await this.#options.readable.read(
       BigInt(this.#chunkOffsets[i]!),
       BigInt(this.#chunkLengths[i]!),
+      readOptions,
     );
     const chunk = parseRecord(byteReader(bytes), true);
     if (chunk?.type !== "Chunk") {
@@ -713,15 +729,21 @@ function gather<T extends BigUint64Array | Float64Array | Uint32Array | Int32Arr
 
 /** Reads through one buffered window, so nearby records don't each cost a read of the readable */
 class WindowedReader {
-  #readable: McapTypes.IReadable;
+  #readable: McapTypes.IReadable<ReadOptions>;
+  public readonly readOptions?: ReadOptions;
   #size: number;
   #buffered?: { offset: number; bytes: Uint8Array };
   /** The decompressed chunk this reader is in */
   public chunk?: { index: number; records: Uint8Array };
 
-  public constructor(readable: McapTypes.IReadable, size: number) {
+  public constructor(
+    readable: McapTypes.IReadable<ReadOptions>,
+    size: number,
+    readOptions?: ReadOptions,
+  ) {
     this.#readable = readable;
     this.#size = size;
+    this.readOptions = readOptions;
   }
 
   /** `length` bytes at `offset` if they are in the window */
@@ -750,7 +772,7 @@ class WindowedReader {
     }
     const readUntil = typeof until === "function" ? until(offset) : (until ?? 0);
     const end = Math.min(this.#size, Math.max(offset + length, readUntil));
-    const bytes = await this.#readable.read(BigInt(offset), BigInt(end - offset));
+    const bytes = await this.#readable.read(BigInt(offset), BigInt(end - offset), this.readOptions);
     if (bytes.byteLength < length) {
       throw new Error(`Read ${bytes.byteLength} bytes at ${offset}, expected ${length}`);
     }

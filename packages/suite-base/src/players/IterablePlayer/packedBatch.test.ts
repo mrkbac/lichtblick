@@ -18,6 +18,7 @@ describe("packBatch", () => {
           schemaName: "A",
           receiveTime: { sec: 1, nsec: 5 },
           publishTime: { sec: 1, nsec: 4 },
+          recordId: "record:1",
           message: new Uint8Array(shared, 0, 4),
           sizeInBytes: 4,
         },

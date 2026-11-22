@@ -19,6 +19,7 @@ import {
   PointsRenderable,
   DECAY_LIMITED,
   payloadFingerprint,
+  pointDecayTime,
   updateDecayNotice,
 } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/pointExtensionUtils";
 import { colorFieldComputedPrefix } from "@lichtblick/suite-base/panels/ThreeDeeRender/settingsNodes/colorMode";
@@ -100,6 +101,8 @@ type PointCloudHistoryUserData = BaseUserData & {
   settings: LayerSettingsPointClouds;
   topic: string;
   latestPointCloud: PointCloud | PointCloud2;
+  historyOnly?: boolean;
+  recordId?: string;
   latestOriginalMessage: Record<string, RosValue> | undefined;
   stixelMaterial: THREE.LineBasicMaterial;
 };
@@ -187,6 +190,7 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
     const isDecay = userData.settings.decayTime > 0;
     // Rewritten by every message, also with a decay time (older scans are copied to the ring)
     const geometry = createGeometry(topic, THREE.DynamicDrawUsage);
+    geometry.resize(0);
 
     const points = new PointCloudRenderable(
       topic,
@@ -314,9 +318,16 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
       return;
     }
 
+    if (this.userData.recordId != undefined) {
+      this.#decayRing?.removeRecord(this.userData.recordId);
+      if (settings.stixelsEnabled) {
+        stixelsHistory.removeOlderRecord(this.userData.recordId);
+      }
+    }
     const latestPointsEntry = pointsHistory.latest();
     latestPointsEntry.receiveTime = receiveTime;
     latestPointsEntry.messageTime = messageTime;
+    latestPointsEntry.recordId = this.userData.recordId;
     latestPointsEntry.renderable.userData.pose = getPose(pointCloud);
     latestPointsEntry.renderable.userData.pointCloud = pointCloud;
     latestPointsEntry.renderable.userData.originalMessage = originalMessage;
@@ -336,6 +347,7 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
 
     latestStixelEntry.receiveTime = receiveTime;
     latestStixelEntry.messageTime = messageTime;
+    latestStixelEntry.recordId = this.userData.recordId;
     latestStixelEntry.renderable.userData.pose = latestPointsEntry.renderable.userData.pose;
     if (settings.stixelsEnabled) {
       latestStixelEntry.renderable.geometry.resize(pointCount * 2);
@@ -379,7 +391,13 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
 
   public startFrame(currentTime: bigint, renderFrameId: string, fixedFrameId: string): void {
     this.#pointsHistory.updateHistoryFromCurrentTime(currentTime);
-    let posesResolved = this.#pointsHistory.updatePoses(currentTime, renderFrameId, fixedFrameId);
+    const poseOptions = { skipLatest: this.userData.historyOnly };
+    let posesResolved = this.#pointsHistory.updatePoses(
+      currentTime,
+      renderFrameId,
+      fixedFrameId,
+      poseOptions,
+    );
     posesResolved =
       this.#updateDecayRing(currentTime, renderFrameId, fixedFrameId) && posesResolved;
     this.#pointsHistory.forEach((entry) => {
@@ -388,7 +406,8 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
     if (this.userData.settings.stixelsEnabled) {
       this.#stixelsHistory.updateHistoryFromCurrentTime(currentTime);
       posesResolved =
-        this.#stixelsHistory.updatePoses(currentTime, renderFrameId, fixedFrameId) && posesResolved;
+        this.#stixelsHistory.updatePoses(currentTime, renderFrameId, fixedFrameId, poseOptions) &&
+        posesResolved;
     }
     if (posesResolved) {
       this.renderer.settings.errors.remove(this.userData.settingsPath, MISSING_TRANSFORM);
@@ -417,6 +436,7 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
         {
           receiveTime: latest.receiveTime,
           messageTime: latest.messageTime,
+          recordId: latest.recordId,
           frameId: this.userData.frameId,
           pose: latest.renderable.userData.pose,
         },
@@ -455,7 +475,21 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
     pointCloud: PointCloud | PointCloud2,
     settings: LayerSettingsPointClouds,
     receiveTime: bigint,
+    recordId?: string,
   ): void {
+    if (
+      recordId != undefined &&
+      this.#decayRing?.holdsRecord(recordId) === true &&
+      (!settings.stixelsEnabled ||
+        this.#stixelsHistory.has(
+          receiveTime,
+          toNanoSec(getTimestamp(pointCloud)),
+          () => false,
+          recordId,
+        ))
+    ) {
+      return;
+    }
     // An older cloud that can't be drawn is just skipped; the latest one stays
     const skip = () => {};
     if (
@@ -486,6 +520,7 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
       {
         receiveTime,
         messageTime,
+        recordId,
         frameId: this.renderer.normalizeFrameId(getFrameId(pointCloud)),
         pose: getPose(pointCloud),
       },
@@ -508,7 +543,7 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
     };
     if (
       !settings.stixelsEnabled ||
-      this.#stixelsHistory.has(receiveTime, messageTime, sameStixels)
+      this.#stixelsHistory.has(receiveTime, messageTime, sameStixels, recordId)
     ) {
       return;
     }
@@ -538,7 +573,12 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
       stixels.geometry.attributes.color!,
     );
     this.add(stixels);
-    this.#stixelsHistory.insertOlderEntry({ receiveTime, messageTime, renderable: stixels });
+    this.#stixelsHistory.insertOlderEntry({
+      receiveTime,
+      messageTime,
+      recordId,
+      renderable: stixels,
+    });
   }
 
   /** The decay ring, created on first use, with the point budget of `settings` */
@@ -572,6 +612,9 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
     const decayNs = BigInt(Math.round(settings.decayTime * 1e9));
     const expireTime = currentTime - decayNs;
     ring.expire(expireTime);
+    if (this.userData.historyOnly === true) {
+      ring.setStyle(pointStyle(settings));
+    }
     // The latest scan counts toward the limits too, as when it was part of the history
     ring.enforceLimits({
       maxPoints: decayMaxPoints(settings),
@@ -1097,12 +1140,16 @@ export class PointClouds extends SceneExtension<PointCloudHistoryRenderable> {
     if (renderable) {
       const prevSettings = this.renderer.config.topics[topicName];
       const settings = { ...DEFAULT_SETTINGS, ...prevSettings };
-      renderable.updatePointCloud(
-        renderable.userData.latestPointCloud,
-        renderable.userData.latestOriginalMessage,
-        settings,
-        renderable.userData.receiveTime,
-      );
+      if (renderable.userData.historyOnly === true) {
+        renderable.userData.settings = settings;
+      } else {
+        renderable.updatePointCloud(
+          renderable.userData.latestPointCloud,
+          renderable.userData.latestOriginalMessage,
+          settings,
+          renderable.userData.receiveTime,
+        );
+      }
     }
   };
 
@@ -1121,6 +1168,7 @@ export class PointClouds extends SceneExtension<PointCloudHistoryRenderable> {
       messageTime,
       messageEvent.message as RosObject,
       frameId,
+      { recordId: messageEvent.recordId },
     );
   };
 
@@ -1139,6 +1187,7 @@ export class PointClouds extends SceneExtension<PointCloudHistoryRenderable> {
       messageTime,
       messageEvent.message as RosObject,
       frameId,
+      { recordId: messageEvent.recordId },
     );
   };
 
@@ -1150,7 +1199,8 @@ export class PointClouds extends SceneExtension<PointCloudHistoryRenderable> {
     messageTime: bigint,
     originalMessage: RosObject,
     frameId: string,
-  ): void {
+    options: { historyOnly?: true; recordId?: string },
+  ): PointCloudHistoryRenderable {
     // Update the mapping of topic to point cloud field names if necessary
     let fields = this.#fieldsByTopic.get(topic);
     // filter count to compare only supported fields
@@ -1170,10 +1220,14 @@ export class PointClouds extends SceneExtension<PointCloudHistoryRenderable> {
     let renderable = this.renderables.get(topic);
     // The drawn scan again (e.g. both read back after a seek and played): nothing to add to history
     const repeat =
-      renderable?.userData.receiveTime === receiveTime &&
-      renderable.userData.messageTime === messageTime &&
-      payloadFingerprint(renderable.userData.latestPointCloud.data) ===
-        payloadFingerprint(pointCloud.data);
+      renderable != undefined &&
+      renderable.userData.historyOnly !== true &&
+      (options.recordId != undefined && renderable.userData.recordId != undefined
+        ? options.recordId === renderable.userData.recordId
+        : renderable.userData.receiveTime === receiveTime &&
+          renderable.userData.messageTime === messageTime &&
+          payloadFingerprint(renderable.userData.latestPointCloud.data) ===
+            payloadFingerprint(pointCloud.data));
     if (!renderable) {
       // Set the initial settings from default values merged with any user settings
       const userSettings = (this.renderer.config.topics[topic] ??
@@ -1217,13 +1271,19 @@ export class PointClouds extends SceneExtension<PointCloudHistoryRenderable> {
       this.renderables.set(topic, renderable);
     }
 
+    renderable.userData.historyOnly = options.historyOnly;
+    if (options.historyOnly === true) {
+      return renderable;
+    }
     const { settings } = renderable.userData;
 
     if (settings.decayTime > 0 && !repeat) {
       renderable.pushHistory(pointCloud, settings, receiveTime);
     }
 
+    renderable.userData.recordId = options.recordId;
     renderable.updatePointCloud(pointCloud, originalMessage, settings, receiveTime);
+    return renderable;
   }
 
   public readonly historySchemas: ReadonlySet<string> = new Set([
@@ -1234,26 +1294,48 @@ export class PointClouds extends SceneExtension<PointCloudHistoryRenderable> {
   /** See {@link DecayHistoryIngest} */
   public addHistoricalMessage(messageEvent: MessageEvent): bigint | undefined {
     const ros = ROS_POINTCLOUD_DATATYPES.has(messageEvent.schemaName);
-    const renderable = this.renderables.get(messageEvent.topic);
+    let renderable = this.renderables.get(messageEvent.topic);
     const receiveTime = toNanoSec(messageEvent.receiveTime);
-    // The drawn scan and anything newer are playback's, which delivers them through timestamp sync
-    if (!renderable || receiveTime > renderable.userData.receiveTime) {
+    const { recordId } = messageEvent;
+    if (!renderable && pointDecayTime(this.renderer.config.topics[messageEvent.topic]) <= 0) {
+      return undefined;
+    }
+    // Playback owns anything newer than a drawn scan, if the seek drew one.
+    if (
+      renderable &&
+      renderable.userData.historyOnly !== true &&
+      receiveTime > renderable.userData.receiveTime
+    ) {
       return undefined;
     }
     const pointCloud = ros
       ? normalizePointCloud2(messageEvent.message as PartialMessage<PointCloud2>)
       : normalizePointCloud(messageEvent.message as PartialMessage<PointCloud>);
-    const { settings, messageTime } = renderable.userData;
+    const stamp = toNanoSec(getTimestamp(pointCloud));
+    renderable ??= this.#handlePointCloud(
+      messageEvent.topic,
+      messageEvent.schemaName,
+      pointCloud,
+      receiveTime,
+      stamp,
+      messageEvent.message as RosObject,
+      getFrameId(pointCloud),
+      { historyOnly: true },
+    );
+    const { settings, messageTime, historyOnly } = renderable.userData;
     const sameAsDrawn =
-      receiveTime === renderable.userData.receiveTime &&
-      toNanoSec(getTimestamp(pointCloud)) === messageTime &&
-      payloadFingerprint(pointCloud.data) ===
-        payloadFingerprint(renderable.userData.latestPointCloud.data);
+      historyOnly !== true &&
+      (recordId != undefined && renderable.userData.recordId != undefined
+        ? recordId === renderable.userData.recordId
+        : receiveTime === renderable.userData.receiveTime &&
+          stamp === messageTime &&
+          payloadFingerprint(pointCloud.data) ===
+            payloadFingerprint(renderable.userData.latestPointCloud.data));
     if (settings.decayTime <= 0 || sameAsDrawn) {
       return undefined;
     }
-    renderable.addOlderScan(pointCloud, settings, receiveTime);
-    return toNanoSec(getTimestamp(pointCloud));
+    renderable.addOlderScan(pointCloud, settings, receiveTime, recordId);
+    return stamp;
   }
 }
 

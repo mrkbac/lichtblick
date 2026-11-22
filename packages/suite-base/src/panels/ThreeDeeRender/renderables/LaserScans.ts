@@ -16,6 +16,7 @@ import {
   DECAY_HISTORY_LIMITS,
   DECAY_LIMITED,
   payloadFingerprint,
+  pointDecayTime,
   updateDecayNotice,
   pointStyle,
   RenderObjectHistory,
@@ -62,6 +63,8 @@ type LaserScanHistoryUserData = BaseUserData & {
   settings: LayerSettingsLaserScan;
   topic: string;
   latestLaserScan: NormalizedLaserScan;
+  historyOnly?: boolean;
+  recordId?: string;
   latestOriginalMessage: Record<string, RosValue> | undefined;
 };
 
@@ -122,6 +125,7 @@ class LaserScanHistoryRenderable extends Renderable<LaserScanHistoryUserData> {
     super(topic, renderer, userData);
 
     const geometry = createGeometry(topic, THREE.DynamicDrawUsage);
+    geometry.resize(0);
     const points = new LaserScanRenderable(
       topic,
       {
@@ -192,16 +196,19 @@ class LaserScanHistoryRenderable extends Renderable<LaserScanHistoryUserData> {
     // (the same message read back after a seek and played counts as the same scan)
     const sameScan =
       laserScan === latest.userData.laserScan ||
-      (latestEntry.receiveTime === receiveTime &&
-        latestEntry.messageTime === messageTime &&
-        payloadFingerprint(laserScan.ranges) ===
-          payloadFingerprint(latest.userData.laserScan?.ranges ?? EMPTY_RANGES));
+      (this.userData.recordId != undefined && latestEntry.recordId != undefined
+        ? this.userData.recordId === latestEntry.recordId
+        : latestEntry.receiveTime === receiveTime &&
+          latestEntry.messageTime === messageTime &&
+          payloadFingerprint(laserScan.ranges) ===
+            payloadFingerprint(latest.userData.laserScan?.ranges ?? EMPTY_RANGES));
     if (settings.decayTime > 0 && previousCount > 0 && !sameScan) {
       const { position, color } = latest.geometry.attributes;
       this.#ring(style).push(
         {
           receiveTime: latestEntry.receiveTime,
           messageTime: latestEntry.messageTime,
+          recordId: latestEntry.recordId,
           frameId: latest.userData.frameId,
           pose: latest.userData.pose,
         },
@@ -210,8 +217,12 @@ class LaserScanHistoryRenderable extends Renderable<LaserScanHistoryUserData> {
       );
     }
 
+    if (this.userData.recordId != undefined) {
+      this.#decayRing?.removeRecord(this.userData.recordId);
+    }
     latestEntry.receiveTime = receiveTime;
     latestEntry.messageTime = messageTime;
+    latestEntry.recordId = this.userData.recordId;
     latest.userData.frameId = this.userData.frameId;
     latest.userData.pose = laserScan.pose;
     latest.userData.laserScan = laserScan;
@@ -228,7 +239,11 @@ class LaserScanHistoryRenderable extends Renderable<LaserScanHistoryUserData> {
     laserScan: NormalizedLaserScan,
     settings: LayerSettingsLaserScan,
     receiveTime: bigint,
+    recordId?: string,
   ): void {
+    if (recordId != undefined && this.#decayRing?.holdsRecord(recordId) === true) {
+      return;
+    }
     // (a scan the ring already holds, e.g. played and then read back, is skipped by its push)
     if (laserScanError(laserScan, settings) != undefined) {
       return;
@@ -241,6 +256,7 @@ class LaserScanHistoryRenderable extends Renderable<LaserScanHistoryUserData> {
       {
         receiveTime,
         messageTime: toNanoSec(laserScan.timestamp),
+        recordId,
         frameId: this.renderer.normalizeFrameId(laserScan.frame_id),
         pose: laserScan.pose,
       },
@@ -263,7 +279,9 @@ class LaserScanHistoryRenderable extends Renderable<LaserScanHistoryUserData> {
   }
 
   public startFrame(currentTime: bigint, renderFrameId: string, fixedFrameId: string): void {
-    let resolved = this.#pointsHistory.updatePoses(currentTime, renderFrameId, fixedFrameId);
+    let resolved = this.#pointsHistory.updatePoses(currentTime, renderFrameId, fixedFrameId, {
+      skipLatest: this.userData.historyOnly,
+    });
     this.#pointsHistory.forEach((entry) => {
       entry.renderable.syncPoints();
     });
@@ -289,6 +307,9 @@ class LaserScanHistoryRenderable extends Renderable<LaserScanHistoryUserData> {
     }
     const windowStart = currentTime - BigInt(Math.round(settings.decayTime * 1e9));
     ring.expire(windowStart);
+    if (this.userData.historyOnly === true) {
+      ring.setStyle(pointStyle(settings));
+    }
     const latestPoints = this.#pointsHistory.latest().renderable.geometry.drawRange.count;
     ring.enforceLimits({ maxPoints: DECAY_HISTORY_LIMITS.maxPoints, reservePoints: latestPoints });
     this.#decayNoticeKey = updateDecayNotice({
@@ -432,25 +453,43 @@ export class LaserScans extends SceneExtension<LaserScanHistoryRenderable> {
       const prevSettings = this.renderer.config.topics[topicName];
       const settings = { ...DEFAULT_SETTINGS, ...prevSettings };
 
-      renderable.updateLaserScan(
-        renderable.userData.latestLaserScan,
-        renderable.userData.latestOriginalMessage,
-        settings,
-        renderable.userData.receiveTime,
-      );
+      if (renderable.userData.historyOnly === true) {
+        renderable.userData.settings = settings;
+      } else {
+        renderable.updateLaserScan(
+          renderable.userData.latestLaserScan,
+          renderable.userData.latestOriginalMessage,
+          settings,
+          renderable.userData.receiveTime,
+        );
+      }
     }
   };
 
   #handleLaserScan = (
     messageEvent: PartialMessageEvent<RosLaserScan | FoxgloveLaserScan>,
   ): void => {
-    const topic = messageEvent.topic;
     const laserScan =
       "header" in messageEvent.message
         ? normalizeRosLaserScan(messageEvent.message)
         : normalizeFoxgloveLaserScan(messageEvent.message as PartialMessage<FoxgloveLaserScan>);
     const receiveTime = toNanoSec(messageEvent.receiveTime);
+    const renderable = this.#getOrCreateRenderable(messageEvent, laserScan);
+    renderable.userData.historyOnly = undefined;
+    renderable.userData.recordId = messageEvent.recordId;
+    renderable.updateLaserScan(
+      laserScan,
+      messageEvent.message as RosObject,
+      renderable.userData.settings,
+      receiveTime,
+    );
+  };
 
+  #getOrCreateRenderable(
+    messageEvent: MessageEvent,
+    laserScan: NormalizedLaserScan,
+  ): LaserScanHistoryRenderable {
+    const { topic, receiveTime } = messageEvent;
     let renderable = this.renderables.get(topic);
     if (!renderable) {
       // Set the initial settings from default values merged with any user settings
@@ -474,7 +513,7 @@ export class LaserScans extends SceneExtension<LaserScanHistoryRenderable> {
 
       const messageTime = toNanoSec(laserScan.timestamp);
       renderable = new LaserScanHistoryRenderable(topic, this.renderer, {
-        receiveTime,
+        receiveTime: toNanoSec(receiveTime),
         messageTime,
         frameId: this.renderer.normalizeFrameId(laserScan.frame_id),
         pose: laserScan.pose,
@@ -489,13 +528,8 @@ export class LaserScans extends SceneExtension<LaserScanHistoryRenderable> {
       this.renderables.set(topic, renderable);
     }
 
-    renderable.updateLaserScan(
-      laserScan,
-      messageEvent.message as RosObject,
-      renderable.userData.settings,
-      receiveTime,
-    );
-  };
+    return renderable;
+  }
 
   public readonly historySchemas: ReadonlySet<string> = new Set([
     ...ROS_LASERSCAN_DATATYPES,
@@ -504,10 +538,18 @@ export class LaserScans extends SceneExtension<LaserScanHistoryRenderable> {
 
   /** See {@link DecayHistoryIngest} */
   public addHistoricalMessage(messageEvent: MessageEvent): bigint | undefined {
-    const renderable = this.renderables.get(messageEvent.topic);
+    let renderable = this.renderables.get(messageEvent.topic);
     const receiveTime = toNanoSec(messageEvent.receiveTime);
-    // The drawn scan and anything newer are playback's, which delivers them through timestamp sync
-    if (!renderable || receiveTime > renderable.userData.receiveTime) {
+    const { recordId } = messageEvent;
+    if (!renderable && pointDecayTime(this.renderer.config.topics[messageEvent.topic]) <= 0) {
+      return undefined;
+    }
+    // Playback owns anything newer than a drawn scan, if the seek drew one.
+    if (
+      renderable &&
+      renderable.userData.historyOnly !== true &&
+      receiveTime > renderable.userData.receiveTime
+    ) {
       return undefined;
     }
     const message = messageEvent.message as PartialMessage<RosLaserScan | FoxgloveLaserScan>;
@@ -515,16 +557,23 @@ export class LaserScans extends SceneExtension<LaserScanHistoryRenderable> {
       "header" in message
         ? normalizeRosLaserScan(message)
         : normalizeFoxgloveLaserScan(message as PartialMessage<FoxgloveLaserScan>);
-    const { settings, messageTime } = renderable.userData;
+    if (!renderable) {
+      renderable = this.#getOrCreateRenderable(messageEvent, laserScan);
+      renderable.userData.historyOnly = true;
+    }
+    const { settings, messageTime, historyOnly } = renderable.userData;
     const sameAsDrawn =
-      receiveTime === renderable.userData.receiveTime &&
-      toNanoSec(laserScan.timestamp) === messageTime &&
-      payloadFingerprint(laserScan.ranges) ===
-        payloadFingerprint(renderable.userData.latestLaserScan.ranges);
+      historyOnly !== true &&
+      (recordId != undefined && renderable.userData.recordId != undefined
+        ? recordId === renderable.userData.recordId
+        : receiveTime === renderable.userData.receiveTime &&
+          toNanoSec(laserScan.timestamp) === messageTime &&
+          payloadFingerprint(laserScan.ranges) ===
+            payloadFingerprint(renderable.userData.latestLaserScan.ranges));
     if (settings.decayTime <= 0 || sameAsDrawn) {
       return undefined;
     }
-    renderable.addOlderScan(laserScan, settings, receiveTime);
+    renderable.addOlderScan(laserScan, settings, receiveTime, recordId);
     return toNanoSec(laserScan.timestamp);
   }
 }

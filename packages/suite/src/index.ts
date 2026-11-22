@@ -169,6 +169,8 @@ export type MessageEvent<T = unknown> = {
    * un-converted message event.
    */
   originalMessageEvent?: MessageEvent;
+  /** Opaque identifier of a recording record, stable across reads in the same player. */
+  recordId?: string;
 
   topicConfig?: unknown;
 };

@@ -45,10 +45,12 @@ export type RecoverReader = (
  */
 export type CheckChunk = (chunk: McapTypes.ChunkIndex) => Promise<Error | undefined>;
 
+type LocatedMessage = McapTypes.Message & { recordOffset?: string };
+
 type ReadMessagesArgs = Omit<
   NonNullable<Parameters<McapIndexedReader["readMessages"]>[0]>,
-  "validateCrcs"
->;
+  "validateCrcs" | "readOptions"
+> & { readOptions?: ReadOptions; abort?: AbortSignal };
 
 const FULL_READ_OPTIONS: ReadOptions = { background: true };
 
@@ -65,6 +67,7 @@ const SKIM_MIN_CHUNKS_PER_WINDOW = 4n;
 
 export class McapIndexedIterableSource implements ISerializedIterableSource {
   #reader: McapIndexedReader;
+  readonly #recordIdPrefix?: string;
   #channelInfoById = new Map<
     number,
     {
@@ -121,9 +124,11 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
       recover?: RecoverReader;
       checkChunk?: CheckChunk;
       corruptChunks?: Set<bigint>;
+      recordIdPrefix?: string;
     },
   ) {
     this.#reader = reader;
+    this.#recordIdPrefix = options?.recordIdPrefix;
     this.#prefetch = options?.prefetch;
     this.#recover = options?.recover;
     this.#checkChunk = options?.checkChunk;
@@ -194,12 +199,13 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
    * recovered reader, once) and resumes after the last message already yielded, so consumers see
    * one uninterrupted stream.
    */
-  async *#readMessages(args: ReadMessagesArgs): AsyncGenerator<McapTypes.Message> {
+  async *#readMessages(args: ReadMessagesArgs): AsyncGenerator<LocatedMessage> {
     // Resume point: the last yielded logTime and how many messages at that logTime were yielded
     let lastTime: bigint | undefined;
     let yieldedAtLastTime = 0;
     let retried = false;
-    for (;;) {
+    const isAborted = () => args.abort?.aborted === true;
+    while (!isAborted()) {
       const resumeArgs: ReadMessagesArgs =
         lastTime == undefined
           ? args
@@ -209,13 +215,23 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
       let skip = yieldedAtLastTime;
       const reader = this.#reader;
       const chunkIndexes = reader.chunkIndexes;
-      const messages = reader.readMessages({ ...resumeArgs, validateCrcs: false });
+      const messages = reader.readMessages({
+        ...resumeArgs,
+        validateCrcs: false,
+        readOptions: args.abort
+          ? { ...resumeArgs.readOptions, signal: args.abort }
+          : resumeArgs.readOptions,
+        includeRecordOffsets: this.#recordIdPrefix != undefined,
+      });
       try {
         for (;;) {
           let result;
           try {
             result = await messages.next();
           } catch (err: unknown) {
+            if (isAborted()) {
+              return;
+            }
             // Retry once first: a transient error (e.g. the network) needs no scan. Then, unless
             // another read already dropped a chunk or swapped the reader meanwhile, look for the
             // corrupt chunk around the read position and drop it. Only if there is none, recover
@@ -251,7 +267,7 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
             }
             break;
           }
-          if (result.done === true) {
+          if (result.done === true || isAborted()) {
             return;
           }
           const message = result.value;
@@ -468,6 +484,7 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
     }
 
     for await (const message of this.#readMessages({
+      abort: args.abort,
       startingAt: toNanoSec(start),
       endingAt: toNanoSec(end),
       topics: topicNames,
@@ -684,7 +701,7 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
     return [...chunks];
   }
 
-  #toResult(message: McapTypes.Message): Readonly<IteratorResult<Uint8Array>> {
+  #toResult(message: LocatedMessage): Readonly<IteratorResult<Uint8Array>> {
     const channelInfo = this.#channelInfoById.get(message.channelId);
     if (!channelInfo) {
       return {
@@ -705,6 +722,9 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
         message: message.data,
         sizeInBytes: message.data.byteLength,
         schemaName: channelInfo.schemaName ?? "",
+        ...(message.recordOffset != undefined && {
+          recordId: `${this.#recordIdPrefix}:${message.recordOffset}`,
+        }),
       },
     };
   }
@@ -755,6 +775,9 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
           message: message.data,
           sizeInBytes: message.data.byteLength,
           schemaName: channelInfo.schemaName ?? "",
+          ...(message.recordOffset != undefined && {
+            recordId: `${this.#recordIdPrefix}:${message.recordOffset}`,
+          }),
         });
 
         break;

@@ -82,6 +82,8 @@ async function tryCreateIndexedReader(
   return { status: "indexed", reader };
 }
 
+let nextRecordIdPrefix = 0;
+
 export class McapIterableSource implements ISerializedIterableSource {
   #source: McapSource;
   // Eagerly-retained inner: used for local blobs, unindexed files, and unpooled sources.
@@ -132,6 +134,8 @@ export class McapIterableSource implements ISerializedIterableSource {
 
   public readonly sourceType = "serialized";
 
+  readonly #recordIdPrefix = String(nextRecordIdPrefix++);
+
   public constructor(source: McapSource) {
     this.#source = source;
     // Remote files don't load ahead: extra range requests could delay the ones a seek waits for
@@ -172,6 +176,7 @@ export class McapIterableSource implements ISerializedIterableSource {
     if (result.status === "indexed") {
       return {
         inner: new McapIndexedIterableSource(result.reader, {
+          recordIdPrefix: this.#recordIdPrefix,
           ...this.#readErrorHandling(readable, decompressHandlers),
         }),
         indexed: true,
@@ -181,6 +186,7 @@ export class McapIterableSource implements ISerializedIterableSource {
     }
     return {
       inner: new McapUnindexedIterableSource({
+        recordIdPrefix: this.#recordIdPrefix,
         readable,
         size: result.length,
         chunkCache: this.#chunkCache,
@@ -218,6 +224,7 @@ export class McapIterableSource implements ISerializedIterableSource {
       remote.setChunks(result.reader.chunkIndexes);
       return {
         inner: new McapIndexedIterableSource(result.reader, {
+          recordIdPrefix: this.#recordIdPrefix,
           prefetch: (ranges, options) => {
             // A rebuilt index has its message indexes past the end of the real bytes
             const end = this.#recovery?.offset;
@@ -243,6 +250,7 @@ export class McapIterableSource implements ISerializedIterableSource {
     // Unindexed: scanned once, then messages are read through the same connection and cache
     return {
       inner: new McapUnindexedIterableSource({
+        recordIdPrefix: this.#recordIdPrefix,
         readable,
         size: result.length,
         chunkCache: this.#chunkCache,
@@ -759,6 +767,9 @@ export class McapIterableSource implements ISerializedIterableSource {
   public async *messageIterator(
     opt: MessageIteratorArgs,
   ): AsyncIterableIterator<Readonly<IteratorResult<Uint8Array>>> {
+    if (opt.abort?.aborted === true) {
+      return;
+    }
     // NOTE: this is an async generator, so the "uninitialized" invariant below throws on the first
     // .next() call, not when messageIterator() is invoked. Callers that expect a synchronous throw
     // (mergeSequentialIterators calls .next(), so it surfaces there) should account for this.
@@ -769,8 +780,11 @@ export class McapIterableSource implements ISerializedIterableSource {
       yield* this.#eagerInner.messageIterator(opt);
       return;
     }
+    // Hydration is shared with playback and concurrent reads. Let it finish, then release
+    // this read's pin without entering the reader when the request has already been cancelled.
     const { inner } = await this.#pool.acquire(this, this.#hydrator);
     try {
+      opt.abort?.throwIfAborted();
       yield* inner.messageIterator(opt);
     } finally {
       this.#pool.release(this);

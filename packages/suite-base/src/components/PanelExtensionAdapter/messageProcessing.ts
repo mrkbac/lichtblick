@@ -70,6 +70,7 @@ export function convertMessage(
         receiveTime: messageEvent.receiveTime,
         message: convertedMessage,
         originalMessageEvent: messageEvent,
+        ...(messageEvent.recordId != undefined && { recordId: messageEvent.recordId }),
         sizeInBytes: messageEvent.sizeInBytes,
         topicConfig: messageEvent.topicConfig,
       });

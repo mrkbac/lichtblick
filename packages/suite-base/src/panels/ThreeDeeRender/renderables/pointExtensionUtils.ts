@@ -168,10 +168,16 @@ export const DECAY_HISTORY_LIMITS: HistoryLimits = { maxEntries: 1_000, maxPoint
 
 export const DECAY_LIMITED = "DECAY_LIMITED";
 
+export function pointDecayTime(settings: Renderer["config"]["topics"][string] | undefined): number {
+  return settings != undefined && "decayTime" in settings && typeof settings.decayTime === "number"
+    ? settings.decayTime
+    : 0;
+}
+
 /**
  * Tells apart distinct records received at the same time with the same header stamp (e.g. the
  * segments of one sweep published together): a 53-bit hash of the whole payload, about 0.3 ms per
- * MB. Messages carry no record id (offset or sequence). Only computed on a tie of both times.
+ * MB. Used for sources without stable record IDs, only on a tie of both times.
  */
 export function payloadFingerprint(payload: ArrayBufferView): number {
   const bytes = new Uint8Array(payload.buffer, payload.byteOffset, payload.byteLength);
@@ -276,6 +282,7 @@ export function updateDecayNotice({
 }
 
 type HistoryEntry<TRenderable extends HistoryRenderable> = {
+  recordId?: string;
   receiveTime: bigint;
   messageTime: bigint;
   renderable: TRenderable;
@@ -321,13 +328,26 @@ export class RenderObjectHistory<TRenderable extends HistoryRenderable> {
     receiveTime: bigint,
     messageTime: bigint,
     same: (renderable: TRenderable) => boolean,
+    recordId?: string,
   ): boolean {
     return this.#history.some(
       (entry) =>
         entry.receiveTime === receiveTime &&
         entry.messageTime === messageTime &&
-        same(entry.renderable),
+        (recordId != undefined && entry.recordId != undefined
+          ? recordId === entry.recordId
+          : same(entry.renderable)),
     );
+  }
+
+  /** Removes a read-back record when playback makes it the latest. */
+  public removeOlderRecord(recordId: string): void {
+    const at = this.#history.findIndex((entry) => entry.recordId === recordId);
+    if (at >= 0 && at < this.#history.length - 1) {
+      const { renderable } = this.#history.splice(at, 1)[0]!;
+      this.#parentRenderable.remove(renderable);
+      renderable.dispose();
+    }
   }
 
   /** Adds an entry older than the latest one (read back after a seek), in time order */
@@ -390,10 +410,17 @@ export class RenderObjectHistory<TRenderable extends HistoryRenderable> {
    * Returns whether every entry found its transform. Adds the MISSING_TRANSFORM error when one
    * doesn't; the caller clears it once all histories sharing its settings path resolve.
    */
-  public updatePoses(currentTime: bigint, renderFrameId: string, fixedFrameId: string): boolean {
-    // Update the pose on each entry
+  public updatePoses(
+    currentTime: bigint,
+    renderFrameId: string,
+    fixedFrameId: string,
+    { skipLatest = false }: { skipLatest?: boolean } = {},
+  ): boolean {
+    // History-only layers have an empty latest slot until playback supplies a scan.
     let hadTfError = false;
-    for (const entry of this.#history) {
+    const count = this.#history.length - (skipLatest ? 1 : 0);
+    for (let i = 0; i < count; i++) {
+      const entry = this.#history[i]!;
       const srcTime = entry.messageTime;
       const frameId = this.#parentRenderable.userData.frameId;
       const updated = updatePose(

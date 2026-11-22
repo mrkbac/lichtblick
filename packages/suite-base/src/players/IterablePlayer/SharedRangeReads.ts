@@ -14,6 +14,7 @@ type Range = { start?: Time; end?: Time };
 type ReadRange = (
   topics: TopicSelection,
   range: Range,
+  signal: AbortSignal,
 ) => AsyncIterableIterator<Readonly<ReadResult>>;
 
 /** Bytes of messages one reader may have waiting before the shared read waits for it */
@@ -41,7 +42,14 @@ export class SharedRangeReads {
 
   public read(topic: string, range: Range): AsyncIterableIterator<Readonly<ReadResult>> {
     if (range.start || range.end) {
-      return this.#readRange(new Map([[topic, { topic }]]), range);
+      const abort = new AbortController();
+      const reader = new Reader(
+        topic,
+        () => {},
+        () => {},
+      );
+      reader.detach(this.#readRange(new Map([[topic, { topic }]]), range, abort.signal), 0, abort);
+      return reader;
     }
     // Joins a shared read on its first pull: an iterator that is never read can't hold up others
     let reader: Reader | undefined;
@@ -89,7 +97,7 @@ class Reader implements AsyncIterableIterator<Readonly<ReadResult>> {
   /** Whether its consumer waits for a message */
   public waiting = false;
   /** Its own read, once detached from the shared one */
-  #own?: AsyncIterator<Readonly<ReadResult>>;
+  #own?: { iterator: AsyncIterator<Readonly<ReadResult>>; abort: AbortController };
   /** Messages of its own read to skip: the shared read delivered them already */
   #skip = 0;
   readonly #onPull: () => void;
@@ -124,8 +132,12 @@ class Reader implements AsyncIterableIterator<Readonly<ReadResult>> {
   }
 
   /** Goes on with `own`, skipping its first `skip` messages; the queue is empty */
-  public detach(own: AsyncIterator<Readonly<ReadResult>>, skip: number): void {
-    this.#own = own;
+  public detach(
+    iterator: AsyncIterator<Readonly<ReadResult>>,
+    skip: number,
+    abort: AbortController,
+  ): void {
+    this.#own = { iterator, abort };
     this.#skip = skip;
     this.#ready?.resolve();
     this.#ready = undefined;
@@ -153,7 +165,7 @@ class Reader implements AsyncIterableIterator<Readonly<ReadResult>> {
     }
     if (this.#own && this.#queue.size() === 0 && !this.#ended) {
       for (;;) {
-        const ownRead = this.#own;
+        const ownRead = this.#own.iterator;
         const own = await new Promise<IteratorResult<Readonly<ReadResult>>>((resolve, reject) => {
           this.#cancelPull = () => {
             resolve({ done: true, value: undefined });
@@ -185,9 +197,9 @@ class Reader implements AsyncIterableIterator<Readonly<ReadResult>> {
   public async return(): Promise<IteratorResult<Readonly<ReadResult>>> {
     this.#ended = true;
     this.#cancelPull?.();
-    // Not awaited: an async generator returns only after a pending read (e.g. remote I/O) ends,
-    // and it stops at its next message then
-    void Promise.resolve(this.#own?.return?.()).catch(() => {});
+    this.#own?.abort.abort();
+    // Sources without cancellable I/O may finish closing after their current pull.
+    void Promise.resolve(this.#own?.iterator.return?.()).catch(() => {});
     this.#queue.clear();
     this.#queuedBytes = 0;
     this.#onLeave(this);
@@ -205,6 +217,8 @@ class SharedRead {
   readonly #readRange: ReadRange;
   readonly #range: Range;
   readonly #readers = new Set<Reader>();
+  readonly #abort = new AbortController();
+  #running = false;
   #pulled?: () => void;
   /** Receive time of the last message read, and per topic how many messages had that time */
   #position?: Time;
@@ -221,6 +235,9 @@ class SharedRead {
       () => this.#pulled?.(),
       (left) => {
         this.#readers.delete(left);
+        if (this.#running && this.#readers.size === 0) {
+          this.#abort.abort();
+        }
         this.#pulled?.();
       },
     );
@@ -232,11 +249,12 @@ class SharedRead {
     if (this.#readers.size === 0) {
       return;
     }
+    this.#running = true;
     const topics: TopicSelection = new Map(
       [...this.#readers].map((reader) => [reader.topic, { topic: reader.topic }]),
     );
     try {
-      for await (const result of this.#readRange(topics, this.#range)) {
+      for await (const result of this.#readRange(topics, this.#range, this.#abort.signal)) {
         if (result.type === "message-event") {
           const { topic, receiveTime } = result.msgEvent;
           if (!this.#position || compare(receiveTime, this.#position) !== 0) {
@@ -283,11 +301,13 @@ class SharedRead {
   #detach(reader: Reader): void {
     const position = this.#position;
     let own: AsyncIterator<Readonly<ReadResult>>;
+    const abort = new AbortController();
     try {
-      own = this.#readRange(new Map([[reader.topic, { topic: reader.topic }]]), {
-        start: position ?? this.#range.start,
-        end: this.#range.end,
-      });
+      own = this.#readRange(
+        new Map([[reader.topic, { topic: reader.topic }]]),
+        { start: position ?? this.#range.start, end: this.#range.end },
+        abort.signal,
+      );
     } catch (error: unknown) {
       // Its waiting pull gets the error instead of waiting forever
       this.#readers.delete(reader);
@@ -295,6 +315,6 @@ class SharedRead {
       return;
     }
     this.#readers.delete(reader);
-    reader.detach(own, position ? (this.#atPosition.get(reader.topic) ?? 0) : 0);
+    reader.detach(own, position ? (this.#atPosition.get(reader.topic) ?? 0) : 0, abort);
   }
 }
