@@ -27,19 +27,13 @@ export const ANNOTATION_WINDOW_NS = 10_000_000_000n;
 export const MAX_ANNOTATION_HISTORY = 1000;
 
 /**
- * Drops the entries no image can still match: those older than the window, or stamped before
- * `oldestImageStampNs` (the oldest image currently shown with this topic; later images are
- * stamped at or after it). The newest entry always stays for unsynced drawing.
+ * Drops the entries more than the window behind the newest. Shown image stamps don't cut it
+ * shorter: a delayed image with an older stamp can still arrive. The newest entry always stays for
+ * unsynced drawing.
  */
-export function pruneAnnotationHistory(
-  history: AnnotationEntry[],
-  oldestImageStampNs: bigint | undefined,
-): void {
+export function pruneAnnotationHistory(history: AnnotationEntry[]): void {
   const newest = history[history.length - 1]?.stampNs;
-  let cutoff = newest == undefined ? undefined : newest - ANNOTATION_WINDOW_NS;
-  if (oldestImageStampNs != undefined && (cutoff == undefined || oldestImageStampNs > cutoff)) {
-    cutoff = oldestImageStampNs;
-  }
+  const cutoff = newest == undefined ? undefined : newest - ANNOTATION_WINDOW_NS;
   let drop = Math.max(0, history.length - MAX_ANNOTATION_HISTORY);
   while (drop < history.length - 1) {
     const stamp = history[drop]!.stampNs;

@@ -63,6 +63,8 @@ type NormalizedAnnotations = {
   // required for setting the original message on the renderable
   originalMessage: MessageEvent<RosImageMarkerArray | RosImageMarker | FoxgloveImageAnnotations>;
   annotations: Annotation[];
+  /** In the sync tree: this stamp's share of the message size */
+  bytes?: number;
 };
 
 type SynchronizationItem = {
@@ -142,11 +144,11 @@ export const WAITING_FOR_SYNC_EMPTY_HUD_ITEM: HUDItem = {
  * annotations are handed off to the SceneExtension for rendering.
  */
 /**
- * Image bytes buffered while waiting for a synchronized image + annotations set; the oldest stamps
- * go first past it. Together with {@link SYNC_WINDOW_NS} (annotations later than that are treated
+ * Image and annotation bytes buffered while waiting for a synchronized set; the oldest stamps go
+ * first past it. Together with {@link SYNC_WINDOW_NS} (annotations later than that are treated
  * as never arriving) it bounds memory when an annotation topic stalls.
  */
-export const SYNC_IMAGE_BYTES = 256 * 1024 * 1024;
+export const SYNC_BYTES = 256 * 1024 * 1024;
 
 export class MessageHandler {
   /** settings that should reflect image mode config */
@@ -164,11 +166,13 @@ export class MessageHandler {
   /** sorted tree that holds state for synchronized messages. Used to find most recent synchronized set of image and annotations. */
   readonly #tree: AVLTree<Time, SynchronizationItem>;
 
-  /** Total `data` bytes of the images in `#tree` */
-  #treeImageBytes = 0;
+  /** Total {@link itemBytes} of `#tree` */
+  #treeBytes = 0;
 
   /** Stamp of the synchronized set being shown; everything older is dropped from `#tree` */
   #match: Time | undefined;
+  /** The set at `#match`, kept even once evicted from `#tree` */
+  #shown: SynchronizationItem | undefined;
   /**
    * Stamps changed since the last render state. A new set can only complete at one of them, so the
    * whole tree is only searched again (`#rescan`) when the config or available topics change.
@@ -250,37 +254,37 @@ export class MessageHandler {
     const stamp = getTimestampFromImage(image);
     const item = this.#tree.get(stamp);
     if (item) {
-      this.#treeImageBytes -= imageBytes(item.image);
+      this.#treeBytes -= imageBytes(item.image);
       item.image = normalizedImageMessage;
     } else {
       this.#tree.set(stamp, { image: normalizedImageMessage, annotationsByTopic: new Map() });
     }
-    this.#treeImageBytes += imageBytes(normalizedImageMessage);
+    this.#treeBytes += imageBytes(normalizedImageMessage);
     this.#touched.push(stamp);
-    this.#evictOldSyncItems();
   }
 
   /**
-   * Drops stamps more than SYNC_WINDOW_NS behind the newest and the oldest ones past
-   * SYNC_IMAGE_BYTES, so images whose annotations never arrive cannot pile up. The newest stays.
+   * Drops stamps more than SYNC_WINDOW_NS behind the newest and the oldest ones past SYNC_BYTES,
+   * so sets that never complete cannot pile up. The newest stays. Runs after matching, so a set
+   * completed by the same message that would evict it is still shown.
    */
   #evictOldSyncItems(): void {
     const cutoff = toNanoSec(this.#tree.maxKey()!) - SYNC_WINDOW_NS;
     while (
       this.#tree.size > 1 &&
-      (toNanoSec(this.#tree.minKey()!) < cutoff || this.#treeImageBytes > SYNC_IMAGE_BYTES)
+      (toNanoSec(this.#tree.minKey()!) < cutoff || this.#treeBytes > SYNC_BYTES)
     ) {
       this.#shiftSyncItem();
     }
   }
 
   #shiftSyncItem(): void {
-    this.#treeImageBytes -= imageBytes(this.#tree.shift()?.[1].image);
+    this.#treeBytes -= itemBytes(this.#tree.shift()?.[1]);
   }
 
   #clearSyncItems(): void {
     this.#tree.clear();
-    this.#treeImageBytes = 0;
+    this.#treeBytes = 0;
     this.#rescan = true;
   }
 
@@ -326,14 +330,14 @@ export class MessageHandler {
         };
         this.#tree.set(stamp, item);
       }
+      const bytes = Math.ceil(messageEvent.sizeInBytes / groups.size);
+      this.#treeBytes += bytes - (item.annotationsByTopic.get(topic)?.bytes ?? 0);
       item.annotationsByTopic.set(topic, {
         originalMessage: messageEvent,
         annotations: group,
+        bytes,
       });
       this.#touched.push(stamp);
-    }
-    if (groups.size > 0) {
-      this.#evictOldSyncItems();
     }
 
     this.#emitState();
@@ -355,9 +359,9 @@ export class MessageHandler {
 
     if ("imageTopic" in newConfig && this.#config.imageTopic !== newConfig.imageTopic) {
       for (const item of this.#tree.values()) {
+        this.#treeBytes -= imageBytes(item.image);
         item.image = undefined;
       }
-      this.#treeImageBytes = 0;
       this.#lastReceivedMessages.image = undefined;
       changed = true;
     }
@@ -389,6 +393,7 @@ export class MessageHandler {
       for (const syncEntry of this.#tree.values()) {
         for (const topic of syncEntry.annotationsByTopic.keys()) {
           if (!newVisibleTopics.has(topic)) {
+            this.#treeBytes -= syncEntry.annotationsByTopic.get(topic)?.bytes ?? 0;
             syncEntry.annotationsByTopic.delete(topic);
             changed = true;
           }
@@ -505,6 +510,7 @@ export class MessageHandler {
     if (this.#rescan) {
       this.#rescan = false;
       this.#match = undefined;
+      this.#shown = undefined;
       // Newest first: stops at the first complete entry
       for (let entry = this.#tree.maxEntry(); entry; entry = this.#tree.findLessThan(entry[0])) {
         if (complete(entry[1])) {
@@ -524,15 +530,21 @@ export class MessageHandler {
     }
     this.#touched.length = 0;
 
-    // The match may have been evicted since
     const matched = this.#match && this.#tree.get(this.#match);
     if (complete(matched)) {
+      this.#shown = matched;
       while (isLessThan(this.#tree.minKey()!, this.#match!)) {
         this.#shiftSyncItem();
       }
-      return { found: true, messages: matched };
+    }
+    if (this.#tree.size > 0) {
+      this.#evictOldSyncItems();
+    }
+    if (complete(this.#shown)) {
+      return { found: true, messages: this.#shown };
     }
     this.#match = undefined;
+    this.#shown = undefined;
 
     for (let entry = this.#tree.maxEntry(); entry; entry = this.#tree.findLessThan(entry[0])) {
       const { image, annotationsByTopic } = entry[1];
@@ -579,6 +591,14 @@ type SynchronizationResult =
        */
       missingAnnotationTopics: string[] | undefined;
     };
+
+function itemBytes(item: SynchronizationItem | undefined): number {
+  let bytes = imageBytes(item?.image);
+  for (const annotations of item?.annotationsByTopic.values() ?? []) {
+    bytes += annotations.bytes ?? 0;
+  }
+  return bytes;
+}
 
 function imageBytes(image: Readonly<MessageEvent<AnyImage>> | undefined): number {
   return image?.message.data.byteLength ?? 0;

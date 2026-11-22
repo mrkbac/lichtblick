@@ -182,11 +182,11 @@ function isStaticTransformTopic(topic: string): boolean {
 const TEXTURE_TOO_LARGE = "TEXTURE_TOO_LARGE";
 const POINTS_NOT_DRAWN = "POINTS_NOT_DRAWN";
 
-/** Settings path of the renderable `object` belongs to */
+/** Settings path of the renderable `object` belongs to; children may carry an empty one */
 function settingsPathOf(object: THREE.Object3D): Path | undefined {
   for (let node: THREE.Object3D | null = object; node; node = node.parent) {
     const path = (node.userData as { settingsPath?: Path }).settingsPath;
-    if (path) {
+    if (path && path.length > 0) {
       return path;
     }
   }
@@ -1868,15 +1868,14 @@ export class Renderer extends EventEmitter<RendererEvents> {
       }
       const key = path.join("\n");
       current.set(key, path);
-      if (!this.#skippedPointPaths.has(key)) {
-        this.settings.errors.add(
-          path,
-          POINTS_NOT_DRAWN,
-          reason === "tooLarge"
-            ? "Too many points to draw at once on this GPU; reduce the decay time or point count"
-            : `Only ${MAX_POINT_SETS} point layers can be drawn at once; hide some to show this one`,
-        );
-      }
+      // A no-op while unchanged; re-adds it after something cleared the layer's errors
+      this.settings.errors.add(
+        path,
+        POINTS_NOT_DRAWN,
+        reason === "tooLarge"
+          ? "Too many points to draw at once on this GPU; reduce the decay time or point count"
+          : `Only ${MAX_POINT_SETS} point layers can be drawn at once; hide some to show this one`,
+      );
     }
     for (const [key, path] of this.#skippedPointPaths) {
       if (!current.has(key)) {

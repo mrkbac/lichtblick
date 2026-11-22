@@ -20,7 +20,7 @@ import { MessageEvent } from "@lichtblick/suite";
 import { HUDItemManager } from "@lichtblick/suite-base/panels/ThreeDeeRender/HUDItemManager";
 import {
   MessageHandler,
-  SYNC_IMAGE_BYTES,
+  SYNC_BYTES,
   WAITING_FOR_BOTH_HUD_ITEM,
   WAITING_FOR_CALIBRATION_HUD_ITEM,
   WAITING_FOR_IMAGE_EMPTY_HUD_ITEM,
@@ -325,7 +325,7 @@ describe("MessageHandler: synchronized = true", () => {
   it("drops the oldest buffered images past the byte budget", () => {
     const messageHandler = syncedHandler();
     // One buffer shared by every image: only byteLength matters
-    const third = new Uint8Array(SYNC_IMAGE_BYTES / 3);
+    const third = new Uint8Array(SYNC_BYTES / 3);
     for (let time = 1n; time <= 4n; time++) {
       messageHandler.handleRawImage(imageAt(time, third));
     }
@@ -342,6 +342,36 @@ describe("MessageHandler: synchronized = true", () => {
     }
     messageHandler.handleAnnotations(annotationsAt(5n));
     expect(renderedStamp(messageHandler)).toEqual(fromNanoSec(5n));
+  });
+
+  it("shows a set completed by the message whose other stamps evict it", () => {
+    const messageHandler = syncedHandler();
+    messageHandler.handleRawImage(imageAt(SEC));
+    messageHandler.handleAnnotations(
+      wrapInMessageEvent(
+        "annotations",
+        "foxglove.ImageAnnotations",
+        12n * SEC,
+        createCircleAnnotations([SEC, 12n * SEC]),
+      ) as MessageEvent<ImageAnnotations>,
+    );
+    expect(renderedStamp(messageHandler)).toEqual(fromNanoSec(SEC));
+    messageHandler.handleRawImage(imageAt(12n * SEC));
+    expect(renderedStamp(messageHandler)).toEqual(fromNanoSec(12n * SEC));
+  });
+
+  it("counts annotations waiting for their image against the byte budget", () => {
+    const messageHandler = syncedHandler();
+    for (let time = 1n; time <= 4n; time++) {
+      messageHandler.handleAnnotations({
+        ...annotationsAt(time),
+        sizeInBytes: Math.floor(SYNC_BYTES / 3),
+      });
+    }
+    messageHandler.handleRawImage(imageAt(1n));
+    expect(renderedStamp(messageHandler)).toBeUndefined();
+    messageHandler.handleRawImage(imageAt(2n));
+    expect(renderedStamp(messageHandler)).toEqual(fromNanoSec(2n));
   });
 
   it("matches the newest complete set when older images are still waiting", () => {

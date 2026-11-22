@@ -88,32 +88,32 @@ describe("pruneAnnotationHistory", () => {
     const history = Array.from({ length: 30 }, (_, i) =>
       makeAnnotationEntry([{ ...circle(0), stamp: { sec: 0, nsec: i * 100_000_000 } }]),
     );
-    pruneAnnotationHistory(history, 0n);
+    pruneAnnotationHistory(history);
     expect(history).toHaveLength(30);
     expect(pickAnnotations(history, 0n, { sync: true })).toBe(history[0]);
   });
 
   it("drops messages more than the window behind the newest", () => {
     const history = entries([0, 1, 5, 11]);
-    pruneAnnotationHistory(history, undefined);
+    pruneAnnotationHistory(history);
     expect(secs(history)).toEqual([1, 5, 11]);
   });
 
-  it("drops messages stamped before the oldest shown image, keeping the newest", () => {
+  it("keeps messages older than the shown image for a delayed image", () => {
     const history = entries([1, 2, 3]);
-    pruneAnnotationHistory(history, 2n * S);
-    expect(secs(history)).toEqual([2, 3]);
-    pruneAnnotationHistory(history, 9n * S);
-    expect(secs(history)).toEqual([3]);
+    // The tile shows the image at 3, then a delayed image stamped 1 arrives
+    pruneAnnotationHistory(history);
+    expect(pickAnnotations(history, 3n * S, { sync: true })).toBe(history[2]);
+    expect(pickAnnotations(history, 1n * S, { sync: true })).toBe(history[0]);
   });
 
   it("drops unstamped messages unless newest, and caps streams whose stamps don't advance", () => {
     const history = [makeAnnotationEntry([]), ...entries([1]), makeAnnotationEntry([])];
-    pruneAnnotationHistory(history, undefined);
+    pruneAnnotationHistory(history);
     expect(history.map((entry) => entry.stampNs)).toEqual([S, undefined]);
 
     const stuck = entries(Array.from({ length: MAX_ANNOTATION_HISTORY + 5 }, () => 1));
-    pruneAnnotationHistory(stuck, undefined);
+    pruneAnnotationHistory(stuck);
     expect(stuck).toHaveLength(MAX_ANNOTATION_HISTORY);
   });
 });

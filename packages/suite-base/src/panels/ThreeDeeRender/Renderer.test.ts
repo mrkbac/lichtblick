@@ -750,12 +750,19 @@ describe("3D Renderer", () => {
       const layer = new THREE.Object3D();
       layer.userData.settingsPath = ["topics", "/points"];
       const points = new THREE.Object3D();
+      // Child renderables may carry an empty path; the layer's is the one to report on
+      points.userData.settingsPath = [];
       layer.add(points);
       const prepare = vi.spyOn(renderer.pointRaster, "prepare").mockImplementation(() => {
         renderer.pointRaster.skipped.set(points as never, "tooManySets");
       });
       const errorAt = () => renderer.settings.errors.errors.errorAtPath(["topics", "/points"]);
       try {
+        renderer.animationFrame();
+        expect(errorAt()).toMatch(/point layers/);
+
+        // Settings errors are cleared on seek; a layer still skipped gets its warning back
+        renderer.settings.errors.clear();
         renderer.animationFrame();
         expect(errorAt()).toMatch(/point layers/);
 

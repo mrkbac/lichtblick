@@ -146,7 +146,7 @@ export class GridRenderer {
         // A malformed message must not stop the rest of the frame (and `done()`) from running.
         try {
           history.push(makeAnnotationEntry(normalizeAnnotations(event.message, event.schemaName)));
-          pruneAnnotationHistory(history, this.#oldestImageStamp(event.topic));
+          pruneAnnotationHistory(history);
           (annotated ??= new Set()).add(event.topic);
         } catch (error) {
           this.#warnMalformed(event.topic, error);
@@ -175,21 +175,6 @@ export class GridRenderer {
         }
       }
     }
-  }
-
-  /** Stamp of the oldest image shown on a tile that draws `annotationTopic` */
-  #oldestImageStamp(annotationTopic: string): bigint | undefined {
-    let oldest: bigint | undefined;
-    for (const tile of this.#tiles.values()) {
-      if (
-        tile.stampNs != undefined &&
-        (oldest == undefined || tile.stampNs < oldest) &&
-        tile.annotationTopics.includes(annotationTopic)
-      ) {
-        oldest = tile.stampNs;
-      }
-    }
-    return oldest;
   }
 
   /** Drops queued video frames and restarts decoding at the next keyframe (the player backfills it). */
