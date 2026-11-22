@@ -346,6 +346,9 @@ export default class UserScriptPlayer implements Player {
   // failed blocks right away, then converts them again in the background, outside the player state
   // lock, so the alert comes back without delaying the seek.
   #retryFailedBlocks = false;
+  // Bumped whenever the converted blocks are dropped (converters, topics or watched variables
+  // changed); a background retry started under another generation is obsolete.
+  #conversionGeneration = 0;
   // `failed`: the result holds a failed block, so a reset must not reuse it as is.
   #lastMessageCache?: { source: BlockCache; converted: BlockCache; failed: boolean };
 
@@ -1056,6 +1059,7 @@ export default class UserScriptPlayer implements Player {
       this.#convertedBlocksKey = key;
       this.#convertedBlocks = new WeakMap();
       this.#failedBlocks = new WeakMap();
+      this.#conversionGeneration++;
       this.#lastMessageCache = undefined;
     }
     if (this.#lastMessageCache?.source === source && !this.#lastMessageCache.failed) {
@@ -1108,7 +1112,7 @@ export default class UserScriptPlayer implements Player {
     const retry = this.#retryFailedBlocks;
     this.#retryFailedBlocks = false;
     if (retry && staleFailedBlocks.length > 0) {
-      void this.#retryFailedBlocksOf(source, staleFailedBlocks, context);
+      void this.#retryFailedBlocksOf(staleFailedBlocks, context, this.#conversionGeneration);
     }
     return { ...progress, messageCache: converted };
   }
@@ -1145,49 +1149,61 @@ export default class UserScriptPlayer implements Player {
   }
 
   /**
-   * Converts failed blocks of `source` again, outside the player state lock (a converter error
-   * raises its alert again). Blocks that now convert replace their failed result and the state is
-   * emitted again, unless the converters or their inputs changed in the meantime.
+   * Converts failed blocks again, outside the player state lock (a converter error raises its
+   * alert again). New results (converted, or a different partial result) replace the old ones in
+   * the latest blocks and the state is emitted again. Dropped as soon as the generation changes,
+   * since the conversion settings it captured are then obsolete.
    */
   async #retryFailedBlocksOf(
-    source: BlockCache,
     retryBlocks: readonly MessageBlock[],
     context: BlockConversion,
+    generation: number,
   ): Promise<void> {
     // Let the pass that scheduled this finish and emit its state (e.g. the seek) first.
     await new Promise((resolve) => setTimeout(resolve, 0));
-    const convertedBlocks = this.#convertedBlocks;
-    const failedBlocks = this.#failedBlocks;
-    let changed = false;
+    const current = () => this.#conversionGeneration === generation;
+    const results = new Map<MessageBlock, MessageBlock>();
     for (const block of retryBlocks) {
+      if (!current()) {
+        return;
+      }
       const result = await this.#convertBlock(block, context);
-      if (this.#failedBlocks !== failedBlocks) {
-        return; // the converted blocks were dropped meanwhile; the next pass starts over
+      if (!current()) {
+        return;
       }
-      if (result && !result.failed) {
-        failedBlocks.delete(block);
-        convertedBlocks.set(block, result.converted);
-        changed = true;
+      if (!result) {
+        continue;
       }
+      if (result.failed) {
+        this.#failedBlocks.set(block, result.converted);
+      } else {
+        this.#failedBlocks.delete(block);
+        this.#convertedBlocks.set(block, result.converted);
+      }
+      results.set(block, result.converted);
     }
-    const last = this.#lastMessageCache;
-    const playerState = this.#playerState;
-    if (!changed || last?.source !== source) {
+    const latest = this.#lastMessageCache;
+    if (results.size === 0 || !latest) {
       return;
     }
-    const converted: BlockCache = {
-      ...last.converted,
-      blocks: last.converted.blocks.map((block, i) => {
-        const sourceBlock = source.blocks[i];
-        return (sourceBlock && convertedBlocks.get(sourceBlock)) ?? block;
-      }),
-    };
+    // Replace by source block identity, in the latest blocks (which may differ from the retried).
+    const blocks = latest.converted.blocks.map((block, i) => {
+      const sourceBlock = latest.source.blocks[i];
+      return (sourceBlock && results.get(sourceBlock)) ?? block;
+    });
+    if (blocks.every((block, i) => block === latest.converted.blocks[i])) {
+      return;
+    }
+    const converted: BlockCache = { ...latest.converted, blocks };
+    const playerState = this.#playerState;
     this.#lastMessageCache = {
-      source,
+      ...latest,
       converted,
-      failed: source.blocks.some((block) => block != undefined && failedBlocks.has(block)),
+      failed: latest.source.blocks.some(
+        (block) => block != undefined && this.#failedBlocks.has(block),
+      ),
     };
-    if (playerState?.progress.messageCache !== last.converted) {
+    if (playerState?.progress.messageCache !== latest.converted) {
       // A newer state is on its way; make its pass pick up the new blocks.
       this.#convertedBlocksInputs = [];
       return;
