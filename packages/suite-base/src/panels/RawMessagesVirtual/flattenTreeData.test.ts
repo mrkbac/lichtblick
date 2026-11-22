@@ -733,15 +733,15 @@ describe("flattenTreeData", () => {
 
       // Then
       expect(result).toHaveLength(10);
-      expect(result[0]).toMatchObject({ key: "[0 … 99]", label: "[0 … 99]", isRange: true });
-      expect(result[9]).toMatchObject({ key: "[900 … 999]", label: "[900 … 999]" });
+      expect(result[0]).toMatchObject({ key: "@0+100", label: "[0 … 99]", isRange: true });
+      expect(result[9]).toMatchObject({ key: "@900+100", label: "[900 … 999]" });
     });
 
     it("shows the elements of an expanded range under their usual keys", () => {
       // Given
       const values = new Float32Array(1000).map((_, i) => i);
       expandedNodes.add("values");
-      expandedNodes.add(`[100 … 199]${PATH_NAME_AGGREGATOR}values`);
+      expandedNodes.add(`@100+100${PATH_NAME_AGGREGATOR}values`);
 
       // When
       const result = flattenTreeData({ values }, (key) => expandedNodes.has(key));
@@ -754,8 +754,25 @@ describe("flattenTreeData", () => {
         value: 150,
         depth: 2,
         keyPath: [150, "values"],
-        parentPath: `[100 … 199]${PATH_NAME_AGGREGATOR}values`,
+        parentPath: `@100+100${PATH_NAME_AGGREGATOR}values`,
       });
+    });
+
+    it("keeps a range's key when the array length changes", () => {
+      // Given an open last range
+      expandedNodes.add(`@900+100${PATH_NAME_AGGREGATOR}values`);
+      expandedNodes.add("values");
+      const flatten = (length: number) =>
+        flattenTreeData({ values: new Float32Array(length) }, (key) => expandedNodes.has(key));
+
+      // When the array shrinks
+      const result = flatten(950);
+
+      // Then the range stays open with its new bounds
+      expect(result.find((node) => node.label === "[900 … 949]")?.key).toBe(
+        `@900+100${PATH_NAME_AGGREGATOR}values`,
+      );
+      expect(result.at(-1)?.key).toBe(`949${PATH_NAME_AGGREGATOR}values`);
     });
 
     it("keeps ranges collapsed when everything is expanded", () => {
@@ -772,8 +789,8 @@ describe("flattenTreeData", () => {
     it("nests ranges so huge arrays stay at most a hundred rows per level", () => {
       // Given
       const data = new Uint8Array(3_200_000);
-      expandedNodes.add("[1000000 … 1999999]");
-      expandedNodes.add(`[1000000 … 1009999]${PATH_NAME_AGGREGATOR}[1000000 … 1999999]`);
+      expandedNodes.add("@1000000+1000000");
+      expandedNodes.add(`@1000000+10000${PATH_NAME_AGGREGATOR}@1000000+1000000`);
 
       // When
       const result = flattenTreeData(data, (key) => expandedNodes.has(key));
@@ -786,9 +803,7 @@ describe("flattenTreeData", () => {
         "[1000000 … 1009999]",
       ]);
       // Each range is keyed under the one enclosing it, for the breadcrumb
-      expect(result[3]?.parentPath).toBe(
-        `[1000000 … 1009999]${PATH_NAME_AGGREGATOR}[1000000 … 1999999]`,
-      );
+      expect(result[3]?.parentPath).toBe(`@1000000+10000${PATH_NAME_AGGREGATOR}@1000000+1000000`);
     });
   });
 

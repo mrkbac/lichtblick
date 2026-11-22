@@ -11,7 +11,10 @@ import {
   diffLabels,
   TreeNode,
 } from "@lichtblick/suite-base/panels/RawMessagesCommon/types";
-import { typedArrayToArray } from "@lichtblick/suite-base/panels/RawMessagesCommon/utils";
+import {
+  rangeKey,
+  typedArrayToArray,
+} from "@lichtblick/suite-base/panels/RawMessagesCommon/utils";
 import { isTypedArray } from "@lichtblick/suite-base/types/isTypedArray";
 
 const DIFF_STATUS_BY_LABEL: Record<string, DiffStatus> = {
@@ -179,12 +182,10 @@ export function flattenTreeData(
     const span = rangeSpan(end - start);
     for (let rangeStart = start; rangeStart < end; rangeStart += span) {
       const rangeEnd = Math.min(rangeStart + span, end);
-      const label = `[${rangeStart} … ${rangeEnd - 1}]`;
-      // Nested under the enclosing range, so the breadcrumb shows every range level
-      const key = rowParent ? `${label}${PATH_NAME_AGGREGATOR}${rowParent}` : label;
+      const key = rangeKey(rangeStart, span, rowParent);
       nodes.push({
         key,
-        label,
+        label: `[${rangeStart} … ${rangeEnd - 1}]`,
         // The whole array, so "expand all" (which skips long arrays) leaves the range collapsed
         value: array,
         depth: rowDepth,
