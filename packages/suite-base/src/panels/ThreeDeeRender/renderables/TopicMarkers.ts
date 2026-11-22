@@ -216,7 +216,7 @@ export class TopicMarkers extends Renderable<MarkerTopicUserData> {
           .applyQuaternion(tempQuaternion);
         renderable.position.set(p.x + tempPosition.x, p.y + tempPosition.y, p.z + tempPosition.z);
         const o = pose.orientation;
-        renderable.quaternion.set(o.x, o.y, o.z, o.w).premultiply(tempQuaternion);
+        renderable.quaternion.set(o.x, o.y, o.z, o.w).premultiply(tempQuaternion).normalize();
       }
     }
     if (missingTransform != undefined) {
