@@ -67,6 +67,39 @@ describe("WorkerSocketAdapter", () => {
     expect(received).toEqual([{ data: first }, { data: second }]);
   });
 
+  it("WorkerSocketAdapter should keep delivering a batch after a frame's handler throws", () => {
+    const socket = new WorkerSocketAdapter(wsUrl);
+    const reportError = vi.fn();
+    vi.stubGlobal("reportError", reportError);
+    const error = new Error("bad frame");
+    const received: unknown[] = [];
+    socket.onmessage = (event) => {
+      received.push(event);
+      if (received.length === 1) {
+        throw error;
+      }
+    };
+
+    workerMock.onmessage?.({ data: { type: "messages", data: ["a", "b", "c"] } });
+
+    expect(received).toEqual([{ data: "a" }, { data: "b" }, { data: "c" }]);
+    expect(reportError).toHaveBeenCalledWith(error);
+    vi.unstubAllGlobals();
+  });
+
+  it("WorkerSocketAdapter should stop delivering a batch once the socket closed", () => {
+    const socket = new WorkerSocketAdapter(wsUrl);
+    const received: unknown[] = [];
+    socket.onmessage = (event) => {
+      received.push(event);
+      workerMock.onmessage?.({ data: { type: "close", data: {} } } as MessageEvent);
+    };
+
+    workerMock.onmessage?.({ data: { type: "messages", data: ["a", "b"] } });
+
+    expect(received).toEqual([{ data: "a" }]);
+  });
+
   it.each([
     [
       {

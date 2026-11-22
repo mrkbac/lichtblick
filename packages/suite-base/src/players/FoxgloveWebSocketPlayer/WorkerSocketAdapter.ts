@@ -53,8 +53,16 @@ export default class WorkerSocketAdapter implements IWebSocket {
           break;
         case "messages":
           for (const data of event.data.data) {
-            // The handler may close the socket (and drop this adapter's handlers) mid-batch
-            this.onmessage?.({ data });
+            if (this.#connectionClosed) {
+              break;
+            }
+            // Each frame used to be its own task: a throw for one frame is reported like an
+            // uncaught error and doesn't drop the frames after it
+            try {
+              this.onmessage?.({ data });
+            } catch (error) {
+              reportError(error);
+            }
           }
           break;
       }
