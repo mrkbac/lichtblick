@@ -3,6 +3,7 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
+import { LabelNodeMaterial } from "@foxglove/three-text/webgpu";
 import * as THREE from "three";
 import { LineSegments2 } from "three/examples/jsm/lines/webgpu/LineSegments2.js";
 import type { Mock } from "vitest";
@@ -313,6 +314,36 @@ describe("MarkerBatches", () => {
     topic.startFrame(0n, "map", "map");
     expect(glyphBatches.children).toHaveLength(0);
     expect(mesh(2).layers.mask).toBe(1 << LAYER_DEFAULT);
+  });
+
+  it("refreshes text scale and glyph buffers on paused redraws", () => {
+    topic.addMarkerMessage({ ...marker(1, MarkerType.TEXT_VIEW_FACING), text: "ABC" }, 0n);
+    topic.addMarkerMessage({ ...marker(2, MarkerType.TEXT_VIEW_FACING), text: "ABC" }, 0n);
+    topic.startFrame(0n, "map", "map");
+
+    const glyphBatches = topic.children.find((child) => child instanceof TextMarkerBatches)!;
+    const batch = glyphBatches.children[0] as THREE.Mesh<
+      THREE.InstancedBufferGeometry,
+      LabelNodeMaterial
+    >;
+    const glyphPosition = batch.geometry.getAttribute(
+      "instanceBoxPosition",
+    ) as THREE.InterleavedBufferAttribute;
+    const version = glyphPosition.data.version;
+    const setScale = vi.spyOn(batch.material, "setScale");
+    topic.startFrame(0n, "map", "map");
+    expect(setScale).not.toHaveBeenCalled();
+    expect(glyphPosition.data.version).toBe(version);
+
+    renderer.labelPool.setScaleFactor(2);
+    topic.startFrame(0n, "map", "map");
+    expect(setScale).toHaveBeenLastCalledWith(
+      6 / renderer.labelPool.fontManager.atlasData.lineHeight,
+    );
+
+    renderer.labelPool.updateAtlas("Ω");
+    topic.startFrame(0n, "map", "map");
+    expect(glyphPosition.data.version).toBeGreaterThan(version);
   });
 
   it("stores instances relative to the batch origin, so map-scale coordinates keep precision", () => {
