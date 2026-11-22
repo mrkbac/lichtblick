@@ -177,3 +177,17 @@ export function detectConnection(input: string): { sourceId: string; url: string
   }
   return undefined;
 }
+
+/** Recognize legacy lists in the path, leaving any query or fragment byte-for-byte intact. */
+export function splitRemoteRecordingUrlList(value: string): string[] | undefined {
+  const tailStart = value.search(/[?#]/);
+  const path = tailStart === -1 ? value : value.slice(0, tailStart);
+  const urls = path.split(/,\s*(?=https?:\/\/)/i).map((entry) => entry.trim());
+  if (urls.length < 2) {
+    return undefined;
+  }
+  if (tailStart !== -1) {
+    urls[urls.length - 1] = urls[urls.length - 1]! + value.slice(tailStart);
+  }
+  return urls.every((url) => detectConnection(url)?.sourceId === "remote-file") ? urls : undefined;
+}

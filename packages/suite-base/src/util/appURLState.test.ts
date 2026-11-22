@@ -60,6 +60,25 @@ describe("app state url parser", () => {
       });
     });
 
+    it("restores a legacy list in a single remote URL parameter", () => {
+      const url = urlBuilder();
+      const last = "https://example.com/second.mcap?value=a,https://example.com/extra.mcap";
+      url.searchParams.set("ds", "remote-file");
+      url.searchParams.set("ds.url", "https://example.com/first.mcap," + last);
+      expect(parseAppURLState(url)).toEqual({
+        ds: "remote-file",
+        dsParamsArray: { urls: ["https://example.com/first.mcap", last] },
+      });
+    });
+
+    it("preserves a comma and URL inside the query of a signed recording URL", () => {
+      const url = urlBuilder();
+      const recording = "https://example.com/first.mcap?value=a,https://example.com/second.mcap";
+      url.searchParams.set("ds", "remote-file");
+      url.searchParams.set("ds.url", recording);
+      expect(parseAppURLState(url)).toEqual({ ds: "remote-file", dsParams: { url: recording } });
+    });
+
     it("parses handles duplicate dsParams correctly", () => {
       const url = urlBuilder();
       url.searchParams.append("ds", "remote-file");
