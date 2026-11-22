@@ -185,7 +185,8 @@ export function stopThreeAnimationLoop(gl: THREE.WebGPURenderer): () => void {
   return () => {
     nodeFrame.update?.();
     // GPU timestamp queries are keyed by frame, as three's loop did
-    gl.info.frame = nodeFrame.frameId ?? gl.info.frame;
+    // Read-only in three's types; three's own loop writes it the same way
+    (gl.info as { frame: number }).frame = nodeFrame.frameId ?? gl.info.frame;
   };
 }
 
