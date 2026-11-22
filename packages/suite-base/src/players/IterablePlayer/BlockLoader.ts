@@ -87,6 +87,8 @@ export class BlockLoader {
   /** Bumped when what to load changes (topics, playhead block), so a finished load runs again */
   #generation = 0;
   #arrayBytes = new WeakMap<readonly MessageEvent[], number>();
+  /** The blocks the running read goes over */
+  #reading?: { start: number; end: number };
 
   public constructor(args: BlockLoaderArgs) {
     this.#source = args.source;
@@ -311,9 +313,10 @@ export class BlockLoader {
   }
 
   /**
-   * Moves the playhead that loading and eviction are ordered around. A jump (a seek) restarts the
-   * running load around the new playhead; playing on into the next block only lets a load that
-   * ran out of budget continue, now that blocks behind count farther.
+   * Moves the playhead that loading and eviction are ordered around. If the new playhead block
+   * still needs loading and the running read doesn't go over it (e.g. a seek), that read stops so
+   * loading starts over around the playhead. Otherwise (e.g. playing over loaded data) it goes on,
+   * and a load that ran out of budget runs again, now that blocks behind count farther.
    */
   public setPlayhead(time: Time): void {
     const previous = this.#playheadBlock();
@@ -322,7 +325,9 @@ export class BlockLoader {
     if (current === previous) {
       return;
     }
-    if (current < previous || current > previous + 1) {
+    const needed = (this.#blocks[current]?.needTopics.size ?? this.#topics.size) > 0;
+    const reading = this.#reading;
+    if (needed && !(reading && reading.start <= current && current <= reading.end)) {
       this.#abortController.abort();
     }
     this.#generation++;
@@ -347,6 +352,7 @@ export class BlockLoader {
       const generation = this.#generation;
 
       await this.#load({ progress: args.progress });
+      this.#reading = undefined;
 
       // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
       if (this.#stopped) {
@@ -426,22 +432,33 @@ export class BlockLoader {
         break;
       }
 
-      // Read on forward while the next block needs the same topics and is not farther than the
-      // nearest block on the other side of the playhead that needs loading
-      let nearestOtherSide = Infinity;
-      for (let id = 0; id < this.#blocks.length; id++) {
-        if (id >= playhead !== blockId >= playhead && fetchTopics(id).size > 0) {
-          nearestOtherSide = Math.min(nearestOtherSide, this.#distance(id, playhead));
-        }
-      }
+      // Read the neighboring blocks that need the same topics in the same read, as many as the
+      // budget likely holds (each read reopens the source, decompressing the chunks at its ends
+      // again): forward, and behind the playhead also backward, farthest block first
+      const loadedBlocks = this.#blocks.filter((block) => (block?.sizeInBytes ?? 0) > 0).length;
+      let room =
+        loadedBlocks > 0
+          ? Math.floor((budget.capacity - budget.used()) / (budget.used() / loadedBlocks))
+          : Infinity;
       let endBlockId = blockId;
       while (
+        room > 1 &&
         endBlockId + 1 < this.#blocks.length &&
-        this.#distance(endBlockId + 1, playhead) <= nearestOtherSide &&
         _.isEqual(fetchTopics(endBlockId + 1), topicsToFetch)
       ) {
         endBlockId++;
+        room--;
       }
+      while (
+        room > 1 &&
+        blockId < playhead &&
+        blockId > 0 &&
+        _.isEqual(fetchTopics(blockId - 1), topicsToFetch)
+      ) {
+        blockId--;
+        room--;
+      }
+      this.#reading = { start: blockId, end: endBlockId };
 
       // Compute the cursor start/end time from the range of blocks we need to load
       const cursorStartTime = this.#blockIdToStartTime(blockId);
@@ -653,17 +670,33 @@ export class BlockLoader {
       }
     }
     victims.sort((a, b) => b.distance - a.distance);
-    for (const { id, topic } of victims) {
-      if (budget.fits(0)) {
-        return;
+    // Evict only if that makes room: otherwise the block being read is dropped anyway and the
+    // evicted data would be lost for nothing
+    const plan: typeof victims = [];
+    let freed = 0;
+    for (const victim of victims) {
+      if (budget.used() - freed <= budget.capacity) {
+        break;
       }
-      const block = this.#blocks[id];
-      const messages = block?.messagesByTopic[topic];
-      if (!block || !messages || (topicBytes.get(topic) ?? 0) <= fairShare) {
+      const messages = this.#blocks[victim.id]?.messagesByTopic[victim.topic];
+      if (!messages || (topicBytes.get(victim.topic) ?? 0) <= fairShare) {
         continue;
       }
       const bytes = this.#bytesOf(messages);
-      topicBytes.set(topic, (topicBytes.get(topic) ?? 0) - bytes);
+      topicBytes.set(victim.topic, (topicBytes.get(victim.topic) ?? 0) - bytes);
+      freed += bytes;
+      plan.push(victim);
+    }
+    if (budget.used() - freed > budget.capacity) {
+      return;
+    }
+    for (const { id, topic } of plan) {
+      const block = this.#blocks[id];
+      const messages = block?.messagesByTopic[topic];
+      if (!block || !messages) {
+        continue;
+      }
+      const bytes = this.#bytesOf(messages);
       const { [topic]: _evicted, ...messagesByTopic } = block.messagesByTopic;
       const loaded = { ...this.#loadedSubscriptions[id] };
       delete loaded[topic];
