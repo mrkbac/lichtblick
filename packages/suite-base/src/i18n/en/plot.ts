@@ -22,7 +22,6 @@ export const plot = {
   axisLabel: "Axis label",
   axisScales: "Axis scales",
   center: "Center",
-  addSeries: "Add series",
   addSeriesPlaceholder: "Field, or a message to add all its fields",
   editSeriesHint: "Click to edit the path",
   dragSeriesHint: "Drag onto another panel to add this series",
