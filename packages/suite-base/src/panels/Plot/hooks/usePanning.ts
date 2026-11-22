@@ -16,36 +16,16 @@ const usePanning = (
       return;
     }
 
-    const boundingClientRect = () => canvasDiv.getBoundingClientRect().toJSON() as DOMRect;
     return listenForPan(canvasDiv, 10, {
-      onStart: ({ deltaX, deltaY, center }) => {
+      onStart: ({ deltaX, deltaY }) => {
         draggingRef.current = true;
-        coordinator.addInteractionEvent({
-          type: "panstart",
-          cancelable: false,
-          deltaY,
-          deltaX,
-          center,
-          boundingClientRect: boundingClientRect(),
-        });
+        coordinator.addInteractionEvent({ type: "panstart", deltaX, deltaY });
       },
       onMove: ({ deltaX, deltaY }) => {
-        coordinator.addInteractionEvent({
-          type: "panmove",
-          cancelable: false,
-          deltaY,
-          deltaX,
-          boundingClientRect: boundingClientRect(),
-        });
+        coordinator.addInteractionEvent({ type: "panmove", deltaX, deltaY });
       },
-      onEnd: ({ deltaX, deltaY }) => {
-        coordinator.addInteractionEvent({
-          type: "panend",
-          cancelable: false,
-          deltaY,
-          deltaX,
-          boundingClientRect: boundingClientRect(),
-        });
+      onEnd: () => {
+        coordinator.addInteractionEvent({ type: "panend" });
         // We need to do this a little bit later so that the onClick handler still sees
         // draggingRef.current===true and can skip the seek.
         setTimeout(() => {

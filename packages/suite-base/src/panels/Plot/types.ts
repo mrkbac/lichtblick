@@ -6,6 +6,10 @@ import { TFunction } from "i18next";
 import { RefObject } from "react";
 
 import { Immutable, SettingsTreeActionUpdatePayload } from "@lichtblick/suite";
+import type {
+  PanInput,
+  WheelInput,
+} from "@lichtblick/suite-base/components/Chart/worker/ChartViewport";
 import { PanelContextMenuItem } from "@lichtblick/suite-base/components/PanelContextMenu";
 import { TimeBasedChartTooltipData } from "@lichtblick/suite-base/components/TimeBasedChart/TimeBasedChartTooltipContent";
 import { OffscreenCanvasRenderer } from "@lichtblick/suite-base/panels/Plot/OffscreenCanvasRenderer";
@@ -41,44 +45,12 @@ export type YScale = {
   bottom: number;
 };
 
-export type BaseInteractionEvent = {
-  cancelable: boolean;
-  deltaY: number;
-  deltaX: number;
-
-  boundingClientRect: DOMRect;
-};
-
-export type MouseBase = BaseInteractionEvent & {
-  clientX: number;
-  clientY: number;
-};
-
-export type ZoomMode = "x" | "y" | "xy";
-
-export type WheelInteractionEvent = {
-  type: "wheel";
-  /** Overrides the zoom mode for this event (modifier keys). Hovering an axis always zooms only that axis. */
-  zoomMode?: ZoomMode;
-} & BaseInteractionEvent &
-  MouseBase;
-
-export type PanStartInteractionEvent = {
-  type: "panstart";
-} & BaseInteractionEvent & {
-    center: { x: number; y: number };
-  };
-export type PanMoveInteractionEvent = {
-  type: "panmove";
-} & BaseInteractionEvent;
-
-export type PanEndInteractionEvent = { type: "panend" } & BaseInteractionEvent;
+export type ZoomMode = NonNullable<WheelInput["zoomMode"]>;
 
 export type InteractionEvent =
-  | WheelInteractionEvent
-  | PanStartInteractionEvent
-  | PanMoveInteractionEvent
-  | PanEndInteractionEvent;
+  | (WheelInput & { type: "wheel" })
+  | (PanInput & { type: "panstart" | "panmove" })
+  | { type: "panend" };
 
 export type Datum = { x: number; y: number } & { value?: OriginalValue };
 
@@ -150,31 +122,6 @@ export type UpdateAction = {
   holdYRange?: boolean;
   /** Forget the held y ranges, e.g. after a seek or a view reset */
   resetHeldYRange?: boolean;
-};
-
-// allows us to override the chart.ctx instance field which zoom plugin uses for adding event listeners
-export type MutableContext<T> = Omit<Chart, "ctx"> & { ctx: T };
-
-export type PanEvent = {
-  deltaX: number;
-  deltaY: number;
-};
-
-export type PanStartEvent = PanEvent & {
-  center: { x: number; y: number };
-  target: {
-    getBoundingClientRect(): DOMRect;
-  };
-};
-
-export type ZoomableChart = Chart & {
-  $zoom: {
-    /** Plugin options as resolved at the last chart update; read by the wheel handler. */
-    _options?: { zoom?: { mode?: ZoomMode; overScaleMode?: ZoomMode } };
-    panStartHandler(event: PanStartEvent): void;
-    panHandler(event: PanEvent): void;
-    panEndHandler(): void;
-  };
 };
 
 export type PlotProps = {

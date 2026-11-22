@@ -19,11 +19,6 @@ import { BasicBuilder } from "@lichtblick/test-builders";
 import ChartJSManager, { InitOpts } from "./ChartJSManager";
 import { lineSegmentLabelColor } from "./lineSegments";
 
-// The plugin resolves to its UMD build, whose export is the plugin itself rather than `Zoom`.
-vi.mock("@foxglove/chartjs-plugin-zoom", async () => ({
-  Zoom: (await vi.importActual<{ default: unknown }>("@foxglove/chartjs-plugin-zoom")).default,
-}));
-
 Chart.register(LineElement, PointElement, ScatterController, LinearScale);
 
 // Mirrors the datasets produced by the State Transitions panel (see messagesToDataset.ts).
@@ -113,11 +108,6 @@ function toPixel(scales: RpcScales, point: { x: number; y: number }): { x: numbe
     x: x.pixelMin + ((point.x - x.min) / (x.max - x.min)) * (x.pixelMax - x.pixelMin),
     y: y.pixelMin + ((point.y - y.min) / (y.max - y.min)) * (y.pixelMax - y.pixelMin),
   };
-}
-
-// The manager receives plain objects over RPC, not real DOM or Hammer events.
-function makeRpcEvent<T>(props: Record<string, unknown>): T {
-  return { cancelable: false, target: { boundingClientRect: BOUNDING_RECT }, ...props } as T;
 }
 
 describe("ChartJSManager", () => {
@@ -326,32 +316,17 @@ describe("ChartJSManager", () => {
   });
 
   describe("pointer events", () => {
-    it.each(["panstart", "panmove", "panend"] as const)(
+    it.each(["panstart", "panmove"] as const)(
       "should return no scales from %s when the chart is not initialized yet",
       (method) => {
         // Given
         const manager = buildManager({ fontLoaded: new Promise<FontFace>(() => {}) });
 
         // When
-        const scales = manager[method](makeRpcEvent({ deltaX: 0, deltaY: 0 }));
+        const scales = manager[method]({ deltaX: 0, deltaY: 0 });
 
         // Then
         expect(scales).toEqual({});
-      },
-    );
-
-    it.each(["wheel", "mousedown", "mousemove", "mouseup"] as const)(
-      "should use the bounding rect sent over RPC when handling %s",
-      async (method) => {
-        // Given
-        const manager = await createManager();
-        const event = makeRpcEvent<WheelEvent>({ clientX: 0, clientY: 0 });
-
-        // When
-        manager[method](event);
-
-        // Then
-        expect((event.target as Element).getBoundingClientRect()).toBe(BOUNDING_RECT);
       },
     );
 
@@ -364,7 +339,12 @@ describe("ChartJSManager", () => {
 
       // When
       const { x } = requireScales(
-        manager.wheel(makeRpcEvent({ deltaY: -100, clientX: center.x, clientY: center.y })),
+        manager.wheel({
+          deltaY: -100,
+          clientX: center.x,
+          clientY: center.y,
+          boundingClientRect: BOUNDING_RECT,
+        }),
       );
 
       // Then
@@ -376,10 +356,10 @@ describe("ChartJSManager", () => {
       const manager = await createManager({
         options: createOptions({ plugins: { zoom: { pan: { enabled: true, mode: "x" } } } }),
       });
-      manager.panstart(makeRpcEvent({ center: { x: 200, y: 50 }, deltaX: 0, deltaY: 0 }));
+      manager.panstart({ deltaX: 0, deltaY: 0 });
 
       // When
-      const { x } = requireScales(manager.panmove(makeRpcEvent({ deltaX: 50, deltaY: 0 })));
+      const { x } = requireScales(manager.panmove({ deltaX: 50, deltaY: 0 }));
 
       // Then
       expect(x.min).toBeLessThan(0);
@@ -390,11 +370,11 @@ describe("ChartJSManager", () => {
       const manager = await createManager({
         options: createOptions({ plugins: { zoom: { pan: { enabled: true, mode: "x" } } } }),
       });
-      manager.panstart(makeRpcEvent({ center: { x: 200, y: 50 }, deltaX: 0, deltaY: 0 }));
-      const afterPanEnd = manager.panend(makeRpcEvent({ deltaX: 0, deltaY: 0 }));
+      manager.panstart({ deltaX: 0, deltaY: 0 });
+      const afterPanEnd = manager.panend();
 
       // When
-      const afterMove = manager.panmove(makeRpcEvent({ deltaX: 50, deltaY: 0 }));
+      const afterMove = manager.panmove({ deltaX: 50, deltaY: 0 });
 
       // Then
       expect(afterMove).toEqual(afterPanEnd);

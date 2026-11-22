@@ -453,22 +453,16 @@ describe("usePlotInteractionHandlers", () => {
       const boundingRect = {
         left: BasicBuilder.number(),
         top: BasicBuilder.number(),
-        toJSON: vi.fn().mockReturnValue({
-          left: BasicBuilder.number(),
-          top: BasicBuilder.number(),
-        }),
       } as unknown as DOMRect;
 
       const wheel = triggerWheel(result, boundingRect);
 
       expect(props.coordinator?.addInteractionEvent).toHaveBeenCalledWith({
         type: "wheel",
-        cancelable: false,
-        deltaX: wheel.deltaX,
         deltaY: wheel.deltaY,
         clientX: wheel.clientX,
         clientY: wheel.clientY,
-        boundingClientRect: boundingRect.toJSON(),
+        boundingClientRect: { left: boundingRect.left, top: boundingRect.top },
       });
     });
 

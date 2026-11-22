@@ -1,0 +1,12 @@
+{
+  "name": "@lichtblick/openapi-codegen",
+  "license": "MPL-2.0",
+  "private": true,
+  "scripts": {
+    "generate": "openapi-typescript ../suite-base/src/api/organization/openapi.yaml -o ../suite-base/src/api/organization/schema.gen.ts"
+  },
+  "devDependencies": {
+    "openapi-typescript": "7.13.0",
+    "typescript": "5.9.3"
+  }
+}
