@@ -5,13 +5,19 @@ settings:
   excludeLinksFromLockfile: false
 
 overrides:
-  dompurify@<3.4.17: 3.4.17
-  undici@<6.29.1: 6.29.1
   '@foxglove/omgidl-serialization>@foxglove/cdr': 3.5.1
   '@foxglove/rosbag2>@foxglove/schemas': 2.3.1
+  dompurify@<3.4.17: 3.4.17
+  undici@<6.29.1: 6.29.1
   utif>pako: ^2.2.0
 
 patchedDependencies:
+  '@foxglove/rosbag2-web@5.0.0':
+    hash: b5c6bf14a18f317a9912278c02c9eb56d7df88f807fa9b858f2b929b36ae4274
+    path: patches/@foxglove__rosbag2-web@5.0.0.patch
+  '@foxglove/rosbag2@6.0.0':
+    hash: a05249625d5e99f9147be96e9ef6c877d8f88dfe4780fb0bb87b304070346ca9
+    path: patches/@foxglove__rosbag2@6.0.0.patch
   '@foxglove/ulog@2.3.2':
     hash: b98cc1e98d01c6fbb959f3aadb54a5ed479cd065e5438141c0cac119f140785c
     path: patches/@foxglove__ulog@2.3.2.patch
@@ -468,7 +474,7 @@ importers:
         version: 0.4.2
       '@foxglove/rosbag2-web':
         specifier: 5.0.0
-        version: 5.0.0
+        version: 5.0.0(patch_hash=b5c6bf14a18f317a9912278c02c9eb56d7df88f807fa9b858f2b929b36ae4274)
       '@foxglove/roslibjs':
         specifier: 0.0.4
         version: 0.0.4
@@ -9425,12 +9431,12 @@ snapshots:
       '@foxglove/omgidl-parser': 1.2.2
       md5-typescript: 1.0.5
 
-  '@foxglove/rosbag2-web@5.0.0':
+  '@foxglove/rosbag2-web@5.0.0(patch_hash=b5c6bf14a18f317a9912278c02c9eb56d7df88f807fa9b858f2b929b36ae4274)':
     dependencies:
-      '@foxglove/rosbag2': 6.0.0
+      '@foxglove/rosbag2': 6.0.0(patch_hash=a05249625d5e99f9147be96e9ef6c877d8f88dfe4780fb0bb87b304070346ca9)
       '@foxglove/sql.js': 0.0.4
 
-  '@foxglove/rosbag2@6.0.0':
+  '@foxglove/rosbag2@6.0.0(patch_hash=a05249625d5e99f9147be96e9ef6c877d8f88dfe4780fb0bb87b304070346ca9)':
     dependencies:
       '@foxglove/rosmsg-msgs-common': 3.3.0
       '@foxglove/rosmsg2-serialization': 3.1.2

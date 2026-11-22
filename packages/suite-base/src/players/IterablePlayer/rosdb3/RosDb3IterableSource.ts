@@ -8,7 +8,7 @@
 import { MessageDefinition } from "@foxglove/message-definition";
 import { ROS2_TO_DEFINITIONS, Rosbag2, SqliteSqljs } from "@foxglove/rosbag2-web";
 import { stringify } from "@foxglove/rosmsg";
-import { Time, add as addTime } from "@foxglove/rostime";
+import { Time, add as addTime, compare, subtract as subtractTime } from "@foxglove/rostime";
 
 import { MessageEvent } from "@lichtblick/suite";
 import { APP_CONFIG } from "@lichtblick/suite-base/constants/config";
@@ -24,6 +24,10 @@ import {
   MessageIteratorArgs,
   TopicWithDecodingInfo,
 } from "../IIterableSource";
+import { BlockCachedFile } from "./BlockCachedFile";
+
+/** Backfill rows read between yields to the event loop */
+const BACKFILL_YIELD_ROWS = 256;
 
 function dataTypeToFullName(dataType: string): string {
   const parts = dataType.split("/");
@@ -53,7 +57,7 @@ export class RosDb3IterableSource implements ISerializedIterableSource {
     const sqlWasm = await (await res.blob()).arrayBuffer();
     await SqliteSqljs.Initialize({ wasmBinary: sqlWasm });
 
-    const dbs = this.#files.map((file) => new SqliteSqljs(file));
+    const dbs = this.#files.map((file) => new SqliteSqljs(new BlockCachedFile(file)));
     const bag = new Rosbag2(dbs);
     await bag.open();
     this.#bag = bag;
@@ -182,9 +186,51 @@ export class RosDb3IterableSource implements ISerializedIterableSource {
     }
   }
 
-  public async getBackfillMessages(
-    _args: GetBackfillMessagesArgs,
-  ): Promise<MessageEvent<Uint8Array>[]> {
-    return [];
+  public async getBackfillMessages({
+    topics,
+    time,
+    abortSignal,
+  }: GetBackfillMessagesArgs): Promise<MessageEvent<Uint8Array>[]> {
+    if (this.#bag == undefined) {
+      throw new Error(`Rosbag2DataProvider is not initialized`);
+    }
+    // .db3 files only index time, so read back from `time` in windows that double in length until
+    // every topic has a message or the recording's start is reached
+    const latest = new Map<string, MessageEvent<Uint8Array>>();
+    let windowEnd = addTime(time, { sec: 0, nsec: 1 });
+    let rows = 0;
+    for (let windowSec = 1; compare(windowEnd, this.#start) > 0; windowSec *= 2) {
+      const missing = [...topics.keys()].filter((topic) => !latest.has(topic));
+      if (missing.length === 0 || abortSignal?.aborted === true) {
+        break;
+      }
+      const back = subtractTime(windowEnd, { sec: windowSec, nsec: 0 });
+      const windowStart = compare(back, this.#start) > 0 ? back : this.#start;
+      for await (const msg of this.#bag.readMessages({
+        startTime: windowStart,
+        endTime: windowEnd,
+        topics: missing,
+        rawMessages: true,
+      })) {
+        // sql.js reads synchronously: let the worker take a superseding seek's abort now and then
+        if (++rows % BACKFILL_YIELD_ROWS === 0) {
+          await new Promise((resolve) => setTimeout(resolve, 0));
+        }
+        // Leaving the loop frees the window's statement
+        abortSignal?.throwIfAborted();
+        const prev = latest.get(msg.topic.name);
+        if (!prev || compare(msg.timestamp, prev.receiveTime) >= 0) {
+          latest.set(msg.topic.name, {
+            topic: msg.topic.name,
+            receiveTime: msg.timestamp,
+            message: msg.data,
+            sizeInBytes: msg.data.byteLength,
+            schemaName: msg.topic.type,
+          });
+        }
+      }
+      windowEnd = windowStart;
+    }
+    return [...latest.values()].sort((a, b) => compare(a.receiveTime, b.receiveTime));
   }
 }
