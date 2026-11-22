@@ -12,4 +12,17 @@ describe("desktopLaunchURL", () => {
     expect(url.searchParams.get("ds.url")).toBe("https://data.example/a.mcap");
     expect(url.hash).toBe("#layout=abc");
   });
+
+  it("keeps every file of a multi-file link", () => {
+    const url = desktopLaunchURL(
+      new URL(
+        "https://app.example/?ds=remote-file&ds.url=https://d.example/a.mcap&ds.url=https://d.example/b.mcap",
+      ),
+    );
+    expect(url.searchParams.getAll("ds.url")).toEqual([
+      "https://d.example/a.mcap",
+      "https://d.example/b.mcap",
+    ]);
+    expect(url.searchParams.getAll("url")).toHaveLength(2);
+  });
 });

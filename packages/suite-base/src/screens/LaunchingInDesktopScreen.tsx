@@ -19,7 +19,8 @@ export function desktopLaunchURL(webURL: URL): URL {
   const desktopURL = new URL("lichtblick://open");
   webURL.searchParams.forEach((v, k) => {
     if (k && v) {
-      desktopURL.searchParams.set(k, v);
+      // Append: a multi-file link repeats `ds.url`.
+      desktopURL.searchParams.append(k, v);
 
       // Temporarily send both sets of params until desktop app is updated to
       // use new ds.* parameters.
@@ -40,7 +41,7 @@ export function desktopLaunchURL(webURL: URL): URL {
           desktopURL.searchParams.set("start", v);
           break;
         case "ds.url":
-          desktopURL.searchParams.set("url", v);
+          desktopURL.searchParams.append("url", v);
           break;
         case "time":
           desktopURL.searchParams.set("seekTo", v);

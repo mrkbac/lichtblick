@@ -45,10 +45,13 @@ export function sharedLayoutFromHash(hash: string): string | undefined {
   return encoded !== "" && encoded.length <= MAX_SHARED_LAYOUT_LENGTH ? encoded : undefined;
 }
 
+/** Page params that aren't source state but change how the app loads, so a link keeps them. */
+const KEPT_PAGE_PARAMS = ["workspace"];
+
 /**
  * A link on `href`'s page that reopens `state` (the active source and time), with the encoded
- * layout in the fragment when given and small enough. The address bar's own query is dropped: it
- * can lag the active source (e.g. a launch's `mcap-bundle`).
+ * layout in the fragment when given and small enough. The address bar's other query params are
+ * dropped: they can lag the active source (e.g. a launch's `mcap-bundle`).
  */
 export function buildShareLink(
   href: string,
@@ -56,7 +59,13 @@ export function buildShareLink(
   encodedLayout: string | undefined,
 ): { link: string; layoutIncluded: boolean } {
   const page = new URL(href);
-  const url = updateAppURLState(new URL(page.pathname, page.origin), state);
+  const base = new URL(page.pathname, page.origin);
+  for (const key of KEPT_PAGE_PARAMS) {
+    for (const value of page.searchParams.getAll(key)) {
+      base.searchParams.append(key, value);
+    }
+  }
+  const url = updateAppURLState(base, state);
   const layoutIncluded =
     encodedLayout != undefined && encodedLayout.length <= MAX_SHARED_LAYOUT_LENGTH;
   if (layoutIncluded) {

@@ -47,12 +47,14 @@ describe("shareLink", () => {
 
   it("links the active source, not stale params in the address bar", () => {
     const { link } = buildShareLink(
-      "https://app.example/?mcap-bundle=old&ds=remote-file&ds.url=https://data.example/old.mcap&layoutUrl=https://x.example/l.json",
+      "https://app.example/?mcap-bundle=old&ds=remote-file&ds.url=https://data.example/old.mcap&layoutUrl=https://x.example/l.json&workspace=team",
       SOURCE,
       "abc",
     );
     const params = new URL(link).searchParams;
-    expect([...params.keys()].sort()).toEqual(["ds", "ds.url"]);
+    // `workspace` isn't source state: it picks the organization's extensions, so it stays.
+    expect([...params.keys()].sort()).toEqual(["ds", "ds.url", "workspace"]);
+    expect(params.get("workspace")).toBe("team");
     expect(params.get("ds.url")).toBe("https://data.example/run.mcap");
   });
 
