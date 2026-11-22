@@ -1,46 +1,43 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import {
-  BlobReadable,
-  ChunkCache,
-  type McapTypes,
-  openCachedMcapReader,
-} from "@lichtblick/mcap-core";
+import { Opcode } from "@lichtblick/mcap-core";
+import { RecordingFileInfo } from "@lichtblick/suite-base/players/types";
 
 import { PreviewKind } from "./types";
 
-/** Reads only the file's summary; attachment data stays on disk until sliced. */
-export async function readAttachmentIndexes(
-  file: Blob,
-): Promise<readonly McapTypes.AttachmentIndex[]> {
-  // No chunks are read, so the cache stays empty.
-  const reader = await openCachedMcapReader({
-    readable: new BlobReadable(file),
-    chunkCache: new ChunkCache(),
-  });
-  return reader.attachmentIndexes;
-}
+export type AttachmentInfo = RecordingFileInfo["attachments"][number];
 
 /**
  * The attachment's data as a lazy slice of the file, so large attachments are never copied into
- * memory. Attachment record: opcode u8, length u64, log_time u64, create_time u64, name string,
+ * memory. Read from the record at `offset`, not the file's summary, so attachments of a recovered
+ * file (cut off, or still being recorded) open too. Undefined when the record there isn't this
+ * attachment, e.g. the file changed since it was opened.
+ *
+ * Attachment record: opcode u8, length u64, log_time u64, create_time u64, name string,
  * media_type string, data_len u64, data, crc u32 (strings are a u32 byte length + UTF-8).
  */
-export function attachmentData(file: Blob, index: McapTypes.AttachmentIndex): Blob {
+export async function attachmentData(
+  file: Blob,
+  { offset, name, mediaType, sizeBytes }: AttachmentInfo,
+): Promise<Blob | undefined> {
   const encoder = new TextEncoder();
-  const start =
-    Number(index.offset) +
-    1 +
-    8 +
-    8 +
-    8 +
-    4 +
-    encoder.encode(index.name).length +
-    4 +
-    encoder.encode(index.mediaType).length +
-    8;
-  return file.slice(start, start + Number(index.dataSize), index.mediaType);
+  const nameBytes = encoder.encode(name);
+  const nameStart = offset + 1 + 8 + 8 + 8 + 4;
+  const header = new Uint8Array(
+    await file.slice(offset, nameStart + nameBytes.length).arrayBuffer(),
+  );
+  const view = new DataView(header.buffer);
+  const matches =
+    header.length === nameStart - offset + nameBytes.length &&
+    header[0] === Opcode.ATTACHMENT &&
+    view.getUint32(nameStart - offset - 4, true) === nameBytes.length &&
+    nameBytes.every((byte, i) => header[nameStart - offset + i] === byte);
+  if (!matches) {
+    return undefined;
+  }
+  const start = nameStart + nameBytes.length + 4 + encoder.encode(mediaType).length + 8;
+  return file.slice(start, start + sizeBytes, mediaType);
 }
 
 const TEXT_TYPE = /^text\/|[/+](json|xml|yaml|x-yaml|toml|javascript|csv|x-sh|x-python)$/i;

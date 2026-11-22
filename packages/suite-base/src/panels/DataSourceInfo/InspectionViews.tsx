@@ -350,7 +350,6 @@ export function ContainerDetails({
                 {viewableFile && viewing != undefined && file.attachments[viewing] && (
                   <AttachmentDialog
                     file={viewableFile}
-                    attachmentIndex={viewing}
                     {...file.attachments[viewing]}
                     onClose={() => {
                       setViewing(undefined);
