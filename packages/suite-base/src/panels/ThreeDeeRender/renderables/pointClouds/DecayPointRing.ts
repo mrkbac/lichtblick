@@ -22,8 +22,10 @@ type RingScan = {
   slot: number;
   start: number;
   count: number;
-  /** Transform tree version its pose row was computed at; undefined while it has no row */
+  /** Transforms epoch its pose row was computed at; undefined while it has no row */
   posedAt: number | undefined;
+  /** Transforms epoch its placement last failed at (no transform), so it waits for a change */
+  failedAt: number | undefined;
   /** The ring kept 1 in this many scans around this one (its intake rate, raised by thinning) */
   stride: number;
 };
@@ -62,6 +64,36 @@ const GROWTH = 1.5;
 const SHRINK_BELOW = 4;
 /** Buffers below this many points are never shrunk; not worth a reallocation */
 const MIN_SHRINK_CAPACITY = 1_000_000;
+
+/**
+ * What the transforms resolve to depends on: the tree's contents (its version), the playback time
+ * when the tree is complete (it then shows only transforms received by then), and frame offsets
+ * edited in the settings. The offsets are folded into one number; equal sums of different edits
+ * are possible but practically never happen.
+ */
+function transformsKey(
+  tree: Renderer["transformTree"],
+  currentTime: bigint,
+): { version: number; time: bigint | undefined; offsets: number } {
+  let offsets = 0;
+  let i = 0;
+  for (const frame of tree.frames().values()) {
+    i++;
+    const p = frame.offsetPosition;
+    const r = frame.offsetEulerDegrees;
+    if (p) {
+      offsets += i * (p[0] + 3 * p[1] + 7 * p[2]);
+    }
+    if (r) {
+      offsets += i * (11 * r[0] + 13 * r[1] + 17 * r[2]);
+    }
+  }
+  return {
+    version: tree.version,
+    time: tree.isComplete() ? currentTime : undefined,
+    offsets,
+  };
+}
 
 /** Writes the top 3 rows of an affine matrix (three.js stores columns) */
 function writePoseRows(out: Float32Array, offset: number, m: THREE.Matrix4): void {
@@ -119,6 +151,11 @@ export class DecayPointRing extends Renderable<BaseUserData, /*TRenderer=*/ unde
   #rowsOrigin: THREE.Vector3 | undefined;
   /** Where the next turn of rechecking outdated rows starts */
   #recheckFrom = 0;
+  /** Bumped whenever what the transforms resolve to may have changed, see #transformsKey */
+  #epoch = 0;
+  #lastKey: { version: number; time: bigint | undefined; offsets: number } | undefined;
+  /** Rows left to (re)compute after the last frame's budget ran out */
+  #posesPending = false;
 
   public constructor(topic: string, style: RingStyle, limits: HistoryLimits) {
     super(`${topic}:decay`, undefined, {
@@ -190,8 +227,9 @@ export class DecayPointRing extends Renderable<BaseUserData, /*TRenderer=*/ unde
   }
 
   /**
-   * Receive time of the newest scan that was dropped because the latest scan alone fills the point
-   * budget (thinning can't help then). Once this is older than the decay window, nothing is missing.
+   * Receive time of the newest scan dropped to stay in the point budget where thinning couldn't
+   * help (scans too large to thin around, or a latest scan that alone fills the budget). Once this
+   * is older than the decay window, nothing in the window is missing.
    */
   public budgetEvictedUntil(): bigint | undefined {
     return this.#budgetEvictedUntil;
@@ -232,7 +270,15 @@ export class DecayPointRing extends Renderable<BaseUserData, /*TRenderer=*/ unde
     // A reused slot still has its last scan's row: hidden until this scan is placed
     this.#points.poses()!.fill(0, slot * POSE_FLOATS, (slot + 1) * POSE_FLOATS);
     this.#points.markPoses(slot, 1);
-    this.#scans.push({ ...info, slot, start, count, posedAt: undefined, stride: this.#stride });
+    this.#scans.push({
+      ...info,
+      slot,
+      start,
+      count,
+      posedAt: undefined,
+      failedAt: undefined,
+      stride: this.#stride,
+    });
     this.#livePoints += count;
 
     this.#positions.set(positions, start * 3);
@@ -257,7 +303,7 @@ export class DecayPointRing extends Renderable<BaseUserData, /*TRenderer=*/ unde
     while (this.#scans.length > 0 && this.#livePoints + reservePoints > maxPoints) {
       // Thinning can't make room next to a latest scan that alone fills the budget
       if (this.#scans.length > 1 && reservePoints < maxPoints) {
-        this.#makeRoom();
+        this.#makeRoom(this.#livePoints + reservePoints - maxPoints);
       } else {
         this.#evictOldest({ budget: true });
       }
@@ -306,7 +352,18 @@ export class DecayPointRing extends Renderable<BaseUserData, /*TRenderer=*/ unde
   ): string | undefined {
     const scans = this.#scans;
     const data = this.#points.poses()!;
-    const version = transformTree.version;
+    const key = transformsKey(transformTree, currentTime);
+    const last = this.#lastKey;
+    if (
+      !last ||
+      last.version !== key.version ||
+      last.time !== key.time ||
+      last.offsets !== key.offsets
+    ) {
+      this.#epoch++;
+      this.#lastKey = key;
+    }
+    const epoch = this.#epoch;
     let budget = POSE_REFRESH_BUDGET;
     let firstSlot = Infinity;
     let lastSlot = -1;
@@ -320,13 +377,13 @@ export class DecayPointRing extends Renderable<BaseUserData, /*TRenderer=*/ unde
       lastSlot = this.#slotsUsed - 1;
       for (const scan of scans) {
         scan.posedAt = undefined;
+        scan.failedAt = undefined;
       }
       this.#rowsFrame = fixedFrameId;
       this.#rowsOrigin = undefined;
       budget = Infinity;
     }
 
-    let missingFrame: string | undefined;
     const place = (scan: RingScan) => {
       budget--;
       const o = scan.slot * POSE_FLOATS;
@@ -342,8 +399,9 @@ export class DecayPointRing extends Renderable<BaseUserData, /*TRenderer=*/ unde
         scan.messageTime,
       );
       if (!ok) {
-        missingFrame ??= scan.frameId;
+        // Retried once the transforms change, so it can't hold back the other scans' rows
         scan.posedAt = undefined;
+        scan.failedAt = epoch;
         data.fill(0, o, o + POSE_FLOATS);
         return;
       }
@@ -356,23 +414,36 @@ export class DecayPointRing extends Renderable<BaseUserData, /*TRenderer=*/ unde
       tempQuaternion.set(q.x, q.y, q.z, q.w);
       tempMatrix.compose(tempPosition, tempQuaternion, UNIT_SCALE);
       writePoseRows(data, o, tempMatrix);
-      scan.posedAt = version;
+      scan.posedAt = epoch;
+      scan.failedAt = undefined;
     };
+    const due = (scan: RingScan) => scan.posedAt !== epoch && scan.failedAt !== epoch;
+    // Scans without a row first, newest first; then the rest in turns
     for (let i = scans.length - 1; i >= 0 && budget > 0; i--) {
-      if (scans[i]!.posedAt == undefined) {
+      if (scans[i]!.posedAt == undefined && due(scans[i]!)) {
         place(scans[i]!);
       }
     }
     let checked = 0;
     for (; checked < scans.length && budget > 0; checked++) {
       const scan = scans[(this.#recheckFrom + checked) % scans.length]!;
-      if (scan.posedAt != undefined && scan.posedAt !== version) {
+      if (due(scan)) {
         place(scan);
       }
     }
     this.#recheckFrom = scans.length > 0 ? (this.#recheckFrom + checked) % scans.length : 0;
     if (lastSlot >= 0) {
       this.#points.markPoses(firstSlot, lastSlot - firstSlot + 1);
+    }
+
+    let missingFrame: string | undefined;
+    this.#posesPending = false;
+    for (const scan of scans) {
+      if (scan.failedAt === epoch) {
+        missingFrame ??= scan.frameId;
+      } else if (scan.posedAt !== epoch) {
+        this.#posesPending = true;
+      }
     }
 
     let end = 0;
@@ -405,6 +476,11 @@ export class DecayPointRing extends Renderable<BaseUserData, /*TRenderer=*/ unde
       .add(tempPosition.set(p.x, p.y, p.z));
     this.visible = true;
     return missingFrame;
+  }
+
+  /** Whether rows were left for later frames; the caller then asks for another frame */
+  public posesPending(): boolean {
+    return this.#posesPending;
   }
 
   /** Points [0, drawCount) the GPU walks each frame, for tests */
@@ -495,7 +571,7 @@ export class DecayPointRing extends Renderable<BaseUserData, /*TRenderer=*/ unde
     // range. Packing re-uploads every point, so first thin while the history fills over 3/4 of the
     // buffers: the next pack is then far off instead of a few scans away.
     while (this.#scans.length > 1 && (this.#livePoints + count) * 4 > this.#capacity * 3) {
-      this.#makeRoom();
+      this.#makeRoom(this.#livePoints + count - Math.floor((this.#capacity * 3) / 4));
     }
     if (this.#livePoints + count > this.#capacity) {
       this.#evictOldest({ budget: true });
@@ -548,22 +624,38 @@ export class DecayPointRing extends Renderable<BaseUserData, /*TRenderer=*/ unde
   }
 
   /**
-   * Frees points: thins, unless one scan holds over half of them. Thinning could keep that one
-   * every round and thin everything else away, so it is dropped instead.
+   * Frees points toward a `deficit`: thins when that frees enough, or at least a quarter of the
+   * points (callers repeat until the deficit is gone). Thinning keeps the newest scan and every other
+   * one, so a few large scans can keep it from freeing much; then the smallest scan that alone
+   * covers the deficit is dropped (or the largest, if none does), which loses the least history.
+   * Such drops are reported (see budgetEvictedUntil).
    */
-  #makeRoom(): void {
-    let largest = this.#scans[0]!;
+  #makeRoom(deficit: number): void {
+    const newest = this.#scans.length - 1;
+    let thinned = 0;
+    for (let i = newest - 1; i >= 0; i -= 2) {
+      thinned += this.#scans[i]!.count;
+    }
+    if (thinned >= deficit || thinned * 4 >= this.#livePoints) {
+      this.#thin();
+      return;
+    }
+    let drop = this.#scans[0]!;
     for (const scan of this.#scans) {
-      if (scan.count > largest.count) {
-        largest = scan;
+      const covers = scan.count >= deficit;
+      const dropCovers = drop.count >= deficit;
+      if (
+        covers ? !dropCovers || scan.count < drop.count : !dropCovers && scan.count > drop.count
+      ) {
+        drop = scan;
       }
     }
-    if (largest.count * 2 > this.#livePoints) {
-      this.#scans.splice(this.#scans.indexOf(largest), 1);
-      this.#free(largest);
-    } else {
-      this.#thin();
-    }
+    this.#scans.splice(this.#scans.indexOf(drop), 1);
+    this.#budgetEvictedUntil =
+      this.#budgetEvictedUntil == undefined || drop.receiveTime > this.#budgetEvictedUntil
+        ? drop.receiveTime
+        : this.#budgetEvictedUntil;
+    this.#free(drop);
   }
 
   /** Drops every other scan, keeping the newest, and keeps 1 in twice as many pushed from now on */

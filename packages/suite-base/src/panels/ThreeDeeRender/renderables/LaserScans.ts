@@ -299,7 +299,8 @@ class LaserScanHistoryRenderable extends Renderable<LaserScanHistoryUserData> {
       this.renderer.settings.errors.remove(settingsPath, DECAY_LIMITED);
       return true;
     }
-    ring.expire(currentTime - BigInt(Math.round(settings.decayTime * 1e9)));
+    const windowStart = currentTime - BigInt(Math.round(settings.decayTime * 1e9));
+    ring.expire(windowStart);
     const latestPoints = this.#pointsHistory.latest().renderable.geometry.drawRange.count;
     ring.enforceLimits({ maxPoints: DECAY_HISTORY_LIMITS.maxPoints, reservePoints: latestPoints });
     this.#decayNoticeKey = updateDecayNotice({
@@ -308,6 +309,7 @@ class LaserScanHistoryRenderable extends Renderable<LaserScanHistoryUserData> {
       ring,
       maxPoints: DECAY_HISTORY_LIMITS.maxPoints,
       latestPoints,
+      windowStart,
       shownKey: this.#decayNoticeKey,
     });
     const missingFrame = ring.updatePoses(
@@ -316,6 +318,10 @@ class LaserScanHistoryRenderable extends Renderable<LaserScanHistoryUserData> {
       renderFrameId,
       fixedFrameId,
     );
+    if (ring.posesPending()) {
+      // Paused redraws stop on their own: draw again until every scan is placed
+      this.renderer.queueAnimationFrame();
+    }
     if (missingFrame != undefined) {
       this.renderer.settings.errors.add(
         settingsPath,
