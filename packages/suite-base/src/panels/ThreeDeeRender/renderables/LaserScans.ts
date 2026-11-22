@@ -187,7 +187,11 @@ class LaserScanHistoryRenderable extends Renderable<LaserScanHistoryUserData> {
     // With a decay time, the previous scan moves into the ring before it is overwritten. A settings
     // change redraws the same scan, which must not add it to the history
     const previousCount = latest.geometry.drawRange.count;
-    if (settings.decayTime > 0 && previousCount > 0 && laserScan !== latest.userData.laserScan) {
+    // (the same message read back after a seek and played counts as the same scan)
+    const sameScan =
+      laserScan === latest.userData.laserScan ||
+      (latestEntry.receiveTime === receiveTime && latestEntry.messageTime === messageTime);
+    if (settings.decayTime > 0 && previousCount > 0 && !sameScan) {
       const { position, color } = latest.geometry.attributes;
       this.#ring(style).push(
         {
@@ -435,20 +439,6 @@ export class LaserScans extends SceneExtension<LaserScanHistoryRenderable> {
     const receiveTime = toNanoSec(messageEvent.receiveTime);
 
     let renderable = this.renderables.get(topic);
-    // A scan not newer than the latest one (read back after a seek, or the latest again) only adds
-    // to the decay history
-    if (
-      renderable &&
-      renderable.userData.settings.decayTime > 0 &&
-      receiveTime <= renderable.userData.receiveTime &&
-      // Time jumped back without a seek (e.g. a restarted simulation): the scan is the new latest
-      this.renderer.currentTime >= renderable.userData.receiveTime
-    ) {
-      if (receiveTime < renderable.userData.receiveTime) {
-        renderable.addOlderScan(laserScan, renderable.userData.settings, receiveTime);
-      }
-      return;
-    }
     if (!renderable) {
       // Set the initial settings from default values merged with any user settings
       const userSettings = (this.renderer.config.topics[topic] ??
@@ -493,6 +483,33 @@ export class LaserScans extends SceneExtension<LaserScanHistoryRenderable> {
       receiveTime,
     );
   };
+
+  public readonly historySchemas: ReadonlySet<string> = new Set([
+    ...ROS_LASERSCAN_DATATYPES,
+    ...FOXGLOVE_LASERSCAN_DATATYPES,
+  ]);
+
+  /** See {@link DecayHistoryIngest} */
+  public addHistoricalMessage(messageEvent: MessageEvent): void {
+    const renderable = this.renderables.get(messageEvent.topic);
+    const receiveTime = toNanoSec(messageEvent.receiveTime);
+    if (!renderable || receiveTime > renderable.userData.receiveTime) {
+      this.#handleLaserScan(messageEvent as PartialMessageEvent<RosLaserScan | FoxgloveLaserScan>);
+      return;
+    }
+    const message = messageEvent.message as PartialMessage<RosLaserScan | FoxgloveLaserScan>;
+    const laserScan =
+      "header" in message
+        ? normalizeRosLaserScan(message)
+        : normalizeFoxgloveLaserScan(message as PartialMessage<FoxgloveLaserScan>);
+    const { settings, messageTime } = renderable.userData;
+    const sameAsDrawn =
+      receiveTime === renderable.userData.receiveTime &&
+      toNanoSec(laserScan.timestamp) === messageTime;
+    if (settings.decayTime > 0 && !sameAsDrawn) {
+      renderable.addOlderScan(laserScan, settings, receiveTime);
+    }
+  }
 }
 
 /** Why a scan can't be drawn with these settings, or undefined if it can */

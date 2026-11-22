@@ -88,6 +88,7 @@ const createMockRenderer = (overrides?: Record<string, any>) => {
     },
     topicSubscriptions: new Map(),
     schemaSubscriptions: new Map(),
+    sceneExtensions: new Map(),
     settings: {
       handleAction: vi.fn(),
       tree: vi.fn().mockReturnValue({}),
@@ -1398,59 +1399,127 @@ describe("ThreeDeeRender", () => {
       });
     });
 
-    it("reads each decayed topic's window before the seek time back into the renderer", async () => {
-      // Given
-      const topics = [
-        RenderStateBuilder.topic({ name: "/scan", schemaName: "sensor_msgs/LaserScan" }),
-      ];
-      const customRendererInstance = createMockRenderer({
-        schemaSubscriptions: new Map([["sensor_msgs/LaserScan", [{}]]]),
+    describe("decay history read after a seek", () => {
+      const scanTopic = RenderStateBuilder.topic({
+        name: "/scan",
+        schemaName: "sensor_msgs/LaserScan",
       });
-      vi.mocked(Renderer).mockImplementationOnce(function () {
-        return customRendererInstance as any;
+      const otherTopic = RenderStateBuilder.topic({
+        name: "/raw",
+        schemaName: "velodyne_msgs/VelodyneScan",
       });
-      const older = MessageEventBuilder.messageEvent({ topic: "/scan" });
-      const mockContext = createPreloadingContext({
-        initialState: { topics: { "/scan": { visible: true, decayTime: 30 } } },
-        onSubscribe: (args: SubscribeMessageRangeArgs) => {
-          void args.onNewRangeIterator(
-            (async function* () {
-              yield [older];
-            })(),
+      const topics = [scanTopic, otherTopic];
+
+      function renderWithDecay(initialTopics: Record<string, unknown>) {
+        const layer = {
+          historySchemas: new Set(["sensor_msgs/LaserScan"]),
+          addHistoricalMessage: vi.fn(),
+        };
+        const customRendererInstance = createMockRenderer({
+          schemaSubscriptions: new Map([
+            ["sensor_msgs/LaserScan", [{}]],
+            ["velodyne_msgs/VelodyneScan", [{}]],
+          ]),
+          sceneExtensions: new Map([["laserScans", layer]]),
+        });
+        vi.mocked(Renderer).mockImplementationOnce(function () {
+          return customRendererInstance as any;
+        });
+        const older = MessageEventBuilder.messageEvent({
+          topic: "/scan",
+          schemaName: "sensor_msgs/LaserScan",
+        });
+        const cancel = vi.fn();
+        const mockContext = createPreloadingContext({
+          initialState: { topics: initialTopics },
+          onSubscribe: (args: SubscribeMessageRangeArgs) => {
+            void args.onNewRangeIterator(
+              (async function* () {
+                yield [older];
+              })(),
+            );
+            return cancel;
+          },
+        });
+        const rendered = render(<ThreeDeeRender {...setup({}, mockContext)} />);
+        return { layer, older, cancel, mockContext, customRendererInstance, rendered };
+      }
+
+      async function start(mockContext: BuiltinPanelExtensionContext) {
+        await waitFor(() => {
+          expect(mockContext.onRender).toBeDefined();
+        });
+        act(() => {
+          mockContext.onRender!({ topics, currentFrame: [] }, vi.fn());
+        });
+        vi.mocked(mockContext.unstable_subscribeMessageRange).mockClear();
+      }
+
+      function seek(mockContext: BuiltinPanelExtensionContext) {
+        act(() => {
+          mockContext.onRender!(
+            { topics, currentFrame: [], currentTime: { sec: 100, nsec: 0 }, didSeek: true },
+            vi.fn(),
           );
-        },
-      });
-      render(<ThreeDeeRender {...setup({}, mockContext)} />);
-      await waitFor(() => {
-        expect(mockContext.onRender).toBeDefined();
-      });
-      act(() => {
-        mockContext.onRender!({ topics, currentFrame: [] }, vi.fn());
-      });
-      vi.mocked(mockContext.unstable_subscribeMessageRange).mockClear();
+        });
+      }
 
-      // When
-      act(() => {
-        mockContext.onRender!(
-          { topics, currentFrame: [], currentTime: { sec: 100, nsec: 0 }, didSeek: true },
-          vi.fn(),
+      it("reads each decayed topic's window before the seek time into its layer's history", async () => {
+        const { layer, older, mockContext, customRendererInstance } = renderWithDecay({
+          "/scan": { visible: true, decayTime: 30 },
+        });
+        await start(mockContext);
+
+        seek(mockContext);
+
+        await waitFor(() => {
+          expect(mockContext.unstable_subscribeMessageRange).toHaveBeenCalledWith(
+            expect.objectContaining({
+              topic: "/scan",
+              start: { sec: 70, nsec: 0 },
+              end: { sec: 100, nsec: 0 },
+            }),
+          );
+        });
+        await waitFor(() => {
+          expect(layer.addHistoricalMessage).toHaveBeenCalledWith(older);
+        });
+        // Not through the playback path, which would synchronize or take it as the latest scan
+        expect(customRendererInstance.addMessageEvent).not.toHaveBeenCalledWith(older);
+        expect(customRendererInstance.queueAnimationFrame).toHaveBeenCalled();
+      });
+
+      it("skips topics whose layer takes no history", async () => {
+        const { mockContext } = renderWithDecay({ "/raw": { visible: true, decayTime: 30 } });
+        await start(mockContext);
+
+        seek(mockContext);
+
+        expect(mockContext.unstable_subscribeMessageRange).not.toHaveBeenCalledWith(
+          expect.objectContaining({ topic: "/raw" }),
         );
       });
 
-      // Then: the window ends at the seek time, and its messages go to the renderer
-      await waitFor(() => {
-        expect(mockContext.unstable_subscribeMessageRange).toHaveBeenCalledWith(
-          expect.objectContaining({
-            topic: "/scan",
-            start: { sec: 70, nsec: 0 },
-            end: { sec: 100, nsec: 0 },
-          }),
-        );
+      it("stops the read when no decayed topic is left", async () => {
+        const { cancel, mockContext } = renderWithDecay({
+          "/scan": { visible: true, decayTime: 30 },
+        });
+        await start(mockContext);
+        seek(mockContext);
+        await waitFor(() => {
+          expect(mockContext.unstable_subscribeMessageRange).toHaveBeenCalled();
+        });
+        cancel.mockClear(); // (the read started before the seek was cancelled by it)
+
+        // e.g. the topic went away, so nothing with a decay time is subscribed anymore
+        act(() => {
+          mockContext.onRender!({ topics: [otherTopic], currentFrame: [] }, vi.fn());
+        });
+
+        await waitFor(() => {
+          expect(cancel).toHaveBeenCalled();
+        });
       });
-      await waitFor(() => {
-        expect(customRendererInstance.addMessageEvent).toHaveBeenCalledWith(older);
-      });
-      expect(customRendererInstance.queueAnimationFrame).toHaveBeenCalled();
     });
 
     it("updates loading indicator during progressive loading", async () => {

@@ -69,6 +69,7 @@ import {
 import type { LayerSettingsTransform } from "./renderables/FrameAxes";
 import { PublishClickEventMap } from "./renderables/PublishClickTool";
 import { DEFAULT_PUBLISH_SETTINGS } from "./renderables/PublishSettings";
+import { DecayHistoryIngest, isDecayHistoryIngest } from "./renderables/pointExtensionUtils";
 import { THREE_DEE_SHORTCUTS } from "./shortcuts";
 import { readTransformRange, readTransformsBefore, TransformTopic } from "./transformHistoryReads";
 import { Shared3DPanelState, ThreeDeeRenderProps } from "./types";
@@ -565,12 +566,23 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
   // Transform topics, whose history is read with range reads instead of player preloading
   const [transformTopics, setTransformTopics] = useState<readonly TransformTopic[]>([]);
 
-  // Subscribed topics drawn with a decay time, and how far back their history reaches in ns
-  const decayTopics: (TransformTopic & { decayNs: bigint })[] = [];
+  // Subscribed topics drawn with a decay time by a layer that takes read-back history (not e.g.
+  // Velodyne scans), the layer, and how far back their history reaches in ns
+  const decayTopics: (TransformTopic & { decayNs: bigint; ingest: DecayHistoryIngest })[] = [];
+  const historyLayers: DecayHistoryIngest[] = [];
+  for (const extension of renderer?.sceneExtensions.values() ?? []) {
+    if (isDecayHistoryIngest(extension)) {
+      historyLayers.push(extension);
+    }
+  }
   for (const { topic, convertTo } of topicsToSubscribe ?? []) {
     const decayTime = (config.topics[topic] as { decayTime?: number } | undefined)?.decayTime ?? 0;
-    if (decayTime > 0) {
-      decayTopics.push({ topic, convertTo, decayNs: BigInt(Math.round(decayTime * 1e9)) });
+    const schema = convertTo ?? topics?.find((candidate) => candidate.name === topic)?.schemaName;
+    const ingest = historyLayers.find(
+      (layer) => schema != undefined && layer.historySchemas.has(schema),
+    );
+    if (decayTime > 0 && ingest) {
+      decayTopics.push({ topic, convertTo, decayNs: BigInt(Math.round(decayTime * 1e9)), ingest });
     }
   }
   const decayTopicsRef = useLatest(decayTopics);
@@ -586,7 +598,7 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
       }
       const abort = new AbortController();
       decayReadRef.current = abort;
-      for (const { decayNs, ...source } of decayTopicsRef.current) {
+      for (const { decayNs, ingest, ...source } of decayTopicsRef.current) {
         void readTransformRange({
           subscribeRange: context.unstable_subscribeMessageRange,
           topics: [source],
@@ -595,7 +607,7 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
           signal: abort.signal,
           onBatch: async (batch) => {
             for (const messageEvent of batch) {
-              renderer.addMessageEvent(messageEvent);
+              ingest.addHistoricalMessage(messageEvent);
             }
             // Read on once a frame has decoded these, so the window is never queued as raw
             // messages all at once
@@ -618,9 +630,10 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
     [renderer, decayTopicsRef],
   );
   useLayoutEffect(() => () => decayReadRef.current?.abort(), [readDecayHistory]);
-  // A new or longer decay time shows its window at once (scans already in the history are skipped)
+  // A new or longer decay time shows its window at once (scans already in the history are skipped);
+  // with no decayed topic left, the read in flight stops
   useEffect(() => {
-    if (renderer && decayKey !== "") {
+    if (renderer) {
       readDecayHistory(renderer.currentTime);
     }
   }, [renderer, decayKey, readDecayHistory]);

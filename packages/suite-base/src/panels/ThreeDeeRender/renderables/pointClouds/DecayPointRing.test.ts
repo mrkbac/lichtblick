@@ -69,6 +69,11 @@ function scan(count: number, value: number) {
   };
 }
 
+function pts(count: number): [Float32Array, Uint8Array] {
+  const { positions, colors } = scan(count, 0);
+  return [positions, colors];
+}
+
 function push(ring: DecayPointRing, time: bigint, count: number, frameId = "lidar") {
   const { positions, colors } = scan(count, Number(time));
   ring.push({ receiveTime: time, messageTime: time, frameId, pose: makePose() }, positions, colors);
@@ -103,6 +108,9 @@ describe("DecayPointRing", () => {
 
     expect(ring.scanCount()).toBe(3);
     expect(ring.oldestReceiveTime()).toBe(2n);
+    // A different scan received at the same time is kept
+    ring.push({ receiveTime: 3n, messageTime: 99n, frameId: "lidar", pose: makePose() }, ...pts(1));
+    expect(ring.scanCount()).toBe(4);
     ring.expire(4n);
     expect(ring.scanCount()).toBe(1);
     expect(ring.oldestReceiveTime()).toBe(5n);

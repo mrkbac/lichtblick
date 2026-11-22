@@ -8,6 +8,7 @@
 import i18next from "i18next";
 import * as THREE from "three/webgpu";
 
+import type { MessageEvent } from "@lichtblick/suite";
 import { DynamicBufferGeometry } from "@lichtblick/suite-base/panels/ThreeDeeRender/DynamicBufferGeometry";
 import { BaseUserData, Renderable } from "@lichtblick/suite-base/panels/ThreeDeeRender/Renderable";
 import type { Renderer } from "@lichtblick/suite-base/panels/ThreeDeeRender/Renderer";
@@ -168,6 +169,21 @@ export const DECAY_HISTORY_LIMITS: HistoryLimits = { maxEntries: 1_000, maxPoint
 export const DECAY_LIMITED = "DECAY_LIMITED";
 
 /**
+ * A scene extension that takes messages read back after a seek: ones newer than what it draws (or
+ * when it draws nothing yet) are handled like played ones, older ones only go into the decay
+ * history. They aren't synchronized with other topics; historical scans have nothing to wait for.
+ */
+export type DecayHistoryIngest = {
+  /** Schemas it takes history for */
+  readonly historySchemas: ReadonlySet<string>;
+  addHistoricalMessage(messageEvent: MessageEvent): void;
+};
+
+export function isDecayHistoryIngest(extension: object): extension is DecayHistoryIngest {
+  return "addHistoricalMessage" in extension;
+}
+
+/**
  * Shows the notice that the limits shape a decay history (the latest scan alone fills the point
  * budget, scans in the window were dropped for it, or the ring keeps only 1 in N incoming scans), or
  * clears it. Takes and returns the key
@@ -257,6 +273,17 @@ export class RenderObjectHistory<TRenderable extends HistoryRenderable> {
   public addHistoryEntry(entry: HistoryEntry<TRenderable>): void {
     this.latest().renderable.releaseMessage();
     this.#history.push(entry);
+    this.#evictOldest(this.#history.length - this.#limits.maxEntries);
+  }
+
+  /** Adds an entry older than the latest one (read back after a seek), in time order */
+  public insertOlderEntry(entry: HistoryEntry<TRenderable>): void {
+    entry.renderable.releaseMessage();
+    let at = this.#history.length - 1; // the latest stays last
+    while (at > 0 && this.#history[at - 1]!.receiveTime > entry.receiveTime) {
+      at--;
+    }
+    this.#history.splice(at, 0, entry);
     this.#evictOldest(this.#history.length - this.#limits.maxEntries);
   }
 

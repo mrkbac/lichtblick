@@ -448,8 +448,8 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
   }
 
   /**
-   * Decodes a scan older than the latest one (e.g. read back after a seek) straight into the decay
-   * ring, leaving the latest scan as it is
+   * Decodes a scan older than the latest one (read back after a seek) straight into the decay ring
+   * (and the stixel history), leaving the latest scan as it is
    */
   public addOlderScan(
     pointCloud: PointCloud | PointCloud2,
@@ -471,17 +471,42 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
     this.#scratch ??= createGeometry(`${this.userData.topic}:older`, THREE.StaticDrawUsage);
     this.#scratch.resize(count);
     const { position, color } = this.#scratch.attributes;
-    // Stixels have no decay ring, so the stixel attributes are never written
+    // Stixels keep one renderable per scan, inserted into their history in time order
+    const stixels = settings.stixelsEnabled
+      ? new StixelsRenderable(
+          this.userData.topic,
+          {
+            receiveTime: -1n, // unused
+            messageTime: -1n, // unused
+            frameId: "", //unused
+            pose: getPose(pointCloud),
+            settingsPath: [], //unused
+            settings: { visible: true }, //unused
+            topic: this.userData.topic,
+          },
+          createStixelGeometry(this.userData.topic, THREE.StaticDrawUsage),
+          this.userData.stixelMaterial,
+        )
+      : undefined;
+    stixels?.geometry.resize(count * 2);
     this.#updatePointCloudBuffers(
       pointCloud,
       tempFieldReaders,
       count,
-      { ...settings, stixelsEnabled: false },
+      settings,
       position!,
       color!,
-      position!,
-      color!,
+      stixels?.geometry.attributes.position ?? position!,
+      stixels?.geometry.attributes.color ?? color!,
     );
+    if (stixels) {
+      this.add(stixels);
+      this.#stixelsHistory.insertOlderEntry({
+        receiveTime,
+        messageTime: toNanoSec(getTimestamp(pointCloud)),
+        renderable: stixels,
+      });
+    }
     this.#ring(settings).push(
       {
         receiveTime,
@@ -1115,20 +1140,10 @@ export class PointClouds extends SceneExtension<PointCloudHistoryRenderable> {
     }
 
     let renderable = this.renderables.get(topic);
-    // A scan not newer than the latest one (read back after a seek, or the latest again) only adds
-    // to the decay history
-    if (
-      renderable &&
-      renderable.userData.settings.decayTime > 0 &&
-      receiveTime <= renderable.userData.receiveTime &&
-      // Time jumped back without a seek (e.g. a restarted simulation): the scan is the new latest
-      this.renderer.currentTime >= renderable.userData.receiveTime
-    ) {
-      if (receiveTime < renderable.userData.receiveTime) {
-        renderable.addOlderScan(pointCloud, renderable.userData.settings, receiveTime);
-      }
-      return;
-    }
+    // The drawn scan again (e.g. both read back after a seek and played): nothing to add to history
+    const repeat =
+      renderable?.userData.receiveTime === receiveTime &&
+      renderable.userData.messageTime === messageTime;
     if (!renderable) {
       // Set the initial settings from default values merged with any user settings
       const userSettings = (this.renderer.config.topics[topic] ??
@@ -1174,11 +1189,41 @@ export class PointClouds extends SceneExtension<PointCloudHistoryRenderable> {
 
     const { settings } = renderable.userData;
 
-    if (settings.decayTime > 0) {
+    if (settings.decayTime > 0 && !repeat) {
       renderable.pushHistory(pointCloud, settings, receiveTime);
     }
 
     renderable.updatePointCloud(pointCloud, originalMessage, settings, receiveTime);
+  }
+
+  public readonly historySchemas: ReadonlySet<string> = new Set([
+    ...ROS_POINTCLOUD_DATATYPES,
+    ...FOXGLOVE_POINTCLOUD_DATATYPES,
+  ]);
+
+  /** See {@link DecayHistoryIngest} */
+  public addHistoricalMessage(messageEvent: MessageEvent): void {
+    const ros = ROS_POINTCLOUD_DATATYPES.has(messageEvent.schemaName);
+    const renderable = this.renderables.get(messageEvent.topic);
+    const receiveTime = toNanoSec(messageEvent.receiveTime);
+    if (!renderable || receiveTime > renderable.userData.receiveTime) {
+      if (ros) {
+        this.#handleRosPointCloud(messageEvent as PartialMessageEvent<PointCloud2>);
+      } else {
+        this.#handleFoxglovePointCloud(messageEvent as PartialMessageEvent<PointCloud>);
+      }
+      return;
+    }
+    const pointCloud = ros
+      ? normalizePointCloud2(messageEvent.message as PartialMessage<PointCloud2>)
+      : normalizePointCloud(messageEvent.message as PartialMessage<PointCloud>);
+    const { settings, messageTime } = renderable.userData;
+    const sameAsDrawn =
+      receiveTime === renderable.userData.receiveTime &&
+      toNanoSec(getTimestamp(pointCloud)) === messageTime;
+    if (settings.decayTime > 0 && !sameAsDrawn) {
+      renderable.addOlderScan(pointCloud, settings, receiveTime);
+    }
   }
 }
 

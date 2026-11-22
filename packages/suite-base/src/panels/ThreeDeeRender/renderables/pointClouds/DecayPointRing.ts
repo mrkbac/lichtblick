@@ -259,7 +259,13 @@ export class DecayPointRing extends Renderable<BaseUserData, /*TRenderer=*/ unde
     if (count === 0 || count > MAX_SET_POINTS) {
       return;
     }
-    if (this.#scans.some((scan) => scan.receiveTime === info.receiveTime)) {
+    // The same message pushed again (e.g. read back after a seek twice); distinct scans received at
+    // the same time have their own stamps
+    if (
+      this.#scans.some(
+        (scan) => scan.receiveTime === info.receiveTime && scan.messageTime === info.messageTime,
+      )
+    ) {
       return;
     }
     if (++this.#sinceKept < this.#stride) {

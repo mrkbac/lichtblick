@@ -262,6 +262,21 @@ describe("PointCloudHistoryRenderable decay", () => {
     expect(latest.instanceDetails(0)).toMatchObject({ x: POSITIONS[0]![0] });
   });
 
+  it("adds an older scan's stixels to the stixel history too", () => {
+    const { renderable, settings } = decode(makeCloud(), {
+      colorMode: "flat",
+      decayTime: 10,
+      stixelsEnabled: true,
+    });
+    renderable.updatePointCloud(makeCloud(), undefined, settings, 10n);
+    const before = renderable.children.length;
+
+    renderable.addOlderScan(makeCloud(), settings, 5n);
+
+    // The decay ring and one stixels renderable for the older scan
+    expect(renderable.children.length).toBe(before + 2);
+  });
+
   it("skips an older scan that can't be drawn without blanking the latest one", () => {
     const { renderable, settings } = decode(makeCloud(), { colorMode: "flat", decayTime: 10 });
     renderable.updatePointCloud(makeCloud(), undefined, settings, 10n);
