@@ -1289,7 +1289,8 @@ describe("IterablePlayer", () => {
         {
           start: { sec: 0, nsec: 99000001 },
           end: { sec: 1, nsec: 0 },
-          topics: mockTopicSelection(secondTopic, topic),
+          // The first topic is cached already: only the new one is read
+          topics: mockTopicSelection(secondTopic),
           consumptionType: "partial",
         },
       ],
