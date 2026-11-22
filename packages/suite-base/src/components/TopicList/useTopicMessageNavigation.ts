@@ -17,9 +17,11 @@
  *    - All time-only reads use the payload-free inspection iterator when the player has one
  *    - Next message: Direct seek from currentTime; stops at the first message after it once the
  *      topic's last message time is known
- *    - Previous message: getMessageAtTime (indexed backward lookup). Sources without one get
- *      backward windows that grow geometrically, sized from topic density when known, so the
- *      read is proportional to the distance to the previous message, never the whole prefix.
+ *    - Previous message: getMessageAtTime (indexed backward lookup) gives a candidate, then the
+ *      range between it and the current time is read to confirm nothing newer exists. Backfill is
+ *      approximate for some sources (overlapping files, unindexed reads, converters), so it is only
+ *      ever a lower bound. Without a candidate, backward windows grow geometrically from the
+ *      current time, so the read is proportional to the distance, never the whole prefix.
  *
  * 3. Boundaries Cache
  *    - Per-topic first/last times come from topicStats when the source reports them
@@ -27,7 +29,7 @@
  *      the end time the same way as "previous message"; the topic is never read in full
  */
 
-import { Time, compare, subtract as subtractTime } from "@foxglove/rostime";
+import { Time, add as addTime, compare, subtract as subtractTime } from "@foxglove/rostime";
 import { enableMapSet } from "immer";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useImmer } from "use-immer";
@@ -67,7 +69,13 @@ const logNavigationError = (direction: "next" | "previous", error: unknown): voi
 const selectNothing = () => undefined;
 
 const ZERO_TIME: Time = Object.freeze({ sec: 0, nsec: 0 });
+
+const sameTime = (a: Time | undefined, b: Time | undefined): boolean =>
+  a == undefined || b == undefined ? a === b : compare(a, b) === 0;
 const ONE_NANOSECOND: Time = Object.freeze({ sec: 0, nsec: 1 });
+// First fallback window holds about this many messages: big windows read more chunks than they
+// save in round trips (measured on indexed MCAP).
+const WINDOW_TARGET_MESSAGES = 2;
 
 enableMapSet();
 
@@ -107,8 +115,8 @@ export function useTopicMessageNavigation({
   const seekPlayback = useMessagePipeline(selectSeekPlayback);
   const pausePlayback = useMessagePipeline(selectPausePlayback);
   const getBatchIterator = useMessagePipeline(selectGetBatchIterator);
-  const getMessageAtTime = useMessagePipeline(selectGetMessageAtTime);
   const getInspectionIterator = useMessagePipeline(selectInspectionIterator);
+  const getMessageAtTime = useMessagePipeline(selectGetMessageAtTime);
 
   // Navigation only needs receive times. The inspection iterator skips decoding payloads (a
   // camera frame costs nothing to step over); sources without it get decoded batches.
@@ -120,7 +128,12 @@ export function useTopicMessageNavigation({
 
   const cachedBoundaries = boundariesCache.get(topicName);
   const firstMessageTime = cachedBoundaries?.first;
-  const lastMessageTime = cachedBoundaries?.last;
+  // A cached last message is only valid for the end time it was found against: once a recording
+  // grows past that end, newer messages may exist.
+  const lastMessageTime =
+    cachedBoundaries?.last && sameTime(cachedBoundaries.lastAtEnd, endTime)
+      ? cachedBoundaries.last
+      : undefined;
 
   // The boundaries cache avoids expensive re-iteration through all messages when
   // switching between topics. Merges partial boundary updates, preserving existing
@@ -140,30 +153,59 @@ export function useTopicMessageNavigation({
     [setBoundariesCache],
   );
 
+  // Receive time of the last message on `topic` in [start, end], or undefined if there is none.
+  // `aborted` is true when the read stopped early, either cancelled or because the source can't
+  // iterate the topic.
+  const lastMessageIn = useCallback(
+    async (
+      signal: AbortSignal,
+      topic: string,
+      start: Time,
+      end: Time,
+    ): Promise<{ found?: Time; aborted: boolean }> => {
+      const iterator = iterateTimes(topic, { start, end });
+      if (!iterator) {
+        return { aborted: true };
+      }
+      let found: Time | undefined;
+      for await (const result of iterator) {
+        if (signal.aborted) {
+          return { aborted: true };
+        }
+        if (result.type !== RESULT_TYPE_MESSAGE_EVENT) {
+          continue;
+        }
+        if (compare(result.msgEvent.receiveTime, end) > 0) {
+          break;
+        }
+        found = result.msgEvent.receiveTime;
+      }
+      return { found, aborted: signal.aborted };
+    },
+    [iterateTimes],
+  );
+
   // Receive time of the latest message on `topic` at or before `time`, never earlier than `floor`.
-  // `first` is the topic's first message time when known. Prefers the player's indexed backward
-  // lookup. Topics without one get backward windows that grow geometrically and don't overlap, so
-  // the bytes read scale with the distance to the message instead of the length of the recording
-  // before it.
   const findMessageAtOrBefore = useCallback(
     async (
       signal: AbortSignal,
       topic: string,
       time: Time,
-      first: Time | undefined,
-      floor: Time = first ?? ZERO_TIME,
+      floor: Time = ZERO_TIME,
       initialWindowMs: number = DEFAULT_WINDOW_MS,
     ): Promise<Time | undefined> => {
-      const event = await getMessageAtTime(topic, time, signal);
-      if (event) {
-        return event.receiveTime;
-      }
-      // Before the first message there is nothing to find. At or after it, a message exists, so
-      // a miss means this topic has no indexed lookup (e.g. a user-script output topic): scan.
-      if (first && compare(time, first) < 0) {
-        return undefined;
+      // The indexed backward lookup is fast, but approximate for some sources (overlapping files,
+      // unindexed reads, converters). Use it as a lower bound and read only the gap after it,
+      // which picks up anything newer it missed.
+      const candidate = (await getMessageAtTime(topic, time, signal))?.receiveTime;
+      if (candidate && compare(candidate, time) <= 0) {
+        const gap = await lastMessageIn(signal, topic, addTime(candidate, ONE_NANOSECOND), time);
+        return gap.aborted && signal.aborted ? undefined : (gap.found ?? candidate);
       }
 
+      // No candidate (no indexed lookup for this topic, or nothing before `time`): backward windows
+      // that grow geometrically and don't overlap, so the bytes read scale with the distance to the
+      // message instead of the length of the recording before it.
       let end = time;
       // Terminates: windows grow geometrically until one reaches the floor.
       for (let windowMs = initialWindowMs; ; windowMs *= WINDOW_GROWTH_FACTOR) {
@@ -172,36 +214,17 @@ export function useTopicMessageNavigation({
         if (reachedFloor) {
           start = floor;
         }
-
-        const iterator = iterateTimes(topic, { start, end });
-        if (!iterator) {
+        const scan = await lastMessageIn(signal, topic, start, end);
+        if (scan.aborted) {
           return undefined;
         }
-
-        let found: Time | undefined;
-        for await (const result of iterator) {
-          if (signal.aborted) {
-            return undefined;
-          }
-          if (result.type !== RESULT_TYPE_MESSAGE_EVENT) {
-            continue;
-          }
-          if (compare(result.msgEvent.receiveTime, time) > 0) {
-            break;
-          }
-          found = result.msgEvent.receiveTime;
-        }
-
-        if (signal.aborted) {
-          return undefined;
-        }
-        if (found || reachedFloor) {
-          return found;
+        if (scan.found || reachedFloor) {
+          return scan.found;
         }
         end = start;
       }
     },
-    [iterateTimes, getMessageAtTime],
+    [getMessageAtTime, lastMessageIn],
   );
 
   // Read through a ref so discovery doesn't restart on every tick of a growing source, where
@@ -236,12 +259,19 @@ export function useTopicMessageNavigation({
       }
 
       if (first && !last && end) {
-        last = await findMessageAtOrBefore(signal, topic, end, first);
+        const windowMs = calculateOptimalWindowMs({
+          numMessages: topicStatsEntry?.numMessages ?? 0,
+          firstMessageTime: first,
+          lastMessageTime: end,
+          targetMessagesInWindow: WINDOW_TARGET_MESSAGES,
+        });
+        last = await findMessageAtOrBefore(signal, topic, end, first, windowMs);
       }
 
-      // Cache complete results only; the effect retries once the end time is known.
+      // Cache complete results only; the effect retries once the end time is known. `lastAtEnd`
+      // records the end this was checked against, so growth past it invalidates `last`.
       if (!signal.aborted && first && last) {
-        updateBoundariesCache(topic, { first, last });
+        updateBoundariesCache(topic, { first, last, lastAtEnd: end });
       }
     },
     [iterateTimes, findMessageAtOrBefore, updateBoundariesCache],
@@ -376,13 +406,13 @@ export function useTopicMessageNavigation({
 
       if (!result) {
         if (!lastMessageTime) {
-          updateBoundariesCache(topicName, { last: currentTime });
+          updateBoundariesCache(topicName, { last: currentTime, lastAtEnd: endTime });
         }
         return;
       }
 
       if (result.isLastMessage && !lastMessageTime) {
-        updateBoundariesCache(topicName, { last: result.targetTime });
+        updateBoundariesCache(topicName, { last: result.targetTime, lastAtEnd: endTime });
       }
 
       pausePlayback();
@@ -402,6 +432,7 @@ export function useTopicMessageNavigation({
     pausePlayback,
     findNextMessage,
     lastMessageTime,
+    endTime,
     updateBoundariesCache,
     createNavigationSignal,
   ]);
@@ -428,7 +459,7 @@ export function useTopicMessageNavigation({
           numMessages: stats.numMessages,
           firstMessageTime: densityFirst,
           lastMessageTime: densityLast,
-          targetMessagesInWindow: 10,
+          targetMessagesInWindow: WINDOW_TARGET_MESSAGES,
         });
       }
 
@@ -439,7 +470,6 @@ export function useTopicMessageNavigation({
         signal,
         topicName,
         subtractTime(currentTime, ONE_NANOSECOND),
-        first,
         first ?? startTime,
         initialWindowMs,
       );
