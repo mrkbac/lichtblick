@@ -17,6 +17,8 @@ updates:
         patterns:
           - "storybook"
           - "@storybook/*"
+          - "eslint-plugin-storybook"
+          - "storybook-react-rsbuild"
       oxlint:
         patterns:
           - "oxlint"
@@ -35,10 +37,18 @@ updates:
           - "vite"
           - "@vitest/*"
           - "vitest-*"
+      playwright:
+        patterns:
+          - "@playwright/test"
+          - "playwright"
+      localization:
+        patterns:
+          - "i18next"
+          - "react-i18next"
       rspack:
         patterns:
           - "@rspack/*"
-          - "webpack"
+          - "@rsbuild/core"
       monaco-editor:
         patterns:
           - "monaco-editor"

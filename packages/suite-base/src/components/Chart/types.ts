@@ -61,5 +61,3 @@ export type RpcElement = {
     y: number;
   };
 };
-
-export type EventListenerHandler = (eventName: string, fn?: () => void) => void;

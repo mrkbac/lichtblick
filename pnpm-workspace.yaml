@@ -20,18 +20,20 @@ ignoredBuiltDependencies:
   - esbuild
 
 overrides:
-  # monaco-editor pins a vulnerable dompurify (GHSA-cg2g-xh64-v4q7, GHSA-mrv2-3pqr-j5jr).
   # Bundle one copy of each instead of two (both copies shipped in the web build):
   # omgidl-serialization pins cdr 3.5.0, rosbag2 asks for schemas ^1, utif for pako ^1.
   "@foxglove/omgidl-serialization>@foxglove/cdr": 3.5.1
   "@foxglove/rosbag2>@foxglove/schemas": 2.3.1
-  "dompurify@<3.4.17": 3.4.17
-  # @actions/tool-cache 2.x pulls undici 5 (several high advisories, e.g. GHSA-2m5v-pch6-74hx).
-  "undici@<6.29.1": 6.29.1
+  # Keep Monaco on the same patched DOMPurify as the application.
+  "dompurify@<3.4.18": 3.4.18
+  # These parents use the named minimatch API retained in v11 (GHSA-g3hv-75wg-m249).
+  "@electron/universal@2.0.3>minimatch": 11.0.9
+  "app-builder-lib@26.18.0>minimatch": 11.0.9
+  # Workbox uses only globSync, retained in v14 (GHSA-3g3m-2fjr-6pw4).
+  "workbox-build@7.4.1>glob": 14.0.6
   "utif>pako": ^2.2.0
 
 patchedDependencies:
-  "@foxglove/rosbag2-web@5.0.0": patches/@foxglove__rosbag2-web@5.0.0.patch
   "@foxglove/rosbag2@6.0.0": patches/@foxglove__rosbag2@6.0.0.patch
   "@foxglove/ulog@2.3.2": patches/@foxglove__ulog@2.3.2.patch
 

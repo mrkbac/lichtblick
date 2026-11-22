@@ -9,9 +9,7 @@
 // Since we don't use the modules directly in this file, we need to load the types as references
 // so typescript will have the merged declarations.
 /// <reference types="chartjs-plugin-datalabels" />
-/// <reference types="@foxglove/chartjs-plugin-zoom" />
 
-import { type ZoomPluginOptions } from "@foxglove/chartjs-plugin-zoom/types/options";
 import * as Comlink from "@foxglove/comlink";
 import { ChartOptions } from "chart.js";
 import * as _ from "lodash-es";
@@ -133,10 +131,8 @@ function Chart(props: Props): React.JSX.Element {
   // at the time they are invoked
   const currentScalesRef = useRef<RpcScales | undefined>(undefined);
 
-  const zoomEnabled =
-    (props.options.plugins?.zoom as ZoomPluginOptions | undefined)?.zoom?.enabled ?? false;
-  const panEnabled =
-    (props.options.plugins?.zoom as ZoomPluginOptions | undefined)?.pan?.enabled ?? false;
+  const zoomEnabled = props.options.plugins?.zoom?.zoom?.enabled ?? false;
+  const panEnabled = props.options.plugins?.zoom?.pan?.enabled ?? false;
 
   const {
     type,
@@ -410,14 +406,11 @@ function Chart(props: Props): React.JSX.Element {
     }
 
     const threshold = props.options.plugins?.zoom?.pan?.threshold ?? 10;
-    const target = () => ({
-      boundingClientRect: container.getBoundingClientRect().toJSON() as DOMRect,
-    });
     return listenForPan(container, threshold, {
-      onStart: ({ deltaX, deltaY, center }) => {
+      onStart: ({ deltaX, deltaY }) => {
         hasPannedSinceMouseDown.current = true;
         void rpcSendRef.current?.<RpcScales>("panstart", {
-          event: { cancelable: false, deltaY, deltaX, center, target: target() },
+          event: { deltaY, deltaX },
         });
       },
       onMove: async ({ deltaX, deltaY }) => {
@@ -425,17 +418,15 @@ function Chart(props: Props): React.JSX.Element {
           return;
         }
         const scales = await rpcSendRef.current<RpcScales>("panmove", {
-          event: { cancelable: false, deltaY, deltaX, target: target() },
+          event: { deltaY, deltaX },
         });
         maybeUpdateScales(scales, { userInteraction: true });
       },
-      onEnd: async ({ deltaX, deltaY }) => {
+      onEnd: async () => {
         if (!rpcSendRef.current) {
           return;
         }
-        const scales = await rpcSendRef.current<RpcScales>("panend", {
-          event: { cancelable: false, deltaY, deltaX, target: target() },
-        });
+        const scales = await rpcSendRef.current<RpcScales>("panend");
         maybeUpdateScales(scales, { userInteraction: true });
       },
     });
@@ -450,14 +441,10 @@ function Chart(props: Props): React.JSX.Element {
       const boundingRect = event.currentTarget.getBoundingClientRect();
       const scales = await rpcSendRef.current<RpcScales>("wheel", {
         event: {
-          cancelable: false,
           deltaY: event.deltaY,
-          deltaX: event.deltaX,
           clientX: event.clientX,
           clientY: event.clientY,
-          target: {
-            boundingClientRect: boundingRect.toJSON(),
-          },
+          boundingClientRect: { left: boundingRect.left, top: boundingRect.top },
         },
       });
       maybeUpdateScales(scales, { userInteraction: true });
@@ -465,31 +452,8 @@ function Chart(props: Props): React.JSX.Element {
     [zoomEnabled, maybeUpdateScales],
   );
 
-  const onMouseDown = useCallback(
-    async (event: React.MouseEvent<HTMLElement>) => {
-      hasPannedSinceMouseDown.current = false;
-
-      if (!rpcSendRef.current) {
-        return;
-      }
-
-      const scales = await rpcSendRef.current<RpcScales>("mousedown", {
-        event: rpcMouseEvent(event),
-      });
-
-      maybeUpdateScales(scales);
-    },
-    [maybeUpdateScales],
-  );
-
-  const onMouseUp = useCallback(async (event: React.MouseEvent<HTMLElement>) => {
-    if (!rpcSendRef.current) {
-      return;
-    }
-
-    return await rpcSendRef.current("mouseup", {
-      event: rpcMouseEvent(event),
-    });
+  const onMouseDown = useCallback(() => {
+    hasPannedSinceMouseDown.current = false;
   }, []);
 
   // Since hover events are handled via rpc, we might get a response back when we've
@@ -590,7 +554,6 @@ function Chart(props: Props): React.JSX.Element {
       onMouseMove={onMouseMove}
       onMouseLeave={onMouseLeave}
       onMouseEnter={onMouseEnter}
-      onMouseUp={onMouseUp}
       style={{ width, height, cursor: "crosshair", position: "relative" }}
     />
   );
