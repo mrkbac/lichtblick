@@ -28,6 +28,7 @@ import { PlayerPresence } from "@lichtblick/suite-base/players/types";
 import { MessagePathSelectionProvider } from "@lichtblick/suite-base/services/messagePathDragging/MessagePathSelectionProvider";
 
 import { MessagePathRow } from "./MessagePathRow";
+import { SelectedTopicKeys } from "./SelectedTopicKeys";
 import { useStyles } from "./TopicList.style";
 import { TopicRow } from "./TopicRow";
 import { useMultiSelection } from "./useMultiSelection";
@@ -54,6 +55,10 @@ export function TopicList(): React.JSX.Element {
     filterText: debouncedFilterText,
   });
   const { selectedIndexes, onSelect, getSelectedIndexes } = useMultiSelection(treeItems);
+  const soleSelectedItem =
+    selectedIndexes.size === 1 ? treeItems[selectedIndexes.values().next().value!] : undefined;
+  const soleSelectedTopic =
+    soleSelectedItem?.type === "topic" ? soleSelectedItem.item.item.name : undefined;
 
   // The virtualizer re-reads row heights only when the keys change, so they include the row type
   const getItemKey = useCallback(
@@ -131,7 +136,6 @@ export function TopicList(): React.JSX.Element {
               style={style}
               topicResult={treeItem.item}
               selected={selected}
-              soleSelected={selected && selectedIndexes.size === 1}
               onClick={onClick}
               onDoubleClick={handleDoubleClick}
               onContextMenu={(event) => {
@@ -215,7 +219,12 @@ export function TopicList(): React.JSX.Element {
           onClear={onClear}
         />
         {treeItems.length > 0 ? (
-          <div ref={scrollRef} style={{ flex: "1 1 100%", overflowY: "auto" }}>
+          // Focusable, so clicking a row focuses the list and its keys (N / Shift+N) apply
+          <div
+            ref={scrollRef}
+            tabIndex={-1}
+            style={{ flex: "1 1 100%", overflowY: "auto", outline: "none" }}
+          >
             <div style={{ height: virtualizer.getTotalSize(), position: "relative" }}>
               {virtualizer.getVirtualItems().map((virtualRow) =>
                 renderRow(virtualRow.index, virtualRow.key, {
@@ -235,6 +244,9 @@ export function TopicList(): React.JSX.Element {
               : t("noTopicsAvailable")}
             {playerPresence === PlayerPresence.RECONNECTING && t("waitingForConnection")}
           </EmptyState>
+        )}
+        {soleSelectedTopic != undefined && (
+          <SelectedTopicKeys topicName={soleSelectedTopic} containerRef={scrollRef} />
         )}
         <DirectTopicStatsUpdater interval={6} />
       </div>

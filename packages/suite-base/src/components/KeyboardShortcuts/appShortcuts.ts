@@ -53,17 +53,6 @@ export const PLAYBACK_SHORTCUTS = [
   // YouTube's keys: Shift+, and Shift+. on US layouts
   { id: "playback.slower", titleKey: "playbackSlower", keys: [{ key: "<" }] },
   { id: "playback.faster", titleKey: "playbackFaster", keys: [{ key: ">" }] },
-  // Bound by the Topics list row while it is the only selected row
-  {
-    id: "playback.nextTopicMessage",
-    titleKey: "nextTopicMessage",
-    keys: [{ key: "n", shift: false, alt: false }],
-  },
-  {
-    id: "playback.previousTopicMessage",
-    titleKey: "previousTopicMessage",
-    keys: [{ key: "n", shift: true, alt: false }],
-  },
   { id: "playback.seekStart", titleKey: "seekStart", keys: [{ key: "Home" }] },
   { id: "playback.seekEnd", titleKey: "seekEnd", keys: [{ key: "End" }] },
   { id: "playback.trimIn", titleKey: "trimIn", keys: [{ key: "i" }] },
