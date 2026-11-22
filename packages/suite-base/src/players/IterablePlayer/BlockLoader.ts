@@ -564,13 +564,12 @@ export class BlockLoader {
         const full = !budget.fits(0);
 
         if (full) {
-          // Drop this block's read. The topic holding the most stops here for this pass; the block
-          // is read again for the others, which may fit without it.
+          // Drop this block's read. The topic with the most data in it stops here for this pass;
+          // the block is read again for the others, which may fit without it.
           budget.release(sizeInBytes);
-          const loadedBytes = this.#topicBytes();
-          const bytesOf = (topic: string) =>
-            (loadedBytes.get(topic) ?? 0) + this.#bytesOf(messagesByTopic[topic] ?? []);
-          const heaviest = _.maxBy([...topicsToFetch.keys()], bytesOf);
+          const heaviest = _.maxBy([...topicsToFetch.keys()], (topic) =>
+            this.#bytesOf(messagesByTopic[topic] ?? []),
+          );
           if (heaviest != undefined) {
             cappedAt.set(heaviest, this.#distance(currentBlockId, playhead));
           }

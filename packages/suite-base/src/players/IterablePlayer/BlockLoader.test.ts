@@ -1031,6 +1031,13 @@ describe("BlockLoader", () => {
       expect((await loadSettled(messages, 12, 0))[0]).toEqual("small");
     });
 
+    it("stops the topic whose part of a block can't fit, not the one with more data elsewhere", async () => {
+      // 8 bytes of "a" at the playhead; the next block has 2 more of "a" and 7 of "b"
+      const messages = [sized("a", 0, 8), sized("a", 1, 2), sized("b", 1, 7)];
+
+      expect((await loadSettled(messages, 12, 0)).slice(0, 2)).toEqual(["a,b", "a"]);
+    });
+
     it("settles when several topics each want more than their share", async () => {
       const { loader, loading, settled } = setup({ a: 10, b: 10, c: 3 }, 100);
       loader.setPlayhead({ sec: 5, nsec: 0 });
