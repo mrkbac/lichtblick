@@ -60,7 +60,8 @@ export function stampToTime(stamp: unknown): Time | undefined {
     return undefined;
   }
   if (typeof nsec === "number") {
-    return { sec, nsec };
+    // Already a Time: no copy, this runs per message on hot paths
+    return stamp as Time;
   }
   return typeof nanosec === "number" ? { sec, nsec: nanosec } : undefined;
 }

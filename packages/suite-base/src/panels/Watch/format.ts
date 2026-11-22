@@ -1,7 +1,10 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
+import { Time } from "@foxglove/rostime";
+
 import { isTypedArray } from "@lichtblick/suite-base/types/isTypedArray";
+import { stampToTime } from "@lichtblick/suite-base/util/time";
 
 export type EnumNames = Readonly<Record<string, string>>;
 
@@ -13,20 +16,14 @@ export function isExpandable(value: unknown): boolean {
   return (
     typeof value === "object" &&
     value != undefined &&
-    !isTime(value) &&
+    asTime(value) == undefined &&
     (!Array.isArray(value) || value.length > 0)
   );
 }
 
-function isTime(value: object): value is { sec: number; nsec: number } {
-  const keys = Object.keys(value);
-  return (
-    keys.length === 2 &&
-    "sec" in value &&
-    typeof value.sec === "number" &&
-    "nsec" in value &&
-    typeof value.nsec === "number"
-  );
+/** A stamp (ROS 1 / Foxglove `nsec` or ROS 2 `nanosec`) with no other fields. */
+function asTime(value: object): Time | undefined {
+  return Object.keys(value).length === 2 ? stampToTime(value) : undefined;
 }
 
 export function formatNumber(value: number, precision: number | undefined): string {
@@ -98,8 +95,9 @@ export function formatValue(
   if (typeof value !== "object" || value == undefined) {
     return formatScalar(value, precision, enumNames);
   }
-  if (isTime(value)) {
-    return `${value.sec}.${String(value.nsec).padStart(9, "0")}`;
+  const time = asTime(value);
+  if (time) {
+    return `${time.sec}.${String(time.nsec).padStart(9, "0")}`;
   }
   if (Array.isArray(value) || isTypedArray(value)) {
     const arr: ArrayLike<unknown> = value;

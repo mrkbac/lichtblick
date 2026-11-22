@@ -103,7 +103,8 @@ describe("time.getTimestampForMessage", () => {
 
 describe("time.stampToTime", () => {
   it("reads ROS 1 / Foxglove and ROS 2 stamps", () => {
-    expect(time.stampToTime({ sec: 1, nsec: 2 })).toEqual({ sec: 1, nsec: 2 });
+    const stamp = { sec: 1, nsec: 2 };
+    expect(time.stampToTime(stamp)).toBe(stamp);
     expect(time.stampToTime({ sec: 1, nanosec: 2 })).toEqual({ sec: 1, nsec: 2 });
   });
 
