@@ -854,6 +854,35 @@ describe("UserScriptPlayer", () => {
         expect(lastOutput()).toEqual(["v2"]);
       });
 
+      it("reruns on the source topic after switching the input away from its alias", async () => {
+        const fakePlayer = new FakePlayer();
+        const userScriptPlayer = new UserScriptPlayer(fakePlayer, defaultUserScriptActions);
+        const emitted: (readonly MessageEvent[])[] = [];
+        userScriptPlayer.setListener(async (state) => {
+          emitted.push(state.activeData?.messages ?? []);
+        });
+        userScriptPlayer.setSubscriptions([{ topic: `${DEFAULT_STUDIO_SCRIPT_PREFIX}1` }]);
+        const aliasScript = scriptCode("v1").replace('["/np_input"]', '["/np_alias"]');
+        await save(userScriptPlayer, aliasScript);
+        // The aliasing player emits each source event under the source name and the alias.
+        await fakePlayer.emit({
+          activeData: {
+            ...basicPlayerState,
+            isPlaying: false,
+            messages: [upstreamFirst, { ...upstreamFirst, topic: "/np_alias" }],
+            topics: [
+              { name: "/np_input", schemaName: "foo" },
+              { name: "/np_alias", schemaName: "foo", aliasedFromName: "/np_input" },
+            ],
+            datatypes: new Map(Object.entries({ foo: { definitions: [] } })),
+          },
+        });
+
+        await save(userScriptPlayer, scriptCode("v2"));
+
+        expect(outputValues(emitted.at(-1)!)).toEqual(["v2"]);
+      });
+
       it("drops the input once no panel reads the script output", async () => {
         const { userScriptPlayer, lastOutput } = await setupPaused();
         userScriptPlayer.setSubscriptions([]);

@@ -284,8 +284,12 @@ export default class UserScriptPlayer implements Player {
 
   // keep track of last message on all topics to recompute output topic messages when user scripts change
   #lastMessageByInputTopic = new Map<string, MessageEvent>();
-  // Topics a user script or topic converter lists as an input; only these are kept above.
+  // Source topics (see #sourceTopic) a user script or topic converter reads; only messages on
+  // these are kept above.
   #scriptInputTopics = new Set<string>();
+  // Aliased topic name -> the topic it is aliased from. An alias and its source carry the same
+  // events, so a script switched from one to the other still finds the event above.
+  #aliasSources = new Map<string, string>();
   #userScriptIdsNeedUpdate = new Set<string>();
 
   #protectedState = new MutexLocked<ProtectedState>({
@@ -846,7 +850,14 @@ export default class UserScriptPlayer implements Player {
 
     let changedTopicsRequireEmitState = false;
     state.scriptRegistrations = validScriptRegistrations;
-    this.#scriptInputTopics = new Set([...state.inputsByOutputTopic.values()].flat());
+    this.#aliasSources = new Map(
+      filterMap(state.lastPlayerStateActiveData.topics, ({ name, aliasedFromName }) =>
+        aliasedFromName != undefined ? [name, aliasedFromName] : undefined,
+      ),
+    );
+    this.#scriptInputTopics = new Set(
+      [...state.inputsByOutputTopic.values()].flat().map((topic) => this.#sourceTopic(topic)),
+    );
 
     // Atomically replace shadow registry for synchronous access in getBatchIterator.
     // We avoid clearing the old map earlier because getBatchIterator is synchronous and
@@ -1150,9 +1161,12 @@ export default class UserScriptPlayer implements Player {
 
         this.#userScriptIdsNeedUpdate.clear();
 
-        for (const message of messages) {
-          if (this.#scriptInputTopics.has(message.topic)) {
-            this.#lastMessageByInputTopic.set(message.topic, message);
+        // Without scripts or converters there is nothing to keep, so skip the loop.
+        if (this.#scriptInputTopics.size > 0) {
+          for (const message of messages) {
+            if (this.#scriptInputTopics.has(this.#sourceTopic(message.topic))) {
+              this.#lastMessageByInputTopic.set(message.topic, message);
+            }
           }
         }
 
@@ -1258,9 +1272,9 @@ export default class UserScriptPlayer implements Player {
         // Panels stopped reading these topics: don't keep their last message (it can be large, e.g.
         // an image). Only here, not after a script save, so a save that briefly drops an input
         // (a broken `inputs` export) keeps it.
-        const subscribedTopics = new Set(remapped.map(({ topic }) => topic));
+        const subscribedTopics = new Set(remapped.map(({ topic }) => this.#sourceTopic(topic)));
         for (const topic of this.#lastMessageByInputTopic.keys()) {
-          if (!subscribedTopics.has(topic)) {
+          if (!subscribedTopics.has(this.#sourceTopic(topic))) {
             this.#lastMessageByInputTopic.delete(topic);
           }
         }
@@ -1269,6 +1283,10 @@ export default class UserScriptPlayer implements Player {
         log.error(err);
         reportError(toError(err));
       });
+  }
+
+  #sourceTopic(topic: string): string {
+    return this.#aliasSources.get(topic) ?? topic;
   }
 
   #setSubscriptionsUnlocked(
