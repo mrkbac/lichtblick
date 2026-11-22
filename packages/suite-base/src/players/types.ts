@@ -127,7 +127,12 @@ export type PlayerAlert = {
   message: string;
   error?: Error;
   tip?: string;
+  /** Actionable help the UI renders in place of the plain-text tip. */
+  guide?: PlayerAlertGuide;
 };
+
+/** A browser blocked a ws:// connection from this https page (mixed content). */
+export type PlayerAlertGuide = { type: "wsMixedContent"; url: string };
 
 export type PlayerURLState = Immutable<{
   sourceId: string;

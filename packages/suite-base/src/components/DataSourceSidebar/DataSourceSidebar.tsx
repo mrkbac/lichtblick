@@ -15,7 +15,6 @@ import { selectPlayerPresence } from "@lichtblick/suite-base/components/MessageP
 import { SidebarContent } from "@lichtblick/suite-base/components/SidebarContent";
 import Stack from "@lichtblick/suite-base/components/Stack";
 import { TopicList } from "@lichtblick/suite-base/components/TopicList/TopicList";
-import WssErrorModal from "@lichtblick/suite-base/components/WssErrorModal";
 import { useWorkspaceActions } from "@lichtblick/suite-base/context/Workspace/useWorkspaceActions";
 import useAlertCount from "@lichtblick/suite-base/hooks/useAlertCount";
 import { PlayerPresence } from "@lichtblick/suite-base/players/types";
@@ -34,7 +33,7 @@ type DataSourceSidebarTab = "topics" | "alerts";
 export default function DataSourceSidebar(props: Props): React.JSX.Element {
   const { disableToolbar = false } = props;
   const playerPresence = useMessagePipeline(selectPlayerPresence);
-  const { playerAlerts, alertCount, highestSeverity } = useAlertCount();
+  const { alertCount, highestSeverity } = useAlertCount();
   const [activeTab, setActiveTab] = useState<DataSourceSidebarTab>("topics");
   const { classes } = useStyles();
   const { t } = useTranslation("dataSourceInfo");
@@ -128,7 +127,6 @@ export default function DataSourceSidebar(props: Props): React.JSX.Element {
           </>
         )}
       </Stack>
-      <WssErrorModal playerAlerts={playerAlerts} />
     </SidebarContent>
   );
 }
