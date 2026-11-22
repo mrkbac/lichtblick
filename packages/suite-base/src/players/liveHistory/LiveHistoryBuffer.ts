@@ -285,9 +285,17 @@ export class LiveHistoryBuffer {
         }
       };
       for (const topic of topics) {
-        takeRetained(checkpoint.whole.get(topic), WHOLE_MESSAGE_KEYS, topic);
+        // Newest first, as the walk does: on a topic with both plain and transform messages, a
+        // whole message hides only older frames.
+        const entries: [number | undefined, readonly string[]][] = [
+          [checkpoint.whole.get(topic), WHOLE_MESSAGE_KEYS],
+        ];
         for (const [key, seq] of checkpoint.frames.get(topic) ?? []) {
-          takeRetained(seq, [key], topic);
+          entries.push([seq, [key]]);
+        }
+        entries.sort(([a], [b]) => (b ?? -1) - (a ?? -1));
+        for (const [seq, keys] of entries) {
+          takeRetained(seq, keys, topic);
         }
       }
     }

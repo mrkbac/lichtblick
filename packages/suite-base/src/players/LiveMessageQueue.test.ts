@@ -146,4 +146,35 @@ describe("LiveMessageQueue", () => {
     expect(queue.drain().at(-1)!.receiveTime.sec).toBe(49);
     (console.warn as Mock).mockClear();
   });
+
+  it("keeps queueing new messages when kept messages are large", () => {
+    const queue = new LiveMessageQueue(1000, new PlayerAlertManager());
+    let t = 0;
+    for (let topic = 0; topic < 23; topic++) {
+      queue.push(msg(t++, 45, `/oneShot${topic}`));
+    }
+    for (let i = 0; i < 300; i++) {
+      queue.push(msg(t++, 10));
+      expect(queue.sizeInBytes()).toBeLessThanOrEqual(1000);
+    }
+    const kept = queue.drain();
+    expect(kept.filter((m) => m.topic === "/a").length).toBeGreaterThan(40);
+    (console.warn as Mock).mockClear();
+  });
+
+  it("keeps messages received at the same time in arrival order", () => {
+    const queue = new LiveMessageQueue(1000, new PlayerAlertManager());
+    const tfs = (...children: string[]) => ({
+      transforms: children.map((child_frame_id) => ({ child_frame_id })),
+    });
+    const older = msg(0, 20, "/transforms", tfs("f", "g"));
+    const newer = msg(0, 10, "/transforms", tfs("f")); // same stamp, newer value for f
+    queue.push(older);
+    queue.push(newer);
+    for (let t = 1; t < 300; t++) {
+      queue.push(msg(t, 10));
+    }
+    expect(queue.drain().slice(0, 2)).toEqual([older, newer]);
+    (console.warn as Mock).mockClear();
+  });
 });

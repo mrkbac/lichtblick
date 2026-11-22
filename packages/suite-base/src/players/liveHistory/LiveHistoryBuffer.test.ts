@@ -321,6 +321,23 @@ describe("LiveHistoryBuffer", () => {
     }
   });
 
+  it("takes newer frames than a whole message on a mixed topic while scrubbing", () => {
+    const buffer = new LiveHistoryBuffer({ windowNs: 100_000n * SEC, maxBytes: 1e12 });
+    const frame = (sec: number, child: string) =>
+      msg("/mixed", sec, { transforms: [{ child_frame_id: child }] });
+    buffer.add(frame(1, "a")); // hidden by the whole message after it
+    buffer.add(msg("/mixed", 2));
+    buffer.add(frame(3, "b"));
+    const last = 3 * CHECKPOINT_INTERVAL;
+    for (let t = 4; t <= last; t++) {
+      buffer.add(msg("/a", t));
+    }
+    const topics = new Set(["/mixed"]);
+    for (const at of [last, last - 1, last - 2]) {
+      expect(times(buffer.backfill(fromSec(at), topics))).toEqual([2, 3]);
+    }
+  });
+
   it("clears everything, including seeds, e.g. on a clock reset", () => {
     const buffer = new LiveHistoryBuffer({ windowNs: 1n * SEC, maxBytes: 1e9 });
     buffer.add(msg("/a", 1));

@@ -71,8 +71,15 @@ export class LiveMessageQueue {
   }
 
   #dropOldest(): void {
-    const target = 0.8 * this.#maxBytes;
+    // Kept messages are chosen again below. The queued ones make room for them, but never below
+    // half the target, so large kept messages can't empty the queue on every drop.
     let bytes = this.#bytes;
+    let latchedBytes = 0;
+    for (const msg of this.#latched) {
+      latchedBytes += msg.sizeInBytes;
+    }
+    bytes -= latchedBytes;
+    const target = Math.max(0.8 * this.#maxBytes - latchedBytes, 0.4 * this.#maxBytes);
     let count = 0;
     while (count < this.#messages.length && bytes > target) {
       bytes -= this.#messages[count]!.sizeInBytes;
@@ -84,7 +91,8 @@ export class LiveMessageQueue {
     // them against newer dropped messages, so a key that never comes back is searched for once.
     const claimed = new Map<string, Set<string>>(); // per topic: child frames, or "" for the topic
     const candidates: Candidate[] = [];
-    const consider = (msg: MessageEvent, source: "queue" | "latched") => {
+    // `arrival` orders ties: kept messages arrived before every queued one.
+    const consider = (msg: MessageEvent, source: "queue" | "latched", arrival: number) => {
       let topicKeys = claimed.get(msg.topic);
       if (topicKeys?.has("") === true) {
         return; // a newer whole message of this topic is already kept
@@ -112,15 +120,15 @@ export class LiveMessageQueue {
           keys,
           transform: transforms != undefined,
           latched: source === "latched",
+          arrival,
         });
       }
     };
     for (let i = count - 1; i >= 0; i--) {
-      consider(this.#messages[i]!, "queue");
+      consider(this.#messages[i]!, "queue", this.#latched.length + i);
     }
     for (let i = this.#latched.length - 1; i >= 0; i--) {
-      bytes -= this.#latched[i]!.sizeInBytes;
-      consider(this.#latched[i]!, "latched");
+      consider(this.#latched[i]!, "latched", i);
     }
     // Drop candidates that a still queued message replaces. Latched ones are only checked when they
     // don't all fit, since a key that never comes back (a static transform) means a full scan.
@@ -131,9 +139,14 @@ export class LiveMessageQueue {
       kept = selectWithin(wanted, bytes, 0.9 * this.#maxBytes);
     }
     const messages = this.#messages.slice(count);
-    this.#latched = kept.sort((a, b) => compare(a.receiveTime, b.receiveTime));
+    this.#latched = kept
+      .sort((a, b) => {
+        const order = compare(a.msg.receiveTime, b.msg.receiveTime);
+        return order !== 0 ? order : a.arrival - b.arrival;
+      })
+      .map(({ msg }) => msg);
     this.#messages = messages;
-    this.#bytes = kept.reduce((sum, msg) => sum + msg.sizeInBytes, bytes);
+    this.#bytes = kept.reduce((sum, { msg }) => sum + msg.sizeInBytes, bytes);
     this.#alerts.addAlert(LIVE_QUEUE_FULL_ALERT_ID, {
       severity: "warn",
       message: `Dropped messages: more than ${(this.#maxBytes / 1_000_000).toFixed(0)} MB were waiting to be shown.`,
@@ -179,28 +192,30 @@ export class LiveMessageQueue {
   }
 }
 
-type Candidate = { msg: MessageEvent; keys: string[]; transform: boolean; latched: boolean };
+type Candidate = {
+  msg: MessageEvent;
+  keys: string[];
+  transform: boolean;
+  latched: boolean;
+  arrival: number;
+};
 
 /**
  * Transforms first, then the smallest, as many as fit with `bytes` already used under `limit`
  * (headroom, so the next push doesn't drop again).
  */
-function selectWithin(
-  candidates: readonly Candidate[],
-  bytes: number,
-  limit: number,
-): MessageEvent[] {
-  const kept: MessageEvent[] = [];
+function selectWithin(candidates: readonly Candidate[], bytes: number, limit: number): Candidate[] {
+  const kept: Candidate[] = [];
   let total = bytes;
   const byPriority = [...candidates].sort((a, b) =>
     a.transform === b.transform
       ? a.msg.sizeInBytes - b.msg.sizeInBytes
       : Number(b.transform) - Number(a.transform),
   );
-  for (const { msg } of byPriority) {
-    if (total + msg.sizeInBytes <= limit) {
-      total += msg.sizeInBytes;
-      kept.push(msg);
+  for (const candidate of byPriority) {
+    if (total + candidate.msg.sizeInBytes <= limit) {
+      total += candidate.msg.sizeInBytes;
+      kept.push(candidate);
     }
   }
   return kept;
