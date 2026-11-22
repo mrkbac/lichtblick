@@ -13,7 +13,6 @@
 import { execFileSync, spawn } from "node:child_process";
 import { once } from "node:events";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { parseArgs } from "node:util";
 import zlib from "node:zlib";
@@ -170,7 +169,7 @@ async function main(): Promise<void> {
   const git = (...args: string[]) =>
     execFileSync("git", args, { cwd: ROOT, encoding: "utf8" }).trim();
   const sha = git("rev-parse", values.base ?? git("merge-base", "HEAD", "origin/licht"));
-  const work = path.join(os.tmpdir(), "lichtblick-perf-budget");
+  const work = git("rev-parse", "--path-format=absolute", "--git-path", "lichtblick-perf-budget");
   const baseDir = path.join(work, "base");
   fs.mkdirSync(work, { recursive: true });
   console.error(`Comparing ${git("rev-parse", "--short", "HEAD")} against base ${sha.slice(0, 9)}`);
@@ -178,6 +177,15 @@ async function main(): Promise<void> {
   // CI has the memory to build all four at once; locally other work may be running
   const parallel = process.env.CI === "true";
   const skip = values["no-build"] === true;
+  const revisions = path.join(work, "revisions");
+  const expected = [git("rev-parse", "HEAD"), sha].join("\n");
+  if (skip) {
+    if (!fs.existsSync(revisions) || fs.readFileSync(revisions, "utf8") !== expected) {
+      throw new Error("Run without --no-build to build these revisions first");
+    }
+  } else {
+    fs.rmSync(revisions, { force: true });
+  }
   const headBuild = skip ? Promise.resolve() : build(ROOT);
   if (!parallel) {
     await headBuild;
@@ -199,6 +207,9 @@ async function main(): Promise<void> {
     (err: unknown) => String(err),
   );
   const baseOk = baseError == undefined;
+  if (baseOk && !skip) {
+    fs.writeFileSync(revisions, expected);
+  }
   const variants: Variant[] = baseOk ? ["base", "head"] : ["head"];
   const dirs: Record<Variant, string> = { base: baseDir, head: ROOT };
 
