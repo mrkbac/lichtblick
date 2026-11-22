@@ -16,7 +16,9 @@ import { makeStyles } from "tss-react/mui";
 
 import EmptyState from "@lichtblick/suite-base/components/EmptyState";
 import Stack from "@lichtblick/suite-base/components/Stack";
+import { loadOpenInSchemas } from "@lichtblick/suite-base/components/TopicList/useOpenMessagePathsInPanel";
 import { PanelInfo, usePanelCatalog } from "@lichtblick/suite-base/context/PanelCatalogContext";
+import { Topic } from "@lichtblick/suite-base/players/types";
 import { mightActuallyBePartial } from "@lichtblick/suite-base/util/mightActuallyBePartial";
 
 import { PanelGrid } from "./PanelGrid";
@@ -71,6 +73,42 @@ function verifyPanels(panels: readonly PanelInfo[]): void {
   }
 }
 
+const MAX_SUGGESTIONS = 8;
+
+/** How many of `topics` each panel can show, by panel type, from the schemas in the panels' docs. */
+function useTopicCountsByPanelType(
+  topics: readonly Topic[] | undefined,
+): ReadonlyMap<string, number> {
+  const panelCatalog = usePanelCatalog();
+  const [counts, setCounts] = useState<ReadonlyMap<string, number>>(new Map());
+  useEffect(() => {
+    if (topics == undefined || topics.length === 0) {
+      setCounts(new Map());
+      return;
+    }
+    let cancelled = false;
+    void loadOpenInSchemas(panelCatalog.getPanels()).then((schemasByType) => {
+      if (cancelled) {
+        return;
+      }
+      const newCounts = new Map<string, number>();
+      for (const [type, schemas] of schemasByType) {
+        const count = topics.filter(
+          (topic) => topic.schemaName != undefined && schemas.has(topic.schemaName),
+        ).length;
+        if (count > 0) {
+          newCounts.set(type, count);
+        }
+      }
+      setCounts(newCounts);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [panelCatalog, topics]);
+  return counts;
+}
+
 type Props = {
   onPanelSelect: (arg0: PanelSelection) => void;
   onDragStart?: () => void;
@@ -78,6 +116,8 @@ type Props = {
   mode?: "grid" | "list";
   isMenu?: boolean;
   ref?: Ref<HTMLDivElement>;
+  /** Topics of the open data; panels that can show them are suggested first. */
+  topics?: readonly Topic[];
 };
 
 export function PanelCatalog(props: Props): React.JSX.Element {
@@ -88,6 +128,7 @@ export function PanelCatalog(props: Props): React.JSX.Element {
     selectedPanelType,
     mode = "list",
     ref,
+    topics,
   } = props;
   const { classes, cx } = useStyles();
   const { t } = useTranslation("addPanel");
@@ -179,9 +220,26 @@ export function PanelCatalog(props: Props): React.JSX.Element {
     [getFilteredPanels, allRegularPanels, allPreconfiguredPanels],
   );
 
+  // Without a search, panels for the open data's schemas come first, most topics first
+  const topicCountsByPanelType = useTopicCountsByPanelType(topics);
+  const suggestedPanels = useMemo(
+    () =>
+      searchQuery.length > 0
+        ? []
+        : _.sortBy(
+            allRegularPanels.filter((panel) => topicCountsByPanelType.has(panel.type)),
+            (panel) => -(topicCountsByPanelType.get(panel.type) ?? 0),
+          ).slice(0, MAX_SUGGESTIONS),
+    [allRegularPanels, searchQuery, topicCountsByPanelType],
+  );
+
   const allFilteredPanels = useMemo(
-    () => [...filteredPreconfiguredPanels, ...filteredRegularPanels],
-    [filteredPreconfiguredPanels, filteredRegularPanels],
+    () => [
+      ...suggestedPanels,
+      ...filteredPreconfiguredPanels,
+      ...filteredRegularPanels.filter((panel) => !suggestedPanels.includes(panel)),
+    ],
+    [filteredPreconfiguredPanels, filteredRegularPanels, suggestedPanels],
   );
 
   const highlightedPanel = useMemo(() => {
@@ -281,6 +339,8 @@ export function PanelCatalog(props: Props): React.JSX.Element {
           filteredPanels={allFilteredPanels}
           selectedPanelType={selectedPanelType}
           highlightedPanelIdx={highlightedPanelIdx}
+          suggestedCount={suggestedPanels.length}
+          topicCountsByPanelType={topicCountsByPanelType}
           onDragStart={onDragStart}
           onPanelSelect={onPanelSelect}
         />
