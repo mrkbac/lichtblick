@@ -17,8 +17,6 @@ import { Duration, interpolate, percentOf, Time } from "./time";
 type TimeAndTransform = [time: Time, transform: Transform];
 
 export const MAX_DURATION: Duration = 4_294_967_295n * BigInt(1e9);
-// Number of transforms evicted is this * max capacity
-export const MAX_CAPACITY_EVICT_PORTION = 0.25;
 
 const DEG2RAD = Math.PI / 180;
 
@@ -57,7 +55,6 @@ export class CoordinateFrame<ID extends AnyFrameId = UserFrameId> {
 
   public readonly id: ID;
   public maxStorageTime: Duration;
-  public maxCapacity: number;
   public offsetPosition: vec3 | undefined;
   public offsetEulerDegrees: vec3 | undefined;
 
@@ -76,7 +73,6 @@ export class CoordinateFrame<ID extends AnyFrameId = UserFrameId> {
     id: ID,
     parent: CoordinateFrame | undefined, // fallback frame not allowed as parent
     maxStorageTime: Duration,
-    maxCapacity: number,
     visibility: TransformVisibility = { complete: false, receivedUntil: undefined },
   ) {
     if (parent) {
@@ -84,7 +80,6 @@ export class CoordinateFrame<ID extends AnyFrameId = UserFrameId> {
     }
     this.id = id;
     this.maxStorageTime = maxStorageTime;
-    this.maxCapacity = maxCapacity;
     this.#visibility = visibility;
   }
 
@@ -211,39 +206,21 @@ export class CoordinateFrame<ID extends AnyFrameId = UserFrameId> {
   }
 
   /**
-   * Add a transform to the transform history maintained by this frame. When the maximum capacity
-   * has been reached, the history is trimmed by removing the larger portion of either
-   * frames that are outside of the `maxStorageTime` or the last quarter of oldest frames.
-   * This is to amortize the cost of trimming the history ever time a new transform is added.
+   * Add a transform to the transform history maintained by this frame, dropping transforms older
+   * than `maxStorageTime` before the newest one. The tree bounds memory by thinning evenly (see
+   * {@link decimate}), not by count here.
    *
    * If a transform with an identical timestamp already exists, it is replaced.
    */
   public addTransform(time: Time, transform: Transform, receiveTime?: Time): void {
     const history = this.#transforms;
     history.set(time, transform, receiveTime);
-    if (this.maxStorageTime === MAX_DURATION && this.maxCapacity === Infinity) {
+    if (this.maxStorageTime === MAX_DURATION) {
       // Complete history: nothing to prune
       return;
     }
 
-    // Prune by time on insert. Wait until the oldest entry is a quarter of maxStorageTime past the
-    // window so the O(n) removal runs once per quarter window, not on every insert.
-    const windowStart = history.timeAt(history.size() - 1) - this.maxStorageTime;
-    if (history.timeAt(0) < windowStart - this.maxStorageTime / 4n) {
-      // Keep the newest transform before the window, so lookups inside the window still
-      // interpolate from it instead of snapping to the next one.
-      const index = history.binarySearch(windowStart);
-      history.removeFirst(index >= 0 ? index : ~index - 1);
-    }
-
-    // Trim down to the maximum history size if we've exceeded the capacity
-    if (history.size() >= this.maxCapacity) {
-      // remove at least a quarter of old transforms, more if maxStorageTime asks for it
-      let removeCount = Math.floor(this.maxCapacity * MAX_CAPACITY_EVICT_PORTION);
-      const startIndex = history.binarySearch(windowStart);
-      removeCount = Math.max(removeCount, startIndex >= 0 ? startIndex : ~startIndex);
-      history.removeFirst(removeCount);
-    }
+    history.removeOlderThan(Number(this.maxStorageTime));
   }
 
   /**
@@ -263,6 +240,11 @@ export class CoordinateFrame<ID extends AnyFrameId = UserFrameId> {
   public setKeepEvery(keepEvery: number): void {
     this.#keepEvery = keepEvery;
     this.#transforms.setKeepEvery(keepEvery);
+  }
+
+  /** See {@link TransformHistory.setAgeThinning}; Infinity turns it off */
+  public setAgeThinning(fullRateDuration: Duration | number, spacing: Duration): void {
+    this.#transforms.setAgeThinning(Number(fullRateDuration), Number(spacing));
   }
 
   /** Time of the newest transform at or before `time` that lookups can see, if any */

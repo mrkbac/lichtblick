@@ -27,6 +27,7 @@ import {
   HistoryById,
 } from "@lichtblick/suite-base/panels/DiagnosticSummary/utils/history";
 import { MessageEvent } from "@lichtblick/suite-base/players/types";
+import { stampToTime } from "@lichtblick/suite-base/util/time";
 
 import { computeDiagnosticInfo } from "../utils/util";
 
@@ -53,7 +54,12 @@ export function addMessages(
     const t = toSec(event.receiveTime);
 
     for (const status of statusArray) {
-      const info = computeDiagnosticInfo(status, header.stamp, event.receiveTime, event.topic);
+      const info = computeDiagnosticInfo(
+        status,
+        stampToTime(header.stamp) ?? header.stamp,
+        event.receiveTime,
+        event.topic,
+      );
       history ??= new Map(prev.history);
       const before = history.get(info.id);
       if (before && t < before.lastSeen) {
