@@ -273,11 +273,11 @@ describe("PointCloudHistoryRenderable decay", () => {
     expect(errors.hasError(path, DECAY_LIMITED)).toBe(false);
   });
 
-  it("keeps the limit notice when the latest scan alone fills the point budget", () => {
+  it("shows the limit notice when no history fits next to the latest scan", () => {
     const errors = new LayerErrors();
     const path = ["topics", "/points"];
-    // 3 points: the 4-point latest cloud alone is over the budget
-    const { renderable, settings } = decode(makeCloud(), { decayTime: 10, decayMaxPoints: 3e-6 }, {
+    // 6 points: one 4-point cloud fits, two don't
+    const { renderable, settings } = decode(makeCloud(), { decayTime: 10, decayMaxPoints: 6e-6 }, {
       ...rendererMock,
       transformTree: {
         apply: (out: unknown) => out,
