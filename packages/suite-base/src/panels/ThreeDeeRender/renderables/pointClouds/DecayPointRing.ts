@@ -137,6 +137,8 @@ export class DecayPointRing extends Renderable<BaseUserData, /*TRenderer=*/ unde
   #rowsOrigin: THREE.Vector3 | undefined;
   /** Where the next turn of rechecking outdated rows starts */
   #recheckFrom = 0;
+  /** Where the next turn of retrying scans that were missing a transform starts */
+  #retryFrom = 0;
   /** Bumped whenever what the transforms resolve to may have changed, see #transformsKey */
   #epoch = 0;
   #lastKey: { version: number; time: bigint | undefined } | undefined;
@@ -260,10 +262,13 @@ export class DecayPointRing extends Renderable<BaseUserData, /*TRenderer=*/ unde
       return;
     }
     this.#sinceKept = 0;
-    if (this.#freeSlots.length === 0) {
+    // Each thinning halves the intake, so a push thins at most once: here for a slot, or below
+    // for space
+    const thinned = this.#freeSlots.length === 0;
+    if (thinned) {
       this.#thin();
     }
-    const start = this.#allocate(count);
+    const start = this.#allocate(count, { mayThin: !thinned });
     const slot = this.#freeSlots.pop()!;
     this.#slotsUsed = Math.max(this.#slotsUsed, slot + 1);
     // A reused slot still has its last scan's row: hidden until this scan is placed
@@ -409,7 +414,12 @@ export class DecayPointRing extends Renderable<BaseUserData, /*TRenderer=*/ unde
       // Matrices are relative to the first placed scan, so they stay small in float32 even for
       // far-away (e.g. UTM) coordinates; this object carries the large offset in double precision
       const origin = (this.#rowsOrigin ??= new THREE.Vector3(p.x, p.y, p.z));
-      if (Math.hypot(p.x - origin.x, p.y - origin.y, p.z - origin.z) > REBASE_DISTANCE) {
+      // Only the newest scan counts: after a rebase it is the origin, and older scans of a long
+      // window may well be farther away than that
+      if (
+        scan === scans[scans.length - 1] &&
+        Math.hypot(p.x - origin.x, p.y - origin.y, p.z - origin.z) > REBASE_DISTANCE
+      ) {
         this.#rebase = true;
       }
       const q = tempPose.orientation;
@@ -421,14 +431,24 @@ export class DecayPointRing extends Renderable<BaseUserData, /*TRenderer=*/ unde
       scan.failedAt = undefined;
     };
     const due = (scan: RingScan) => scan.posedAt !== epoch && scan.failedAt !== epoch;
-    // Scans without a row first, newest first, with a few retries of ones still missing a transform
-    let retries = POSE_RETRY_BUDGET;
+    // Scans never tried first, newest first; then a few retries of ones still missing a transform,
+    // in turns so each gets its chance
     for (let i = scans.length - 1; i >= 0 && budget > 0; i--) {
       const scan = scans[i]!;
-      if (scan.posedAt == undefined && due(scan) && (scan.failedAt == undefined || retries-- > 0)) {
+      if (scan.posedAt == undefined && scan.failedAt == undefined) {
         place(scan);
       }
     }
+    let retries = Math.min(budget, POSE_RETRY_BUDGET);
+    let retryChecked = 0;
+    for (; retryChecked < scans.length && retries > 0; retryChecked++) {
+      const scan = scans[(this.#retryFrom + retryChecked) % scans.length]!;
+      if (scan.posedAt == undefined && scan.failedAt != undefined && due(scan)) {
+        place(scan);
+        retries--;
+      }
+    }
+    this.#retryFrom = scans.length > 0 ? (this.#retryFrom + retryChecked) % scans.length : 0;
     // Outdated rows: half the rest newest first, so a new scan placed with a transform that was
     // still clamped is corrected the next frame; the other half in turns, so old rows are rechecked
     let recent = Math.min(budget, POSE_REFRESH_BUDGET / 2);
@@ -552,7 +572,7 @@ export class DecayPointRing extends Renderable<BaseUserData, /*TRenderer=*/ unde
    * by expired scans), else any other free gap, else in grown buffers, else evicting the oldest
    * scans once at the budget.
    */
-  #allocate(count: number): number {
+  #allocate(count: number, { mayThin }: { mayThin: boolean }): number {
     const fits = (start: number) =>
       start + count <= this.#capacity && !this.#overlapsScan(start, count);
     const newest = this.#scans[this.#scans.length - 1];
@@ -585,7 +605,7 @@ export class DecayPointRing extends Renderable<BaseUserData, /*TRenderer=*/ unde
     // range. Packing re-uploads every point, so first thin (once: each thinning halves the intake)
     // while the history fills over 3/4 of the buffers: the next pack is then far off instead of a
     // few scans away. Whatever still doesn't fit is dropped.
-    if (this.#scans.length > 1 && (this.#livePoints + count) * 4 > this.#capacity * 3) {
+    if (mayThin && this.#scans.length > 1 && (this.#livePoints + count) * 4 > this.#capacity * 3) {
       this.#makeRoom(this.#livePoints + count - Math.floor((this.#capacity * 3) / 4));
     }
     while (this.#scans.length > 0 && this.#livePoints + count > this.#capacity) {

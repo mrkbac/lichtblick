@@ -389,6 +389,58 @@ describe("DecayPointRing", () => {
     // Relative to the newest scan again, so float32 rows stay small
     expect(ring.position.x).toBe(5000);
     expect(poseRow(1)).toEqual(rows(new THREE.Matrix4()));
+
+    // The older scan, still 5 km from the new origin, doesn't trigger another rebase
+    const apply = vi.fn((...args: Parameters<Renderer["transformTree"]["apply"]>) =>
+      transformTree.apply(...args),
+    );
+    const tree = {
+      apply,
+      isComplete: () => false,
+      version: 0,
+    } as unknown as Renderer["transformTree"];
+    ring.updatePoses(tree, 0n, "map", "map");
+    expect(apply).toHaveBeenCalledTimes(1); // render <- fixed only
+  });
+
+  it("thins at most once per push, also when it already thinned for a slot", () => {
+    const { ring } = makeRing({ maxEntries: 4, maxPoints: 8 });
+    for (let i = 1; i <= 4; i++) {
+      push(ring, BigInt(i), 2); // every slot and point in use
+    }
+
+    push(ring, 5n, 4); // out of slots, and short of space after that thinning
+
+    expect(ring.stride()).toBe(2);
+  });
+
+  it("retries scans missing a transform in turns", () => {
+    const { ring } = makeRing({ maxEntries: 1000, maxPoints: 10_000 });
+    const apply = vi.fn((...args: Parameters<Renderer["transformTree"]["apply"]>) =>
+      transformTree.apply(...args),
+    );
+    const tree = {
+      apply,
+      isComplete: () => false,
+      version: 1,
+    } as unknown as Renderer["transformTree"] & {
+      version: number;
+    };
+    ring.updatePoses(tree, 0n, "map", "map");
+    for (let i = 1; i <= 40; i++) {
+      push(ring, BigInt(i), 1, "missing");
+    }
+    ring.updatePoses(tree, 0n, "map", "map"); // all tried once
+    apply.mockClear();
+
+    for (let frame = 0; frame < 3; frame++) {
+      tree.version++; // e.g. live transforms keep arriving
+      ring.updatePoses(tree, 0n, "map", "map");
+    }
+
+    const retried = new Set(apply.mock.calls.map(([, , , , src, , time]) => `${src} ${time}`));
+    retried.delete("map 0"); // render <- fixed
+    expect(retried.size).toBe(40); // 3 x 16 retries reach every scan, not the 16 newest again
   });
 
   it("thins at most once while making room for one scan", () => {
