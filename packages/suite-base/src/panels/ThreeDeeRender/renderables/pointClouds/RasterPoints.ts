@@ -204,10 +204,10 @@ export class RasterPoints extends THREE.Object3D {
     }
   }
 
-  /** Queues an upload of all poses */
-  public markPoses(): void {
+  /** Queues an upload of the poses of slots [0, slots) */
+  public markPoses(slots: number): void {
     if (this.#poses) {
-      this.#poses.needsUpdate = true;
+      addRange(this.#poses, 0, slots * POSE_FLOATS);
     }
   }
 

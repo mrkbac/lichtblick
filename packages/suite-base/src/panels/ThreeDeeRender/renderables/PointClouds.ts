@@ -16,6 +16,7 @@ import {
   createGeometry,
   pointStyle,
   DECAY_HISTORY_LIMITS,
+  DECAY_RING_LIMITS,
   RenderObjectHistory,
   PointsRenderable,
 } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/pointExtensionUtils";
@@ -410,7 +411,7 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
     if (latestCount > 0) {
       if (!this.#decayRing) {
         this.#decayRing = new DecayPointRing(topic, pointStyle(settings), {
-          maxEntries: DECAY_HISTORY_LIMITS.maxEntries,
+          maxEntries: DECAY_RING_LIMITS.maxEntries,
           maxPoints: decayMaxPoints(settings),
         });
         this.add(this.#decayRing);
@@ -474,31 +475,31 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
       reservePoints: this.#pointsHistory.latest().renderable.geometry.drawRange.count,
     });
 
-    // Say so when the limits, not the decay time, decide how far back the history goes. With the
-    // ring emptied by the limits, only the latest scan is shown.
+    // Say so when the limits thin the history, or (the latest scan alone filling the budget) empty it
     const evictedUntil = ring.budgetEvictedUntil();
-    const oldest = ring.oldestReceiveTime() ?? this.#pointsHistory.latest().receiveTime;
-    if (evictedUntil != undefined && evictedUntil >= expireTime) {
-      const shownSeconds = Math.round(Math.max(0, Number(currentTime - oldest) / 1e9));
+    const emptied = evictedUntil != undefined && evictedUntil >= expireTime;
+    if (emptied || ring.stride() > 1) {
       const locale = i18next.language;
       const maxPoints = decayMaxPoints(settings);
       // Formatted only when what it shows changes, not on every frame
-      const key = `${locale} ${maxPoints} ${shownSeconds} ${settings.decayTime}`;
+      const key = `${locale} ${maxPoints} ${emptied ? 0 : ring.stride()}`;
       // (errors can also be cleared elsewhere, e.g. on a topic reset)
       if (
         key !== this.#decayNoticeKey ||
         !this.renderer.settings.errors.hasError(settingsPath, DECAY_LIMITED)
       ) {
         this.#decayNoticeKey = key;
+        const values = {
+          maxPoints: maxPoints.toLocaleString(locale),
+          maxScans: DECAY_RING_LIMITS.maxEntries.toLocaleString(locale),
+          stride: ring.stride().toLocaleString(locale),
+        };
         this.renderer.settings.errors.add(
           settingsPath,
           DECAY_LIMITED,
-          i18next.t("threeDee:decayHistoryLimited", {
-            maxPoints: maxPoints.toLocaleString(locale),
-            maxScans: DECAY_HISTORY_LIMITS.maxEntries.toLocaleString(locale),
-            shownSeconds: shownSeconds.toLocaleString(locale),
-            decaySeconds: settings.decayTime.toLocaleString(locale),
-          }),
+          emptied
+            ? i18next.t("threeDee:decayHistoryLimited", values)
+            : i18next.t("threeDee:decayHistoryThinned", values),
         );
       }
     } else {

@@ -70,6 +70,10 @@ function writePoseRows(out: Float32Array, offset: number, m: THREE.Matrix4): voi
  * per slot is refreshed every frame, so late transforms and frame changes move old scans just like
  * separate objects. Points of free slots and evicted scans point at an all-zero row, which hides
  * them.
+ *
+ * Over its limits the ring thins evenly instead of dropping its oldest scans: it drops every other
+ * scan and from then on keeps 1 in twice as many new ones, so the whole decay window stays visible
+ * at a lower density.
  */
 export class DecayPointRing extends Renderable<BaseUserData, /*TRenderer=*/ undefined> {
   public override pickable = true;
@@ -92,6 +96,12 @@ export class DecayPointRing extends Renderable<BaseUserData, /*TRenderer=*/ unde
   #budgetEvictedUntil: bigint | undefined;
   /** Points across live scans (the buffers can be larger, e.g. after one oversized scan) */
   #livePoints = 0;
+  /** Keeps 1 in this many pushed scans; doubles each time the history is thinned */
+  #stride = 1;
+  /** Scans pushed since the last kept one */
+  #sinceKept = 0;
+  /** One past the highest slot ever used; poses beyond it stay zero and aren't uploaded */
+  #slotsUsed = 0;
 
   public constructor(topic: string, style: RingStyle, limits: HistoryLimits) {
     super(`${topic}:decay`, undefined, {
@@ -152,14 +162,19 @@ export class DecayPointRing extends Renderable<BaseUserData, /*TRenderer=*/ unde
     return this.#livePoints;
   }
 
+  /** The ring keeps 1 in this many scans (1 until it is first over its limits) */
+  public stride(): number {
+    return this.#stride;
+  }
+
   /** Receive time of the oldest accumulated scan */
   public oldestReceiveTime(): bigint | undefined {
     return this.#scans[0]?.receiveTime;
   }
 
   /**
-   * Receive time of the newest scan that was dropped to stay within the limits rather than because
-   * it expired. Once this is older than the decay window, nothing in the window is missing.
+   * Receive time of the newest scan that was dropped because the latest scan alone fills the point
+   * budget (thinning can't help then). Once this is older than the decay window, nothing is missing.
    */
   public budgetEvictedUntil(): bigint | undefined {
     return this.#budgetEvictedUntil;
@@ -178,8 +193,8 @@ export class DecayPointRing extends Renderable<BaseUserData, /*TRenderer=*/ unde
   }
 
   /**
-   * Copies a decoded scan into the ring. Evicts the oldest scans when the ring is out of space or
-   * slots, after growing up to the point budget.
+   * Copies a decoded scan into the ring, unless thinning skips it. Thins the history when the ring
+   * is out of slots, or out of space after growing up to the point budget.
    */
   public push(info: RingScanInfo, positions: Float32Array, colors: Uint8Array): void {
     const count = positions.length / 3;
@@ -187,11 +202,16 @@ export class DecayPointRing extends Renderable<BaseUserData, /*TRenderer=*/ unde
     if (count === 0 || count > MAX_SET_POINTS) {
       return;
     }
+    if (++this.#sinceKept < this.#stride) {
+      return;
+    }
+    this.#sinceKept = 0;
     if (this.#freeSlots.length === 0) {
-      this.#evictOldest({ budget: true });
+      this.#thin();
     }
     const start = this.#allocate(count);
     const slot = this.#freeSlots.pop()!;
+    this.#slotsUsed = Math.max(this.#slotsUsed, slot + 1);
     this.#scans.push({ ...info, slot, start, count });
     this.#livePoints += count;
 
@@ -202,8 +222,9 @@ export class DecayPointRing extends Renderable<BaseUserData, /*TRenderer=*/ unde
   }
 
   /**
-   * Evicts the oldest scans until the history plus `reservePoints` and one scan (the latest, drawn
-   * separately) fit in the limits. A latest scan bigger than the budget leaves no history.
+   * Thins the history until it plus `reservePoints` (the latest scan, drawn separately) fit in the
+   * point budget, and goes back to a denser history once there is room for twice the points. A
+   * latest scan bigger than the budget leaves no history.
    */
   public enforceLimits({
     maxPoints,
@@ -213,12 +234,22 @@ export class DecayPointRing extends Renderable<BaseUserData, /*TRenderer=*/ unde
     reservePoints: number;
   }): void {
     this.#maxPoints = maxPoints;
-    while (
-      this.#scans.length > 0 &&
-      (this.#livePoints + reservePoints > maxPoints ||
-        this.#scans.length + 1 > this.#limits.maxEntries)
+    while (this.#scans.length > 0 && this.#livePoints + reservePoints > maxPoints) {
+      if (this.#scans.length > 1) {
+        this.#thin();
+      } else {
+        this.#evictOldest({ budget: true });
+      }
+    }
+    // Twice the density must fit with a quarter to spare, so this doesn't undo the last thinning
+    // (which leaves the history about half full) and flip back and forth
+    const roomFor = (used: number, limit: number) => used * 2 * 4 <= limit * 3;
+    if (
+      this.#stride > 1 &&
+      roomFor(this.#livePoints + reservePoints, maxPoints) &&
+      roomFor(this.#scans.length, this.#limits.maxEntries)
     ) {
-      this.#evictOldest({ budget: true });
+      this.#stride /= 2;
     }
   }
 
@@ -247,7 +278,7 @@ export class DecayPointRing extends Renderable<BaseUserData, /*TRenderer=*/ unde
   ): string | undefined {
     let missingFrame: string | undefined;
     const data = this.#points.poses()!;
-    data.fill(0);
+    data.fill(0, 0, this.#slotsUsed * POSE_FLOATS);
     // Matrices are relative to the newest scan's origin so they stay small in float32 even for
     // far-away (e.g. UTM) coordinates; this object carries the large offset in double precision
     let haveOrigin = false;
@@ -279,7 +310,7 @@ export class DecayPointRing extends Renderable<BaseUserData, /*TRenderer=*/ unde
       tempMatrix.compose(tempPosition, tempQuaternion, UNIT_SCALE);
       writePoseRows(data, scan.slot * POSE_FLOATS, tempMatrix);
     }
-    this.#points.markPoses();
+    this.#points.markPoses(this.#slotsUsed);
     // One dispatch covers every live scan; points in free gaps are hidden by their slot
     this.#points.drawCount = end;
     this.#points.updateShapes();
@@ -371,14 +402,15 @@ export class DecayPointRing extends Renderable<BaseUserData, /*TRenderer=*/ unde
         return this.#livePoints;
       }
     }
-    const newestNow = this.#scans[this.#scans.length - 1];
-    const after = newestNow ? newestNow.start + newestNow.count : 0;
-    const start = after + count <= this.#capacity ? after : 0;
-    // Evict in age order: an older scan never outlives a newer one
-    while (this.#overlapsScan(start, count)) {
+    // At the budget: thin, then pack the live scans so the freed space is one range
+    while (this.#livePoints + count > this.#capacity && this.#scans.length > 1) {
+      this.#thin();
+    }
+    if (this.#livePoints + count > this.#capacity) {
       this.#evictOldest({ budget: true });
     }
-    return start;
+    this.#resize(this.#capacity);
+    return this.#livePoints;
   }
 
   /** First free range of `count` points between live scans or after the last one */
@@ -424,6 +456,19 @@ export class DecayPointRing extends Renderable<BaseUserData, /*TRenderer=*/ unde
     this.#points.setArrays(positions, colors, slots);
   }
 
+  /** Drops every other scan, keeping the newest, and keeps 1 in twice as many pushed from now on */
+  #thin(): void {
+    const newest = this.#scans.length - 1;
+    this.#scans = this.#scans.filter((scan, i) => {
+      const keep = (newest - i) % 2 === 0;
+      if (!keep) {
+        this.#free(scan);
+      }
+      return keep;
+    });
+    this.#stride *= 2;
+  }
+
   #evictOldest({ budget }: { budget: boolean }): void {
     const scan = this.#scans.shift();
     if (!scan) {
@@ -432,6 +477,10 @@ export class DecayPointRing extends Renderable<BaseUserData, /*TRenderer=*/ unde
     if (budget) {
       this.#budgetEvictedUntil = scan.receiveTime;
     }
+    this.#free(scan);
+  }
+
+  #free(scan: RingScan): void {
     this.#livePoints -= scan.count;
     this.#slots.fill(this.#hiddenSlot, scan.start, scan.start + scan.count);
     this.#points.markSlots(scan.start, scan.count);

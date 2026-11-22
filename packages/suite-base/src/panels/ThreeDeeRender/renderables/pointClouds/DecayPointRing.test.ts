@@ -134,26 +134,60 @@ describe("DecayPointRing", () => {
     expect(positions()[8 * 3]).toBe(4);
   });
 
-  it("evicts the oldest scans at the point budget and reports it", () => {
-    const { ring } = makeRing({ maxEntries: 100, maxPoints: 10 });
+  it("thins every other scan at the point budget, keeping the newest, and packs the rest", () => {
+    const { ring, positions } = makeRing({ maxEntries: 100, maxPoints: 10 });
     push(ring, 1n, 4);
     push(ring, 2n, 4);
     push(ring, 3n, 4);
 
-    expect(ring.pointCount()).toBeLessThanOrEqual(10);
+    expect(ring.pointCount()).toBe(8);
     expect(ring.oldestReceiveTime()).toBe(2n);
-    expect(ring.budgetEvictedUntil()).toBe(1n);
+    expect(ring.stride()).toBe(2);
+    expect(ring.budgetEvictedUntil()).toBeUndefined();
+    expect(positions()[0]).toBe(2);
+    expect(positions()[4 * 3]).toBe(3);
   });
 
-  it("evicts the oldest scan when out of slots", () => {
-    const { ring } = makeRing({ maxEntries: 2, maxPoints: 1000 });
+  it("keeps the whole window at a lower density when out of slots", () => {
+    const { ring } = makeRing({ maxEntries: 4, maxPoints: 1000 });
+    for (let i = 1; i <= 16; i++) {
+      push(ring, BigInt(i), 1);
+    }
+
+    // Dropping the oldest would keep only 13-16
+    expect(ring.scanCount()).toBe(4);
+    expect(ring.oldestReceiveTime()).toBe(4n);
+    expect(ring.stride()).toBe(4);
+    expect(ring.budgetEvictedUntil()).toBeUndefined();
+  });
+
+  it("keeps 1 in `stride` new scans, and goes back to every scan once there is room", () => {
+    const { ring } = makeRing({ maxEntries: 100, maxPoints: 10 });
+    for (let i = 1; i <= 3; i++) {
+      push(ring, BigInt(i), 4);
+    }
+    expect(ring.stride()).toBe(2);
+    push(ring, 4n, 1); // skipped
+    push(ring, 5n, 1);
+    expect(ring.scanCount()).toBe(3);
+
+    ring.expire(5n); // e.g. the decay time was lowered: 1 point left
+    ring.enforceLimits({ maxPoints: 10, reservePoints: 0 });
+    expect(ring.stride()).toBe(1);
+    push(ring, 6n, 1);
+    push(ring, 7n, 1);
+    expect(ring.scanCount()).toBe(3);
+  });
+
+  it("uploads only the poses of slots in use", () => {
+    const { ring, points } = makeRing();
     push(ring, 1n, 1);
     push(ring, 2n, 1);
-    push(ring, 3n, 1);
+    points.poseAttribute()!.clearUpdateRanges();
 
-    expect(ring.scanCount()).toBe(2);
-    expect(ring.oldestReceiveTime()).toBe(2n);
-    expect(ring.budgetEvictedUntil()).toBe(1n);
+    ring.updatePoses(transformTree, 0n, "map", "map");
+
+    expect(points.poseAttribute()!.updateRanges).toEqual([{ start: 0, count: 2 * 12 }]);
   });
 
   it("keeps a single scan larger than the budget", () => {
@@ -172,24 +206,22 @@ describe("DecayPointRing", () => {
     ring.enforceLimits({ maxPoints: 10, reservePoints: 0 });
 
     expect(ring.pointCount()).toBe(6);
-    expect(ring.budgetEvictedUntil()).toBe(2n);
+    expect(ring.oldestReceiveTime()).toBe(3n);
+    expect(ring.stride()).toBe(2);
   });
 
-  it("reserves room for the latest scan in both limits", () => {
+  it("reserves room for the latest scan, and empties when the latest alone fills the budget", () => {
     const { ring } = makeRing({ maxEntries: 3, maxPoints: 10 });
     push(ring, 1n, 3);
     push(ring, 2n, 3);
 
     ring.enforceLimits({ maxPoints: 10, reservePoints: 5 }); // 3 + 3 + 5 > 10
     expect(ring.oldestReceiveTime()).toBe(2n);
-
-    push(ring, 3n, 1);
-    push(ring, 4n, 1);
-    ring.enforceLimits({ maxPoints: 10, reservePoints: 0 }); // 3 history scans + the latest > 3 slots
-    expect(ring.scanCount()).toBe(2);
+    expect(ring.budgetEvictedUntil()).toBeUndefined();
 
     ring.enforceLimits({ maxPoints: 10, reservePoints: 50 }); // the latest alone exceeds the budget
     expect(ring.scanCount()).toBe(0);
+    expect(ring.budgetEvictedUntil()).toBe(2n);
   });
 
   it("walks one range covering every live scan, free gaps hidden by their slot", () => {
@@ -285,7 +317,7 @@ describe("DecayPointRing", () => {
 
     expect(ring.pointCount()).toBe(100);
     expect(ring.oldestReceiveTime()).toBe(3n);
-    expect(ring.budgetEvictedUntil()).toBe(2n);
+    expect(ring.stride()).toBe(4);
   });
 
   it("bounds live scans where the shader draws them", () => {

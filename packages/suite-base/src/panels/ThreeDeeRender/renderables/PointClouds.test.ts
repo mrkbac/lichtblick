@@ -246,23 +246,23 @@ describe("PointCloudHistoryRenderable decay", () => {
   it("drops the ring and its limit notice when the decay time is turned off", () => {
     const errors = new LayerErrors();
     const path = ["topics", "/points"];
-    const { renderable, settings } = decode(makeCloud(), { decayTime: 10 }, {
+    // 4-point clouds and a 10-point budget: the history thins at the third scan
+    const { renderable, settings } = decode(makeCloud(), { decayTime: 10, decayMaxPoints: 1e-5 }, {
       ...rendererMock,
       transformTree: { apply: (out: unknown) => out },
       settings: { errors },
     } as unknown as Renderer);
     vi.mocked(updatePose).mockReturnValue(true);
-    // One more scan than the 1,000-scan limit allows next to the latest
-    for (let i = 1; i <= 1001; i++) {
+    for (let i = 1; i <= 4; i++) {
       renderable.pushHistory(makeCloud(), settings, BigInt(i));
       renderable.updatePointCloud(makeCloud(), undefined, settings, BigInt(i));
     }
-    renderable.startFrame(1001n, "map", "map");
+    renderable.startFrame(4n, "map", "map");
     expect(errors.hasError(path, DECAY_LIMITED)).toBe(true);
     vi.mocked(console.warn).mockClear(); // the limit notice is logged once
 
-    renderable.updatePointCloud(makeCloud(), undefined, { ...settings, decayTime: 0 }, 1002n);
-    renderable.startFrame(1002n, "map", "map");
+    renderable.updatePointCloud(makeCloud(), undefined, { ...settings, decayTime: 0 }, 5n);
+    renderable.startFrame(5n, "map", "map");
 
     expect(renderable.children.some((child) => child instanceof DecayPointRing)).toBe(false);
     expect(errors.hasError(path, DECAY_LIMITED)).toBe(false);
