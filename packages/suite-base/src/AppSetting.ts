@@ -25,7 +25,6 @@ export enum AppSetting {
   ENABLE_MEMORY_USE_INDICATOR = "dev.memory-use-indicator",
 
   // Miscellaneous
-  HIDE_SIGN_IN_PROMPT = "hideSignInPrompt",
   LAUNCH_PREFERENCE = "launchPreference",
   SHOW_OPEN_DIALOG_ON_STARTUP = "ui.open-dialog-startup",
   OPEN_FOXGLOVE_LINKS = "desktop.openFoxgloveLinks",

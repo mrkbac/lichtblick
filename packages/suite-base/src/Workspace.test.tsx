@@ -14,7 +14,6 @@ import {
 } from "@lichtblick/suite-base/components/MessagePipeline";
 import Sidebars from "@lichtblick/suite-base/components/Sidebars";
 import { SidebarItem } from "@lichtblick/suite-base/components/Sidebars/types";
-import { useCurrentUserType } from "@lichtblick/suite-base/context/CurrentUserContext";
 import { useEvents } from "@lichtblick/suite-base/context/EventsContext";
 import { useLayoutManager } from "@lichtblick/suite-base/context/LayoutManagerContext";
 import { usePlayerSelection } from "@lichtblick/suite-base/context/PlayerSelectionContext";
@@ -158,9 +157,6 @@ vi.mock("@lichtblick/suite-base/context/CurrentLayoutContext", () => ({
     setSelectedLayoutId: vi.fn(),
   }),
 }));
-vi.mock("@lichtblick/suite-base/context/CurrentUserContext", () => ({
-  useCurrentUserType: vi.fn(),
-}));
 vi.mock("@lichtblick/suite-base/context/EventsContext", () => ({
   useEvents: vi.fn(),
 }));
@@ -281,7 +277,6 @@ describe("Workspace - alerts badge in leftSidebarItems", () => {
     });
     (useHandleFiles as Mock).mockReturnValue({ handleFiles: vi.fn() });
     (useAppConfigurationValue as Mock).mockReturnValue([false]);
-    (useCurrentUserType as Mock).mockReturnValue("unauthenticated");
     (useEvents as Mock).mockImplementation(
       (selector: (store: { eventsSupported: boolean; selectEvent: Mock }) => unknown) =>
         selector({ eventsSupported: false, selectEvent: vi.fn() }),
@@ -396,7 +391,6 @@ describe("Workspace - session-based MCAP resolution", () => {
     });
     (useHandleFiles as Mock).mockReturnValue({ handleFiles: vi.fn() });
     (useAppConfigurationValue as Mock).mockReturnValue([false]);
-    (useCurrentUserType as Mock).mockReturnValue("unauthenticated");
     (useEvents as Mock).mockImplementation(
       (selector: (store: { eventsSupported: boolean; selectEvent: Mock }) => unknown) =>
         selector({ eventsSupported: false, selectEvent: vi.fn() }),
@@ -768,7 +762,6 @@ describe("Workspace - fetchLayoutFromUrl", () => {
     });
     (useHandleFiles as Mock).mockReturnValue({ handleFiles: vi.fn() });
     (useAppConfigurationValue as Mock).mockReturnValue([false]);
-    (useCurrentUserType as Mock).mockReturnValue("unauthenticated");
     (useEvents as Mock).mockImplementation(
       (selector: (store: { eventsSupported: boolean; selectEvent: Mock }) => unknown) =>
         selector({ eventsSupported: false, selectEvent: vi.fn() }),
