@@ -296,25 +296,25 @@ describe("DecayPointRing", () => {
     expect(ring.budgetEvictedUntil()).toBe(4n); // reported as history lost to the budget
   });
 
-  it("recomputes rows when a frame offset is edited or a complete tree's playback time moves", () => {
+  it("recomputes rows when the tree changes or a complete tree's playback time moves", () => {
     const { ring } = makeRing();
     push(ring, 1n, 1);
-    const frame: { offsetPosition?: number[] } = {};
     let complete = false;
     const apply = vi.fn((...args: Parameters<Renderer["transformTree"]["apply"]>) =>
       transformTree.apply(...args),
     );
     const tree = {
       apply,
-      frames: () => new Map([["lidar", frame]]),
       isComplete: () => complete,
       version: 1,
-    } as unknown as Renderer["transformTree"];
+    } as unknown as Renderer["transformTree"] & { version: number };
     ring.updatePoses(tree, 0n, "map", "map");
     const placements = () => apply.mock.calls.filter(([, , , , src]) => src === "lidar").length;
     expect(placements()).toBe(1);
+    ring.updatePoses(tree, 0n, "map", "map");
+    expect(placements()).toBe(1);
 
-    frame.offsetPosition = [1, 0, 0]; // edited in the settings, no new transforms
+    tree.version++; // e.g. a new transform, or a frame offset edited in the settings
     ring.updatePoses(tree, 0n, "map", "map");
     expect(placements()).toBe(2);
 
@@ -344,6 +344,78 @@ describe("DecayPointRing", () => {
       expect(poseRow(slot)).not.toEqual(Array(12).fill(0));
     }
     expect(ring.updatePoses(transformTree, 0n, "map", "map")).toBe("missing");
+  });
+
+  it("corrects the newest outdated rows first, and retries only a few scans missing a transform", () => {
+    const { ring } = makeRing({ maxEntries: 1000, maxPoints: 10_000 });
+    const apply = vi.fn((...args: Parameters<Renderer["transformTree"]["apply"]>) =>
+      transformTree.apply(...args),
+    );
+    const tree = {
+      apply,
+      isComplete: () => false,
+      version: 1,
+    } as unknown as Renderer["transformTree"] & {
+      version: number;
+    };
+    ring.updatePoses(tree, 0n, "map", "map");
+    for (let i = 1; i <= 300; i++) {
+      push(ring, BigInt(i), 1, i <= 200 ? "missing" : "lidar");
+    }
+    for (let frame = 0; frame < 3; frame++) {
+      ring.updatePoses(tree, 0n, "map", "map"); // every scan tried once
+    }
+    expect(ring.posesPending()).toBe(false);
+    apply.mockClear();
+
+    tree.version++; // every row outdated, every missing scan worth a retry
+    ring.updatePoses(tree, 0n, "map", "map");
+
+    const times = apply.mock.calls.slice(0, -1).map(([, , , , src, , time]) => [src, time]);
+    expect(times.filter(([src]) => src === "missing")).toHaveLength(16);
+    // The newest placed scan is rechecked in this frame
+    expect(times).toContainEqual(["lidar", 300n]);
+  });
+
+  it("rebases the rows once the scans are far from their origin", () => {
+    const { ring, poseRow } = makeRing();
+    push(ring, 1n, 1);
+    ring.updatePoses(transformTree, 0n, "map", "map");
+    push(ring, 5000n, 1); // placed at x = 5000, 5 km away
+
+    ring.updatePoses(transformTree, 0n, "map", "map");
+    ring.updatePoses(transformTree, 0n, "map", "map");
+
+    // Relative to the newest scan again, so float32 rows stay small
+    expect(ring.position.x).toBe(5000);
+    expect(poseRow(1)).toEqual(rows(new THREE.Matrix4()));
+  });
+
+  it("thins at most once while making room for one scan", () => {
+    const { ring } = makeRing({ maxEntries: 100, maxPoints: 16 });
+    for (let i = 1; i <= 8; i++) {
+      push(ring, BigInt(i), 2); // fills the 16-point buffers
+    }
+    expect(ring.stride()).toBe(1);
+
+    push(ring, 9n, 12); // needs far more than one thinning frees
+
+    expect(ring.stride()).toBe(2);
+  });
+
+  it("names the fixed frame when the render frame can't be placed in it", () => {
+    const { ring } = makeRing();
+    push(ring, 1n, 1);
+    const tree = {
+      apply: (out: Pose, input: Pose, _r: string, _f: string, src: string, ...rest: bigint[]) =>
+        src === "odom"
+          ? undefined
+          : transformTree.apply(out, input, _r, _f, src, rest[0]!, rest[1]!),
+      isComplete: () => false,
+      version: 0,
+    } as unknown as Renderer["transformTree"];
+
+    expect(ring.updatePoses(tree, 0n, "map", "odom")).toBe("odom");
   });
 
   it("frees only about as much as the budget needs", () => {
