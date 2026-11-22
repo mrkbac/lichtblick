@@ -33,8 +33,9 @@ const BUDGETS: Record<string, number> = {
   heap: 1.1,
   "gzip bytes": 1.01,
 };
-/** Over budget or not comparable, and nothing worse */
-const EXIT_WAIVABLE = 3;
+/** Exit codes; ci.yml lets the perf-budget-accepted label accept only EXIT_OVER_BUDGET */
+const EXIT_NOT_COMPARABLE = 2;
+const EXIT_OVER_BUDGET = 3;
 const ROUNDS = 10;
 const HEAP_ROUNDS = 3;
 /** Measured in a fresh process per run (see childMain) */
@@ -198,8 +199,8 @@ async function main(): Promise<void> {
     await fs.promises.access(path.join(baseDir, "benchmark/.perf/cases.mjs"));
   })();
   await headBuild;
-  // Cases that can't be compared, e.g. because the PR changed an API they call: the label can
-  // accept these, like a metric over budget
+  // Cases that can't be compared (e.g. the PR changed an API they call). Nothing was measured for
+  // them, so they fail and the label can't accept them: the cases must run on both builds
   const problems: string[] = [];
   // A run that compared nothing (failed base build) must fail, and the label can't change that
   const baseError = await baseBuild.then(
@@ -331,18 +332,26 @@ async function main(): Promise<void> {
     "",
     !baseOk
       ? "**Nothing was compared.** This fails regardless of labels; re-run once the base builds."
-      : failed + problems.length > 0
-        ? `**${failed} metric(s) over budget, ${problems.length} case(s) not comparable.** A deliberate trade-off can be accepted with the \`perf-budget-accepted\` PR label.`
-        : "All metrics within budget.",
+      : problems.length > 0
+        ? `**${problems.length} case(s) not comparable.** This fails regardless of labels: make the cases in benchmark/src/perf/cases.ts run on both builds.`
+        : failed > 0
+          ? `**${failed} metric(s) over budget.** A deliberate trade-off can be accepted with the \`perf-budget-accepted\` PR label.`
+          : "All metrics within budget.",
     "",
   ].join("\n");
   console.log(report);
   if (process.env.GITHUB_STEP_SUMMARY) {
     fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, report);
   }
-  // Exit code 3 means "only things the perf-budget-accepted label may accept"; ci.yml checks the
-  // label then. Anything else non-zero (a failed base build, a crash) is never accepted.
-  process.exitCode = !baseOk ? 1 : failed + problems.length > 0 ? EXIT_WAIVABLE : 0;
+  // Only "over budget and nothing else" may be accepted by the label (ci.yml checks it then). A
+  // failed base build, a case that isn't comparable or a crash (exit 1) never is.
+  process.exitCode = !baseOk
+    ? 1
+    : problems.length > 0
+      ? EXIT_NOT_COMPARABLE
+      : failed > 0
+        ? EXIT_OVER_BUDGET
+        : 0;
 }
 
 if (process.argv[2] === "--child") {

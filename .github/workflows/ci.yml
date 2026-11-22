@@ -104,8 +104,9 @@ jobs:
           BASE: ${{ github.event.pull_request.base.sha }}
           GH_TOKEN: ${{ github.token }}
           PR: ${{ github.event.pull_request.number }}
-        # Exit code 3 means over budget or not comparable, which a deliberate trade-off may accept
-        # with the `perf-budget-accepted` label. The label is read now, not from the event, so a
+        # Exit code 3 means over budget (and nothing worse), which a deliberate trade-off may accept
+        # with the `perf-budget-accepted` label. Not comparable (2), a failed base build or a crash
+        # always fail. The label is read now, not from the event, so a
         # re-run (perf-budget-label.yml) sees the current state. The annotation titles tell
         # perf-budget-label.yml what this run decided. Other failures are never accepted.
         run: |
@@ -113,7 +114,11 @@ jobs:
           node --expose-gc ci/perf-budget.ts --base "$(git merge-base HEAD "$BASE")"
           code=$?
           if [ "$code" -eq 3 ]; then
-            if gh pr view "$PR" -R "$GITHUB_REPOSITORY" --json labels --jq '.labels[].name' | grep -qx perf-budget-accepted; then
+            if ! labels=$(gh pr view "$PR" -R "$GITHUB_REPOSITORY" --json labels --jq '.labels[].name'); then
+              echo "::error::Couldn't read the PR's labels"
+              exit 1
+            fi
+            if grep -qx perf-budget-accepted <<<"$labels"; then
               echo "::notice title=perf-budget-accepted::Over budget, accepted with the perf-budget-accepted label"
               exit 0
             fi

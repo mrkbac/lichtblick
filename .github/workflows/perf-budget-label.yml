@@ -1,7 +1,8 @@
 name: Perf budget label
 
 # Keeps the required perf-budget check (ci.yml) in line with the `perf-budget-accepted` label:
-# when the label is added or removed, waits for the PR's perf-budget job to finish, then re-runs it
+# when the label is added or removed, waits for the PR's whole CI run to finish (a re-run requested
+# while other jobs still run can be rejected), then re-runs perf-budget
 # if its result no longer matches the label (failed over budget but now labelled, or passed by the
 # label that is now gone). The job reads the label itself when it finishes, and the annotation it
 # leaves says what it decided.
@@ -41,23 +42,31 @@ jobs:
         run: |
           set -euo pipefail
           while true; do
-            sha=$(gh pr view "$PR" --json headRefOid --jq .headRefOid)
-            run=$(gh run list --workflow ci.yml --event pull_request --commit "$sha" --limit 1 --json databaseId --jq '.[0].databaseId // empty')
+            pr=$(gh pr view "$PR" --json headRefOid,headRefName)
+            sha=$(jq -r .headRefOid <<<"$pr")
+            # The PR's branch and its head commit: a commit alone can belong to other PRs too
+            run=$(gh run list --workflow ci.yml --event pull_request --branch "$(jq -r .headRefName <<<"$pr")" --limit 20 --json databaseId,status,headSha |
+              jq --arg sha "$sha" '[.[] | select(.headSha == $sha)][0] // empty')
             if [ -z "$run" ]; then
-              echo "No CI run for $sha yet"
+              echo "No CI run for $sha yet; it reads the label itself"
               exit 0
             fi
-            job=$(gh api "repos/$GH_REPO/actions/runs/$run/jobs" --jq '.jobs[] | select(.name == "perf-budget")')
-            if [ "$(jq -r '.status // ""' <<<"$job")" = completed ]; then
+            if [ "$(jq -r .status <<<"$run")" = completed ]; then
               break
             fi
-            echo "perf-budget in run $run hasn't finished; waiting"
+            echo "CI run $(jq -r .databaseId <<<"$run") hasn't finished; waiting"
             sleep 20
           done
+          run=$(jq -r .databaseId <<<"$run")
+          job=$(gh api --paginate "repos/$GH_REPO/actions/runs/$run/jobs" --jq '.jobs[] | select(.name == "perf-budget")')
+          if [ -z "$job" ] || [ "$(jq -r .conclusion <<<"$job")" = skipped ]; then
+            echo "perf-budget didn't run in $run (tests failed, cancelled, awaiting approval); nothing to reconcile"
+            exit 0
+          fi
           id=$(jq -r .id <<<"$job")
           conclusion=$(jq -r .conclusion <<<"$job")
           labelled=$(gh pr view "$PR" --json labels --jq 'any(.labels[]; .name == "perf-budget-accepted")')
-          titles=$(gh api "repos/$GH_REPO/check-runs/$id/annotations" --jq '.[].title')
+          titles=$(gh api --paginate "repos/$GH_REPO/check-runs/$id/annotations" --jq '.[].title')
           echo "perf-budget: $conclusion; label present: $labelled; annotations: $(echo $titles)"
           if { [ "$labelled" = true ] && [ "$conclusion" = failure ] && grep -qx perf-budget-waivable <<<"$titles"; } ||
             { [ "$labelled" = false ] && [ "$conclusion" = success ] && grep -qx perf-budget-accepted <<<"$titles"; }; then
