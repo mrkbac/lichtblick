@@ -496,7 +496,7 @@ export class McapUnindexedIterableSource implements ISerializedIterableSource {
     if (chunk === -1) {
       return reader.peek(position, length);
     }
-    const records = this.#chunkCache.get(chunk);
+    const records = this.#cachedRecords(chunk);
     return records?.subarray(position, position + length);
   }
 
@@ -531,11 +531,15 @@ export class McapUnindexedIterableSource implements ISerializedIterableSource {
     };
   }
 
-  /** The decompressed records of chunk `i`, from a small LRU cache */
+  #cachedRecords(i: number): Uint8Array | undefined {
+    const view = this.#chunkCache.get(BigInt(this.#chunkOffsets[i]!));
+    return view && new Uint8Array(view.buffer, view.byteOffset, view.byteLength);
+  }
+
   async #chunkRecords(i: number): Promise<Uint8Array> {
-    const cached = this.#chunkCache.get(BigInt(this.#chunkOffsets[i]!));
+    const cached = this.#cachedRecords(i);
     if (cached) {
-      return new Uint8Array(cached.buffer, cached.byteOffset, cached.byteLength);
+      return cached;
     }
     // Concurrent readers (playback, backfill) share one load, so a chunk is read and counted once
     let load = this.#chunkLoads.get(i);
