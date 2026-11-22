@@ -10,8 +10,10 @@ permissions:
 
 # A new push to a PR supersedes the previous run; cancel it so it doesn't hold runners.
 # Runs on licht are never cancelled, so every merge commit keeps a result.
+# Re-run attempts (e.g. perf-budget-label.yml re-running an older commit's perf-budget) get their own
+# group per commit, so they never cancel the CI of a newer push.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}${{ github.run_attempt != '1' && format('-rerun-{0}', github.sha) || '' }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
