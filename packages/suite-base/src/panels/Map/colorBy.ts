@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
-import { distanceMeters, Units } from "./geo";
-import { SampleStore, TrackStore } from "./track";
+import { haversineMeters, Units } from "./geo";
+import { lastIndexAtOrBefore, SampleStore, TrackStore } from "./track";
 
 const SPEED_UNITS: Record<Units, { label: string; perMps: number }> = {
   metric: { label: "km/h", perMps: 3.6 },
@@ -19,10 +19,24 @@ export function speedUnitLabel(units: Units): string {
  * next one.
  */
 export function speedValues(track: TrackStore, units: Units, windowSeconds = 0.5): Float64Array {
-  const { time } = track.columns;
+  const { time, lon, lat } = track.columns;
   const values = new Float64Array(track.length);
-  let from = 0;
-  for (let i = 0; i < track.length; i++) {
+  // Rows appended since the last call are all that's new: reuse the rest. The newest row can be
+  // replaced in place while thinned, and the first takes the second's speed, so redo both.
+  const cached = speedCache.get(track);
+  let start = 0;
+  if (
+    cached?.version === track.version &&
+    cached.units === units &&
+    cached.windowSeconds === windowSeconds &&
+    cached.values.length > 2 &&
+    cached.values.length <= track.length
+  ) {
+    start = cached.values.length - 1;
+    values.set(cached.values.subarray(0, start));
+  }
+  let from = Math.max(0, lastIndexAtOrBefore(time, start, time[start]! - windowSeconds));
+  for (let i = start; i < track.length; i++) {
     const t = time[i]!;
     // Advance `from` to the latest fix still at least `windowSeconds` back.
     while (from + 1 < i && t - time[from + 1]! >= windowSeconds) {
@@ -31,14 +45,21 @@ export function speedValues(track: TrackStore, units: Units, windowSeconds = 0.5
     const dt = t - time[from]!;
     values[i] =
       dt > 0
-        ? (distanceMeters(track.lngLat(from), track.lngLat(i)) / dt) * SPEED_UNITS[units].perMps
+        ? (haversineMeters(lon[from]!, lat[from]!, lon[i]!, lat[i]!) / dt) *
+          SPEED_UNITS[units].perMps
         : NaN;
   }
-  if (values.length > 1 && isNaN(values[0]!)) {
+  if (start === 0 && values.length > 1 && isNaN(values[0]!)) {
     values[0] = values[1]!;
   }
+  speedCache.set(track, { version: track.version, units, windowSeconds, values });
   return values;
 }
+
+const speedCache = new WeakMap<
+  TrackStore,
+  { version: number; units: Units; windowSeconds: number; values: Float64Array }
+>();
 
 /** For each fix, the latest sample at or before it (NaN if none). */
 export function sampleAt(samples: SampleStore | undefined, track: TrackStore): Float64Array {
@@ -70,7 +91,15 @@ export function valueRange(
   min: number | undefined,
   max: number | undefined,
 ): [number, number] | undefined {
-  const sorted = Float64Array.from(values).filter(isFinite).sort();
+  // A percentile of an even sample is as good for a color scale, and sorting stays cheap.
+  const stride = Math.max(1, Math.ceil(values.length / 100_000));
+  const sample: number[] = [];
+  for (let i = 0; i < values.length; i += stride) {
+    if (isFinite(values[i]!)) {
+      sample.push(values[i]!);
+    }
+  }
+  const sorted = Float64Array.from(sample).sort();
   if (sorted.length === 0) {
     return undefined;
   }

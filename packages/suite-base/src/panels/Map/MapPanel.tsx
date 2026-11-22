@@ -42,7 +42,7 @@ import { toError } from "@lichtblick/suite-base/util/toError";
 
 import { AutoHideAttributionControl } from "./AutoHideAttributionControl";
 import { MapToolbar } from "./MapToolbar";
-import { normalize, sampleAt, speedUnitLabel, speedValues, valueRange } from "./colorBy";
+import { sampleAt, speedUnitLabel, speedValues, valueRange } from "./colorBy";
 import {
   applySettingsAction,
   buildSettingsTree,
@@ -52,6 +52,7 @@ import {
 } from "./config";
 import {
   ARROW_IMAGE,
+  ColorScale,
   createArrowImage,
   currentFeatures,
   DataSource,
@@ -742,7 +743,7 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
 
   // "Color by": per-fix values from speed or a message path, with a range per topic.
   const { colorValues, legends } = useMemo(() => {
-    const values = new Map<string, { values: Float64Array; scale: Float64Array; unit: string }>();
+    const values = new Map<string, ColorScale & { unit: string }>();
     const legendList: {
       topic: string;
       title: string;
@@ -765,12 +766,8 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
         continue;
       }
       const reverse = style?.colorReverse === true;
-      const scale = raw.map((value) => {
-        const t = normalize(value, range);
-        return reverse ? 1 - t : t;
-      });
       const unit = colorBy === "speed" ? ` ${speedUnitLabel(config.units)}` : "";
-      values.set(topic, { values: raw, scale, unit });
+      values.set(topic, { values: raw, range, reverse, unit });
       legendList.push({
         topic,
         title:
@@ -1152,7 +1149,7 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
         const color = colors.get(track.store.topic);
         return color == undefined
           ? undefined
-          : { ...track, color, scale: colorValues.get(track.store.topic)?.scale };
+          : { ...track, color, colorScale: colorValues.get(track.store.topic) };
       }),
     [colorValues, colors, thinned],
   );

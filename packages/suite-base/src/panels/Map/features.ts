@@ -8,6 +8,7 @@ import { MessageEvent } from "@lichtblick/suite";
 import { turboColorString } from "@lichtblick/suite-base/util/colorUtils";
 import { darkColor, lightColor } from "@lichtblick/suite-base/util/plotColors";
 
+import { normalize } from "./colorBy";
 import { DEFAULT_POINT_SIZE, TopicStyle } from "./config";
 import { bearingDegrees, distanceMeters, ellipseRing, LngLat } from "./geo";
 import { getAccuracy } from "./getAccuracy";
@@ -285,6 +286,9 @@ const collection = (features: Feature[]): FeatureCollection => ({
 /** Colors of "color by" values, quantized so runs of similar values share one line feature. */
 const VALUE_COLORS = Array.from({ length: 64 }, (_unused, i) => turboColorString(i / 63));
 
+/** Values mapped onto the color scale between `range`, high to low when `reverse`. */
+export type ColorScale = { values: Float64Array; range: [number, number]; reverse: boolean };
+
 /** A topic's track as drawn: the fixes to draw (see `thinTrack`) and how. */
 export type DrawnTrack = {
   store: TrackStore;
@@ -292,8 +296,8 @@ export type DrawnTrack = {
   runs: readonly number[];
   color: string;
   style: TopicStyle;
-  /** Per-fix position on the color scale, 0..1 or NaN, when colored by a value. */
-  scale?: Float64Array;
+  /** Per-fix values (NaN where unknown) and their color scale, when colored by a value. */
+  colorScale?: ColorScale;
 };
 
 /** Point property `k` indexes into `tracks`, `i` into that track's store. */
@@ -303,12 +307,16 @@ export function trackFeatures(tracks: readonly DrawnTrack[]): {
 } {
   const points: Feature[] = [];
   const lines: Feature[] = [];
-  tracks.forEach(({ store, indices, runs, color, style, scale }, k) => {
+  tracks.forEach(({ store, indices, runs, color, style, colorScale }, k) => {
     const history = style.history ?? "points";
     const base = lightColor(color);
     const colorAt = (i: number) => {
-      const t = scale?.[i] ?? NaN;
-      return isNaN(t) ? base : VALUE_COLORS[Math.round(t * 63)]!;
+      const value = colorScale?.values[i] ?? NaN;
+      if (!colorScale || isNaN(value)) {
+        return base;
+      }
+      const t = normalize(value, colorScale.range);
+      return VALUE_COLORS[Math.round((colorScale.reverse ? 1 - t : t) * 63)]!;
     };
     const r = style.pointSize ?? DEFAULT_POINT_SIZE;
     if (history === "points" || history === "both") {
@@ -333,7 +341,7 @@ export function trackFeatures(tracks: readonly DrawnTrack[]): {
       };
       runs.forEach((start, run) => {
         const end = runs[run + 1] ?? indices.length;
-        if (!scale) {
+        if (!colorScale) {
           const coordinates: LngLat[] = [];
           for (let j = start; j < end; j++) {
             coordinates.push(store.lngLat(indices[j]!));

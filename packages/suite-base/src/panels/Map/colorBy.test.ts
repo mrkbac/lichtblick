@@ -52,3 +52,26 @@ describe("colorBy", () => {
     expect(normalize(75, [50, 100])).toBe(0.5);
   });
 });
+
+describe("speedValues while a track grows", () => {
+  it("matches a full computation", () => {
+    const fixes = Array.from({ length: 50 }, (_, i) => ({
+      time: i / 10,
+      position: offsetMeters([8, 47], i * (1 + (i % 3)), 0),
+    }));
+    const growing = track([]);
+    for (const [i, fix] of fixes.entries()) {
+      growing.push({
+        topic: "/fix",
+        schemaName: "sensor_msgs/NavSatFix",
+        receiveTime: { sec: Math.floor(fix.time), nsec: Math.round((fix.time % 1) * 1e9) },
+        sizeInBytes: 0,
+        message: { longitude: fix.position[0], latitude: fix.position[1] },
+      });
+      if (i % 7 === 0) {
+        speedValues(growing, "metric");
+      }
+    }
+    expect([...speedValues(growing, "metric")]).toEqual([...speedValues(track(fixes), "metric")]);
+  });
+});

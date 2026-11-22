@@ -23,6 +23,8 @@ type ColumnArray = InstanceType<Column>;
  */
 export class ColumnStore<K extends string> {
   public length = 0;
+  /** Changes when existing rows move or go away (clear, thinning); appending keeps it. */
+  public version = 0;
   public readonly columns: Record<K, ColumnArray>;
   #stride = 1;
   /** Rows received since the last row kept at the stride. */
@@ -38,6 +40,7 @@ export class ColumnStore<K extends string> {
   }
 
   public clear(): void {
+    this.version++;
     this.length = 0;
     this.#stride = 1;
     this.#sinceKept = 0;
@@ -70,6 +73,7 @@ export class ColumnStore<K extends string> {
   }
 
   #halve(): void {
+    this.version++;
     // Keep rows 0, 2, 4, ...; the next kept row follows a full new stride after the last one.
     const kept = Math.ceil(this.length / 2);
     for (const key of this.#keys()) {
@@ -224,13 +228,17 @@ export function thinTrack(
   // MapLibre's world is 512 px wide at zoom 0.
   // ponytail: ignores pitch, so near the camera a tilted map shows the spacing; scale by the
   // tilt if that matters.
-  let minDistance = options.minPixels / (512 * 2 ** options.zoom);
+  // In degrees of longitude. Locally a degree of latitude is 1/cos(lat) as long on a Mercator map,
+  // so distances need no projection (no log or sin per fix).
+  let minDistance = (options.minPixels / (512 * 2 ** options.zoom)) * 360;
   for (;;) {
+    const minSquared = minDistance * minDistance;
     const indices: number[] = [];
     const runs: number[] = [];
     let gap = true;
-    let lastX = 0;
-    let lastY = 0;
+    let lastLon = 0;
+    let lastLat = 0;
+    let latScale = 1;
     let nearPrevious = false;
     let near = n > 0 && inView(0);
     for (let i = 0; i < n; i++) {
@@ -238,23 +246,26 @@ export function thinTrack(
       if (!near && !nearPrevious && !nearNext) {
         gap = true;
       } else {
-        const x = mercatorX(lon[i]!);
-        const y = mercatorY(lat[i]!);
+        const x = lon[i]!;
+        const y = lat[i]!;
+        const dx = x - lastLon;
+        const dy = (y - lastLat) * latScale;
         // The ends of each run are always kept, so the track meets the viewport edge.
-        if (gap || i === n - 1 || !nearNext || Math.hypot(x - lastX, y - lastY) >= minDistance) {
+        if (gap || i === n - 1 || !nearNext || dx * dx + dy * dy >= minSquared) {
           if (gap) {
             runs.push(indices.length);
             gap = false;
           }
           indices.push(i);
-          lastX = x;
-          lastY = y;
+          lastLon = x;
+          lastLat = y;
+          latScale = 1 / Math.cos((Math.max(-85, Math.min(85, y)) * Math.PI) / 180);
         }
       }
       nearPrevious = near;
       near = nearNext;
     }
-    if (indices.length <= options.budget || minDistance > 1) {
+    if (indices.length <= options.budget || minDistance > 360) {
       return { indices: Uint32Array.from(indices), runs };
     }
     // Kept points shrink roughly in proportion to the spacing; overshoot a little.

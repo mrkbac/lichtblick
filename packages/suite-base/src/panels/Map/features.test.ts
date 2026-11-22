@@ -55,7 +55,12 @@ describe("trackFeatures", () => {
 
   it("merges segments of equal color when colored by value", () => {
     const { lines } = trackFeatures([
-      { ...base, runs: [0], style: { history: "line" }, scale: Float64Array.of(0, 0, 0, 1, 1) },
+      {
+        ...base,
+        runs: [0],
+        style: { history: "line" },
+        colorScale: { values: Float64Array.of(0, 0, 0, 1, 1), range: [0, 1], reverse: false },
+      },
     ]);
     expect(lines.features.map((f) => f.geometry)).toEqual([
       {
