@@ -1230,7 +1230,7 @@ describe("ThreeDeeRender", () => {
         schemaSubscriptions: new Map([["tf2_msgs/TFMessage", [{ preload: true }]]]),
       });
       vi.mocked(Renderer).mockImplementationOnce(function () {
-        return customRendererInstance as any;
+        return customRendererInstance as unknown as Renderer;
       });
       const cancels: Mock[] = [];
       const mockContext = createPreloadingContext({
@@ -1238,8 +1238,10 @@ describe("ThreeDeeRender", () => {
           scene: { transforms: { enablePreloading: false } },
           topics: { "/tf": { visible: true }, "/tf_static": { visible: true } },
         },
-        onSubscribe: (args: any) => {
-          void args.onNewRangeIterator?.({
+        onSubscribe: (
+          args: Parameters<BuiltinPanelExtensionContext["unstable_subscribeMessageRange"]>[0],
+        ) => {
+          void args.onNewRangeIterator({
             // oxlint-disable-next-line require-yield -- a read that never delivers
             async *[Symbol.asyncIterator]() {
               await new Promise(() => {});
