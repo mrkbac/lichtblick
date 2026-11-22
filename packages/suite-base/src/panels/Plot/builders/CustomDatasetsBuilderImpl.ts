@@ -286,7 +286,7 @@ export class CustomDatasetsBuilderImpl {
    * x-axis has data at or after the row's receive time, so pans and zooms do not pair again.
    */
   #pair(series: Series): void {
-    if (series.config.xParsed) {
+    if (series.config.xParsed || series.pairedUpTo >= series.points.length) {
       return;
     }
     const { points } = series;
