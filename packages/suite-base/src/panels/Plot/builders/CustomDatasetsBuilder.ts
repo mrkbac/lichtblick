@@ -27,6 +27,7 @@ import {
   GetViewportDatasetsResult,
   HandlePlayerStateResult,
   IDatasetsBuilder,
+  MessageRangeOptions,
   SeriesItem,
   Viewport,
 } from "./IDatasetsBuilder";
@@ -138,7 +139,7 @@ export class CustomDatasetsBuilder implements IDatasetsBuilder {
 
   public handleMessageRange(
     messages: Immutable<MessageEvent[]>,
-    options: { isReset: boolean },
+    options: MessageRangeOptions,
   ): void {
     this.#hasRangeSource = true;
     const topic = messages[0]?.topic;
@@ -146,7 +147,7 @@ export class CustomDatasetsBuilder implements IDatasetsBuilder {
       return;
     }
 
-    const isXBatch = topic === this.#xParsedPath?.topicName;
+    const isXBatch = options.readsXAxis !== false && topic === this.#xParsedPath?.topicName;
 
     if (isXBatch) {
       if (options.isReset) {

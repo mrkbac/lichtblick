@@ -4,7 +4,12 @@
 import { STREAM_MODIFIERS } from "@lichtblick/message-path";
 import { Immutable, MessageEvent } from "@lichtblick/suite";
 
-import { GetViewportDatasetsResult, SeriesConfigKey, SeriesItem } from "./IDatasetsBuilder";
+import {
+  GetViewportDatasetsResult,
+  MessageRangeOptions,
+  SeriesConfigKey,
+  SeriesItem,
+} from "./IDatasetsBuilder";
 import { CurrentFrameSeriesItem } from "./types";
 import { Dataset } from "../types";
 
@@ -156,12 +161,15 @@ type SeriesFullAction<T> =
 export function buildFullSeriesActions<TItem>(
   series: Immutable<Array<{ config: Immutable<SeriesItem> }>>,
   topic: string,
-  options: { isReset: boolean },
+  options: Immutable<MessageRangeOptions>,
   getItems: (config: Immutable<SeriesItem>) => TItem[],
 ): SeriesFullAction<TItem>[] {
   const actions: SeriesFullAction<TItem>[] = [];
   for (const s of series) {
-    if (s.config.parsed.topicName !== topic) {
+    if (
+      s.config.parsed.topicName !== topic ||
+      (options.seriesKeys != undefined && !options.seriesKeys.has(s.config.key))
+    ) {
       continue;
     }
     if (options.isReset) {
