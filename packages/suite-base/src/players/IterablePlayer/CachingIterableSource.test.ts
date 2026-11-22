@@ -1412,6 +1412,32 @@ describe("CachingIterableSource", () => {
       await iterator.return?.(undefined);
     });
 
+    it("doesn't evict a block a read is still writing", async () => {
+      // Given a read still writing its block with a full budget
+      const { source } = recordingSource(["a"], 10);
+      const cache = new CachingIterableSource(source, { maxTotalSize: 600 });
+      await cache.initialize();
+      const older = cache.messageIterator({ topics: mockTopicSelection("a") });
+      for (let i = 0; i < 6; i++) {
+        await older.next();
+      }
+
+      // When another read further on needs room
+      const newer = cache.messageIterator({
+        topics: mockTopicSelection("a"),
+        start: { sec: 8, nsec: 0 },
+      });
+      await newer.next();
+
+      // Then the block being written stays, and finishing both reads keeps the budget exact
+      expect(cache.loadedRanges()[0]?.start).toBe(0);
+      expect(cache.canReadMore()).toBe(false);
+      await readTopics(older);
+      await readTopics(newer);
+      const stored = await readTopics(cache.messageIterator({ topics: mockTopicSelection("a") }));
+      expect(cache.getCacheSize()).toBe(100 * stored.length);
+    });
+
     it("drops unwanted results only from blocks no read is writing", async () => {
       // Given a read of a and b still writing its block with a full budget
       const { source } = recordingSource(["a", "b"], 10);
@@ -1574,22 +1600,60 @@ describe("CachingIterableSource", () => {
       expect(cache.getCacheSize()).toBe(1000);
     });
 
-    it("serves a skimmed read from full blocks without reading", async () => {
-      const { source, reads } = recordingSource(["a"], 10);
+    it("serves a skimmed read from full blocks, thinned like a skimmed source read", async () => {
+      const { source, reads } = recordingSource(["a", "b"], 10);
+      const cache = new CachingIterableSource(source, { maxTotalSize: TEST_CACHE_BYTES });
+      await cache.initialize();
+      await readTopics(cache.messageIterator({ topics: mockTopicSelection("a", "b") }));
+      reads.length = 0;
+
+      const results: string[] = [];
+      for await (const result of cache.messageIterator({
+        topics: mockTopicSelection("a", "b"),
+        skimInterval: { sec: 2, nsec: 0 },
+      })) {
+        results.push(
+          result.type === "message-event"
+            ? `${result.msgEvent.topic}${result.msgEvent.receiveTime.sec}`
+            : result.type === "stamp"
+              ? `stamp${result.stamp.sec}`
+              : result.type,
+        );
+      }
+
+      // Then nothing is read, and each 2 s window yields its last message per topic and a stamp
+      expect(reads).toEqual([]);
+      expect(results).toEqual([
+        ...["a1", "b1", "stamp1"],
+        ...["a3", "b3", "stamp3"],
+        ...["a5", "b5", "stamp5"],
+        ...["a7", "b7", "stamp7"],
+        ...["a9", "b9"],
+      ]);
+    });
+
+    it("reads a range skimmed instead of filling a full block during a skimmed read", async () => {
+      const { source, reads } = recordingSource(["a", "b"], 10);
       const cache = new CachingIterableSource(source, { maxTotalSize: TEST_CACHE_BYTES });
       await cache.initialize();
       await readTopics(cache.messageIterator({ topics: mockTopicSelection("a") }));
       reads.length = 0;
 
-      const topics = await readTopics(
+      await readTopics(
         cache.messageIterator({
-          topics: mockTopicSelection("a"),
+          topics: mockTopicSelection("a", "b"),
           skimInterval: { sec: 2, nsec: 0 },
         }),
       );
 
+      // Then b isn't read at full density, and the full block stays as it was
+      expect(reads.map(({ topics, skimInterval }) => ({ topics, skimInterval }))).toEqual([
+        { topics: ["a", "b"], skimInterval: { sec: 2, nsec: 0 } },
+      ]);
+      expect(cache.getCacheSize()).toBe(1000);
+      reads.length = 0;
+      await readTopics(cache.messageIterator({ topics: mockTopicSelection("a") }));
       expect(reads).toEqual([]);
-      expect(topics).toHaveLength(10);
     });
 
     it("reads skimmed ranges again for a full read", async () => {

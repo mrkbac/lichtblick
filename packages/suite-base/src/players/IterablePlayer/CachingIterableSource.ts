@@ -25,6 +25,60 @@ import {
 
 const log = Log.getLogger(__filename);
 
+/**
+ * Thins full-density results for a skimmed read like a skimmed source read: the last message per
+ * topic per skim window (windows start at the read's start), then a stamp at the window end.
+ * Otherwise skimming would still send every cached message to the panels.
+ */
+class SkimThinner<MessageType> {
+  #startNs: bigint;
+  #skimNs: bigint;
+  #windowEndNs?: bigint;
+  #latest = new Map<string, Readonly<IteratorResult<MessageType>>>();
+
+  public constructor(startNs: bigint, skimNs: bigint) {
+    this.#startNs = startNs;
+    this.#skimNs = skimNs;
+  }
+
+  public hasPending(): boolean {
+    return this.#latest.size > 0;
+  }
+
+  /** Adds a message at timeNs; returns the window it closed, if any */
+  public add(
+    timeNs: bigint,
+    result: Readonly<IteratorResult<MessageType>> & { type: "message-event" },
+  ): Readonly<IteratorResult<MessageType>>[] | undefined {
+    let closed: Readonly<IteratorResult<MessageType>>[] | undefined;
+    if (this.#windowEndNs != undefined && timeNs > this.#windowEndNs) {
+      closed = this.#take();
+      closed.push({ type: "stamp", stamp: fromNanoSec(this.#windowEndNs) });
+      this.#windowEndNs = undefined;
+    }
+    this.#windowEndNs ??=
+      this.#startNs + ((timeNs - this.#startNs) / this.#skimNs + 1n) * this.#skimNs - 1n;
+    this.#latest.set(result.msgEvent.topic, result);
+    return closed;
+  }
+
+  /** Ends the window before its end (e.g. at a gap): its messages, without a stamp */
+  public flush(): Readonly<IteratorResult<MessageType>>[] {
+    this.#windowEndNs = undefined;
+    return this.#take();
+  }
+
+  #take(): Readonly<IteratorResult<MessageType>>[] {
+    const results = [...this.#latest.values()];
+    this.#latest.clear();
+    return results.sort((a, b) =>
+      a.type === "message-event" && b.type === "message-event"
+        ? compare(a.msgEvent.receiveTime, b.msgEvent.receiveTime)
+        : 0,
+    );
+  }
+}
+
 type CacheItem<MessageType> = [bigint, IteratorResult<MessageType>];
 
 // An individual cache item represents a continuous range of CacheIteratorItems
@@ -231,6 +285,12 @@ class CachingIterableSource<MessageType = unknown>
     this.#currentReadHead = readHead;
     this.#candidatesStale = true;
 
+    // A skimmed read served from full blocks gets what a skimmed source read returns (one local:
+    // each yield of this generator saves all its locals)
+    const thinner = args.skimInterval
+      ? new SkimThinner<MessageType>(toNanoSec(readHead), toNanoSec(args.skimInterval))
+      : undefined;
+
     for (;;) {
       if (compare(readHead, maxEnd) > 0) {
         break;
@@ -258,7 +318,16 @@ class CachingIterableSource<MessageType = unknown>
         continue;
       }
 
-      if (block && CachingIterableSource.#Lacks(block.topics, want)) {
+      const lacks = block != undefined && CachingIterableSource.#Lacks(block.topics, want);
+      // A thinned window goes on only through full blocks with every wanted topic. One flush
+      // site: this generator's size slows every yield and the per-message path.
+      if (thinner?.hasPending() === true && (!block || lacks || block.skimInterval)) {
+        for (const result of thinner.flush()) {
+          yield result;
+        }
+      }
+
+      if (block && lacks) {
         const fillEnd = compare(block.end, maxEnd) < 0 ? block.end : maxEnd;
         yield* this.#fillBlock(block, readHead, fillEnd, want, args);
         readHead = add(fillEnd, { sec: 0, nsec: 1 });
@@ -269,11 +338,14 @@ class CachingIterableSource<MessageType = unknown>
       if (block) {
         // The block holds every wanted topic (checked above): filter only if it holds more
         const filter = block.topics.size !== want.size;
+        const thin = block.skimInterval ? undefined : thinner;
         const cacheIndex = CachingIterableSource.#FindStartCacheItemIndex(
           block.items,
           toNanoSec(readHead),
         );
 
+        // Accessed now and when done (Date.now() per item costs more than the rest of the loop)
+        block.lastAccess = Date.now();
         // We have a cached item, we can consume our cache until we've read to the end
         for (let idx = cacheIndex; idx < block.items.length; ++idx) {
           const cachedItem = block.items[idx];
@@ -281,19 +353,36 @@ class CachingIterableSource<MessageType = unknown>
             break;
           }
 
-          // We may have found a cached time that is after our max iterator time.
-          // We bail with no return when that happens.
+          // We may have found a cached time that is after our max iterator time: the block ends
+          // after maxEnd, so the loop ends next
           if (cachedItem[0] > maxEndNanos) {
-            return;
+            break;
           }
 
-          // update the last time this block was accessed
-          block.lastAccess = Date.now();
-
-          if (!filter || CachingIterableSource.#Wanted(cachedItem[1], want)) {
-            yield cachedItem[1];
+          const result = cachedItem[1];
+          if (filter && !CachingIterableSource.#Wanted(result, want)) {
+            continue;
+          }
+          if (!thin) {
+            yield result;
+            continue;
+          }
+          // Alerts pass; the window stamps replace cached stamps
+          if (result.type !== "message-event") {
+            if (result.type === "alert") {
+              yield result;
+            }
+            continue;
+          }
+          const closed = thin.add(cachedItem[0], result);
+          if (closed) {
+            for (const closedResult of closed) {
+              yield closedResult;
+            }
           }
         }
+
+        block.lastAccess = Date.now();
 
         // We've read all the messages cached for the block, this means our next read can start
         // at 1 nanosecond after the end of the block because we know that block.end is inclusive
@@ -419,12 +508,7 @@ class CachingIterableSource<MessageType = unknown>
 
           const sizeInBytes =
             iterResult.type === "message-event" ? iterResult.msgEvent.sizeInBytes : 0;
-          if (
-            this.#maybePurgeCache({
-              activeBlock: block,
-              sizeInBytes,
-            })
-          ) {
+          if (this.#maybePurgeCache(block, sizeInBytes)) {
             this.#markLoadedRangesDirty();
           }
 
@@ -508,6 +592,11 @@ class CachingIterableSource<MessageType = unknown>
       // We've read everything there was to read for this source, so our next read will be after
       // the end of this source
       readHead = add(sourceReadEnd, { sec: 0, nsec: 1 });
+    }
+    if (thinner?.hasPending() === true) {
+      for (const result of thinner.flush()) {
+        yield result;
+      }
     }
   }
 
@@ -704,8 +793,9 @@ class CachingIterableSource<MessageType = unknown>
     }
 
     // Results on topics no longer wanted are dropped before the next read stores anything
+    const writing = new Set([...this.#writing].map((block) => block.id));
     return (
-      this.#evictableCandidates().length > 0 ||
+      this.#evictableCandidates().some((id) => !writing.has(id)) ||
       this.#trimmableBlocks().some((block) => this.#unwantedBytes(block) > 0)
     );
   }
@@ -838,9 +928,8 @@ class CachingIterableSource<MessageType = unknown>
   // exceeds the budget only by what it can't evict: the blocks from the read head on, which the
   // reader stops filling once canReadMore() is false.
   // @return true if a block was purged
-  #maybePurgeCache(opt: { activeBlock?: CacheBlock<MessageType>; sizeInBytes: number }): boolean {
-    const { activeBlock, sizeInBytes } = opt;
-
+  // Called per message: positional arguments, no options object
+  #maybePurgeCache(activeBlock: CacheBlock<MessageType> | undefined, sizeInBytes: number): boolean {
     if (this.#maybeUnwanted && !this.#budget.fits(sizeInBytes)) {
       this.#trimUnwanted();
     }
@@ -852,7 +941,8 @@ class CachingIterableSource<MessageType = unknown>
       }
       const idx = this.#cache.findIndex((item) => item.id === blockId);
       const block = this.#cache[idx];
-      if (!block || block === activeBlock) {
+      // A running read still writes it
+      if (!block || block === activeBlock || this.#writing.has(block)) {
         continue;
       }
       this.#budget.release(block.size);
@@ -889,6 +979,7 @@ class CachingIterableSource<MessageType = unknown>
    * Reads the wanted topics `block` lacks from `readHead` to `end` and merges them into it,
    * yielding the merged results on `want`. The filled part becomes blocks with both topic sets
    * (split every #maxBlockSizeBytes); the rest of `block`, e.g. after an early return, keeps its own.
+   * A skimmed read over a full block instead reads the range skimmed and leaves the block alone.
    */
   async *#fillBlock(
     block: CacheBlock<MessageType>,
@@ -897,6 +988,18 @@ class CachingIterableSource<MessageType = unknown>
     want: ReadonlySet<string>,
     args: MessageIteratorArgs,
   ): AsyncIterableIterator<Readonly<IteratorResult<MessageType>>> {
+    if (args.skimInterval && !block.skimInterval) {
+      // Filling a full block would read the new topic at full density: read the range skimmed
+      // instead, uncached, and keep the block for full-speed playback
+      yield* this.#source.messageIterator({
+        topics: args.topics,
+        start: readHead,
+        end,
+        consumptionType: args.consumptionType,
+        skimInterval: args.skimInterval,
+      });
+      return;
+    }
     if (compare(block.start, readHead) < 0) {
       this.#splitBlock(block, readHead);
     }
@@ -1005,7 +1108,7 @@ class CachingIterableSource<MessageType = unknown>
         }
 
         const size = CachingIterableSource.#Size(result);
-        if (this.#maybePurgeCache({ activeBlock: block, sizeInBytes: size })) {
+        if (this.#maybePurgeCache(block, size)) {
           this.#markLoadedRangesDirty();
         }
         this.#budget.add(size);
