@@ -7,11 +7,13 @@
 
 import CloseIcon from "@mui/icons-material/Close";
 import { Badge, Divider, IconButton, Tab, Tabs } from "@mui/material";
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo, useRef } from "react";
+import { useTranslation } from "react-i18next";
 
 import { useStyles } from "@lichtblick/suite-base/components/Sidebars/NewSidebar.style";
 import { NewSidebarProps } from "@lichtblick/suite-base/components/Sidebars/types";
 import Stack from "@lichtblick/suite-base/components/Stack";
+import { TabOverflowMenu } from "@lichtblick/suite-base/components/TabOverflowMenu";
 
 function Noop(): React.JSX.Element | undefined {
   return undefined;
@@ -25,6 +27,8 @@ export function NewSidebar<K extends string>({
   setActiveTab,
 }: NewSidebarProps<K>): React.JSX.Element {
   const { classes, cx } = useStyles();
+  const { t } = useTranslation("general");
+  const tabsRef = useRef<HTMLDivElement>(null);
 
   const handleTabChange = useCallback(
     (_ev: React.SyntheticEvent, newValue: K) => {
@@ -58,6 +62,8 @@ export function NewSidebar<K extends string>({
           </Badge>
         }
         value={key}
+        // The badge count is not part of the name
+        aria-label={item.title}
         data-testid={`${key}-${anchor}`}
       />
     ));
@@ -76,6 +82,7 @@ export function NewSidebar<K extends string>({
     >
       <Stack direction="row" justifyContent="space-between" alignItems="center">
         <Tabs
+          ref={tabsRef}
           className={classes.tabs}
           textColor="inherit"
           // A narrow sidebar scrolls its tabs instead of cutting the last one off.
@@ -86,9 +93,10 @@ export function NewSidebar<K extends string>({
         >
           {memoizedTabs}
         </Tabs>
-
+        <TabOverflowMenu stripRef={tabsRef} className={classes.iconButton} />
         <IconButton
           className={classes.iconButton}
+          aria-label={t("closeSidebar")}
           onClick={onClose}
           size="small"
           data-testid={`sidebar-close-${anchor}`}
