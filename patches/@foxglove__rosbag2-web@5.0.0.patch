@@ -1,0 +1,16 @@
+diff --git a/dist/SqliteSqljs.js b/dist/SqliteSqljs.js
+index c7e424e49f519e40f15629d272c563077f3f5222..5b53b1d0c853e99323102e6bc333517255f9c6db 100644
+--- a/dist/SqliteSqljs.js
++++ b/dist/SqliteSqljs.js
+@@ -143,7 +143,10 @@ class SqliteSqljs {
+             throw new Error(`Call open() before retrieving the time range`);
+         }
+         const db = __classPrivateFieldGet(this, _SqliteSqljs_context, "f").db;
+-        const res = db.exec("select cast(min(timestamp) as TEXT), cast(max(timestamp) as TEXT) from messages")[0]?.values[0] ?? ["0", "0"];
++        const res = db.exec(
++        // Separate subqueries so each is one timestamp_idx lookup; min() and max() in one select
++        // scan the whole index
++        "select cast((select min(timestamp) from messages) as TEXT), cast((select max(timestamp) from messages) as TEXT)")[0]?.values[0] ?? ["0", "0"];
+         const [minNsec, maxNsec] = res;
+         return [(0, rostime_1.fromNanoSec)(BigInt(minNsec ?? 0n)), (0, rostime_1.fromNanoSec)(BigInt(maxNsec ?? 0n))];
+     }
