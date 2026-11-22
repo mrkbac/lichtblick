@@ -10,6 +10,7 @@ import { Time, fromNanoSec, subtract, toNanoSec, toSec, toRFC3339String } from "
 import * as _ from "lodash-es";
 
 import {
+  ChunkCache,
   MCAP_MAGIC,
   McapByteReader,
   McapTypes,
@@ -38,13 +39,12 @@ const MESSAGE_LOG_TIME_AT = 15;
 const MESSAGE_PUBLISH_TIME_AT = 23;
 const MESSAGE_DATA_AT = 31;
 const READ_WINDOW_BYTES = 8 * 1024 * 1024;
-/** Decompressed chunks kept for reads of chunked messages in a file without a chunk index */
-const CHUNK_CACHE_BYTES = 64 * 1024 * 1024;
 /** How far ahead a message read looks for more wanted messages to read in the same window */
 const LOOKAHEAD_MESSAGES = 4096;
 
 type Options = {
   readable: McapTypes.IReadable;
+  chunkCache?: ChunkCache;
   /** Read only the first `size` bytes (e.g. the readable records of a damaged file) */
   size?: number;
 };
@@ -82,9 +82,8 @@ export class McapUnindexedIterableSource implements ISerializedIterableSource {
   #channelInfoById = new Map<number, ChannelInfo>();
   #chunkOffsets: number[] = [];
   #chunkLengths: number[] = [];
-  #chunkCache = new Map<number, Uint8Array>();
+  #chunkCache: ChunkCache;
   #chunkLoads = new Map<number, Promise<Uint8Array>>();
-  #chunkCacheBytes = 0;
   #decompressHandlers?: McapTypes.DecompressHandlers;
   #size = 0;
   #start?: Time;
@@ -94,6 +93,7 @@ export class McapUnindexedIterableSource implements ISerializedIterableSource {
 
   public constructor(options: Options) {
     this.#options = options;
+    this.#chunkCache = options.chunkCache ?? new ChunkCache();
   }
 
   public async initialize(): Promise<Initialization> {
@@ -106,7 +106,6 @@ export class McapUnindexedIterableSource implements ISerializedIterableSource {
     this.#chunkLengths = [];
     this.#chunkCache.clear();
     this.#chunkLoads.clear();
-    this.#chunkCacheBytes = 0;
 
     const alerts: PlayerAlert[] = [];
     const reportedConflicts = new Set<string>();
@@ -534,11 +533,9 @@ export class McapUnindexedIterableSource implements ISerializedIterableSource {
 
   /** The decompressed records of chunk `i`, from a small LRU cache */
   async #chunkRecords(i: number): Promise<Uint8Array> {
-    const cached = this.#chunkCache.get(i);
+    const cached = this.#chunkCache.get(BigInt(this.#chunkOffsets[i]!));
     if (cached) {
-      this.#chunkCache.delete(i);
-      this.#chunkCache.set(i, cached);
-      return cached;
+      return new Uint8Array(cached.buffer, cached.byteOffset, cached.byteLength);
     }
     // Concurrent readers (playback, backfill) share one load, so a chunk is read and counted once
     let load = this.#chunkLoads.get(i);
@@ -559,15 +556,10 @@ export class McapUnindexedIterableSource implements ISerializedIterableSource {
       throw new Error(`Chunk at offset ${this.#chunkOffsets[i]} changed since it was read`);
     }
     const records = decompress(this.#decompressHandlers!, chunk);
-    this.#chunkCache.set(i, records);
-    this.#chunkCacheBytes += records.byteLength;
-    for (const [key, value] of this.#chunkCache) {
-      if (this.#chunkCacheBytes <= CHUNK_CACHE_BYTES || key === i) {
-        break;
-      }
-      this.#chunkCache.delete(key);
-      this.#chunkCacheBytes -= value.byteLength;
-    }
+    this.#chunkCache.set(
+      BigInt(this.#chunkOffsets[i]!),
+      new DataView(records.buffer, records.byteOffset, records.byteLength),
+    );
     return records;
   }
 }
