@@ -8,7 +8,7 @@ import {
 
 let ws: WebSocket | undefined = undefined;
 
-const post: (message: FromWorkerMessage, transfer?: Transferable[]) => void = self.postMessage;
+const post: (message: FromWorkerMessage, transfer: Transferable[]) => void = self.postMessage;
 
 // Received messages go to the main thread in batches: one task there per batch instead of one per
 // message. A batch is posted once the messages already queued here have been handled.
@@ -29,7 +29,7 @@ function flush(): void {
 /** Posts everything received so far first, so the main thread sees events in order */
 function send(message: FromWorkerMessage): void {
   flush();
-  post(message);
+  self.postMessage(message);
 }
 
 self.onmessage = (event: MessageEvent<ToWorkerMessage>) => {
