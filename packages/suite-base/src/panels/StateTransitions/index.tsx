@@ -17,7 +17,8 @@
 import { add as addTimes, fromSec } from "@foxglove/rostime";
 import { Typography, alpha, useTheme } from "@mui/material";
 import { AnnotationOptions } from "chartjs-plugin-annotation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import * as _ from "lodash-es";
+import { useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useDebounce } from "use-debounce";
 
@@ -27,6 +28,7 @@ import {
   configuredFocus,
   useComparedPaths,
 } from "@lichtblick/suite-base/components/Compare/comparedPaths";
+import { PanelVisibleContext } from "@lichtblick/suite-base/components/DockPanelContext";
 import KeyListener from "@lichtblick/suite-base/components/KeyListener";
 import { usePathSampleHistory } from "@lichtblick/suite-base/components/MessagePathSyntax/usePathSampleHistory";
 import {
@@ -45,7 +47,7 @@ import { useStateTransitionsStyles } from "@lichtblick/suite-base/panels/StateTr
 import { parseCondition } from "@lichtblick/suite-base/panels/StateTransitions/condition";
 import {
   EMPTY_ITEMS_BY_PATH,
-  LIVE_HISTORY_SIZE,
+  MAX_LIVE_SAMPLES_PER_PATH,
   LIVE_REDRAW_MS,
   EMPTY_PATHS,
   EMPTY_TOPICS,
@@ -120,9 +122,16 @@ function StateTransitions(props: StateTransitionPanelProps) {
     };
   }, [paths]);
 
+  // Series with a condition need exact matches even once their samples are thinned.
+  const changesPaths = useMemo(
+    () => _.uniq(paths.filter((path) => parseCondition(path.condition)).map((path) => path.value)),
+    [paths],
+  );
+
   const decodedMessages = useDecodedMessageRange(
     isPlayerPresent ? topics : EMPTY_TOPICS,
     isPlayerPresent ? pathStrings : EMPTY_PATHS,
+    changesPaths,
   );
 
   // When range data is active, skip the live subscription entirely
@@ -130,14 +139,15 @@ function StateTransitions(props: StateTransitionPanelProps) {
   const hasRangeData = useMemo(
     () =>
       decodedMessages.some((block) =>
-        pathStrings.some((pathStr) => (block[pathStr]?.length ?? 0) > 0),
+        pathStrings.some((pathStr) => (block[pathStr]?.size() ?? 0) > 0),
       ),
     [decodedMessages, pathStrings],
   );
 
   const itemsByPath = usePathSampleHistory(
     hasRangeData ? EMPTY_PATHS : pathStrings,
-    LIVE_HISTORY_SIZE,
+    MAX_LIVE_SAMPLES_PER_PATH,
+    changesPaths,
   );
 
   const { height, heightPerTopic } = useMemo(() => {
@@ -210,12 +220,9 @@ function StateTransitions(props: StateTransitionPanelProps) {
   const hasCondition = paths.some((path) => parseCondition(path.condition) != undefined);
   // The epsilon absorbs float error after seeking to a match start.
   const now = currentTimeSinceStart ?? 0;
-  const matchesSoFar = useMemo(
-    () => matchStarts.filter((x) => x <= now + MATCH_EPSILON).length,
-    [now, matchStarts],
-  );
-  const previousMatch = matchStarts.findLast((x) => x < now - MATCH_EPSILON);
-  const nextMatch = matchStarts.find((x) => x > now + MATCH_EPSILON);
+  const matchesSoFar = _.sortedLastIndex(matchStarts, now + MATCH_EPSILON);
+  const previousMatch = matchStarts[_.sortedIndex(matchStarts, now - MATCH_EPSILON) - 1];
+  const nextMatch = matchStarts[matchesSoFar];
 
   const seekToNextMatch = useCallback(() => {
     if (nextMatch != undefined) {
@@ -229,6 +236,7 @@ function StateTransitions(props: StateTransitionPanelProps) {
     }
   }, [previousMatch, seekToSeconds]);
 
+  const panelVisible = useContext(PanelVisibleContext);
   const keyDownHandlers = useMemo(
     () =>
       shortcutKeyHandlers(STATE_TRANSITIONS_SHORTCUTS, {
@@ -412,7 +420,8 @@ function StateTransitions(props: StateTransitionPanelProps) {
           )}
         </div>
       </Stack>
-      <KeyListener global keyDownHandlers={keyDownHandlers} />
+      {/* A hidden panel may hold batched, outdated matches: only the visible one answers */}
+      {panelVisible && <KeyListener global keyDownHandlers={keyDownHandlers} />}
     </Stack>
   );
 }

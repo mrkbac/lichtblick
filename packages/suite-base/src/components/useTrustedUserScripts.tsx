@@ -75,8 +75,9 @@ type Decision = { layoutId: string; scripts: string };
 
 /**
  * User scripts run code from the layout. Scripts in a shared layout can come from anyone who can
- * edit it, so they only run after the user agrees, once per version of the scripts. Scripts in
- * local layouts, and the user's own edits to scripts they already allowed, run as before.
+ * edit it, and scripts in a layout opened from a link from anyone who made the link, so they only
+ * run after the user agrees, once per version of the scripts. Scripts in the user's own layouts,
+ * and the user's own edits to scripts they already allowed, run as before.
  *
  * Returns the scripts to run (none until allowed) and the dialog to render.
  */
@@ -94,7 +95,8 @@ export function useTrustedUserScripts({
   const scriptsText = useMemo(() => canonical(userScripts), [userScripts]);
   const hasScripts = Object.keys(userScripts).length > 0;
 
-  const [layoutInfo, setLayoutInfo] = useState<{ id: string; shared: boolean }>();
+  /** `source` is why the layout's scripts need approval, if they do. */
+  const [layoutInfo, setLayoutInfo] = useState<{ id: string; source?: "shared" | "link" }>();
   const [allowed, setAllowed] = useState<Decision>();
   const [declined, setDeclined] = useState<Decision>();
   const [pending, setPending] = useState<Decision & { names: string[] }>();
@@ -108,7 +110,17 @@ export function useTrustedUserScripts({
     const controller = new AbortController();
     void layoutManager.getLayout(layoutId as never).then((layout) => {
       if (!controller.signal.aborted) {
-        setLayoutInfo({ id: layoutId, shared: layout != undefined && layoutIsShared(layout) });
+        setLayoutInfo({
+          id: layoutId,
+          source:
+            layout == undefined
+              ? undefined
+              : layoutIsShared(layout)
+                ? "shared"
+                : layout.untrusted === true
+                  ? "link"
+                  : undefined,
+        });
       }
     });
     return () => {
@@ -117,7 +129,7 @@ export function useTrustedUserScripts({
   }, [layoutId, layoutManager]);
 
   const known = layoutId != undefined && layoutInfo?.id === layoutId;
-  const needsTrust = hasScripts && known && layoutInfo.shared;
+  const needsTrust = hasScripts && known && layoutInfo.source != undefined;
   const isAllowed =
     allowed != undefined && allowed.layoutId === layoutId && allowed.scripts === scriptsText;
   const isDeclined =
@@ -158,19 +170,25 @@ export function useTrustedUserScripts({
   }, [edited, isAllowed, isDeclined, layoutId, needsTrust, scriptsText, userScripts]);
 
   let scripts = NO_SCRIPTS;
-  if (hasScripts && known && (!layoutInfo.shared || isAllowed)) {
+  if (hasScripts && known && (layoutInfo.source == undefined || isAllowed)) {
     scripts = userScripts;
   }
 
   const prompt = pending?.layoutId === layoutId && pending != undefined && (
     <Dialog open maxWidth="sm" fullWidth data-testid="trust-user-scripts">
-      <DialogTitle>Run user scripts from this shared layout?</DialogTitle>
+      <DialogTitle>
+        {layoutInfo?.source === "link"
+          ? "Run user scripts from this linked layout?"
+          : "Run user scripts from this shared layout?"}
+      </DialogTitle>
       <DialogContent>
         <DialogContentText>
           This layout contains {pending.names.length === 1 ? "a user script" : "user scripts"}:{" "}
           {pending.names.join(", ")}. User scripts run code in your browser and can change the data
-          you see. Anyone who can edit this layout in your organization can change them. Only run
-          them if you trust those people.
+          you see.{" "}
+          {layoutInfo?.source === "link"
+            ? "This layout came from a link, which anyone can make. Only run them if you trust whoever sent it."
+            : "Anyone who can edit this layout in your organization can change them. Only run them if you trust those people."}
         </DialogContentText>
       </DialogContent>
       <DialogActions>

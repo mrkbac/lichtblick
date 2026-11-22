@@ -51,6 +51,7 @@ import PlayerSelectionContext, {
   IDataSourceFactory,
   PlayerSelection,
   RecentSource,
+  RemoteFileSelection,
 } from "@lichtblick/suite-base/context/PlayerSelectionContext";
 import {
   UserScriptStore,
@@ -69,8 +70,15 @@ import { Player } from "@lichtblick/suite-base/players/types";
 import { AppEvent } from "@lichtblick/suite-base/services/IAnalytics";
 import { UserScripts } from "@lichtblick/suite-base/types/panels";
 import { updateAppURLState } from "@lichtblick/suite-base/util/appURLState";
-import { rememberHandle } from "@lichtblick/suite-base/util/compareSides";
+import {
+  Recording,
+  compareNamesOf,
+  recordingName,
+  rememberHandle,
+  splitUrls,
+} from "@lichtblick/suite-base/util/compareSides";
 import { recentArgs, recentFileTitle } from "@lichtblick/suite-base/util/recentSources";
+import { takeSourcePick } from "@lichtblick/suite-base/util/sourcePick";
 import { toError } from "@lichtblick/suite-base/util/toError";
 
 import { useTrustedUserScripts } from "./useTrustedUserScripts";
@@ -241,8 +249,10 @@ export default function PlayerManager(
   const { enqueueSnackbar, closeSnackbar } = useSnackbar();
 
   const [selectedSource, setSelectedSource] = useState<IDataSourceFactory | undefined>();
-  const [selectedFiles, setSelectedFiles] = useState<readonly File[] | undefined>();
+  const [selectedRecordings, setSelectedRecordings] = useState<readonly Recording[] | undefined>();
+  const [selectedRemoteFile, setSelectedRemoteFile] = useState<RemoteFileSelection | undefined>();
   const [selectedCompare, setSelectedCompare] = useState<readonly string[] | undefined>();
+  const [selectedWithCookies, setSelectedWithCookies] = useState(false);
 
   // Sample layout ids for this session, used when localStorage is unavailable.
   const sampleLayoutIds = useRef(new Map<string, { id: LayoutID; version: string }>());
@@ -252,7 +262,7 @@ export default function PlayerManager(
   const pendingTransport = useRef<AbortController | undefined>(undefined);
   useEffect(() => () => pendingTransport.current?.abort(), []);
 
-  const selectSource = useCallback(
+  const openSource = useCallback(
     async (sourceId: string, args?: DataSourceArgs) => {
       log.debug(`Select Source: ${sourceId}`);
       const seq = ++selectionSeq.current;
@@ -296,22 +306,36 @@ export default function PlayerManager(
           }
         }
       }
-      setCurrentRecentId(undefined);
-
-      setSelectedSource(foundSource);
-      setSelectedFiles(undefined);
-      setSelectedCompare(undefined);
+      // Only once the new player exists: a failed initialize keeps the current player running,
+      // and it still needs its selection (Compare, Export).
+      const commitSelection = (
+        recordings?: readonly Recording[],
+        compare?: readonly string[],
+        {
+          withCookies = false,
+          remoteFile,
+        }: { withCookies?: boolean; remoteFile?: RemoteFileSelection } = {},
+      ) => {
+        setCurrentRecentId(undefined);
+        setSelectedSource(foundSource);
+        setSelectedRecordings(recordings);
+        setSelectedRemoteFile(remoteFile);
+        setSelectedCompare(compare);
+        setSelectedWithCookies(withCookies);
+      };
 
       // Sample sources don't need args or prompts to initialize
       if (foundSource.type === "sample") {
         const newPlayer = initializePlayer({});
+        commitSelection();
 
         setBasePlayer(newPlayer);
         writeLastFile(undefined);
 
         // Show the sample in the layout made for it. Its id is remembered per source, so an
         // edited or renamed copy is reopened and same-named layouts are never picked up.
-        if (foundSource.sampleLayout) {
+        const keepLayout = args?.type === "connection" && args.keepLayout === true;
+        if (foundSource.sampleLayout && !keepLayout) {
           const storageKey = `lichtblick.sampleLayoutId.${foundSource.id}`;
           const versionKey = `${storageKey}.version`;
           const version = String(foundSource.sampleLayoutVersion ?? 1);
@@ -369,7 +393,6 @@ export default function PlayerManager(
         enqueueSnackbar("Unable to initialize player: no args", {
           variant: "error",
         });
-        setSelectedSource(undefined);
         return;
       }
 
@@ -385,6 +408,24 @@ export default function PlayerManager(
               throw new Error("Unable to initialize player");
             }
             transport = undefined; // The player owns the backend from here.
+            // Remote recordings (not live connections) can be compared like local files
+            const url = args.params?.url;
+            const withCookies = args.params?.includeCredentials === "true";
+            // One remote file can also be exported
+            const remoteFile: RemoteFileSelection | undefined =
+              foundSource.id === "remote-file" && url != undefined && splitUrls(url).length === 1
+                ? { url, credentials: withCookies ? "include" : undefined }
+                : undefined;
+            if (url != undefined && foundSource.supportedFileTypes != undefined) {
+              const urls = splitUrls(url);
+              const compare = compareNamesOf(args.params);
+              commitSelection(urls, compare?.length === urls.length ? compare : undefined, {
+                withCookies,
+                remoteFile,
+              });
+            } else {
+              commitSelection(undefined, undefined, { remoteFile });
+            }
             setBasePlayer(newPlayer);
             writeLastFile(undefined);
 
@@ -409,7 +450,10 @@ export default function PlayerManager(
             // File instances are not: storing a File in IndexedDB copies the entire file.
             if (handles) {
               // A file compared in several sides repeats its handle: ask and read it once
-              const uniqueHandles = [...new Set(handles)];
+              // URLs (in a comparison that mixes them with files) need no permission
+              const uniqueHandles = [
+                ...new Set(handles.filter((h): h is FileSystemFileHandle => typeof h !== "string")),
+              ];
               for (const handle of uniqueHandles) {
                 const permission = await handle.queryPermission({
                   mode: "read",
@@ -436,7 +480,7 @@ export default function PlayerManager(
               if (!isMounted() || seq !== selectionSeq.current) {
                 return;
               }
-              files = handles.map((h) => fileOf.get(h)!);
+              files = handles.map((h) => (typeof h === "string" ? h : fileOf.get(h)!));
               for (const [handle, file] of fileOf) {
                 rememberHandle(file, handle);
               }
@@ -444,24 +488,35 @@ export default function PlayerManager(
 
             if (files) {
               const multiFile = foundSource.supportsMultiFile === true && files.length > 1;
+              const localFiles = files.filter((f): f is File => typeof f !== "string");
+              // Remote URLs among the files: only a source that compares can read them
+              const mixed = localFiles.length !== files.length;
+              if (mixed && foundSource.supportsCompare !== true) {
+                throw new Error(`${foundSource.displayName} can't open remote recordings`);
+              }
 
               const compare =
                 multiFile && foundSource.supportsCompare === true ? args.compare : undefined;
-              const newPlayer = initializePlayer({
-                file: multiFile ? undefined : files[0],
-                handle: multiFile ? undefined : handles?.[0],
-                files: multiFile ? files : undefined,
-                compare,
-              });
+              const newPlayer = initializePlayer(
+                mixed
+                  ? { recordings: files, compare }
+                  : {
+                      file: multiFile ? undefined : localFiles[0],
+                      handle: multiFile
+                        ? undefined
+                        : (handles?.[0] as FileSystemFileHandle | undefined),
+                      files: multiFile ? localFiles : undefined,
+                      compare,
+                    },
+              );
+              commitSelection(files, compare);
 
               setBasePlayer(newPlayer);
-              setSelectedFiles(files);
-              setSelectedCompare(compare);
 
               // Only handles can be reopened after a reload
               if (handles) {
                 const title = recentFileTitle(
-                  handles.map((h) => h.name),
+                  handles.map((h) => (typeof h === "string" ? recordingName(h) : h.name)),
                   compare,
                 );
                 const recentId = addRecent({
@@ -499,6 +554,18 @@ export default function PlayerManager(
       layoutManager,
       setSelectedLayoutId,
     ],
+  );
+
+  // Opening from what the user did (a menu, the open page, a recent, a link): a source picked for
+  // something else (e.g. a comparison row) goes there instead, leaving the open source as it is.
+  // Opening on its own (restoring the last file) uses openSource and never satisfies a pick.
+  const selectSource = useCallback(
+    async (sourceId: string, args?: DataSourceArgs) => {
+      if (!takeSourcePick(sourceId, args)) {
+        await openSource(sourceId, args);
+      }
+    },
+    [openSource],
   );
 
   // Select a recent entry by id
@@ -540,14 +607,16 @@ export default function PlayerManager(
     const seq = selectionSeq.current;
     void (async () => {
       const permissions = await Promise.all(
-        recent.handles.map(async (h) => await h.queryPermission({ mode: "read" })),
+        recent.handles.map(async (h) =>
+          typeof h === "string" ? "granted" : await h.queryPermission({ mode: "read" }),
+        ),
       );
       // The user opened or closed a source meanwhile: don't override that with the restore
       if (seq !== selectionSeq.current) {
         return;
       }
       if (permissions.every((p) => p === "granted")) {
-        void selectSource(recent.sourceId, recentArgs(recent));
+        void openSource(recent.sourceId, recentArgs(recent));
         return;
       }
       // requestPermission needs a user gesture, so ask with a click
@@ -559,7 +628,7 @@ export default function PlayerManager(
             color="inherit"
             onClick={() => {
               closeSnackbar(key);
-              void selectSource(recent.sourceId, recentArgs(recent));
+              void openSource(recent.sourceId, recentArgs(recent));
             }}
           >
             Reopen
@@ -567,7 +636,7 @@ export default function PlayerManager(
         ),
       });
     })();
-  }, [recentsLoaded, recents, selectSource, enqueueSnackbar, closeSnackbar]);
+  }, [recentsLoaded, recents, openSource, enqueueSnackbar, closeSnackbar]);
 
   const closeSource = useCallback(() => {
     selectionSeq.current++;
@@ -575,8 +644,10 @@ export default function PlayerManager(
     // Dropping the player makes MessagePipelineProvider close() it (e.g. closes the websocket).
     setBasePlayer(undefined);
     setSelectedSource(undefined);
-    setSelectedFiles(undefined);
+    setSelectedRecordings(undefined);
+    setSelectedRemoteFile(undefined);
     setSelectedCompare(undefined);
+    setSelectedWithCookies(false);
     setCurrentRecentId(undefined);
     // Forget the last opened file so a reload doesn't reopen it (the recent entry stays).
     writeLastFile(undefined);
@@ -596,6 +667,7 @@ export default function PlayerManager(
       (item): RecentSource => ({
         id: item.id,
         title: item.title,
+        name: item.type === "connection" ? item.extra?.name : undefined,
         label: item.label,
         sourceId: item.sourceId,
         type: item.type,
@@ -617,8 +689,10 @@ export default function PlayerManager(
       togglePinRecent,
       clearRecents,
       selectedSource,
-      selectedFiles,
+      selectedRecordings,
+      selectedRemoteFile,
       selectedCompare,
+      selectedWithCookies,
       availableSources: playerSources,
       recentSources,
     }),
@@ -630,8 +704,10 @@ export default function PlayerManager(
       togglePinRecent,
       clearRecents,
       selectedSource,
-      selectedFiles,
+      selectedRecordings,
+      selectedRemoteFile,
       selectedCompare,
+      selectedWithCookies,
       playerSources,
       recentSources,
     ],

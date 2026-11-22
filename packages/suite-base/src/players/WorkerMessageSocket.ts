@@ -38,7 +38,7 @@ export default class WorkerMessageSocket implements IWebSocket {
     }
 
     this.#worker.onmessage = (event: MessageEvent<FromWorkerMessage>) => {
-      if (this.#connectionClosed) {
+      if (event.data.type !== "messages" && this.#connectionClosed) {
         return;
       }
       switch (event.data.type) {
@@ -54,6 +54,20 @@ export default class WorkerMessageSocket implements IWebSocket {
         case "error":
           if (this.onerror) {
             this.onerror(event.data);
+          }
+          break;
+        case "messages":
+          for (const data of event.data.data) {
+            if (this.#connectionClosed) {
+              break;
+            }
+            // Each frame used to be its own task: a throw for one frame is reported like an
+            // uncaught error and doesn't drop the frames after it
+            try {
+              this.onmessage?.({ data });
+            } catch (error) {
+              reportError(error);
+            }
           }
           break;
         case "message":

@@ -106,6 +106,38 @@ describe("CachedFilelike", () => {
     });
   });
 
+  it("caches in bounded blocks even when the whole file fits the budget", async () => {
+    vi.resetModules();
+    const blockSizes: (number | undefined)[] = [];
+    const actual = await vi.importActual<typeof import("./VirtualLRUBuffer")>("./VirtualLRUBuffer");
+    vi.doMock("./VirtualLRUBuffer", () => ({
+      default: class extends actual.default {
+        public constructor(options: { size: number; blockSize?: number; numberOfBlocks?: number }) {
+          super(options);
+          blockSizes.push(options.blockSize);
+        }
+      },
+    }));
+    try {
+      const { default: MockedCachedFilelike } = await import("./CachedFilelike");
+      const fileReader = new InMemoryFileReader(new Uint8Array(4));
+      // A large file, of which only a few bytes are ever read
+      fileReader.open = async () => ({ size: 400 * MEBIBYTE });
+      const cachedFileReader = new MockedCachedFilelike({
+        fileReader,
+        log,
+        cacheSizeInBytes: 500 * MEBIBYTE,
+      });
+
+      await cachedFileReader.open();
+
+      expect(blockSizes.at(-1)).toBe(10 * MEBIBYTE);
+    } finally {
+      vi.doUnmock("./VirtualLRUBuffer");
+      vi.resetModules();
+    }
+  });
+
   describe("#read", () => {
     it("returns data from the underlying FileReader", async () => {
       const fileReader = new InMemoryFileReader(new Uint8Array([0, 1, 2, 3]));

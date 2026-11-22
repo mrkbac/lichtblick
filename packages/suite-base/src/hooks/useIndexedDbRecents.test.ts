@@ -178,7 +178,7 @@ describe("useIndexedDbRecents", () => {
       throw new Error("expected a file recent");
     }
     expect(recent.compare).toEqual(["A", "A", "B", "B"]);
-    expect(recent.handles.map((h) => h.name)).toEqual([
+    expect(recent.handles.map((h) => (typeof h === "string" ? h : h.name))).toEqual([
       "base.mcap",
       "a.mcap",
       "base.mcap",
@@ -187,6 +187,21 @@ describe("useIndexedDbRecents", () => {
     // The shared file is still one handle, so it is opened once
     expect(recent.handles[0]).toBe(recent.handles[2]);
     unmount();
+  });
+
+  it("identifies a connection by its arguments, not its display name", () => {
+    const recent = (extra: Record<string, string>) => ({
+      type: "connection" as const,
+      sourceId: "remote-file",
+      title: "https://example.com/a.mcap",
+      extra,
+    });
+    const url = "https://example.com/a.mcap";
+    expect(isSameRecent(recent({ url }), recent({ url, name: "Sample" }))).toBe(true);
+    expect(isSameRecent(recent({ url, name: "Old" }), recent({ url, name: "New" }))).toBe(true);
+    expect(isSameRecent(recent({ url }), recent({ url: "https://example.com/b.mcap" }))).toBe(
+      false,
+    );
   });
 
   it("tells comparisons of the same files with other sides apart", () => {

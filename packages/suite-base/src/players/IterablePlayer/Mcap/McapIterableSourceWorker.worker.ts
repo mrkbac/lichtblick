@@ -19,11 +19,11 @@ export function initialize(args: IterableSourceInitializeArgs): WorkerIterableSo
     const source = new McapIterableSource({ type: "file", file: args.file, handle: args.handle });
     const wrapped = new WorkerIterableSourceWorker(source);
     return Comlink.proxy(wrapped);
-  } else if (args.files) {
+  } else if (args.files ?? args.recordings) {
     const source = new MultiIterableSource(
       {
         type: "files",
-        files: args.files,
+        files: (args.files ?? args.recordings)!,
         compare: args.compare,
         ...pickDefinedHydrationOverrides(args),
       },

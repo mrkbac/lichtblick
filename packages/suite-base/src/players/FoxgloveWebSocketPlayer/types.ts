@@ -31,7 +31,9 @@ export type FromWorkerMessage =
   | { type: "open"; protocol: string }
   | { type: "close"; data: unknown }
   | { type: "error"; error: unknown }
-  | { type: "message"; data: unknown; acknowledge?: boolean };
+  | { type: "message"; data: unknown; acknowledge?: boolean }
+  /** Messages received since the last post, in order */
+  | { type: "messages"; data: unknown[] };
 
 export type ToWorkerMessage =
   | { type: "open"; data: { wsUrl: string; protocols?: string[] | string } }

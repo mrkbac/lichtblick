@@ -30,7 +30,9 @@ test("open Plot panel when clicking on Layouts > layout", { tag: "@regression" }
   await mainWindow.getByText("Plot").nth(0).click();
 
   await mainWindow.getByTestId("add-series").click();
-  await mainWindow.getByPlaceholder("/some/topic.msgs[0].field").fill("mouse.clientX");
+  const seriesInput = mainWindow.getByPlaceholder("Field, or a message to add all its fields");
+  await seriesInput.fill("mouse.clientX");
+  await seriesInput.press("Enter");
 
   // Then
   // "mouse.clientX" should appear in the Plot panel as the path of the added series

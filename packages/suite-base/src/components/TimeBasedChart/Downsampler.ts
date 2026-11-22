@@ -66,14 +66,20 @@ export class Downsampler {
       return undefined;
     }
 
-    const numPoints = MAX_POINTS / Math.max(this.#datasets.length, 1);
     return this.#datasets.map((dataset) => {
       if (!view) {
         return dataset;
       }
 
-      const downsampled = downsampleStates(iterateObjects(dataset.data), view, numPoints);
-      const yValue = dataset.data[0]?.y ?? 0;
+      const downsampled = downsampleStates(
+        iterateObjects(dataset.data),
+        view,
+        // Per dataset: a shared split would leave each of many rows a few hundred points and
+        // grey out stretches that fit the chart's width. The width still caps each row.
+        MAX_POINTS,
+      );
+      // The row's y, from a point that isn't a gap (a gap's y is NaN).
+      const yValue = dataset.data.find((datum) => datum != undefined && !isNaN(datum.y))?.y ?? 0;
       const resolved = downsampled.map(({ x, index, states }) => {
         if (index == undefined) {
           return {

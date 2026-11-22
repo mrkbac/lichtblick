@@ -11,6 +11,7 @@ import {
   DataSourceFactoryInitializeArgs,
 } from "@lichtblick/suite-base/context/PlayerSelectionContext";
 import { IterablePlayer } from "@lichtblick/suite-base/players/IterablePlayer";
+import { createMcapSourceWorker } from "@lichtblick/suite-base/players/IterablePlayer/Mcap/createMcapSourceWorker";
 import { WorkerSerializedIterableSource } from "@lichtblick/suite-base/players/IterablePlayer/WorkerIterableSource";
 import {
   MultiFileHydrationOverrides,
@@ -18,7 +19,7 @@ import {
 } from "@lichtblick/suite-base/players/IterablePlayer/shared/multiFileHydrationOptions";
 import { expandVideoSeekBackfill } from "@lichtblick/suite-base/players/IterablePlayer/videoSeekBackfill";
 import { Player } from "@lichtblick/suite-base/players/types";
-import { uniqueNames } from "@lichtblick/suite-base/util/compareSides";
+import { compareNamesOf, splitUrls, uniqueNames } from "@lichtblick/suite-base/util/compareSides";
 import { basename, extname } from "@lichtblick/suite-base/util/path";
 
 const initWorkers: Record<string, () => Worker> = {
@@ -30,14 +31,7 @@ const initWorkers: Record<string, () => Worker> = {
       ),
     );
   },
-  ".mcap": () => {
-    return new Worker(
-      new URL(
-        "@lichtblick/suite-base/players/IterablePlayer/Mcap/McapIterableSourceWorker.worker",
-        import.meta.url,
-      ),
-    );
-  },
+  ".mcap": createMcapSourceWorker,
 };
 
 const fileTypesAllowed: AllowedFileExtensions[] = [
@@ -87,7 +81,7 @@ class RemoteDataSourceFactory implements IDataSourceFactory {
     if (args.params?.url == undefined) {
       return;
     }
-    const urls = args.params.url.split(",");
+    const urls = splitUrls(args.params.url);
     // Same meaning as Foxglove's `ds.includeCredentials`: send cookies with the file requests
     const includeCredentials = args.params.includeCredentials === "true";
     const credentials: RequestCredentials | undefined = includeCredentials ? "include" : undefined;
@@ -100,17 +94,25 @@ class RemoteDataSourceFactory implements IDataSourceFactory {
       nextExtension = this.checkExtensionMatch(extension, nextExtension);
     });
 
-    const initWorker = initWorkers[extension]!;
+    const initWorker = initWorkers[extension];
+    if (initWorker == undefined) {
+      throw new Error(
+        `${extension === "" ? "Files without an extension" : `${extension} files`} can't be opened from a URL yet. Open .bag or .mcap files from a URL, or open the file from disk.`,
+      );
+    }
 
     // `ds.compare=true` compares the files side by side, one side per file; a comma list names the
-    // side of each file instead (files with the same name are merged into that side)
-    const compareParam = args.params.compare;
+    // side of each file instead (files with the same name are merged into that side).
+    // `ds.compareNames` is that list with commas in names escaped (see encodeCompareNames).
+    const { compare: compareParam, compareNames } = args.params;
+    // `compareNames` wins over `compare`, as everywhere that reads them (see compareNamesOf)
     const compare =
-      urls.length < 2 || compareParam == undefined || compareParam === ""
+      urls.length < 2
         ? undefined
-        : compareParam === "true"
-          ? uniqueNames(urls.map((url) => basename(new URL(url).pathname)))
-          : compareParam.split(",");
+        : (compareNamesOf(args.params) ??
+          (compareParam === "true"
+            ? uniqueNames(urls.map((url) => basename(new URL(url).pathname)))
+            : undefined));
     const validCompare = compare?.length === urls.length ? compare : undefined;
 
     const initArgs =
@@ -124,12 +126,15 @@ class RemoteDataSourceFactory implements IDataSourceFactory {
 
     return new IterablePlayer({
       source,
-      name: urls.join(),
+      // A catalog passes the recording's name, so the title bar shows it instead of the URL
+      name: args.params.name ?? urls.join(),
       // Keep includeCredentials in the app URL so reloads and shared links still send cookies
       urlParams: {
         urls,
         ...(includeCredentials && { includeCredentials: "true" }),
-        ...(validCompare && { compare: compareParam! }),
+        ...(args.params.name != undefined && { name: args.params.name }),
+        ...(validCompare &&
+          (compareNames != undefined ? { compareNames } : { compare: compareParam! })),
       },
       sourceId: this.id,
       readAheadDuration: { sec: 10, nsec: 0 },

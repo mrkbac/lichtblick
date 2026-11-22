@@ -208,6 +208,28 @@ describe("FoxgloveGrid", () => {
     expect(mesh.geometry).toBe(renderable.userData.planeGeometry);
   });
 
+  it("hides a grid wider than the GPU's texture limit with an error until the limit allows it", () => {
+    const wide = makeGrid([]);
+    wide.column_count = 9000;
+    wide.row_stride = 9000 * wide.cell_stride;
+    wide.data = new Uint8Array(wide.row_stride);
+    receive(wide);
+    const renderable = extension.renderables.get(TOPIC)!;
+    const errorAt = () => renderer.settings.errors.errors.errorAtPath(["topics", TOPIC]);
+    // No device yet: WebGPU's guaranteed 8192
+    expect(renderable.userData.mesh.visible).toBe(false);
+    expect(errorAt()).toMatch(/9000 x 1 cells.*8192/);
+
+    // The device asked for the adapter's larger limit
+    (renderer.gl.backend as unknown as { device: unknown }).device = {
+      limits: { maxTextureDimension2D: 16384 },
+    };
+    extension.gpuReady();
+    expect(renderable.userData.mesh.visible).toBe(true);
+    expect(errorAt()).toBeUndefined();
+    expect(renderable.userData.texture.image.width).toBe(9000);
+  });
+
   it("picks the shader's color source from the color mode and map", () => {
     receive(makeGrid([0, 1, 2, 3, 4, 5]));
     const { uniforms } = extension.renderables.get(TOPIC)!.userData;

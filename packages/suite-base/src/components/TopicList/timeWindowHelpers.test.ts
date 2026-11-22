@@ -5,13 +5,7 @@
 
 import { Time } from "@foxglove/rostime";
 
-import {
-  calculateOptimalWindowMs,
-  createWindowSizes,
-  subtractMilliseconds,
-  timeToSec,
-  wouldReachBoundary,
-} from "./timeWindowHelpers";
+import { calculateOptimalWindowMs, subtractMilliseconds, timeToSec } from "./timeWindowHelpers";
 
 describe("timeWindowHelpers", () => {
   describe("subtractMilliseconds", () => {
@@ -35,6 +29,10 @@ describe("timeWindowHelpers", () => {
       const result = subtractMilliseconds(time, 5000); // 5 seconds
 
       expect(result).toEqual({ sec: 95, nsec: 0 });
+    });
+
+    it("subtracts very large windows in constant time", () => {
+      expect(subtractMilliseconds({ sec: 10, nsec: 0 }, 1e15)).toEqual({ sec: 10 - 1e12, nsec: 0 });
     });
   });
 
@@ -148,78 +146,6 @@ describe("timeWindowHelpers", () => {
       });
 
       expect(windowMs).toBe(500);
-    });
-  });
-
-  describe("createWindowSizes", () => {
-    it("creates progressive window sizes", () => {
-      const windows = createWindowSizes(100, 4);
-
-      expect(windows).toEqual([
-        100, // Initial
-        500, // 100 * 5^1
-        2500, // 100 * 5^2
-        12500, // 100 * 5^3
-      ]);
-    });
-
-    it("caps windows at 60000ms", () => {
-      const windows = createWindowSizes(10000, 5);
-
-      expect(windows).toEqual([
-        10000, // Initial
-        50000, // 10000 * 5^1
-        60000, // Capped (would be 250000)
-        60000, // Capped
-        60000, // Capped
-      ]);
-    });
-
-    it("creates default 4 windows", () => {
-      const windows = createWindowSizes(500);
-
-      expect(windows).toHaveLength(4);
-      expect(windows[0]).toBe(500);
-    });
-  });
-
-  describe("wouldReachBoundary", () => {
-    it("returns false when no boundary", () => {
-      const currentTime: Time = { sec: 100, nsec: 0 };
-
-      const result = wouldReachBoundary(currentTime, 1000, undefined);
-
-      expect(result).toBe(false);
-    });
-
-    it("returns true when window would reach boundary", () => {
-      const currentTime: Time = { sec: 100, nsec: 0 };
-      const boundaryTime: Time = { sec: 99, nsec: 600_000_000 }; // 99.6 seconds
-
-      // Window of 500ms would go to 99.5s, which is before boundary at 99.6s
-      const result = wouldReachBoundary(currentTime, 500, boundaryTime);
-
-      expect(result).toBe(true);
-    });
-
-    it("returns false when window would not reach boundary", () => {
-      const currentTime: Time = { sec: 100, nsec: 0 };
-      const boundaryTime: Time = { sec: 99, nsec: 0 }; // 99 seconds
-
-      // Window of 500ms would go to 99.5s, which is after boundary at 99s
-      const result = wouldReachBoundary(currentTime, 500, boundaryTime);
-
-      expect(result).toBe(false);
-    });
-
-    it("returns true when window exactly reaches boundary", () => {
-      const currentTime: Time = { sec: 100, nsec: 0 };
-      const boundaryTime: Time = { sec: 99, nsec: 500_000_000 }; // 99.5 seconds
-
-      // Window of 500ms would go to 99.5s, exactly at boundary
-      const result = wouldReachBoundary(currentTime, 500, boundaryTime);
-
-      expect(result).toBe(true);
     });
   });
 });

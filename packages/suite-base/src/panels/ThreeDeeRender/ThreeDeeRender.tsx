@@ -5,7 +5,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { Time, toNanoSec } from "@foxglove/rostime";
+import { fromNanoSec, Time, toNanoSec } from "@foxglove/rostime";
 import { Button } from "@mui/material";
 import * as _ from "lodash-es";
 import React, {
@@ -50,7 +50,7 @@ import { findShortcut } from "@lichtblick/suite-base/util/keyboardShortcuts";
 import { localResourceFolders } from "@lichtblick/suite-base/util/localResourceFolders";
 
 import type { ImageModeConfig, RendererConfig, RendererSubscription } from "./IRenderer";
-import type { Path } from "./LayerErrors";
+import { reportPersistentErrors, type Path } from "./LayerErrors";
 import type { PickedRenderable } from "./Picker";
 import { NO_FRAME_SELECTED, Renderer } from "./Renderer";
 import { RendererContext, useRendererEvent, useRendererProperty } from "./RendererContext";
@@ -67,8 +67,9 @@ import {
   makePoseMessage,
 } from "./publish";
 import type { LayerSettingsTransform } from "./renderables/FrameAxes";
-import { PublishClickEventMap } from "./renderables/PublishClickTool";
+import { PublishClickEventMap, PublishClickType } from "./renderables/PublishClickTool";
 import { DEFAULT_PUBLISH_SETTINGS } from "./renderables/PublishSettings";
+import { DecayHistoryIngest, isDecayHistoryIngest } from "./renderables/pointExtensionUtils";
 import { THREE_DEE_SHORTCUTS } from "./shortcuts";
 import { readTransformRange, readTransformsBefore, TransformTopic } from "./transformHistoryReads";
 import { Shared3DPanelState, ThreeDeeRenderProps } from "./types";
@@ -76,7 +77,37 @@ import { useGpuRecovery } from "./useGpuRecovery";
 
 import "maplibre-gl/dist/maplibre-gl.css";
 
+const LAYER_ERROR_LOG_GRACE_MS = 3000;
+
 const log = Logger.getLogger(__filename);
+
+/** Transforms are read back this far before a read-back scan's oldest header stamp */
+const STAMP_LOOKBACK_NS = 1_000_000_000n;
+
+/** Resolves after the renderer's next frame (or on abort) */
+async function nextFrame(renderer: Renderer, signal: AbortSignal): Promise<void> {
+  await new Promise<void>((resolve) => {
+    const done = () => {
+      renderer.removeListener("endFrame", done);
+      signal.removeEventListener("abort", done);
+      resolve();
+    };
+    renderer.addListener("endFrame", done);
+    signal.addEventListener("abort", done);
+    renderer.queueAnimationFrame();
+  });
+}
+
+/** Frames placed under a parent, which reads of transforms around a time should refresh */
+function placedFrameIds(renderer: Renderer): string[] {
+  const ids: string[] = [];
+  for (const frame of renderer.transformTree.frames().values()) {
+    if (frame.parent()) {
+      ids.push(frame.id);
+    }
+  }
+  return ids;
+}
 
 /**
  * A panel that renders a 3D scene. This is a thin wrapper around a `Renderer` instance.
@@ -328,6 +359,7 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
   // Times of the transform history the tree holds completely, in ns; -1n when none
   const transformsCompleteUntilRef = useRef(-1n);
   const seekReadRef = useRef<AbortController | undefined>(undefined);
+  const decayReadRef = useRef<AbortController | undefined>(undefined);
   // Transform topic names the transform tree was filled from
   const transformTopicNamesRef = useRef<string | undefined>(undefined);
 
@@ -434,29 +466,30 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
 
   // Log LayerErrors to PanelLogs
   const handleLayerErrorUpdate = useCallback(
-    (path: Path, errorId: string, errorMessage: string) => {
+    (path: Path, errorId: string, errorMessage: string, raisedAt: bigint) => {
       // Every panel starts without frames; logging that floods the log after each seek
       if (logError != undefined && errorId !== NO_FRAME_SELECTED) {
         const pathString = path.join(" > ");
         const fullMessage = `[${pathString}] ${errorMessage}`;
-        logError(fullMessage);
+        // 0n: no frame rendered yet, so the panel uses the playback time
+        logError(fullMessage, undefined, raisedAt === 0n ? undefined : fromNanoSec(raisedAt));
       }
     },
     [logError],
   );
 
-  // Subscribe to LayerErrors events
+  // Log layer errors that outlive the moment it takes a good recording to deliver its transforms
+  // and camera info; transient ones only show in the settings tree while active.
   useEffect(() => {
     if (!renderer?.settings.errors) {
       return;
     }
-
-    const errors = renderer.settings.errors;
-    errors.on("update", handleLayerErrorUpdate);
-
-    return () => {
-      errors.off("update", handleLayerErrorUpdate);
-    };
+    return reportPersistentErrors(
+      renderer.settings.errors,
+      handleLayerErrorUpdate,
+      LAYER_ERROR_LOG_GRACE_MS,
+      () => renderer.currentTime,
+    );
   }, [renderer, handleLayerErrorUpdate]);
 
   const [focusedSettingsPath, setFocusedSettingsPath] = useState<undefined | readonly string[]>();
@@ -527,6 +560,19 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
   const isPreloadingEnabled = isTransformPreloadEnabled(config);
   // How many times the preloaded transform history was halved to fit the sample budget
   const [transformDecimations, setTransformDecimations] = useState(0);
+  // Live transforms are thinned too, without a preload read to report it
+  useEffect(() => {
+    if (!renderer) {
+      return;
+    }
+    const onUpdate = () => {
+      setTransformDecimations(renderer.transformTree.decimations);
+    };
+    renderer.addListener("transformTreeUpdated", onUpdate);
+    return () => {
+      renderer.removeListener("transformTreeUpdated", onUpdate);
+    };
+  }, [renderer]);
   useEffect(() => {
     setPanelAlert?.(
       "transform-preload",
@@ -564,8 +610,118 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
   // Transform topics, whose history is read with range reads instead of player preloading
   const [transformTopics, setTransformTopics] = useState<readonly TransformTopic[]>([]);
 
+  // Subscribed topics drawn with a decay time by a layer that takes read-back history (not e.g.
+  // Velodyne scans), the layer, and how far back their history reaches in ns
+  const decayTopics: (TransformTopic & { decayNs: bigint; ingest: DecayHistoryIngest })[] = [];
+  const historyLayers: DecayHistoryIngest[] = [];
+  for (const extension of renderer?.sceneExtensions.values() ?? []) {
+    if (isDecayHistoryIngest(extension)) {
+      historyLayers.push(extension);
+    }
+  }
+  for (const { topic, convertTo } of topicsToSubscribe ?? []) {
+    const decayTime = (config.topics[topic] as { decayTime?: number } | undefined)?.decayTime ?? 0;
+    const schema = convertTo ?? topics?.find((candidate) => candidate.name === topic)?.schemaName;
+    const ingest = historyLayers.find(
+      (layer) => schema != undefined && layer.historySchemas.has(schema),
+    );
+    if (decayTime > 0 && ingest) {
+      decayTopics.push({ topic, convertTo, decayNs: BigInt(Math.round(decayTime * 1e9)), ingest });
+    }
+  }
+  const decayTopicsRef = useLatest(decayTopics);
+  const decayKey = decayTopics.map((d) => `${d.topic} ${d.convertTo} ${d.decayNs}`).join("\n");
+
+  // A seek empties the decay histories: read each decayed topic's window before the new time again.
+  // The layers decode each batch straight into the history (never through the renderer's message
+  // queue, so nothing piles up while frames wait, e.g. in a background tab); the drawn scan and
+  // anything newer stay playback's. After a seek, the reads start once the seek's frame has drawn
+  // the latest scans. With `only`, read just those topics and keep the reads in flight (a decay
+  // time changed, not the time).
+  const transformTopicsRef = useLatest(transformTopics);
+  const readDecayHistory = useCallback(
+    (time: bigint, only?: ReadonlySet<string>) => {
+      if (only == undefined || decayReadRef.current?.signal.aborted !== false) {
+        decayReadRef.current?.abort();
+        decayReadRef.current = new AbortController();
+      }
+      const abort = decayReadRef.current;
+      const sources = decayTopicsRef.current;
+      if (!renderer || sources.length === 0) {
+        abort.abort();
+        return;
+      }
+      const read = async () => {
+        if (only == undefined) {
+          await nextFrame(renderer, abort.signal);
+          if (abort.signal.aborted) {
+            return;
+          }
+        }
+        let oldestStamp: bigint | undefined;
+        await Promise.all(
+          sources
+            .filter(({ topic }) => only == undefined || only.has(topic))
+            .map(
+              async ({ decayNs, ingest, ...source }) =>
+                await readTransformRange({
+                  subscribeRange: context.unstable_subscribeMessageRange,
+                  topics: [source],
+                  start: time - decayNs,
+                  end: time,
+                  signal: abort.signal,
+                  onBatch: (batch) => {
+                    for (const messageEvent of batch) {
+                      const stamp = ingest.addHistoricalMessage(messageEvent);
+                      if (stamp != undefined && (oldestStamp == undefined || stamp < oldestStamp)) {
+                        oldestStamp = stamp;
+                      }
+                    }
+                    renderer.queueAnimationFrame();
+                  },
+                }),
+            ),
+        );
+        // The transform reads go back to the longest decay time by receive time; scans can be
+        // stamped earlier than they were received, so also read back to their oldest stamp
+        const covered = sources.reduce(
+          (min, { decayNs }) => (time - decayNs < min ? time - decayNs : min),
+          time,
+        );
+        const transformSources = transformTopicsRef.current;
+        if (
+          abort.signal.aborted ||
+          oldestStamp == undefined ||
+          oldestStamp >= covered ||
+          transformSources.length === 0 ||
+          transformsCompleteUntilRef.current >= time
+        ) {
+          return;
+        }
+        await readTransformRange({
+          subscribeRange: context.unstable_subscribeMessageRange,
+          topics: transformSources,
+          // A sample before the oldest stamp, to interpolate at it
+          start: oldestStamp - STAMP_LOOKBACK_NS,
+          end: covered,
+          signal: abort.signal,
+          onBatch: (batch) => {
+            renderer.addTransformMessages(batch);
+          },
+        });
+        renderer.queueAnimationFrame();
+      };
+      void read();
+    },
+    // context is static, we're just using it to subscribe
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [renderer, decayTopicsRef, transformTopicsRef],
+  );
+  useLayoutEffect(() => () => decayReadRef.current?.abort(), [readDecayHistory]);
+
   // After a seek past the preloaded history (or with preloading off), read the transforms just
-  // before the new time, so every frame is placed right without waiting for preloading.
+  // before the new time, so every frame is placed right without waiting for preloading. The first
+  // window covers the longest decay time, so the decay histories read back are placed too.
   const readTransformsAfterSeek = useCallback(
     (time: bigint, knownFrameIds: readonly string[]) => {
       seekReadRef.current?.abort();
@@ -581,6 +737,10 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
         topics: transformTopics,
         time,
         floor,
+        minLookback: decayTopicsRef.current.reduce(
+          (max, d) => (d.decayNs > max ? d.decayNs : max),
+          0n,
+        ),
         signal: abort.signal,
         onBatch: (batch) => {
           renderer.addTransformMessages(batch, refreshed);
@@ -603,6 +763,35 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
   // A layout effect, declared before the preloading one: React runs its cleanup before that effect
   // starts a new read, so the cleanup cannot cancel it (a passive cleanup would run after).
   useLayoutEffect(() => () => seekReadRef.current?.abort(), [readTransformsAfterSeek]);
+
+  // A new or longer decay time shows its window at once, read for just that topic (scans already
+  // in the history are skipped before decoding), with the transforms of the new window so the
+  // older scans are placed (e.g. while paused); with no decayed topic left, the reads stop
+  const decayReadNsRef = useRef(new Map<string, bigint>());
+  // A new renderer starts with empty histories: every decayed topic counts as new
+  useEffect(() => {
+    decayReadNsRef.current = new Map();
+  }, [renderer]);
+  useEffect(() => {
+    if (!renderer) {
+      return;
+    }
+    const grown = new Set<string>();
+    const readNs = new Map<string, bigint>();
+    for (const { topic, decayNs } of decayTopicsRef.current) {
+      readNs.set(topic, decayNs);
+      if (decayNs > (decayReadNsRef.current.get(topic) ?? 0n)) {
+        grown.add(topic);
+      }
+    }
+    decayReadNsRef.current = readNs;
+    if (readNs.size === 0) {
+      readDecayHistory(renderer.currentTime); // stops the reads
+    } else if (grown.size > 0) {
+      readTransformsAfterSeek(renderer.currentTime, placedFrameIds(renderer));
+      readDecayHistory(renderer.currentTime, grown);
+    }
+  }, [renderer, decayKey, readDecayHistory, readTransformsAfterSeek, decayTopicsRef]);
 
   // Preloading: read the whole transform history into the renderer's transform tree
   useLayoutEffect(() => {
@@ -873,17 +1062,13 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
     renderer.setCurrentTime(newTimeNs);
     if (didSeek) {
       // Frames placed before the seek, collected before handleSeek may clear them
-      const knownFrameIds: string[] = [];
-      for (const frame of renderer.transformTree.frames().values()) {
-        if (frame.parent()) {
-          knownFrameIds.push(frame.id);
-        }
-      }
+      const frameIds = placedFrameIds(renderer);
       renderer.handleSeek(oldTimeNs);
-      readTransformsAfterSeek(newTimeNs, knownFrameIds);
+      readTransformsAfterSeek(newTimeNs, frameIds);
+      readDecayHistory(newTimeNs);
       setDidSeek(false);
     }
-  }, [currentTime, renderer, didSeek, readTransformsAfterSeek]);
+  }, [currentTime, renderer, didSeek, readTransformsAfterSeek, readDecayHistory]);
 
   // Keep the renderer colorScheme and backgroundColor up to date
   useEffect(() => {
@@ -1128,6 +1313,14 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
     }
   }, [publishActive, renderer]);
 
+  const onChangePublishClickType = useCallback(
+    (type: PublishClickType) => {
+      renderer?.publishClickTool.setPublishClickType(type);
+      renderer?.publishClickTool.start();
+    },
+    [renderer],
+  );
+
   const onTogglePerspective = useCallback(() => {
     const currentState = renderer?.getCameraState()?.perspective ?? false;
     actionHandler({
@@ -1233,10 +1426,7 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
             onClickPublish={onClickPublish}
             onShowTopicSettings={onShowTopicSettings}
             publishClickType={renderer?.publishClickTool.publishClickType ?? "point"}
-            onChangePublishClickType={(type) => {
-              renderer?.publishClickTool.setPublishClickType(type);
-              renderer?.publishClickTool.start();
-            }}
+            onChangePublishClickType={onChangePublishClickType}
             timezone={timezone}
           />
         </RendererContext.Provider>

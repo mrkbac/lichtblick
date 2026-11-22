@@ -9,16 +9,16 @@ import * as Comlink from "@foxglove/comlink";
 import { Time } from "@lichtblick/suite";
 
 import type { IMessageCursor, IteratorResult } from "./IIterableSource";
+import { PackedBatch, packBatch } from "./packedBatch";
 
 /**
  * Wraps a IMessageCursor and returns message-events with calls to Comlink.transfer.
  * This allows ArrayBuffers to be transferred rather than being structureClone'd which is significantly faster.
+ * Batches are returned packed (see packBatch); the main thread unpacks them with unpackBatch.
  * This class must only be used for worker communication because otherwise Comlink's interal transfer buffer
  * will never be emptied leading to an OOM.
  */
-class ComlinkTransferIteratorCursor<MessageType = Uint8Array>
-  implements IMessageCursor<MessageType>
-{
+class ComlinkTransferIteratorCursor<MessageType = Uint8Array> {
   #cursor: IMessageCursor<MessageType>;
 
   public constructor(cursor: IMessageCursor<MessageType>) {
@@ -38,31 +38,27 @@ class ComlinkTransferIteratorCursor<MessageType = Uint8Array>
     return next;
   }
 
-  public async nextBatch(durationMs: number): Promise<IteratorResult<MessageType>[] | undefined> {
-    const batch = await this.#cursor.nextBatch(durationMs);
-    if (batch == undefined) {
-      return batch;
-    }
-
-    const transferables: Transferable[] = [];
-    for (const iterResult of batch) {
-      if (
-        iterResult.type === "message-event" &&
-        iterResult.msgEvent.message instanceof Uint8Array
-      ) {
-        transferables.push(iterResult.msgEvent.message.buffer);
-      }
-    }
-    return Comlink.transfer(batch, transferables);
+  public async nextBatch(durationMs: number): Promise<PackedBatch<MessageType> | undefined> {
+    return transferPacked(await this.#cursor.nextBatch(durationMs));
   }
 
-  public async readUntil(end: Time): ReturnType<IMessageCursor<MessageType>["readUntil"]> {
-    return await this.#cursor.readUntil(end);
+  public async readUntil(end: Time): Promise<PackedBatch<MessageType> | undefined> {
+    return transferPacked(await this.#cursor.readUntil(end));
   }
 
   public async end(): ReturnType<IMessageCursor<MessageType>["end"]> {
     await this.#cursor.end();
   }
+}
+
+function transferPacked<MessageType>(
+  batch: IteratorResult<MessageType>[] | undefined,
+): PackedBatch<MessageType> | undefined {
+  if (batch == undefined) {
+    return undefined;
+  }
+  const { packed, transfer } = packBatch(batch);
+  return Comlink.transfer(packed, transfer);
 }
 
 export { ComlinkTransferIteratorCursor };

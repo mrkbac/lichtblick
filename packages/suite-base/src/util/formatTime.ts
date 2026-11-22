@@ -119,6 +119,29 @@ export function formatDuration(stamp: Time): string {
   return `${sign}${days}d ${formatHms(Math.abs(totalMs) % DAY_MS)}`;
 }
 
+/**
+ * A duration at the precision a person reads it: "8.4 s" under a minute, then "m:ss", "h:mm:ss"
+ * and "2d 3:04:05", rounded to the shown digit (so 59.999 s is "1:00").
+ */
+export function formatDurationCompact(stamp: Time): string {
+  const seconds = stamp.sec + stamp.nsec / 1e9;
+  const sign = seconds < 0 ? "-" : "";
+  const abs = Math.abs(seconds);
+  if (Math.round(abs * 10) < 600) {
+    return `${sign}${abs.toFixed(1)} s`;
+  }
+  const total = Math.round(abs);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const [d, h, m, s] = [
+    Math.floor(total / 86_400),
+    Math.floor(total / 3600) % 24,
+    Math.floor(total / 60) % 60,
+    total % 60,
+  ];
+  const clock = h > 0 || d > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${m}:${pad(s)}`;
+  return `${sign}${d > 0 ? `${d}d ` : ""}${clock}`;
+}
+
 const timeStrRegex =
   /^(\d{4})-(\d{1,2})-(\d{1,2})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2})(?:\.(\d+))?)?)?(?:\s*([AaPp][Mm]))?/;
 

@@ -69,13 +69,13 @@ function setup(historySize: number, path = "/state.mode") {
 }
 
 describe("usePathSampleHistory", () => {
-  it("keeps the decoded values of the newest messages, not the messages", () => {
-    const { send, values, hook } = setup(2);
+  it("keeps the decoded values, not the messages", () => {
+    const { send, values, hook } = setup(10);
     send(message(1, 1));
     send(message(2, 2), message(3, 3));
 
-    expect(values()).toEqual([2, 3]);
-    const last = hook.result.current.history["/state.mode"]?.last();
+    expect(values()).toEqual([1, 2, 3]);
+    const last = hook.result.current.history["/state.mode"]?.at(2);
     expect(last).toEqual({
       receiveTime: { sec: 3, nsec: 0 },
       headerStamp: undefined,
@@ -84,6 +84,17 @@ describe("usePathSampleHistory", () => {
       constantName: undefined,
     });
     expect(last).not.toHaveProperty("messageEvent");
+  });
+
+  it("thins a long history instead of dropping its start", () => {
+    const { send, values } = setup(8);
+    for (let i = 0; i < 40; i++) {
+      send(message(i, i));
+    }
+    const kept = values() ?? [];
+    expect(kept.length).toBeLessThanOrEqual(8);
+    expect(kept[0]).toBe(0);
+    expect(kept.at(-1)).toBe(39);
   });
 
   it("starts over after a seek", () => {

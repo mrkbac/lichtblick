@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import AddIcon from "@mui/icons-material/Add";
+import CloudOutlinedIcon from "@mui/icons-material/CloudOutlined";
 import DeleteOutlinedIcon from "@mui/icons-material/DeleteOutlined";
 import LayersIcon from "@mui/icons-material/Layers";
 import {
@@ -16,48 +17,80 @@ import {
   Tooltip,
   Typography,
 } from "@mui/material";
-import { useCallback, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { makeStyles } from "tss-react/mui";
-import { create } from "zustand";
 
 import Stack from "@lichtblick/suite-base/components/Stack";
-import { usePlayerSelection } from "@lichtblick/suite-base/context/PlayerSelectionContext";
+import {
+  DataSourceArgs,
+  IDataSourceFactory,
+  usePlayerSelection,
+} from "@lichtblick/suite-base/context/PlayerSelectionContext";
+import { useWorkspaceStore } from "@lichtblick/suite-base/context/Workspace/WorkspaceContext";
 import { FILE_ACCEPT_TYPE } from "@lichtblick/suite-base/context/Workspace/constants";
+import { useWorkspaceActions } from "@lichtblick/suite-base/context/Workspace/useWorkspaceActions";
 import {
   CompareDraft,
-  draftFromFiles,
+  Recording,
   draftToCompare,
+  encodeCompareNames,
   handlesOf,
+  joinUrls,
+  splitUrls,
+  recordingExtension,
+  recordingName,
   rememberHandle,
 } from "@lichtblick/suite-base/util/compareSides";
-import { extname } from "@lichtblick/suite-base/util/path";
 import showOpenFilePicker from "@lichtblick/suite-base/util/showOpenFilePicker";
+import { useSourcePick } from "@lichtblick/suite-base/util/sourcePick";
 
 import { SIDE_COLORS, sideLabel } from "./CompareContext";
+import { compareSourceFor, useCompareDialog } from "./compareDialogStore";
 
-/** The open compare dialog's starting draft, so menus anywhere can open it */
-export const useCompareDialog = create<{
-  draft: CompareDraft | undefined;
-  show: (draft: CompareDraft) => void;
-  hide: () => void;
-}>()((set) => ({
-  draft: undefined,
-  show: (draft) => {
-    set({ draft });
-  },
-  hide: () => {
-    set({ draft: undefined });
-  },
-}));
+/**
+ * The recordings `source` opened with `args` reads, and whether its URLs are fetched with cookies.
+ * A live connection or a sample has none.
+ */
+async function recordingsOf(
+  source: IDataSourceFactory | undefined,
+  args: DataSourceArgs | undefined,
+): Promise<{ recordings: Recording[]; withCookies: boolean }> {
+  if (args?.type === "connection") {
+    // Only sources that read recording files (not live connections, whatever their URL ends with)
+    const url = source?.supportedFileTypes != undefined ? args.params?.url : undefined;
+    const urls = url != undefined ? splitUrls(url) : [];
+    const isHttp = (each: string) => /^https?:\/\//i.test(each);
+    return {
+      recordings: urls.every(isHttp) ? urls : [],
+      withCookies: args.params?.includeCredentials === "true",
+    };
+  }
+  return { recordings: await filesOf(args), withCookies: false };
+}
 
-/** Opens the compare dialog with the files open now, so adding recordings starts from them */
-export function useShowCompareDialog(): () => void {
-  const { selectedFiles, selectedCompare } = usePlayerSelection();
-  const show = useCompareDialog((state) => state.show);
-  return useCallback(() => {
-    show(draftFromFiles(selectedFiles ?? [], selectedCompare));
-  }, [selectedFiles, selectedCompare, show]);
+async function filesOf(args: DataSourceArgs | undefined): Promise<Recording[]> {
+  if (args?.type !== "file") {
+    return [];
+  }
+  if (args.handles) {
+    return await Promise.all(
+      args.handles.map(async (handle) => {
+        if (typeof handle === "string") {
+          return handle;
+        }
+        if ((await handle.queryPermission({ mode: "read" })) !== "granted") {
+          if ((await handle.requestPermission({ mode: "read" })) !== "granted") {
+            throw new Error(`Permission denied: ${handle.name}`);
+          }
+        }
+        const file = await handle.getFile();
+        rememberHandle(file, handle);
+        return file;
+      }),
+    );
+  }
+  return args.files ?? [];
 }
 
 const useStyles = makeStyles()((theme) => ({
@@ -104,17 +137,28 @@ const useStyles = makeStyles()((theme) => ({
 type FileRowProps = {
   swatch: React.ReactNode;
   header: React.ReactNode;
-  files: readonly File[];
+  files: readonly Recording[];
   accepts: (file: File) => boolean;
-  onFiles: (files: File[]) => void;
+  onFiles: (files: Recording[]) => void;
   onPick: () => void;
+  onPickElsewhere: () => void;
   onRemoveRow?: () => void;
   emptyHint: string;
 };
 
 /** One row of files: drop files on it, add more with the picker, remove each with its chip */
 function FileRow(props: FileRowProps): React.JSX.Element {
-  const { swatch, header, files, accepts, onFiles, onPick, onRemoveRow, emptyHint } = props;
+  const {
+    swatch,
+    header,
+    files,
+    accepts,
+    onFiles,
+    onPick,
+    onPickElsewhere,
+    onRemoveRow,
+    emptyHint,
+  } = props;
   const { classes, cx } = useStyles();
   const { t } = useTranslation("compare");
   const [dragOver, setDragOver] = useState(false);
@@ -152,10 +196,11 @@ function FileRow(props: FileRowProps): React.JSX.Element {
       <div className={classes.files}>
         {files.map((file, index) => (
           <Chip
-            key={`${file.name}-${index}`}
+            key={`${recordingName(file)}-${index}`}
             size="small"
-            label={file.name}
-            title={file.name}
+            icon={typeof file === "string" ? <CloudOutlinedIcon /> : undefined}
+            label={recordingName(file)}
+            title={typeof file === "string" ? file : file.name}
             onDelete={() => {
               onFiles(files.filter((_, i) => i !== index));
             }}
@@ -169,6 +214,11 @@ function FileRow(props: FileRowProps): React.JSX.Element {
         <Button size="small" startIcon={<AddIcon />} onClick={onPick}>
           {t("addFiles")}
         </Button>
+        <Tooltip title={t("addFromHint")}>
+          <Button size="small" startIcon={<AddIcon />} onClick={onPickElsewhere}>
+            {t("addFrom")}
+          </Button>
+        </Tooltip>
       </div>
     </div>
   );
@@ -177,10 +227,10 @@ function FileRow(props: FileRowProps): React.JSX.Element {
 // Rows keep their id while rows around them are added or removed, so a file picker that finishes
 // late still fills the row it was opened from
 type DialogSide = CompareDraft["sides"][number] & { id: number };
-type DialogDraft = { shared: File[]; sides: DialogSide[] };
+type DialogDraft = { shared: Recording[]; sides: DialogSide[]; withCookies: readonly string[] };
 
 let nextSideId = 0;
-function newSide(files: File[] = [], name = ""): DialogSide {
+function newSide(files: Recording[] = [], name = ""): DialogSide {
   return { id: nextSideId++, name, files };
 }
 
@@ -190,7 +240,7 @@ function toDialogDraft(draft: CompareDraft): DialogDraft {
   while (sides.length < 2) {
     sides.push(newSide());
   }
-  return { shared: draft.shared, sides };
+  return { shared: draft.shared, sides, withCookies: draft.withCookies ?? [] };
 }
 
 function CompareDialogContent({ initial }: { initial: CompareDraft }): React.JSX.Element {
@@ -199,6 +249,13 @@ function CompareDialogContent({ initial }: { initial: CompareDraft }): React.JSX
   const hide = useCompareDialog((state) => state.hide);
   const { availableSources, selectSource } = usePlayerSelection();
   const [draft, setDraft] = useState(() => toDialogDraft(initial));
+  // The latest draft, ahead of renders: picks finishing close together each check and change the
+  // draft the one before left, not the one their render saw
+  const draftRef = useRef(draft);
+  const updateDraft = (update: (old: DialogDraft) => DialogDraft) => {
+    draftRef.current = update(draftRef.current);
+    setDraft(draftRef.current);
+  };
   const [error, setError] = useState<string | undefined>();
 
   const sources = useMemo(
@@ -212,7 +269,22 @@ function CompareDialogContent({ initial }: { initial: CompareDraft }): React.JSX
     () => [...new Set(sources.flatMap((source) => source.supportedFileTypes ?? []))],
     [sources],
   );
-  const accepts = (file: File) => extensions.includes(extname(file.name));
+  const accepts = (file: Recording) => extensions.includes(recordingExtension(file));
+  const { dialogActions } = useWorkspaceActions();
+  const pickOpen = useWorkspaceStore((store) => store.dialogs.dataSource.open);
+
+  // A pick ends with the open dialog: closing it without opening anything cancels the pick
+  useEffect(() => {
+    if (!pickOpen) {
+      useSourcePick.setState({ pick: undefined });
+    }
+  }, [pickOpen]);
+  useEffect(
+    () => () => {
+      useSourcePick.setState({ pick: undefined });
+    },
+    [],
+  );
 
   const pick = async (): Promise<File[]> => {
     const handles = await showOpenFilePicker({
@@ -243,8 +315,77 @@ function CompareDialogContent({ initial }: { initial: CompareDraft }): React.JSX
         setError(String(err));
       });
   };
+  /**
+   * Pick recordings for a row in the app's open dialog: whatever the user opens there (a recent, a
+   * URL, a catalog entry, a sample, a local file) is added to the row instead of being opened
+   */
+  const pickElsewhere = (
+    label: string,
+    add: (old: DialogDraft, picked: Recording[]) => DialogDraft,
+  ) => {
+    setError(undefined);
+    useSourcePick.setState({
+      pick: {
+        label,
+        deliver: (sourceId, args) => {
+          dialogActions.dataSource.close();
+          const source = availableSources.find(
+            (s) => s.id === sourceId || s.legacyIds?.includes(sourceId) === true,
+          );
+          recordingsOf(source, args)
+            .then(({ recordings: picked, withCookies }) => {
+              const unsupported = picked.find((r) => !accepts(r));
+              // One URL, one cookie policy: the same recording can't be fetched both ways. Checked
+              // and committed against the latest draft in one step.
+              const current = draftRef.current;
+              const inDraft = new Set([
+                ...current.shared,
+                ...current.sides.flatMap((s) => s.files),
+              ]);
+              const conflict = picked.find(
+                (r) =>
+                  typeof r === "string" &&
+                  inDraft.has(r) &&
+                  current.withCookies.includes(r) !== withCookies,
+              );
+              if (conflict != undefined) {
+                setError(t("cookiesConflict", { name: recordingName(conflict) }));
+                return;
+              }
+              if (picked.length === 0 || unsupported != undefined) {
+                setError(
+                  t("notComparable", {
+                    name: unsupported != undefined ? recordingName(unsupported) : t("thisSource"),
+                    types: extensions.join(", "),
+                  }),
+                );
+                return;
+              }
+              // The draft's cookie setting for each picked URL follows this pick
+              const urls = picked.filter((r) => typeof r === "string");
+              updateDraft((old) =>
+                add(
+                  {
+                    ...old,
+                    withCookies: [
+                      ...old.withCookies.filter((url) => !urls.includes(url)),
+                      ...(withCookies ? urls : []),
+                    ],
+                  },
+                  picked,
+                ),
+              );
+            })
+            .catch((err: unknown) => {
+              setError(String(err));
+            });
+        },
+      },
+    });
+    dialogActions.dataSource.open("start");
+  };
   const updateSide = (id: number, update: (side: DialogSide) => Partial<DialogSide>) => {
-    setDraft((old) => ({
+    updateDraft((old) => ({
       ...old,
       sides: old.sides.map((s) => (s.id === id ? { ...s, ...update(s) } : s)),
     }));
@@ -252,10 +393,23 @@ function CompareDialogContent({ initial }: { initial: CompareDraft }): React.JSX
 
   const { files, compare } = draftToCompare(draft);
   const sideCount = new Set(compare).size;
-  const source = sources.find((s) =>
-    files.every((file) => s.supportedFileTypes?.includes(extname(file.name)) === true),
-  );
+  const source = compareSourceFor(files, sources);
   const mixed = files.length > 0 && source == undefined;
+  const urls = files.filter((file): file is string => typeof file === "string");
+  // Only remote recordings: opened as one remote source, so the comparison can be shared as a link
+  const remoteSource =
+    urls.length === files.length
+      ? availableSources.find(
+          (s) =>
+            s.type === "connection" &&
+            urls.every((url) => s.supportedFileTypes?.includes(recordingExtension(url)) === true),
+        )
+      : undefined;
+  // Cookies (`ds.includeCredentials`) are one setting for a whole remote comparison, and files
+  // mixed with URLs are opened without them
+  const withCookies = urls.filter((url) => draft.withCookies.includes(url));
+  const cookiesMixed =
+    withCookies.length > 0 && (withCookies.length !== urls.length || remoteSource == undefined);
 
   return (
     <>
@@ -283,12 +437,18 @@ function CompareDialogContent({ initial }: { initial: CompareDraft }): React.JSX
             accepts={accepts}
             emptyHint={t("sharedEmpty")}
             onFiles={(shared) => {
-              setDraft((old) => ({ ...old, shared }));
+              updateDraft((old) => ({ ...old, shared }));
             }}
             onPick={() => {
               pickInto((picked) => {
-                setDraft((old) => ({ ...old, shared: [...old.shared, ...picked] }));
+                updateDraft((old) => ({ ...old, shared: [...old.shared, ...picked] }));
               });
+            }}
+            onPickElsewhere={() => {
+              pickElsewhere(t("sharedPick"), (old, picked) => ({
+                ...old,
+                shared: [...old.shared, ...picked],
+              }));
             }}
           />
           {draft.sides.map((side, index) => (
@@ -307,7 +467,11 @@ function CompareDialogContent({ initial }: { initial: CompareDraft }): React.JSX
                   size="small"
                   variant="standard"
                   value={side.name}
-                  placeholder={side.files[0]?.name ?? t("sideName", { label: sideLabel(index) })}
+                  placeholder={
+                    side.files[0] != undefined
+                      ? recordingName(side.files[0])
+                      : t("sideName", { label: sideLabel(index) })
+                  }
                   slotProps={{ htmlInput: { "aria-label": t("sideNameLabel") } }}
                   onChange={(event) => {
                     const name = event.target.value;
@@ -326,10 +490,18 @@ function CompareDialogContent({ initial }: { initial: CompareDraft }): React.JSX
                   updateSide(side.id, (s) => ({ files: [...s.files, ...picked] }));
                 });
               }}
+              onPickElsewhere={() => {
+                pickElsewhere(t("sideName", { label: sideLabel(index) }), (old, picked) => ({
+                  ...old,
+                  sides: old.sides.map((s) =>
+                    s.id === side.id ? { ...s, files: [...s.files, ...picked] } : s,
+                  ),
+                }));
+              }}
               onRemoveRow={
                 draft.sides.length > 2
                   ? () => {
-                      setDraft((old) => ({
+                      updateDraft((old) => ({
                         ...old,
                         sides: old.sides.filter((s) => s.id !== side.id),
                       }));
@@ -343,7 +515,7 @@ function CompareDialogContent({ initial }: { initial: CompareDraft }): React.JSX
               size="small"
               startIcon={<AddIcon />}
               onClick={() => {
-                setDraft((old) => ({ ...old, sides: [...old.sides, newSide()] }));
+                updateDraft((old) => ({ ...old, sides: [...old.sides, newSide()] }));
               }}
             >
               {t("addRecording")}
@@ -354,7 +526,7 @@ function CompareDialogContent({ initial }: { initial: CompareDraft }): React.JSX
                 onClick={() => {
                   // Each picked file becomes a recording of its own, filling empty rows first
                   pickInto((picked) => {
-                    setDraft((old) => {
+                    updateDraft((old) => {
                       const sides = [...old.sides];
                       for (const file of picked) {
                         const empty = sides.findIndex((s) => s.files.length === 0);
@@ -373,9 +545,10 @@ function CompareDialogContent({ initial }: { initial: CompareDraft }): React.JSX
               </Button>
             </Tooltip>
           </Stack>
-          {(error != undefined || mixed) && (
+          {(error != undefined || mixed || cookiesMixed) && (
             <Typography variant="body2" color="error">
-              {error ?? t("mixedTypes")}
+              {error ??
+                (mixed ? t("mixedTypes", { types: extensions.join(", ") }) : t("cookiesMixed"))}
             </Typography>
           )}
         </Stack>
@@ -384,14 +557,26 @@ function CompareDialogContent({ initial }: { initial: CompareDraft }): React.JSX
         <Button onClick={hide}>{t("cancel")}</Button>
         <Button
           variant="contained"
-          disabled={sideCount < 2 || source == undefined}
+          disabled={sideCount < 2 || source == undefined || cookiesMixed}
           onClick={() => {
-            // With a handle for every file the comparison is kept in recents; dropped files have none
-            const handles = handlesOf(files);
-            selectSource(
-              source!.id,
-              handles ? { type: "file", handles, compare } : { type: "file", files, compare },
-            );
+            if (remoteSource) {
+              selectSource(remoteSource.id, {
+                type: "connection",
+                params: {
+                  url: joinUrls(urls),
+                  compareNames: encodeCompareNames(compare),
+                  ...(withCookies.length > 0 && { includeCredentials: "true" }),
+                },
+              });
+            } else {
+              // With a handle for every file the comparison is kept in recents; dropped files have
+              // none
+              const handles = handlesOf(files);
+              selectSource(
+                source!.id,
+                handles ? { type: "file", handles, compare } : { type: "file", files, compare },
+              );
+            }
             hide();
           }}
         >
@@ -402,15 +587,20 @@ function CompareDialogContent({ initial }: { initial: CompareDraft }): React.JSX
   );
 }
 
-/** Pick the recordings to compare: one row per side, each merged from any number of files */
+/**
+ * Pick the recordings to compare: one row per side, each merged from any number of files. Loaded
+ * only once a comparison is being edited (see compareDialogStore).
+ */
 export function CompareDialog(): React.JSX.Element | null {
   const draft = useCompareDialog((state) => state.draft);
   const hide = useCompareDialog((state) => state.hide);
+  // Out of the way (but kept, with its rows) while a recording is picked in the open dialog
+  const picking = useSourcePick((state) => state.pick != undefined);
   if (!draft) {
     return null;
   }
   return (
-    <Dialog open onClose={hide} fullWidth maxWidth="sm">
+    <Dialog open={!picking} keepMounted onClose={hide} fullWidth maxWidth="sm">
       <CompareDialogContent initial={draft} />
     </Dialog>
   );

@@ -99,6 +99,14 @@ describe("getAlertCopyText", () => {
 });
 
 describe("buildGroupedAlerts", () => {
+  it("keeps a player alert's guide when it groups with an identical session alert", () => {
+    const alert = { severity: "error" as const, message: "Blocked", tip: "Use the extension" };
+    const guide = { type: "wsMixedContent" as const, url: "ws://robot.example:8765" };
+    const [group] = buildGroupedAlerts([{ ...alert, tag: "s" }], [{ ...alert, guide }], new Set());
+    expect(group?.count).toBe(2);
+    expect(group?.guide).toEqual(guide);
+  });
+
   it("should return empty array when there are no alerts", () => {
     // Given / When
     const result = buildGroupedAlerts([], [], new Set());

@@ -47,10 +47,20 @@ async function ensureI18n(): Promise<void> {
 export default class BrowserHttpReader implements FileReader {
   #url: string;
   #credentials: RequestCredentials | undefined;
+  /** Cancels the requests that open the file */
+  #signal: AbortSignal | undefined;
 
-  public constructor(url: string, options?: { credentials?: RequestCredentials }) {
+  public constructor(
+    url: string,
+    options?: { credentials?: RequestCredentials; signal?: AbortSignal },
+  ) {
     this.#url = url;
     this.#credentials = options?.credentials;
+    this.#signal = options?.signal;
+  }
+
+  #withSignal(signal: AbortSignal): AbortSignal {
+    return this.#signal ? AbortSignal.any([signal, this.#signal]) : signal;
   }
 
   /**
@@ -140,7 +150,7 @@ export default class BrowserHttpReader implements FileReader {
       headers: { range },
       cache: "no-store",
       credentials: this.#credentials,
-      signal: controller.signal,
+      signal: this.#withSignal(controller.signal),
     });
     response.catch(() => {}); // the caller may not await a request it aborted
     return {
@@ -160,7 +170,7 @@ export default class BrowserHttpReader implements FileReader {
     let response: Response;
     try {
       response = await fetch(this.#url, {
-        signal: controller.signal,
+        signal: this.#withSignal(controller.signal),
         cache: "no-store",
         credentials: this.#credentials,
       });
@@ -214,7 +224,9 @@ export default class BrowserHttpReader implements FileReader {
       mode: "no-cors",
       cache: "no-store",
       credentials: this.#credentials,
-      signal: AbortSignal.any([controller.signal, AbortSignal.timeout(PROBE_TIMEOUT_MS)]),
+      signal: this.#withSignal(
+        AbortSignal.any([controller.signal, AbortSignal.timeout(PROBE_TIMEOUT_MS)]),
+      ),
     }).then(
       () => true,
       () => false,

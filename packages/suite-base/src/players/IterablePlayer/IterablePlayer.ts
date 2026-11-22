@@ -61,6 +61,7 @@ import {
   Initialization,
   IteratorResult,
 } from "./IIterableSource";
+import { SharedRangeReads } from "./SharedRangeReads";
 
 const log = Log.getLogger(__filename);
 // Number of bytes that we aim to keep in the cache.
@@ -238,6 +239,10 @@ export class IterablePlayer implements Player {
   // Unbuffered reads (block loading, range and backfill reads). Shares the playback source's parsed
   // channels, which its initialize() and waitForUpdate() parse for all readers.
   readonly #unbufferedSource: IDeserializedIterableSource;
+  /** Range reads (getBatchIterator) that start together share one pass over the recording */
+  readonly #rangeReads = new SharedRangeReads((topics, range) =>
+    this.#unbufferedSource.messageIterator({ topics, consumptionType: "full", ...range }),
+  );
   // #unbufferedSource once initialized
   #messageRangeSource?: IDeserializedIterableSource;
   #samplingEnabled: boolean = false;
@@ -552,14 +557,10 @@ export class IterablePlayer implements Player {
     topic: string,
     options?: { start?: Time; end?: Time },
   ): AsyncIterableIterator<Readonly<IteratorResult>> | undefined {
-    const topicSelection = new Map([[topic, { topic }]]);
-
-    return this.#messageRangeSource?.messageIterator({
-      topics: topicSelection,
-      consumptionType: "full",
-      start: options?.start,
-      end: options?.end,
-    });
+    if (!this.#messageRangeSource) {
+      return undefined;
+    }
+    return this.#rangeReads.read(topic, { start: options?.start, end: options?.end });
   }
 
   // Reuses #messageRangeSource (already independent of the live playback cursor/state machine,
@@ -829,6 +830,11 @@ export class IterablePlayer implements Player {
     freezeMetadata(this.#metadata);
 
     this.#profile = profile;
+    this.#capabilities = [
+      PLAYER_CAPABILITIES.setSpeed,
+      PLAYER_CAPABILITIES.playbackControl,
+      ...(initResult.indexedBackfill === true ? [PLAYER_CAPABILITIES.indexedBackfill] : []),
+    ];
     this.#recordingFiles = initResult.recordingFiles;
     this.#compareSides = initResult.compareSides;
     this.#compareRequest = initResult.compareRequest;
@@ -1194,6 +1200,8 @@ export class IterablePlayer implements Player {
 
     let activeData: PlayerStateActiveData | undefined;
     if (this.#start && this.#end && this.#currentTime) {
+      // Preloading follows what is shown
+      this.#blockLoader?.setPlayhead(this.#currentTime);
       activeData = {
         messages,
         totalBytesReceived: this.#receivedBytes,

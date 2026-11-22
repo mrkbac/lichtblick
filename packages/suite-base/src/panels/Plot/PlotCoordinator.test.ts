@@ -685,6 +685,76 @@ describe("PlotCoordinator", () => {
       );
     });
 
+    describe("adding and removing series on a plotted topic", () => {
+      const keyA = "0:receiveTime:/foo.a" as SeriesConfigKey;
+      const keyB = "1:receiveTime:/foo.b" as SeriesConfigKey;
+      const batch = [{ topic: "/foo" }];
+      let cancels: Mock[];
+      let handleMessageRange: Mock;
+
+      beforeEach(() => {
+        cancels = [];
+        handleMessageRange = vi.fn();
+        datasetsBuilder.handleMessageRange = handleMessageRange;
+        mockSubscribeMessageRange.mockImplementation(
+          ({
+            onNewRangeIterator,
+          }: {
+            onNewRangeIterator: (iter: AsyncIterable<unknown>) => Promise<void>;
+          }) => {
+            void onNewRangeIterator(
+              (async function* () {
+                yield batch;
+              })(),
+            );
+            const cancel = vi.fn();
+            cancels.push(cancel);
+            return cancel;
+          },
+        );
+      });
+
+      // one state, so the topics stay the same between calls
+      const state = PlayerBuilder.playerState({ activeData: PlayerBuilder.activeData() });
+      function setKeys(keys: SeriesConfigKey[]) {
+        plotCoordinator["seriesKeysByTopic"] = new Map([["/foo", new Set(keys)]]);
+        plotCoordinator.handlePlayerState(state);
+      }
+
+      it("reads only the added series and keeps the loaded data of the others", async () => {
+        // GIVEN a plotted series on /foo
+        setKeys([keyA]);
+        await vi.waitFor(() => {
+          expect(handleMessageRange).toHaveBeenCalledTimes(1);
+        });
+
+        // WHEN a second series on /foo is added
+        setKeys([keyA, keyB]);
+
+        // THEN the first read keeps going and a new read feeds only the new series
+        await vi.waitFor(() => {
+          expect(handleMessageRange).toHaveBeenCalledTimes(2);
+        });
+        expect(cancels[0]).not.toHaveBeenCalled();
+        expect(mockSubscribeMessageRange).toHaveBeenCalledTimes(2);
+        expect(handleMessageRange).toHaveBeenLastCalledWith(
+          batch,
+          { isReset: true, seriesKeys: new Set([keyB]), readsXAxis: false },
+          expect.anything(),
+        );
+      });
+
+      it("keeps the read when one of the series is removed", () => {
+        setKeys([keyA, keyB]);
+        mockSubscribeMessageRange.mockClear();
+
+        setKeys([keyB]);
+
+        expect(cancels[0]).not.toHaveBeenCalled();
+        expect(mockSubscribeMessageRange).not.toHaveBeenCalled();
+      });
+    });
+
     describe("handling topic object reference changes", () => {
       beforeEach(() => {
         mockSubscribeMessageRange.mockImplementation(

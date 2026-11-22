@@ -5,12 +5,15 @@ import type { Feature, FeatureCollection } from "geojson";
 import type { LayerSpecification, SourceSpecification } from "maplibre-gl";
 
 import { MessageEvent } from "@lichtblick/suite";
+import { turboColorString } from "@lichtblick/suite-base/util/colorUtils";
 import { darkColor, lightColor } from "@lichtblick/suite-base/util/plotColors";
 
+import { normalize } from "./colorBy";
 import { DEFAULT_POINT_SIZE, TopicStyle } from "./config";
 import { bearingDegrees, distanceMeters, ellipseRing, LngLat } from "./geo";
 import { getAccuracy } from "./getAccuracy";
 import { GeoJsonMessage, hasFix, parseGeoJSON } from "./support";
+import { lastIndexAtOrBefore, nearestFix, TrackStore } from "./track";
 import { NavSatFixMsg } from "./types";
 
 export type NavMessage = MessageEvent<NavSatFixMsg>;
@@ -258,34 +261,17 @@ export function createArrowImage(size = 48): ImageData {
   return ctx.getImageData(0, 0, size, size);
 }
 
-/**
- * How long to batch track updates. Each flush rebuilds and re-uploads the whole track, so wait
- * longer as it grows: total rebuild work while loading stays proportional to the track length
- * instead of growing with its square.
- */
-export function trackFlushDelayMs(trackLength: number, cap?: number): number {
-  // Capped (live) trails start slower: they are redrawn for as long as data arrives.
-  return Math.max(cap == undefined ? 50 : 500, trackLength / 2000);
-}
+/** Where fixes come from: a recording's range, or live data as it arrives. */
+export type DataSource = "recorded" | "live";
 
 /**
- * The part of a fix the track draws and its popup shows. The track keeps every fix of a
- * recording, so it must not keep the decoded message (covariance, header and other fields).
+ * How long to batch track updates. Each flush thins and recolors the whole track, so wait longer
+ * as it grows: total work while loading stays proportional to the track length instead of
+ * growing with its square.
  */
-export function trackPoint(event: NavMessage): NavMessage {
-  const { latitude, longitude, altitude, status } = event.message;
-  return {
-    topic: event.topic,
-    schemaName: event.schemaName,
-    receiveTime: event.receiveTime,
-    sizeInBytes: 0,
-    message: {
-      latitude,
-      longitude,
-      altitude,
-      status: status ? { status: status.status, service: status.service } : undefined,
-    },
-  };
+export function trackFlushDelayMs(trackLength: number, source: DataSource): number {
+  // Live trails start slower: they are redrawn for as long as data arrives.
+  return Math.max(source === "live" ? 500 : 50, trackLength / 2000);
 }
 
 export function lngLatOf(event: NavMessage): LngLat {
@@ -297,74 +283,112 @@ const collection = (features: Feature[]): FeatureCollection => ({
   features,
 });
 
-/** Full recorded track. Point property `i` indexes into `messages`. */
-/** Per-message color and label when a track is colored by a value (speed, message path). */
-export type ValueStyle = { color: string; label: string };
+/** Colors of "color by" values, quantized so runs of similar values share one line feature. */
+const VALUE_COLORS = Array.from({ length: 64 }, (_unused, i) => turboColorString(i / 63));
 
+/** Values mapped onto the color scale between `range`, high to low when `reverse`. */
+export type ColorScale = {
+  values: Float64Array;
+  range: [number, number];
+  reverse: boolean;
+  /** Appended to values in labels, e.g. " km/h". */
+  unit: string;
+};
+
+/** A topic's track as drawn: the fixes to draw (see `thinTrack`) and how. */
+export type DrawnTrack = {
+  store: TrackStore;
+  indices: Uint32Array;
+  runs: readonly number[];
+  /** `store.version` when `indices` were chosen; they are stale once it changes. */
+  version: number;
+  /** `store.length` and `store.tailReplacements` then: rows past or replaced since aren't drawn. */
+  length: number;
+  tailReplacements: number;
+  color: string;
+  style: TopicStyle;
+  /** Per-fix values (NaN where unknown) and their color scale, when colored by a value. */
+  colorScale?: ColorScale;
+};
+
+/**
+ * Point property `k` indexes into `tracks`, `i` into that track's store, and `g` is the
+ * `generation` of `tracks`, so hovers resolve against the tracks the map actually shows.
+ */
 export function trackFeatures(
-  messages: readonly NavMessage[],
-  colors: ReadonlyMap<string, string>,
-  styles: Readonly<Record<string, TopicStyle>>,
-  valueStyleAt?: (index: number) => ValueStyle | undefined,
-): { points: FeatureCollection; lines: FeatureCollection } {
+  tracks: readonly DrawnTrack[],
+  generation = 0,
+): {
+  points: FeatureCollection;
+  lines: FeatureCollection;
+} {
   const points: Feature[] = [];
   const lines: Feature[] = [];
-  const lineCoords = new Map<string, { color: string; coords: LngLat[] }>();
-  const previous = new Map<string, LngLat>();
-  messages.forEach((event, i) => {
-    const style = styles[event.topic] ?? {};
-    const history = style.history ?? "points";
-    const base = colors.get(event.topic);
-    if (history === "none" || base == undefined) {
+  tracks.forEach(({ store, version, indices, runs, color, style, colorScale }, k) => {
+    // Rows moved (cleared or thinned) since `indices` were chosen: skip it until the next redraw,
+    // which the change schedules, rather than draw the wrong fixes.
+    if (store.version !== version) {
       return;
     }
-    const valueStyle = valueStyleAt?.(i);
-    const position = lngLatOf(event);
+    const history = style.history ?? "points";
+    const base = lightColor(color);
+    const colorAt = (i: number) => {
+      const value = colorScale?.values[i] ?? NaN;
+      // Infinite readings aren't on the scale: draw them like unknown ones.
+      if (!colorScale || !isFinite(value)) {
+        return base;
+      }
+      const t = normalize(value, colorScale.range);
+      return VALUE_COLORS[Math.round((colorScale.reverse ? 1 - t : t) * 63)]!;
+    };
+    const r = style.pointSize ?? DEFAULT_POINT_SIZE;
     if (history === "points" || history === "both") {
-      points.push({
-        type: "Feature",
-        geometry: { type: "Point", coordinates: position },
-        properties: {
-          i,
-          c: valueStyle?.color ?? lightColor(base),
-          r: style.pointSize ?? DEFAULT_POINT_SIZE,
-          ...(valueStyle ? { v: valueStyle.label } : {}),
-        },
-      });
+      for (const i of indices) {
+        points.push({
+          type: "Feature",
+          geometry: { type: "Point", coordinates: store.lngLat(i) },
+          properties: { g: generation, k, i, c: colorAt(i), r },
+        });
+      }
     }
     if (history === "line" || history === "both") {
-      const width = Math.max(1.5, (style.pointSize ?? DEFAULT_POINT_SIZE) * 0.8);
-      const from = previous.get(event.topic);
-      previous.set(event.topic, position);
-      if ((style.colorBy ?? "topic") !== "topic") {
-        // Colored by value: one segment per fix pair, in the color of its end point.
-        if (from) {
+      const w = Math.max(1.5, r * 0.8);
+      const line = (coordinates: LngLat[], c: string) => {
+        if (coordinates.length > 1) {
           lines.push({
             type: "Feature",
-            geometry: { type: "LineString", coordinates: [from, position] },
-            properties: { c: valueStyle?.color ?? lightColor(base), w: width },
+            geometry: { type: "LineString", coordinates },
+            properties: { c, w },
           });
         }
-        return;
-      }
-      let line = lineCoords.get(event.topic);
-      if (!line) {
-        line = { color: base, coords: [] };
-        lineCoords.set(event.topic, line);
-      }
-      line.coords.push(position);
+      };
+      runs.forEach((start, run) => {
+        const end = runs[run + 1] ?? indices.length;
+        if (!colorScale) {
+          const coordinates: LngLat[] = [];
+          for (let j = start; j < end; j++) {
+            coordinates.push(store.lngLat(indices[j]!));
+          }
+          line(coordinates, base);
+          return;
+        }
+        // Colored by value: each segment takes the color of its end; equal colors share a line.
+        let coordinates = [store.lngLat(indices[start]!)];
+        let c = "";
+        for (let j = start + 1; j < end; j++) {
+          const i = indices[j]!;
+          const next = colorAt(i);
+          if (next !== c && coordinates.length > 1) {
+            line(coordinates, c);
+            coordinates = [coordinates[coordinates.length - 1]!];
+          }
+          c = next;
+          coordinates.push(store.lngLat(i));
+        }
+        line(coordinates, c);
+      });
     }
   });
-  for (const [topic, { color, coords: coordinates }] of lineCoords) {
-    lines.push({
-      type: "Feature",
-      geometry: { type: "LineString", coordinates },
-      properties: {
-        c: lightColor(color),
-        w: Math.max(1.5, (styles[topic]?.pointSize ?? DEFAULT_POINT_SIZE) * 0.8),
-      },
-    });
-  }
   return { points: collection(points), lines: collection(lines) };
 }
 
@@ -456,22 +480,61 @@ export function geoJsonFeatures(
   return collection(features);
 }
 
-/** Direction of travel from the most recent fix at least `minDistance` meters back. */
+/** Direction of travel to `to` from the latest fix before `end` at least `minDistance` meters back. */
 export function headingFromTrack(
-  track: readonly NavMessage[],
+  track: TrackStore,
+  end: number,
+  to: LngLat,
   minDistance = 1,
 ): number | undefined {
-  const last = track[track.length - 1];
-  if (!last) {
-    return undefined;
-  }
-  const to = lngLatOf(last);
-  for (let i = track.length - 2; i >= 0; i--) {
-    const from = lngLatOf(track[i]!);
+  // ponytail: 500 fixes back at most, so a long stop doesn't scan the whole track.
+  for (let i = end - 1; i >= Math.max(0, end - 500); i--) {
+    const from = track.lngLat(i);
     // ponytail: below 1 m GNSS jitter dominates, so a stationary receiver keeps its last heading.
     if (distanceMeters(from, to) >= minDistance) {
       return bearingDegrees(from, to);
     }
   }
   return undefined;
+}
+
+/**
+ * The fix under the cursor for a track point feature (`k`, `i` from `trackFeatures`) drawn from
+ * `tracks`: the full-resolution fix nearest `at` among those the point stands for. Undefined when
+ * the feature doesn't belong to `tracks` or the track changed since (cleared or thinned).
+ */
+export function resolveTrackFix(
+  tracks: readonly DrawnTrack[] | undefined,
+  k: unknown,
+  i: unknown,
+  at: LngLat,
+): { track: DrawnTrack; fix: number } | undefined {
+  const track = typeof k === "number" ? tracks?.[k] : undefined;
+  if (
+    !track ||
+    typeof i !== "number" ||
+    track.store.version !== track.version ||
+    i >= track.length
+  ) {
+    return undefined;
+  }
+  // The newest drawn row may have been replaced in place by a later fix since.
+  const usable =
+    track.store.tailReplacements === track.tailReplacements ? track.length : track.length - 1;
+  const position = lastIndexAtOrBefore(track.indices, track.indices.length, i);
+  if (track.indices[position] !== i) {
+    return undefined;
+  }
+  const fix = nearestFix(track.store, track.indices, position, at, usable);
+  return fix < usable ? { track, fix } : undefined;
+}
+
+/**
+ * Identity of a track fix for hover state. An index alone can stand for another fix after the
+ * store is thinned (`version`) or the newest row is replaced in place (`tailReplacements`, which
+ * also tells apart a replacement with the same receive time).
+ */
+export function trackFixKey(store: TrackStore, fix: number): string {
+  const replacement = fix === store.length - 1 ? store.tailReplacements : -1;
+  return `${store.topic}\0${store.version}\0${fix}\0${replacement}`;
 }

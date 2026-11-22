@@ -18,6 +18,7 @@ export const commandPalette = {
   groupAddPanel: "Add panel",
   groupTopic: "Topic",
   groupPlayback: "Playback",
+  groupShare: "Share",
   groupView: "View",
   groupHelp: "Help",
 
@@ -70,12 +71,17 @@ export const commandPalette = {
   seekBy: "Seek {{offset}}",
   seekDetail: "Offset from start of recording",
   seekRelativeDetail: "Relative to the current time",
+  copyLink: "Copy link to this moment",
+  copyLinkDetail: "Source, time and layout",
+  copyLinkLocalDetail: "Not available for local files",
+  copyTimestamp: "Copy timestamp",
   playbackSpeed: "Playback speed…",
   playbackSpeedPlaceholder: "Choose a speed",
 
   toggleLeftSidebar: "Toggle left sidebar",
   toggleRightSidebar: "Toggle right sidebar",
   settings: "Open settings",
+  toggleTheme: "Switch light / dark theme",
 
   panelGuide: "Open panel guide",
   about: "About {{appName}}",

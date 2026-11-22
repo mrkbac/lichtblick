@@ -42,7 +42,14 @@ import {
   transformSettingsNode,
 } from "../settingsNodes/global";
 import { isThreeDeeShortcut } from "../shortcuts";
-import { CoordinateFrame, Duration, makePose, MAX_DURATION, Transform } from "../transforms";
+import {
+  CoordinateFrame,
+  Duration,
+  makePose,
+  MAX_DURATION,
+  Transform,
+  TransformTree,
+} from "../transforms";
 import { Axis } from "./Axis";
 import {
   ADJUST_STEPS,
@@ -998,26 +1005,54 @@ export class FrameAxes extends SceneExtension<FrameAxisRenderable> {
 
     // Layout-wide offsets apply in every panel, unless comparing against the original
     const shared = frameOffset(this.#offsets, frameId);
+    const tree = this.renderer.transformTree;
     if (this.#offsets.showOriginal === true || shared) {
-      frame.offsetPosition = shared && this.#offsets.showOriginal !== true ? shared.xyz : undefined;
-      frame.offsetEulerDegrees =
-        shared && this.#offsets.showOriginal !== true ? shared.rpy : undefined;
+      const showOriginal = this.#offsets.showOriginal === true;
+      setFrameOffsets(
+        tree,
+        frame,
+        shared && !showOriginal ? shared.xyz : undefined,
+        shared && !showOriginal ? shared.rpy : undefined,
+      );
       return;
     }
 
     // Legacy per-panel offsets (and URDF manual joints) only apply while editable
     const editable = this.renderer.config.scene.transforms?.editable ?? DEFAULT_EDITABLE;
     if (!editable) {
-      frame.offsetPosition = undefined;
-      frame.offsetEulerDegrees = undefined;
+      setFrameOffsets(tree, frame, undefined, undefined);
       return;
     }
 
     const frameKey = `frame:${renderable.userData.frameId}`;
-    frame.offsetPosition = getOffset(this.renderer.config.transforms[frameKey]?.xyzOffset);
-    frame.offsetEulerDegrees = getOffset(this.renderer.config.transforms[frameKey]?.rpyCoefficient);
+    setFrameOffsets(
+      tree,
+      frame,
+      getOffset(this.renderer.config.transforms[frameKey]?.xyzOffset),
+      getOffset(this.renderer.config.transforms[frameKey]?.rpyCoefficient),
+    );
   }
 }
+/**
+ * Sets a frame's offsets. Changed offsets bump the transform tree's version, like a new transform,
+ * so readers that cache resolved poses (e.g. decay histories) recompute them.
+ */
+export function setFrameOffsets(
+  tree: TransformTree,
+  frame: CoordinateFrame,
+  position: CoordinateFrame["offsetPosition"],
+  eulerDegrees: CoordinateFrame["offsetEulerDegrees"],
+): void {
+  const same = (a: ArrayLike<number> | undefined, b: ArrayLike<number> | undefined) =>
+    a === b ||
+    (a != undefined && b != undefined && a[0] === b[0] && a[1] === b[1] && a[2] === b[2]);
+  if (!same(frame.offsetPosition, position) || !same(frame.offsetEulerDegrees, eulerDegrees)) {
+    tree.version++;
+  }
+  frame.offsetPosition = position;
+  frame.offsetEulerDegrees = eulerDegrees;
+}
+
 function createLineGeometry(): LineGeometry {
   const lineGeometry = new LineGeometry();
   lineGeometry.setPositions([0, 0, 0, 1, 0, 0]);

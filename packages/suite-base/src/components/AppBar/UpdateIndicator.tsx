@@ -1,44 +1,47 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import { ArrowSyncCircle24Filled } from "@fluentui/react-icons";
+import { ArrowClockwise24Filled, ArrowSyncCircle24Filled } from "@fluentui/react-icons";
 import { useTheme } from "@mui/material";
 import { useTranslation } from "react-i18next";
 
-import {
-  applyServiceWorkerUpdate,
-  useServiceWorkerUpdate,
-} from "@lichtblick/suite-base/hooks/useServiceWorkerUpdate";
+import { useServiceWorkerUpdate } from "@lichtblick/suite-base/hooks/useServiceWorkerUpdate";
 
 import { AppBarIconButton } from "./AppBarIconButton";
 
-/** Shows a button in the app bar while a new version is waiting; clicking it applies the update. */
+/**
+ * Shows a button in the app bar while a newer version is available; clicking it updates. A window
+ * left on the old build after another window updated shows a plain reload arrow instead.
+ */
 export function UpdateIndicator(): React.JSX.Element | undefined {
   const { t } = useTranslation("appBar");
   const theme = useTheme();
-  const waiting = useServiceWorkerUpdate();
+  const available = useServiceWorkerUpdate();
 
-  if (!waiting) {
+  if (!available) {
     return undefined;
   }
+
+  const stale = available.kind === "activated";
+  const title = stale ? t("staleVersion") : t("updateAvailable");
+  // the accent color: the muted app bar color is nearly invisible on the dark bar
+  const Icon = stale ? ArrowClockwise24Filled : ArrowSyncCircle24Filled;
 
   return (
     <AppBarIconButton
       title={
         <>
-          <b>{t("updateAvailable")}</b>
+          <b>{title}</b>
           <br />
-          {t("updateAvailableDescription")}
+          {stale ? t("staleVersionDescription") : t("updateAvailableDescription")}
         </>
       }
-      aria-label={t("updateAvailable")}
+      aria-label={title}
       data-testid="update-indicator"
-      onClick={() => {
-        applyServiceWorkerUpdate(waiting);
-      }}
+      data-update-kind={available.kind}
+      onClick={available.update}
     >
-      {/* the accent color: the muted app bar color is nearly invisible on the dark bar */}
-      <ArrowSyncCircle24Filled primaryFill={theme.palette.primary.main} />
+      <Icon primaryFill={theme.palette.primary.main} />
     </AppBarIconButton>
   );
 }

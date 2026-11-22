@@ -16,7 +16,7 @@ import {
 import { useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import { useShowCompareDialog } from "@lichtblick/suite-base/components/Compare/CompareDialog";
+import { useShowCompareDialog } from "@lichtblick/suite-base/components/Compare/compareDialogStore";
 import { FormField } from "@lichtblick/suite-base/components/DataSourceDialog/FormField";
 import { useStyles } from "@lichtblick/suite-base/components/DataSourceDialog/OpenUrlInput.style";
 import Stack from "@lichtblick/suite-base/components/Stack";
@@ -30,6 +30,7 @@ import {
   hostUrl,
   looksLikeHost,
 } from "@lichtblick/suite-base/util/recentSources";
+import { useSourcePick } from "@lichtblick/suite-base/util/sourcePick";
 
 /** id of the address bar, so the open-connection shortcut can focus it while the page is open. */
 export const START_ADDRESS_INPUT_ID = "start-address-input";
@@ -61,6 +62,7 @@ export function OpenUrlInput({
   const { availableSources, recentSources, selectRecent, selectSource } = usePlayerSelection();
   const { dialogActions } = useWorkspaceActions();
   const showCompare = useShowCompareDialog();
+  const picking = useSourcePick((state) => state.pick != undefined);
 
   const [error, setError] = useState<string | undefined>();
   // Source picked from the ⋯ menu; undefined detects it from the input
@@ -152,7 +154,9 @@ export function OpenUrlInput({
     if (!source || hasFieldErrors) {
       return;
     }
-    if (recentMatch?.sourceId === source.id && extraFields.length === 0) {
+    // A typed URL picked for a comparison is just that URL: a matching recent's stored settings
+    // (e.g. its cookies) only come with picking the recent itself
+    if (!picking && recentMatch?.sourceId === source.id && extraFields.length === 0) {
       selectRecent(recentMatch.id);
       return;
     }
@@ -271,9 +275,12 @@ export function OpenUrlInput({
         >
           {t("openLocalFiles")}
         </Button>
-        <Button className={classes.button} variant="outlined" size="small" onClick={showCompare}>
-          {t("compareRecordings")}
-        </Button>
+        {/* Already picking a recording for a comparison: starting another would drop its rows */}
+        {!picking && (
+          <Button className={classes.button} variant="outlined" size="small" onClick={showCompare}>
+            {t("compareRecordings")}
+          </Button>
+        )}
         <Tooltip title={t("connectionType")}>
           <IconButton
             size="small"

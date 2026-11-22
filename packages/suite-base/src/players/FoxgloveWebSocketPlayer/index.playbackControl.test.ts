@@ -6,6 +6,7 @@ import type { Mock } from "vitest";
 import { PLAYER_CAPABILITIES } from "@lichtblick/suite-base/players/constants";
 import { PlayerState } from "@lichtblick/suite-base/players/types";
 
+import { PROXY_MISSING_REASON } from "./ExtensionProxySocket";
 import FoxgloveWebSocketPlayer from "./index";
 import { decodePlaybackState, encodePlaybackControlRequest } from "./playbackControl";
 
@@ -175,6 +176,21 @@ describe("FoxgloveWebSocketPlayer playback control", () => {
     );
     await Promise.resolve();
     expect(states.at(-1)!.capabilities).toContain(PLAYER_CAPABILITIES.liveHistory);
+  });
+
+  it("retries right away without a guide when the proxy extension is missing", () => {
+    const realSetTimeout = global.setTimeout;
+    const delays: number[] = [];
+    global.setTimeout = ((_fn: () => void, ms: number) => {
+      delays.push(ms);
+    }) as unknown as typeof setTimeout;
+    try {
+      ws.onclose?.({ code: 1006, reason: PROXY_MISSING_REASON });
+    } finally {
+      global.setTimeout = realSetTimeout;
+    }
+    expect(delays).toEqual([0]);
+    expect(states.at(-1)!.alerts ?? []).toEqual([]);
   });
 
   it("does not send playback control to a reconnecting socket that is not open yet", () => {

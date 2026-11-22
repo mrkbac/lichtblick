@@ -80,6 +80,17 @@ export function updateAppURLState(url: URL, urlState: AppURLState): URL {
 }
 
 /**
+ * The URL's href with `:`, `/` and `,` unescaped in the query, where they are literal, so times
+ * and source URLs stay readable. Never decodeURIComponent the whole href: a data-source URL with
+ * its own query string (e.g. a presigned URL) would spill its `&…` params into ours.
+ */
+export function readableHref(url: URL): string {
+  const readable = new URL(url.href);
+  readable.search = readable.search.replace(/%(3A|2F|2C)/gi, (m) => decodeURIComponent(m));
+  return readable.href;
+}
+
+/**
  * Tries to parse a state url into one of the types we know how to open.
  *
  * @param url URL to try to parse.

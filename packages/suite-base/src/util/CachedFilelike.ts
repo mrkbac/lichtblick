@@ -119,20 +119,15 @@ export default class CachedFilelike implements Filelike {
       return;
     }
     this.#fileSize = size;
-    if (this.#cacheSizeInBytes >= size) {
-      // If we have a cache limit that exceeds the file size, then we don't need to limit ourselves
-      // to small blocks. This way `VirtualLRUBuffer#slice` will be faster since we'll almost always
-      // not need to copy from multiple blocks into a new `Buffer` instance.
-      this.#virtualBuffer = new VirtualLRUBuffer({ size });
-    } else {
-      this.#virtualBuffer = new VirtualLRUBuffer({
-        size,
-        blockSize: CACHE_BLOCK_SIZE,
-        // Rather create too many blocks than too few (Math.ceil), and always add one block,
-        // to allow for a read range not starting or ending perfectly at a block boundary.
-        numberOfBlocks: Math.ceil(this.#cacheSizeInBytes / CACHE_BLOCK_SIZE) + 2,
-      });
-    }
+    // Bounded blocks even when the whole file fits the budget: one file-sized block would be
+    // allocated in full by the first small read (e.g. a scan's first window) and kept alive
+    this.#virtualBuffer = new VirtualLRUBuffer({
+      size,
+      blockSize: CACHE_BLOCK_SIZE,
+      // Rather create too many blocks than too few (Math.ceil), and always add one block,
+      // to allow for a read range not starting or ending perfectly at a block boundary.
+      numberOfBlocks: Math.ceil(this.#cacheSizeInBytes / CACHE_BLOCK_SIZE) + 2,
+    });
     for (const { offset, data } of initialData ?? []) {
       // Cached like downloaded data, so reads of these ranges need no request
       if (data.byteLength > 0 && data.byteLength <= this.#cacheSizeInBytes) {

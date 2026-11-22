@@ -95,7 +95,11 @@ export interface Player {
     topic: string,
     options?: { start?: Time; end?: Time },
   ) => AsyncIterableIterator<Readonly<IteratorResult>> | undefined;
-  /** Inspect topics in one pass without decoding; returned events omit message payloads. */
+  /**
+   * Inspect topics in one pass without decoding; returned events omit message payloads. Returns
+   * undefined when any topic has no stored records, e.g. a user-script or converter output: only
+   * recorded (physical) topics can be inspected. Creating the iterator reads nothing.
+   */
   getInspectionIterator?: (
     topics: readonly string[],
     options?: { start?: Time; end?: Time },
@@ -127,7 +131,12 @@ export type PlayerAlert = {
   message: string;
   error?: Error;
   tip?: string;
+  /** Actionable help the UI renders in place of the plain-text tip. */
+  guide?: PlayerAlertGuide;
 };
+
+/** A browser blocked a ws:// connection from this https page (mixed content). */
+export type PlayerAlertGuide = { type: "wsMixedContent"; url: string };
 
 export type PlayerURLState = Immutable<{
   sourceId: string;
@@ -309,6 +318,8 @@ export type RecordingFileInfo = {
   start?: Time;
   end?: Time;
   library: string;
+  /** Read through the file's own complete index (not rebuilt, not still being written) */
+  footerIndexed?: boolean;
   channels: {
     id: number;
     topic: string;
@@ -325,7 +336,13 @@ export type RecordingFileInfo = {
     compressedBytes: number;
     uncompressedBytes: number;
   }[];
-  attachments: { name: string; mediaType: string; sizeBytes: number }[];
+  attachments: {
+    name: string;
+    mediaType: string;
+    sizeBytes: number;
+    /** Byte offset of the attachment's record in the file, to read it without the summary */
+    offset: number;
+  }[];
 };
 
 export type TopicStats = {

@@ -13,6 +13,7 @@ import { BasicBuilder } from "@lichtblick/test-builders";
 import {
   createGeometry,
   HistoryLimits,
+  payloadFingerprint,
   PointsRenderable,
   RenderObjectHistory,
   pointStyle,
@@ -204,6 +205,18 @@ describe("RenderObjectHistory", () => {
     expect(history.latest().receiveTime).toBe(11n);
   });
 
+  it("keeps read-back entries within the point budget as they are inserted", () => {
+    const history = makeHistory({ maxEntries: 100, maxPoints: 250 });
+    history.addHistoryEntry(entry(100n, 100)); // the latest
+    for (let i = 1n; i <= 10n; i++) {
+      history.insertOlderEntry(entry(i, 100)); // a window read back after a seek
+    }
+
+    // Without waiting for the next frame's trim
+    expect(live).toBe(2);
+    expect(history.latest().receiveTime).toBe(100n);
+  });
+
   it("releases the message of every entry but the latest", () => {
     const history = makeHistory({ maxEntries: 100, maxPoints: Infinity });
     const first = entry(1n, 1);
@@ -268,5 +281,20 @@ describe("PointsRenderable mesh shapes", () => {
     points.setStyle(style("sphere", { outline: true }));
     expect(lines()).toHaveLength(0);
     points.dispose();
+  });
+});
+
+describe("payloadFingerprint", () => {
+  it("tells apart payloads that differ anywhere, not just where it might sample", () => {
+    const payload = new Uint8Array(10_000).map((_, i) => i % 251);
+    const changed = payload.slice();
+    changed[5_003] = (changed[5_003]! + 1) % 256;
+
+    expect(payloadFingerprint(payload)).toBe(payloadFingerprint(payload.slice()));
+    expect(payloadFingerprint(changed)).not.toBe(payloadFingerprint(payload));
+    // Unaligned views of the same bytes hash the same
+    const shifted = new Uint8Array(10_001);
+    shifted.set(payload, 1);
+    expect(payloadFingerprint(shifted.subarray(1))).toBe(payloadFingerprint(payload));
   });
 });

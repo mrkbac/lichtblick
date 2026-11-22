@@ -42,18 +42,23 @@ import { toError } from "@lichtblick/suite-base/util/toError";
 
 import { AutoHideAttributionControl } from "./AutoHideAttributionControl";
 import { MapToolbar } from "./MapToolbar";
-import { normalize, Sample, sampleAt, speedUnitLabel, speedValues, valueRange } from "./colorBy";
+import { sampleAt, speedUnitLabel, speedValues, valueRange } from "./colorBy";
 import {
   applySettingsAction,
   buildSettingsTree,
   Config,
   DEFAULT_POINT_SIZE,
+  FOLLOW_MOVE_EVENT,
   normalizeConfig,
+  shouldSaveView,
 } from "./config";
 import {
   ARROW_IMAGE,
+  ColorScale,
   createArrowImage,
   currentFeatures,
+  DataSource,
+  DrawnTrack,
   emptyOverlayData,
   geoJsonFeatures,
   headingFromTrack,
@@ -63,10 +68,10 @@ import {
   OVERLAY,
   OverlaySource,
   overlayStyle,
+  resolveTrackFix,
+  trackFixKey,
   trackFeatures,
   trackFlushDelayMs,
-  trackPoint,
-  ValueStyle,
 } from "./features";
 import { loadGeoTiff } from "./geotiff";
 import {
@@ -87,15 +92,25 @@ import {
   isValidMapMessage,
   expandLocationFixes,
 } from "./support";
+import {
+  lastIndexAtOrBefore,
+  SampleStore,
+  thinTrack,
+  thinViewCovers,
+  thinViewFor,
+  ThinView,
+  TrackStore,
+} from "./track";
 
 const log = Logger.getLogger(__filename);
 
-/** Cap for the trail built from live data, where no recorded range is available. */
-const LIVE_TRAIL_LIMIT = 100_000;
+/** Track points drawn at once, over all topics; the track is thinned to fit. */
+const TRACK_POINT_BUDGET = 50_000;
 
+/** `id` tells hovered things apart: the same fix or feature keeps its popup. */
 type Hit =
-  | { kind: "nav"; message: NavMessage; value?: string }
-  | { kind: "geojson"; message: GeoJsonMessage; name?: string };
+  | { kind: "nav"; id: unknown; message: NavMessage; value?: string }
+  | { kind: "geojson"; id: unknown; message: GeoJsonMessage; name?: string };
 
 type View = Pick<Config, "center" | "zoomLevel" | "bearing" | "pitch">;
 
@@ -295,7 +310,9 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
   const configRef = useLatest(config);
   const [colorScheme, setColorScheme] = useState<"dark" | "light">("light");
   const [topics, setTopics] = useState<readonly Topic[]>([]);
-  const [trackMessages, setTrackMessages] = useState<NavMessage[]>([]);
+  // Fixes per topic, in mutable stores; the state object is replaced when they change.
+  const tracksRef = useRef(new Map<string, TrackStore>());
+  const [tracks, setTracks] = useState({ stores: tracksRef.current });
   const [currentNav, setCurrentNav] = useState<ReadonlyMap<string, NavMessage[]>>(new Map());
   const [currentGeo, setCurrentGeo] = useState<ReadonlyMap<string, GeoJsonMessage>>(new Map());
   const [previewTime, setPreviewTime] = useState<number | undefined>();
@@ -314,7 +331,8 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
   const measuringRef = useRef(false);
   const rangeTopicsRef = useRef(new Set<string>());
   // Values of "color by message path" expressions over time, by path string.
-  const [pathSamples, setPathSamples] = useState<ReadonlyMap<string, Sample[]>>(new Map());
+  const samplesRef = useRef(new Map<string, SampleStore>());
+  const [pathSamples, setPathSamples] = useState({ stores: samplesRef.current });
   const pathRangeTopicsRef = useRef(new Set<string>());
   const rememberedRef = useRef(new Set<string>());
   const viewRef = useRef<View>({
@@ -502,37 +520,39 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
     [context],
   );
 
-  // Batch incoming messages so long recordings don't re-render once per range batch.
-  const pendingTrack = useRef<NavMessage[]>([]);
+  // Fixes go straight into the stores; re-renders are batched so long recordings don't redraw
+  // once per range batch.
   const flushTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
-  const trackLengthRef = useLatest(trackMessages.length);
+  const trackLength = () => _.sumBy([...tracksRef.current.values()], (store) => store.length);
+  const scheduleTrackFlush = useCallback((source: DataSource) => {
+    flushTimer.current ??= setTimeout(
+      () => {
+        flushTimer.current = undefined;
+        setTracks({ stores: tracksRef.current });
+      },
+      trackFlushDelayMs(trackLength(), source),
+    );
+  }, []);
   const appendTrack = useCallback(
-    (messages: readonly NavMessage[], cap?: number) => {
+    (messages: readonly NavMessage[], source: DataSource) => {
       for (const message of messages) {
-        pendingTrack.current.push(trackPoint(message));
+        let store = tracksRef.current.get(message.topic);
+        if (!store) {
+          store = new TrackStore(message.topic);
+          tracksRef.current.set(message.topic, store);
+        }
+        store.push(message);
       }
-      // Live trails (capped) rebuild less often: each flush redraws the whole retained trail.
-      flushTimer.current ??= setTimeout(
-        () => {
-          flushTimer.current = undefined;
-          const pending = pendingTrack.current;
-          pendingTrack.current = [];
-          setTrackMessages((prev) => {
-            const next = prev.concat(pending);
-            return cap != undefined && next.length > cap ? next.slice(-cap) : next;
-          });
-        },
-        trackFlushDelayMs(trackLengthRef.current, cap),
-      );
+      scheduleTrackFlush(source);
     },
-    [trackLengthRef],
+    [scheduleTrackFlush],
   );
 
   // The full track comes from the recorded range. GeoJSON is deliberately not ranged: each
   // message is a complete scene that replaces the previous one.
   useLayoutEffect(() => {
-    setTrackMessages([]);
-    pendingTrack.current = [];
+    tracksRef.current = new Map();
+    setTracks({ stores: tracksRef.current });
     rangeTopicsRef.current = new Set();
     const unsubscribes = navTopics.map((topic) =>
       context.unstable_subscribeMessageRange({
@@ -540,15 +560,15 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
         convertTo: topic.schemaName,
         onNewRangeIterator: async (iterator) => {
           // A new iterator replaces the topic's data (e.g. an edited user script); drop the old.
-          pendingTrack.current = pendingTrack.current.filter((m) => m.topic !== topic.name);
-          setTrackMessages((prev) => prev.filter((m) => m.topic !== topic.name));
+          tracksRef.current.get(topic.name)?.clear();
+          scheduleTrackFlush("recorded");
           rangeTopicsRef.current.add(topic.name);
           for await (const batch of iterator) {
             const valid = expandLocationFixes(batch).filter(
               (event): event is NavMessage => isValidMapMessage(event) && !isGeoJSONMessage(event),
             );
             if (valid.length > 0) {
-              appendTrack(valid);
+              appendTrack(valid, "recorded");
             }
           }
         },
@@ -561,57 +581,52 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
         unsubscribe();
       }
     };
-  }, [appendTrack, context, navTopics]);
+  }, [appendTrack, context, navTopics, scheduleTrackFlush]);
 
-  // Batched and (for live sources) capped like the track: each flush recolors the whole track.
-  const pendingSamples = useRef(new Map<string, Sample[]>());
+  // Batched like the track: each flush recolors the whole track.
   const sampleTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const appendPathSamples = useCallback(
     (
       messages: readonly MessageEvent[],
       paths: readonly { path: string; parsed: MessagePath }[],
-      cap?: number,
+      source: DataSource,
     ) => {
+      let added = false;
       for (const { path, parsed } of paths) {
         for (const message of messages) {
           const value = simpleGetMessagePathDataItems(message, parsed).find(
             (item): item is number | bigint => typeof item === "number" || typeof item === "bigint",
           );
           if (value != undefined) {
-            const samples = pendingSamples.current.get(path) ?? [];
-            samples.push({ time: eventTimeSec(message), value: Number(value) });
-            pendingSamples.current.set(path, samples);
+            let store = samplesRef.current.get(path);
+            if (!store) {
+              store = new SampleStore();
+              samplesRef.current.set(path, store);
+            }
+            store.push(eventTimeSec(message), Number(value));
+            added = true;
           }
         }
       }
-      if (pendingSamples.current.size === 0) {
+      if (!added) {
         return;
       }
       sampleTimer.current ??= setTimeout(
         () => {
           sampleTimer.current = undefined;
-          const pending = pendingSamples.current;
-          pendingSamples.current = new Map();
-          setPathSamples((prev) => {
-            const next = new Map(prev);
-            for (const [path, samples] of pending) {
-              const all = (prev.get(path) ?? []).concat(samples);
-              next.set(path, cap != undefined && all.length > cap ? all.slice(-cap) : all);
-            }
-            return next;
-          });
+          setPathSamples({ stores: samplesRef.current });
         },
         // Each flush recolors the whole track, so it is paced by the track's length.
-        trackFlushDelayMs(trackLengthRef.current, cap),
+        trackFlushDelayMs(trackLength(), source),
       );
     },
-    [trackLengthRef],
+    [],
   );
 
   // Recorded values for "color by message path".
   useLayoutEffect(() => {
-    setPathSamples(new Map());
-    pendingSamples.current = new Map();
+    samplesRef.current = new Map();
+    setPathSamples({ stores: samplesRef.current });
     pathRangeTopicsRef.current = new Set();
     const byTopic = Map.groupBy(colorPaths, ({ parsed }) => parsed.topicName);
     const unsubscribes = [...byTopic].map(([topic, paths]) =>
@@ -619,18 +634,12 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
         topic,
         onNewRangeIterator: async (iterator) => {
           for (const { path } of paths) {
-            pendingSamples.current.delete(path);
+            samplesRef.current.get(path)?.clear();
           }
-          setPathSamples((prev) => {
-            const next = new Map(prev);
-            for (const { path } of paths) {
-              next.delete(path);
-            }
-            return next;
-          });
+          setPathSamples({ stores: samplesRef.current });
           pathRangeTopicsRef.current.add(topic);
           for await (const batch of iterator) {
-            appendPathSamples(batch, paths);
+            appendPathSamples(batch, paths, "recorded");
           }
         },
       }),
@@ -667,7 +676,7 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
         (m) => !pathRangeTopicsRef.current.has(m.topic),
       );
       if (livePathMessages && livePathMessages.length > 0 && colorPathsRef.current.length > 0) {
-        appendPathSamples(livePathMessages, colorPathsRef.current, LIVE_TRAIL_LIMIT);
+        appendPathSamples(livePathMessages, colorPathsRef.current, "live");
       }
 
       // After a seek the frame is a backfill: drop positions of topics it doesn't contain.
@@ -689,7 +698,7 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
         // Live sources have no recorded range: build the track from what arrives.
         const live = nav.filter((m) => !rangeTopicsRef.current.has(m.topic));
         if (live.length > 0) {
-          appendTrack(live, LIVE_TRAIL_LIMIT);
+          appendTrack(live, "live");
         }
       }
       if (geo.length > 0) {
@@ -714,55 +723,38 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
 
   // --- Derived data -----------------------------------------------------------------------
 
-  const visibleTrack = useMemo(
-    () => trackMessages.filter((m) => enabledNames.has(m.topic)),
-    [enabledNames, trackMessages],
-  );
-  const trackByTopic = useMemo(() => Map.groupBy(visibleTrack, (m) => m.topic), [visibleTrack]);
-  const trackTimesByTopic = useMemo(
-    () => new Map([...trackByTopic].map(([topic, m]) => [topic, m.map(eventTimeSec)])),
-    [trackByTopic],
+  const visibleTracks = useMemo(
+    () => [...tracks.stores.values()].filter((t) => t.length > 0 && enabledNames.has(t.topic)),
+    [enabledNames, tracks],
   );
 
-  // "Color by": per-fix colors from speed or a message path, with a range per topic.
-  const { valueStyles, legends } = useMemo(() => {
-    const styles = new Map<NavMessage, ValueStyle>();
+  // "Color by": per-fix values from speed or a message path, with a range per topic.
+  const { colorValues, legends } = useMemo(() => {
+    const values = new Map<string, ColorScale>();
     const legendList: {
       topic: string;
       title: string;
       range: [number, number];
       reverse: boolean;
     }[] = [];
-    for (const [topic, messages] of trackByTopic) {
+    for (const store of visibleTracks) {
+      const { topic } = store;
       const style = config.topicStyles[topic];
       const colorBy = style?.colorBy ?? "topic";
       if (colorBy === "topic") {
         continue;
       }
-      const times = trackTimesByTopic.get(topic) ?? [];
-      const values =
+      const raw =
         colorBy === "speed"
-          ? speedValues(
-              messages.map((m, i) => ({ time: times[i]!, position: lngLatOf(m) })),
-              config.units,
-            )
-          : sampleAt(pathSamples.get(style?.colorPath ?? "") ?? [], times);
-      const range = valueRange(values, style?.colorMin, style?.colorMax);
+          ? speedValues(store, config.units)
+          : sampleAt(pathSamples.stores.get(style?.colorPath ?? ""), store);
+      const range = valueRange(raw, style?.colorMin, style?.colorMax);
       if (!range) {
         continue;
       }
       const reverse = style?.colorReverse === true;
       const unit = colorBy === "speed" ? ` ${speedUnitLabel(config.units)}` : "";
-      messages.forEach((message, i) => {
-        const value = values[i];
-        if (value != undefined && isFinite(value)) {
-          const t = normalize(value, range);
-          styles.set(message, {
-            color: turboColorString(reverse ? 1 - t : t),
-            label: `${Number(value.toPrecision(4))}${unit}`,
-          });
-        }
-      });
+      values.set(topic, { values: raw, range, reverse, unit });
       legendList.push({
         topic,
         title:
@@ -773,8 +765,8 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
         reverse,
       });
     }
-    return { valueStyles: styles, legends: legendList };
-  }, [config.topicStyles, config.units, pathSamples, trackByTopic, trackTimesByTopic]);
+    return { colorValues: values, legends: legendList };
+  }, [config.topicStyles, config.units, pathSamples, visibleTracks]);
 
   const currentMessages = useMemo(
     () => [...currentNav.values()].flat().filter((m) => enabledNames.has(m.topic)),
@@ -792,20 +784,22 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
       if (!current) {
         continue;
       }
-      const history = trackByTopic.get(topic) ?? [];
-      const end = _.sortedLastIndexBy(history, current, eventTimeSec);
-      const heading = headingFromTrack([...history.slice(Math.max(0, end - 500), end), current]);
+      const store = tracks.stores.get(topic);
+      const end = store
+        ? lastIndexAtOrBefore(store.columns.time, store.length, eventTimeSec(current)) + 1
+        : 0;
+      const heading = store ? headingFromTrack(store, end, lngLatOf(current)) : undefined;
       if (heading != undefined) {
         result.set(topic, heading);
       }
     }
     return result;
-  }, [currentNav, trackByTopic]);
+  }, [currentNav, tracks]);
 
   // Refs for event handlers, which map feature indices back to messages.
-  const trackRef = useLatest(visibleTrack);
   const currentRef = useLatest(currentMessages);
   const geoRef = useLatest(geoMessages);
+  const visibleTracksRef = useLatest(visibleTracks);
 
   // --- Map --------------------------------------------------------------------------------
 
@@ -857,7 +851,7 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
         didInitialFitRef.current = true;
       }
     });
-    instance.on("moveend", () => {
+    instance.on("moveend", (event) => {
       userMovingRef.current = false;
       const center = instance.getCenter();
       viewRef.current = {
@@ -866,7 +860,9 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
         bearing: instance.getBearing(),
         pitch: instance.getPitch(),
       };
-      context.saveState(viewRef.current);
+      if (shouldSaveView(event, configRef.current)) {
+        context.saveState(viewRef.current);
+      }
     });
 
     // Resizing clears the WebGL canvas; redraw in the same frame or the cleared (black)
@@ -883,7 +879,7 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
       instance.remove();
       setMap(undefined);
     };
-  }, [context]);
+  }, [configRef, context]);
 
   // Custom URL fields update on every keystroke; only use URLs once they stop changing so
   // half-typed URLs aren't fetched. Other layer settings (sliders, toggles) apply immediately.
@@ -1099,13 +1095,84 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
 
   // --- Overlay data -----------------------------------------------------------------------
 
+  // Thin the track for the current view: redone after the map moves, not during.
+  const [thinView, setThinView] = useState<ThinView>();
   useEffect(() => {
-    const { points, lines } = trackFeatures(visibleTrack, colors, config.topicStyles, (i) =>
-      valueStyles.get(visibleTrack[i]!),
+    if (!map) {
+      return;
+    }
+    const update = () => {
+      const b = map.getBounds();
+      const bounds = {
+        west: b.getWest(),
+        east: b.getEast(),
+        south: b.getSouth(),
+        north: b.getNorth(),
+      };
+      const zoom = map.getZoom();
+      // Keep the thinned track (and skip its upload) while it still covers the view.
+      setThinView((prev) =>
+        prev && thinViewCovers(prev, zoom, bounds) ? prev : thinViewFor(zoom, bounds),
+      );
+    };
+    update();
+    map.on("moveend", update);
+    map.on("resize", update);
+    return () => {
+      map.off("moveend", update);
+      map.off("resize", update);
+    };
+  }, [map]);
+
+  const thinned = useMemo(() => {
+    if (!thinView) {
+      return [];
+    }
+    // Hidden histories take no share of the budget.
+    const drawn = visibleTracks.filter(
+      (store) => (config.topicStyles[store.topic]?.history ?? "points") !== "none",
     );
+    const budget = TRACK_POINT_BUDGET / Math.max(1, drawn.length);
+    return drawn.map((store) => {
+      const style = config.topicStyles[store.topic] ?? {};
+      const history = style.history ?? "points";
+      // Points overlap heavily at half their radius apart; lines only need a pixel.
+      const minPixels =
+        history === "line" ? 1 : Math.max(1, (style.pointSize ?? DEFAULT_POINT_SIZE) / 2);
+      return {
+        store,
+        style,
+        version: store.version,
+        length: store.length,
+        tailReplacements: store.tailReplacements,
+        ...thinTrack(store, { ...thinView, minPixels, budget }),
+      };
+    });
+  }, [config.topicStyles, thinView, visibleTracks]);
+
+  const drawnTracks = useMemo(
+    () =>
+      filterMap(thinned, (track): DrawnTrack | undefined => {
+        const color = colors.get(track.store.topic);
+        return color == undefined
+          ? undefined
+          : { ...track, color, colorScale: colorValues.get(track.store.topic) };
+      }),
+    [colorValues, colors, thinned],
+  );
+  // Tracks of the overlays sent to the map, by generation. Features the map still shows may be
+  // from the previous one, so hovers resolve against the tracks their features were built from.
+  const trackGenerations = useRef(new Map<number, readonly DrawnTrack[]>());
+  const generationRef = useRef(0);
+
+  useEffect(() => {
+    const generation = ++generationRef.current;
+    trackGenerations.current.set(generation, drawnTracks);
+    trackGenerations.current.delete(generation - 2);
+    const { points, lines } = trackFeatures(drawnTracks, generation);
     setOverlay(OVERLAY.track, points);
     setOverlay(OVERLAY.trackLine, lines);
-  }, [colors, config.topicStyles, setOverlay, valueStyles, visibleTrack]);
+  }, [drawnTracks, setOverlay]);
 
   useEffect(() => {
     const { markers, accuracy } = currentFeatures(
@@ -1124,17 +1191,17 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
 
   // Marker for the hovered time (e.g. from a plot) on any track.
   useEffect(() => {
-    let best: NavMessage | undefined;
+    let best: { store: TrackStore; index: number } | undefined;
     if (previewTime != undefined) {
-      for (const [topic, messages] of trackByTopic) {
-        const index = _.sortedLastIndex(trackTimesByTopic.get(topic), previewTime);
-        const candidate = messages[index - 1];
-        if (candidate && (!best || eventTimeSec(candidate) > eventTimeSec(best))) {
-          best = candidate;
+      for (const store of visibleTracks) {
+        const { time } = store.columns;
+        const index = lastIndexAtOrBefore(time, store.length, previewTime);
+        if (index >= 0 && (!best || time[index]! > best.store.columns.time[best.index]!)) {
+          best = { store, index };
         }
       }
     }
-    const base = best ? colors.get(best.topic) : undefined;
+    const base = best ? colors.get(best.store.topic) : undefined;
     setOverlay(OVERLAY.preview, {
       type: "FeatureCollection",
       features:
@@ -1142,16 +1209,16 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
           ? [
               {
                 type: "Feature",
-                geometry: { type: "Point", coordinates: lngLatOf(best) },
+                geometry: { type: "Point", coordinates: best.store.lngLat(best.index) },
                 properties: {
                   c: darkColor(base),
-                  r: config.topicStyles[best.topic]?.pointSize ?? DEFAULT_POINT_SIZE,
+                  r: config.topicStyles[best.store.topic]?.pointSize ?? DEFAULT_POINT_SIZE,
                 },
               },
             ]
           : [],
     });
-  }, [colors, config.topicStyles, previewTime, setOverlay, trackByTopic, trackTimesByTopic]);
+  }, [colors, config.topicStyles, previewTime, setOverlay, visibleTracks]);
 
   const setMeasureData = useCallback(
     (data: FeatureCollection) => {
@@ -1164,8 +1231,11 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
 
   const dataBounds = useCallback((): LngLatBounds | undefined => {
     const bounds = new LngLatBounds();
-    for (const message of trackRef.current) {
-      bounds.extend(lngLatOf(message));
+    for (const store of visibleTracksRef.current) {
+      const { lon, lat } = store.columns;
+      for (let i = 0; i < store.length; i++) {
+        bounds.extend([lon[i]!, lat[i]!]);
+      }
     }
     for (const message of currentRef.current) {
       bounds.extend(lngLatOf(message));
@@ -1176,7 +1246,7 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
       }
     }
     return bounds.isEmpty() ? undefined : bounds;
-  }, [currentRef, trackRef]);
+  }, [currentRef, visibleTracksRef]);
 
   const fitToData = useCallback(
     (duration = 600) => {
@@ -1202,7 +1272,8 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
   // First data without a saved view: frame it, re-fitting while the recording streams in,
   // until the user takes over or loading settles.
   const firstDataAtRef = useRef<number>(undefined);
-  const dataSize = visibleTrack.length + currentMessages.length + geoMessages.length;
+  const dataSize =
+    _.sumBy(visibleTracks, (store) => store.length) + currentMessages.length + geoMessages.length;
   useEffect(() => {
     if (!map || dataSize === 0 || didInitialFitRef.current) {
       return;
@@ -1240,14 +1311,17 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
     };
     // Jump on seeks and big moves, glide during normal playback.
     if (map.getBounds().contains(center)) {
-      map.easeTo({
-        ...options,
-        duration: 200,
-        easing: (t) => t,
-        essential: true,
-      });
+      map.easeTo(
+        {
+          ...options,
+          duration: 200,
+          easing: (t) => t,
+          essential: true,
+        },
+        FOLLOW_MOVE_EVENT,
+      );
     } else {
-      map.jumpTo(options);
+      map.jumpTo(options, FOLLOW_MOVE_EVENT);
     }
   }, [config.followMode, config.followTopic, currentNav, headings, map]);
 
@@ -1289,21 +1363,41 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
       }
       const layerId = feature.layer.id;
       if (layerId === INTERACTIVE_LAYERS.track) {
-        const message = trackRef.current[index];
-        const value: unknown = feature.properties.v;
-        return message
-          ? { kind: "nav", message, value: typeof value === "string" ? value : undefined }
-          : undefined;
+        // The drawn point stands for the fixes around it: show the one under the cursor.
+        const generation: unknown = feature.properties.g;
+        const hit = resolveTrackFix(
+          typeof generation === "number" ? trackGenerations.current.get(generation) : undefined,
+          feature.properties.k,
+          index,
+          [event.lngLat.lng, event.lngLat.lat],
+        );
+        if (!hit) {
+          return undefined;
+        }
+        const { track, fix } = hit;
+        const colored = track.colorScale;
+        const value = colored?.values[fix];
+        return {
+          kind: "nav",
+          // The fix, not the overlay: the popup and preview time stay put across redraws.
+          id: trackFixKey(track.store, fix),
+          message: track.store.message(fix),
+          value:
+            colored && value != undefined && isFinite(value)
+              ? `${Number(value.toPrecision(4))}${colored.unit}`
+              : undefined,
+        };
       }
       if ((INTERACTIVE_LAYERS.current as readonly string[]).includes(layerId)) {
         const message = currentRef.current[index];
-        return message ? { kind: "nav", message } : undefined;
+        return message ? { kind: "nav", id: message, message } : undefined;
       }
       const message = geoRef.current[index];
       const name: unknown = feature.properties.name;
       return message
         ? {
             kind: "geojson",
+            id: message,
             message,
             name: typeof name === "string" && name ? name : undefined,
           }
@@ -1331,7 +1425,7 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
       }
       map.getCanvas().style.cursor = "pointer";
       popup.setLngLat(event.lngLat);
-      if (hit.message !== hovered?.message) {
+      if (hit.id !== hovered?.id) {
         hovered = hit;
         popup.setDOMContent(popupContent(hit)).addTo(map);
         context.setPreviewTime(eventTimeSec(hit.message));
@@ -1356,7 +1450,7 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
       map.getCanvas().removeEventListener("mouseleave", clear);
       popup.remove();
     };
-  }, [context, currentRef, geoRef, map, trackRef]);
+  }, [context, currentRef, geoRef, map]);
 
   // --- Render -----------------------------------------------------------------------------
 

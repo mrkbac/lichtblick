@@ -154,4 +154,15 @@ describe("downsampleStates", () => {
       { x: 50.02, index: 2 },
     ]);
   });
+
+  it("folds a row alternating with gaps into a few points per pixel", () => {
+    const data: Datum[] = Array.from({ length: 10_000 }, (_, i) =>
+      i % 2 === 0 ? { x: i / 100, y: 0, label: A } : { x: i / 100, y: Number.NaN },
+    );
+    const result = downsampleStates(iterateObjects(data), bounds);
+    expect(result.length).toBeLessThan(500);
+    // Still in x order, and the row still ends in a gap.
+    expect(result.map((p) => p.x)).toEqual([...result.map((p) => p.x)].sort((a, b) => a - b));
+    expect(result.at(-1)?.index).toBe(9_999);
+  });
 });

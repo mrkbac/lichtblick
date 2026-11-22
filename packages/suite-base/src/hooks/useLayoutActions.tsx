@@ -13,7 +13,11 @@ import useCallbackWithToast from "@lichtblick/suite-base/hooks/useCallbackWithTo
 import { useConfirm } from "@lichtblick/suite-base/hooks/useConfirm";
 import { useLayoutNavigation } from "@lichtblick/suite-base/hooks/useLayoutNavigation";
 import { AppEvent } from "@lichtblick/suite-base/services/IAnalytics";
-import { Layout, layoutIsShared } from "@lichtblick/suite-base/services/ILayoutStorage";
+import {
+  Layout,
+  layoutIsShared,
+  personalLayoutCopy,
+} from "@lichtblick/suite-base/services/ILayoutStorage";
 
 type UseLayoutActions = {
   onRenameLayout: (item: Layout, newName: string) => Promise<void>;
@@ -50,11 +54,9 @@ export function useLayoutActions({ state, dispatch }: LayoutSetupOptions): UseLa
         return;
       }
 
-      const newLayout = await layoutManager.saveNewLayout({
-        name: `${item.name} copy`,
-        data: item.working?.data ?? item.baseline.data,
-        permission: "CREATOR_WRITE",
-      });
+      const newLayout = await layoutManager.saveNewLayout(
+        personalLayoutCopy(item, `${item.name} copy`),
+      );
       await onSelectLayout(newLayout);
       analytics.logEvent(AppEvent.LAYOUT_DUPLICATE, { permission: item.permission });
     },

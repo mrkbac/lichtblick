@@ -6,6 +6,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { Semaphore } from "async-mutex";
+import * as _ from "lodash-es";
 
 import { McapTypes } from "@lichtblick/mcap-core";
 import BrowserHttpReader from "@lichtblick/suite-base/util/BrowserHttpReader";
@@ -13,7 +14,7 @@ import CachedFilelike from "@lichtblick/suite-base/util/CachedFilelike";
 import type { ReadOptions } from "@lichtblick/suite-base/util/CachedFilelike.types";
 
 import { BatchingReadable } from "./BatchingReadable";
-import type { RemoteFileReadableOptions } from "./RemoteFileReadable.types";
+import type { PrefetchOptions, RemoteFileReadableOptions } from "./RemoteFileReadable.types";
 
 const DEFAULT_CACHE_SIZE_BYTES = 1024 * 1024 * 500; // 500MiB
 // Parallel range requests hide per-request latency; a few saturate most links
@@ -23,6 +24,8 @@ const PREFETCH_MAX_BYTES = 1024 * 1024 * 128;
 // While prefetches keep coming in, reads jump around: fetch misses exactly too instead of
 // opening a streaming connection that reads ahead megabytes the next jump skips
 const PREFETCH_ACTIVE_MS = 2000;
+// Largest chunk fetched together with its message indexes; bigger ones are read on their own
+const MAX_CHUNK_WITH_INDEX_BYTES = 1024 * 1024 * 32;
 
 type Prefetched = { start: number; end: number; data: Promise<Uint8Array | undefined> };
 
@@ -36,14 +39,22 @@ export class RemoteFileReadable {
   readonly #prefetched = new Map<number, Prefetched>();
   #prefetchedBytes = 0;
   #lastPrefetchMs = 0;
+  readonly #cacheSizeInBytes: number;
+  // Chunks whose message indexes directly follow them: end offsets (sorted) and start offsets
+  #chunkEnds = new Float64Array(0);
+  #chunkStarts = new Float64Array(0);
 
   public constructor(url: string, options?: RemoteFileReadableOptions) {
     this.#url = url;
     this.#credentials = options?.credentials;
-    const fileReader = new BrowserHttpReader(url, { credentials: this.#credentials });
+    this.#cacheSizeInBytes = options?.cacheSizeInBytes ?? DEFAULT_CACHE_SIZE_BYTES;
+    const fileReader = new BrowserHttpReader(url, {
+      credentials: this.#credentials,
+      signal: options?.signal,
+    });
     this.#remoteReader = new CachedFilelike({
       fileReader,
-      cacheSizeInBytes: options?.cacheSizeInBytes ?? DEFAULT_CACHE_SIZE_BYTES,
+      cacheSizeInBytes: this.#cacheSizeInBytes,
       readAheadEnabled: options?.readAheadEnabled,
       readAheadBufferBytes: options?.readAheadBufferBytes,
     });
@@ -67,19 +78,55 @@ export class RemoteFileReadable {
   public async size(): Promise<bigint> {
     return BigInt(this.#remoteReader.size());
   }
+  /**
+   * The reader reads a chunk's message indexes to find the messages it wants, and then the chunk.
+   * Both are next to each other in the file, so a read of the indexes fetches the chunk too: it is
+   * cached, and the chunk read that follows needs no second round trip.
+   */
+  public setChunks(chunks: readonly McapTypes.ChunkIndex[]): void {
+    const maxBytes = BigInt(
+      Math.min(MAX_CHUNK_WITH_INDEX_BYTES, Math.floor(this.#cacheSizeInBytes / 4)),
+    );
+    const adjacent = chunks
+      .filter(
+        (chunk) =>
+          chunk.messageIndexLength > 0n &&
+          chunk.chunkLength <= maxBytes &&
+          [...chunk.messageIndexOffsets.values()].some(
+            (offset) => offset === chunk.chunkStartOffset + chunk.chunkLength,
+          ),
+      )
+      .map((chunk) => ({
+        start: Number(chunk.chunkStartOffset),
+        end: Number(chunk.chunkStartOffset + chunk.chunkLength),
+      }))
+      .sort((a, b) => a.end - b.end);
+    this.#chunkEnds = Float64Array.from(adjacent, (chunk) => chunk.end);
+    this.#chunkStarts = Float64Array.from(adjacent, (chunk) => chunk.start);
+  }
+
   public async read(offset: bigint, size: bigint, options?: ReadOptions): Promise<Uint8Array> {
     const start = Number(offset);
     const end = start + Number(size);
+    // Not for background reads (whole-file scans): fewer round trips would let them take more of
+    // the bandwidth that playback needs
+    const chunk = options?.background === true ? -1 : _.sortedIndexOf(this.#chunkEnds, start);
+    const from = chunk === -1 ? start : this.#chunkStarts[chunk]!;
+    const data = await this.#read(from, end, options);
+    return from === start ? data : data.subarray(start - from);
+  }
+
+  async #read(start: number, end: number, options?: ReadOptions): Promise<Uint8Array> {
     let prefetched = this.#findPrefetched(start, end);
     if (!prefetched && Date.now() - this.#lastPrefetchMs < PREFETCH_ACTIVE_MS) {
-      this.prefetch([{ offset, length: size }]);
+      this.prefetch([{ offset: BigInt(start), length: BigInt(end - start) }]);
       prefetched = this.#findPrefetched(start, end);
     }
     const data = await prefetched?.data;
     if (prefetched && data) {
       return data.subarray(start - prefetched.start, end - prefetched.start);
     }
-    return await this.#batchingReadable.read(offset, size, options);
+    return await this.#batchingReadable.read(BigInt(start), BigInt(end - start), options);
   }
 
   #findPrefetched(start: number, end: number): Prefetched | undefined {
@@ -95,27 +142,47 @@ export class RemoteFileReadable {
    * Download these exact ranges in parallel, without the cache's read-ahead, so reads that jump
    * around (e.g. skimming at high playback speed) don't each wait for a request round trip or
    * stream megabytes they skip. Failed prefetches fall back to the normal read path.
+   * @param options.skim Reads keep jumping around after this (skimming), so for a while reads that
+   * miss are fetched exactly too. False for a one-off batch, after which reads stream as usual.
    */
-  public prefetch(ranges: { offset: bigint; length: bigint }[]): void {
-    this.#lastPrefetchMs = Date.now();
+  public prefetch(
+    ranges: { offset: bigint; length: bigint }[],
+    { skim = true }: PrefetchOptions = {},
+  ): void {
+    if (skim) {
+      this.#lastPrefetchMs = Date.now();
+    }
+    let batchBytes = 0;
     for (const range of ranges) {
       const start = Number(range.offset);
       const end = start + Number(range.length);
+      // Ranges already downloaded count too: a batch never pushes out its own earlier ranges
+      batchBytes += end - start;
+      if (batchBytes > PREFETCH_MAX_BYTES) {
+        break;
+      }
       if (this.#prefetched.has(start)) {
         continue;
       }
-      const data = this.#prefetchQueue
-        .runExclusive(async () => await this.#fetchRange(start, end))
-        .catch(() => undefined);
-      this.#prefetched.set(start, { start, end, data });
-      this.#prefetchedBytes += end - start;
+      // Make room before queueing, so nothing is downloaded only to be dropped
       for (const [key, oldest] of this.#prefetched) {
-        if (this.#prefetchedBytes <= PREFETCH_MAX_BYTES) {
+        if (this.#prefetchedBytes + (end - start) <= PREFETCH_MAX_BYTES) {
           break;
         }
         this.#prefetched.delete(key);
         this.#prefetchedBytes -= oldest.end - oldest.start;
       }
+      const prefetched: Prefetched = { start, end, data: Promise.resolve(undefined) };
+      prefetched.data = this.#prefetchQueue
+        .runExclusive(async () =>
+          // Dropped from the budget while it waited in the queue: don't download it
+          this.#prefetched.get(start) === prefetched
+            ? await this.#fetchRange(start, end)
+            : undefined,
+        )
+        .catch(() => undefined);
+      this.#prefetched.set(start, prefetched);
+      this.#prefetchedBytes += end - start;
     }
   }
 

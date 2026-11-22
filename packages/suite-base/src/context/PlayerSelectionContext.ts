@@ -18,7 +18,10 @@ export type DataSourceFactoryInitializeArgs = {
   // The handle `file` came from, if any (see IterableSourceInitializeArgs)
   handle?: FileSystemFileHandle;
   files?: File[];
-  // Compare `files` side by side instead of merging them into one recording: the side name of
+  // Local files and remote URLs (strings) together, for a comparison that mixes them. Only passed
+  // to factories that set supportsCompare.
+  recordings?: (File | string)[];
+  // Compare `files` (or `recordings`) side by side instead of merging them into one recording: the side name of
   // each file, in order. Files with the same side name are merged into one side.
   compare?: readonly string[];
   params?: Record<string, string | undefined>;
@@ -98,6 +101,8 @@ export interface IDataSourceFactory {
 export type RecentSource = {
   id: string;
   title: string;
+  /** Display name given when it was opened (e.g. a catalog recording's), shown instead of the title */
+  name?: string;
   label?: string;
   sourceId?: string;
   type?: "file" | "connection";
@@ -111,8 +116,9 @@ export type RecentSource = {
 // File data sources accept either file instances or handles
 type FileDataSourceArgs = {
   type: "file";
-  files?: File[];
-  handles?: FileSystemFileHandle[];
+  // A string is a remote URL, which only a source that supportsCompare reads alongside files
+  files?: (File | string)[];
+  handles?: (FileSystemFileHandle | string)[];
   // Compare the files side by side instead of merging them into one recording: the side name of
   // each file, in order (see DataSourceFactoryInitializeArgs.compare)
   compare?: readonly string[];
@@ -122,9 +128,13 @@ type ConnectionDataSourceArgs = {
   type: "connection";
   params?: Record<string, string | undefined>;
   sourceMetadata?: Record<string, unknown>[];
+  /** The caller brings its own layout (e.g. a link): a sample source doesn't switch to its own. */
+  keepLayout?: boolean;
 };
 
 export type DataSourceArgs = FileDataSourceArgs | ConnectionDataSourceArgs;
+
+export type RemoteFileSelection = { url: string; credentials?: RequestCredentials };
 
 /**
  * PlayerSelectionContext exposes the available data sources and a function to set the current data source
@@ -142,11 +152,20 @@ export interface PlayerSelection {
   /** Currently selected data source */
   selectedSource?: IDataSourceFactory;
 
-  /** Local files backing the current data source, if it was opened from files */
-  selectedFiles?: readonly File[];
+  /**
+   * The recordings backing the current data source: local files, and remote URLs (strings), if it
+   * was opened from recordings
+   */
+  selectedRecordings?: readonly (File | string)[];
 
-  /** The side name of each of `selectedFiles` when they are compared side by side */
+  /** The remote file backing the current data source, if it was opened from one URL */
+  selectedRemoteFile?: RemoteFileSelection;
+
+  /** The side name of each of `selectedRecordings` when they are compared side by side */
   selectedCompare?: readonly string[];
+
+  /** Whether the remote ones of `selectedRecordings` are fetched with cookies (`ds.includeCredentials`) */
+  selectedWithCookies?: boolean;
 
   /** List of available data sources */
   availableSources: readonly IDataSourceFactory[];

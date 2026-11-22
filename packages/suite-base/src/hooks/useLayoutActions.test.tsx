@@ -113,6 +113,19 @@ describe("useLayoutActions", () => {
   });
 
   describe("onDuplicateLayout", () => {
+    it("keeps a linked layout's copy untrusted", async () => {
+      mockLayoutManager.saveNewLayout = vi.fn().mockResolvedValue(LayoutBuilder.layout());
+      const { result } = setup();
+
+      await act(async () => {
+        await result.current.onDuplicateLayout({ ...LayoutBuilder.layout(), untrusted: true });
+      });
+
+      expect(mockLayoutManager.saveNewLayout).toHaveBeenCalledWith(
+        expect.objectContaining({ untrusted: true }),
+      );
+    });
+
     it("saves new layout, selects it, and logs event", async () => {
       const newLayout = LayoutBuilder.layout();
       mockLayoutManager.saveNewLayout = vi.fn().mockResolvedValue(newLayout);

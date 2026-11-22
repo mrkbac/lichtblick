@@ -5,8 +5,8 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { Dismiss16Regular, ErrorCircle16Filled } from "@fluentui/react-icons";
-import { CircularProgress, IconButton, Tooltip } from "@mui/material";
+import { Dismiss16Regular } from "@fluentui/react-icons";
+import { IconButton, Tooltip } from "@mui/material";
 import { useTranslation } from "react-i18next";
 import { makeStyles } from "tss-react/mui";
 
@@ -19,18 +19,16 @@ import {
   selectPlayerPresence,
   selectSeekPlayback,
 } from "@lichtblick/suite-base/components/MessagePipeline/selectors";
+import { PlayerStatusPill } from "@lichtblick/suite-base/components/PlayerStatus/PlayerStatusPill";
 import Stack from "@lichtblick/suite-base/components/Stack";
 import TextMiddleTruncate from "@lichtblick/suite-base/components/TextMiddleTruncate";
 import WssErrorModal from "@lichtblick/suite-base/components/WssErrorModal";
 import { usePlayerSelection } from "@lichtblick/suite-base/context/PlayerSelectionContext";
-import { useWorkspaceActions } from "@lichtblick/suite-base/context/Workspace/useWorkspaceActions";
 import { PlayerPresence } from "@lichtblick/suite-base/players/types";
 
 import { EndTimestamp } from "./EndTimestamp";
 
-const ICON_SIZE = 18;
-
-const useStyles = makeStyles<void, "adornmentError">()((theme, _params, _classes) => ({
+const useStyles = makeStyles()((theme) => ({
   sourceName: {
     font: "inherit",
     fontSize: theme.typography.body2.fontSize,
@@ -42,40 +40,9 @@ const useStyles = makeStyles<void, "adornmentError">()((theme, _params, _classes
     whiteSpace: "nowrap",
     minWidth: 0,
   },
-  adornment: {
-    display: "flex",
-    flex: "none",
-    alignItems: "center",
-    justifyContent: "center",
-    position: "relative",
-    color: theme.palette.appBar.primary,
-    width: ICON_SIZE,
-    height: ICON_SIZE,
-  },
-  adornmentError: {
-    color: theme.palette.error.main,
-  },
-  spinner: {
-    position: "absolute",
-    top: 0,
-    right: 0,
-    left: 0,
-    bottom: 0,
-    margin: "auto",
-  },
   textTruncate: {
     maxWidth: "30vw",
     overflow: "hidden",
-  },
-  iconButton: {
-    padding: 0,
-    position: "relative",
-    zIndex: 1,
-    fontSize: ICON_SIZE - 2,
-
-    "svg:not(.MuiSvgIcon-root)": {
-      fontSize: "1rem",
-    },
   },
 }));
 
@@ -83,25 +50,19 @@ const selectPlayerAlerts = (ctx: MessagePipelineContext) => ctx.playerState.aler
 
 export function DataSource(): React.JSX.Element {
   const { t } = useTranslation("appBar");
-  const { classes, cx } = useStyles();
+  const { classes } = useStyles();
 
   const playerName = useMessagePipeline(selectPlayerName);
   const playerPresence = useMessagePipeline(selectPlayerPresence);
   const playerAlerts = useMessagePipeline(selectPlayerAlerts) ?? [];
   const seek = useMessagePipeline(selectSeekPlayback);
 
-  const { sidebarActions } = useWorkspaceActions();
   const { closeSource } = usePlayerSelection();
 
   // A crude but correct proxy (for our current architecture) for whether a connection is live
   const isLiveConnection = seek == undefined;
 
-  const reconnecting = playerPresence === PlayerPresence.RECONNECTING;
   const initializing = playerPresence === PlayerPresence.INITIALIZING;
-  const error =
-    playerPresence === PlayerPresence.ERROR ||
-    playerAlerts.some((alert) => alert.severity === "error");
-  const loading = reconnecting || initializing;
 
   const playerDisplayName = initializing && playerName == undefined ? "Initializing…" : playerName;
 
@@ -124,28 +85,7 @@ export function DataSource(): React.JSX.Element {
             </>
           )}
         </div>
-        <div className={cx(classes.adornment, { [classes.adornmentError]: error })}>
-          {loading && (
-            <CircularProgress
-              size={ICON_SIZE}
-              color="inherit"
-              className={classes.spinner}
-              variant="indeterminate"
-            />
-          )}
-          {error && (
-            <IconButton
-              color="inherit"
-              className={classes.iconButton}
-              onClick={() => {
-                sidebarActions.left.setOpen(true);
-                sidebarActions.left.selectItem("alerts");
-              }}
-            >
-              <ErrorCircle16Filled />
-            </IconButton>
-          )}
-        </div>
+        <PlayerStatusPill />
         <Tooltip title={isLiveConnection ? t("disconnect") : t("closeDataSource")}>
           <IconButton
             color="inherit"

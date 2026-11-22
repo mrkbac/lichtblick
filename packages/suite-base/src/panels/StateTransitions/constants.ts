@@ -10,8 +10,17 @@ import {
 import { fontMonospace } from "@lichtblick/theme";
 
 export const EMPTY_ITEMS_BY_PATH: SamplesByPath = {};
-/** Live samples kept per path when the source has no recorded range: about 30 min at 50 Hz. */
-export const LIVE_HISTORY_SIZE = 100_000;
+/**
+ * Samples kept per path (20 bytes each), live or over a recorded range. Past this, repeats are
+ * thinned first (value changes and matches stay exact), then every other sample, so the whole
+ * history stays visible. See PathSampleColumns.
+ */
+export const MAX_SAMPLES_PER_PATH = 1_000_000;
+/**
+ * Live samples kept per path: the chart redraws all of them every LIVE_REDRAW_MS, so this keeps
+ * that redraw as cheap as the old 100k ring, but thinned instead of dropping the start.
+ */
+export const MAX_LIVE_SAMPLES_PER_PATH = 100_000;
 /** How often the chart takes live updates. */
 export const LIVE_REDRAW_MS = 250;
 export const EMPTY_TOPICS: string[] = [];

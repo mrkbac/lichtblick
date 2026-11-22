@@ -4,6 +4,7 @@
 import { Time } from "@foxglove/rostime";
 import { useMemo } from "react";
 
+import { PathSampleColumns } from "@lichtblick/suite-base/components/MessagePathSyntax/PathSampleColumns";
 import {
   ChartDataset,
   ChartDatasets,
@@ -17,18 +18,51 @@ import { UseStateTransitionsData } from "@lichtblick/suite-base/panels/StateTran
 import { messagesToDataset } from "@lichtblick/suite-base/panels/StateTransitions/messagesToDataset";
 import { datasetContainsArray } from "@lichtblick/suite-base/panels/StateTransitions/shared";
 import {
+  MessageDatasetArgs,
   PathState,
   SamplesByPath,
   StateTransitionPath,
 } from "@lichtblick/suite-base/panels/StateTransitions/types";
 
-/** Collects the x of every segment where a condition series turns true. */
-export function addMatchStarts(dataset: ChartDataset, out: Set<number>): void {
+/** Collects the x of every segment where a condition series turns true (within `keep`). */
+export function addMatchStarts(
+  dataset: ChartDataset,
+  out: Set<number>,
+  keep: (x: number) => boolean = () => true,
+): void {
   for (const datum of dataset.data) {
-    if (datum?.value === true && datum.label != undefined) {
+    if (datum?.value === true && datum.label != undefined && keep(datum.x)) {
       out.add(datum.x);
     }
   }
+}
+
+/**
+ * Adds the matches in `blocks`, whose chart is `drawn`. Thinned samples can merge matches, so
+ * they come from the exact record of changes; where that record forgot its oldest changes, the
+ * drawn samples fill in before it.
+ */
+function addMatches(
+  blocks: readonly (PathSampleColumns | undefined)[],
+  drawn: ChartDataset,
+  args: Omit<MessageDatasetArgs, "blocks">,
+  out: Set<number>,
+): void {
+  const changeBlocks = blocks.map((samples) => samples?.changes());
+  if (changeBlocks.every((changes, i) => changes === blocks[i])) {
+    addMatchStarts(drawn, out);
+    return;
+  }
+  const exact = messagesToDataset({ ...args, blocks: changeBlocks, showPoints: false });
+  if (blocks.every((samples) => samples?.hasAllChanges() !== false)) {
+    addMatchStarts(exact, out);
+    return;
+  }
+  // The record only starts at its oldest kept change: matches before it come from the drawn
+  // samples. (Its first sample carries the state from before the cut and is never a match.)
+  const firstChangeX = exact.data.find((datum) => datum != undefined)?.x ?? Infinity;
+  addMatchStarts(exact, out);
+  addMatchStarts(drawn, out, (x) => x < firstChangeX);
 }
 
 function useStateTransitionsData(
@@ -65,15 +99,8 @@ function useStateTransitionsData(
       const hasCondition = parseCondition(path.condition) != undefined;
       const blocksForPath = decodedBlocks.map((decodedBlock) => decodedBlock[path.value]);
 
-      const newBlockDataSet = messagesToDataset({
-        blocks: blocksForPath,
-        path,
-        pathIndex,
-        startTime,
-        y,
-        showPoints,
-        darkenLabels,
-      });
+      const datasetArgs = { path, pathIndex, startTime, y, showPoints, darkenLabels };
+      const newBlockDataSet = messagesToDataset({ ...datasetArgs, blocks: blocksForPath });
 
       const items = itemsByPath[path.value];
       const isArray = datasetContainsArray([...blocksForPath, items]);
@@ -84,25 +111,17 @@ function useStateTransitionsData(
       });
       outDatasets.push(newBlockDataSet);
       if (hasCondition) {
-        addMatchStarts(newBlockDataSet, matchStarts);
+        addMatches(blocksForPath, newBlockDataSet, datasetArgs, matchStarts);
       }
 
       if (items == undefined) {
         return;
       }
 
-      const newPathDataSet = messagesToDataset({
-        blocks: [items],
-        path,
-        pathIndex,
-        startTime,
-        y,
-        showPoints,
-        darkenLabels,
-      });
+      const newPathDataSet = messagesToDataset({ ...datasetArgs, blocks: [items] });
       outDatasets.push(newPathDataSet);
       if (hasCondition) {
-        addMatchStarts(newPathDataSet, matchStarts);
+        addMatches([items], newPathDataSet, datasetArgs, matchStarts);
       }
     });
 

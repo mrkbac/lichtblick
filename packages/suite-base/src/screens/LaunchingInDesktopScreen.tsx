@@ -14,6 +14,47 @@ import Stack from "@lichtblick/suite-base/components/Stack";
 import { APP_CONFIG } from "@lichtblick/suite-base/constants/config";
 import { LaunchPreferenceValue } from "@lichtblick/suite-base/types/LaunchPreferenceValue";
 
+/** The `lichtblick://` link that opens the web app's `webURL` in the desktop app. */
+export function desktopLaunchURL(webURL: URL): URL {
+  const desktopURL = new URL("lichtblick://open");
+  webURL.searchParams.forEach((v, k) => {
+    if (k && v) {
+      // Append: a multi-file link repeats `ds.url`.
+      desktopURL.searchParams.append(k, v);
+
+      // Temporarily send both sets of params until desktop app is updated to
+      // use new ds.* parameters.
+      switch (k) {
+        case "ds":
+          desktopURL.searchParams.set("type", v);
+          break;
+        case "ds.deviceId":
+          desktopURL.searchParams.set("deviceId", v);
+          break;
+        case "ds.importId":
+          desktopURL.searchParams.set("importId", v);
+          break;
+        case "ds.end":
+          desktopURL.searchParams.set("end", v);
+          break;
+        case "ds.start":
+          desktopURL.searchParams.set("start", v);
+          break;
+        case "ds.url":
+          desktopURL.searchParams.append("url", v);
+          break;
+        case "time":
+          desktopURL.searchParams.set("seekTo", v);
+          break;
+      }
+    }
+  });
+
+  // A share link's layout rides in the fragment (see util/shareLink).
+  desktopURL.hash = webURL.hash;
+  return desktopURL;
+}
+
 export function LaunchingInDesktopScreen(): ReactElement {
   const [, setLaunchPreference] = useSessionStorageValue(AppSetting.LAUNCH_PREFERENCE);
 
@@ -26,40 +67,7 @@ export function LaunchingInDesktopScreen(): ReactElement {
   }
 
   useEffect(() => {
-    const desktopURL = new URL("lichtblick://open");
-    cleanWebURL.searchParams.forEach((v, k) => {
-      if (k && v) {
-        desktopURL.searchParams.set(k, v);
-
-        // Temporarily send both sets of params until desktop app is updated to
-        // use new ds.* parameters.
-        switch (k) {
-          case "ds":
-            desktopURL.searchParams.set("type", v);
-            break;
-          case "ds.deviceId":
-            desktopURL.searchParams.set("deviceId", v);
-            break;
-          case "ds.importId":
-            desktopURL.searchParams.set("importId", v);
-            break;
-          case "ds.end":
-            desktopURL.searchParams.set("end", v);
-            break;
-          case "ds.start":
-            desktopURL.searchParams.set("start", v);
-            break;
-          case "ds.url":
-            desktopURL.searchParams.set("url", v);
-            break;
-          case "time":
-            desktopURL.searchParams.set("seekTo", v);
-            break;
-        }
-      }
-    });
-
-    window.location.href = desktopURL.href;
+    window.location.href = desktopLaunchURL(cleanWebURL).href;
   });
 
   return (

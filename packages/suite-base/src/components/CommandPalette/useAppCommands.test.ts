@@ -29,10 +29,16 @@ vi.mock("@lichtblick/suite-base/context/CurrentLayoutContext");
 vi.mock("@lichtblick/suite-base/context/LayoutManagerContext");
 vi.mock("@lichtblick/suite-base/context/PanelCatalogContext");
 vi.mock("@lichtblick/suite-base/context/PlayerSelectionContext");
+vi.mock("@lichtblick/suite-base/hooks/useShareLink", () => ({
+  useShareLink: () => ({ availability: "none", copyLink: async () => {} }),
+}));
 vi.mock("@lichtblick/suite-base/context/Workspace/WorkspaceContext");
 vi.mock("@lichtblick/suite-base/context/Workspace/useWorkspaceActions");
 vi.mock("@lichtblick/suite-base/hooks/useAddPanel");
 vi.mock("@lichtblick/suite-base/hooks/useLayoutTransfer");
+vi.mock("@lichtblick/suite-base/components/ColorSchemeThemeProvider", () => ({
+  useToggleColorScheme: () => vi.fn(),
+}));
 
 // Two tabs in one group; the Plot panel's tab is in the background
 const layout: LayoutNode = {

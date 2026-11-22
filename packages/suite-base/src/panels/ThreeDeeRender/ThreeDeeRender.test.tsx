@@ -12,7 +12,7 @@ import { act, render, waitFor } from "@testing-library/react";
 import { produce } from "immer";
 import type { Mock } from "vitest";
 
-import { SettingsTreeAction, Topic } from "@lichtblick/suite";
+import { SettingsTreeAction, SubscribeMessageRangeArgs, Topic } from "@lichtblick/suite";
 import MockPanelContextProvider from "@lichtblick/suite-base/components/MockPanelContextProvider";
 import {
   BuiltinPanelExtensionContext,
@@ -71,6 +71,7 @@ const createMockRenderer = (overrides?: Record<string, any>) => {
     setCameraState: vi.fn(),
     getCameraState: vi.fn().mockReturnValue(undefined),
     animationFrame: vi.fn(),
+    queueAnimationFrame: vi.fn(),
     addListener: vi.fn(function (event: string, listener: (...args: any[]) => void) {
       if (!listeners.has(event)) {
         listeners.set(event, new Set());
@@ -87,6 +88,7 @@ const createMockRenderer = (overrides?: Record<string, any>) => {
     },
     topicSubscriptions: new Map(),
     schemaSubscriptions: new Map(),
+    sceneExtensions: new Map(),
     settings: {
       handleAction: vi.fn(),
       tree: vi.fn().mockReturnValue({}),
@@ -1218,6 +1220,35 @@ describe("ThreeDeeRender", () => {
       });
     });
 
+    it("tells the user when live transforms were thinned to fit in memory", async () => {
+      // Given: preloading off
+      const customRendererInstance = createMockRenderer();
+      vi.mocked(Renderer).mockImplementationOnce(function () {
+        return customRendererInstance as unknown as Renderer;
+      });
+      const mockContext = createPreloadingContext({
+        initialState: { scene: { transforms: { enablePreloading: false } } },
+      });
+      render(<ThreeDeeRender {...setup({}, mockContext)} />);
+      await waitFor(() => {
+        expect(mockContext.onRender).toBeDefined();
+      });
+
+      // When: the live tree halves its history
+      act(() => {
+        customRendererInstance.transformTree.decimations = 1;
+        customRendererInstance.emit("transformTreeUpdated", customRendererInstance);
+      });
+
+      // Then
+      await waitFor(() => {
+        expect(mockContext.unstable_setAlert).toHaveBeenLastCalledWith(
+          "transform-preload",
+          expect.objectContaining({ severity: "info" }),
+        );
+      });
+    });
+
     it("keeps the read that restores transforms after a topic change running", async () => {
       // Given: preloading off, a tree filled from /tf and /tf_static, and range reads that take a
       // while (they never finish here)
@@ -1394,6 +1425,252 @@ describe("ThreeDeeRender", () => {
             end: { sec: 100, nsec: 0 },
           }),
         );
+      });
+    });
+
+    describe("decay history read after a seek", () => {
+      const scanTopic = RenderStateBuilder.topic({
+        name: "/scan",
+        schemaName: "sensor_msgs/LaserScan",
+      });
+      const otherTopic = RenderStateBuilder.topic({
+        name: "/raw",
+        schemaName: "velodyne_msgs/VelodyneScan",
+      });
+      const topics = [scanTopic, otherTopic];
+
+      function renderWithDecay(initialTopics: Record<string, unknown>) {
+        const layer = {
+          historySchemas: new Set(["sensor_msgs/LaserScan"]),
+          addHistoricalMessage: vi.fn(),
+        };
+        const customRendererInstance = createMockRenderer({
+          schemaSubscriptions: new Map([
+            ["sensor_msgs/LaserScan", [{}]],
+            ["velodyne_msgs/VelodyneScan", [{}]],
+          ]),
+          sceneExtensions: new Map([["laserScans", layer]]),
+        });
+        vi.mocked(Renderer).mockImplementationOnce(function () {
+          return customRendererInstance as any;
+        });
+        const older = MessageEventBuilder.messageEvent({
+          topic: "/scan",
+          schemaName: "sensor_msgs/LaserScan",
+        });
+        const cancel = vi.fn();
+        const mockContext = createPreloadingContext({
+          initialState: { topics: initialTopics },
+          onSubscribe: (args: SubscribeMessageRangeArgs) => {
+            void args.onNewRangeIterator(
+              (async function* () {
+                yield [older];
+              })(),
+            );
+            return cancel;
+          },
+        });
+        const rendered = render(<ThreeDeeRender {...setup({}, mockContext)} />);
+        return { layer, older, cancel, mockContext, customRendererInstance, rendered };
+      }
+
+      async function start(mockContext: BuiltinPanelExtensionContext) {
+        await waitFor(() => {
+          expect(mockContext.onRender).toBeDefined();
+        });
+        act(() => {
+          mockContext.onRender!({ topics, currentFrame: [] }, vi.fn());
+        });
+        vi.mocked(mockContext.unstable_subscribeMessageRange).mockClear();
+      }
+
+      function seek(
+        mockContext: BuiltinPanelExtensionContext,
+        renderer: ReturnType<typeof createMockRenderer>,
+      ) {
+        act(() => {
+          mockContext.onRender!(
+            { topics, currentFrame: [], currentTime: { sec: 100, nsec: 0 }, didSeek: true },
+            vi.fn(),
+          );
+        });
+        // The seek's frame draws the latest scans; the reads start after it
+        act(() => {
+          renderer.emit("endFrame", 100_000_000_000n, renderer);
+        });
+      }
+
+      it("reads each decayed topic's window before the seek time into its layer's history", async () => {
+        const { layer, older, mockContext, customRendererInstance } = renderWithDecay({
+          "/scan": { visible: true, decayTime: 30 },
+        });
+        await start(mockContext);
+
+        seek(mockContext, customRendererInstance);
+
+        await waitFor(() => {
+          expect(mockContext.unstable_subscribeMessageRange).toHaveBeenCalledWith(
+            expect.objectContaining({
+              topic: "/scan",
+              start: { sec: 70, nsec: 0 },
+              end: { sec: 100, nsec: 0 },
+            }),
+          );
+        });
+        await waitFor(() => {
+          expect(layer.addHistoricalMessage).toHaveBeenCalledWith(older);
+        });
+        // Not through the playback path, which would synchronize or take it as the latest scan
+        expect(customRendererInstance.addMessageEvent).not.toHaveBeenCalledWith(older);
+        expect(customRendererInstance.queueAnimationFrame).toHaveBeenCalled();
+      });
+
+      it("reads the transforms of a new or longer decay window too, e.g. while paused", async () => {
+        const layer = {
+          historySchemas: new Set(["sensor_msgs/LaserScan"]),
+          addHistoricalMessage: vi.fn(),
+        };
+        const customRendererInstance = createMockRenderer({
+          schemaSubscriptions: new Map([
+            ["sensor_msgs/LaserScan", [{}]],
+            ["tf2_msgs/TFMessage", [{ preload: true }]],
+          ]),
+          sceneExtensions: new Map([["laserScans", layer]]),
+          currentTime: 100_000_000_000n,
+        });
+        vi.mocked(Renderer).mockImplementationOnce(function () {
+          return customRendererInstance as any;
+        });
+        const mockContext = createPreloadingContext({
+          initialState: {
+            scene: { transforms: { enablePreloading: false } },
+            topics: { "/scan": { visible: true, decayTime: 30 }, "/tf": { visible: true } },
+          },
+        });
+        render(<ThreeDeeRender {...setup({}, mockContext)} />);
+        await waitFor(() => {
+          expect(mockContext.onRender).toBeDefined();
+        });
+
+        // The decay topic appears (as when its decay time is set): no seek
+        act(() => {
+          mockContext.onRender!(
+            {
+              topics: [
+                scanTopic,
+                RenderStateBuilder.topic({ name: "/tf", schemaName: "tf2_msgs/TFMessage" }),
+              ],
+              currentFrame: [],
+            },
+            vi.fn(),
+          );
+        });
+
+        await waitFor(() => {
+          expect(mockContext.unstable_subscribeMessageRange).toHaveBeenCalledWith(
+            expect.objectContaining({
+              topic: "/tf",
+              start: { sec: 70, nsec: 0 },
+              end: { sec: 100, nsec: 0 },
+            }),
+          );
+        });
+      });
+
+      it("reads transforms back to the oldest header stamp of the scans read back", async () => {
+        const layer = {
+          historySchemas: new Set(["sensor_msgs/LaserScan"]),
+          // Stamped 5 s before it was received, before the decay window
+          addHistoricalMessage: vi.fn(() => 65_000_000_000n),
+        };
+        const customRendererInstance = createMockRenderer({
+          schemaSubscriptions: new Map([
+            ["sensor_msgs/LaserScan", [{}]],
+            ["tf2_msgs/TFMessage", [{ preload: true }]],
+          ]),
+          sceneExtensions: new Map([["laserScans", layer]]),
+          currentTime: 100_000_000_000n,
+        });
+        vi.mocked(Renderer).mockImplementationOnce(function () {
+          return customRendererInstance as any;
+        });
+        const mockContext = createPreloadingContext({
+          initialState: {
+            scene: { transforms: { enablePreloading: false } },
+            topics: { "/scan": { visible: true, decayTime: 30 }, "/tf": { visible: true } },
+          },
+          onSubscribe: (args: SubscribeMessageRangeArgs) => {
+            if (args.topic === "/scan") {
+              void args.onNewRangeIterator(
+                (async function* () {
+                  yield [MessageEventBuilder.messageEvent({ topic: "/scan" })];
+                })(),
+              );
+            }
+          },
+        });
+        render(<ThreeDeeRender {...setup({}, mockContext)} />);
+        await waitFor(() => {
+          expect(mockContext.onRender).toBeDefined();
+        });
+
+        act(() => {
+          mockContext.onRender!(
+            {
+              topics: [
+                scanTopic,
+                RenderStateBuilder.topic({ name: "/tf", schemaName: "tf2_msgs/TFMessage" }),
+              ],
+              currentFrame: [],
+            },
+            vi.fn(),
+          );
+        });
+
+        // [70 s, 100 s] by receive time, then back to a second before the 65 s stamp
+        await waitFor(() => {
+          expect(mockContext.unstable_subscribeMessageRange).toHaveBeenCalledWith(
+            expect.objectContaining({
+              topic: "/tf",
+              start: { sec: 64, nsec: 0 },
+              end: { sec: 70, nsec: 0 },
+            }),
+          );
+        });
+      });
+
+      it("skips topics whose layer takes no history", async () => {
+        const { mockContext, customRendererInstance } = renderWithDecay({
+          "/raw": { visible: true, decayTime: 30 },
+        });
+        await start(mockContext);
+
+        seek(mockContext, customRendererInstance);
+
+        expect(mockContext.unstable_subscribeMessageRange).not.toHaveBeenCalledWith(
+          expect.objectContaining({ topic: "/raw" }),
+        );
+      });
+
+      it("stops the read when no decayed topic is left", async () => {
+        const { cancel, mockContext, customRendererInstance } = renderWithDecay({
+          "/scan": { visible: true, decayTime: 30 },
+        });
+        await start(mockContext);
+        seek(mockContext, customRendererInstance);
+        await waitFor(() => {
+          expect(mockContext.unstable_subscribeMessageRange).toHaveBeenCalled();
+        });
+        cancel.mockClear(); // (the read started before the seek was cancelled by it)
+
+        // e.g. the topic went away, so nothing with a decay time is subscribed anymore
+        act(() => {
+          mockContext.onRender!({ topics: [otherTopic], currentFrame: [] }, vi.fn());
+        });
+
+        await waitFor(() => {
+          expect(cancel).toHaveBeenCalled();
+        });
       });
     });
 

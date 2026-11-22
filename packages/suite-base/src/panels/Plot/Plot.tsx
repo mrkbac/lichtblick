@@ -70,6 +70,7 @@ import usePlotDataHandling from "./hooks/usePlotDataHandling";
 import usePlotPanelSettings from "./hooks/usePlotPanelSettings";
 import useRenderer from "./hooks/useRenderer";
 import useSubscriptions from "./hooks/useSubscriptions";
+import { plottableFields } from "./utils/plottableFields";
 
 /** The user's axis label, or the fallback when there is none */
 const labelOr = (label: string | undefined, fallback: string): string =>
@@ -258,12 +259,17 @@ const Plot = (props: PlotProps): React.JSX.Element => {
   }, [boxZoomActive, deltaMeasureMode, isHovered, keyDownHandlers, toggleBoxZoom]);
 
   useEffect(() => {
+    const structures = messagePathStructures(datatypes);
     setMessagePathDropConfig(
-      addPathsDrop((added) => {
-        saveConfig((prevConfig) => ({ ...prevConfig, paths: [...prevConfig.paths, ...added] }));
-      }),
+      addPathsDrop(
+        (added) => {
+          saveConfig((prevConfig) => ({ ...prevConfig, paths: [...prevConfig.paths, ...added] }));
+        },
+        // A dropped topic or message adds its numeric fields, e.g. x, y and z
+        (item) => plottableFields(item.path, structures, topics),
+      ),
     );
-  }, [saveConfig, setMessagePathDropConfig]);
+  }, [datatypes, saveConfig, setMessagePathDropConfig, topics]);
 
   useEffect(() => {
     coordinator?.handleConfig(
@@ -432,6 +438,7 @@ const Plot = (props: PlotProps): React.JSX.Element => {
             sidebarDimension={sidebarDimension}
             showValues={config.showPlotValuesInLegend}
             hoveredValuesBySeriesIndex={hoveredValuesBySeriesIndex}
+            supportsStreamModifiers={xAxisMode === "timestamp"}
           />
         )}
         <Tooltip

@@ -8,11 +8,19 @@ import { MISSING_TRANSFORM } from "@lichtblick/suite-base/panels/ThreeDeeRender/
 import { PointCloud2, PointFieldType } from "@lichtblick/suite-base/panels/ThreeDeeRender/ros";
 import { ColorModeSettings } from "@lichtblick/suite-base/panels/ThreeDeeRender/settingsNodes/colorMode";
 import { DEFAULT_POINT_SETTINGS } from "@lichtblick/suite-base/panels/ThreeDeeRender/settingsNodes/topics";
+import { TransformTree } from "@lichtblick/suite-base/panels/ThreeDeeRender/transforms";
 import { updatePose } from "@lichtblick/suite-base/panels/ThreeDeeRender/updatePose";
 
-import { createStixelMaterial, DECAY_LIMITED, PointCloudHistoryRenderable } from "./PointClouds";
+import { createStixelMaterial, PointCloudHistoryRenderable, PointClouds } from "./PointClouds";
 import { getColorConverter } from "./colorMode";
 import { DecayPointRing } from "./pointClouds/DecayPointRing";
+import { DECAY_LIMITED, payloadFingerprint } from "./pointExtensionUtils";
+
+// A spy around the payload hash, to check playback doesn't compute it
+vi.mock("./pointExtensionUtils", async (importOriginal) => {
+  const original = await importOriginal<typeof import("./pointExtensionUtils")>();
+  return { ...original, payloadFingerprint: vi.fn(original.payloadFingerprint) };
+});
 
 vi.mock("@lichtblick/suite-base/panels/ThreeDeeRender/updatePose", () => ({
   updatePose: vi.fn(),
@@ -204,7 +212,7 @@ describe("PointCloudHistoryRenderable missing transform error", () => {
     const path = ["topics", "/points"];
     const { renderable } = decode(makeCloud(), { stixelsEnabled: true }, {
       ...rendererMock,
-      transformTree: {},
+      transformTree: new TransformTree(),
       settings: { errors },
     } as unknown as Renderer);
 
@@ -243,38 +251,131 @@ describe("PointCloudHistoryRenderable decay", () => {
     expect(latest.instanceDetails(0)).toMatchObject({ x: 42, y: 2, z: 3 });
   });
 
-  it("drops the ring and its limit notice when the decay time is turned off", () => {
-    const errors = new LayerErrors();
-    const path = ["topics", "/points"];
-    const { renderable, settings } = decode(makeCloud(), { decayTime: 10 }, {
-      ...rendererMock,
-      transformTree: { apply: (out: unknown) => out },
-      settings: { errors },
-    } as unknown as Renderer);
-    vi.mocked(updatePose).mockReturnValue(true);
-    // One more scan than the 1,000-scan limit allows next to the latest
-    for (let i = 1; i <= 1001; i++) {
+  it("puts an older scan (read back after a seek) straight into the ring, keeping the latest", () => {
+    const { renderable, settings } = decode(makeCloud(), { colorMode: "flat", decayTime: 10 });
+    renderable.updatePointCloud(makeCloud(), undefined, settings, 10n);
+    const older = makeCloud();
+    new DataView(older.data.buffer).setFloat32(0, 42, true);
+
+    renderable.addOlderScan(older, settings, 5n);
+
+    const ring = renderable.children.find((child) => child instanceof DecayPointRing)!;
+    expect(ring.scanCount()).toBe(1);
+    expect(ring.oldestReceiveTime()).toBe(5n);
+    expect(ring.points().positionAttribute().array[0]).toBe(42);
+    const latest = renderable.children[0] as unknown as {
+      instanceDetails: (instanceId: number) => Record<string, unknown> | undefined;
+    };
+    expect(latest.instanceDetails(0)).toMatchObject({ x: POSITIONS[0]![0] });
+  });
+
+  it("adds an older scan's stixels to the stixel history too", () => {
+    const { renderable, settings } = decode(makeCloud(), {
+      colorMode: "flat",
+      decayTime: 10,
+      stixelsEnabled: true,
+    });
+    renderable.updatePointCloud(makeCloud(), undefined, settings, 10n);
+    const before = renderable.children.length;
+
+    renderable.addOlderScan(makeCloud(), settings, 5n);
+
+    // The decay ring and one stixels renderable for the older scan
+    expect(renderable.children.length).toBe(before + 2);
+
+    // Read back again (e.g. a later decay change re-reads the window): nothing is added
+    renderable.addOlderScan(makeCloud(), settings, 5n);
+    expect(renderable.children.length).toBe(before + 2);
+  });
+
+  it("skips an older scan that playback already moved into the history", () => {
+    const { renderable, settings } = decode(makeCloud(), {
+      colorMode: "flat",
+      decayTime: 10,
+      stixelsEnabled: true,
+    });
+    renderable.updatePointCloud(makeCloud(), undefined, settings, 5n);
+    renderable.pushHistory(makeCloud(), settings, 10n); // the 5n scan moves into the history
+    renderable.updatePointCloud(makeCloud(), undefined, settings, 10n);
+    const ring = renderable.children.find((child) => child instanceof DecayPointRing)!;
+    const before = renderable.children.length;
+
+    renderable.addOlderScan(makeCloud(), settings, 5n); // the paced read reaches it afterwards
+
+    expect(ring.scanCount()).toBe(1);
+    expect(renderable.children.length).toBe(before);
+  });
+
+  it("skips an older scan that can't be drawn without blanking the latest one", () => {
+    const { renderable, settings } = decode(makeCloud(), { colorMode: "flat", decayTime: 10 });
+    renderable.updatePointCloud(makeCloud(), undefined, settings, 10n);
+    const broken = { ...makeCloud(), point_step: 7 }; // data isn't a multiple of it
+
+    renderable.addOlderScan(broken, settings, 5n);
+
+    expect(renderable.children.some((child) => child instanceof DecayPointRing)).toBe(false);
+    const latest = renderable.children[0] as unknown as {
+      geometry: { drawRange: { count: number } };
+    };
+    expect(latest.geometry.drawRange.count).toBe(POSITIONS.length);
+  });
+
+  it("computes no payload hash during playback, only for scans whose times tie", () => {
+    const { renderable, settings } = decode(makeCloud(), {
+      colorMode: "flat",
+      decayTime: 10,
+      stixelsEnabled: true,
+    });
+    vi.mocked(payloadFingerprint).mockClear();
+    for (let i = 1; i <= 5; i++) {
       renderable.pushHistory(makeCloud(), settings, BigInt(i));
       renderable.updatePointCloud(makeCloud(), undefined, settings, BigInt(i));
     }
-    renderable.startFrame(1001n, "map", "map");
+    renderable.addOlderScan(makeCloud(), settings, 0n); // read back, older than all of them
+
+    expect(vi.mocked(payloadFingerprint)).not.toHaveBeenCalled();
+  });
+
+  it("drops the ring and its limit notice when the decay time is turned off", () => {
+    const errors = new LayerErrors();
+    const path = ["topics", "/points"];
+    // 4-point clouds and a 10-point budget: the history thins at the third scan
+    const { renderable, settings } = decode(makeCloud(), { decayTime: 10, decayMaxPoints: 1e-5 }, {
+      ...rendererMock,
+      transformTree: {
+        apply: (out: unknown) => out,
+        frames: () => new Map(),
+        isComplete: () => false,
+      },
+      settings: { errors },
+    } as unknown as Renderer);
+    vi.mocked(updatePose).mockReturnValue(true);
+    for (let i = 1; i <= 4; i++) {
+      renderable.pushHistory(makeCloud(), settings, BigInt(i));
+      renderable.updatePointCloud(makeCloud(), undefined, settings, BigInt(i));
+    }
+    renderable.startFrame(4n, "map", "map");
     expect(errors.hasError(path, DECAY_LIMITED)).toBe(true);
     vi.mocked(console.warn).mockClear(); // the limit notice is logged once
 
-    renderable.updatePointCloud(makeCloud(), undefined, { ...settings, decayTime: 0 }, 1002n);
-    renderable.startFrame(1002n, "map", "map");
+    renderable.updatePointCloud(makeCloud(), undefined, { ...settings, decayTime: 0 }, 5n);
+    renderable.startFrame(5n, "map", "map");
 
     expect(renderable.children.some((child) => child instanceof DecayPointRing)).toBe(false);
     expect(errors.hasError(path, DECAY_LIMITED)).toBe(false);
   });
 
-  it("keeps the limit notice when the latest scan alone fills the point budget", () => {
+  it("shows the limit notice when no history fits next to the latest scan", () => {
     const errors = new LayerErrors();
     const path = ["topics", "/points"];
     // 6 points: one 4-point cloud fits, two don't
     const { renderable, settings } = decode(makeCloud(), { decayTime: 10, decayMaxPoints: 6e-6 }, {
       ...rendererMock,
-      transformTree: { apply: (out: unknown) => out },
+      transformTree: {
+        apply: (out: unknown) => out,
+        frames: () => new Map(),
+        isComplete: () => false,
+      },
       settings: { errors },
     } as unknown as Renderer);
     vi.mocked(updatePose).mockReturnValue(true);
@@ -286,5 +387,35 @@ describe("PointCloudHistoryRenderable decay", () => {
     expect(renderable.children.some((child) => child instanceof DecayPointRing)).toBe(true);
     expect(errors.hasError(path, DECAY_LIMITED)).toBe(true);
     vi.mocked(console.warn).mockClear(); // the limit notice is logged once
+
+    // Long after: the history is empty because its window passed, not because of the budget
+    renderable.startFrame(100_000_000_000n, "map", "map");
+    expect(errors.hasError(path, DECAY_LIMITED)).toBe(false);
+  });
+});
+
+describe("PointClouds read-back history", () => {
+  it("leaves the drawn scan and anything newer to playback (through timestamp sync)", () => {
+    const addMessageEvent = vi.fn();
+    const extension = new PointClouds({
+      ...rendererMock,
+      hud: {},
+      config: { topics: {} },
+      topics: [],
+      addMessageEvent,
+      settings: { ...rendererMock.settings, setNodesForKey: vi.fn() },
+    } as unknown as Renderer);
+    const messageEvent = {
+      topic: "/points",
+      schemaName: "sensor_msgs/PointCloud2",
+      receiveTime: { sec: 5, nsec: 0 },
+      message: makeCloud(),
+      sizeInBytes: 0,
+    };
+
+    // Nothing drawn yet: neither drawn nor queued from the read
+    expect(extension.addHistoricalMessage(messageEvent)).toBeUndefined();
+    expect(addMessageEvent).not.toHaveBeenCalled();
+    expect(extension.renderables.size).toBe(0);
   });
 });

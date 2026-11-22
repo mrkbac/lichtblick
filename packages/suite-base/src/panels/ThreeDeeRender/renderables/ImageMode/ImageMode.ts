@@ -636,7 +636,7 @@ export class ImageMode
     newState: MessageRenderState,
     oldState: MessageRenderState | undefined,
   ): void => {
-    if (newState.missingAnnotationTopics) {
+    if (newState.missingAnnotationTopics || newState.waitingForImage === true) {
       this.#removeImageRenderable();
     }
     if (newState.image != undefined && newState.image.message !== oldState?.image?.message) {
