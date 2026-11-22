@@ -51,7 +51,7 @@ export const threeDee = {
   loadingTransforms_other: "Loading transforms: {{formattedCount}} messages",
   transformHistoryThinnedAlert: "Transform history thinned to fit in memory",
   transformHistoryThinnedAlertTip:
-    "This recording has more transforms than fit in memory, so each frame keeps about 1 in {{factor}} of them. Frames between kept transforms are interpolated.",
+    "There are more transforms than fit in memory, so each frame keeps about 1 in {{factor}} of them. Frames between kept transforms are interpolated.",
   fixed: "Fixed",
   followMode: "Follow mode",
   followModeHelp: "Change the camera behavior during playback to follow the display frame or not.",

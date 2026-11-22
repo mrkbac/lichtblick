@@ -11,7 +11,7 @@ import * as _ from "lodash-es";
 import { PanelSettings, VariableValue } from "@lichtblick/suite";
 import { EMPTY_GLOBAL_VARIABLES } from "@lichtblick/suite-base/hooks/useGlobalVariables";
 import { RosTime } from "@lichtblick/suite-base/panels/ThreeDeeRender/ros";
-import { PlayerPresence } from "@lichtblick/suite-base/players/types";
+import { MessageBlock, PlayerPresence } from "@lichtblick/suite-base/players/types";
 import PlayerBuilder from "@lichtblick/suite-base/testing/builders/PlayerBuilder";
 import { BasicBuilder } from "@lichtblick/test-builders";
 
@@ -337,6 +337,60 @@ describe("renderState", () => {
         },
       ],
     });
+  });
+
+  it("keeps allFrames when a progress update only loads topics the panel does not preload", () => {
+    const buildRenderState = initRenderStateBuilder();
+    const test1 = [makeBlock("test1", { nsec: 0, sec: 1 })];
+    // Stable inputs: new ones would count as changed conversions and rebuild allFrames anyway.
+    const subscriptions = [{ topic: "test1", preload: true }];
+    const sortedTopics = [
+      { name: "test1", schemaName: "schema" },
+      { name: "test2", schemaName: "schema" },
+    ];
+    const messageConverters: [] = [];
+    const watchedFields = new Set(["allFrames"]);
+    const withBlocks = (blocks: MessageBlock[]) => {
+      const playerState = PlayerBuilder.playerState();
+      playerState.progress = { messageCache: { startTime: { sec: 0, nsec: 0 }, blocks } };
+      return {
+        watchedFields,
+        playerState,
+        appSettings: undefined,
+        currentFrame: undefined,
+        colorScheme: undefined,
+        globalVariables: EMPTY_GLOBAL_VARIABLES,
+        hoverValue: undefined,
+        sharedPanelState: {},
+        sortedTopics,
+        subscriptions,
+        messageConverters,
+        forceConversion: new Set<string>(),
+      };
+    };
+
+    const first = buildRenderState(withBlocks([{ sizeInBytes: 0, messagesByTopic: { test1 } }]));
+    const allFrames = first?.allFrames;
+    expect(allFrames).toEqual(test1);
+
+    // The block is replaced because test2 loaded; test1's array is the same.
+    const otherTopicLoaded = buildRenderState(
+      withBlocks([
+        {
+          sizeInBytes: 0,
+          messagesByTopic: { test1, test2: [makeBlock("test2", { nsec: 0, sec: 2 })] },
+        },
+      ]),
+    );
+    expect(otherTopicLoaded).toBeUndefined();
+
+    // test1 itself changed: rebuilt.
+    const test1More = [...test1, makeBlock("test1", { nsec: 0, sec: 3 })];
+    const panelTopicLoaded = buildRenderState(
+      withBlocks([{ sizeInBytes: 0, messagesByTopic: { test1: test1More } }]),
+    );
+    expect(panelTopicLoaded?.allFrames).toEqual(test1More);
+    expect(panelTopicLoaded?.allFrames).not.toBe(allFrames);
   });
 
   it("should make allFrames sorted receive time across sorted messagesInTopic", () => {

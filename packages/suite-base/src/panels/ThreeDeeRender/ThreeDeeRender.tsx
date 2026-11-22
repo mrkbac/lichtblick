@@ -529,6 +529,19 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
   const isPreloadingEnabled = isTransformPreloadEnabled(config);
   // How many times the preloaded transform history was halved to fit the sample budget
   const [transformDecimations, setTransformDecimations] = useState(0);
+  // Live transforms are thinned too, without a preload read to report it
+  useEffect(() => {
+    if (!renderer) {
+      return;
+    }
+    const onUpdate = () => {
+      setTransformDecimations(renderer.transformTree.decimations);
+    };
+    renderer.addListener("transformTreeUpdated", onUpdate);
+    return () => {
+      renderer.removeListener("transformTreeUpdated", onUpdate);
+    };
+  }, [renderer]);
   useEffect(() => {
     setPanelAlert?.(
       "transform-preload",
