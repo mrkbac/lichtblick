@@ -63,7 +63,11 @@ export const threeDee = {
   lineColor: "Line color",
   noCoordinateFramesFound: "No coordinate frames found",
   decayHistoryLimited:
-    "Decay history limit reached ({{maxPoints}} points or {{maxScans}} scans): showing the last {{shownSeconds}} s of {{decaySeconds}} s",
+    "The decay limit of {{maxPoints}} points leaves no room next to the latest scan: no decay history is shown",
+  decayHistoryDropped:
+    "Decay history limit reached ({{maxPoints}} points): scans too large to thin around were dropped",
+  decayHistoryThinned:
+    "Decay history limit reached ({{maxPoints}} points or {{maxScans}} scans): keeping 1 in {{stride}} incoming scans",
   parent: "Parent",
   pose: "Pose",
   rotationOffset: "Rotation offset",
