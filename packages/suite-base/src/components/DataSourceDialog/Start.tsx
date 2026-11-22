@@ -116,7 +116,7 @@ export default function Start(): React.JSX.Element {
       (recent): CatalogRecording => ({
         ...catalogMatch(recent, catalogByName),
         id: recent.id,
-        name: splitRecentTitle(recent.title).primary,
+        name: recent.name ?? splitRecentTitle(recent.title).primary,
         source: { type: "remote-file", url: recent.title },
       }),
     );
