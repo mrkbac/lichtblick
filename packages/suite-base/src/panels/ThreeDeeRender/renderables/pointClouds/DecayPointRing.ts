@@ -19,6 +19,8 @@ type RingScan = {
   frameId: string;
   /** The message's own pose in its frame */
   pose: Pose;
+  /** Tells apart distinct records with the same times (see payloadFingerprint) */
+  fingerprint: number;
   slot: number;
   start: number;
   count: number;
@@ -30,7 +32,10 @@ type RingScan = {
   stride: number;
 };
 
-export type RingScanInfo = Pick<RingScan, "receiveTime" | "messageTime" | "frameId" | "pose">;
+export type RingScanInfo = Pick<
+  RingScan,
+  "receiveTime" | "messageTime" | "frameId" | "pose" | "fingerprint"
+>;
 
 /**
  * Scans whose pose row is (re)computed per frame. New scans and ones still missing a transform go
@@ -206,13 +211,13 @@ export class DecayPointRing extends Renderable<BaseUserData, /*TRenderer=*/ unde
     return this.#livePoints;
   }
 
-  /**
-   * Whether the ring holds the scan received at `receiveTime` with header stamp `messageTime`
-   * (distinct scans received at the same time have their own stamps)
-   */
-  public has(receiveTime: bigint, messageTime: bigint): boolean {
+  /** Whether the ring holds this record: its times and payload fingerprint */
+  public has(receiveTime: bigint, messageTime: bigint, fingerprint: number): boolean {
     return this.#scans.some(
-      (scan) => scan.receiveTime === receiveTime && scan.messageTime === messageTime,
+      (scan) =>
+        scan.receiveTime === receiveTime &&
+        scan.messageTime === messageTime &&
+        scan.fingerprint === fingerprint,
     );
   }
 
@@ -260,7 +265,7 @@ export class DecayPointRing extends Renderable<BaseUserData, /*TRenderer=*/ unde
       return;
     }
     // The same message pushed again (e.g. read back after a seek twice)
-    if (this.has(info.receiveTime, info.messageTime)) {
+    if (this.has(info.receiveTime, info.messageTime, info.fingerprint)) {
       return;
     }
     if (++this.#sinceKept < this.#stride) {

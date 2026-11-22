@@ -76,7 +76,11 @@ function pts(count: number): [Float32Array, Uint8Array] {
 
 function push(ring: DecayPointRing, time: bigint, count: number, frameId = "lidar") {
   const { positions, colors } = scan(count, Number(time));
-  ring.push({ receiveTime: time, messageTime: time, frameId, pose: makePose() }, positions, colors);
+  ring.push(
+    { receiveTime: time, messageTime: time, frameId, pose: makePose(), fingerprint: 0 },
+    positions,
+    colors,
+  );
 }
 
 describe("DecayPointRing", () => {
@@ -99,6 +103,18 @@ describe("DecayPointRing", () => {
     expect(ring.visible).toBe(true);
   });
 
+  it("keeps distinct records with the same times apart by their payload fingerprint", () => {
+    const { ring } = makeRing();
+    const info = { receiveTime: 1n, messageTime: 1n, frameId: "lidar", pose: makePose() };
+    ring.push({ ...info, fingerprint: 1 }, ...pts(1)); // e.g. two segments of one sweep
+    ring.push({ ...info, fingerprint: 2 }, ...pts(1));
+    ring.push({ ...info, fingerprint: 2 }, ...pts(1)); // the second one again
+
+    expect(ring.scanCount()).toBe(2);
+    expect(ring.has(1n, 1n, 2)).toBe(true);
+    expect(ring.has(1n, 1n, 3)).toBe(false);
+  });
+
   it("places scans older than the newest in age order and skips ones it already has", () => {
     const { ring } = makeRing();
     push(ring, 5n, 1); // e.g. the latest scan before the seek read's older ones arrive
@@ -109,7 +125,10 @@ describe("DecayPointRing", () => {
     expect(ring.scanCount()).toBe(3);
     expect(ring.oldestReceiveTime()).toBe(2n);
     // A different scan received at the same time is kept
-    ring.push({ receiveTime: 3n, messageTime: 99n, frameId: "lidar", pose: makePose() }, ...pts(1));
+    ring.push(
+      { receiveTime: 3n, messageTime: 99n, frameId: "lidar", pose: makePose(), fingerprint: 0 },
+      ...pts(1),
+    );
     expect(ring.scanCount()).toBe(4);
     ring.expire(4n);
     expect(ring.scanCount()).toBe(1);
@@ -650,7 +669,13 @@ describe("DecayPointRing", () => {
     const { ring } = makeRing({ maxEntries: 100, maxPoints: 70_000_000 });
     const pushZeros = (time: bigint, count: number) => {
       ring.push(
-        { receiveTime: time, messageTime: time, frameId: "lidar", pose: makePose() },
+        {
+          receiveTime: time,
+          messageTime: time,
+          frameId: "lidar",
+          pose: makePose(),
+          fingerprint: 0,
+        },
         new Float32Array(count * 3),
         new Uint8Array(count * 4),
       );

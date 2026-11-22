@@ -204,6 +204,18 @@ describe("RenderObjectHistory", () => {
     expect(history.latest().receiveTime).toBe(11n);
   });
 
+  it("keeps read-back entries within the point budget as they are inserted", () => {
+    const history = makeHistory({ maxEntries: 100, maxPoints: 250 });
+    history.addHistoryEntry(entry(100n, 100)); // the latest
+    for (let i = 1n; i <= 10n; i++) {
+      history.insertOlderEntry(entry(i, 100)); // a window read back after a seek
+    }
+
+    // Without waiting for the next frame's trim
+    expect(live).toBe(2);
+    expect(history.latest().receiveTime).toBe(100n);
+  });
+
   it("releases the message of every entry but the latest", () => {
     const history = makeHistory({ maxEntries: 100, maxPoints: Infinity });
     const first = entry(1n, 1);

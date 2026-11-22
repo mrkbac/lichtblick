@@ -1518,6 +1518,58 @@ describe("ThreeDeeRender", () => {
         expect(customRendererInstance.queueAnimationFrame).toHaveBeenCalled();
       });
 
+      it("reads the transforms of a new or longer decay window too, e.g. while paused", async () => {
+        const layer = {
+          historySchemas: new Set(["sensor_msgs/LaserScan"]),
+          addHistoricalMessage: vi.fn(),
+        };
+        const customRendererInstance = createMockRenderer({
+          schemaSubscriptions: new Map([
+            ["sensor_msgs/LaserScan", [{}]],
+            ["tf2_msgs/TFMessage", [{ preload: true }]],
+          ]),
+          sceneExtensions: new Map([["laserScans", layer]]),
+          currentTime: 100_000_000_000n,
+        });
+        vi.mocked(Renderer).mockImplementationOnce(function () {
+          return customRendererInstance as any;
+        });
+        const mockContext = createPreloadingContext({
+          initialState: {
+            scene: { transforms: { enablePreloading: false } },
+            topics: { "/scan": { visible: true, decayTime: 30 }, "/tf": { visible: true } },
+          },
+        });
+        render(<ThreeDeeRender {...setup({}, mockContext)} />);
+        await waitFor(() => {
+          expect(mockContext.onRender).toBeDefined();
+        });
+
+        // The decay topic appears (as when its decay time is set): no seek
+        act(() => {
+          mockContext.onRender!(
+            {
+              topics: [
+                scanTopic,
+                RenderStateBuilder.topic({ name: "/tf", schemaName: "tf2_msgs/TFMessage" }),
+              ],
+              currentFrame: [],
+            },
+            vi.fn(),
+          );
+        });
+
+        await waitFor(() => {
+          expect(mockContext.unstable_subscribeMessageRange).toHaveBeenCalledWith(
+            expect.objectContaining({
+              topic: "/tf",
+              start: { sec: 70, nsec: 0 },
+              end: { sec: 100, nsec: 0 },
+            }),
+          );
+        });
+      });
+
       it("skips topics whose layer takes no history", async () => {
         const { mockContext } = renderWithDecay({ "/raw": { visible: true, decayTime: 30 } });
         await start(mockContext);

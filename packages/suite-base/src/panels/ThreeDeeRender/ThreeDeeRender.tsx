@@ -81,6 +81,17 @@ const LAYER_ERROR_LOG_GRACE_MS = 3000;
 
 const log = Logger.getLogger(__filename);
 
+/** Frames placed under a parent, which reads of transforms around a time should refresh */
+function placedFrameIds(renderer: Renderer): string[] {
+  const ids: string[] = [];
+  for (const frame of renderer.transformTree.frames().values()) {
+    if (frame.parent()) {
+      ids.push(frame.id);
+    }
+  }
+  return ids;
+}
+
 /**
  * A panel that renders a 3D scene. This is a thin wrapper around a `Renderer` instance.
  */
@@ -643,32 +654,6 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
     [renderer, decayTopicsRef],
   );
   useLayoutEffect(() => () => decayReadRef.current?.abort(), [readDecayHistory]);
-  // A new or longer decay time shows its window at once, read for just that topic (scans already
-  // in the history are skipped before decoding); with no decayed topic left, the reads stop
-  const decayReadNsRef = useRef(new Map<string, bigint>());
-  // A new renderer starts with empty histories: every decayed topic counts as new
-  useEffect(() => {
-    decayReadNsRef.current = new Map();
-  }, [renderer]);
-  useEffect(() => {
-    if (!renderer) {
-      return;
-    }
-    const grown = new Set<string>();
-    const readNs = new Map<string, bigint>();
-    for (const { topic, decayNs } of decayTopicsRef.current) {
-      readNs.set(topic, decayNs);
-      if (decayNs > (decayReadNsRef.current.get(topic) ?? 0n)) {
-        grown.add(topic);
-      }
-    }
-    decayReadNsRef.current = readNs;
-    if (readNs.size === 0) {
-      readDecayHistory(renderer.currentTime); // stops the reads
-    } else if (grown.size > 0) {
-      readDecayHistory(renderer.currentTime, grown);
-    }
-  }, [renderer, decayKey, readDecayHistory, decayTopicsRef]);
 
   // After a seek past the preloaded history (or with preloading off), read the transforms just
   // before the new time, so every frame is placed right without waiting for preloading. The first
@@ -714,6 +699,35 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
   // A layout effect, declared before the preloading one: React runs its cleanup before that effect
   // starts a new read, so the cleanup cannot cancel it (a passive cleanup would run after).
   useLayoutEffect(() => () => seekReadRef.current?.abort(), [readTransformsAfterSeek]);
+
+  // A new or longer decay time shows its window at once, read for just that topic (scans already
+  // in the history are skipped before decoding), with the transforms of the new window so the
+  // older scans are placed (e.g. while paused); with no decayed topic left, the reads stop
+  const decayReadNsRef = useRef(new Map<string, bigint>());
+  // A new renderer starts with empty histories: every decayed topic counts as new
+  useEffect(() => {
+    decayReadNsRef.current = new Map();
+  }, [renderer]);
+  useEffect(() => {
+    if (!renderer) {
+      return;
+    }
+    const grown = new Set<string>();
+    const readNs = new Map<string, bigint>();
+    for (const { topic, decayNs } of decayTopicsRef.current) {
+      readNs.set(topic, decayNs);
+      if (decayNs > (decayReadNsRef.current.get(topic) ?? 0n)) {
+        grown.add(topic);
+      }
+    }
+    decayReadNsRef.current = readNs;
+    if (readNs.size === 0) {
+      readDecayHistory(renderer.currentTime); // stops the reads
+    } else if (grown.size > 0) {
+      readTransformsAfterSeek(renderer.currentTime, placedFrameIds(renderer));
+      readDecayHistory(renderer.currentTime, grown);
+    }
+  }, [renderer, decayKey, readDecayHistory, readTransformsAfterSeek, decayTopicsRef]);
 
   // Preloading: read the whole transform history into the renderer's transform tree
   useLayoutEffect(() => {
@@ -984,14 +998,9 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
     renderer.setCurrentTime(newTimeNs);
     if (didSeek) {
       // Frames placed before the seek, collected before handleSeek may clear them
-      const knownFrameIds: string[] = [];
-      for (const frame of renderer.transformTree.frames().values()) {
-        if (frame.parent()) {
-          knownFrameIds.push(frame.id);
-        }
-      }
+      const frameIds = placedFrameIds(renderer);
       renderer.handleSeek(oldTimeNs);
-      readTransformsAfterSeek(newTimeNs, knownFrameIds);
+      readTransformsAfterSeek(newTimeNs, frameIds);
       readDecayHistory(newTimeNs);
       setDidSeek(false);
     }

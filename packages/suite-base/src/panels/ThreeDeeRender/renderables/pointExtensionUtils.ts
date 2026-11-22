@@ -169,9 +169,24 @@ export const DECAY_HISTORY_LIMITS: HistoryLimits = { maxEntries: 1_000, maxPoint
 export const DECAY_LIMITED = "DECAY_LIMITED";
 
 /**
+ * Tells apart distinct records received at the same time with the same header stamp (e.g. the
+ * segments of one sweep published together): a hash of the payload's size and up to 64 values
+ * spread across it. Messages carry no record id (offset or sequence) to use instead.
+ */
+export function payloadFingerprint(values: ArrayLike<number>): number {
+  let hash = Math.imul(0x811c9dc5 ^ values.length, 16777619);
+  const step = Math.max(1, Math.floor(values.length / 64));
+  for (let i = 0; i < values.length; i += step) {
+    hash = Math.imul(hash ^ (Math.round(values[i]! * 4096) | 0), 16777619);
+  }
+  return hash >>> 0;
+}
+
+/**
  * A scene extension that takes messages read back after a seek: ones newer than what it draws (or
- * when it draws nothing yet) are handled like played ones, older ones only go into the decay
- * history. They aren't synchronized with other topics; historical scans have nothing to wait for.
+ * when it draws nothing yet) go through the playback path like played ones (timestamp sync
+ * included); older ones only go into the decay history, unsynchronized, since historical scans
+ * have nothing to wait for.
  */
 export type DecayHistoryIngest = {
   /** Schemas it takes history for */
@@ -244,6 +259,8 @@ export function updateDecayNotice({
 type HistoryEntry<TRenderable extends HistoryRenderable> = {
   receiveTime: bigint;
   messageTime: bigint;
+  /** See payloadFingerprint; unknown for the entry a history starts with */
+  fingerprint?: number;
   renderable: TRenderable;
 };
 
@@ -282,10 +299,13 @@ export class RenderObjectHistory<TRenderable extends HistoryRenderable> {
     this.#evictOldest(this.#history.length - this.#limits.maxEntries);
   }
 
-  /** Whether an entry for the message received at `receiveTime` and stamped `messageTime` exists */
-  public has(receiveTime: bigint, messageTime: bigint): boolean {
+  /** Whether an entry for this record (times and payload fingerprint) exists */
+  public has(receiveTime: bigint, messageTime: bigint, fingerprint: number): boolean {
     return this.#history.some(
-      (entry) => entry.receiveTime === receiveTime && entry.messageTime === messageTime,
+      (entry) =>
+        entry.receiveTime === receiveTime &&
+        entry.messageTime === messageTime &&
+        (entry.fingerprint == undefined || entry.fingerprint === fingerprint),
     );
   }
 
@@ -298,6 +318,8 @@ export class RenderObjectHistory<TRenderable extends HistoryRenderable> {
     }
     this.#history.splice(at, 0, entry);
     this.#evictOldest(this.#history.length - this.#limits.maxEntries);
+    // A read-back window inserts many entries before the next frame trims them: cap it here
+    this.#enforcePointBudget();
   }
 
   /** Disposes the `count` oldest entries, always keeping the latest. */

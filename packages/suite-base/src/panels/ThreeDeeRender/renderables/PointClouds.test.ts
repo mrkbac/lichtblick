@@ -10,7 +10,7 @@ import { ColorModeSettings } from "@lichtblick/suite-base/panels/ThreeDeeRender/
 import { DEFAULT_POINT_SETTINGS } from "@lichtblick/suite-base/panels/ThreeDeeRender/settingsNodes/topics";
 import { updatePose } from "@lichtblick/suite-base/panels/ThreeDeeRender/updatePose";
 
-import { createStixelMaterial, PointCloudHistoryRenderable } from "./PointClouds";
+import { createStixelMaterial, PointCloudHistoryRenderable, PointClouds } from "./PointClouds";
 import { getColorConverter } from "./colorMode";
 import { DecayPointRing } from "./pointClouds/DecayPointRing";
 import { DECAY_LIMITED } from "./pointExtensionUtils";
@@ -368,5 +368,30 @@ describe("PointCloudHistoryRenderable decay", () => {
     // Long after: the history is empty because its window passed, not because of the budget
     renderable.startFrame(100_000_000_000n, "map", "map");
     expect(errors.hasError(path, DECAY_LIMITED)).toBe(false);
+  });
+});
+
+describe("PointClouds read-back history", () => {
+  it("promotes a scan newer than the drawn one through the playback path, so sync applies", () => {
+    const addMessageEvent = vi.fn();
+    const extension = new PointClouds({
+      ...rendererMock,
+      hud: {},
+      config: { topics: {} },
+      topics: [],
+      addMessageEvent,
+      settings: { ...rendererMock.settings, setNodesForKey: vi.fn() },
+    } as unknown as Renderer);
+    const messageEvent = {
+      topic: "/points",
+      schemaName: "sensor_msgs/PointCloud2",
+      receiveTime: { sec: 5, nsec: 0 },
+      message: makeCloud(),
+      sizeInBytes: 0,
+    };
+
+    extension.addHistoricalMessage(messageEvent); // nothing drawn yet: it may become the latest
+
+    expect(addMessageEvent).toHaveBeenCalledWith(messageEvent);
   });
 });
