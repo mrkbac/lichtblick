@@ -600,7 +600,9 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [renderer, transformTopics],
   );
-  useEffect(() => () => seekReadRef.current?.abort(), [readTransformsAfterSeek]);
+  // A layout effect, declared before the preloading one: React runs its cleanup before that effect
+  // starts a new read, so the cleanup cannot cancel it (a passive cleanup would run after).
+  useLayoutEffect(() => () => seekReadRef.current?.abort(), [readTransformsAfterSeek]);
 
   // Preloading: read the whole transform history into the renderer's transform tree
   useLayoutEffect(() => {
@@ -611,8 +613,9 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
     setIsLoadingTransforms(false);
     setLoadedTransformCount(0);
     const topicNames = new Set(transformTopics.map(({ topic }) => topic));
-    const topicsChanged = [...topicNames].sort().join("\n") !== transformTopicNamesRef.current;
-    transformTopicNamesRef.current = [...topicNames].sort().join("\n");
+    const topicsKey = [...topicNames].sort().join("\n");
+    const topicsChanged = topicsKey !== transformTopicNamesRef.current;
+    transformTopicNamesRef.current = topicsKey;
     if (
       renderer.transformTree.isComplete() ||
       (topicsChanged && renderer.transformTree.frames().size > 0)

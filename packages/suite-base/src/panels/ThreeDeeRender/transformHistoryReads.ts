@@ -120,7 +120,7 @@ export async function readTransformsBefore(args: {
     // Next window only reads the older part; ranges are inclusive, so step one nanosecond back
     end = start - 1n;
   }
-  return true;
   // ponytail: frames silent for over SEEK_LOOKBACK_NS stay missing (e.g. a dynamic frame that
   // stopped publishing long ago); widen the last window if that matters.
+  return true;
 }

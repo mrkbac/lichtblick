@@ -1218,6 +1218,66 @@ describe("ThreeDeeRender", () => {
       });
     });
 
+    it("keeps the read that restores transforms after a topic change running", async () => {
+      // Given: preloading off, a tree filled from /tf and /tf_static, and range reads that take a
+      // while (they never finish here)
+      const tf = RenderStateBuilder.topic({ name: "/tf", schemaName: "tf2_msgs/TFMessage" });
+      const tfStatic = RenderStateBuilder.topic({
+        name: "/tf_static",
+        schemaName: "tf2_msgs/TFMessage",
+      });
+      const customRendererInstance = createMockRenderer({
+        schemaSubscriptions: new Map([["tf2_msgs/TFMessage", [{ preload: true }]]]),
+      });
+      vi.mocked(Renderer).mockImplementationOnce(function () {
+        return customRendererInstance as any;
+      });
+      const cancels: Mock[] = [];
+      const mockContext = createPreloadingContext({
+        initialState: {
+          scene: { transforms: { enablePreloading: false } },
+          topics: { "/tf": { visible: true }, "/tf_static": { visible: true } },
+        },
+        onSubscribe: (args: any) => {
+          void args.onNewRangeIterator?.({
+            // oxlint-disable-next-line require-yield -- a read that never delivers
+            async *[Symbol.asyncIterator]() {
+              await new Promise(() => {});
+            },
+          });
+          const cancel = vi.fn();
+          cancels.push(cancel);
+          return cancel;
+        },
+      });
+      render(<ThreeDeeRender {...setup({}, mockContext)} />);
+      await waitFor(() => {
+        expect(mockContext.onRender).toBeDefined();
+      });
+      act(() => {
+        mockContext.onRender!({ topics: [tf, tfStatic], currentFrame: [] }, vi.fn());
+      });
+      customRendererInstance.transformTree.frames.mockReturnValue(
+        new Map([["base", { id: "base", parent: () => ({ id: "map" }) }]]),
+      );
+
+      // When: /tf_static goes away, which starts the history over and reads /tf again
+      act(() => {
+        mockContext.onRender!({ topics: [tf], currentFrame: [] }, vi.fn());
+      });
+
+      // Then: that read is still running once all effects have run
+      await waitFor(() => {
+        expect(mockContext.unstable_subscribeMessageRange).toHaveBeenLastCalledWith(
+          expect.objectContaining({ topic: "/tf" }),
+        );
+      });
+      await act(async () => {
+        await Promise.resolve();
+      });
+      expect(cancels.at(-1)).not.toHaveBeenCalled();
+    });
+
     it("keeps widening the seek read until it refreshes every known frame", async () => {
       // Given: frames A and B are known; a cached transform must not count as refreshed. The first
       // window only gives B a transform, the second one gives A one.
