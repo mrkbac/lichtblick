@@ -63,8 +63,8 @@ type NormalizedAnnotations = {
   // required for setting the original message on the renderable
   originalMessage: MessageEvent<RosImageMarkerArray | RosImageMarker | FoxgloveImageAnnotations>;
   annotations: Annotation[];
-  /** In the sync tree: this stamp's share of the message size */
-  bytes?: number;
+  /** In the sync tree: shared by every group of the message, which is charged in full until all go */
+  charge?: { bytes: number; groups: number };
 };
 
 type SynchronizationItem = {
@@ -86,6 +86,8 @@ type MessageHandlerState = {
   presentAnnotationTopics?: string[];
   /** Topics that were missing so that a synchronized set could not be found */
   missingAnnotationTopics?: string[];
+  /** Synchronized annotations keep arriving but no image is buffered to match them */
+  waitingForImage?: boolean;
 };
 
 export type MessageRenderState = Readonly<Partial<MessageHandlerState>>;
@@ -166,7 +168,7 @@ export class MessageHandler {
   /** sorted tree that holds state for synchronized messages. Used to find most recent synchronized set of image and annotations. */
   readonly #tree: AVLTree<Time, SynchronizationItem>;
 
-  /** Total {@link itemBytes} of `#tree` */
+  /** Image bytes in `#tree` plus the full size of every annotation message with a group in it */
   #treeBytes = 0;
 
   /** Stamp of the synchronized set being shown; everything older is dropped from `#tree` */
@@ -279,7 +281,17 @@ export class MessageHandler {
   }
 
   #shiftSyncItem(): void {
-    this.#treeBytes -= itemBytes(this.#tree.shift()?.[1]);
+    const item = this.#tree.shift()?.[1];
+    this.#treeBytes -= imageBytes(item?.image);
+    for (const annotations of item?.annotationsByTopic.values() ?? []) {
+      this.#releaseAnnotations(annotations);
+    }
+  }
+
+  #releaseAnnotations({ charge }: NormalizedAnnotations): void {
+    if (charge && --charge.groups === 0) {
+      this.#treeBytes -= charge.bytes;
+    }
   }
 
   #clearSyncItems(): void {
@@ -320,6 +332,10 @@ export class MessageHandler {
       groups.set(key, [annotation]);
     }
 
+    const charge = { bytes: messageEvent.sizeInBytes, groups: groups.size };
+    if (groups.size > 0) {
+      this.#treeBytes += charge.bytes;
+    }
     for (const [stampNsec, group] of groups) {
       const stamp = fromNanoSec(stampNsec);
       let item = this.#tree.get(stamp);
@@ -330,12 +346,14 @@ export class MessageHandler {
         };
         this.#tree.set(stamp, item);
       }
-      const bytes = Math.ceil(messageEvent.sizeInBytes / groups.size);
-      this.#treeBytes += bytes - (item.annotationsByTopic.get(topic)?.bytes ?? 0);
+      const replaced = item.annotationsByTopic.get(topic);
+      if (replaced) {
+        this.#releaseAnnotations(replaced);
+      }
       item.annotationsByTopic.set(topic, {
         originalMessage: messageEvent,
         annotations: group,
-        bytes,
+        charge,
       });
       this.#touched.push(stamp);
     }
@@ -393,7 +411,7 @@ export class MessageHandler {
       for (const syncEntry of this.#tree.values()) {
         for (const topic of syncEntry.annotationsByTopic.keys()) {
           if (!newVisibleTopics.has(topic)) {
-            this.#treeBytes -= syncEntry.annotationsByTopic.get(topic)?.bytes ?? 0;
+            this.#releaseAnnotations(syncEntry.annotationsByTopic.get(topic)!);
             syncEntry.annotationsByTopic.delete(topic);
             changed = true;
           }
@@ -443,7 +461,8 @@ export class MessageHandler {
     const calibrationRequired = this.#config.calibrationTopic != undefined;
 
     const waitingForImage =
-      this.#lastReceivedMessages.image == undefined && state.image == undefined;
+      state.image == undefined &&
+      (this.#lastReceivedMessages.image == undefined || state.waitingForImage === true);
 
     const waitingForCalibration = calibrationRequired && state.cameraInfo == undefined;
 
@@ -493,6 +512,8 @@ export class MessageHandler {
         cameraInfo: this.#lastReceivedMessages.cameraInfo,
         presentAnnotationTopics: result.presentAnnotationTopics,
         missingAnnotationTopics: result.missingAnnotationTopics,
+        // No image buffered (the camera stopped) while annotations are: the last match expired
+        waitingForImage: result.missingAnnotationTopics == undefined && this.#tree.size > 0,
       };
     }
     return { ...this.#lastReceivedMessages };
@@ -595,14 +616,6 @@ type SynchronizationResult =
        */
       missingAnnotationTopics: string[] | undefined;
     };
-
-function itemBytes(item: SynchronizationItem | undefined): number {
-  let bytes = imageBytes(item?.image);
-  for (const annotations of item?.annotationsByTopic.values() ?? []) {
-    bytes += annotations.bytes ?? 0;
-  }
-  return bytes;
-}
 
 function imageBytes(image: Readonly<MessageEvent<AnyImage>> | undefined): number {
   return image?.message.data.byteLength ?? 0;

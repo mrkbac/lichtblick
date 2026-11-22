@@ -378,6 +378,54 @@ describe("MessageHandler: synchronized = true", () => {
     expect(state.missingAnnotationTopics).toEqual(["annotations"]);
   });
 
+  it("reports waiting for images once the camera stops and the match ages out", () => {
+    const hud = new HUDItemManager(() => {});
+    const messageHandler = new MessageHandler(
+      { synchronize: true, annotations: { annotations: { visible: true } } },
+      hud,
+    );
+    messageHandler.setAvailableAnnotationTopics(["annotations"]);
+    messageHandler.handleRawImage(imageAt(SEC));
+    messageHandler.handleAnnotations(annotationsAt(SEC));
+    expect(renderedStamp(messageHandler)).toEqual(fromNanoSec(SEC));
+    // Images stop; annotations keep coming
+    for (let sec = 2n; sec <= 12n; sec++) {
+      messageHandler.handleAnnotations(annotationsAt(sec * SEC));
+    }
+    const state = messageHandler.getRenderStateAndUpdateHUD();
+    expect(state.image).toBeUndefined();
+    expect(state.waitingForImage).toBe(true);
+    expect(hud.getHUDItems()).toEqual([WAITING_FOR_IMAGE_EMPTY_HUD_ITEM]);
+  });
+
+  it("charges an annotation message in full while any of its stamps is buffered", () => {
+    const messageHandler = syncedHandler();
+    const sized = (message: MessageEvent<ImageAnnotations>, sizeInBytes: number) => ({
+      ...message,
+      sizeInBytes,
+    });
+    // One message covering stamps 1 and 4
+    messageHandler.handleAnnotations(
+      sized(
+        wrapInMessageEvent(
+          "annotations",
+          "foxglove.ImageAnnotations",
+          4n,
+          createCircleAnnotations([1n, 4n]),
+        ) as MessageEvent<ImageAnnotations>,
+        Math.floor(SYNC_BYTES * 0.6),
+      ),
+    );
+    messageHandler.handleRawImage(imageAt(1n));
+    messageHandler.handleAnnotations(annotationsAt(2n));
+    messageHandler.handleRawImage(imageAt(2n));
+    expect(renderedStamp(messageHandler)).toEqual(fromNanoSec(2n));
+    // Stamp 1 is released, but stamp 4 still holds the whole message: an image of 45% doesn't fit
+    messageHandler.handleRawImage(imageAt(3n, new Uint8Array(Math.floor(SYNC_BYTES * 0.45))));
+    messageHandler.handleAnnotations(annotationsAt(3n));
+    expect(renderedStamp(messageHandler)).toBeUndefined();
+  });
+
   it("keeps matching after one future-stamped image", () => {
     const messageHandler = syncedHandler();
     messageHandler.handleRawImage(imageAt(1000n * SEC));
