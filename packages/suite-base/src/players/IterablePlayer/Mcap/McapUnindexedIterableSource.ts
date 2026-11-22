@@ -222,7 +222,9 @@ export class McapUnindexedIterableSource implements ISerializedIterableSource {
     }
     let offset = MCAP_MAGIC.length;
     while (offset + RECORD_PREFIX_BYTES <= size) {
-      const prefix = await reader.read(offset, RECORD_PREFIX_BYTES, offset + READ_WINDOW_BYTES);
+      const prefix =
+        reader.peek(offset, RECORD_PREFIX_BYTES) ??
+        (await reader.read(offset, RECORD_PREFIX_BYTES, offset + READ_WINDOW_BYTES));
       const prefixView = new DataView(prefix.buffer, prefix.byteOffset, prefix.byteLength);
       const opcode = prefix[0]!;
       const length = RECORD_PREFIX_BYTES + Number(prefixView.getBigUint64(1, true));
@@ -249,7 +251,8 @@ export class McapUnindexedIterableSource implements ISerializedIterableSource {
       try {
         switch (opcode) {
           case Opcode.MESSAGE: {
-            const head = await reader.read(offset, MESSAGE_DATA_AT);
+            const head =
+              reader.peek(offset, MESSAGE_DATA_AT) ?? (await reader.read(offset, MESSAGE_DATA_AT));
             columns.add(new DataView(head.buffer, head.byteOffset), 0, length, -1, offset);
             break;
           }
@@ -402,8 +405,13 @@ export class McapUnindexedIterableSource implements ISerializedIterableSource {
       i < index.count && index.logTimes[i]! <= endNs;
       i++
     ) {
-      if (wanted[index.channels[i]!] === 1) {
-        const msgEvent = await this.#readMessage(i, reader, (from) => {
+      if (wanted[index.channels[i]!] !== 1) {
+        continue;
+      }
+      // Most reads hit the current window or a cached chunk: no await for those
+      const record =
+        this.#peekRecord(i, reader) ??
+        (await this.#loadRecord(i, reader, (from) => {
           // Read up to the further wanted messages close by in the same window
           let until = 0;
           const windowEnd = from + READ_WINDOW_BYTES;
@@ -418,9 +426,8 @@ export class McapUnindexedIterableSource implements ISerializedIterableSource {
             }
           }
           return until;
-        });
-        yield { type: "message-event", msgEvent };
-      }
+        }));
+      yield { type: "message-event", msgEvent: this.#messageEvent(i, record) };
     }
   }
 
@@ -444,7 +451,8 @@ export class McapUnindexedIterableSource implements ISerializedIterableSource {
       const channelId = index.channels[i]!;
       const topic = this.#channelInfoById.get(channelId)?.channel.topic;
       if (wanted[channelId] === 1 && topic != undefined && !found.has(topic)) {
-        found.set(topic, await this.#readMessage(i, reader));
+        const record = this.#peekRecord(i, reader) ?? (await this.#loadRecord(i, reader));
+        found.set(topic, this.#messageEvent(i, record));
       }
     }
     return [...found.values()];
@@ -468,20 +476,36 @@ export class McapUnindexedIterableSource implements ISerializedIterableSource {
     return wanted;
   }
 
-  /** Message `i` of the index; `readUntil` says how far past it to read into the window on a miss */
-  async #readMessage(
-    i: number,
-    reader: WindowedReader,
-    readUntil?: (from: number) => number,
-  ): Promise<MessageEvent<Uint8Array>> {
+  /** The record of message `i` if it is in the reader's window or a cached chunk */
+  #peekRecord(i: number, reader: WindowedReader): Uint8Array | undefined {
     const index = this.#index!;
     const position = index.positions[i]!;
     const length = index.lengths[i]!;
     const chunk = index.chunks[i]!;
-    const record =
-      chunk === -1
-        ? await reader.read(position, length, readUntil)
-        : (await this.#chunkRecords(chunk)).subarray(position, position + length);
+    if (chunk === -1) {
+      return reader.peek(position, length);
+    }
+    const records = this.#chunkCache.get(chunk);
+    return records?.subarray(position, position + length);
+  }
+
+  /** The record of message `i`; `readUntil` says how far past it to read into the window */
+  async #loadRecord(
+    i: number,
+    reader: WindowedReader,
+    readUntil?: (from: number) => number,
+  ): Promise<Uint8Array> {
+    const index = this.#index!;
+    const position = index.positions[i]!;
+    const length = index.lengths[i]!;
+    const chunk = index.chunks[i]!;
+    return chunk === -1
+      ? await reader.read(position, length, readUntil)
+      : (await this.#chunkRecords(chunk)).subarray(position, position + length);
+  }
+
+  #messageEvent(i: number, record: Uint8Array): MessageEvent<Uint8Array> {
+    const index = this.#index!;
     const view = new DataView(record.buffer, record.byteOffset, record.byteLength);
     const info = this.#channelInfoById.get(index.channels[i]!)!;
     // A copy: the event's buffer is transferred to the main thread, which detaches it
@@ -652,28 +676,38 @@ class WindowedReader {
     this.#size = size;
   }
 
+  /** `length` bytes at `offset` if they are in the window */
+  public peek(offset: number, length: number): Uint8Array | undefined {
+    const buffered = this.#buffered;
+    if (
+      !buffered ||
+      offset < buffered.offset ||
+      offset + length > buffered.offset + buffered.bytes.byteLength
+    ) {
+      return undefined;
+    }
+    const at = offset - buffered.offset;
+    return buffered.bytes.subarray(at, at + length);
+  }
+
   /** `length` bytes at `offset`; on a miss the window is read from `offset` up to `until` */
   public async read(
     offset: number,
     length: number,
     until?: number | ((offset: number) => number),
   ): Promise<Uint8Array> {
-    let buffered = this.#buffered;
-    if (
-      !buffered ||
-      offset < buffered.offset ||
-      offset + length > buffered.offset + buffered.bytes.byteLength
-    ) {
-      const readUntil = typeof until === "function" ? until(offset) : (until ?? 0);
-      const end = Math.min(this.#size, Math.max(offset + length, readUntil));
-      const bytes = await this.#readable.read(BigInt(offset), BigInt(end - offset));
-      if (bytes.byteLength < length) {
-        throw new Error(`Read ${bytes.byteLength} bytes at ${offset}, expected ${length}`);
-      }
-      buffered = this.#buffered = { offset, bytes };
+    const hit = this.peek(offset, length);
+    if (hit) {
+      return hit;
     }
-    const at = offset - buffered.offset;
-    return buffered.bytes.subarray(at, at + length);
+    const readUntil = typeof until === "function" ? until(offset) : (until ?? 0);
+    const end = Math.min(this.#size, Math.max(offset + length, readUntil));
+    const bytes = await this.#readable.read(BigInt(offset), BigInt(end - offset));
+    if (bytes.byteLength < length) {
+      throw new Error(`Read ${bytes.byteLength} bytes at ${offset}, expected ${length}`);
+    }
+    this.#buffered = { offset, bytes };
+    return bytes.subarray(0, length);
   }
 }
 
