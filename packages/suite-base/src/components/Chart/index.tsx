@@ -273,23 +273,29 @@ function Chart(props: Props): React.JSX.Element {
 
       isSending.current = true;
 
-      while (queuedUpdates.current.length > 0) {
-        const { current: updates } = queuedUpdates;
-        if (updates.length === 0) {
-          break;
+      try {
+        while (queuedUpdates.current.length > 0) {
+          const { current: updates } = queuedUpdates;
+          if (updates.length === 0) {
+            break;
+          }
+
+          // We merge all of the pending updates together to do as few renders as
+          // possible when we fall behind
+          const coalesced = Object.assign({}, ...updates) as (typeof updates)[number];
+          onStartRender?.();
+          try {
+            const scales = await send<RpcScales>("update", coalesced);
+            maybeUpdateScales(scales);
+          } finally {
+            // A failed update must not leave the message pipeline paused.
+            onFinishRender?.();
+          }
+          queuedUpdates.current = queuedUpdates.current.slice(updates.length);
         }
-
-        // We merge all of the pending updates together to do as few renders as
-        // possible when we fall behind
-        const coalesced = Object.assign({}, ...updates) as (typeof updates)[number];
-        onStartRender?.();
-        const scales = await send<RpcScales>("update", coalesced);
-        maybeUpdateScales(scales);
-        onFinishRender?.();
-        queuedUpdates.current = queuedUpdates.current.slice(updates.length);
+      } finally {
+        isSending.current = false;
       }
-
-      isSending.current = false;
     },
     [maybeUpdateScales, onFinishRender, onStartRender],
   );
@@ -324,13 +330,21 @@ function Chart(props: Props): React.JSX.Element {
           ? canvas.transferControlToOffscreen()
           : canvas;
 
-      // Using queueMicrotask to ensure the canvas is completely inserted into the DOM
-      // before sending the initialization request to the worker.
-      queueMicrotask(async () => {
-        if (!sendWrapperRef.current) {
-          return;
-        }
-        const scales = await sendWrapperRef.current<RpcScales>(
+      // Wait a microtask so the canvas is completely inserted into the DOM before the worker takes
+      // it over. Awaited rather than queued, so a failed initialize reaches the caller.
+      await new Promise<void>((resolve) => {
+        queueMicrotask(resolve);
+      });
+      // The chart may have unmounted while we waited.
+      const send = sendWrapperRef.current as RpcSend | undefined;
+      if (send == undefined) {
+        onFinishRender?.();
+        return;
+      }
+      try {
+        // Its scales aren't published: they are the placeholder bounds the chart had before the
+        // first update, which a synced plot would otherwise adopt. The first update publishes.
+        await send<RpcScales>(
           "initialize",
           {
             node: offscreenCanvas,
@@ -348,24 +362,24 @@ function Chart(props: Props): React.JSX.Element {
             offscreenCanvas as OffscreenCanvas,
           ],
         );
-        maybeUpdateScales(scales);
+      } finally {
         onFinishRender?.();
+      }
 
-        // We cannot rely solely on the call to `initialize`, since it doesn't
-        // actually produce the first frame. However, if we append this update to
-        // the end, it will overwrite updates that have been queued _since we
-        // started initializing_. This is incorrect behavior and can set the
-        // scales incorrectly on weak devices.
-        //
-        // To prevent this from happening, we put this update at the beginning of
-        // the queue so that it gets coalesced properly.
-        queuedUpdates.current = [update, ...queuedUpdates.current];
-        await flushUpdates(sendWrapperRef.current);
-        // once we are initialized, we can allow other handlers to send to the rpc endpoint
-        rpcSendRef.current = sendWrapperRef.current;
-      });
+      // We cannot rely solely on the call to `initialize`, since it doesn't
+      // actually produce the first frame. However, if we append this update to
+      // the end, it will overwrite updates that have been queued _since we
+      // started initializing_. This is incorrect behavior and can set the
+      // scales incorrectly on weak devices.
+      //
+      // To prevent this from happening, we put this update at the beginning of
+      // the queue so that it gets coalesced properly.
+      queuedUpdates.current = [update, ...queuedUpdates.current];
+      await flushUpdates(send);
+      // once we are initialized, we can allow other handlers to send to the rpc endpoint
+      rpcSendRef.current = send;
     },
-    [maybeUpdateScales, onFinishRender, onStartRender, type, flushUpdates],
+    [onFinishRender, onStartRender, type, flushUpdates],
   );
 
   const [updateError, setUpdateError] = useState<Error | undefined>();

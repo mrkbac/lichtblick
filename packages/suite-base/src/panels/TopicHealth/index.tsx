@@ -659,9 +659,9 @@ function TopicHealthTable({ config, saveConfig }: Props): React.JSX.Element {
                           {timing ? formatSeconds(timing.jitterNs / 1e9) : "—"}
                         </td>
                         <td className={classes.number}>
-                          {row.inspection?.largestInterval
+                          {row.inspection?.largestIntervals[0]
                             ? formatSeconds(
-                                Number(row.inspection.largestInterval.nanoseconds) / 1e9,
+                                Number(row.inspection.largestIntervals[0].nanoseconds) / 1e9,
                               )
                             : "—"}
                         </td>

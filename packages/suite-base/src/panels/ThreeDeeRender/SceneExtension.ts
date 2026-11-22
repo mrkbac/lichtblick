@@ -256,7 +256,14 @@ export class SceneExtension<
         srcTime,
       );
       if (!updated) {
-        const message = missingTransformMessage(renderFrameId, fixedFrameId, frameId);
+        const message = missingTransformMessage(
+          this.renderer.transformTree,
+          renderFrameId,
+          fixedFrameId,
+          frameId,
+          currentTime,
+          srcTime,
+        );
         this.renderer.settings.errors.add(path, MISSING_TRANSFORM, message);
       } else {
         this.renderer.settings.errors.remove(path, MISSING_TRANSFORM);

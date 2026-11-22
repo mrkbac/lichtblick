@@ -329,7 +329,14 @@ export class RenderObjectHistory<TRenderable extends HistoryRenderable> {
         srcTime,
       );
       if (!updated && !hadTfError) {
-        const message = missingTransformMessage(renderFrameId, fixedFrameId, frameId);
+        const message = missingTransformMessage(
+          this.#renderer.transformTree,
+          renderFrameId,
+          fixedFrameId,
+          frameId,
+          currentTime,
+          srcTime,
+        );
         this.#renderer.settings.errors.add(
           this.#parentRenderable.userData.settingsPath,
           MISSING_TRANSFORM,

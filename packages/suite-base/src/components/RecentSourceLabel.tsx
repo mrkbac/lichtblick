@@ -47,7 +47,7 @@ export function RecentSourceLabel({ recent, hidePinIndicator = false }: Props): 
         </span>
         <div className={classes.text}>
           <Typography variant="body2" noWrap>
-            {primary}
+            {recent.name ?? primary}
           </Typography>
           {secondary !== "" && (
             <Typography variant="caption" noWrap component="div" color="textSecondary">
