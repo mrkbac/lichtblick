@@ -111,6 +111,33 @@ describe("useLayoutTransfer", () => {
     expect(onSelectLayoutMock).not.toHaveBeenCalled();
   });
 
+  it.each([undefined, false, true])(
+    "requires approval for imported scripts with trust marker %s",
+    async (untrusted) => {
+      const data = LayoutBuilder.data({
+        userNodes: { sample: { name: "Sample", sourceCode: "export default () => 1;" } },
+      });
+      const content = JSON.stringify({ ...data, untrusted }) ?? "";
+      const file = new File([content], "imported.json");
+      file.text = async () => content;
+      const newLayout = LayoutBuilder.layout({ untrusted: true });
+      saveNewLayoutMock.mockResolvedValue(newLayout);
+      const { result } = renderHook(() => useLayoutTransfer());
+
+      await act(async () => {
+        await result.current.parseAndInstallLayout(file, "local");
+      });
+
+      expect(saveNewLayoutMock).toHaveBeenCalledWith({
+        name: "imported",
+        data,
+        permission: "CREATOR_WRITE",
+        untrusted: true,
+      });
+      expect(onSelectLayoutMock).toHaveBeenCalledWith(newLayout);
+    },
+  );
+
   it("should import a layout and call onSelectLayout", async () => {
     promptForUnsavedChangesMock.mockResolvedValue(true);
     const content = JSON.stringify(LayoutBuilder.data()) ?? "";
