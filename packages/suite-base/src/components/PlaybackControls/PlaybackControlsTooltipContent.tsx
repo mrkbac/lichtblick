@@ -9,6 +9,7 @@ import { compare as compareTimes, subtract as subtractTimes, toSec, Time } from 
 import { Divider, Typography } from "@mui/material";
 import * as _ from "lodash-es";
 import { Fragment, useEffect, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import { makeStyles } from "tss-react/mui";
 
 import {
@@ -17,7 +18,10 @@ import {
   useCompare,
 } from "@lichtblick/suite-base/components/Compare/CompareContext";
 import { useMessagePipeline } from "@lichtblick/suite-base/components/MessagePipeline";
-import { selectStartTime } from "@lichtblick/suite-base/components/MessagePipeline/selectors";
+import {
+  selectEndTime,
+  selectStartTime,
+} from "@lichtblick/suite-base/components/MessagePipeline/selectors";
 import {
   TimelineInteractionStateStore,
   useTimelineInteractionState,
@@ -25,6 +29,7 @@ import {
 import { useAppTimeFormat } from "@lichtblick/suite-base/hooks";
 import { customTypography } from "@lichtblick/theme";
 
+import { isGap, useDensity } from "./DensityStrip";
 import { THUMBNAIL_WIDTH } from "./scrubPreview";
 
 type PlaybackControlsTooltipItem =
@@ -91,6 +96,9 @@ export function PlaybackControlsTooltipContent(params: {
   const hoveredEvents = useTimelineInteractionState(selectHoveredEvents);
   const startTime = useMessagePipeline(selectStartTime);
   const compare = useCompare();
+  const density = useDensity();
+  const { t } = useTranslation("playbackTime");
+  const endTime = useMessagePipeline(selectEndTime);
   const { classes } = useStyles();
 
   if (!startTime) {
@@ -137,6 +145,17 @@ export function PlaybackControlsTooltipContent(params: {
     title: "Elapsed",
     value: `${toSec(timeFromStart).toFixed(9)} sec`,
   });
+
+  if (density && endTime) {
+    const fraction = toSec(timeFromStart) / toSec(subtractTimes(endTime, startTime));
+    const bucket = Math.min(
+      Math.floor(fraction * density.buckets.length),
+      density.buckets.length - 1,
+    );
+    if (isGap(density, Math.max(bucket, 0))) {
+      tooltipItems.push({ type: "item", title: t("data"), value: t("dataGap") });
+    }
+  }
 
   // Each compared recording's own time here, if it covers this moment
   if (compare) {
