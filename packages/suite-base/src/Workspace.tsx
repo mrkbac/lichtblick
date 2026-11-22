@@ -596,6 +596,12 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
     [layoutManager, parseAndInstallLayout],
   );
 
+  /**
+   * Whether the share link's layout got installed. Only the source the link opens waits for it,
+   * once, so later launches show their own (e.g. a sample's) layout.
+   */
+  const sharedLayoutInstall = useRef<Promise<{ installed: boolean }>>(undefined);
+
   // A share link carries its layout in the fragment (see util/shareLink). Install it once, then
   // drop the fragment so a reload or a newly copied link doesn't reinstall a stale copy.
   // The fragment comes with the launch link: the page URL on the web, the `lichtblick://` link
@@ -614,19 +620,22 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
     layoutRequest.current?.abort();
     const controller = new AbortController();
     layoutRequest.current = controller;
-    void (async () => {
+    sharedLayoutInstall.current = (async () => {
       try {
         const text = await decodeSharedLayout(encoded);
         controller.signal.throwIfAborted();
         const file = new File([text], "Shared layout.json", { type: "application/json" });
         // Anyone can make a link: its user scripts wait for the user's approval.
-        await parseAndInstallLayout(file, "local", controller.signal, { untrusted: true });
+        const layout = await parseAndInstallLayout(file, "local", controller.signal, {
+          untrusted: true,
+        });
+        return { installed: layout != undefined };
       } catch (error) {
-        if (controller.signal.aborted) {
-          return;
+        if (!controller.signal.aborted) {
+          log.error("Could not open the layout from the link", error);
+          enqueueSnackbar("Could not open the layout from the link", { variant: "error" });
         }
-        log.error("Could not open the layout from the link", error);
-        enqueueSnackbar("Could not open the layout from the link", { variant: "error" });
+        return { installed: false };
       }
     })();
     // Only the link the app was opened with carries a layout.
@@ -697,18 +706,26 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
     let shouldUpdate = false;
 
     // Apply any available data source args
-    if (unappliedSourceArgs.ds) {
+    const { ds, dsParams, sourceMetadata } = unappliedSourceArgs;
+    if (ds) {
       log.debug("Initialising source from url", unappliedSourceArgs);
-      selectSource(unappliedSourceArgs.ds, {
-        type: "connection",
-        params: unappliedSourceArgs.dsParams,
-        sourceMetadata: unappliedSourceArgs.sourceMetadata,
-        // A layout in the link is what the sender wants shown, not the sample's own.
-        ...((unappliedSourceArgs.layoutUrl != undefined || sharedLinkLayout != undefined) && {
-          keepLayout: true,
-        }),
-      });
-      selectEvent(unappliedSourceArgs.dsParams?.eventId);
+      const open = ({ installed }: { installed: boolean }) => {
+        selectSource(ds, {
+          type: "connection",
+          params: dsParams,
+          sourceMetadata,
+          // The link's layout is what the sender wants shown, not the sample's own.
+          ...(installed && { keepLayout: true }),
+        });
+        selectEvent(dsParams?.eventId);
+      };
+      const layoutInstall = sharedLayoutInstall.current;
+      sharedLayoutInstall.current = undefined;
+      if (layoutInstall) {
+        void layoutInstall.then(open);
+      } else {
+        open({ installed: false });
+      }
       shouldUpdate = true;
     }
     // Apply any available layout URL
@@ -721,14 +738,7 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
     if (shouldUpdate) {
       setUnappliedSourceArgs({ ds: undefined, dsParams: undefined, layoutUrl: undefined });
     }
-  }, [
-    fetchLayoutFromUrl,
-    selectEvent,
-    selectSource,
-    sharedLinkLayout,
-    unappliedSourceArgs,
-    setUnappliedSourceArgs,
-  ]);
+  }, [fetchLayoutFromUrl, selectEvent, selectSource, unappliedSourceArgs, setUnappliedSourceArgs]);
 
   // Seek to time in URL.
   useEffect(() => {
