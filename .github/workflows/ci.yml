@@ -1,4 +1,7 @@
 name: CI
+# The PR number makes a run identifiable for perf-budget-label.yml, also for fork PRs where GitHub
+# leaves the run's pull_requests empty. Pushes keep the default name.
+run-name: "${{ github.event_name == 'pull_request' && format('PR #{0}: {1}', github.event.pull_request.number, github.event.pull_request.title) || '' }}"
 
 on:
   push:

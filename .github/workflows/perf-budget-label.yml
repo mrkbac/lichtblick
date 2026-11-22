@@ -50,14 +50,14 @@ jobs:
           while true; do
             pr=$(gh pr view "$PR" --json headRefOid,headRefName,headRepository,headRepositoryOwner)
             sha=$(jq -r .headRefOid <<<"$pr")
-            # This PR's CI run: its head commit, branch and repository. Runs from forks list no
-            # pull_requests, so the number is only checked where GitHub fills it in.
+            # This PR's CI run: its head commit, branch and repository, and the PR number that ci.yml
+            # puts in the run name (runs from forks list no pull_requests)
             run=$(gh api "repos/$GH_REPO/actions/runs?head_sha=$sha&event=pull_request&per_page=100" |
               jq --argjson pr "$pr" --argjson number "$PR" '[.workflow_runs[] | select(
                   .path == ".github/workflows/ci.yml" and
                   .head_branch == $pr.headRefName and
                   .head_repository.full_name == "\($pr.headRepositoryOwner.login)/\($pr.headRepository.name)" and
-                  (.pull_requests == [] or any(.pull_requests[]; .number == $number))
+                  (.display_title | startswith("PR #\($number): "))
                 ) | {databaseId: .id, status}][0] // empty')
             if [ -z "$run" ]; then
               echo "No CI run for $sha yet; it reads the label itself"
