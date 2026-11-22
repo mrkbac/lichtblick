@@ -15,6 +15,8 @@
 //   found at http://www.apache.org/licenses/LICENSE-2.0
 //   You may not use this file except in compliance with the License.
 
+import v8 from "node:v8";
+import vm from "node:vm";
 import type { Mock } from "vitest";
 
 import FakePlayer from "@lichtblick/suite-base/components/MessagePipeline/FakePlayer";
@@ -186,6 +188,42 @@ describe("UserScriptPlayer", () => {
         { topic: "/studio/test" },
         { topic: "/input/baz" },
       ]);
+    });
+
+    it("releases the last message of a topic once nobody subscribes to it", async () => {
+      v8.setFlagsFromString("--expose-gc");
+      const gc = vm.runInNewContext("gc") as () => void;
+      const fakePlayer = new FakePlayer();
+      const userScriptPlayer = new UserScriptPlayer(fakePlayer, defaultUserScriptActions);
+      userScriptPlayer.setListener(async () => {});
+      userScriptPlayer.setSubscriptions([{ topic: "/image" }]);
+      await Promise.resolve();
+
+      let message: object | undefined = { data: new Uint8Array(1024) };
+      const released = new WeakRef(message);
+      await fakePlayer.emit({
+        activeData: {
+          ...basicPlayerState,
+          messages: [
+            {
+              topic: "/image",
+              schemaName: "Image",
+              receiveTime: { sec: 0, nsec: 1 },
+              message,
+              sizeInBytes: 1024,
+            },
+          ],
+        },
+      });
+      message = undefined;
+      userScriptPlayer.setSubscriptions([]);
+      await Promise.resolve();
+      await fakePlayer.emit({ activeData: { ...basicPlayerState, messages: [] } });
+      // WeakRef targets are kept until the current job ends.
+      await delay(0);
+      gc();
+
+      expect(released.deref()).toBeUndefined();
     });
 
     it("delegates play and pause calls to underlying player", () => {
