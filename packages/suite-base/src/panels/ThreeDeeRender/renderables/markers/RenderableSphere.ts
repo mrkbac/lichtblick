@@ -16,6 +16,7 @@ import { Marker } from "../../ros";
 
 export class RenderableSphere extends RenderableMarker {
   public mesh: THREE.Mesh<THREE.SphereGeometry, THREE.MeshStandardMaterial>;
+  public readonly outline: THREE.LineSegments | undefined = undefined;
 
   public constructor(
     topic: string,
