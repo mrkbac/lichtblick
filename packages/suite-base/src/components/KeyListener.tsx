@@ -27,6 +27,9 @@ export type KeyListenerProps = {
   keyUpHandlers?: KeyHandlers;
 };
 
+/** Events a KeyListener prevented, so other KeyListeners for the same key still run. */
+const preventedByKeyListener = new WeakSet<Event>();
+
 function callHandlers(handlers: KeyHandlers | undefined, event: KeyboardEvent): void {
   if (!handlers) {
     return;
@@ -41,6 +44,7 @@ function callHandlers(handlers: KeyHandlers | undefined, event: KeyboardEvent): 
     } finally {
       if (preventDefault) {
         event.preventDefault();
+        preventedByKeyListener.add(event);
       }
     }
   }
@@ -63,6 +67,11 @@ export default function KeyListener(props: KeyListenerProps): ReactElement {
         (target instanceof HTMLElement && target.closest(".monaco-editor"))
       ) {
         // The user is typing in an editable field; ignore the event.
+        return;
+      }
+      if (event.defaultPrevented && !preventedByKeyListener.has(event)) {
+        // The focused element already handled the key (e.g. arrow keys in a tree, slider or
+        // menu), so it isn't also a shortcut.
         return;
       }
 

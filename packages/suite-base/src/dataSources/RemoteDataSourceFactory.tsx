@@ -94,7 +94,12 @@ class RemoteDataSourceFactory implements IDataSourceFactory {
       nextExtension = this.checkExtensionMatch(extension, nextExtension);
     });
 
-    const initWorker = initWorkers[extension]!;
+    const initWorker = initWorkers[extension];
+    if (initWorker == undefined) {
+      throw new Error(
+        `${extension === "" ? "Files without an extension" : `${extension} files`} can't be opened from a URL yet. Open .bag or .mcap files from a URL, or open the file from disk.`,
+      );
+    }
 
     // `ds.compare=true` compares the files side by side, one side per file; a comma list names the
     // side of each file instead (files with the same name are merged into that side)
@@ -118,11 +123,13 @@ class RemoteDataSourceFactory implements IDataSourceFactory {
 
     return new IterablePlayer({
       source,
-      name: urls.join(),
+      // A catalog passes the recording's name, so the title bar shows it instead of the URL
+      name: args.params.name ?? urls.join(),
       // Keep includeCredentials in the app URL so reloads and shared links still send cookies
       urlParams: {
         urls,
         ...(includeCredentials && { includeCredentials: "true" }),
+        ...(args.params.name != undefined && { name: args.params.name }),
         ...(validCompare && { compare: compareParam! }),
       },
       sourceId: this.id,

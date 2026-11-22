@@ -61,9 +61,10 @@ export function useCatalogUrl(url: string): CatalogFolder {
       recordings: catalog?.recordings ?? [],
       progress: catalog == undefined && error == undefined ? { done: 0, total: 1 } : undefined,
       error,
-      open: async ({ source, layoutUrl }: CatalogRecording) => {
+      open: async ({ source, layoutUrl, name }: CatalogRecording) => {
         if (source.type !== "local-file") {
-          launch({ ds: source.type, dsParams: { url: source.url }, layoutUrl });
+          // The name titles the window and recents instead of the URL
+          launch({ ds: source.type, dsParams: { url: source.url, name }, layoutUrl });
         }
       },
       loadPreview: async () => {

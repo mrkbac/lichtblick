@@ -211,7 +211,13 @@ export default function CurrentLayoutProvider({
             data = reverted.data;
           }
           setLayoutState({
-            selectedLayout: { loading: false, id: layout.id, data, name: layout.name },
+            selectedLayout: {
+              loading: false,
+              id: layout.id,
+              data,
+              name: layout.name,
+              externalEdit: true,
+            },
           });
           if (saveToProfile) {
             setUserProfile({ currentLayoutId: id }).catch((error: unknown) => {
@@ -239,7 +245,10 @@ export default function CurrentLayoutProvider({
 
   /** Every layout edit goes through here, so undo/redo sees all of them. */
   const commitLayoutData = useCallback(
-    (edit: (history: LayoutHistory, data: LayoutData) => LayoutData | undefined) => {
+    (
+      edit: (history: LayoutHistory, data: LayoutData) => LayoutData | undefined,
+      { externalEdit = false }: { externalEdit?: boolean } = {},
+    ) => {
       const selected = layoutStateRef.current.selectedLayout;
       if (selected?.data == undefined || selected.loading === true) {
         return;
@@ -260,6 +269,7 @@ export default function CurrentLayoutProvider({
           data: newData,
           name: selected.name,
           edited: true,
+          externalEdit,
         },
       });
     },
@@ -295,7 +305,13 @@ export default function CurrentLayoutProvider({
         // A revert is a step of the layout's history, so it can be undone.
         history.current.sync(data);
         setLayoutState({
-          selectedLayout: { loading: false, id: updatedLayout.id, data, name: updatedLayout.name },
+          selectedLayout: {
+            loading: false,
+            id: updatedLayout.id,
+            data,
+            name: updatedLayout.name,
+            externalEdit: true,
+          },
         });
       }
     };
@@ -521,16 +537,16 @@ export default function CurrentLayoutProvider({
         setSelectedPanelIds([]);
       },
       undoLayoutChange: () => {
-        commitLayoutData((h, data) => h.undo(data));
+        commitLayoutData((h, data) => h.undo(data), { externalEdit: true });
       },
       redoLayoutChange: () => {
-        commitLayoutData((h, data) => h.redo(data));
+        commitLayoutData((h, data) => h.redo(data), { externalEdit: true });
       },
       reopenClosedPanel: () => {
         commitLayoutData((h, data) => h.reopenClosedPanel(data, performance.now()));
       },
       goToLayoutHistory: (index: number) => {
-        commitLayoutData((h, data) => h.goTo(data, index));
+        commitLayoutData((h, data) => h.goTo(data, index), { externalEdit: true });
       },
       getLayoutHistory: () => history.current.snapshot(),
       subscribeLayoutHistory: (listener: () => void) => history.current.subscribe(listener),
