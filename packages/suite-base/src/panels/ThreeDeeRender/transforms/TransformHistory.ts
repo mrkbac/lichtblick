@@ -157,6 +157,10 @@ export class TransformHistory {
       lastIndex < 0 || relativeTime > this.#data[lastIndex * STRIDE]!
         ? ~this.#size
         : this.binarySearch(time);
+    if (index !== ~this.#size) {
+      // Not appended: it may have landed before the window start, so check pruning again
+      this.#pruneAt = -Infinity;
+    }
     if (index < 0) {
       index = ~index;
       if (index === this.#size && this.#size >= 2) {

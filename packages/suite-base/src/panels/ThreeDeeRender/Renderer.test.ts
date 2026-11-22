@@ -2196,6 +2196,21 @@ describe("Renderer.addTransformMessages", () => {
     expect(renderer.transformTree.frame("kept")).toBeDefined();
   });
 
+  it("announces the cleared tree on a backward seek without static transforms", () => {
+    // The panel reads the thinning count from the tree on this event
+    const renderer = new Renderer({ ...defaultRendererProps, canvas });
+    renderer.setCurrentTime(100n);
+    renderer.addTransform("root", "a", 90n, { x: 0, y: 0, z: 0 }, { x: 0, y: 0, z: 0, w: 1 });
+    const updates = vi.fn();
+    renderer.on("transformTreeUpdated", updates);
+
+    renderer.setCurrentTime(50n);
+    renderer.handleSeek(100n);
+
+    expect(renderer.transformTree.frame("a")).toBeUndefined();
+    expect(updates).toHaveBeenCalledTimes(1);
+  });
+
   it("is idempotent for transforms read twice", () => {
     const renderer = new Renderer({ ...defaultRendererProps, canvas });
     const batch = [createTFMessageEvent("root", "a", 1n, [1n, 2n])];

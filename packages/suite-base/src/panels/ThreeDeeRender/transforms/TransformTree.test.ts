@@ -185,6 +185,20 @@ describe("TransformTree", () => {
     expect(tfTree.frame("b")!.latestTimeAtOrBefore(t - 2n * sec)).toBe(t - 2n * sec);
   });
 
+  it("drops late transforms that arrive already outside the storage window", () => {
+    const sec = BigInt(1e9);
+    const tfTree = new TransformTree(10n * sec);
+    const at = (x: number) => new Transform([x, 0, 0], [0, 0, 0, 1]);
+    tfTree.addTransform("b", "a", 0n, at(0));
+    tfTree.addTransform("b", "a", 100n * sec, at(100));
+    // Delayed transforms far behind the newest one, which does not advance
+    for (let i = 1; i <= 600; i++) {
+      tfTree.addTransform("b", "a", BigInt(i) * (sec / 10n), at(i));
+    }
+    // The newest one before the window and the newest one
+    expect(tfTree.frame("b")!.transformsSize()).toBeLessThanOrEqual(2 + 600 / 64);
+  });
+
   it("keeps the transform just before the storage window for interpolation", () => {
     const sec = BigInt(1e9);
     const tfTree = new TransformTree(300n * sec);

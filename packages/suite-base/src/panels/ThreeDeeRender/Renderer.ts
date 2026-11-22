@@ -680,10 +680,13 @@ export class Renderer extends EventEmitter<RendererEvents> {
     // from the future of the new time must go.
     const movedBack = this.currentTime < oldTimeNs && !this.transformTree.isComplete();
 
-    this.clear({ clearTransforms: movedBack, preserveStaticTransforms: movedBack });
-    if (movedBack) {
-      this.#reapplyStaticTransforms();
-    }
+    // One tree update for the clear and the static transforms put back
+    this.#batchTransformTreeUpdates(() => {
+      this.clear({ clearTransforms: movedBack, preserveStaticTransforms: movedBack });
+      if (movedBack) {
+        this.#reapplyStaticTransforms();
+      }
+    });
   }
 
   /**
@@ -846,6 +849,8 @@ export class Renderer extends EventEmitter<RendererEvents> {
     if (preserveStaticTransforms !== true) {
       this.#staticTransformCache.clear();
     }
+    // Listeners (the frame list, the thinned-history alert) must see the empty tree
+    this.#transformTreeUpdated();
   };
 
   // Call on scene extensions to add subscriptions to the renderer
