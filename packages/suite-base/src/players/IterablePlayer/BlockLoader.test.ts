@@ -5,6 +5,8 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+import { compare } from "@foxglove/rostime";
+
 import { Immutable, MessageEvent } from "@lichtblick/suite";
 import PlayerAlertManager from "@lichtblick/suite-base/players/PlayerAlertManager";
 import { MessageBlock } from "@lichtblick/suite-base/players/types";
@@ -428,7 +430,11 @@ describe("BlockLoader", () => {
     ): AsyncIterableIterator<Readonly<IteratorResult>> {
       for (const msgEvent of msgEvents) {
         // need to filter iterator by requested topics since there's messages from more than 1 topic in here
-        if (_args.topics.has(msgEvent.topic)) {
+        if (
+          _args.topics.has(msgEvent.topic) &&
+          (!_args.start || compare(msgEvent.receiveTime, _args.start) >= 0) &&
+          (!_args.end || compare(msgEvent.receiveTime, _args.end) <= 0)
+        ) {
           yield {
             type: "message-event",
             msgEvent,
@@ -869,7 +875,7 @@ describe("BlockLoader", () => {
             .join(","),
         );
       };
-      return { loader, loading, settled };
+      return { loader, loading, settled, reads: () => reads };
     }
 
     it("keeps the blocks around the playhead, forward first, and follows a seek", async () => {
@@ -907,6 +913,23 @@ describe("BlockLoader", () => {
       await loader.stopLoading();
       await loading;
       consoleWarnMock.mockClear();
+    });
+
+    it("reads ahead of and behind the playhead in one read each when everything fits", async () => {
+      const { loader, loading, settled, reads } = setup({ a: 1 }, 1000);
+      loader.setPlayhead({ sec: 5, nsec: 0 });
+      expect(await settled()).toEqual(Array(10).fill("a"));
+      // The first read starts before the playhead is set
+      const afterStart = reads();
+
+      loader.setPlayhead({ sec: 6, nsec: 0 });
+      loader.setPlayhead({ sec: 9, nsec: 0 });
+      await settled();
+      expect(reads()).toBe(afterStart);
+
+      await loader.stopLoading();
+      await loading;
+      expect(afterStart).toBeLessThanOrEqual(3);
     });
 
     it("hands out preloaded messages by time range, and nothing where a block is missing", async () => {
