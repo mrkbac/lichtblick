@@ -261,6 +261,20 @@ describe("PointCloudHistoryRenderable decay", () => {
     expect(latest.instanceDetails(0)).toMatchObject({ x: POSITIONS[0]![0] });
   });
 
+  it("skips an older scan that can't be drawn without blanking the latest one", () => {
+    const { renderable, settings } = decode(makeCloud(), { colorMode: "flat", decayTime: 10 });
+    renderable.updatePointCloud(makeCloud(), undefined, settings, 10n);
+    const broken = { ...makeCloud(), point_step: 7 }; // data isn't a multiple of it
+
+    renderable.addOlderScan(broken, settings, 5n);
+
+    expect(renderable.children.some((child) => child instanceof DecayPointRing)).toBe(false);
+    const latest = renderable.children[0] as unknown as {
+      geometry: { drawRange: { count: number } };
+    };
+    expect(latest.geometry.drawRange.count).toBe(POSITIONS.length);
+  });
+
   it("drops the ring and its limit notice when the decay time is turned off", () => {
     const errors = new LayerErrors();
     const path = ["topics", "/points"];

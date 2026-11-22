@@ -423,7 +423,9 @@ export class LaserScans extends SceneExtension<LaserScanHistoryRenderable> {
     if (
       renderable &&
       renderable.userData.settings.decayTime > 0 &&
-      receiveTime <= renderable.userData.receiveTime
+      receiveTime <= renderable.userData.receiveTime &&
+      // Time jumped back without a seek (e.g. a restarted simulation): the scan is the new latest
+      this.renderer.currentTime >= renderable.userData.receiveTime
     ) {
       if (receiveTime < renderable.userData.receiveTime) {
         renderable.addOlderScan(laserScan, renderable.userData.settings, receiveTime);

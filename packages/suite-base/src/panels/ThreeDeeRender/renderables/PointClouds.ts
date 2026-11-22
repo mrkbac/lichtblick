@@ -178,6 +178,8 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
   #decayRing: DecayPointRing | undefined;
   /** Decodes scans older than the latest before they are copied into the ring */
   #scratch: DynamicBufferGeometry | undefined;
+  /** While validating an older scan, whose errors must not touch the latest scan */
+  #checkingOlderScan = false;
   /** What the shown decay limit notice says, to format it again only when that changes */
   #decayNoticeKey: string | undefined;
 
@@ -455,11 +457,16 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
     settings: LayerSettingsPointClouds,
     receiveTime: bigint,
   ): void {
-    if (
-      !this.#validatePointCloud(pointCloud) ||
-      !this.#getPointCloudFieldReaders(tempFieldReaders, pointCloud, settings)
-    ) {
-      return;
+    this.#checkingOlderScan = true;
+    try {
+      if (
+        !this.#validatePointCloud(pointCloud) ||
+        !this.#getPointCloudFieldReaders(tempFieldReaders, pointCloud, settings)
+      ) {
+        return;
+      }
+    } finally {
+      this.#checkingOlderScan = false;
     }
     const count = Math.trunc(pointCloud.data.length / getStride(pointCloud));
     this.#scratch ??= createGeometry(`${this.userData.topic}:older`, THREE.StaticDrawUsage);
@@ -575,6 +582,9 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
   }
 
   #invalidError(message: string): void {
+    if (this.#checkingOlderScan) {
+      return; // an older scan that can't be drawn is just skipped; the latest one stays
+    }
     this.renderer.settings.errors.addToTopic(this.userData.topic, INVALID_POINTCLOUD, message);
     const lastEntry = this.#pointsHistory.latest();
     lastEntry.renderable.geometry.resize(0);
@@ -1129,7 +1139,9 @@ export class PointClouds extends SceneExtension<PointCloudHistoryRenderable> {
     if (
       renderable &&
       renderable.userData.settings.decayTime > 0 &&
-      receiveTime <= renderable.userData.receiveTime
+      receiveTime <= renderable.userData.receiveTime &&
+      // Time jumped back without a seek (e.g. a restarted simulation): the scan is the new latest
+      this.renderer.currentTime >= renderable.userData.receiveTime
     ) {
       if (receiveTime < renderable.userData.receiveTime) {
         renderable.addOlderScan(pointCloud, renderable.userData.settings, receiveTime);
