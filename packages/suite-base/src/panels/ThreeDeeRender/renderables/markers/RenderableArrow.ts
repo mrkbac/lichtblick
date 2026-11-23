@@ -6,7 +6,6 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import * as THREE from "three";
-import { clamp } from "three/src/math/MathUtils.js";
 
 import { RenderableMarker } from "./RenderableMarker";
 import { makeStandardMaterial } from "./materials";
@@ -127,7 +126,7 @@ export class RenderableArrow extends RenderableMarker {
       let headLength = HEAD_LENGTH_PROPORTION * distance;
       if (marker.scale.z !== 0) {
         const length = marker.scale.z;
-        headLength = clamp(length, 0, distance);
+        headLength = THREE.MathUtils.clamp(length, 0, distance);
       }
       const shaftLength = distance - headLength;
       const shaftDiameter = marker.scale.x;

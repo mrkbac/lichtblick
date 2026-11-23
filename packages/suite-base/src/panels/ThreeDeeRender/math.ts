@@ -23,14 +23,6 @@ export function vec3TupleApproxEquals(
   );
 }
 
-export function clamp(value: number, min: number, max: number): number {
-  return Math.max(min, Math.min(max, value));
-}
-
-export function lerp(a: number, b: number, t: number): number {
-  return a + (b - a) * t;
-}
-
 /** Byte-wise equality of two typed arrays (NaN positions compare equal to themselves) */
 export function sameBytes(a: ArrayBufferView, b: ArrayBufferView): boolean {
   if (a.byteLength !== b.byteLength) {

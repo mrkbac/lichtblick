@@ -9,7 +9,6 @@ import * as THREE from "three";
 
 import { parseColor } from "@lichtblick/suite-base/util/parseColor";
 
-import { lerp } from "./math";
 import { ColorRGB, ColorRGBA } from "./ros";
 
 export const LIGHT_OUTLINE = new THREE.Color(0x000000).convertSRGBToLinear();
@@ -107,9 +106,9 @@ export function rgbaGradient(output: ColorRGBA, a: ColorRGBA, b: ColorRGBA, t: n
   const bG = b.g * b.a;
   const bB = b.b * b.a;
 
-  output.r = lerp(aR, bR, t);
-  output.g = lerp(aG, bG, t);
-  output.b = lerp(aB, bB, t);
-  output.a = lerp(a.a, b.a, t);
+  output.r = THREE.MathUtils.lerp(aR, bR, t);
+  output.g = THREE.MathUtils.lerp(aG, bG, t);
+  output.b = THREE.MathUtils.lerp(aB, bB, t);
+  output.a = THREE.MathUtils.lerp(a.a, b.a, t);
   return output;
 }
