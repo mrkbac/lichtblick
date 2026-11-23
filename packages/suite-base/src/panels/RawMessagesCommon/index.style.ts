@@ -29,6 +29,14 @@ export const useStylesDiffSpan = makeStyles()((theme) => ({
     textDecoration: "inherit",
     whiteSpace: "pre-line",
   },
+  stacked: {
+    display: "inline-grid",
+    gridTemplateColumns: "auto auto",
+    verticalAlign: "top",
+  },
+  integer: { textAlign: "right" },
+  whole: { gridColumn: "1 / -1" },
+  before: { color: theme.palette.text.secondary },
 }));
 
 export const useStylesDiffStats = makeStyles()((theme) => ({
@@ -92,6 +100,13 @@ export const useStylesToolbar = makeStyles()((theme) => ({
     paddingInlineEnd: theme.spacing(6.75),
     gap: theme.spacing(0.25),
     display: "flex",
+    alignItems: "center",
+  },
+  fullMessage: {
+    marginLeft: "auto",
+    marginRight: 0,
+    flex: "none",
+    whiteSpace: "nowrap",
   },
 }));
 

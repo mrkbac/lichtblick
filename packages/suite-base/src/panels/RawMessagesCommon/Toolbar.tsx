@@ -6,7 +6,14 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import DiffIcon from "@mui/icons-material/Difference";
-import { IconButton, MenuItem, Select, SelectChangeEvent } from "@mui/material";
+import {
+  Checkbox,
+  FormControlLabel,
+  IconButton,
+  MenuItem,
+  Select,
+  SelectChangeEvent,
+} from "@mui/material";
 import React from "react";
 
 import MessagePathInput from "@lichtblick/suite-base/components/MessagePathSyntax/MessagePathInput";
@@ -37,6 +44,7 @@ function ToolbarComponent(props: PropsToolbar): React.JSX.Element {
     onToggleExpandAll,
     onTopicPathChange,
     saveConfig,
+    showFullMessageForDiff,
     topic,
     topicPath,
     searchOpen = false,
@@ -122,6 +130,20 @@ function ToolbarComponent(props: PropsToolbar): React.JSX.Element {
               {...(topic ? { prioritizedDatatype: topic.schemaName } : {})}
             />
           )}
+          <FormControlLabel
+            className={classes.fullMessage}
+            disableTypography
+            checked={showFullMessageForDiff}
+            control={
+              <Checkbox
+                size="small"
+                onChange={() => {
+                  saveConfig({ showFullMessageForDiff: !showFullMessageForDiff });
+                }}
+              />
+            }
+            label="Show full message"
+          />
         </div>
       )}
     </>

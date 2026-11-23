@@ -99,6 +99,7 @@ export type PropsToolbar = {
   onToggleExpandAll: () => void;
   onTopicPathChange: (path: string) => void;
   saveConfig: SaveConfig<RawMessagesVirtualPanelConfig>;
+  showFullMessageForDiff: boolean;
   topic?: Topic;
   topicPath: string;
   searchOpen?: boolean;

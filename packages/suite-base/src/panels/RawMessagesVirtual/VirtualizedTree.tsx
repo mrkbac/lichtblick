@@ -20,6 +20,7 @@ import {
   DEFAULT_FONT_SIZE,
   EXPANDED_ICON,
   SCROLLL_OVERSCAN,
+  MAX_KEY_COLUMN_CH,
   TREE_NODE_INDENTATION,
 } from "@lichtblick/suite-base/panels/RawMessagesVirtual/constants";
 
@@ -142,6 +143,15 @@ export const VirtualizedTree = memo(function VirtualizedTree({
     return flattenTreeData(data, isExpanded, { diff, cache: typedArrayCache.current });
   }, [data, diff, isExpanded, isShownExpanded, searchResult]);
 
+  // Siblings share a key column width, so their values start in one aligned column.
+  const keyWidthByParent = useMemo(() => {
+    const widths = new Map<string, number>();
+    for (const node of flatData) {
+      widths.set(node.parentPath, Math.max(widths.get(node.parentPath) ?? 0, node.label.length));
+    }
+    return widths;
+  }, [flatData]);
+
   const getScrollElement = useCallback(() => parentRef.current, []);
 
   const virtualizer = useVirtualizer({
@@ -222,11 +232,7 @@ export const VirtualizedTree = memo(function VirtualizedTree({
   // Breadcrumb of the topmost visible row's ancestors, so deep rows keep their context. Taken from
   // the rows above it, so index ranges show up although element keys don't name them.
   const topIndex = items.find((item) => item.end > (virtualizer.scrollOffset ?? 0))?.index ?? -1;
-  const hasNesting = flatData.some((node) => node.depth > 0);
   const breadcrumb = useMemo(() => {
-    if (!hasNesting) {
-      return undefined;
-    }
     const crumbs: { label: string; index: number }[] = [];
     let depth = flatData[topIndex]?.depth ?? 0;
     for (let index = topIndex - 1; index >= 0 && depth > 0; index--) {
@@ -237,11 +243,11 @@ export const VirtualizedTree = memo(function VirtualizedTree({
       }
     }
     return crumbs;
-  }, [flatData, hasNesting, topIndex]);
+  }, [flatData, topIndex]);
 
   return (
     <div className={classes.wrapper}>
-      {breadcrumb != undefined && (
+      {breadcrumb.length > 0 && (
         <div className={classes.breadcrumb} style={{ fontSize: fontSize ?? "inherit" }}>
           {breadcrumb.map(({ label, index: rowIndex }, index) => (
             <Fragment key={rowIndex}>
@@ -280,7 +286,8 @@ export const VirtualizedTree = memo(function VirtualizedTree({
             }
 
             const expanded = node.isExpandable && isShownExpanded(node.key, node.value);
-            const changed = diff ? node.diffStatus === "changed" : hasChanged(node, previousData);
+            // Diff mode shows changes as stacked old/new values, so only stepping highlights.
+            const changed = !diff && hasChanged(node, previousData);
 
             return (
               <div
@@ -322,7 +329,14 @@ export const VirtualizedTree = memo(function VirtualizedTree({
                     </button>
                   )}
                 </span>
-                <span className={classes.key}>{node.label}</span>
+                <span
+                  className={classes.key}
+                  style={{
+                    minWidth: `${Math.min(keyWidthByParent.get(node.parentPath) ?? 0, MAX_KEY_COLUMN_CH)}ch`,
+                  }}
+                >
+                  {node.label}
+                </span>
                 <div className={classes.valueContainer}>
                   {node.isRange !== true && renderValue(node)}
                 </div>
