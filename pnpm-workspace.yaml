@@ -14,6 +14,11 @@ auditConfig:
 # electron-builder's optional Squirrel.Windows target.
 autoInstallPeers: false
 
+peerDependencyRules:
+  # The ESLint plugins run inside oxlint's JS plugin runtime, which doesn't need ESLint itself.
+  ignoreMissing:
+    - eslint
+
 # esbuild (only used by Storybook) works without its postinstall check; listing it silences the
 # "ignored build scripts" warning.
 ignoredBuiltDependencies:

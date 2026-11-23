@@ -103,7 +103,6 @@
     "@vitest/coverage-v8": "5.1.1",
     "electron": "45.4.1",
     "electron-builder": "26.18.0",
-    "eslint": "9.39.5",
     "eslint-plugin-import": "2.32.0",
     "eslint-plugin-storybook": "10.6.8",
     "eslint-plugin-tss-unused-classes": "1.0.4",
