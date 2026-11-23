@@ -10,12 +10,12 @@ import Logger from "@lichtblick/log";
 import { MessagePathStructureItem } from "@lichtblick/message-path";
 import { useToggleColorScheme } from "@lichtblick/suite-base/components/ColorSchemeThemeProvider";
 import { useShowCompareDialog } from "@lichtblick/suite-base/components/Compare/compareDialogStore";
-import { useLayoutTemplateCommands } from "@lichtblick/suite-base/components/LayoutTemplates";
 import { useKeyboardShortcutsStore } from "@lichtblick/suite-base/components/KeyboardShortcuts/KeyboardShortcuts";
 import {
   APP_SHORTCUTS,
   PLAYBACK_SHORTCUTS,
 } from "@lichtblick/suite-base/components/KeyboardShortcuts/appShortcuts";
+import { useLayoutTemplateCommands } from "@lichtblick/suite-base/components/LayoutTemplates";
 import { useStructureItemsByPathStore } from "@lichtblick/suite-base/components/MessagePathSyntax/useStructureItemsByPathStore";
 import {
   MessagePipelineContext,

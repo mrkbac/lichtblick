@@ -27,10 +27,10 @@ import { sharedI18nObject as i18n } from "@lichtblick/suite-base/src/i18n";
 import { palette } from "@lichtblick/theme";
 
 import StudioAppUpdater from "./StudioAppUpdater";
-import { ForwardedMenuEvent } from "../common/types";
 import getDevModeIcon from "./getDevModeIcon";
 import { simulateUserClick } from "./simulateUserClick";
 import { encodeRendererArg } from "../common/rendererArgs";
+import { ForwardedMenuEvent } from "../common/types";
 import { LICHTBLICK_PRODUCT_NAME } from "../common/webpackDefines";
 
 declare const MAIN_WINDOW_WEBPACK_ENTRY: string;
