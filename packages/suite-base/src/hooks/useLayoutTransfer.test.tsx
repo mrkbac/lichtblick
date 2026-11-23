@@ -13,7 +13,6 @@ import * as filePicker from "@lichtblick/suite-base/util/showOpenFilePicker";
 import { BasicBuilder } from "@lichtblick/test-builders";
 
 import { useLayoutTransfer } from "./useLayoutTransfer";
-import { useAnalytics } from "../context/AnalyticsContext";
 import { useLayoutManager } from "../context/LayoutManagerContext";
 
 const mockEnqueueSnackbar = vi.fn();
@@ -35,10 +34,6 @@ vi.mock("@lichtblick/suite-base/hooks/useLayoutNavigation", () => ({
   useLayoutNavigation: vi.fn(),
 }));
 
-vi.mock("../context/AnalyticsContext", () => ({
-  useAnalytics: vi.fn(),
-}));
-
 vi.mock("@lichtblick/suite-base/util/download");
 vi.mock("@lichtblick/suite-base/util/showOpenFilePicker");
 
@@ -53,7 +48,6 @@ describe("useLayoutTransfer", () => {
   const getCurrentLayoutStateMock = vi.fn();
   const onSelectLayoutMock = vi.fn();
   const promptForUnsavedChangesMock = vi.fn();
-  const logEventMock = vi.fn();
 
   beforeEach(() => {
     (useLayoutManager as Mock).mockReturnValue({
@@ -68,10 +62,6 @@ describe("useLayoutTransfer", () => {
     (useLayoutNavigation as Mock).mockReturnValue({
       promptForUnsavedChanges: promptForUnsavedChangesMock,
       onSelectLayout: onSelectLayoutMock,
-    });
-
-    (useAnalytics as Mock).mockReturnValue({
-      logEvent: logEventMock,
     });
 
     vi.clearAllMocks();
@@ -189,7 +179,6 @@ describe("useLayoutTransfer", () => {
 
     expect(saveNewLayoutMock).toHaveBeenCalled();
     expect(onSelectLayoutMock).toHaveBeenCalled();
-    expect(logEventMock).toHaveBeenCalled();
   });
 
   it("should not install a layout that fails validation", async () => {

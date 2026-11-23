@@ -88,10 +88,9 @@ describe("createCommonWebpackConfig", () => {
     expect(defs.LICHTBLICK_PRODUCT_HOMEPAGE).toBe(JSON.stringify("https://example.com"));
   });
 
-  it("should propagate API_URL and OTLP_ENDPOINT from environment if set", () => {
+  it("should propagate API_URL from environment if set", () => {
     // Given
     process.env.API_URL = "https://api.example.com";
-    process.env.OTLP_ENDPOINT = "http://localhost:4318";
     const params = createTestParams();
 
     // When
@@ -100,13 +99,11 @@ describe("createCommonWebpackConfig", () => {
 
     // Then
     expect(definePlugin.definitions.API_URL).toBe(JSON.stringify("https://api.example.com"));
-    expect(definePlugin.definitions.OTLP_ENDPOINT).toBe(JSON.stringify("http://localhost:4318"));
   });
 
-  it("should leave API_URL and OTLP_ENDPOINT undefined if not set", () => {
+  it("should leave API_URL undefined if not set", () => {
     // Given
     delete process.env.API_URL;
-    delete process.env.OTLP_ENDPOINT;
     const params = createTestParams();
 
     // When
@@ -115,6 +112,5 @@ describe("createCommonWebpackConfig", () => {
 
     // Then
     expect(definePlugin.definitions.API_URL).toBeUndefined();
-    expect(definePlugin.definitions.OTLP_ENDPOINT).toBeUndefined();
   });
 });

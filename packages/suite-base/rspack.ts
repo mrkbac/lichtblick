@@ -291,7 +291,6 @@ export function makeConfig(
         LICHTBLICK_REPOSITORY_URL: JSON.stringify(product.repositoryUrl),
         // licht deploys talk to its organization server unless API_URL says otherwise.
         API_URL: JSON.stringify(process.env.API_URL ?? "https://licht-server.marko.im"),
-        OTLP_ENDPOINT: JSON.stringify(process.env.OTLP_ENDPOINT),
       }),
     ],
     optimization: {

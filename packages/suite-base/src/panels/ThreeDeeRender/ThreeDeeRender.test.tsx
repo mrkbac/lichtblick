@@ -18,7 +18,6 @@ import {
   BuiltinPanelExtensionContext,
   PanelExtensionAdapter,
 } from "@lichtblick/suite-base/components/PanelExtensionAdapter";
-import { useAnalytics } from "@lichtblick/suite-base/context/AnalyticsContext";
 import { DEFAULT_FOLLOW_MODE } from "@lichtblick/suite-base/panels/ThreeDeeRender/constants";
 import type { MessageEvent } from "@lichtblick/suite-base/players/types";
 import * as PanelStateContextProvider from "@lichtblick/suite-base/providers/PanelStateContextProvider";
@@ -41,10 +40,6 @@ vi.mock("./ModelCache", () => ({
 
 vi.mock("./SceneExtensionConfig", () => ({
   DEFAULT_SCENE_EXTENSION_CONFIG: {},
-}));
-
-vi.mock("@lichtblick/suite-base/context/AnalyticsContext", () => ({
-  useAnalytics: vi.fn(),
 }));
 
 const createMockRenderer = (overrides?: Record<string, any>) => {
@@ -99,7 +94,6 @@ const createMockRenderer = (overrides?: Record<string, any>) => {
     },
     getDropStatus: vi.fn(),
     handleDrop: vi.fn(),
-    setAnalytics: vi.fn(),
     setCustomCameraModels: vi.fn(),
     setCameraSyncError: vi.fn(),
     followFrameId: "base_link",
@@ -201,7 +195,6 @@ function buildTfMessages({
 }
 
 describe("ThreeDeeRender", () => {
-  const mockAnalytics = { logEvent: vi.fn() };
   const mockedRenderer = vi.mocked(Renderer);
 
   const setup = (
@@ -224,7 +217,6 @@ describe("ThreeDeeRender", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    (useAnalytics as Mock).mockReturnValue(mockAnalytics);
 
     // WebGL context
     HTMLCanvasElement.prototype.getContext = vi.fn().mockReturnValue({

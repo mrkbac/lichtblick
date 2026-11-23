@@ -52,10 +52,6 @@ vi.mock("@lichtblick/suite-base/components/Catalog/useCatalogFolder", () => ({
   useCatalogFolder: vi.fn(),
 }));
 
-vi.mock("@lichtblick/suite-base/context/AnalyticsContext", () => ({
-  useAnalytics: () => ({ logEvent: vi.fn() }),
-}));
-
 const wsSource = {
   id: "foxglove-websocket",
   type: "connection",

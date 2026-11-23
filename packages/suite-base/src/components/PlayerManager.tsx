@@ -33,7 +33,6 @@ import Logger from "@lichtblick/log";
 import { Immutable } from "@lichtblick/suite";
 import { CompareProvider } from "@lichtblick/suite-base/components/Compare/CompareContext";
 import { MessagePipelineProvider } from "@lichtblick/suite-base/components/MessagePipeline";
-import { useAnalytics } from "@lichtblick/suite-base/context/AnalyticsContext";
 import {
   LayoutID,
   LayoutState,
@@ -67,7 +66,6 @@ import {
 } from "@lichtblick/suite-base/players/TopicAliasingPlayer/TopicAliasingPlayer";
 import UserScriptPlayer from "@lichtblick/suite-base/players/UserScriptPlayer";
 import { Player } from "@lichtblick/suite-base/players/types";
-import { AppEvent } from "@lichtblick/suite-base/services/IAnalytics";
 import { UserScripts } from "@lichtblick/suite-base/types/panels";
 import { updateAppURLState } from "@lichtblick/suite-base/util/appURLState";
 import {
@@ -158,8 +156,6 @@ export default function PlayerManager(
   const userScriptActions = useUserScriptState(selectUserScriptActions);
 
   const isMounted = useMountedState();
-
-  const analytics = useAnalytics();
 
   const [basePlayer, setBasePlayer] = useState<Player | undefined>();
 
@@ -320,9 +316,6 @@ export default function PlayerManager(
         if (!isMounted() || seq !== selectionSeq.current) {
           newPlayer?.close();
           return undefined;
-        }
-        if (newPlayer) {
-          analytics.logEvent(AppEvent.PLAYER_CONSTRUCTED, { player: sourceId });
         }
         return { player: newPlayer };
       };
@@ -579,15 +572,7 @@ export default function PlayerManager(
         }
       }
     },
-    [
-      playerSources,
-      analytics,
-      enqueueSnackbar,
-      isMounted,
-      addRecent,
-      layoutManager,
-      setSelectedLayoutId,
-    ],
+    [playerSources, enqueueSnackbar, isMounted, addRecent, layoutManager, setSelectedLayoutId],
   );
 
   // Opening from what the user did (a menu, the open page, a recent, a link): a source picked for

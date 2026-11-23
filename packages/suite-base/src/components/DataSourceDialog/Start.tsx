@@ -41,13 +41,11 @@ import { usePanelGuideStore } from "@lichtblick/suite-base/components/PanelDocs/
 import { RecentSourceLabel } from "@lichtblick/suite-base/components/RecentSourceLabel";
 import Stack from "@lichtblick/suite-base/components/Stack";
 import { APP_CONFIG } from "@lichtblick/suite-base/constants/config";
-import { useAnalytics } from "@lichtblick/suite-base/context/AnalyticsContext";
 import {
   RecentSource,
   usePlayerSelection,
 } from "@lichtblick/suite-base/context/PlayerSelectionContext";
 import { useWorkspaceActions } from "@lichtblick/suite-base/context/Workspace/useWorkspaceActions";
-import { AppEvent } from "@lichtblick/suite-base/services/IAnalytics";
 import { splitRecentTitle } from "@lichtblick/suite-base/util/recentSources";
 
 // Number of recents listed on the All tab, unless searching
@@ -81,7 +79,6 @@ export default function Start(): React.JSX.Element {
   const { classes } = useStyles();
   const { t } = useTranslation("openDialog");
   const { dialogActions } = useWorkspaceActions();
-  const analytics = useAnalytics();
   const folder = useCatalogFolder();
 
   const [query, setQuery] = useState("");
@@ -368,7 +365,6 @@ export default function Start(): React.JSX.Element {
           size="small"
           onClick={() => {
             dialogActions.dataSource.open("demo");
-            analytics.logEvent(AppEvent.DIALOG_SELECT_VIEW, { type: "demo" });
           }}
         >
           {t("exploreSampleData")}

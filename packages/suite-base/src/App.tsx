@@ -117,7 +117,7 @@ export function App(props: AppProps): React.JSX.Element {
 
   if (extraProviders) {
     // Providers supplying context consumed by providers above them in this list must stay outermost,
-    // otherwise those consumers silently fall back to the context default (for example analytics).
+    // otherwise those consumers silently fall back to the context default.
     providers.unshift(...extraProviders);
   }
 
