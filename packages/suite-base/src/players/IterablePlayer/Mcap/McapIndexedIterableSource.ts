@@ -30,7 +30,7 @@ import { RosDatatypes } from "@lichtblick/suite-base/types/RosDatatypes";
 import type { ReadOptions } from "@lichtblick/suite-base/util/CachedFilelike.types";
 import { toError } from "@lichtblick/suite-base/util/toError";
 
-import type { PrefetchOptions } from "./RemoteFileReadable.types";
+import type { PrefetchOptions } from "./RemoteFileReadable";
 
 const log = Logger.getLogger(__filename);
 

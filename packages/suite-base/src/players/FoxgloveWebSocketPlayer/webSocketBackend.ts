@@ -3,9 +3,9 @@
 import type { IWebSocket } from "@foxglove/ws-protocol";
 
 import type { LiveConnectionBackend } from "@lichtblick/suite-base/players/LiveConnectionBackend";
+import WorkerMessageSocket from "@lichtblick/suite-base/players/WorkerMessageSocket";
 
 import ExtensionProxySocket, { needsExtensionProxy } from "./ExtensionProxySocket";
-import WorkerSocketAdapter from "./WorkerSocketAdapter";
 
 export const webSocketBackend: LiveConnectionBackend = {
   open(url, protocols) {
@@ -13,7 +13,11 @@ export const webSocketBackend: LiveConnectionBackend = {
       return new ExtensionProxySocket(url, protocols);
     }
     if (typeof Worker !== "undefined") {
-      return new WorkerSocketAdapter(url, protocols);
+      return new WorkerMessageSocket(
+        new Worker(new URL("./worker", import.meta.url)),
+        url,
+        protocols,
+      );
     }
     return new WebSocket(url, protocols) as IWebSocket;
   },

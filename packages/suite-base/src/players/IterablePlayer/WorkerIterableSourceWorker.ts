@@ -14,7 +14,6 @@ import type {
   GetBackfillMessagesArgs,
   IIterableSource,
   Initialization,
-  IteratorResult,
   MessageIteratorArgs,
 } from "./IIterableSource";
 import { IteratorCursor } from "./IteratorCursor";
@@ -42,12 +41,6 @@ export class WorkerIterableSourceWorker<MessageType = unknown> {
 
   public async setCompareOffsets(offsetsSec: readonly number[], request: number): Promise<void> {
     await this.#source.setCompareOffsets?.(offsetsSec, request);
-  }
-
-  public messageIterator(
-    args: MessageIteratorArgs,
-  ): AsyncIterableIterator<Readonly<IteratorResult<MessageType>>> & Comlink.ProxyMarked {
-    return Comlink.proxy(this.#source.messageIterator(args));
   }
 
   public async getBackfillMessages(

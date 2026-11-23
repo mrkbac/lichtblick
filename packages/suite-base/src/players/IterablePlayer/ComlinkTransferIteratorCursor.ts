@@ -25,19 +25,6 @@ class ComlinkTransferIteratorCursor<MessageType = Uint8Array> {
     this.#cursor = cursor;
   }
 
-  public async next(): ReturnType<IMessageCursor<MessageType>["next"]> {
-    const next = await this.#cursor.next();
-    if (next == undefined) {
-      return next;
-    }
-
-    if (next.type === "message-event" && next.msgEvent.message instanceof Uint8Array) {
-      return Comlink.transfer(next, [next.msgEvent.message.buffer]);
-    }
-
-    return next;
-  }
-
   public async nextBatch(durationMs: number): Promise<PackedBatch<MessageType> | undefined> {
     return transferPacked(await this.#cursor.nextBatch(durationMs));
   }

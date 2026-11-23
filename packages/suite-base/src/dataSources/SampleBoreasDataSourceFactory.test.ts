@@ -2,15 +2,6 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import SampleBoreasDataSourceFactory from "@lichtblick/suite-base/dataSources/SampleBoreasDataSourceFactory";
-import {
-  SAMPLE_BOREAS_DATA_SOURCE_DISPLAY_NAME,
-  SAMPLE_BOREAS_DATA_SOURCE_ICON_NAME,
-  SAMPLE_BOREAS_DATA_SOURCE_ID,
-  SAMPLE_BOREAS_DATA_SOURCE_NAME,
-  SAMPLE_BOREAS_DATA_SOURCE_READ_AHEAD_DURATION,
-  SAMPLE_BOREAS_DATA_SOURCE_TYPE,
-  SAMPLE_BOREAS_DATA_SOURCE_URL,
-} from "@lichtblick/suite-base/dataSources/constants";
 import { IterablePlayer } from "@lichtblick/suite-base/players/IterablePlayer";
 import { WorkerSerializedIterableSource } from "@lichtblick/suite-base/players/IterablePlayer/WorkerIterableSource";
 import { expandVideoSeekBackfill } from "@lichtblick/suite-base/players/IterablePlayer/videoSeekBackfill";
@@ -43,10 +34,10 @@ describe("SampleBoreasDataSourceFactory", () => {
 
     expect(IterablePlayer).toHaveBeenCalledWith({
       source: expect.any(Object),
-      name: SAMPLE_BOREAS_DATA_SOURCE_NAME,
+      name: expect.stringContaining("Boreas dataset"),
       urlParams: {},
-      sourceId: SAMPLE_BOREAS_DATA_SOURCE_ID,
-      readAheadDuration: SAMPLE_BOREAS_DATA_SOURCE_READ_AHEAD_DURATION,
+      sourceId: "sample-boreas",
+      readAheadDuration: { sec: 10, nsec: 0 },
       expandBackfill: expandVideoSeekBackfill,
     });
     expect(player).toBeInstanceOf(IterablePlayer);
@@ -60,7 +51,7 @@ describe("SampleBoreasDataSourceFactory", () => {
     expect(WorkerSerializedIterableSource).toHaveBeenCalledWith(
       expect.objectContaining({
         initArgs: {
-          url: SAMPLE_BOREAS_DATA_SOURCE_URL,
+          url: expect.stringMatching(/boreas-showcase-v2\.mcap$/),
         },
       }),
     );
@@ -68,10 +59,10 @@ describe("SampleBoreasDataSourceFactory", () => {
 
   it("should have correct factory properties", async () => {
     //Given / When / Then
-    expect(factory.id).toBe(SAMPLE_BOREAS_DATA_SOURCE_ID);
-    expect(factory.type).toBe(SAMPLE_BOREAS_DATA_SOURCE_TYPE);
-    expect(factory.displayName).toBe(SAMPLE_BOREAS_DATA_SOURCE_DISPLAY_NAME);
-    expect(factory.iconName).toBe(SAMPLE_BOREAS_DATA_SOURCE_ICON_NAME);
+    expect(factory.id).toBe("sample-boreas");
+    expect(factory.type).toBe("sample");
+    expect(factory.displayName).toBe("Sample: Boreas");
+    expect(factory.iconName).toBe("FileASPX");
     expect(factory.hidden).toBe(true);
     expect(factory.legacyIds).toEqual(["sample-nuscenes"]);
     expect(factory.sampleLayout).toBeDefined();

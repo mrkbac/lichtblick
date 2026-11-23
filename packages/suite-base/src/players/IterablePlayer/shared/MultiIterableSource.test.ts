@@ -12,8 +12,8 @@ import { BasicBuilder } from "@lichtblick/test-builders";
 
 import { IIterableSource, Initialization, ISerializedIterableSource } from "../IIterableSource";
 import { HydratedSourcePool, SourceHydrator } from "./HydratedSourcePool";
-import { MIN_UPDATE_INTERVAL_MS, MultiIterableSource } from "./MultiIterableSource";
-import { MultiSource } from "./types";
+import { MIN_UPDATE_INTERVAL_MS, MultiIterableSource, MultiSource } from "./MultiIterableSource";
+import type { McapIterableSource } from "../Mcap/McapIterableSource";
 
 const DEFAULT_READ_AHEAD_BUFFER_BYTES = 1024 * 1024 * 2;
 
@@ -146,7 +146,6 @@ describe("MultiIterableSource", () => {
         type: "url",
         url: url1,
         cacheSizeInBytes: expect.any(Number),
-        readAheadEnabled: true,
         readAheadBufferBytes: DEFAULT_READ_AHEAD_BUFFER_BYTES,
         pool: expect.any(HydratedSourcePool),
       });
@@ -154,47 +153,10 @@ describe("MultiIterableSource", () => {
         type: "url",
         url: url2,
         cacheSizeInBytes: expect.any(Number),
-        readAheadEnabled: true,
         readAheadBufferBytes: DEFAULT_READ_AHEAD_BUFFER_BYTES,
         pool: expect.any(HydratedSourcePool),
       });
       expect(initializations).toHaveLength(2);
-    });
-    it("should enable read-ahead by default for multi-url sources", async () => {
-      // GIVEN: a multi-url source with three URLs.
-      const urls = [BasicBuilder.string(), BasicBuilder.string(), BasicBuilder.string()];
-      const multiSource = new MultiIterableSource(
-        {
-          type: "urls",
-          urls,
-        },
-        mockSourceConstructor,
-      );
-
-      // WHEN
-      await multiSource["loadMultipleSources"]();
-
-      // THEN: each constructed source keeps bounded speculative read-ahead enabled.
-      expect(mockSourceConstructor.mock.calls[0]![0].readAheadEnabled).toBe(true);
-      expect(mockSourceConstructor.mock.calls[1]![0].readAheadEnabled).toBe(true);
-      expect(mockSourceConstructor.mock.calls[2]![0].readAheadEnabled).toBe(true);
-    });
-    it("should enable read-ahead by default for a single-url source", async () => {
-      // GIVEN: a single-url source.
-      const urls = [BasicBuilder.string()];
-      const multiSource = new MultiIterableSource(
-        {
-          type: "urls",
-          urls,
-        },
-        mockSourceConstructor,
-      );
-
-      // WHEN
-      await multiSource["loadMultipleSources"]();
-
-      // THEN: the constructed source keeps legacy read-ahead behavior.
-      expect(mockSourceConstructor.mock.calls[0]![0].readAheadEnabled).toBe(true);
     });
     it("should cap default multi-url readAheadBufferBytes at 2 MiB when per-source cache is larger", async () => {
       // GIVEN: a multi-url source whose per-source cache is far above 8 MiB.
@@ -774,7 +736,7 @@ describe("MultiIterableSource", () => {
           type: "urls",
           urls,
         },
-        TestPooledSource,
+        TestPooledSource as unknown as typeof McapIterableSource,
       );
 
       // WHEN: the real top-level initialize() sorts and prewarms the earliest sources.

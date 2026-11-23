@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import { compare, toNanoSec } from "@foxglove/rostime";
+import { Time, compare, toNanoSec } from "@foxglove/rostime";
 import { Heap } from "heap-js";
 
 import {
@@ -9,10 +9,19 @@ import {
   IteratorResult,
   MessageIteratorArgs,
 } from "@lichtblick/suite-base/players/IterablePlayer/IIterableSource";
-import {
-  SequentialIteratorMergeOptions,
-  SourceWithTime,
-} from "@lichtblick/suite-base/players/IterablePlayer/shared/types";
+
+type SourceWithTime = {
+  source: IIterableSource;
+  startTime: Time;
+  endTime: Time;
+};
+
+type SequentialIteratorMergeOptions<T extends IteratorResult> = {
+  value: T;
+  iterator: AsyncIterableIterator<Readonly<IteratorResult>>;
+  /** Sort key in ns: the value's time, or for an alert the last time its iterator reached */
+  time: bigint;
+};
 
 /**
  * Lazily merges sources in start-time order, activating each iterator only when playback reaches

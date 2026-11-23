@@ -3,13 +3,23 @@
 
 import Logger from "@lichtblick/log";
 
-import type { HydratedSourcePoolOptions, SourceHydrator } from "./types";
+// Contract a caller supplies to HydratedSourcePool for a hydrated (heavyweight) value.
+export type SourceHydrator<T> = {
+  // Create the heavyweight value (open readable, build reader, parse channels, ...).
+  open: () => Promise<T>;
+  // Release the heavyweight value (close readable/connection, drop references).
+  close: (value: T) => Promise<void>;
+  // Optional estimated resident memory (bytes) of the hydrated value, used by the byte budget.
+  // When omitted, every entry weighs 1 so the pool behaves as a pure count cap.
+  weigh?: (value: T) => number;
+};
 
-// Re-exported so the existing external import of this type from "./HydratedSourcePool" keeps
-// working; its canonical definition now lives in shared/types.ts. HydratedSourcePoolOptions is
-// only used internally here (constructor parameter type) — external consumers import it directly
-// from "./types".
-export type { SourceHydrator };
+type HydratedSourcePoolOptions = {
+  // Primary limiter: evict LRU unpinned entries while total estimated bytes exceeds this.
+  maxBytes?: number;
+  // Safety cap on resident entry count (bounds open connections/readers regardless of weight).
+  maxCount?: number;
+};
 
 const log = Logger.getLogger(__filename);
 

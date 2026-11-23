@@ -31,7 +31,7 @@ class IteratorCursor<MessageType = unknown> implements IMessageCursor<MessageTyp
     this.#abort = abort;
   }
 
-  public async next(): ReturnType<IMessageCursor<MessageType>["next"]> {
+  async #next(): Promise<IteratorResult<MessageType> | undefined> {
     if (this.#abort?.aborted === true) {
       return undefined;
     }
@@ -41,7 +41,7 @@ class IteratorCursor<MessageType = unknown> implements IMessageCursor<MessageTyp
   }
 
   public async nextBatch(durationMs: number): Promise<IteratorResult<MessageType>[] | undefined> {
-    const firstResult = await this.next();
+    const firstResult = await this.#next();
     if (!firstResult) {
       return undefined;
     }
@@ -63,7 +63,7 @@ class IteratorCursor<MessageType = unknown> implements IMessageCursor<MessageTyp
     }
 
     for (;;) {
-      const result = await this.next();
+      const result = await this.#next();
       if (!result) {
         return results;
       }
