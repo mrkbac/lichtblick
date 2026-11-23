@@ -191,12 +191,3 @@ export const Occupancy_Grid_Costmap_With_Pick_Settings: StoryObj = {
     await userEvent.click(await screen.findByRole("button", { name: /show settings/i }));
   },
 };
-
-export const OccupancyGridCostmapWithSettingsChinese: StoryObj = {
-  ...Occupancy_Grid_Costmap_With_Pick_Settings,
-  parameters: { forceLanguage: "zh" },
-};
-export const OccupancyGridCostmapWithSettingsJapanese: StoryObj = {
-  ...Occupancy_Grid_Costmap_With_Pick_Settings,
-  parameters: { forceLanguage: "ja" },
-};

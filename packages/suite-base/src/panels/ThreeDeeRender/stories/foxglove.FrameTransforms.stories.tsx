@@ -142,12 +142,3 @@ export const FoxgloveFrameTransforms: StoryObj = {
     );
   },
 };
-
-export const FoxgloveFrameTransformsChinese: StoryObj = {
-  ...FoxgloveFrameTransforms,
-  parameters: { forceLanguage: "zh" },
-};
-export const FoxgloveFrameTransformsJapanese: StoryObj = {
-  ...FoxgloveFrameTransforms,
-  parameters: { forceLanguage: "ja" },
-};

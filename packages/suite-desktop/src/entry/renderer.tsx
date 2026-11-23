@@ -8,9 +8,10 @@
 import "@lichtblick/suite-base/util/installSetImmediate";
 
 import { AppSetting } from "@lichtblick/suite-base";
-import { Storage } from "@lichtblick/suite-desktop/src/common/types";
-import { main as rendererMain } from "@lichtblick/suite-desktop/src/renderer/index";
-import NativeStorageAppConfiguration from "@lichtblick/suite-desktop/src/renderer/services/NativeStorageAppConfiguration";
+
+import { Storage } from "../common/types";
+import { main as rendererMain } from "../renderer/index";
+import NativeStorageAppConfiguration from "../renderer/services/NativeStorageAppConfiguration";
 
 const isDevelopment = process.env.NODE_ENV === "development";
 
