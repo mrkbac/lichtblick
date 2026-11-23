@@ -34,6 +34,11 @@ describe("parseProtobufSchema", () => {
       ),
     );
     expect(channel.deserialize(Buffer.from("0A0101", "hex"))).toEqual({ data: [1] });
+    expect(channel.datatypes.get("ExampleMessage")?.definitions).toContainEqual({
+      type: "int32",
+      name: "data",
+      isArray: true,
+    });
   });
 
   it("handles protobuf int64 values", () => {

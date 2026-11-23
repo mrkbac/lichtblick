@@ -121,4 +121,22 @@ describe("Bitstream", () => {
     expect(bitstream.se_v()).toEqual(-2);
     expect(bitstream.se_v()).toEqual(-6);
   });
+
+  it("Keeps a 0x03 that follows a single zero byte read bit by bit", () => {
+    // Bit reads re-read the same byte; that must not count it as two zero bytes.
+    const bitstream = new Bitstream(new Uint8Array([0x00, 0x03, 0xff]));
+    expect(bitstream.u(16)).toEqual(0x0003);
+  });
+
+  it("Keeps a leading 0x03 and a 0x03 right after an escape", () => {
+    const bitstream = new Bitstream(new Uint8Array([0x03, 0x00, 0x00, 0x03, 0x03]));
+    expect(bitstream.u_8()).toEqual(0x03);
+    expect(bitstream.u(16)).toEqual(0);
+    expect(bitstream.u_8()).toEqual(0x03);
+  });
+
+  it("Reads 32 bits that end exactly at the buffer end", () => {
+    const bitstream = new Bitstream(new Uint8Array([0xff, 0xff, 0xff, 0xfe]));
+    expect(bitstream.u(32)).toEqual(0xfffffffe);
+  });
 });

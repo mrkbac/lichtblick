@@ -8,7 +8,13 @@
 import { McapIndexedReader, McapWriter, TempBuffer } from "@lichtblick/mcap-core";
 
 import { loadDecompressHandlers } from "./decompressHandlers";
-import { ExportMcapOptions, countTimesInRange, exportMcap, readMessageTimes } from "./exportMcap";
+import {
+  ExportMcapOptions,
+  countTimesInRange,
+  exportMcap,
+  readMessageTimes,
+  rewriteChunk,
+} from "./exportMcap";
 
 type Input = { reader: McapIndexedReader; buffer: TempBuffer };
 
@@ -168,6 +174,29 @@ describe("exportMcap", () => {
         signal: controller.signal,
       }),
     ).rejects.toThrow();
+  });
+});
+
+describe("rewriteChunk", () => {
+  it("skips decompression for an empty compressed chunk", () => {
+    const decompress = vi.fn(() => {
+      throw new Error("empty input");
+    });
+    const result = rewriteChunk(
+      {
+        records: new Uint8Array(0),
+        compression: "zstd",
+        uncompressedSize: 0n,
+        startTime: 0n,
+        endTime: 0n,
+        channels: new Map(),
+        topicCounters: new Map(),
+        outputCompression: "none",
+      },
+      { decompressHandlers: { zstd: decompress }, compressZstd: (data) => data },
+    );
+    expect(decompress).not.toHaveBeenCalled();
+    expect(result.bytes.byteLength).toBe(0);
   });
 });
 
