@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MPL-2.0
 import type * as Foxglove from "@foxglove/extension";
 import { Immutable } from "immer";
+import { ReactNode } from "react";
 
 import {
   SettingsIcon,
@@ -13,6 +14,8 @@ import {
   SettingsTreeNode,
   SettingsTreeNodeActionDivider,
 } from "@lichtblick/suite";
+
+import { TopicVisibility } from "./topicNameTree";
 
 // The editor renders trees from both Lichtblick and Foxglove extensions. These "Editor" types are
 // the union of both settings tree APIs. They stay internal: `@lichtblick/suite` matches upstream.
@@ -106,7 +109,15 @@ export type NodeEditorProps = {
   focusedPath?: readonly string[];
   path: readonly string[];
   settings?: Immutable<EditorSettingsTreeNode>;
+  unfilteredSettings?: Immutable<EditorSettingsTreeNode>;
   reorderContext?: ChildReorderContext;
+  displayLabel?: string;
+  indent?: number;
+  topicNamespace?: {
+    topics: readonly TopicVisibility[];
+    children: ReactNode;
+    expand: boolean;
+  };
 };
 
 export type SelectVisibilityFilterValue = "all" | "visible" | "invisible";
@@ -115,6 +126,7 @@ export type FieldEditorProps = {
   actionHandler: (action: EditorSettingsTreeAction) => void;
   field: Immutable<EditorSettingsTreeField>;
   path: readonly string[];
+  indent?: number;
 };
 
 export type SettingsTreeEditorProps = {
@@ -132,4 +144,5 @@ export type NodeEditorState = {
   open: boolean;
   textFilter: string;
   visibilityFilter: SelectVisibilityFilterValue;
+  topicTree: boolean;
 };

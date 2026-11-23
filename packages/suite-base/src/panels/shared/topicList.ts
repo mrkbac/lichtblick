@@ -20,6 +20,7 @@ export function topicListNode<T extends SettingsTreeNode>(
 ): T {
   return {
     enableVisibilityFilter: true,
+    enableTopicNameTree: true,
     defaultExpansionState: "expanded",
     ...node,
     actions: [

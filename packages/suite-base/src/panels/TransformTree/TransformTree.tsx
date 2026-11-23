@@ -202,9 +202,9 @@ export function TransformTree({ config, saveConfig }: Props): React.JSX.Element 
   const updatePanelSettingsTree = usePanelSettingsTreeUpdate();
   const settingsActionHandler = useCallback(
     (action: SettingsTreeAction) => {
-      saveConfig(settingsActionReducer(config, action));
+      saveConfig((previous) => settingsActionReducer(previous, action));
     },
-    [config, saveConfig],
+    [saveConfig],
   );
 
   // Entries remember every parent a frame had, including from topics that are now hidden, so

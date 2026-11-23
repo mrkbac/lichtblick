@@ -42,6 +42,28 @@ export const useStyles = makeStyles()((theme) => ({
     alignItems: "center",
     justifyContent: "center",
   },
+  topicFilterRow: {
+    gridColumn: "span 2",
+    display: "flex",
+    flexWrap: "wrap",
+    alignItems: "center",
+    gap: theme.spacing(0.5),
+    padding: theme.spacing(0.5, 1, 0.5, 2),
+  },
+  topicFilterInput: {
+    flex: "1 1 100px",
+    minWidth: 0,
+  },
+  topicFilterControls: {
+    display: "flex",
+    alignItems: "center",
+    gap: theme.spacing(0.5),
+  },
+  topicVisibilityFilter: {
+    "& .MuiToggleButton-root": {
+      padding: theme.spacing(0.25, 0.75),
+    },
+  },
 
   nodeHeader: {
     display: "flex",

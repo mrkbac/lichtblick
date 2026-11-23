@@ -1027,6 +1027,9 @@ export type SettingsTreeNode = {
    */
   enableVisibilityFilter?: boolean;
 
+  /** Offer a namespace tree for children keyed by topic name. */
+  enableTopicNameTree?: boolean;
+
   /**
    * True if the node can be reordered via drag and drop.
    */
