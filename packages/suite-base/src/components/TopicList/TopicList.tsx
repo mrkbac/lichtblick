@@ -282,6 +282,8 @@ export function TopicList(): React.JSX.Element {
       {contextMenuState && (
         <Suspense fallback={undefined}>
           <ContextMenu
+            // A new right-click opens a fresh menu, not the old one with new props
+            key={`${contextMenuState.position.left},${contextMenuState.position.top}`}
             onClose={handleContextMenuClose}
             anchorPosition={contextMenuState.position}
             messagePaths={contextMenuState.items}
