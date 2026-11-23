@@ -11,6 +11,7 @@ import {
   PREVIEW_TOPIC_OFF,
   ThumbnailCache,
   findCachedMessage,
+  isPreviewFrame,
   previewableTopics,
   requestThumbnail,
   resolvePreviewTopic,
@@ -36,8 +37,8 @@ describe("previewableTopics / resolvePreviewTopic", () => {
     { name: "/video", schemaName: "foxglove.CompressedVideo" },
   ]);
 
-  it("keeps raw and compressed image topics, sorted by name", () => {
-    expect(topics).toEqual(["/a/cam", "/z/cam"]);
+  it("keeps image and video topics, sorted by name", () => {
+    expect(topics).toEqual(["/a/cam", "/video", "/z/cam"]);
   });
 
   it("defaults to the first topic, honours a valid choice, and supports off", () => {
@@ -91,6 +92,28 @@ describe("findCachedMessage", () => {
     expect(findCachedMessage(cache, end, "/cam", { sec: 3, nsec: 500_000_000 })).toBeUndefined();
     expect(findCachedMessage(cache, end, "/other", { sec: 2, nsec: 0 })).toBeUndefined();
     expect(findCachedMessage(undefined, end, "/cam", { sec: 2, nsec: 0 })).toBeUndefined();
+  });
+
+  it("skips messages that fail `accept`", () => {
+    const only = (seconds: number) => (m: { receiveTime: { sec: number; nsec: number } }) =>
+      m.receiveTime.sec + m.receiveTime.nsec / 1e9 === seconds;
+    expect(
+      findCachedMessage(cache, end, "/cam", { sec: 2, nsec: 900_000_000 }, only(0.5))?.receiveTime,
+    ).toEqual(fromSec(0.5));
+  });
+});
+
+describe("isPreviewFrame", () => {
+  const video = (nalHeader: number): MessageEvent => ({
+    ...msg("/video", 1),
+    schemaName: "foxglove.CompressedVideo",
+    message: { format: "h264", data: new Uint8Array([0, 0, 0, 1, nalHeader, 0x88]) },
+  });
+
+  it("accepts images and video keyframes, rejects video delta frames", () => {
+    expect(isPreviewFrame(msg("/cam", 1))).toBe(true);
+    expect(isPreviewFrame(video(0x65))).toBe(true); // IDR
+    expect(isPreviewFrame(video(0x41))).toBe(false); // non-IDR slice
   });
 });
 
