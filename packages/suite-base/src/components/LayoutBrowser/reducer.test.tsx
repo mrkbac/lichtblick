@@ -138,6 +138,33 @@ describe("LayoutBrowser reducer", () => {
     expect(result.current[0].multiAction).toBeUndefined();
   });
 
+  it("shift-multi-action drops deleted layouts from the selection", () => {
+    const { result } = renderHook(() =>
+      useLayoutBrowserReducer({
+        busy: false,
+        error: undefined,
+        online: true,
+        lastSelectedId: undefined,
+      }),
+    );
+    const testId1 = BasicBuilder.string();
+    const testId2 = BasicBuilder.string();
+
+    act(() => {
+      result.current[1]({ type: "select-id", id: testId1 });
+      result.current[1]({ type: "select-id", id: testId2, modKey: true });
+      result.current[1]({ type: "queue-multi-action", action: "delete" });
+      result.current[1]({ type: "shift-multi-action" });
+    });
+    expect(result.current[0].selectedIds).toEqual([testId2]);
+
+    act(() => {
+      result.current[1]({ type: "shift-multi-action" });
+    });
+    expect(result.current[0].selectedIds).toEqual([]);
+    expect(result.current[0].multiAction).toBeUndefined();
+  });
+
   /**
    * GIVEN a state with some selected IDs
    * WHEN select-id is dispatched with modKey=true

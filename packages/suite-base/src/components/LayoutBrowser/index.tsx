@@ -97,7 +97,7 @@ export default function LayoutBrowser({
     onRevertLayout,
     onOverwriteLayout,
     confirmModal,
-  } = useLayoutActions({ state, dispatch });
+  } = useLayoutActions({ state, dispatch, onSelectLayout });
   const { importLayout, exportLayout } = useLayoutTransfer();
   const onExportLayout = exportLayout;
 

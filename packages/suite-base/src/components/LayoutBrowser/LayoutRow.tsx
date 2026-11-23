@@ -376,7 +376,12 @@ export default React.memo(function LayoutRow({
       {confirmModal}
       <ListItemButton
         data-testid="layout-list-item"
-        selected={selected || multiSelectedIds.includes(layout.id)}
+        // While several are selected, show only them: the current layout may be toggled out.
+        selected={
+          multiSelection
+            ? multiSelectedIds.includes(layout.id)
+            : selected || multiSelectedIds.includes(layout.id)
+        }
         onSubmit={onSubmit}
         onClick={(event) => {
           // Toggle selection for multi-select support

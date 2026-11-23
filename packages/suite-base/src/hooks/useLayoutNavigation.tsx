@@ -40,19 +40,17 @@ export function useLayoutNavigation(menuClose?: () => void): UseLayoutNavigation
   const onSelectLayout = useCallbackWithToast(
     async (item: Layout, { event }: { event?: MouseEvent } = {}) => {
       if (event?.ctrlKey === true || event?.metaKey === true || event?.shiftKey === true) {
-        if (item.id !== currentLayoutId) {
-          // selectedIds is empty on intial render
-          // this adds the current layout to selection
-          if (state.selectedIds.length === 0 && currentLayoutId != undefined) {
-            dispatch({ type: "select-id", id: currentLayoutId });
-          }
-          dispatch({
-            type: "select-id",
-            id: item.id,
-            modKey: event.ctrlKey || event.metaKey,
-            shiftKey: event.shiftKey,
-          });
+        // selectedIds is empty on initial render, while the current layout shows as selected: start
+        // the selection from it. Clicking it then toggles it out like any other layout.
+        if (state.selectedIds.length === 0 && currentLayoutId != undefined) {
+          dispatch({ type: "select-id", id: currentLayoutId });
         }
+        dispatch({
+          type: "select-id",
+          id: item.id,
+          modKey: event.ctrlKey || event.metaKey,
+          shiftKey: event.shiftKey,
+        });
       } else {
         // Re-selecting the shown layout would reload every panel for nothing.
         if (item.id !== currentLayoutId) {

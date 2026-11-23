@@ -199,7 +199,11 @@ describe("useLayoutNavigation", () => {
       expect(menuClose).not.toHaveBeenCalled();
     });
 
-    it("does nothing when modifier key is pressed but item is the current layout", async () => {
+    it("toggles the current layout like any other when a modifier key is pressed", async () => {
+      (useLayoutBrowserReducer as Mock).mockReturnValue([
+        { ...defaultState, selectedIds: [currentLayoutId, otherLayoutId] },
+        dispatchMock,
+      ]);
       const { result, layout } = setup({ layoutProps: { id: currentLayoutId } });
 
       await act(async () => {
@@ -209,7 +213,13 @@ describe("useLayoutNavigation", () => {
       });
 
       expect(setSelectedLayoutIdMock).not.toHaveBeenCalled();
-      expect(dispatchMock).not.toHaveBeenCalled();
+      expect(dispatchMock).toHaveBeenCalledTimes(1);
+      expect(dispatchMock).toHaveBeenCalledWith({
+        type: "select-id",
+        id: currentLayoutId,
+        modKey: true,
+        shiftKey: false,
+      });
     });
 
     it("first dispatches currentLayoutId then the new id when selectedIds is empty and ctrlKey is pressed", async () => {
