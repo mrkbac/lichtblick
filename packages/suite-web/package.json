@@ -20,6 +20,7 @@
     "fake-indexeddb": "6.2.8",
     "react": "19.3.1",
     "react-dom": "19.3.1",
+    "react-i18next": "18.0.3",
     "react-refresh": "0.19.0",
     "storybook-react-rsbuild": "3.6.4",
     "tss-react": "4.9.21",
