@@ -424,6 +424,7 @@ const Plot = (props: PlotProps): React.JSX.Element => {
                 <Stack alignItems="center" justifyContent="center" padding={0.5}>
                   <WarningAmberIcon
                     style={{ fontSize: 16 }}
+                    aria-hidden={false}
                     aria-label={approximateWarning}
                     role="img"
                     htmlColor={theme.palette.warning.main}

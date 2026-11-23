@@ -28,7 +28,7 @@ describe("AlertIcon", () => {
     // Then
     const svg = container.querySelector("svg");
     expect(svg).toBeInTheDocument();
-    expect(svg).toHaveAttribute("fill", lightPalette.error.main);
+    expect(svg).toHaveAttribute("color", lightPalette.error.main);
   });
 
   it("renders the warning icon with the warning palette color", () => {
@@ -38,7 +38,7 @@ describe("AlertIcon", () => {
     // Then
     const svg = container.querySelector("svg");
     expect(svg).toBeInTheDocument();
-    expect(svg).toHaveAttribute("fill", lightPalette.warning.main);
+    expect(svg).toHaveAttribute("color", lightPalette.warning.main);
   });
 
   it("renders the info icon with the info palette color", () => {
@@ -48,7 +48,7 @@ describe("AlertIcon", () => {
     // Then
     const svg = container.querySelector("svg");
     expect(svg).toBeInTheDocument();
-    expect(svg).toHaveAttribute("fill", lightPalette.info.main);
+    expect(svg).toHaveAttribute("color", lightPalette.info.main);
   });
 
   it("renders nothing for an unknown severity", () => {
