@@ -16,11 +16,6 @@ export const EMPTY_ITEMS_BY_PATH: SamplesByPath = {};
  * history stays visible. See PathSampleColumns.
  */
 export const MAX_SAMPLES_PER_PATH = 1_000_000;
-/**
- * Live samples kept per path: the chart redraws all of them every LIVE_REDRAW_MS, so this keeps
- * that redraw as cheap as the old 100k ring, but thinned instead of dropping the start.
- */
-export const MAX_LIVE_SAMPLES_PER_PATH = 100_000;
 /** How often the chart takes live updates. */
 export const LIVE_REDRAW_MS = 250;
 export const EMPTY_TOPICS: string[] = [];

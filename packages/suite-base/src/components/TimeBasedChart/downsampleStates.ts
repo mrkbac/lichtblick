@@ -5,6 +5,8 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+import * as _ from "lodash-es";
+
 import { Point } from "@lichtblick/suite-base/components/Chart/datasets";
 
 import { calculateIntervals } from "./downsample";
@@ -43,6 +45,26 @@ type Interval = {
   lastRepeat?: StatePoint;
 };
 
+/** Points within this x range are kept; past it, only the nearest point on each side. */
+function keptXRange({ bounds }: PlotViewport): { minX: number; maxX: number } {
+  const xRange = bounds.x.max - bounds.x.min;
+  return { minX: bounds.x.min - xRange * 0.5, maxX: bounds.x.max + xRange * 0.5 };
+}
+
+/**
+ * The rows [start, end) of points sorted by x that `downsampleStates` uses for `view`: the kept
+ * range plus the nearest point outside it on each side. Lets a long history skip what's off-screen.
+ */
+export function sortedStateWindow(
+  data: readonly { x: number }[],
+  view: PlotViewport,
+): { start: number; end: number } {
+  const { minX, maxX } = keptXRange(view);
+  const start = Math.max(0, _.sortedIndexBy(data, { x: minX }, "x") - 1);
+  const end = Math.min(data.length, _.sortedLastIndexBy(data, { x: maxX }, "x") + 1);
+  return { start, end };
+}
+
 /**
  * Downsample state transition data by breaking the visible bounds into a set
  * of evenly-sized intervals and making a note of the number of state
@@ -68,7 +90,6 @@ export function downsampleStates(
   view: PlotViewport,
   maxPoints?: number,
 ): StatePoint[] {
-  const { bounds } = view;
   const { pixelPerXValue } = calculateIntervals(view, 2, maxPoints);
   const xValuePerPixel = 1 / pixelPerXValue;
 
@@ -78,9 +99,7 @@ export function downsampleStates(
   // We keep points within a buffer window around the bounds so points near the bounds are
   // connected to their peers and available for pan/zoom.
   // Points outside this buffer window are dropped.
-  const xRange = bounds.x.max - bounds.x.min;
-  const minX = bounds.x.min - xRange * 0.5;
-  const maxX = bounds.x.max + xRange * 0.5;
+  const { minX, maxX } = keptXRange(view);
 
   let firstPastBounds: number | undefined = undefined;
 

@@ -142,7 +142,15 @@ describe("incremental live datasets", () => {
     expect(sampleValue.mock.calls.length).toBeLessThanOrEqual(4);
     expect(first.data[0]?.x).toBeLessThan(0);
     expect(next.data[0]?.x).toBeLessThan(-150);
-    expect(next).toEqual(messagesToDataset(shifted));
+    // Cached points are shifted, not recomputed: equal up to float rounding.
+    const fresh = messagesToDataset(shifted);
+    expect({ ...next, data: [] }).toEqual({ ...fresh, data: [] });
+    expect(next.data.map((point) => ({ ...point, x: undefined }))).toEqual(
+      fresh.data.map((point) => ({ ...point, x: undefined })),
+    );
+    next.data.forEach((point, i) => {
+      expect(point!.x).toBeCloseTo(fresh.data[i]!.x, 9);
+    });
   });
 
   it("converts only new samples and the mutable tail on a dense live redraw", () => {
