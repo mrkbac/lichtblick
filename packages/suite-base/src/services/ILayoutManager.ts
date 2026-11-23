@@ -105,6 +105,8 @@ export interface ILayoutManager {
     name: string;
     data: LayoutData;
     permission: LayoutPermission;
+    /** Stored as Layout.from, e.g. to recognize layouts installed from a link. */
+    from?: string;
     /** See Layout.untrusted */
     untrusted?: boolean;
     /** Organization to save a shared layout in (organization API only). */

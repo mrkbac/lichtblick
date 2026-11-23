@@ -121,6 +121,9 @@ import { severityToBadgeColor } from "./utils";
 
 const log = Logger.getLogger(__filename);
 
+/** Layout.from of layouts installed from a `?layoutUrl=` or `#layout=` link. */
+const LAYOUT_FROM_LINK = "link";
+
 // Loaded once a comparison is edited, so it costs nothing at startup
 const CompareDialog = lazy(async () => ({
   default: (await import("@lichtblick/suite-base/components/Compare/CompareDialog")).CompareDialog,
@@ -491,17 +494,20 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
     async (text: string, filename: string, signal: AbortSignal) => {
       const layoutName = basename(filename, extname(filename));
 
-      // Earlier copies from links: same name, personal, untrusted. Never touch shared or trusted
-      // layouts that happen to share the name.
+      // Only earlier copies this installed (marked from a link, personal). Imported, shared or
+      // other layouts that happen to share the name stay.
       const existingLayouts = await layoutManager.getLayouts();
       const matchingLayouts = existingLayouts.filter(
         (layout) =>
-          layout.name === layoutName && layout.untrusted === true && !layoutIsShared(layout),
+          layout.name === layoutName && layout.from === LAYOUT_FROM_LINK && !layoutIsShared(layout),
       );
 
       // Delegate JSON parsing, saving, and selection to parseAndInstallLayout
       const file = new File([text], filename, { type: "application/json" });
-      const newLayout = await parseAndInstallLayout(file, "local", signal, { untrusted: true });
+      const newLayout = await parseAndInstallLayout(file, "local", signal, {
+        untrusted: true,
+        from: LAYOUT_FROM_LINK,
+      });
 
       // Only delete old layouts after successful save to avoid data loss
       if (newLayout) {

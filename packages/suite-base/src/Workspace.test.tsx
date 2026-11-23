@@ -701,17 +701,31 @@ describe("Workspace - fetchLayoutFromUrl", () => {
         "local",
         expect.any(AbortSignal),
         // Anyone can make a link: its user scripts need approval.
-        { untrusted: true },
+        { untrusted: true, from: "link" },
       );
     });
   });
 
   it("should delete only earlier link-installed copies after successful install", async () => {
-    // Given an earlier link copy plus a trusted and a shared layout with the same name
+    // Given an earlier link copy plus an own, an imported (untrusted) and a shared layout with the
+    // same name
     mockGetLayouts.mockResolvedValue([
-      { id: "old-id", name: "my-layout", permission: "CREATOR_WRITE", untrusted: true },
+      {
+        id: "old-id",
+        name: "my-layout",
+        permission: "CREATOR_WRITE",
+        untrusted: true,
+        from: "link",
+      },
       { id: "own-id", name: "my-layout", permission: "CREATOR_WRITE" },
-      { id: "shared-id", name: "my-layout", permission: "ORG_WRITE", untrusted: true },
+      { id: "imported-id", name: "my-layout", permission: "CREATOR_WRITE", untrusted: true },
+      {
+        id: "shared-id",
+        name: "my-layout",
+        permission: "ORG_WRITE",
+        untrusted: true,
+        from: "link",
+      },
     ]);
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,
@@ -738,7 +752,13 @@ describe("Workspace - fetchLayoutFromUrl", () => {
   it("should not delete existing layouts if parseAndInstallLayout returns undefined", async () => {
     // Given
     mockGetLayouts.mockResolvedValue([
-      { id: "old-id", name: "my-layout", permission: "CREATOR_WRITE", untrusted: true },
+      {
+        id: "old-id",
+        name: "my-layout",
+        permission: "CREATOR_WRITE",
+        untrusted: true,
+        from: "link",
+      },
     ]);
     mockParseAndInstallLayout.mockResolvedValue(undefined);
     global.fetch = vi.fn().mockResolvedValue({
@@ -843,7 +863,7 @@ describe("Workspace - fetchLayoutFromUrl", () => {
         expect.objectContaining({ name: "Shared layout.json" }),
         "local",
         expect.any(AbortSignal),
-        { untrusted: true },
+        { untrusted: true, from: "link" },
       );
     });
     await waitFor(() => {
@@ -856,7 +876,13 @@ describe("Workspace - fetchLayoutFromUrl", () => {
 
   it("replaces the layout from an earlier share link", async () => {
     mockGetLayouts.mockResolvedValue([
-      { id: "old-id", name: "Shared layout", permission: "CREATOR_WRITE", untrusted: true },
+      {
+        id: "old-id",
+        name: "Shared layout",
+        permission: "CREATOR_WRITE",
+        untrusted: true,
+        from: "link",
+      },
     ]);
     const encoded = await encodeSharedLayout({ configById: {} });
 

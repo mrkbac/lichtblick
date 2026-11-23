@@ -82,12 +82,13 @@ export function CurrentLayoutLocalStorageSyncAdapter(): React.JSX.Element {
 
   const save = useDebouncedCallback(
     async ({ id, data }: OwnedLayout) => {
-      storeLayoutData(data);
-      if (skipSaveFor.current === id) {
-        skipSaveFor.current = undefined;
-        return;
-      }
+      // Callers fire and forget (`void save(...)`), so nothing may reject.
       try {
+        storeLayoutData(data);
+        if (skipSaveFor.current === id) {
+          skipSaveFor.current = undefined;
+          return;
+        }
         // Only the data (panel configuration), saved to the 'working' copy so the layout shows
         // as edited. Renames go through layoutManager.updateLayout separately.
         await layoutManager.updateLayout({ id, data });
@@ -121,7 +122,11 @@ export function CurrentLayoutLocalStorageSyncAdapter(): React.JSX.Element {
       mounted.current = true;
       prevId.current = layout?.id;
       if (layout) {
-        storeLayoutData(layout.data);
+        try {
+          storeLayoutData(layout.data);
+        } catch (error) {
+          log.error(error);
+        }
       }
       return;
     }
