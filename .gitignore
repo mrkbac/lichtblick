@@ -18,7 +18,6 @@ coverage/
 # E2E tests
 .playwright-mcp/
 e2e/reports
-e2e/tests/reports/desktop/*
 e2e/tests/reports/web/*
 e2e/tmp/*
 benchmark/e2e/reports/*

@@ -114,7 +114,6 @@ pnpm test
 pnpm test:watch
 
 # Run E2E tests
-pnpm test:e2e:desktop
 pnpm test:e2e:web
 ```
 
@@ -385,12 +384,7 @@ The project uses a **Builder pattern** to streamline the creation of test data a
 
 ### End-to-End Tests (Playwright)
 
-E2E tests cover both desktop (Electron) and web versions, with the following strategy:
-
-- **Primary focus on desktop testing** — The desktop version is the final stage of the software, so the majority of E2E tests target it.
-- **Web-specific tests only when necessary** — Tests are written for the web version only when there is a distinct behavior that needs separate validation.
-- **Shared test architecture** — Page Object Models (POM) and helper functions are reused across both platforms.
-- **Playwright** is the chosen E2E framework.
+E2E tests run against the web app with **Playwright**. Page Object Models (POM) and helper functions keep the specs short.
 
 #### Filename pattern
 
@@ -405,15 +399,6 @@ Example: `install-multiple-extensions.web.spec.ts`
 ```
 e2e/
 ├── tests/
-│   ├── desktop/                          # Desktop E2E tests
-│   │   ├── open-files/
-│   │   │   └── open-mcap-via-ui.desktop.spec.ts
-│   │   ├── sidebar/
-│   │   ├── layout/
-│   │   ├── extension/
-│   │   ├── panel/
-│   │   ├── utils/                        # Shared desktop test utilities
-│   │   └── playwright.config.ts          # Desktop Playwright configuration
 │   └── web/                              # Web E2E tests
 │       ├── open-files/
 │       │   └── open-mcap-via-url.web.spec.ts
@@ -426,9 +411,7 @@ e2e/
 #### Running E2E tests
 
 ```sh
-pnpm test:e2e:desktop           # Desktop E2E tests
 pnpm test:e2e:web               # Web E2E tests
-pnpm test:e2e:desktop:debug     # Desktop E2E with debug mode
 pnpm test:e2e:web:debug         # Web E2E with debug mode
 ```
 
@@ -445,7 +428,6 @@ The following checks run automatically on every PR:
 | **desktop**     | Production desktop build                                                                        |
 | **benchmark**   | Production benchmark build                                                                      |
 | **test**        | Full unit test suite                                                                            |
-| **e2e-desktop** | Desktop E2E tests (parallelized across 4 shards)                                                |
 | **e2e-web**     | Web E2E tests                                                                                   |
 
 > All CI checks must pass before a PR can be merged.

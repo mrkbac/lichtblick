@@ -53,12 +53,6 @@
     "test:e2e:web:ci": "CI=true playwright test --config=e2e/tests/web/playwright.config.ts",
     "test:e2e:web:smoke": "playwright test --config=e2e/tests/web/playwright.config.ts --grep @smoke",
     "test:e2e:web:smoke:ci": "CI=true playwright test --config=e2e/tests/web/playwright.config.ts --grep @smoke",
-    "test:e2e:desktop": "playwright test --config=e2e/tests/desktop/playwright.config.ts",
-    "test:e2e:desktop:debug": "playwright test --config=e2e/tests/desktop/playwright.config.ts --debug",
-    "test:e2e:desktop:report": "playwright show-report e2e/reports/desktop",
-    "test:e2e:desktop:ci": "CI=true playwright test --config=e2e/tests/desktop/playwright.config.ts",
-    "test:e2e:desktop:smoke": "playwright test --config=e2e/tests/desktop/playwright.config.ts --grep @smoke",
-    "test:e2e:desktop:smoke:ci": "CI=true playwright test --config=e2e/tests/desktop/playwright.config.ts --grep @smoke",
     "test:e2e:summary": "node e2e/ci-helpers/generate-test-summary.ts",
     "test:e2e:benchmark": "playwright test --config=benchmark/e2e/playwright.config.ts",
     "test:e2e:benchmark:debug": "playwright test --config=benchmark/e2e/playwright.config.ts --debug",
@@ -85,7 +79,6 @@
   "devDependencies": {
     "@actions/exec": "3.0.0",
     "@biomejs/biome": "2.6.8",
-    "@foxglove/ws-protocol": "0.8.0",
     "@lichtblick/den": "workspace:*",
     "@lichtblick/tsconfig": "1.1.2",
     "@mui/material": "9.5.0",
@@ -99,7 +92,6 @@
     "@types/nearley": "2.11.5",
     "@types/node": "26.6.6",
     "@types/spdx-satisfies": "6.0.0",
-    "@types/ws": "8.18.2",
     "@vitest/coverage-v8": "5.1.1",
     "electron": "45.4.1",
     "electron-builder": "26.18.0",
@@ -124,7 +116,6 @@
     "typescript": "6.0.3",
     "typescript7": "npm:typescript@7.0.2",
     "vite": "8.3.8",
-    "vitest": "5.1.1",
-    "ws": "8.23.0"
+    "vitest": "5.1.1"
   }
 }
