@@ -39,7 +39,6 @@ import { AppBarIconButton } from "./AppBarIconButton";
 import { AppMenu } from "./AppMenu";
 import { DataSource } from "./DataSource";
 import { MonitorSetupButtons } from "./MonitorSetupButtons";
-import { NetworkStatusIndicator } from "./NetworkStatusIndicator";
 import { UpdateIndicator } from "./UpdateIndicator";
 import { UserMenu, hasUserMenu } from "./UserMenu";
 
@@ -255,7 +254,6 @@ export function AppBar(props: AppBarProps): React.JSX.Element {
 
           <div className={classes.end}>
             <div className={classes.endInner}>
-              <NetworkStatusIndicator />
               <UpdateIndicator />
               {enableMemoryUseIndicator && <MemoryUseIndicator />}
               <Stack direction="row" alignItems="center" data-tourid="sidebar-button-group">

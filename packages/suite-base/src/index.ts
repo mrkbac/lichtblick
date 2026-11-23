@@ -31,7 +31,6 @@ export { default as waitForFonts } from "./util/waitForFonts";
 export { initI18n } from "./i18n";
 export { completeLoginRedirect } from "./api/organization/oidc";
 export type { Namespace } from "./types";
-export { RemoteExtensionLoader } from "./services/extension/RemoteExtensionLoader";
 export type {
   IExtensionLoader,
   TypeExtensionLoader,
@@ -58,5 +57,4 @@ export { reportError, setReportErrorHandler } from "./reportError";
 export { makeWorkspaceContextInitialState } from "./providers/WorkspaceContextProvider";
 export type { AppBarProps } from "./components/AppBar";
 export { WebExtensionLoader } from "./services/extension/WebExtensionLoader";
-export { IdbExtensionLoader } from "./services/extension/IdbExtensionLoader";
 export { LOCAL_STORAGE_APP_CONFIGURATION } from "./constants/browserStorageKeys";

@@ -99,7 +99,6 @@ describe("IdbExtensionLoader", () => {
         METADATA_STORE_NAME,
         expect.objectContaining({
           ...expectedExtensionInfo,
-          externalId: undefined,
           size: expect.any(Number),
         }),
       );
@@ -107,7 +106,6 @@ describe("IdbExtensionLoader", () => {
         content: foxe,
         info: expect.objectContaining({
           ...expectedExtensionInfo,
-          externalId: undefined,
           size: expect.any(Number),
         }),
       });
@@ -129,7 +127,6 @@ describe("IdbExtensionLoader", () => {
         METADATA_STORE_NAME,
         expect.objectContaining({
           ...info,
-          externalId: undefined,
           size: expect.any(Number),
         }),
       );
@@ -137,7 +134,6 @@ describe("IdbExtensionLoader", () => {
         content: foxe,
         info: expect.objectContaining({
           ...info,
-          externalId: undefined,
           size: expect.any(Number),
         }),
       });

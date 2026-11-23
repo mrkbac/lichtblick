@@ -14,11 +14,9 @@ import {
   IExtensionLoader,
   FoxgloveWebSocketDataSourceFactory,
   IDataSourceFactory,
-  IdbExtensionLoader,
   WebExtensionLoader,
   McapLocalDataSourceFactory,
   RemoteDataSourceFactory,
-  RemoteExtensionLoader,
   Ros1LocalBagDataSourceFactory,
   Ros2LocalBagDataSourceFactory,
   RosbridgeDataSourceFactory,
@@ -26,7 +24,6 @@ import {
   SharedRoot,
   UlogLocalDataSourceFactory,
 } from "@lichtblick/suite-base";
-import { APP_CONFIG } from "@lichtblick/suite-base/constants/config";
 import { AppParametersInput } from "@lichtblick/suite-base/context/AppParametersContext";
 
 import LocalStorageAppConfiguration from "./services/LocalStorageAppConfiguration";
@@ -50,18 +47,9 @@ export function WebRoot(props: {
     [],
   );
 
-  const defaultExtensionLoaders: IExtensionLoader[] = [
-    new IdbExtensionLoader("org"),
-    new WebExtensionLoader(),
-  ];
   const url = new URL(globalThis.location.href);
   const [isProtocolLaunch] = useState(() => url.searchParams.has("protocol"));
-  const workspace = url.searchParams.get("workspace");
-
-  if (workspace && APP_CONFIG.apiUrl) {
-    defaultExtensionLoaders.push(new RemoteExtensionLoader("org", workspace));
-  }
-  const [extensionLoaders] = useState(() => defaultExtensionLoaders);
+  const [extensionLoaders] = useState<IExtensionLoader[]>(() => [new WebExtensionLoader()]);
 
   const layout = url.searchParams.get("layout");
   const [appParameters] = useState<AppParametersInput>(() => {

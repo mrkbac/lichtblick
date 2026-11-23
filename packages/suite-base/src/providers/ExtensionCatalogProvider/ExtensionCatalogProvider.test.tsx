@@ -20,10 +20,7 @@ import {
   useExtensionCatalog,
 } from "@lichtblick/suite-base/context/ExtensionCatalogContext";
 import { TopicAliasFunctions } from "@lichtblick/suite-base/players/TopicAliasingPlayer/StateProcessorFactory";
-import {
-  IExtensionLoader,
-  LoadedExtension,
-} from "@lichtblick/suite-base/services/extension/IExtensionLoader";
+import { IExtensionLoader } from "@lichtblick/suite-base/services/extension/IExtensionLoader";
 import PanelSetup from "@lichtblick/suite-base/stories/PanelSetup";
 import ExtensionBuilder from "@lichtblick/suite-base/testing/builders/ExtensionBuilder";
 import { Namespace } from "@lichtblick/suite-base/types";
@@ -88,46 +85,6 @@ describe("ExtensionCatalogProvider", () => {
     });
   }
 
-  function createOrgCacheLoader(
-    cachedExtension: ExtensionInfo | undefined,
-    options?: {
-      source?: string;
-      loadExtensionMock?: Mock;
-      installExtensionMock?: Mock;
-    },
-  ): IExtensionLoader {
-    return createMockLoader({
-      type: "browser",
-      namespace: "org",
-      getExtension: vi.fn().mockResolvedValue(cachedExtension),
-      loadExtension:
-        options?.loadExtensionMock ??
-        vi.fn().mockResolvedValue({ raw: options?.source ?? defaultSource }),
-      installExtension: options?.installExtensionMock ?? vi.fn(),
-    });
-  }
-
-  function createOrgServerLoader(
-    remoteExtension: ExtensionInfo,
-    options?: {
-      source?: string;
-      buffer?: Uint8Array;
-      loadExtensionMock?: Mock;
-    },
-  ): IExtensionLoader {
-    const loadResponse: LoadedExtension = {
-      raw: options?.source ?? defaultSource,
-      ...(options?.buffer && { buffer: options.buffer }),
-    };
-
-    return createMockLoader({
-      type: "server",
-      namespace: "org",
-      getExtensions: vi.fn().mockResolvedValue([remoteExtension]),
-      loadExtension: options?.loadExtensionMock ?? vi.fn().mockResolvedValue(loadResponse),
-    });
-  }
-
   async function setup({ loadersOverride }: { loadersOverride?: IExtensionLoader[] } = {}) {
     const namespace: Namespace = "local";
     const extensionInfo: ExtensionInfo = ExtensionBuilder.extensionInfo({ namespace });
@@ -137,7 +94,7 @@ describe("ExtensionCatalogProvider", () => {
       raw: `module.exports = { activate: function() { return 1; } }`,
     });
     const loaderDefault: IExtensionLoader = {
-      type: extensionInfo.namespace === "local" ? "browser" : "server",
+      type: "browser",
       namespace: extensionInfo.namespace!,
       getExtension: vi.fn().mockResolvedValue(extensionInfo),
       getExtensions: vi.fn().mockResolvedValue(extensions),
@@ -808,32 +765,19 @@ describe("ExtensionCatalogProvider", () => {
         isDesktop: false,
         loaderType: "browser" as const,
         namespace: "local" as Namespace,
-        useExternalId: false,
       },
       {
         description: "filesystem loader (local namespace)",
         isDesktop: true,
         loaderType: "filesystem" as const,
         namespace: "local" as Namespace,
-        useExternalId: false,
-      },
-      {
-        description: "server loader (org namespace)",
-        isDesktop: false,
-        loaderType: "server" as const,
-        namespace: "org" as Namespace,
-        useExternalId: true,
       },
     ])(
       "should call uninstallExtension with correct parameter for $description",
-      async ({ isDesktop, loaderType, namespace, useExternalId }) => {
+      async ({ isDesktop, loaderType, namespace }) => {
         (isDesktopApp as Mock).mockReturnValue(isDesktop);
 
-        const externalId = useExternalId ? BasicBuilder.string() : undefined;
-        const extensionInfo = ExtensionBuilder.extensionInfo({
-          namespace,
-          ...(externalId && { externalId }),
-        });
+        const extensionInfo = ExtensionBuilder.extensionInfo({ namespace });
         const uninstallFn = vi.fn().mockResolvedValue(undefined);
         const loader: IExtensionLoader = {
           type: loaderType,
@@ -855,7 +799,7 @@ describe("ExtensionCatalogProvider", () => {
           await result.current.uninstallExtension(namespace, extensionInfo.id);
         });
 
-        expect(uninstallFn).toHaveBeenCalledWith(useExternalId ? externalId : extensionInfo.id);
+        expect(uninstallFn).toHaveBeenCalledWith(extensionInfo.id);
       },
     );
 
@@ -902,82 +846,6 @@ describe("ExtensionCatalogProvider", () => {
       expect(result.current.installedExtensions).toEqual([]);
 
       (console.warn as Mock).mockRestore();
-    });
-
-    it("should only remove the org entry when the same extension is installed in both local and org", async () => {
-      (isDesktopApp as Mock).mockReturnValue(false);
-
-      const sharedId = BasicBuilder.string();
-      const localExtension = ExtensionBuilder.extensionInfo({ id: sharedId, namespace: "local" });
-      const orgExtension = ExtensionBuilder.extensionInfo({ id: sharedId, namespace: "org" });
-
-      const localLoader = createLocalLoader(localExtension, { source: "" });
-      const orgLoader = createOrgServerLoader(orgExtension, { source: "" });
-
-      const { result } = await setup({ loadersOverride: [localLoader, orgLoader] });
-
-      await waitFor(() => {
-        expect(result.current.installedExtensions).toHaveLength(2);
-      });
-
-      // Uninstall only the org copy
-      await act(async () => {
-        await result.current.uninstallExtension("org", sharedId);
-      });
-
-      // Local copy must still be present
-      expect(result.current.installedExtensions).toHaveLength(1);
-      expect(result.current.installedExtensions).toContainEqual(
-        expect.objectContaining({ id: sharedId, namespace: "local" }),
-      );
-      // Extension is still considered installed (local copy remains)
-      expect(result.current.isExtensionInstalled(sharedId)).toBe(true);
-    });
-
-    it("should remove contribution points only when the last namespace copy is uninstalled", async () => {
-      (isDesktopApp as Mock).mockReturnValue(false);
-
-      const sharedId = BasicBuilder.string();
-      const panelName = BasicBuilder.string();
-      const source = `
-        module.exports = {
-          activate: function(ctx) {
-            ctx.registerPanel({ name: "${panelName}", initPanel: () => ({ renderToolbar: () => null }) });
-          }
-        }
-      `;
-
-      const localExtension = ExtensionBuilder.extensionInfo({ id: sharedId, namespace: "local" });
-      const orgExtension = ExtensionBuilder.extensionInfo({ id: sharedId, namespace: "org" });
-
-      const localLoader = createLocalLoader(localExtension, { source });
-      const orgLoader = createOrgServerLoader(orgExtension, { source });
-
-      const { result } = await setup({ loadersOverride: [localLoader, orgLoader] });
-
-      await waitFor(() => {
-        expect(result.current.installedExtensions).toHaveLength(2);
-      });
-
-      // Uninstall org copy — panels should still be registered (local copy remains)
-      await act(async () => {
-        await result.current.uninstallExtension("org", sharedId);
-      });
-
-      expect(result.current.installedExtensions).toHaveLength(1);
-      const panelKey = Object.keys(result.current.installedPanels ?? {}).find((k) =>
-        k.includes(panelName),
-      );
-      expect(panelKey).toBeDefined();
-
-      // Uninstall local copy — now panels must be cleaned up
-      await act(async () => {
-        await result.current.uninstallExtension("local", sharedId);
-      });
-
-      expect(result.current.installedExtensions).toHaveLength(0);
-      expect(result.current.installedPanels).toEqual({});
-      expect(result.current.isExtensionInstalled(sharedId)).toBe(false);
     });
 
     it("should do nothing when the extension id is not found in installedExtensions", async () => {
@@ -1248,205 +1116,6 @@ describe("ExtensionCatalogProvider", () => {
 
       // Then: refreshAllExtensions completed gracefully with an empty list
       expect(result.current.installedExtensions).toEqual([]);
-    });
-  });
-
-  describe("loadSingleExtension", () => {
-    function setupLoaders(overrides?: {
-      extensionId?: string;
-      externalId?: string;
-      cachedVersion?: string;
-      remoteVersion?: string;
-      buffer?: Uint8Array;
-      cachedExtension?: ExtensionInfo | undefined;
-      loadCachedMock?: Mock;
-      loadRemoteMock?: Mock;
-      installMock?: Mock;
-    }) {
-      const extensionId = overrides?.extensionId ?? BasicBuilder.string();
-      const externalId = overrides?.externalId ?? BasicBuilder.string();
-      const remoteVersion = overrides?.remoteVersion ?? "1.2.3";
-      const cachedVersion = overrides?.cachedVersion;
-
-      const remoteExtension = ExtensionBuilder.extensionInfo({
-        namespace: "org",
-        id: extensionId,
-        version: remoteVersion,
-        externalId,
-      });
-
-      const cachedExtension =
-        overrides?.cachedExtension ??
-        (cachedVersion ? { ...remoteExtension, version: cachedVersion } : undefined);
-
-      const loadCachedMock =
-        overrides?.loadCachedMock ?? vi.fn().mockResolvedValue({ raw: defaultSource });
-      const loadRemoteMock =
-        overrides?.loadRemoteMock ??
-        vi.fn().mockResolvedValue({
-          raw: defaultSource,
-          ...(overrides?.buffer && { buffer: overrides.buffer }),
-        });
-      const cacheInstallMock = overrides?.installMock ?? vi.fn();
-
-      const cacheLoader = createOrgCacheLoader(cachedExtension, {
-        loadExtensionMock: loadCachedMock,
-        installExtensionMock: cacheInstallMock,
-      });
-
-      const serverLoader = createOrgServerLoader(remoteExtension, {
-        loadExtensionMock: loadRemoteMock,
-      });
-
-      return {
-        extensionId,
-        externalId,
-        remoteExtension,
-        cachedExtension,
-        loadCachedMock,
-        loadRemoteMock,
-        cacheInstallMock,
-        cacheLoader,
-        serverLoader,
-      };
-    }
-
-    it("should load from local loader", async () => {
-      // Given
-      const extension = ExtensionBuilder.extensionInfo({ namespace: "local" });
-      const loadExtensionMock = vi.fn().mockResolvedValue({ raw: defaultSource });
-      const loader = createLocalLoader(extension, { loadExtensionMock });
-
-      // When
-      const { result } = await setup({ loadersOverride: [loader] });
-
-      // Then
-      await waitFor(() => {
-        expect(loadExtensionMock).toHaveBeenCalledWith(extension.id);
-      });
-      expect(result.current.installedExtensions).toEqual([extension]);
-    });
-
-    it("should use cached version when cache version is equal to remote", async () => {
-      // Given
-      const version = "1.2.3";
-      const {
-        loadCachedMock,
-        cacheInstallMock,
-        loadRemoteMock,
-        extensionId,
-        cacheLoader,
-        serverLoader,
-        cachedExtension,
-      } = setupLoaders({
-        cachedVersion: version,
-        remoteVersion: version,
-      });
-
-      // When
-      const { result } = await setup({ loadersOverride: [cacheLoader, serverLoader] });
-
-      // Then
-      await waitFor(() => {
-        expect(loadCachedMock).toHaveBeenCalledWith(extensionId);
-      });
-      expect(loadRemoteMock).not.toHaveBeenCalled();
-      expect(cacheInstallMock).not.toHaveBeenCalled();
-      expect(result.current.installedExtensions).toEqual([cachedExtension]);
-    });
-
-    it("should use remote version when cache version differs from remote", async () => {
-      // Given
-      const remoteVersion = "1.2.3";
-      const cachedVersion = "1.2.4";
-      const buffer = new Uint8Array([BasicBuilder.number()]);
-      const {
-        loadCachedMock,
-        cacheInstallMock,
-        loadRemoteMock,
-        externalId,
-        cacheLoader,
-        serverLoader,
-        remoteExtension,
-      } = setupLoaders({
-        cachedVersion,
-        remoteVersion,
-        buffer,
-      });
-
-      // When
-      const { result } = await setup({ loadersOverride: [cacheLoader, serverLoader] });
-
-      // Then
-      await waitFor(() => {
-        expect(loadRemoteMock).toHaveBeenCalledWith(externalId);
-      });
-      await waitFor(() => {
-        expect(cacheInstallMock).toHaveBeenCalledWith({ foxeFileData: buffer });
-      });
-      expect(loadCachedMock).not.toHaveBeenCalled();
-      // When versions differ, use remote version regardless of which is newer
-      expect(result.current.installedExtensions).toEqual([remoteExtension]);
-    });
-
-    it("should load from remote and update cache when cached version is outdated", async () => {
-      // Given
-      const remoteVersion = "1.2.4";
-      const cachedVersion = "1.2.3";
-      const buffer = new Uint8Array([BasicBuilder.number()]);
-      const {
-        loadCachedMock,
-        cacheInstallMock,
-        remoteExtension,
-        loadRemoteMock,
-        externalId,
-        cacheLoader,
-        serverLoader,
-      } = setupLoaders({
-        cachedVersion,
-        remoteVersion,
-        buffer,
-      });
-
-      const { result } = await setup({ loadersOverride: [cacheLoader, serverLoader] });
-
-      await waitFor(() => {
-        expect(loadRemoteMock).toHaveBeenCalledWith(externalId);
-      });
-      await waitFor(() => {
-        expect(cacheInstallMock).toHaveBeenCalledWith({ foxeFileData: buffer });
-      });
-      expect(loadCachedMock).not.toHaveBeenCalled();
-      expect(result.current.installedExtensions).toEqual([remoteExtension]);
-    });
-
-    it("should load from remote when no cached version exists", async () => {
-      // Given
-      const buffer = new Uint8Array([BasicBuilder.number()]);
-
-      const {
-        cacheInstallMock,
-        remoteExtension,
-        loadRemoteMock,
-        externalId,
-        cacheLoader,
-        serverLoader,
-      } = setupLoaders({
-        cachedExtension: undefined,
-        buffer,
-      });
-
-      // when
-      const { result } = await setup({ loadersOverride: [cacheLoader, serverLoader] });
-
-      // Then
-      await waitFor(() => {
-        expect(loadRemoteMock).toHaveBeenCalledWith(externalId);
-      });
-      await waitFor(() => {
-        expect(cacheInstallMock).toHaveBeenCalledWith({ foxeFileData: buffer });
-      });
-      expect(result.current.installedExtensions).toEqual([remoteExtension]);
     });
   });
 

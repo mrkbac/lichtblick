@@ -8,8 +8,6 @@
 import { Fragment, Suspense, useEffect, useMemo } from "react";
 
 import { IdbLayoutStorage } from "@lichtblick/suite-base/IdbLayoutStorage";
-import { LayoutFavoritesAPI } from "@lichtblick/suite-base/api/layouts/LayoutFavoritesAPI";
-import { LayoutsAPI } from "@lichtblick/suite-base/api/layouts/LayoutsAPI";
 import { APP_CONFIG } from "@lichtblick/suite-base/constants/config";
 import LayoutStorageContext from "@lichtblick/suite-base/context/LayoutStorageContext";
 import {
@@ -86,36 +84,13 @@ export function StudioApp(): React.JSX.Element {
   providers.unshift(<LayoutStorageContext.Provider value={layoutStorage} />);
   const MaybeLaunchPreference = enableLaunchPreferenceScreen === true ? LaunchPreference : Fragment;
 
-  const url = new URL(window.location.href);
-  const workspace = url.searchParams.get("workspace");
-
-  // `?workspace=` keeps the workspace API; otherwise API_URL serves the organization API.
-  const organization = useOrganizationSession(workspace ? undefined : APP_CONFIG.apiUrl);
+  const organization = useOrganizationSession(APP_CONFIG.apiUrl);
   providers.unshift(<OrganizationProvider value={organization} />);
 
-  const workspaceLayoutStorage = useMemo(() => {
-    if (workspace && APP_CONFIG.apiUrl) {
-      return new LayoutsAPI(workspace);
-    }
-    return undefined;
-  }, [workspace]);
-
-  const organizationStorage =
-    organization.status === "authenticated" ? organization.storage : undefined;
-  const remoteLayoutStorage = organizationStorage ?? workspaceLayoutStorage;
-
-  const remoteLayoutFavoritesStorage = useMemo(
-    () => organizationStorage ?? (workspaceLayoutStorage ? new LayoutFavoritesAPI() : undefined),
-    [organizationStorage, workspaceLayoutStorage],
-  );
-
-  if (remoteLayoutStorage) {
-    providers.unshift(<RemoteLayoutStorageContext.Provider value={remoteLayoutStorage} />);
-  }
-
-  if (remoteLayoutFavoritesStorage) {
+  if (organization.status === "authenticated") {
+    providers.unshift(<RemoteLayoutStorageContext.Provider value={organization.storage} />);
     providers.unshift(
-      <RemoteLayoutFavoritesStorageContext.Provider value={remoteLayoutFavoritesStorage} />,
+      <RemoteLayoutFavoritesStorageContext.Provider value={organization.storage} />,
     );
   }
 

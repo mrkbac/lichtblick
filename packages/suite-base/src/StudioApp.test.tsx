@@ -8,7 +8,6 @@ import type { Mock } from "vitest";
 import "@testing-library/jest-dom/vitest";
 
 import { IdbLayoutStorage } from "@lichtblick/suite-base/IdbLayoutStorage";
-import { LayoutsAPI } from "@lichtblick/suite-base/api/layouts/LayoutsAPI";
 import { SharedRootContext } from "@lichtblick/suite-base/context/SharedRootContext";
 
 import { StudioApp } from "./StudioApp";
@@ -78,14 +77,6 @@ vi.mock("@lichtblick/suite-base/IdbLayoutStorage", () => ({
   IdbLayoutStorage: vi.fn().mockImplementation(function () {
     return {
       mockLayoutStorage: true,
-    };
-  }),
-}));
-
-vi.mock("@lichtblick/suite-base/api/layouts/LayoutsAPI", () => ({
-  LayoutsAPI: vi.fn().mockImplementation(function () {
-    return {
-      mockRemoteLayoutStorage: true,
     };
   }),
 }));
@@ -244,44 +235,6 @@ describe("StudioApp", () => {
     renderWithContext();
 
     expect(addEventListenerSpy).toHaveBeenCalledWith("contextmenu", expect.any(Function));
-  });
-
-  it("should create remote layout storage when workspace is provided", () => {
-    // Mock URL with workspace parameter
-    global.URL = vi.fn().mockImplementation(function () {
-      return {
-        searchParams: {
-          get: vi.fn().mockImplementation(function (key) {
-            if (key === "workspace") {
-              return "test-workspace";
-            }
-            return undefined;
-          }),
-        },
-      };
-    }) as any;
-
-    renderWithContext();
-
-    expect(vi.mocked(LayoutsAPI)).toHaveBeenCalledWith("test-workspace");
-  });
-
-  it("should not create remote layout storage when no workspace is provided", () => {
-    // Clear previous calls
-    vi.mocked(LayoutsAPI).mockClear();
-
-    // Mock URL without workspace parameter
-    global.URL = vi.fn().mockImplementation(function () {
-      return {
-        searchParams: {
-          get: vi.fn().mockReturnValue(undefined),
-        },
-      };
-    }) as any;
-
-    renderWithContext();
-
-    expect(vi.mocked(LayoutsAPI)).not.toHaveBeenCalled();
   });
 
   it("should create IdbLayoutStorage", () => {

@@ -11,7 +11,6 @@ export type SingleLoaderInstallResult =
       success: true;
       info: ExtensionInfo;
       contributionPoints: ContributionPoints;
-      externalId: string | undefined;
     }
   | {
       loaderType: TypeExtensionLoader;

@@ -16,7 +16,6 @@ Use the existing app query parameters, for example:
 ```text
 web+lichtblick://open?ds=remote-file&ds.url=https%3A%2F%2Fexample.com%2Frecording.mcap
 web+lichtblick://open?ds=foxglove-websocket&ds.url=wss%3A%2F%2Frobot.example.com
-web+lichtblick://open?mcap-bundle=session-id
 web+lichtblick://open?time=123
 ```
 

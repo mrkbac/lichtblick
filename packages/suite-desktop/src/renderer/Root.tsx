@@ -14,7 +14,6 @@ import {
   FoxgloveWebSocketDataSourceFactory,
   IAppConfiguration,
   IDataSourceFactory,
-  IdbExtensionLoader,
   INativeAppMenu,
   INativeWindow,
   McapLocalDataSourceFactory,
@@ -62,10 +61,7 @@ export default function Root(props: RootProps): React.JSX.Element {
     };
   }, [appConfiguration]);
 
-  const [extensionLoaders] = useState(() => [
-    new IdbExtensionLoader("org"),
-    new DesktopExtensionLoader(desktopBridge),
-  ]);
+  const [extensionLoaders] = useState(() => [new DesktopExtensionLoader(desktopBridge)]);
 
   const [layoutLoaders] = useState(() => [new DesktopLayoutLoader(desktopBridge)]);
 

@@ -5,14 +5,13 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import {
-  SaveNewLayoutParams,
-  UpdateLayoutRequest,
-  UpdateLayoutResponse,
-} from "@lichtblick/suite-base/api/layouts/types";
 import { LayoutID } from "@lichtblick/suite-base/context/CurrentLayoutContext";
 import { LayoutData } from "@lichtblick/suite-base/context/CurrentLayoutContext/actions";
-import { ISO8601Timestamp, LayoutPermission } from "@lichtblick/suite-base/services/ILayoutStorage";
+import {
+  ISO8601Timestamp,
+  Layout,
+  LayoutPermission,
+} from "@lichtblick/suite-base/services/ILayoutStorage";
 
 /**
  * A panel layout stored on a remote server.
@@ -28,6 +27,27 @@ export type RemoteLayout = {
   /** Organization that owns this layout (organization API only). */
   organizationId?: string;
 };
+export type SaveNewLayoutParams = Pick<Layout, "id" | "name" | "permission" | "untrusted"> & {
+  data: LayoutData;
+  /** Organization to save a shared layout in. */
+  organizationId?: string;
+};
+
+export type UpdateLayoutRequest = {
+  id: LayoutID;
+  /** Server-side id */
+  externalId: string;
+  name?: string;
+  data?: LayoutData;
+  permission?: LayoutPermission;
+  untrusted?: true;
+  savedAt: ISO8601Timestamp;
+};
+
+export type UpdateLayoutResponse =
+  | { status: "success"; newLayout: RemoteLayout }
+  | { status: "conflict" };
+
 export interface IRemoteLayoutStorage {
   /**
    * A namespace corresponding to the logged-in user. Used by the LayoutManager to organize cached
