@@ -5,25 +5,23 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import {
-  Add20Regular,
-  AppsAddIn20Regular,
-  BarcodeScanner20Regular,
-  BookStar20Regular,
-  BracesVariable20Regular,
-  Delete20Regular,
-  Dismiss20Regular,
-  DismissCircle20Regular,
-  Document20Regular,
-  DocumentLink20Regular,
-  Edit20Regular,
-  Flow20Regular,
-  GridDots20Filled,
-  Settings20Regular,
-  SlideAdd20Regular,
-  Sparkle20Regular,
-  TextBulletListLtr20Regular,
-} from "@fluentui/react-icons";
+import AddIcon from "@mui/icons-material/Add";
+import AddToQueueIcon from "@mui/icons-material/AddToQueue";
+import AppsIcon from "@mui/icons-material/Apps";
+import AutoAwesomeOutlinedIcon from "@mui/icons-material/AutoAwesomeOutlined";
+import CloseIcon from "@mui/icons-material/Close";
+import CollectionsBookmarkOutlinedIcon from "@mui/icons-material/CollectionsBookmarkOutlined";
+import DataArrayIcon from "@mui/icons-material/DataArray";
+import DeleteOutlinedIcon from "@mui/icons-material/DeleteOutlined";
+import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
+import ExtensionOutlinedIcon from "@mui/icons-material/ExtensionOutlined";
+import FilePresentOutlinedIcon from "@mui/icons-material/FilePresentOutlined";
+import FormatListBulletedIcon from "@mui/icons-material/FormatListBulleted";
+import HighlightOffIcon from "@mui/icons-material/HighlightOff";
+import InsertDriveFileOutlinedIcon from "@mui/icons-material/InsertDriveFileOutlined";
+import QrCodeScannerIcon from "@mui/icons-material/QrCodeScanner";
+import SchemaOutlinedIcon from "@mui/icons-material/SchemaOutlined";
+import SettingsOutlinedIcon from "@mui/icons-material/SettingsOutlined";
 
 import BlockheadFilledIcon from "@lichtblick/suite-base/components/BlockheadFilledIcon";
 import BlockheadIcon from "@lichtblick/suite-base/components/BlockheadIcon";
@@ -37,28 +35,28 @@ const icons: {
   // This makes it a type error to forget to add an icon here once it has been added to RegisteredIconNames.
   [N in RegisteredIconNames]: React.ReactElement;
 } = {
-  Add: <Add20Regular />,
-  AddIn: <AppsAddIn20Regular />,
-  BacklogList: <TextBulletListLtr20Regular />,
+  Add: <AddIcon fontSize="small" />,
+  AddIn: <ExtensionOutlinedIcon fontSize="small" />,
+  BacklogList: <FormatListBulletedIcon fontSize="small" />,
   Blockhead: <BlockheadIcon />,
   BlockheadFilled: <BlockheadFilledIcon />,
-  BookStar: <BookStar20Regular />,
-  Cancel: <Dismiss20Regular />,
+  BookStar: <CollectionsBookmarkOutlinedIcon fontSize="small" />,
+  Cancel: <CloseIcon fontSize="small" />,
   DatabaseSettings: <DatabaseSettings />,
-  Delete: <Delete20Regular />,
-  Edit: <Edit20Regular />,
-  ErrorBadge: <DismissCircle20Regular />,
-  FileASPX: <DocumentLink20Regular />,
+  Delete: <DeleteOutlinedIcon fontSize="small" />,
+  Edit: <EditOutlinedIcon fontSize="small" />,
+  ErrorBadge: <HighlightOffIcon fontSize="small" />,
+  FileASPX: <FilePresentOutlinedIcon fontSize="small" />,
   FiveTileGrid: <PanelLayout />,
-  Flow: <Flow20Regular />,
-  GenericScan: <BarcodeScanner20Regular />,
-  OpenFile: <Document20Regular />,
+  Flow: <SchemaOutlinedIcon fontSize="small" />,
+  GenericScan: <QrCodeScannerIcon fontSize="small" />,
+  OpenFile: <InsertDriveFileOutlinedIcon fontSize="small" />,
   PanelSettings: <PanelSettings />,
-  RectangularClipping: <SlideAdd20Regular />,
-  Settings: <Settings20Regular />,
-  Sparkle: <Sparkle20Regular />,
-  Variable2: <BracesVariable20Regular />,
-  ROS: <GridDots20Filled />,
+  RectangularClipping: <AddToQueueIcon fontSize="small" />,
+  Settings: <SettingsOutlinedIcon fontSize="small" />,
+  Sparkle: <AutoAwesomeOutlinedIcon fontSize="small" />,
+  Variable2: <DataArrayIcon fontSize="small" />,
+  ROS: <AppsIcon fontSize="small" />,
 };
 
 export default icons;

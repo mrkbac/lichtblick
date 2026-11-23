@@ -95,7 +95,7 @@ function OverlayButton(props: {
           disabled={disabled}
           onClick={onClick}
         >
-          {icon ?? <Icon />}
+          {icon ?? <Icon fontSize="small" />}
         </IconButton>
       </span>
     </Tooltip>
@@ -879,7 +879,7 @@ export function MapToolbar(props: Props): React.JSX.Element {
             <OverlayToolGroup
               collapsed={foldTools}
               label={measuringToolsTitle}
-              icon={<ActiveToolIcon />}
+              icon={<ActiveToolIcon fontSize="small" />}
               active={tool != undefined}
             >
               {TOOLS.map(({ tool: option, button, needsTerrain = false }) => {

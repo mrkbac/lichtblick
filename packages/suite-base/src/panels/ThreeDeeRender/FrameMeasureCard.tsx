@@ -1,7 +1,9 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import { ArrowSwap16Regular, Copy16Regular, Dismiss16Regular } from "@fluentui/react-icons";
+import CloseIcon from "@mui/icons-material/Close";
+import ContentCopyIcon from "@mui/icons-material/ContentCopy";
+import SwapVertIcon from "@mui/icons-material/SwapVert";
 import {
   Autocomplete,
   IconButton,
@@ -174,13 +176,13 @@ export function FrameMeasureCard({
                 }
               }}
             >
-              <Copy16Regular />
+              <ContentCopyIcon style={{ fontSize: 16 }} />
             </IconButton>
           </span>
         </Tooltip>
         <Tooltip title={t("frameMeasureClose")}>
           <IconButton size="small" aria-label={t("frameMeasureClose")} onClick={onClose}>
-            <Dismiss16Regular />
+            <CloseIcon style={{ fontSize: 16 }} />
           </IconButton>
         </Tooltip>
       </div>
@@ -197,7 +199,7 @@ export function FrameMeasureCard({
               onChange(swapFrames(measurement));
             }}
           >
-            <ArrowSwap16Regular style={{ transform: "rotate(90deg)" }} />
+            <SwapVertIcon style={{ fontSize: 16 }} />
           </IconButton>
         </Tooltip>
       </div>

@@ -1,7 +1,8 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import { ArrowDownload20Regular, Delete20Regular } from "@fluentui/react-icons";
+import DeleteOutlinedIcon from "@mui/icons-material/DeleteOutlined";
+import FileDownloadOutlinedIcon from "@mui/icons-material/FileDownloadOutlined";
 import { Button, IconButton, TextField, Tooltip, Typography } from "@mui/material";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -117,7 +118,7 @@ export function LiveRecordingsList({
                   });
               }}
             >
-              <ArrowDownload20Regular />
+              <FileDownloadOutlinedIcon fontSize="small" />
             </IconButton>
           </Tooltip>
           <Tooltip title={t("delete")}>
@@ -127,7 +128,7 @@ export function LiveRecordingsList({
                 run(rec.remove);
               }}
             >
-              <Delete20Regular />
+              <DeleteOutlinedIcon fontSize="small" />
             </IconButton>
           </Tooltip>
         </>

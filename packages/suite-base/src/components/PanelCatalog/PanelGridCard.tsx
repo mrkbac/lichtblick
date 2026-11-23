@@ -5,7 +5,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { PuzzlePiece20Regular } from "@fluentui/react-icons";
+import ExtensionOutlinedIcon from "@mui/icons-material/ExtensionOutlined";
 import { Card, CardActionArea, CardContent, CardMedia, Typography } from "@mui/material";
 import { useCallback } from "react";
 import { makeStyles } from "tss-react/mui";
@@ -53,7 +53,7 @@ export function PanelGridCard(props: Props): React.JSX.Element {
   const { searchQuery, panel, onClick } = props;
   const { classes } = useStyles();
 
-  const Icon = panel.icon ?? PuzzlePiece20Regular;
+  const Icon = panel.icon ?? ExtensionOutlinedIcon;
   const targetString = panel.extensionNamespace
     ? `${panel.title} [${panel.extensionNamespace}]`
     : panel.title;
@@ -77,7 +77,7 @@ export function PanelGridCard(props: Props): React.JSX.Element {
           )}
           <CardContent className={classes.cardContent}>
             <Typography variant="subtitle2" gutterBottom className={classes.title}>
-              <Icon className={classes.icon} />
+              <Icon className={classes.icon} fontSize="small" />
               <span data-testid={`panel-grid-card ${panel.title}`}>
                 <HighlightChars
                   str={targetString}

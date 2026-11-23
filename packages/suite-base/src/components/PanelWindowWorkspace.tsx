@@ -1,7 +1,8 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import { PanelLeft24Filled, PanelLeft24Regular } from "@fluentui/react-icons";
+import ViewSidebarIcon from "@mui/icons-material/ViewSidebar";
+import ViewSidebarOutlinedIcon from "@mui/icons-material/ViewSidebarOutlined";
 import { Typography } from "@mui/material";
 import {
   PropsWithChildren,
@@ -161,7 +162,7 @@ function WindowContents({
               sidebarActions.left.setOpen(!left.open);
             }}
           >
-            {left.open ? <PanelLeft24Filled /> : <PanelLeft24Regular />}
+            {left.open ? <ViewSidebarIcon /> : <ViewSidebarOutlinedIcon />}
           </AppBarIconButton>
           <Typography variant="body2">{title}</Typography>
         </Stack>

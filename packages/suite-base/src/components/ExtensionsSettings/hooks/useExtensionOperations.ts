@@ -4,7 +4,6 @@
 import { useSnackbar } from "notistack";
 import { useCallback, useState } from "react";
 
-import { useMountedState } from "@lichtblick/hooks";
 import { Immutable } from "@lichtblick/suite";
 import {
   UseExtensionOperationsOptions,
@@ -30,7 +29,6 @@ export function useExtensionOperations(
   const installExtensions = useExtensionCatalog((state) => state.installExtensions);
   const uninstallExtension = useExtensionCatalog((state) => state.uninstallExtension);
   const { enqueueSnackbar } = useSnackbar();
-  const isMounted = useMountedState();
   const [operatingExtensionId, setOperatingExtensionId] = useState<string | undefined>();
   const [operationStatus, setOperationStatus] = useState<OperationStatus>(OperationStatus.IDLE);
 
@@ -57,9 +55,6 @@ export function useExtensionOperations(
       try {
         const extensionBuffer = await downloadExtension(url);
         await installExtensions("local", [{ buffer: extensionBuffer }]);
-        if (!isMounted()) {
-          return;
-        }
         enqueueSnackbar(`${extension.name} installed successfully`, { variant: "success" });
         onInstallSuccess?.(extension.id);
       } catch (error) {
@@ -67,13 +62,11 @@ export function useExtensionOperations(
           variant: "error",
         });
       } finally {
-        if (isMounted()) {
-          setOperatingExtensionId(undefined);
-          setOperationStatus(OperationStatus.IDLE);
-        }
+        setOperatingExtensionId(undefined);
+        setOperationStatus(OperationStatus.IDLE);
       }
     },
-    [downloadExtension, enqueueSnackbar, installExtensions, isMounted, onInstallSuccess],
+    [downloadExtension, enqueueSnackbar, installExtensions, onInstallSuccess],
   );
 
   const handleUninstall = useCallback(
@@ -83,9 +76,6 @@ export function useExtensionOperations(
 
       try {
         await uninstallExtension(extension.namespace ?? "local", extension.id);
-        if (!isMounted()) {
-          return;
-        }
         enqueueSnackbar(`${extension.name} uninstalled successfully`, { variant: "success" });
         onUninstallSuccess?.(extension.id);
       } catch (error) {
@@ -93,13 +83,11 @@ export function useExtensionOperations(
           variant: "error",
         });
       } finally {
-        if (isMounted()) {
-          setOperatingExtensionId(undefined);
-          setOperationStatus(OperationStatus.IDLE);
-        }
+        setOperatingExtensionId(undefined);
+        setOperationStatus(OperationStatus.IDLE);
       }
     },
-    [enqueueSnackbar, isMounted, onUninstallSuccess, uninstallExtension],
+    [enqueueSnackbar, onUninstallSuccess, uninstallExtension],
   );
 
   const isOperating = useCallback(

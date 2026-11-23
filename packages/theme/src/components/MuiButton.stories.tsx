@@ -5,7 +5,8 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { Delete20Regular, Send20Filled } from "@fluentui/react-icons";
+import DeleteOutlinedIcon from "@mui/icons-material/DeleteOutlined";
+import SendIcon from "@mui/icons-material/Send";
 import { Button, ButtonProps, Stack } from "@mui/material";
 import { Fragment } from "react";
 import { Meta, StoryObj } from "storybook-react-rsbuild";
@@ -151,10 +152,10 @@ export const Sizes: StoryObj = {
 export const ButtonsWithIcons: StoryObj = {
   render: () => (
     <>
-      <Button variant="outlined" startIcon={<Delete20Regular />}>
+      <Button variant="outlined" startIcon={<DeleteOutlinedIcon fontSize="small" />}>
         Delete
       </Button>
-      <Button variant="contained" endIcon={<Send20Filled />}>
+      <Button variant="contained" endIcon={<SendIcon fontSize="small" />}>
         Send
       </Button>
     </>

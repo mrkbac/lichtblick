@@ -5,7 +5,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { Dismiss16Regular } from "@fluentui/react-icons";
+import CloseIcon from "@mui/icons-material/Close";
 import { IconButton, Tooltip } from "@mui/material";
 import { useTranslation } from "react-i18next";
 import { makeStyles } from "tss-react/mui";
@@ -96,7 +96,7 @@ export function DataSource(): React.JSX.Element {
             aria-label={isLiveConnection ? t("disconnect") : t("closeDataSource")}
             onClick={closeSource}
           >
-            <Dismiss16Regular />
+            <CloseIcon style={{ fontSize: 16 }} />
           </IconButton>
         </Tooltip>
       </Stack>

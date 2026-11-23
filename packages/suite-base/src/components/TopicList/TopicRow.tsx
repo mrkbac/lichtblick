@@ -5,12 +5,10 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import {
-  ChevronLeft16Regular,
-  ChevronRight16Regular,
-  Open16Regular,
-  ReOrderDotsVertical16Regular,
-} from "@fluentui/react-icons";
+import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
+import ChevronRightIcon from "@mui/icons-material/ChevronRight";
+import DragIndicatorIcon from "@mui/icons-material/DragIndicator";
+import OpenInNewIcon from "@mui/icons-material/OpenInNew";
 import { Badge, IconButton, Tooltip, Typography } from "@mui/material";
 import { FzfResultItem } from "fzf";
 import { useCallback, useMemo } from "react";
@@ -186,7 +184,7 @@ export function TopicRow({
                 disabled={isPreviousDisabled}
                 className={classes.navIconButton}
               >
-                <ChevronLeft16Regular />
+                <ChevronLeftIcon style={{ fontSize: 16 }} />
               </IconButton>
             </span>
           </Tooltip>
@@ -207,7 +205,7 @@ export function TopicRow({
                 disabled={isNextDisabled}
                 className={classes.navIconButton}
               >
-                <ChevronRight16Regular />
+                <ChevronRightIcon style={{ fontSize: 16 }} />
               </IconButton>
             </span>
           </Tooltip>
@@ -223,12 +221,12 @@ export function TopicRow({
             onDoubleClick={handleButtonMouseDown}
             className={cx(classes.navIconButton, classes.hoverButton)}
           >
-            <Open16Regular />
+            <OpenInNewIcon style={{ fontSize: 16 }} />
           </IconButton>
         </Tooltip>
       )}
       <div data-testid="TopicListDragHandle" className={classes.dragHandle}>
-        <ReOrderDotsVertical16Regular />
+        <DragIndicatorIcon style={{ fontSize: 16 }} />
       </div>
     </div>
   );

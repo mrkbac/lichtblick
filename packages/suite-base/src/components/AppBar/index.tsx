@@ -5,14 +5,10 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import {
-  ChevronDown12Regular,
-  PanelLeft24Filled,
-  PanelLeft24Regular,
-  PanelRight24Filled,
-  PanelRight24Regular,
-  SlideAdd24Regular,
-} from "@fluentui/react-icons";
+import AddToQueueIcon from "@mui/icons-material/AddToQueue";
+import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
+import ViewSidebarIcon from "@mui/icons-material/ViewSidebar";
+import ViewSidebarOutlinedIcon from "@mui/icons-material/ViewSidebarOutlined";
 import { Avatar, IconButton, Tooltip } from "@mui/material";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -83,6 +79,9 @@ const useStyles = makeStyles<{ debugDragRegion?: boolean }, "avatar">()(
           color: "currentColor",
           opacity: theme.palette.action.disabledOpacity,
         },
+      },
+      flipped: {
+        transform: "scaleX(-1)",
       },
       dropDownIcon: {
         fontSize: "12px !important",
@@ -219,9 +218,10 @@ export function AppBar(props: AppBarProps): React.JSX.Element {
                 }}
               >
                 <LichtblickLogo fontSize="inherit" color="inherit" />
-                <ChevronDown12Regular
+                <ExpandMoreIcon
+                  style={{ fontSize: 12 }}
                   className={classes.dropDownIcon}
-                  primaryFill={theme.palette.appBar.text}
+                  htmlColor={theme.palette.appBar.text}
                 />
               </IconButton>
               <AppMenu
@@ -247,7 +247,7 @@ export function AppBar(props: AppBarProps): React.JSX.Element {
                   setPanelAnchorEl(event.currentTarget);
                 }}
               >
-                <SlideAdd24Regular />
+                <AddToQueueIcon />
               </AppBarIconButton>
               <MonitorSetupButtons disabled={!hasCurrentLayout} />
             </div>
@@ -277,7 +277,11 @@ export function AppBar(props: AppBarProps): React.JSX.Element {
                   data-tourid="left-sidebar-button"
                   data-testid="left-sidebar-button"
                 >
-                  {leftSidebarOpen ? <PanelLeft24Filled /> : <PanelLeft24Regular />}
+                  {leftSidebarOpen ? (
+                    <ViewSidebarIcon className={classes.flipped} />
+                  ) : (
+                    <ViewSidebarOutlinedIcon className={classes.flipped} />
+                  )}
                 </AppBarIconButton>
                 <AppBarIconButton
                   title={
@@ -293,7 +297,7 @@ export function AppBar(props: AppBarProps): React.JSX.Element {
                   data-tourid="right-sidebar-button"
                   data-testid="right-sidebar-button"
                 >
-                  {rightSidebarOpen ? <PanelRight24Filled /> : <PanelRight24Regular />}
+                  {rightSidebarOpen ? <ViewSidebarIcon /> : <ViewSidebarOutlinedIcon />}
                 </AppBarIconButton>
               </Stack>
               {showUserMenu && (

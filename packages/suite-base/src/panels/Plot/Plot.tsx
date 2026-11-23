@@ -5,7 +5,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { Warning16Regular } from "@fluentui/react-icons";
+import WarningAmberIcon from "@mui/icons-material/WarningAmber";
 import { Tooltip, Fade, useTheme } from "@mui/material";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -418,10 +418,12 @@ const Plot = (props: PlotProps): React.JSX.Element => {
             {approximateWarning && (
               <Tooltip title={approximateWarning}>
                 <Stack alignItems="center" justifyContent="center" padding={0.5}>
-                  <Warning16Regular
+                  <WarningAmberIcon
+                    style={{ fontSize: 16 }}
+                    aria-hidden={false}
                     aria-label={approximateWarning}
                     role="img"
-                    primaryFill={theme.palette.warning.main}
+                    htmlColor={theme.palette.warning.main}
                   />
                 </Stack>
               </Tooltip>

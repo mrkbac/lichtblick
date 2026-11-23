@@ -1,8 +1,9 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import { ErrorCircle20Regular, SpeakerMute20Regular } from "@fluentui/react-icons";
 import { subtract, toSec } from "@foxglove/rostime";
+import ErrorOutlineOutlinedIcon from "@mui/icons-material/ErrorOutlineOutlined";
+import VolumeOffOutlinedIcon from "@mui/icons-material/VolumeOffOutlined";
 import { Button, Slider, Typography } from "@mui/material";
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -259,7 +260,7 @@ export function Audio({ config, saveConfig }: Props): React.JSX.Element {
           aria-pressed={config.muted}
           onClick={toggleMute}
         >
-          {config.muted ? <SpeakerMute20Regular /> : undefined}
+          {config.muted ? <VolumeOffOutlinedIcon fontSize="small" /> : undefined}
         </PanelIconButton>
         <Slider
           size="small"
@@ -281,7 +282,9 @@ export function Audio({ config, saveConfig }: Props): React.JSX.Element {
           title={error ?? info}
           className={classes.status}
         >
-          {error != undefined && <ErrorCircle20Regular style={{ flexShrink: 0 }} />}
+          {error != undefined && (
+            <ErrorOutlineOutlinedIcon fontSize="small" style={{ flexShrink: 0 }} />
+          )}
           {error ?? [schemaName, info].filter(Boolean).join(" · ")}
         </Typography>
       </Stack>

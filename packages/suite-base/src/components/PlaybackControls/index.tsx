@@ -14,21 +14,18 @@
 //   found at http://www.apache.org/licenses/LICENSE-2.0
 //   You may not use this file except in compliance with the License.
 
-import {
-  ArrowRepeatAll20Regular,
-  Cut20Filled,
-  Cut20Regular,
-  ArrowRepeatAllOff20Regular,
-  Next20Filled,
-  Next20Regular,
-  Pause20Filled,
-  Pause20Regular,
-  Play20Filled,
-  Play20Regular,
-  Previous20Filled,
-  Previous20Regular,
-} from "@fluentui/react-icons";
 import { Time, compare, fromNanoSec, toNanoSec } from "@foxglove/rostime";
+import ContentCutIcon from "@mui/icons-material/ContentCut";
+import PauseIcon from "@mui/icons-material/Pause";
+import PauseOutlinedIcon from "@mui/icons-material/PauseOutlined";
+import PlayArrowIcon from "@mui/icons-material/PlayArrow";
+import PlayArrowOutlinedIcon from "@mui/icons-material/PlayArrowOutlined";
+import RepeatIcon from "@mui/icons-material/Repeat";
+import RepeatOnIcon from "@mui/icons-material/RepeatOn";
+import SkipNextIcon from "@mui/icons-material/SkipNext";
+import SkipNextOutlinedIcon from "@mui/icons-material/SkipNextOutlined";
+import SkipPreviousIcon from "@mui/icons-material/SkipPrevious";
+import SkipPreviousOutlinedIcon from "@mui/icons-material/SkipPreviousOutlined";
 import { Suspense, lazy, useCallback, useEffect, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -251,8 +248,8 @@ export default function PlaybackControls({
                 size="small"
                 title={editingCut ? t("hideCutHandles") : t("cutRecording")}
                 color={cutActive ? "primary" : "inherit"}
-                icon={editingCut ? <Cut20Filled /> : <Cut20Regular />}
-                activeIcon={<Cut20Filled />}
+                icon={<ContentCutIcon fontSize="small" />}
+                activeIcon={<ContentCutIcon fontSize="small" />}
                 onClick={toggleCutEditing}
                 data-testid="trim-button"
               />
@@ -265,8 +262,8 @@ export default function PlaybackControls({
               disabled={disableControls}
               size="small"
               title="Seek backward"
-              icon={<Previous20Regular />}
-              activeIcon={<Previous20Filled />}
+              icon={<SkipPreviousOutlinedIcon fontSize="small" />}
+              activeIcon={<SkipPreviousIcon fontSize="small" />}
               onClick={() => {
                 seekBackwardAction();
               }}
@@ -277,16 +274,24 @@ export default function PlaybackControls({
               size="small"
               title={isPlaying ? "Pause" : "Play"}
               onClick={togglePlayPause}
-              icon={isPlaying ? <Pause20Regular /> : <Play20Regular />}
-              activeIcon={isPlaying ? <Pause20Filled /> : <Play20Filled />}
+              icon={
+                isPlaying ? (
+                  <PauseOutlinedIcon fontSize="small" />
+                ) : (
+                  <PlayArrowOutlinedIcon fontSize="small" />
+                )
+              }
+              activeIcon={
+                isPlaying ? <PauseIcon fontSize="small" /> : <PlayArrowIcon fontSize="small" />
+              }
               data-testid="play-button"
             />
             <HoverableIconButton
               disabled={disableControls}
               size="small"
               title="Seek forward"
-              icon={<Next20Regular />}
-              activeIcon={<Next20Filled />}
+              icon={<SkipNextOutlinedIcon fontSize="small" />}
+              activeIcon={<SkipNextIcon fontSize="small" />}
               onClick={() => {
                 seekForwardAction();
               }}
@@ -302,7 +307,7 @@ export default function PlaybackControls({
                 title="Loop playback"
                 color={repeat ? "primary" : "inherit"}
                 onClick={toggleRepeat}
-                icon={repeat ? <ArrowRepeatAll20Regular /> : <ArrowRepeatAllOff20Regular />}
+                icon={repeat ? <RepeatOnIcon fontSize="small" /> : <RepeatIcon fontSize="small" />}
               />
             )}
             <PlaybackSpeedControls />

@@ -1,8 +1,10 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import { ChevronDown12Filled, ChevronRight12Filled, Warning16Filled } from "@fluentui/react-icons";
 import { toSec } from "@foxglove/rostime";
+import ChevronRightIcon from "@mui/icons-material/ChevronRight";
+import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
+import WarningFilledIcon from "@mui/icons-material/Warning";
 import { Tooltip } from "@mui/material";
 import { TFunction } from "i18next";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -145,7 +147,7 @@ function WarningIcon({ text }: { text: string }): React.JSX.Element {
   return (
     <Tooltip title={<span className={classes.multiline}>{text}</span>}>
       <span className={classes.warningIcon} role="img" aria-label={text} tabIndex={0}>
-        <Warning16Filled />
+        <WarningFilledIcon style={{ fontSize: 16 }} />
       </span>
     </Tooltip>
   );
@@ -451,7 +453,8 @@ export function TransformTree({ config, saveConfig }: Props): React.JSX.Element 
                 aria-label={t("multipleRoots", { count: rootCount })}
                 tabIndex={0}
               >
-                <Warning16Filled /> {t("multipleRoots", { count: rootCount })}
+                <WarningFilledIcon style={{ fontSize: 16 }} />{" "}
+                {t("multipleRoots", { count: rootCount })}
               </span>
             </Tooltip>
           )}
@@ -466,7 +469,8 @@ export function TransformTree({ config, saveConfig }: Props): React.JSX.Element 
                 aria-label={t("warningCount", { count: warningCount })}
                 tabIndex={0}
               >
-                <Warning16Filled /> {t("warningCount", { count: warningCount })}
+                <WarningFilledIcon style={{ fontSize: 16 }} />{" "}
+                {t("warningCount", { count: warningCount })}
               </span>
             </Tooltip>
           )}
@@ -727,7 +731,11 @@ const FrameTableRow = memo(function FrameTableRowImpl({
                 onToggle(row.frame);
               }}
             >
-              {collapsed ? <ChevronRight12Filled /> : <ChevronDown12Filled />}
+              {collapsed ? (
+                <ChevronRightIcon style={{ fontSize: 12 }} />
+              ) : (
+                <ExpandMoreIcon style={{ fontSize: 12 }} />
+              )}
             </button>
           ) : (
             <span className={classes.togglePlaceholder} />

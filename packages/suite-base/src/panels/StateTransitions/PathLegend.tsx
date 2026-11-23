@@ -5,7 +5,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { Add16Regular } from "@fluentui/react-icons";
+import AddIcon from "@mui/icons-material/Add";
 import { Button, ButtonGroup, Stack } from "@mui/material";
 import React, { MouseEvent, useCallback } from "react";
 import { useTranslation } from "react-i18next";
@@ -46,7 +46,7 @@ function SeriesButton({
       title={dragRef ? t("dragSeriesHint") : undefined}
       className={cx({ [classes.dragging]: isDragging })}
       data-testid={`edit-topic-button-${index}`}
-      endIcon={path == undefined && <Add16Regular />}
+      endIcon={path == undefined && <AddIcon style={{ fontSize: 16 }} />}
       onClick={() => {
         onClick(index);
       }}
@@ -128,7 +128,7 @@ export const PathLegend = React.memo(function PathLegend(props: PathLegendProps)
                     handleDeletePath(event, index);
                   }}
                 >
-                  <DeleteIcon />
+                  <DeleteIcon style={{ fontSize: 12 }} />
                 </Button>
               )}
             </ButtonGroup>

@@ -239,7 +239,7 @@ describe("ExtensionDetails Component", () => {
       expect(installButton).not.toBeInTheDocument();
     });
 
-    it("does not report success when component is unmounted before install completes", async () => {
+    it("still reports a completed install after the component unmounts", async () => {
       // Given
       (isDesktopApp as Mock).mockReturnValue(true);
 
@@ -272,9 +272,13 @@ describe("ExtensionDetails Component", () => {
         expect(mockDownloadExtension).toHaveBeenCalled();
         expect(mockInstallExtensions).toHaveBeenCalled();
       });
+      await mockInstallExtensions.mock.results[0]?.value;
 
-      // No success toast because the component was unmounted
-      expect(mockEnqueueSnackbar).not.toHaveBeenCalled();
+      // The install finished, so it is still announced
+      expect(mockEnqueueSnackbar).toHaveBeenCalledWith(
+        `${mockExtension.name} installed successfully`,
+        { variant: "success" },
+      );
     });
   });
 
@@ -348,7 +352,7 @@ describe("ExtensionDetails Component", () => {
       });
     });
 
-    it("does not report success when component is unmounted before uninstall completes", async () => {
+    it("still reports a completed uninstall after the component unmounts", async () => {
       mockUninstallExtension.mockImplementation(
         async () => await new Promise((resolve) => setTimeout(resolve, 300)),
       );
@@ -368,8 +372,11 @@ describe("ExtensionDetails Component", () => {
       });
       await mockUninstallExtension.mock.results[0]?.value;
 
-      // No success toast because the component was unmounted
-      expect(mockEnqueueSnackbar).not.toHaveBeenCalled();
+      // The uninstall finished, so it is still announced
+      expect(mockEnqueueSnackbar).toHaveBeenCalledWith(
+        `${mockExtension.name} uninstalled successfully`,
+        { variant: "success" },
+      );
     });
   });
 });

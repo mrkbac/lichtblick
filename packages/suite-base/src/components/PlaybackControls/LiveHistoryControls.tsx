@@ -1,10 +1,10 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import { History20Regular } from "@fluentui/react-icons";
 import { compare } from "@foxglove/rostime";
 import CheckIcon from "@mui/icons-material/Check";
 import FiberManualRecordIcon from "@mui/icons-material/FiberManualRecord";
+import HistoryIcon from "@mui/icons-material/History";
 import { Button, ListItemIcon, ListItemText, Menu, MenuItem } from "@mui/material";
 import { useState } from "react";
 import { makeStyles } from "tss-react/mui";
@@ -82,7 +82,7 @@ export function LiveHistoryControls({
       <HoverableIconButton
         size="small"
         title={`History kept while connected: ${formatLiveHistoryWindow(windowSec)}`}
-        icon={<History20Regular />}
+        icon={<HistoryIcon fontSize="small" />}
         onClick={(event) => {
           setAnchorEl(event.currentTarget);
         }}

@@ -1,7 +1,9 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import { ErrorCircle16Regular, Info16Regular, Warning16Regular } from "@fluentui/react-icons";
+import ErrorOutlineOutlinedIcon from "@mui/icons-material/ErrorOutlineOutlined";
+import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
+import WarningAmberIcon from "@mui/icons-material/WarningAmber";
 import { useTheme } from "@mui/material";
 
 import { NotificationSeverity } from "@lichtblick/suite-base/util/sendNotification";
@@ -16,11 +18,29 @@ export function AlertIcon({
 
   switch (severity) {
     case "warn":
-      return <Warning16Regular className={classes.icon} primaryFill={palette.warning.main} />;
+      return (
+        <WarningAmberIcon
+          style={{ fontSize: 16 }}
+          className={classes.icon}
+          htmlColor={palette.warning.main}
+        />
+      );
     case "error":
-      return <ErrorCircle16Regular className={classes.icon} primaryFill={palette.error.main} />;
+      return (
+        <ErrorOutlineOutlinedIcon
+          style={{ fontSize: 16 }}
+          className={classes.icon}
+          htmlColor={palette.error.main}
+        />
+      );
     case "info":
-      return <Info16Regular className={classes.icon} primaryFill={palette.info.main} />;
+      return (
+        <InfoOutlinedIcon
+          style={{ fontSize: 16 }}
+          className={classes.icon}
+          htmlColor={palette.info.main}
+        />
+      );
     default:
       return <></>;
   }

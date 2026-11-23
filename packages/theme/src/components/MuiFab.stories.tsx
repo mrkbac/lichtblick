@@ -5,7 +5,10 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { Add20Filled, Edit20Filled, Heart20Filled, Toolbox20Filled } from "@fluentui/react-icons";
+import AddIcon from "@mui/icons-material/Add";
+import EditIcon from "@mui/icons-material/Edit";
+import FavoriteIcon from "@mui/icons-material/Favorite";
+import HomeRepairServiceIcon from "@mui/icons-material/HomeRepairService";
 import { Fab, FabProps, Stack } from "@mui/material";
 import { Meta, StoryObj } from "storybook-react-rsbuild";
 
@@ -50,17 +53,17 @@ export const Default: StoryObj = {
   render: () => (
     <>
       <Fab color="primary" aria-label="add">
-        <Add20Filled />
+        <AddIcon fontSize="small" />
       </Fab>
       <Fab color="secondary" aria-label="edit">
-        <Edit20Filled />
+        <EditIcon fontSize="small" />
       </Fab>
       <Fab variant="extended">
-        <Toolbox20Filled />
+        <HomeRepairServiceIcon fontSize="small" />
         Tools
       </Fab>
       <Fab disabled aria-label="like">
-        <Heart20Filled />
+        <FavoriteIcon fontSize="small" />
       </Fab>
     </>
   ),
@@ -71,7 +74,7 @@ export const Colors: StoryObj = {
     <>
       {colors.map((color) => (
         <Fab key={color} color={color} aria-label={color}>
-          <Add20Filled />
+          <AddIcon fontSize="small" />
         </Fab>
       ))}
     </>
@@ -97,7 +100,7 @@ export const SizesAndVariants: StoryObj = {
         >
           {sizes.map((size) => (
             <Fab color="primary" key={size} {...{ size, variant }}>
-              <Add20Filled />
+              <AddIcon fontSize="small" />
               {variant === "extended" && "Extended"}
             </Fab>
           ))}
