@@ -22,6 +22,15 @@ export function connectionRecentArgs(
   return { type: "connection", params, urls };
 }
 
+/** The URLs a connection reads: its list, or else its typed `url` param */
+export function urlsOf(args: {
+  urls?: readonly string[];
+  params?: Record<string, string | undefined>;
+}): readonly string[] {
+  const url = args.params?.url;
+  return args.urls ?? (url == undefined ? [] : [url]);
+}
+
 /** Reopens a file recent as it was opened: compared side by side when it was */
 export function recentArgs(recent: FileRecent): Extract<DataSourceArgs, { type: "file" }> {
   return { type: "file", handles: recent.handles, compare: recent.compare };
@@ -176,4 +185,31 @@ export function detectConnection(input: string): { sourceId: string; url: string
     }
   }
   return undefined;
+}
+
+/** Recognize legacy lists in the path, leaving any query or fragment byte-for-byte intact. */
+export function splitRemoteRecordingUrlList(value: string): string[] | undefined {
+  const tailStart = value.search(/[?#]/);
+  const path = tailStart === -1 ? value : value.slice(0, tailStart);
+  const urls = path.split(/,\s*(?=https?:\/\/)/i).map((entry) => entry.trim());
+  if (urls.length < 2) {
+    return undefined;
+  }
+  if (tailStart !== -1) {
+    urls[urls.length - 1] = urls[urls.length - 1]! + value.slice(tailStart);
+  }
+  const valid = urls.every((entry) => {
+    try {
+      const url = new URL(entry);
+      return (
+        (url.protocol === "http:" || url.protocol === "https:") &&
+        url.username === "" &&
+        url.password === "" &&
+        REMOTE_FILE_EXTENSIONS.some((ext) => url.pathname.toLowerCase().endsWith(ext))
+      );
+    } catch {
+      return false;
+    }
+  });
+  return valid ? urls : undefined;
 }

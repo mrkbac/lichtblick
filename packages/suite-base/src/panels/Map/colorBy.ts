@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: MPL-2.0
 
+import { upperBound } from "@lichtblick/suite-base/util/sortedSearch";
+
 import { haversineMeters, Units } from "./geo";
-import { lastIndexAtOrBefore, SampleStore, TrackStore } from "./track";
+import { SampleStore, TrackStore } from "./track";
 
 const SPEED_UNITS: Record<Units, { label: string; perMps: number }> = {
   metric: { label: "km/h", perMps: 3.6 },
@@ -35,7 +37,7 @@ export function speedValues(track: TrackStore, units: Units, windowSeconds = 0.5
     start = cached.values.length - 1;
     values.set(cached.values.subarray(0, start));
   }
-  let from = Math.max(0, lastIndexAtOrBefore(time, start, time[start]! - windowSeconds));
+  let from = Math.max(0, upperBound(time, 0, start, time[start]! - windowSeconds) - 1);
   for (let i = start; i < track.length; i++) {
     const t = time[i]!;
     // Advance `from` to the latest fix still at least `windowSeconds` back.

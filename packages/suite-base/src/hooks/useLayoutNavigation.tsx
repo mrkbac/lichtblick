@@ -8,7 +8,6 @@ import {
   LayoutSelectionState,
   LayoutSelectionAction,
 } from "@lichtblick/suite-base/components/LayoutBrowser/types";
-import { useAnalytics } from "@lichtblick/suite-base/context/AnalyticsContext";
 import {
   LayoutState,
   useCurrentLayoutActions,
@@ -16,14 +15,10 @@ import {
 } from "@lichtblick/suite-base/context/CurrentLayoutContext";
 import { useLayoutManager } from "@lichtblick/suite-base/context/LayoutManagerContext";
 import useCallbackWithToast from "@lichtblick/suite-base/hooks/useCallbackWithToast";
-import { AppEvent } from "@lichtblick/suite-base/services/IAnalytics";
 import { Layout } from "@lichtblick/suite-base/services/ILayoutStorage";
 
 export type UseLayoutNavigation = {
-  onSelectLayout: (
-    item: Layout,
-    params?: { selectedViaClick?: boolean; event?: MouseEvent },
-  ) => Promise<void>;
+  onSelectLayout: (item: Layout, params?: { event?: MouseEvent }) => Promise<void>;
   state: LayoutSelectionState;
   dispatch: Dispatch<LayoutSelectionAction>;
 };
@@ -33,7 +28,6 @@ const selectedLayoutIdSelector = (state: LayoutState) => state.selectedLayout?.i
 export function useLayoutNavigation(menuClose?: () => void): UseLayoutNavigation {
   const currentLayoutId = useCurrentLayoutSelector(selectedLayoutIdSelector);
   const layoutManager = useLayoutManager();
-  const analytics = useAnalytics();
   const { setSelectedLayoutId } = useCurrentLayoutActions();
 
   const [state, dispatch] = useLayoutBrowserReducer({
@@ -44,13 +38,7 @@ export function useLayoutNavigation(menuClose?: () => void): UseLayoutNavigation
   });
 
   const onSelectLayout = useCallbackWithToast(
-    async (
-      item: Layout,
-      { selectedViaClick = false, event }: { selectedViaClick?: boolean; event?: MouseEvent } = {},
-    ) => {
-      if (selectedViaClick) {
-        analytics.logEvent(AppEvent.LAYOUT_SELECT, { permission: item.permission });
-      }
+    async (item: Layout, { event }: { event?: MouseEvent } = {}) => {
       if (event?.ctrlKey === true || event?.metaKey === true || event?.shiftKey === true) {
         if (item.id !== currentLayoutId) {
           // selectedIds is empty on intial render
@@ -74,14 +62,7 @@ export function useLayoutNavigation(menuClose?: () => void): UseLayoutNavigation
         menuClose?.();
       }
     },
-    [
-      analytics,
-      currentLayoutId,
-      dispatch,
-      menuClose,
-      setSelectedLayoutId,
-      state.selectedIds.length,
-    ],
+    [currentLayoutId, dispatch, menuClose, setSelectedLayoutId, state.selectedIds.length],
   );
 
   return { onSelectLayout, state, dispatch };

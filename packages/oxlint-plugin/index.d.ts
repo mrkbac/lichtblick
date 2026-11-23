@@ -8,13 +8,12 @@ type RuleName =
   | "heavy-imports"
   | "license-header"
   | "link-target"
-  | "lodash-ramda-imports"
+  | "lodash-imports"
   | "no-boolean-parameters"
   | "no-getters-setters"
   | "no-object-url"
   | "no-push-spread"
   | "no-return-promise-resolve"
-  | "ramda-usage"
   | "strict-equality";
 
 declare const plugin: { meta: { name: string }; rules: Record<RuleName, Rule> };

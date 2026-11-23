@@ -28,7 +28,6 @@ import { CameraStateSettings } from "@lichtblick/suite-base/panels/ThreeDeeRende
 import { DEFAULT_PUBLISH_SETTINGS } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/PublishSettings";
 import { TFMessage, TransformStamped } from "@lichtblick/suite-base/panels/ThreeDeeRender/ros";
 import { makePose, Transform } from "@lichtblick/suite-base/panels/ThreeDeeRender/transforms";
-import IAnalytics from "@lichtblick/suite-base/services/IAnalytics";
 import { BasicBuilder } from "@lichtblick/test-builders";
 
 import { DynamicBufferGeometry } from "./DynamicBufferGeometry";
@@ -523,6 +522,32 @@ describe("3D Renderer", () => {
     }
   });
 
+  it("skips resize and drawing while the canvas is empty", async () => {
+    // Given: a panel collapsed to 0 wide, e.g. while another panel is fullscreen
+    const visible = vi.spyOn(document, "visibilityState", "get").mockReturnValue("visible");
+    const renderer = new Renderer({ ...defaultRendererProps, canvas });
+    await renderer.ready;
+    const setSize = vi.spyOn(renderer.gl, "setSize");
+    setSize.mockClear();
+    const render = vi.spyOn(renderer.gl, "render");
+
+    // When
+    renderer.input.emit("resize", new THREE.Vector2(0, 300));
+    // Then: the canvas keeps its last size
+    expect(setSize).not.toHaveBeenCalled();
+
+    // When: the drawing buffer is empty anyway (e.g. the panel mounted collapsed)
+    vi.spyOn(renderer.gl, "getDrawingBufferSize").mockImplementation((target) =>
+      target.set(0, 300),
+    );
+    renderer.animationFrame();
+    // Then
+    expect(render).not.toHaveBeenCalled();
+
+    renderer.dispose();
+    visible.mockRestore();
+  });
+
   it("skips GPU work while the tab is hidden and repaints when it is shown", async () => {
     const visibility = vi.spyOn(document, "visibilityState", "get");
     const requestAnimationFrameSpy = vi
@@ -876,22 +901,6 @@ describe("3D Renderer", () => {
     // Then: Should update color scheme and backdrop
     expect(renderer.colorScheme).toBe("light");
     expect(setClearColorSpy).toHaveBeenCalled();
-
-    renderer.dispose();
-  });
-
-  it("sets analytics instance", () => {
-    // Given: A renderer instance and mock analytics
-    const renderer = new Renderer({ ...defaultRendererProps, canvas });
-    const mockAnalytics = {
-      logEvent: vi.fn(),
-    } as unknown as IAnalytics;
-
-    // When: Setting analytics
-    renderer.setAnalytics(mockAnalytics);
-
-    // Then: Analytics should be set
-    expect(renderer.analytics).toBe(mockAnalytics);
 
     renderer.dispose();
   });

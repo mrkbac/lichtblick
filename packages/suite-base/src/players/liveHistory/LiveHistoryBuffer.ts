@@ -12,15 +12,6 @@ const WHOLE_MESSAGE_KEYS: readonly string[] = [WHOLE_MESSAGE];
 export const CHECKPOINT_INTERVAL = 8192;
 
 /**
- * Child frame ids of a transform message (tf2 TFMessage, foxglove FrameTransform(s)), detected by
- * shape so no topic or schema names are involved. Each child frame keeps its own seed, so a frame
- * published rarely on a shared transform topic survives a seek.
- */
-export function transformChildFrames(message: unknown): string[] | undefined {
-  return transformEntries(message)?.map((tf) => tf.child_frame_id);
-}
-
-/**
  * The transforms of a transform message, each with a string `child_frame_id`, without copying the
  * message's array; undefined for other messages.
  */
@@ -448,8 +439,14 @@ export class LiveHistoryBuffer {
   }
 }
 
-function seedKeys(msg: MessageEvent): readonly string[] {
-  return transformChildFrames(msg.message) ?? WHOLE_MESSAGE_KEYS;
+/**
+ * What a later message of the same topic replaces: the child frame ids of a transform message
+ * (tf2 TFMessage, foxglove FrameTransform(s)), detected by shape so no topic or schema names are
+ * involved, else the whole message. Each child frame keeps its own seed, so a frame published
+ * rarely on a shared transform topic survives a seek.
+ */
+export function seedKeys(msg: MessageEvent): readonly string[] {
+  return transformEntries(msg.message)?.map((tf) => tf.child_frame_id) ?? WHOLE_MESSAGE_KEYS;
 }
 
 /** Per topic, the sequence number of the latest whole message and of the latest message per frame. */

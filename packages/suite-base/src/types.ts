@@ -2,9 +2,8 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import { AppBarProps } from "@lichtblick/suite-base/components/AppBar";
-import { CustomWindowControlsProps } from "@lichtblick/suite-base/components/AppBar/CustomWindowControls";
 
-export type WorkspaceProps = CustomWindowControlsProps & {
+export type WorkspaceProps = {
   deepLinks?: readonly string[];
   appBarLeftInset?: number;
   onAppBarDoubleClick?: () => void;

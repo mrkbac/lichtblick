@@ -220,6 +220,26 @@ describe("RemoteFileReadable", () => {
       expect(mockRead).not.toHaveBeenCalled();
     });
 
+    it("serves a cancellable read from a prefetch but starts none for it", async () => {
+      const fetchMock = vi
+        .fn()
+        .mockImplementation(
+          async () => new Response(new Uint8Array([10, 11, 12, 13, 14]), { status: 206 }),
+        );
+      globalThis.fetch = fetchMock;
+      const readable = new RemoteFileReadable(testUrl);
+      const signal = new AbortController().signal;
+
+      readable.prefetch([{ offset: 100n, length: 5n }]);
+      const data = await readable.read(101n, 3n, { signal });
+      await readable.read(500n, 5n, { signal });
+
+      expect([...data]).toEqual([11, 12, 13]);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(mockRead).toHaveBeenCalledTimes(1);
+      expect(mockRead).toHaveBeenCalledWith(500, 5, expect.objectContaining({ signal }));
+    });
+
     it("fetches misses exactly while skimming, and streams them after a one-off batch", async () => {
       const fetchMock = vi
         .fn()

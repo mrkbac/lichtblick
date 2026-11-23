@@ -75,19 +75,16 @@ function WindowWorkspace({
     const fromParent = workspace.subscribe((state) => {
       store.setState({ ...state, sidebars: store.getState().sidebars });
     });
-    const toParent = store.subscribe(
-      ({ dialogs, featureTours, layoutBrowser, playbackControls }) => {
-        const parent = workspace.getState();
-        if (
-          dialogs !== parent.dialogs ||
-          featureTours !== parent.featureTours ||
-          layoutBrowser !== parent.layoutBrowser ||
-          playbackControls !== parent.playbackControls
-        ) {
-          workspace.setState({ dialogs, featureTours, layoutBrowser, playbackControls });
-        }
-      },
-    );
+    const toParent = store.subscribe(({ dialogs, layoutBrowser, playbackControls }) => {
+      const parent = workspace.getState();
+      if (
+        dialogs !== parent.dialogs ||
+        layoutBrowser !== parent.layoutBrowser ||
+        playbackControls !== parent.playbackControls
+      ) {
+        workspace.setState({ dialogs, layoutBrowser, playbackControls });
+      }
+    });
     return () => {
       fromParent();
       toParent();

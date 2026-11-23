@@ -1,13 +1,17 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import {
+  MessagePath,
   MessagePathStructureItem,
   MessagePathStructureItemMessage,
   parseMessagePath,
   quoteFieldNameIfNeeded,
 } from "@lichtblick/message-path";
 import { traverseStructure } from "@lichtblick/suite-base/components/MessagePathSyntax/messagePathsForDatatype";
-import { PLOTABLE_ROS_TYPES } from "@lichtblick/suite-base/panels/shared/constants";
+import {
+  PLOTABLE_ROS_TYPES,
+  ROS2_TIME_TYPES,
+} from "@lichtblick/suite-base/panels/shared/constants";
 import { Topic } from "@lichtblick/suite-base/players/types";
 
 const isHeader = (datatype: string) => /(^|[/.])Header$/.test(datatype);
@@ -17,12 +21,32 @@ function collect(item: MessagePathStructureItem, prefix: string, out: string[]):
     if (item.primitiveType !== "string" && PLOTABLE_ROS_TYPES.includes(item.primitiveType)) {
       out.push(prefix);
     }
+  } else if (item.structureType === "message" && ROS2_TIME_TYPES.includes(item.datatype)) {
+    // A ROS 2 stamp plots as one value, like the `time` primitive, not as .sec and .nanosec
+    out.push(prefix);
   } else if (item.structureType === "message" && (prefix === "" || !isHeader(item.datatype))) {
     for (const [name, next] of Object.entries(item.nextByName)) {
       collect(next, `${prefix}.${quoteFieldNameIfNeeded(name)}`, out);
     }
   }
   // Arrays are skipped: one series per element is rarely what someone adding a message wants.
+}
+
+function structureAt(
+  parsed: MessagePath,
+  structures: Readonly<Record<string, MessagePathStructureItemMessage>>,
+  topics: readonly Topic[],
+): MessagePathStructureItem | undefined {
+  const schemaName = topics.find((topic) => topic.name === parsed.topicName)?.schemaName;
+  const root = schemaName != undefined ? structures[schemaName] : undefined;
+  const { valid, structureItem } = traverseStructure(root, parsed.messagePath);
+  return valid ? structureItem : undefined;
+}
+
+function fieldsOf(path: string, item: MessagePathStructureItem): string[] {
+  const fields: string[] = [];
+  collect(item, "", fields);
+  return fields.map((field) => path + field);
 }
 
 /**
@@ -39,15 +63,8 @@ export function plottableFields(
   if (!parsed || parsed.modifier != undefined) {
     return undefined;
   }
-  const schemaName = topics.find((topic) => topic.name === parsed.topicName)?.schemaName;
-  const root = schemaName != undefined ? structures[schemaName] : undefined;
-  const { valid, structureItem } = traverseStructure(root, parsed.messagePath);
-  if (!valid || structureItem?.structureType !== "message") {
-    return undefined;
-  }
-  const fields: string[] = [];
-  collect(structureItem, "", fields);
-  return fields.map((field) => path + field);
+  const item = structureAt(parsed, structures, topics);
+  return item?.structureType === "message" ? fieldsOf(path, item) : undefined;
 }
 
 /**
@@ -70,16 +87,12 @@ export function resolvePlotPaths(
   if (parsed.modifier != undefined || parsed.messagePath.some((part) => part.type === "modifier")) {
     return [path];
   }
-  const fields = plottableFields(path, structures, topics);
-  if (fields) {
+  const item = structureAt(parsed, structures, topics);
+  if (item?.structureType === "message") {
+    const fields = fieldsOf(path, item);
     return fields.length > 0 ? fields : undefined;
   }
-  const schemaName = topics.find((topic) => topic.name === parsed.topicName)?.schemaName;
-  const root = schemaName != undefined ? structures[schemaName] : undefined;
-  const { valid, structureItem } = traverseStructure(root, parsed.messagePath);
-  return valid &&
-    structureItem?.structureType === "primitive" &&
-    PLOTABLE_ROS_TYPES.includes(structureItem.primitiveType)
+  return item?.structureType === "primitive" && PLOTABLE_ROS_TYPES.includes(item.primitiveType)
     ? [path]
     : undefined;
 }

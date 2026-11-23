@@ -16,15 +16,16 @@
  *   backwards from the end time. The topic is never read in full.
  */
 
-import { Time, add as addTime, compare } from "@foxglove/rostime";
+import { Time, add as addTime, compare, toSec } from "@foxglove/rostime";
 
 import Logger from "@lichtblick/log";
 import { MessagePipelineContext } from "@lichtblick/suite-base/components/MessagePipeline";
 import { RESULT_TYPE_MESSAGE_EVENT } from "@lichtblick/suite-base/components/TopicList/constants";
 import {
   DEFAULT_WINDOW_MS,
+  MAX_WINDOW_MS,
+  MIN_WINDOW_MS,
   WINDOW_GROWTH_FACTOR,
-  calculateOptimalWindowMs,
   subtractMilliseconds,
 } from "@lichtblick/suite-base/components/TopicList/timeWindowHelpers";
 import { TopicStats } from "@lichtblick/suite-base/players/types";
@@ -57,14 +58,12 @@ export function initialWindowMs(
   first: Time | undefined,
   last: Time | undefined,
 ): number {
-  return numMessages != undefined && first && last
-    ? calculateOptimalWindowMs({
-        numMessages,
-        firstMessageTime: first,
-        lastMessageTime: last,
-        targetMessagesInWindow: WINDOW_TARGET_MESSAGES,
-      })
-    : DEFAULT_WINDOW_MS;
+  const durationSec = first && last ? toSec(last) - toSec(first) : 0;
+  if (numMessages == undefined || numMessages <= 0 || durationSec <= 0) {
+    return DEFAULT_WINDOW_MS;
+  }
+  const windowMs = ((WINDOW_TARGET_MESSAGES * durationSec) / numMessages) * 1000;
+  return Math.max(MIN_WINDOW_MS, Math.min(MAX_WINDOW_MS, windowMs));
 }
 
 /**

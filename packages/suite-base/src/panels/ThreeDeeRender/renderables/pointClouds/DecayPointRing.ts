@@ -10,6 +10,7 @@ import { POSE_FLOATS, PointColorEncoding, PointShape, RasterPoints } from "./Ras
 import { applyCameraFallback, convertPointColorEncoding } from "./cameraColor";
 import { BaseUserData, Renderable } from "../../Renderable";
 import type { Renderer } from "../../Renderer";
+import { sameBytes } from "../../math";
 import { makePose, Pose } from "../../transforms";
 import type { HistoryLimits } from "../pointExtensionUtils";
 
@@ -89,21 +90,6 @@ function transformsKey(
   return { version: tree.version, time: tree.isComplete() ? currentTime : undefined };
 }
 
-/** Byte-wise equality of two typed arrays (NaN positions compare equal to themselves) */
-export function sameBytes(a: ArrayBufferView, b: ArrayBufferView): boolean {
-  if (a.byteLength !== b.byteLength) {
-    return false;
-  }
-  const x = new Uint8Array(a.buffer, a.byteOffset, a.byteLength);
-  const y = new Uint8Array(b.buffer, b.byteOffset, b.byteLength);
-  for (let i = 0; i < x.length; i++) {
-    if (x[i] !== y[i]) {
-      return false;
-    }
-  }
-  return true;
-}
-
 /** Writes the top 3 rows of an affine matrix (three.js stores columns) */
 function writePoseRows(out: Float32Array, offset: number, m: THREE.Matrix4): void {
   const e = m.elements;
@@ -131,6 +117,8 @@ export class DecayPointRing extends Renderable<BaseUserData, /*TRenderer=*/ unde
   public override pickable = true;
   // Old scans keep only their geometry (as before), so there are no per-point details to show
   public override pickableInstances = false;
+  /** What the shown decay limit notice says, to format it again only when that changes */
+  public noticeKey: string | undefined;
 
   readonly #limits: HistoryLimits;
   /** Point budget (a setting, so it can change at runtime; see enforceLimits) */

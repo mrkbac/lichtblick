@@ -8,6 +8,8 @@
 const { version: electronVersion } = require("electron/package.json");
 const path = require("path");
 
+const { productName } = require("../../../package.json");
+
 /**
  * @param {{appPath: string}} params
  * @returns {import("electron-builder").Configuration}
@@ -29,7 +31,7 @@ function makeElectronBuilderConfig(params) {
     icon: path.join(__dirname, "../resources/icon/icon.icns"),
     protocols: [
       {
-        name: "Digitalis",
+        name: productName,
         schemes: ["lichtblick"],
       },
     ],
@@ -57,7 +59,7 @@ function makeElectronBuilderConfig(params) {
         },
         {
           ext: "foxe",
-          name: "Digitalis Extension",
+          name: `${productName} Extension`,
           mimeType: "application/zip",
         },
       ],
@@ -83,7 +85,7 @@ function makeElectronBuilderConfig(params) {
         },
         {
           ext: "foxe",
-          name: "Digitalis Extension",
+          name: `${productName} Extension`,
         },
       ],
     },
@@ -95,15 +97,6 @@ function makeElectronBuilderConfig(params) {
       category: "public.app-category.developer-tools",
       entitlements: path.join(__dirname, "../resources/mac/entitlements.plist"),
       entitlementsInherit: path.join(__dirname, "../resources/mac/entitlements.plist"),
-      extraFiles: [
-        {
-          from: path.join(
-            require.resolve("quicklookjs/index.d.ts"),
-            "../dist/PreviewExtension.appex",
-          ),
-          to: "PlugIns/PreviewExtension.appex",
-        },
-      ],
       extraResources: [
         { from: path.join(__dirname, "../resources/icon/BagIcon.png"), to: "BagIcon.png" },
         { from: path.join(__dirname, "../resources/icon/McapIcon.png"), to: "McapIcon.png" },
@@ -132,7 +125,7 @@ function makeElectronBuilderConfig(params) {
           {
             CFBundleTypeExtensions: ["foxe"],
             CFBundleTypeIconFile: "FoxeIcon",
-            CFBundleTypeName: "Digitalis Extension File",
+            CFBundleTypeName: `${productName} Extension File`,
             CFBundleTypeRole: "Viewer",
             LSHandlerRank: "Owner",
             CFBundleTypeIconSystemGenerated: 1,
@@ -150,7 +143,7 @@ function makeElectronBuilderConfig(params) {
           },
           {
             UTTypeConformsTo: ["public.data", "public.archive", "public.zip-archive"],
-            UTTypeDescription: "Digitalis Extension File",
+            UTTypeDescription: `${productName} Extension File`,
             UTTypeIcons: { UTTypeIconText: "foxe" },
             UTTypeIdentifier: "dev.foxglove.extension",
             UTTypeTagSpecification: { "public.filename-extension": "foxe" },

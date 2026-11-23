@@ -15,7 +15,7 @@ import {
 } from "@lichtblick/suite-base/components/MessagePathSyntax/PathSampleColumns";
 import { MessagePathDataItem } from "@lichtblick/suite-base/components/MessagePathSyntax/useCachedGetMessagePathDataItems";
 import { usePathSampleHistory } from "@lichtblick/suite-base/components/MessagePathSyntax/usePathSampleHistory";
-import { MAX_LIVE_SAMPLES_PER_PATH } from "@lichtblick/suite-base/panels/StateTransitions/constants";
+import { MAX_SAMPLES_PER_PATH } from "@lichtblick/suite-base/panels/StateTransitions/constants";
 import { SamplesByPath } from "@lichtblick/suite-base/panels/StateTransitions/types";
 import { MessageEvent } from "@lichtblick/suite-base/players/types";
 import MessageEventBuilder from "@lichtblick/suite-base/testing/builders/MessageEventBuilder";
@@ -184,7 +184,7 @@ describe("StateTransitions", () => {
 
     expect(mockUsePathSampleHistory).toHaveBeenCalledWith(
       [topicA, topicB],
-      MAX_LIVE_SAMPLES_PER_PATH,
+      MAX_SAMPLES_PER_PATH,
       [],
     );
   });
@@ -225,7 +225,7 @@ describe("StateTransitions", () => {
       paths: [{ value: topic, timestampMethod: "receiveTime" }],
     });
 
-    expect(mockUsePathSampleHistory).toHaveBeenCalledWith([], MAX_LIVE_SAMPLES_PER_PATH, []);
+    expect(mockUsePathSampleHistory).toHaveBeenCalledWith([], MAX_SAMPLES_PER_PATH, []);
   });
 
   it("should pass pathStrings when decodedMessages has matching paths but empty arrays", () => {
@@ -237,7 +237,7 @@ describe("StateTransitions", () => {
       paths: [{ value: topic, timestampMethod: "receiveTime" }],
     });
 
-    expect(mockUsePathSampleHistory).toHaveBeenCalledWith([topic], MAX_LIVE_SAMPLES_PER_PATH, []);
+    expect(mockUsePathSampleHistory).toHaveBeenCalledWith([topic], MAX_SAMPLES_PER_PATH, []);
   });
 
   it("should skip usePathSampleHistory when any path has range data", () => {
@@ -258,7 +258,7 @@ describe("StateTransitions", () => {
       ],
     });
 
-    expect(mockUsePathSampleHistory).toHaveBeenCalledWith([], MAX_LIVE_SAMPLES_PER_PATH, []);
+    expect(mockUsePathSampleHistory).toHaveBeenCalledWith([], MAX_SAMPLES_PER_PATH, []);
   });
 
   it.each([undefined, "=> 2"])("hides match navigation for condition %s", (condition) => {

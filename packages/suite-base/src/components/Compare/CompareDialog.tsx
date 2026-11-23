@@ -41,6 +41,7 @@ import {
   rememberHandle,
   remoteCompareNames,
 } from "@lichtblick/suite-base/util/compareSides";
+import { urlsOf } from "@lichtblick/suite-base/util/recentSources";
 import showOpenFilePicker from "@lichtblick/suite-base/util/showOpenFilePicker";
 import { useSourcePick } from "@lichtblick/suite-base/util/sourcePick";
 
@@ -57,9 +58,7 @@ async function recordingsOf(
 ): Promise<{ recordings: readonly Recording[]; names?: readonly string[]; withCookies: boolean }> {
   if (args?.type === "connection") {
     // Only sources that read recording files (not live connections, whatever their URL ends with)
-    const url = args.params?.url;
-    const urls =
-      source?.supportedFileTypes != undefined ? (args.urls ?? (url == undefined ? [] : [url])) : [];
+    const urls = source?.supportedFileTypes != undefined ? urlsOf(args) : [];
     const isHttp = urls.every((each) => /^https?:\/\//i.test(each));
     return {
       recordings: isHttp ? urls : [],

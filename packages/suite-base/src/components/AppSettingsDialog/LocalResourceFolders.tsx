@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import { Alert, Button, FormLabel, Typography } from "@mui/material";
-import { useState, useSyncExternalStore } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { useTranslation } from "react-i18next";
 import { makeStyles } from "tss-react/mui";
 
@@ -21,15 +21,13 @@ export function LocalResourceFolders(): React.JSX.Element {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
   const supported = "showDirectoryPicker" in window;
-  const select = async () => {
+  useEffect(() => {
+    void localResourceFolders.restore();
+  }, []);
+  const run = async (action: () => Promise<void>) => {
     setError(undefined);
     try {
-      const folder = await window.showDirectoryPicker({
-        id: "lichtblick-ros-resources",
-        mode: "read",
-      });
-      setBusy(true);
-      await localResourceFolders.add(folder);
+      await action();
     } catch (err) {
       if (!(err instanceof DOMException && err.name === "AbortError")) {
         setError(err instanceof Error ? err.message : String(err));
@@ -37,6 +35,22 @@ export function LocalResourceFolders(): React.JSX.Element {
     } finally {
       setBusy(false);
     }
+  };
+  const select = async () => {
+    await run(async () => {
+      const folder = await window.showDirectoryPicker({
+        id: "lichtblick-ros-resources",
+        mode: "read",
+      });
+      setBusy(true);
+      await localResourceFolders.add(folder);
+    });
+  };
+  const reconnect = async (id: string) => {
+    await run(async () => {
+      setBusy(true);
+      await localResourceFolders.reconnect(id);
+    });
   };
   return (
     <Stack gap={1}>
@@ -48,12 +62,22 @@ export function LocalResourceFolders(): React.JSX.Element {
       {folders.map((folder) => (
         <Stack key={folder.id} gap={1}>
           <Typography variant="body2">
-            {t("localResourceFolderSummary", { name: folder.name, count: folder.packages.length })}
+            {folder.needsPermission
+              ? t("resourceFolderNeedsPermission", { name: folder.name })
+              : t("localResourceFolderSummary", {
+                  name: folder.name,
+                  count: folder.packages.length,
+                })}
           </Typography>
           <Typography
             variant="caption"
             className={classes.path}
           >{`local-asset://${folder.id}/`}</Typography>
+          {folder.needsPermission && (
+            <Button size="small" disabled={busy} onClick={() => void reconnect(folder.id)}>
+              {t("reconnectResourceFolder")}
+            </Button>
+          )}
           <Button
             size="small"
             disabled={busy}

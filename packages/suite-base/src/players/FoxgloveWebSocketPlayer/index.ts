@@ -1732,8 +1732,6 @@ export default class FoxgloveWebSocketPlayer implements Player {
     );
   }
 
-  public setGlobalVariables(): void {}
-
   public getBatchIterator(): undefined {
     // FoxgloveWebSocketPlayer does not support batch iteration
     return undefined;

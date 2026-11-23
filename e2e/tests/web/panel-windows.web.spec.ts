@@ -5,6 +5,21 @@ import { expect, Page, test } from "@playwright/test";
 
 import { loadFiles } from "../../fixtures/load-files";
 
+/** Moves a popped-out panel back to the workspace; the click closes its window mid-action. */
+async function returnToWorkspace(monitor: Page): Promise<void> {
+  await monitor.getByTestId("panel-menu").click();
+  const closed = monitor.waitForEvent("close");
+  await monitor
+    .getByText("Return to workspace", { exact: true })
+    .click()
+    .catch((error: unknown) => {
+      if (!monitor.isClosed()) {
+        throw error;
+      }
+    });
+  await closed;
+}
+
 test.beforeEach(async ({ page }) => {
   // Given
   await page.goto("/");
@@ -72,8 +87,7 @@ test("opens one always-on-top PiP monitor and returns it to the workspace", {
   await expect(page.getByTestId("panel-menu")).toHaveCount(2);
   await expect(page.getByText("Show panel window", { exact: true })).toBeVisible();
   // When
-  await monitor.getByTestId("panel-menu").click();
-  await monitor.getByText("Return to workspace", { exact: true }).click();
+  await returnToWorkspace(monitor);
   // Then
   await expect(page.getByTestId("panel-menu")).toHaveCount(3);
 });
@@ -138,9 +152,7 @@ for (const action of ["Open in new window", "Open Picture-in-Picture monitor"] a
     await expect(monitor.locator("canvas")).toBeVisible();
     await monitor.getByTestId("window-left-sidebar-button").click();
     await expect(monitor.getByTestId("sidebar-left").getByRole("heading")).toContainText("3D");
-    await monitor.getByTestId("panel-menu").click();
-    await monitor.getByText("Return to workspace", { exact: true }).click();
-    await expect.poll(() => monitor.isClosed()).toBe(true);
+    await returnToWorkspace(monitor);
     await expect(page.getByTestId("panel-menu")).toHaveCount(3);
   });
 
@@ -201,8 +213,7 @@ for (const action of ["Open in new window", "Open Picture-in-Picture monitor"] a
     await expect(monitor.locator("canvas")).toBeVisible();
     await expect(monitor.getByText("Waiting for image messages…", { exact: true })).toHaveCount(0);
     // Explicitly returning the panel preserves the same paused image.
-    await monitor.getByTestId("panel-menu").click();
-    await monitor.getByText("Return to workspace", { exact: true }).click();
+    await returnToWorkspace(monitor);
     // Then no seek or playback is needed to recover it
     await expect(image.locator("canvas")).toBeVisible();
     await expect(image.getByText("Waiting for image messages…", { exact: true })).toHaveCount(0);

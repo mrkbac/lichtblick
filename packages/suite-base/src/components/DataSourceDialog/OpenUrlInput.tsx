@@ -29,6 +29,7 @@ import {
   detectConnection,
   hostUrl,
   looksLikeHost,
+  splitRemoteRecordingUrlList,
 } from "@lichtblick/suite-base/util/recentSources";
 import { useSourcePick } from "@lichtblick/suite-base/util/sourcePick";
 
@@ -43,6 +44,7 @@ type Props = {
   /** Label of the result Enter opens when the input is a search, not a URL. */
   topMatch?: string;
   onOpenTopMatch: () => void;
+  onOpenCatalog: (url: string) => void;
 };
 
 /**
@@ -56,6 +58,7 @@ export function OpenUrlInput({
   onChange,
   topMatch,
   onOpenTopMatch,
+  onOpenCatalog,
 }: Props): React.JSX.Element {
   const { classes } = useStyles();
   const { t } = useTranslation("openDialog");
@@ -92,12 +95,13 @@ export function OpenUrlInput({
   // part of a recording's name still searches.
   const bareHost = !explicitUrl && topMatch == undefined && looksLikeHost(trimmed);
   const isUrl = explicitUrl || bareHost;
+  const remoteUrls = explicitUrl ? splitRemoteRecordingUrlList(trimmed) : undefined;
   const detected = explicitUrl
-    ? detectConnection(trimmed)
+    ? detectConnection(remoteUrls?.[0] ?? trimmed)
     : bareHost
       ? { sourceId: "foxglove-websocket", url: hostUrl(trimmed, "foxglove-websocket") }
       : undefined;
-  const url = detected?.url ?? trimmed;
+  const url = remoteUrls ? trimmed : (detected?.url ?? trimmed);
   // A previously used URL keeps the source it was opened with (e.g. rosbridge on a custom port)
   const recentMatch = recentSources.find(
     (recent) => recent.type === "connection" && recent.title === url,
@@ -113,9 +117,13 @@ export function OpenUrlInput({
     picked ??
     (isUrl ? connectionSources.find((s) => s.id === sourceId && hasUrlField(s)) : undefined);
   const connects = picked != undefined || isUrl;
-  // A .json URL lists recordings: a catalog (see Catalog/catalogUrl.ts)
+  // Known recording and connection URLs keep their existing handlers.
+  const catalogUrl = URL.parse(trimmed);
   const isCatalog =
-    picked == undefined && explicitUrl && /^https?:\/\/[^?#]+\.json([?#]|$)/i.test(trimmed);
+    picked == undefined &&
+    detected == undefined &&
+    catalogUrl != undefined &&
+    (catalogUrl.protocol === "https:" || catalogUrl.protocol === "http:");
   // Extra fields only show for a picked source, so a detected one opens with their defaults
   const extraFields = fields.filter((field) => field.id !== "url");
   const hasFieldErrors = Object.values(fieldErrors).some((err) => err != undefined);
@@ -137,7 +145,7 @@ export function OpenUrlInput({
 
   const connect = () => {
     if (isCatalog) {
-      dialogActions.dataSource.open("demo", undefined, trimmed);
+      onOpenCatalog(catalogUrl.href);
       return;
     }
     if (!source || hasFieldErrors) {
@@ -151,7 +159,10 @@ export function OpenUrlInput({
     }
     const sourceFields = source.formConfig?.fields ?? [];
     const urlField = sourceFields.find((field) => field.id === "url");
-    const urlError = urlField?.validate?.(url);
+    const urls = source.id === "remote-file" ? remoteUrls : undefined;
+    const urlError = (urls ?? [url])
+      .map((entry) => urlField?.validate?.(entry))
+      .find((issue) => issue instanceof Error);
     if (urlError instanceof Error) {
       setError(urlError.message);
       return;
@@ -161,7 +172,8 @@ export function OpenUrlInput({
     );
     selectSource(source.id, {
       type: "connection",
-      params: { ...defaults, ...fieldValues, ...(urlField ? { url } : {}) },
+      params: { ...defaults, ...fieldValues, ...(urlField && !urls ? { url } : {}) },
+      ...(urls && { urls }),
     });
   };
 

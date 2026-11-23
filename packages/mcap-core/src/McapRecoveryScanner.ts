@@ -349,10 +349,12 @@ export class McapRecoveryScanner {
     }
     const compression = new TextDecoder().decode(bytes.subarray(41, 41 + compressionLength));
     const compressed = bytes.subarray(recordsAt);
-    const records =
-      compression === ""
-        ? compressed
-        : this.#decompress(compression, compressed, chunkView.getBigUint64(25, true));
+    const records = decompress(
+      this.#decompressHandlers,
+      compression,
+      compressed,
+      chunkView.getBigUint64(25, true),
+    );
     // Each channel's MessageIndex record where the chunk index points, filled in one walk
     const messageIndexes = new Uint8Array(Number(chunkIndex.messageIndexLength));
     const view = new DataView(messageIndexes.buffer);
@@ -526,15 +528,8 @@ export class McapRecoveryScanner {
     }
   }
 
-  #decompress(compression: string, records: Uint8Array, uncompressedSize: bigint): Uint8Array {
-    return decompress(this.#decompressHandlers, compression, records, uncompressedSize);
-  }
-
   #addChunk(chunk: McapTypes.Chunk, offset: bigint, length: bigint): void {
-    const records = this.#decompress(chunk.compression, chunk.records, chunk.uncompressedSize);
-    if (chunk.uncompressedCrc !== 0 && crc32(records) !== chunk.uncompressedCrc) {
-      throw new Error("Chunk CRC mismatch");
-    }
+    const records = decompressChunk(this.#decompressHandlers, chunk);
 
     // Parse everything before touching the index, so a chunk that fails halfway adds nothing.
     // Per channel only its message count and time range: the offsets are rebuilt when needed.
@@ -700,15 +695,7 @@ export async function checkChunk(
     if (chunk?.type !== "Chunk") {
       throw new Error(`No chunk at offset ${chunkIndex.chunkStartOffset}`);
     }
-    const records = decompress(
-      decompressHandlers,
-      chunk.compression,
-      chunk.records,
-      chunk.uncompressedSize,
-    );
-    if (chunk.uncompressedCrc !== 0 && crc32(records) !== chunk.uncompressedCrc) {
-      throw new Error(`Chunk at offset ${chunkIndex.chunkStartOffset} fails its CRC`);
-    }
+    const records = decompressChunk(decompressHandlers, chunk);
     const view = new DataView(records.buffer, records.byteOffset, records.byteLength);
     const messages = new Map<number, { channelId: number; logTime: bigint }>();
     walkChunk(records, (channelId, offset) => {
@@ -745,13 +732,26 @@ export async function checkChunk(
   }
 }
 
+/** A chunk's records, decompressed and checked against its CRC */
+export function decompressChunk(
+  handlers: McapTypes.DecompressHandlers,
+  chunk: McapTypes.Chunk,
+): Uint8Array {
+  const records = decompress(handlers, chunk.compression, chunk.records, chunk.uncompressedSize);
+  if (chunk.uncompressedCrc !== 0 && crc32(records) !== chunk.uncompressedCrc) {
+    throw new Error("Chunk CRC mismatch");
+  }
+  return records;
+}
+
 function decompress(
   handlers: McapTypes.DecompressHandlers,
   compression: string,
   records: Uint8Array,
   uncompressedSize: bigint,
 ): Uint8Array {
-  if (compression === "") {
+  // An empty chunk has nothing to decompress (as in McapIndexedReader and McapStreamReader)
+  if (compression === "" || records.byteLength === 0) {
     return records;
   }
   const handler = handlers[compression];

@@ -124,10 +124,7 @@ describe("PanelToolbarControls", () => {
         openFile: { open: vi.fn() },
         preferences: { close: vi.fn(), open: vi.fn() },
       },
-      featureTourActions: { startTour: vi.fn(), finishTour: vi.fn() },
-      openAccountSettings: vi.fn(),
       openPanelSettings: vi.fn(),
-      openLayoutBrowser: vi.fn(),
       playbackControlActions: { setRepeat: vi.fn() },
     } as any);
   });
@@ -298,10 +295,7 @@ describe("PanelToolbarControls", () => {
           openFile: { open: vi.fn() },
           preferences: { close: vi.fn(), open: vi.fn() },
         },
-        featureTourActions: { startTour: vi.fn(), finishTour: vi.fn() },
-        openAccountSettings: vi.fn(),
         openPanelSettings,
-        openLayoutBrowser: vi.fn(),
         playbackControlActions: { setRepeat: vi.fn() },
       } as any);
 
@@ -734,10 +728,7 @@ describe("PanelToolbarControls", () => {
           openFile: { open: vi.fn() },
           preferences: { close: vi.fn(), open: vi.fn() },
         },
-        featureTourActions: { startTour: vi.fn(), finishTour: vi.fn() },
-        openAccountSettings: vi.fn(),
         openPanelSettings,
-        openLayoutBrowser: vi.fn(),
         playbackControlActions: { setRepeat: vi.fn() },
       } as any);
 

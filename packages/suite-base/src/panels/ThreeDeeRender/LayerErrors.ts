@@ -176,21 +176,21 @@ export class LayerErrors extends EventEmitter<LayerErrorEvents> {
 }
 
 /**
- * Report errors that are still active `graceMs` after they were raised. Most layer errors on a good
+ * Report errors that are still active 3 s after they were raised. Most layer errors on a good
  * recording are transient (a transform, camera info or frame that arrives a moment after the first
  * message) and resolve on their own, so they stay in the settings tree but never reach the log.
+ * @param now - the current playback time
  * @returns unsubscribe
  */
-export function reportPersistentErrors<T>(
+export function reportPersistentErrors(
   errors: LayerErrors,
-  report: (path: Path, errorId: string, errorMessage: string, raisedAt: T) => void,
-  graceMs: number,
-  now: () => T,
+  report: (path: Path, errorId: string, errorMessage: string, raisedAt: bigint) => void,
+  now: () => bigint,
 ): () => void {
   const pending = new Map<string, ReturnType<typeof setTimeout>>();
   const onAdd = (path: Path, errorId: string) => {
     const pathCopy = [...path]; // callers reuse path arrays
-    const raisedAt = now(); // reported as of when it was raised, not graceMs later
+    const raisedAt = now(); // reported as of when it was raised, not the grace period later
     const key = `${pathCopy.join("\0")}\0${errorId}`;
     clearTimeout(pending.get(key));
     pending.set(
@@ -201,7 +201,7 @@ export function reportPersistentErrors<T>(
         if (message != undefined) {
           report(pathCopy, errorId, message, raisedAt);
         }
-      }, graceMs),
+      }, 3000),
     );
   };
   errors.on("add", onAdd);

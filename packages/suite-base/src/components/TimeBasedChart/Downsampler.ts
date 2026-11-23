@@ -10,7 +10,7 @@ import { RpcScales } from "@lichtblick/suite-base/components/Chart/types";
 import { grey } from "@lichtblick/suite-base/util/toolsColorScheme";
 
 import { MAX_POINTS } from "./downsample";
-import { downsampleStates } from "./downsampleStates";
+import { downsampleStates, sortedStateWindow } from "./downsampleStates";
 import { ChartDatasets, PlotViewport } from "./types";
 
 type UpdateParams = {
@@ -71,8 +71,13 @@ export class Downsampler {
         return dataset;
       }
 
+      // A sorted row holds no undefined points (see ChartDataset.xSorted).
+      const { start, end } =
+        dataset.xSorted === true
+          ? sortedStateWindow(dataset.data as { x: number }[], view)
+          : { start: 0, end: dataset.data.length };
       const downsampled = downsampleStates(
-        iterateObjects(dataset.data),
+        iterateObjects(dataset.data, start, end),
         view,
         // Per dataset: a shared split would leave each of many rows a few hundred points and
         // grey out stretches that fit the chart's width. The width still caps each row.

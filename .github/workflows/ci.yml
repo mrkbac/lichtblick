@@ -1,7 +1,4 @@
 name: CI
-# The PR number makes a run identifiable for perf-budget-label.yml, also for fork PRs where GitHub
-# leaves the run's pull_requests empty. Pushes keep the default name.
-run-name: "${{ github.event_name == 'pull_request' && format('PR #{0}: {1}', github.event.pull_request.number, github.event.pull_request.title) || '' }}"
 
 on:
   push:
@@ -13,10 +10,8 @@ permissions:
 
 # A new push to a PR supersedes the previous run; cancel it so it doesn't hold runners.
 # Runs on licht are never cancelled, so every merge commit keeps a result.
-# Re-run attempts (e.g. perf-budget-label.yml re-running an older commit's perf-budget) get their own
-# group per commit, so they never cancel the CI of a newer push.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}${{ github.run_attempt != '1' && format('-rerun-{0}', github.sha) || '' }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
@@ -111,8 +106,8 @@ jobs:
           PR: ${{ github.event.pull_request.number }}
         # Exit code 3 means over budget (and nothing worse), which a deliberate trade-off may accept
         # with the `perf-budget-accepted` label. Not comparable (2), a failed base build or a crash
-        # always fail. The label is read now, not from the event, so a
-        # re-run (perf-budget-label.yml) sees the current state. The annotations say which way it went.
+        # always fail. The label is read now, not from the event, so
+        # re-running the job after changing the label applies it. The annotations say which way it went.
         run: |
           set +e
           node --expose-gc ci/perf-budget.ts --base "$(git merge-base HEAD "$BASE")"

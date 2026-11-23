@@ -15,10 +15,9 @@ import {
 } from "@lichtblick/suite-base/players/liveHistory/liveRecordings";
 
 import { FolderFile, indexFiles, loadPreview } from "./indexFolder";
-import { CatalogRecording } from "./types";
-import { CatalogFolder } from "./useCatalogFolder";
+import { CatalogBackend, CatalogRecording } from "./types";
 
-export type LiveCatalog = CatalogFolder & {
+export type LiveCatalog = CatalogBackend & {
   pickFolder: () => Promise<void>;
   /** Recordings being written right now; they can't be read until the session ends. */
   active: LiveRecording[];

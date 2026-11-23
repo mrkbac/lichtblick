@@ -6,24 +6,18 @@
 import { renderHook, act } from "@testing-library/react";
 import type { Mock } from "vitest";
 
-import { useAnalytics } from "@lichtblick/suite-base/context/AnalyticsContext";
 import { useCurrentLayoutActions } from "@lichtblick/suite-base/context/CurrentLayoutContext";
 import { useLayoutManager } from "@lichtblick/suite-base/context/LayoutManagerContext";
 import { LayoutSetupOptions } from "@lichtblick/suite-base/hooks/types";
 import { useConfirm } from "@lichtblick/suite-base/hooks/useConfirm";
 import { useLayoutActions } from "@lichtblick/suite-base/hooks/useLayoutActions";
 import { useLayoutNavigation } from "@lichtblick/suite-base/hooks/useLayoutNavigation";
-import { AppEvent } from "@lichtblick/suite-base/services/IAnalytics";
 import MockLayoutManager from "@lichtblick/suite-base/services/LayoutManager/MockLayoutManager";
 import LayoutBuilder from "@lichtblick/suite-base/testing/builders/LayoutBuilder";
 import { BasicBuilder } from "@lichtblick/test-builders";
 
 vi.mock("@lichtblick/suite-base/context/LayoutManagerContext", () => ({
   useLayoutManager: vi.fn(),
-}));
-
-vi.mock("@lichtblick/suite-base/context/AnalyticsContext", () => ({
-  useAnalytics: vi.fn(),
 }));
 
 vi.mock("@lichtblick/suite-base/context/CurrentLayoutContext", () => ({
@@ -59,7 +53,6 @@ function setup(options: Partial<LayoutSetupOptions> = {}) {
 }
 
 describe("useLayoutActions", () => {
-  let analyticsMock: any;
   let setSelectedLayoutIdMock: Mock;
   let onSelectLayoutMock: Mock;
   let confirmMock: Mock;
@@ -71,13 +64,11 @@ describe("useLayoutActions", () => {
     mockLayoutManager.overwriteLayout = vi.fn().mockResolvedValue(undefined);
     mockLayoutManager.revertLayout = vi.fn().mockResolvedValue(undefined);
     mockLayoutManager.getLayouts = vi.fn().mockResolvedValue([]);
-    analyticsMock = { logEvent: vi.fn() };
     setSelectedLayoutIdMock = vi.fn();
     onSelectLayoutMock = vi.fn();
     confirmMock = vi.fn().mockResolvedValue("ok");
 
     (useLayoutManager as Mock).mockReturnValue(mockLayoutManager);
-    (useAnalytics as Mock).mockReturnValue(analyticsMock);
     (useCurrentLayoutActions as Mock).mockReturnValue({
       setSelectedLayoutId: setSelectedLayoutIdMock,
     });
@@ -106,9 +97,6 @@ describe("useLayoutActions", () => {
         name: newName,
       });
       expect(setSelectedLayoutIdMock).toHaveBeenCalledWith(mockLayout.id);
-      expect(analyticsMock.logEvent).toHaveBeenCalledWith(AppEvent.LAYOUT_RENAME, {
-        permission: mockLayout.permission,
-      });
     });
   });
 
@@ -143,9 +131,6 @@ describe("useLayoutActions", () => {
         permission: "CREATOR_WRITE",
       });
       expect(onSelectLayoutMock).toHaveBeenCalledWith(newLayout);
-      expect(analyticsMock.logEvent).toHaveBeenCalledWith(AppEvent.LAYOUT_DUPLICATE, {
-        permission: mockLayout.permission,
-      });
     });
 
     it("dispatches queue-multi-action when multiple layouts are selected", async () => {
@@ -170,7 +155,6 @@ describe("useLayoutActions", () => {
       });
       expect(mockLayoutManager.saveNewLayout).not.toHaveBeenCalled();
       expect(onSelectLayoutMock).not.toHaveBeenCalled();
-      expect(analyticsMock.logEvent).not.toHaveBeenCalled();
     });
   });
 
@@ -184,9 +168,6 @@ describe("useLayoutActions", () => {
       });
 
       expect(mockLayoutManager.deleteLayout).toHaveBeenCalledWith({ id: mockLayout.id });
-      expect(analyticsMock.logEvent).toHaveBeenCalledWith(AppEvent.LAYOUT_DELETE, {
-        permission: mockLayout.permission,
-      });
     });
 
     it("dispatches queue-multi-action when multiple layouts are selected", async () => {
@@ -208,7 +189,6 @@ describe("useLayoutActions", () => {
       expect(dispatch).toHaveBeenCalledWith({ type: "queue-multi-action", action: "delete" });
       expect(mockLayoutManager.deleteLayout).not.toHaveBeenCalled();
       expect(onSelectLayoutMock).not.toHaveBeenCalled();
-      expect(analyticsMock.logEvent).not.toHaveBeenCalled();
     });
   });
 
@@ -222,9 +202,6 @@ describe("useLayoutActions", () => {
       });
 
       expect(mockLayoutManager.revertLayout).toHaveBeenCalledWith({ id: mockLayout.id });
-      expect(analyticsMock.logEvent).toHaveBeenCalledWith(AppEvent.LAYOUT_REVERT, {
-        permission: mockLayout.permission,
-      });
     });
 
     it("dispatches queue-multi-action when multiple layouts are selected", async () => {
@@ -246,7 +223,6 @@ describe("useLayoutActions", () => {
       expect(dispatch).toHaveBeenCalledWith({ type: "queue-multi-action", action: "revert" });
       expect(mockLayoutManager.revertLayout).not.toHaveBeenCalled();
       expect(onSelectLayoutMock).not.toHaveBeenCalled();
-      expect(analyticsMock.logEvent).not.toHaveBeenCalled();
     });
   });
 
@@ -261,9 +237,6 @@ describe("useLayoutActions", () => {
 
       expect(confirmMock).not.toHaveBeenCalled();
       expect(mockLayoutManager.overwriteLayout).toHaveBeenCalledWith({ id: mockLayout.id });
-      expect(analyticsMock.logEvent).toHaveBeenCalledWith(AppEvent.LAYOUT_OVERWRITE, {
-        permission: mockLayout.permission,
-      });
     });
 
     it("asks confirmation before overwriting a shared layout and proceeds on ok", async () => {
@@ -288,7 +261,6 @@ describe("useLayoutActions", () => {
       });
 
       expect(mockLayoutManager.overwriteLayout).not.toHaveBeenCalled();
-      expect(analyticsMock.logEvent).not.toHaveBeenCalled();
     });
 
     it("dispatches queue-multi-action when multiple layouts are selected", async () => {

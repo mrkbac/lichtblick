@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MPL-2.0
 
-import { fromRFC3339String } from "@foxglove/rostime";
+import { compare, fromRFC3339String } from "@foxglove/rostime";
 
-import { CatalogRecording, CatalogTopic } from "./types";
+import { CatalogEvent, CatalogRecording, CatalogTopic } from "./types";
 
 /**
  * A served catalog (schema v1): JSON that lists recordings to open from URLs. Relative URLs are
@@ -22,6 +22,9 @@ import { CatalogRecording, CatalogTopic } from "./types";
  *     "topics": [{ "name": "/camera/wrist", "schema": "foxglove.CompressedVideo", "messages": 166 }],
  *     "thumbnail": "droid.jpg",                           // image URL
  *     "layout": "droid-layout.json",                      // applied when the recording opens
+ *     "device": "Robot 1", "dataset": "Outdoor trials",
+ *     "session": "Morning run", "episode": "Approach",
+ *     "events": [{ "name": "Reached waypoint", "start": "2026-10-01T10:01:00Z" }],
  *     "description": "DROID, Alexander Khazatsky et al. · CC BY 4.0"
  *   }]
  * }
@@ -69,6 +72,23 @@ function parseTopics(value: unknown): CatalogTopic[] | undefined {
         messages: optionalNumber(topic.messages),
       },
     ];
+  });
+}
+
+function parseEvents(value: unknown): CatalogEvent[] | undefined {
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+  return value.flatMap((event): CatalogEvent[] => {
+    if (!isRecord(event) || typeof event.start !== "string") {
+      return [];
+    }
+    const name = optionalString(event.name);
+    const start = fromRFC3339String(event.start);
+    const end = typeof event.end === "string" ? fromRFC3339String(event.end) : undefined;
+    return name && start
+      ? [{ name, start, end: end && compare(end, start) >= 0 ? end : undefined }]
+      : [];
   });
 }
 
@@ -129,6 +149,11 @@ export function parseCatalog(json: unknown, catalogUrl: string): ServedCatalog {
       thumbnail: resolve(entry.thumbnail),
       layoutUrl: resolve(entry.layout),
       description: optionalString(entry.description),
+      machine: optionalString(entry.device),
+      dataset: optionalString(entry.dataset),
+      session: optionalString(entry.session),
+      episode: optionalString(entry.episode),
+      events: parseEvents(entry.events),
     };
   });
   return { name: optionalString(json.name), recordings };

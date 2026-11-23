@@ -51,13 +51,8 @@ export function isMixedContentWs(url: string, origin: string | undefined = pageO
   if (origin?.startsWith("https:") !== true) {
     return false;
   }
-  let parsed: URL;
-  try {
-    parsed = new URL(url);
-  } catch {
-    return false;
-  }
-  return parsed.protocol === "ws:" && !isLoopback(parsed.hostname);
+  const parsed = URL.parse(url);
+  return parsed?.protocol === "ws:" && !isLoopback(parsed.hostname);
 }
 
 /** True when this page can use the proxy and the browser would block the socket directly. */

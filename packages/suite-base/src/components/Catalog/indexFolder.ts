@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import { pushAll } from "@lichtblick/den/collection";
-import { KEY_WORKSPACE_PREFIX } from "@lichtblick/suite-base/constants/browserStorageKeys";
 import { createKeyValueStore } from "@lichtblick/suite-base/util/idbKeyValueStore";
 
 import { PreviewFrame, Previews, previewMcap } from "./preview";
@@ -18,7 +17,7 @@ export type FolderFile = {
   handle?: FileSystemFileHandle;
 };
 
-const DB_NAME = `${KEY_WORKSPACE_PREFIX}lichtblick-catalog`;
+const DB_NAME = "lichtblick-catalog";
 const summaryStore = createKeyValueStore(DB_NAME, "summaries");
 const folderStore = createKeyValueStore(`${DB_NAME}-folders`, "folders");
 // Kept apart from the summaries, which are all read on every scan; previews are read one at a time.
@@ -27,7 +26,7 @@ const LAST_FOLDER_KEY = "last";
 
 const CONCURRENCY = 4;
 // Bump when CatalogSummary gains fields, so cached summaries are read again.
-const CACHE_VERSION = 6;
+const CACHE_VERSION = 7;
 
 function isMcap(name: string): boolean {
   return name.toLowerCase().endsWith(".mcap");
@@ -97,12 +96,21 @@ export function listInputFiles(fileList: Iterable<File>): FolderFile[] {
     }));
 }
 
-export async function saveLastFolder(dir: FileSystemDirectoryHandle): Promise<void> {
-  await folderStore.set(LAST_FOLDER_KEY, dir);
+export async function saveLastFolder(
+  dir: FileSystemDirectoryHandle,
+  slot = LAST_FOLDER_KEY,
+): Promise<void> {
+  await folderStore.set(slot, dir);
 }
 
-export async function loadLastFolder(): Promise<FileSystemDirectoryHandle | undefined> {
-  return await folderStore.get<FileSystemDirectoryHandle>(LAST_FOLDER_KEY);
+export async function loadLastFolder(
+  slot = LAST_FOLDER_KEY,
+): Promise<FileSystemDirectoryHandle | undefined> {
+  return await folderStore.get<FileSystemDirectoryHandle>(slot);
+}
+
+export async function forgetCatalogFolder(slot: string): Promise<void> {
+  await folderStore.delete(slot);
 }
 
 async function indexFile(

@@ -119,7 +119,7 @@ export class TopicAliasingPlayer implements Player {
   }
 
   public setPublishers(publishers: AdvertiseOptions[]): void {
-    this.#player.setPublishers(publishers);
+    this.#player.setPublishers?.(publishers);
   }
 
   public setParameter(key: string, value: ParameterValue): void {
@@ -167,7 +167,7 @@ export class TopicAliasingPlayer implements Player {
   }
 
   public setGlobalVariables(globalVariables: GlobalVariables): void {
-    this.#player.setGlobalVariables(globalVariables);
+    this.#player.setGlobalVariables?.(globalVariables);
 
     // Set this before the lastPlayerstate skip below so we have global variables when
     // a player state is provided later.
