@@ -62,7 +62,7 @@ describe("paintPointColors", () => {
   });
 
   it("uses rectification and projection matrices for rectified images", () => {
-    const calibration = {
+    const calibration: PointCloudCameraFrame["calibration"] = {
       ...camera.calibration,
       D: [0.5, 0, 0, 0, 0],
       R: [0, -1, 0, 1, 0, 0, 0, 0, 1],
