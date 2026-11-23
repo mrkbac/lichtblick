@@ -238,6 +238,10 @@ export const threeDee = {
   colorModeCamera: "Camera",
   colorCameraTopic: "Camera topic",
   cameraFallbackColorMode: "Fallback color mode",
+  cameraColorProjection: "Camera image calibration",
+  cameraColorProjectionHelp: "Choose the calibration for the selected camera image stream.",
+  cameraColorProjectionRaw: "Raw",
+  cameraColorProjectionRectified: "Rectified",
   cameraFallbackColorModeHelp: "Controls points that have no matching camera pixel.",
   cameraFallbackHide: "Hide unpainted points",
   colorCameraTopicHelp:

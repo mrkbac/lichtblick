@@ -60,4 +60,26 @@ describe("paintPointColors", () => {
     paintPointColors(Float32Array.of(0, 0, 1), colors, 1, camera, pose, "linear");
     expect(Array.from(colors)).toEqual([0, 55, 255, 255]);
   });
+
+  it("uses rectification and projection matrices for rectified images", () => {
+    const calibration = {
+      ...camera.calibration,
+      D: [0.5, 0, 0, 0, 0],
+      R: [0, -1, 0, 1, 0, 0, 0, 0, 1],
+      P: [4, 0, 1, 0.5, 0, 4, 0, 0, 0, 0, 1, 0],
+    };
+    const points = Float32Array.of(-1, -0.25, 1);
+    const colors = new Uint8Array(4);
+    paintPointColors(points, colors, 1, { ...camera, calibration }, pose, "srgb");
+    expect(Array.from(colors)).toEqual([0, 0, 0, 0]);
+    paintPointColors(
+      points,
+      colors,
+      1,
+      { ...camera, calibration, projection: "rectified" },
+      pose,
+      "srgb",
+    );
+    expect(Array.from(colors)).toEqual([0, 128, 255, 0]);
+  });
 });

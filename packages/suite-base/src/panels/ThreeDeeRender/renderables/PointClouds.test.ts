@@ -271,9 +271,14 @@ describe("PointCloudHistoryRenderable decay", () => {
   });
 
   it("paints a backfilled scan using a matching camera frame and deduplicates its fallback version", () => {
+    let hasTransform = true;
+    const transformTree = {
+      version: 0,
+      apply: (_output: unknown, input: unknown) => (hasTransform ? input : undefined),
+    };
     const rendererOverride = {
       ...rendererMock,
-      transformTree: { apply: (_output: unknown, input: unknown) => input },
+      transformTree,
     } as unknown as Renderer;
     const cameraSettings = {
       colorMode: "flat" as const,
@@ -312,11 +317,22 @@ describe("PointCloudHistoryRenderable decay", () => {
     expect(renderable.userData.receiveTime).toBe(10n);
     expect(Array.from(stixelColors.slice(0, 8))).toEqual([255, 0, 0, 255, 255, 0, 0, 255]);
 
-    renderable.repaintFromCamera({
+    const newCamera = {
       ...camera,
       pixels: { width: 1, height: 1, data: Uint8ClampedArray.of(0, 255, 0, 255) },
-    });
+    };
+    hasTransform = false;
+    renderable.repaintFromCamera(newCamera);
+    expect(renderable.waitingToRepaint).toBe(true);
+    hasTransform = true;
+    transformTree.version++;
+    renderable.repaintFromCamera(newCamera);
+    expect(renderable.waitingToRepaint).toBe(false);
     expect(Array.from(stixelColors.slice(0, 8))).toEqual([0, 255, 0, 255, 0, 255, 0, 255]);
+    const latest = renderable.children[0] as unknown as { geometry: DynamicBufferGeometry };
+    expect(Array.from(latest.geometry.attributes.color!.array.slice(0, 4))).toEqual([
+      0, 255, 0, 255,
+    ]);
 
     renderable.applySettings({ ...config, colorFromCamera: false });
     expect(Array.from(stixelColors.slice(0, 8))).toEqual(Array(8).fill(255));

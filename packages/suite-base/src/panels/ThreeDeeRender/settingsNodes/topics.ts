@@ -1020,6 +1020,7 @@ export function pointSettingsNode(
 export type PointCloudCameraSettings = {
   colorFromCamera?: boolean;
   colorCameraTopic?: string;
+  cameraColorProjection?: "raw" | "rectified";
   hideUnpaintedCameraPoints?: boolean;
 };
 
@@ -1101,6 +1102,19 @@ export function pointCloudSettingsNode(
                   ...cameraTopics.map((value) => ({ label: value, value })),
                 ],
                 value: config.colorCameraTopic,
+              },
+            ],
+            [
+              "cameraColorProjection",
+              {
+                label: t("threeDee:cameraColorProjection"),
+                help: t("threeDee:cameraColorProjectionHelp"),
+                input: "select",
+                options: [
+                  { label: t("threeDee:cameraColorProjectionRaw"), value: "raw" },
+                  { label: t("threeDee:cameraColorProjectionRectified"), value: "rectified" },
+                ],
+                value: config.cameraColorProjection ?? "raw",
               },
             ],
             [

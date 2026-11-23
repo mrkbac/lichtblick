@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MPL-2.0
 
-import { Quaternion, Vector3 } from "three";
+import { Matrix3, Quaternion, Vector3 } from "three";
 
 import { PinholeCameraModel } from "@lichtblick/den/image";
 
@@ -11,6 +11,7 @@ export type PointCloudCameraFrame = {
   time: bigint;
   frameId: string;
   calibration: CameraInfo;
+  projection?: "raw" | "rectified";
   pixels: Pick<ImageData, "width" | "height" | "data">;
 };
 
@@ -71,29 +72,52 @@ export function paintPointColors(
   encoding: "srgb" | "linear",
   paintedPoints?: Uint8Array,
 ): void {
-  const model = projector(camera.calibration);
-  if (!model) {
+  const { calibration } = camera;
+  const rectified = camera.projection === "rectified";
+  const model = rectified ? undefined : projector(calibration);
+  const { P, R } = calibration;
+  if (rectified ? P.length !== 12 || !(P[0] > 0 && P[5] > 0) : !model) {
     return;
   }
   const { width, height, data } = camera.pixels;
   const { position: t, orientation: q } = pointToCamera;
-  const { K } = model;
-  const xScale = width / model.width;
-  const yScale = height / model.height;
+  const xScale = width / calibration.width;
+  const yScale = height / calibration.height;
+  const rectification =
+    rectified && R.length === 9 ? new Matrix3().fromArray(R).transpose() : undefined;
   const rotation = new Quaternion(q.x, q.y, q.z, q.w);
   const point = new Vector3();
+  const translation = new Vector3(t.x, t.y, t.z);
   const ray = { x: 0, y: 0 };
   for (let i = 0; i < pointCount; ++i) {
-    point.fromArray(positions, 3 * i).applyQuaternion(rotation);
-    const depth = point.z + t.z;
-    if (!(depth > 0)) {
+    point
+      .fromArray(positions, 3 * i)
+      .applyQuaternion(rotation)
+      .add(translation);
+    if (!(point.z > 0)) {
       continue;
     }
-    ray.x = (point.x + t.x) / depth;
-    ray.y = (point.y + t.y) / depth;
-    model.distortNormalized(ray, ray);
-    const u = Math.floor((K[0] * ray.x + K[1] * ray.y + K[2]) * xScale);
-    const v = Math.floor((K[4] * ray.y + K[5]) * yScale);
+    if (model) {
+      const { K } = model;
+      ray.x = point.x / point.z;
+      ray.y = point.y / point.z;
+      model.distortNormalized(ray, ray);
+      ray.x = K[0] * ray.x + K[1] * ray.y + K[2];
+      ray.y = K[4] * ray.y + K[5];
+    } else {
+      if (rectification) {
+        point.applyMatrix3(rectification);
+      }
+      const { x, y, z } = point;
+      const depth = P[8]! * x + P[9]! * y + P[10]! * z + P[11]!;
+      if (!(depth > 0)) {
+        continue;
+      }
+      ray.x = (P[0]! * x + P[1]! * y + P[2]! * z + P[3]!) / depth;
+      ray.y = (P[4]! * x + P[5]! * y + P[6]! * z + P[7]!) / depth;
+    }
+    const u = Math.floor(ray.x * xScale);
+    const v = Math.floor(ray.y * yScale);
     if (!(u >= 0 && u < width && v >= 0 && v < height)) {
       continue;
     }

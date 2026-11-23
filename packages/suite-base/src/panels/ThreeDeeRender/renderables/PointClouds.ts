@@ -215,6 +215,8 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
   #latestUnpaintedColors: Uint8Array | undefined;
   #latestPaintedPoints: Uint8Array | undefined;
   #latestCameraFrame: PointCloudCameraFrame | undefined;
+  #latestProjectionAttempt: { version: number; fixedFrameId: string | undefined } | undefined;
+  #historyProjectionAttempt: { version: number; fixedFrameId: string | undefined } | undefined;
   public waitingToRepaint = false;
 
   public constructor(topic: string, renderer: Renderer, userData: PointCloudHistoryUserData) {
@@ -297,14 +299,19 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
   }
 
   public applySettings(settings: LayerSettingsPointClouds): void {
+    const cameraTopic = pointCloudColorCamera(settings);
     const cameraChanged =
-      pointCloudColorCamera(this.userData.settings) !== pointCloudColorCamera(settings);
+      pointCloudColorCamera(this.userData.settings) !== cameraTopic ||
+      (cameraTopic != undefined &&
+        (this.userData.settings.cameraColorProjection ?? "raw") !==
+          (settings.cameraColorProjection ?? "raw"));
     if (cameraChanged) {
       this.#decayRing?.recolor();
       this.#stixelsHistory.forEach(({ renderable }) => {
         renderable.recolor();
       });
-      this.waitingToRepaint = pointCloudColorCamera(settings) != undefined;
+      this.waitingToRepaint = cameraTopic != undefined;
+      this.#historyProjectionAttempt = undefined;
     }
     const hide = hideUnpaintedPoints(settings);
     const wasHidden = hideUnpaintedPoints(this.userData.settings);
@@ -330,7 +337,17 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
   }
 
   public repaintFromCamera(camera: PointCloudCameraFrame): void {
+    const { transformTree, fixedFrameId } = this.renderer;
+    const previous = this.#historyProjectionAttempt;
+    if (
+      previous &&
+      previous.version === transformTree.version &&
+      previous.fixedFrameId === fixedFrameId
+    ) {
+      return;
+    }
     this.waitingToRepaint = false;
+    this.#historyProjectionAttempt = undefined;
     const { settings, latestPointCloud, latestOriginalMessage, receiveTime } = this.userData;
     const paint = (
       scan: RingScanInfo,
@@ -339,16 +356,19 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
       count: number,
       paintedPoints: Uint8Array,
     ) => {
-      const pose = this.renderer.transformTree.apply(
+      const pose = transformTree.apply(
         tempCameraPose,
         scan.pose,
         camera.frameId,
-        this.renderer.fixedFrameId,
+        fixedFrameId,
         scan.frameId,
         camera.time,
         scan.messageTime,
       );
-      if (pose) {
+      if (!pose) {
+        this.waitingToRepaint = true;
+        this.#historyProjectionAttempt ??= { version: transformTree.version, fixedFrameId };
+      } else {
         paintPointColors(
           positions,
           colors,
@@ -386,6 +406,7 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
     cameraFrame?: PointCloudCameraFrame,
   ): void {
     this.#latestCameraFrame = cameraFrame;
+    this.#latestProjectionAttempt = undefined;
     const messageTime = toNanoSec(getTimestamp(pointCloud));
     this.userData.receiveTime = receiveTime;
     this.userData.messageTime = messageTime;
@@ -465,6 +486,24 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
     }
     const stixelPositionAttribute = latestStixelEntry.renderable.geometry.attributes.position!;
     const stixelColorAttribute = latestStixelEntry.renderable.geometry.attributes.color!;
+    // Use the fixed frame to account for motion between the scan and the camera exposure.
+    const { transformTree, fixedFrameId } = this.renderer;
+    const pointToCamera =
+      cameraFrame == undefined
+        ? undefined
+        : transformTree.apply(
+            tempCameraPose,
+            getPose(pointCloud),
+            cameraFrame.frameId,
+            fixedFrameId,
+            this.userData.frameId,
+            cameraFrame.time,
+            messageTime,
+          );
+    if (cameraFrame && !pointToCamera) {
+      this.#latestProjectionAttempt = { version: transformTree.version, fixedFrameId };
+    }
+
     // Settings changes that don't affect the buffers (point size, shape, decay, ...) re-submit the
     // same message; skip the full decode for those
     const decodeKey = JSON.stringify([
@@ -481,27 +520,14 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
       pointCloudColorCamera(settings),
       hideUnpaintedPoints(settings),
       cameraFrame?.time.toString(),
+      cameraFrame?.projection,
+      pointToCamera != undefined,
     ])!;
     const decoded = latestPoints.decoded;
     if (decoded?.pointCloud === pointCloud && decoded.key === decodeKey) {
       return;
     }
     latestPoints.decoded = { pointCloud, key: decodeKey };
-
-    // A scan and the camera exposure can have different sensor times. Both are located through
-    // the fixed frame so robot motion between them is reflected in the projection.
-    const pointToCamera =
-      cameraFrame == undefined
-        ? undefined
-        : this.renderer.transformTree.apply(
-            tempCameraPose,
-            getPose(pointCloud),
-            cameraFrame.frameId,
-            this.renderer.fixedFrameId,
-            this.userData.frameId,
-            cameraFrame.time,
-            messageTime,
-          );
 
     const { unpaintedColors, paintedPoints } = this.#updatePointCloudBuffers(
       pointCloud,
@@ -538,6 +564,22 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
   }
 
   public startFrame(currentTime: bigint, renderFrameId: string, fixedFrameId: string): void {
+    const attempt = this.#latestProjectionAttempt;
+    if (
+      attempt &&
+      this.userData.historyOnly !== true &&
+      (attempt.version !== this.renderer.transformTree.version ||
+        attempt.fixedFrameId !== this.renderer.fixedFrameId)
+    ) {
+      const { latestPointCloud, latestOriginalMessage, settings, receiveTime } = this.userData;
+      this.updatePointCloud(
+        latestPointCloud,
+        latestOriginalMessage,
+        settings,
+        receiveTime,
+        this.#latestCameraFrame,
+      );
+    }
     this.#pointsHistory.updateHistoryFromCurrentTime(currentTime);
     const poseOptions = { skipLatest: this.userData.historyOnly };
     let posesResolved = this.#pointsHistory.updatePoses(
@@ -1358,7 +1400,7 @@ export class PointClouds extends SceneExtension<PointCloudHistoryRenderable> {
         continue;
       }
       if (renderable.waitingToRepaint) {
-        const camera = this.#cameraFrame(pointCloudColorCamera(renderable.userData.settings));
+        const camera = this.#cameraFrame(renderable.userData.settings);
         if (camera) {
           renderable.repaintFromCamera(camera);
         }
@@ -1540,16 +1582,17 @@ export class PointClouds extends SceneExtension<PointCloudHistoryRenderable> {
   }
 
   #cameraFrame(
-    cameraTopic: string | undefined,
+    settings: LayerSettingsPointClouds,
     scanTime?: bigint,
   ): PointCloudCameraFrame | undefined {
+    const cameraTopic = pointCloudColorCamera(settings);
     if (cameraTopic == undefined) {
       return undefined;
     }
     const images = this.renderer.sceneExtensions.get(Images.extensionId);
-    return images instanceof Images
-      ? images.pointCloudCameraFrame(cameraTopic, scanTime)
-      : undefined;
+    const frame =
+      images instanceof Images ? images.pointCloudCameraFrame(cameraTopic, scanTime) : undefined;
+    return frame ? { ...frame, projection: settings.cameraColorProjection } : undefined;
   }
 
   #flushWaitingScans(): void {
@@ -1565,7 +1608,7 @@ export class PointClouds extends SceneExtension<PointCloudHistoryRenderable> {
       let processed = 0;
       for (const scan of queue) {
         const camera = this.#cameraFrame(
-          colorCameraTopic,
+          renderable.userData.settings,
           toNanoSec(getTimestamp(scan.pointCloud)),
         );
         if (
@@ -1673,7 +1716,7 @@ export class PointClouds extends SceneExtension<PointCloudHistoryRenderable> {
       settings,
       receiveTime,
       recordId,
-      this.#cameraFrame(pointCloudColorCamera(settings), stamp),
+      this.#cameraFrame(settings, stamp),
     );
     return stamp;
   }

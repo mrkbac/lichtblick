@@ -160,6 +160,9 @@ export class Images extends SceneExtension<ImageRenderable> {
         this.renderables.delete(renderable.userData.topic);
         continue;
       }
+      if (settings.visible && wasDecodeOnly) {
+        this.#applyOverlayCalibration(renderable);
+      }
       renderable.flushPendingDecodes();
       if (settings.visible && wasDecodeOnly) {
         renderable.update();
@@ -368,7 +371,7 @@ export class Images extends SceneExtension<ImageRenderable> {
 
     // The camera info topic changed for our renderable
     // Remove the previous camera_info_topic -> image_topic mapping
-    if (prevCameraInfoTopic != undefined) {
+    if (prevCameraInfoTopic != undefined && prevCameraInfoTopic !== cameraInfoTopic) {
       this.#cameraInfoToImageTopics.delete(prevCameraInfoTopic, imageTopic);
     }
 
@@ -586,13 +589,18 @@ export class Images extends SceneExtension<ImageRenderable> {
     renderable.userData.receiveTime = receiveTime;
     renderable.decodeWithoutOverlay = !visible;
     renderable.setImage(image, DEFAULT_BITMAP_WIDTH);
-    if (!visible) {
-      return;
+    if (visible) {
+      this.#applyOverlayCalibration(renderable);
     }
+  };
+
+  #applyOverlayCalibration(renderable: ImageRenderable): void {
     // Auto-select settings.cameraInfoTopic if it's not already set
-    const settings = renderable.userData.settings;
+    const { topic: imageTopic, settings } = renderable.userData;
     if (settings.cameraInfoTopic == undefined) {
-      const newCameraInfoTopic = this.#matchingCalibrationTopic(imageTopic);
+      const newCameraInfoTopic = this.#isPointCloudCamera(imageTopic)
+        ? this.#pointCloudCalibrationTopic(imageTopic)
+        : this.#matchingCalibrationTopic(imageTopic);
       settings.cameraInfoTopic = newCameraInfoTopic;
       renderable.setSettings(settings);
 
@@ -634,7 +642,7 @@ export class Images extends SceneExtension<ImageRenderable> {
     } else {
       this.#recomputeCameraModel(renderable, cameraInfo);
     }
-  };
+  }
 
   #handleCameraInfo = (messageEvent: PartialMessageEvent<CameraInfo>): void => {
     // Store the last camera info on each topic, when processing an image message we'll look up
