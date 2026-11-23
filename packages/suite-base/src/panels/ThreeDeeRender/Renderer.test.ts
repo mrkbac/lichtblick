@@ -21,7 +21,6 @@ import {
   Renderer,
   stopThreeAnimationLoop,
 } from "@lichtblick/suite-base/panels/ThreeDeeRender/Renderer";
-import { DEFAULT_SCENE_EXTENSION_CONFIG } from "@lichtblick/suite-base/panels/ThreeDeeRender/SceneExtensionConfig";
 import { DEFAULT_CAMERA_STATE } from "@lichtblick/suite-base/panels/ThreeDeeRender/camera";
 import { HOVER_PICK_THROTTLE_MS } from "@lichtblick/suite-base/panels/ThreeDeeRender/constants";
 import { CameraStateSettings } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/CameraStateSettings";
@@ -201,7 +200,6 @@ const defaultRendererProps = {
   config: defaultRendererConfig,
   interfaceMode: "3d" as const,
   fetchAsset,
-  sceneExtensionConfig: DEFAULT_SCENE_EXTENSION_CONFIG,
   testOptions: {},
   customCameraModels: new Map(),
 };
