@@ -48,7 +48,7 @@ export async function listAsarFiles(asarPath: string): Promise<string[]> {
 }
 
 /**
- * Source maps doubled the app size; electronBuilderConfig.js and the Quick Look copy exclude them.
+ * Source maps doubled the app size; electronBuilderConfig.js excludes them.
  * Checks loose files and the contents of app.asar.
  */
 async function assertNoSourceMaps(appOutDir: string): Promise<void> {
@@ -73,7 +73,7 @@ async function assertNoSourceMaps(appOutDir: string): Promise<void> {
 
 /**
  * When building a universal app, electron-builder uses lipo to merge binaries at the same path.
- * Since our bundled Quick Look and Spotlight extensions already provide universal binaries, we need
+ * Since our bundled Spotlight extension already provides universal binaries, we need
  * to strip out other architectures so that lipo doesn't fail when it gets two copies of each slice.
  */
 async function extractTargetArchitecture(executablePath: string, context: AfterPackContext) {

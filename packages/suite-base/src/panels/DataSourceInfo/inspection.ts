@@ -34,7 +34,7 @@ export type TopicInspection = {
   largestIntervals: Interval[];
 };
 
-export type Interval = { start: Time; end: Time; nanoseconds: bigint };
+export type Interval = { start: Time; nanoseconds: bigint };
 
 export const LARGEST_INTERVAL_COUNT = 5;
 
@@ -118,11 +118,7 @@ export function updateInspection(
     while (index > 0 && largest[index - 1]!.nanoseconds < interval) {
       index--;
     }
-    largest.splice(index, 0, {
-      start: fromNanoSec(previousNs),
-      end: receiveTime,
-      nanoseconds: interval,
-    });
+    largest.splice(index, 0, { start: fromNanoSec(previousNs), nanoseconds: interval });
     largest.length = Math.min(largest.length, LARGEST_INTERVAL_COUNT);
   }
   const ns = Number(interval);
