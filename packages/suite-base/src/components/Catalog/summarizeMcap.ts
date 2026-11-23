@@ -12,6 +12,7 @@ import {
 import { loadDecompressHandlers } from "@lichtblick/mcap-support";
 
 import { Previews, renderPreviews } from "./preview";
+import { readCatalogEvents } from "./readCatalogEvents";
 import { sampleRecording } from "./sampleRecording";
 import { CatalogSummary, CatalogTopic } from "./types";
 
@@ -98,7 +99,13 @@ export async function summarizeMcap(
     console.warn("Catalog sampling failed", err);
   }
 
+  const events = await readCatalogEvents(reader).catch((err: unknown) => {
+    console.warn("Catalog event indexing failed", err);
+    return { eventsError: true };
+  });
+
   return {
+    ...events,
     previews: previews && Object.keys(previews).length > 0 ? previews : undefined,
     previewTopics: previews && Object.keys(previews).length > 0 ? Object.keys(previews) : undefined,
     thumbnail,
