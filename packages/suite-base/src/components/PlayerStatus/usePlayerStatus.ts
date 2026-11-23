@@ -8,7 +8,7 @@ import {
   useMessagePipeline,
 } from "@lichtblick/suite-base/components/MessagePipeline";
 import { usePlayerSelection } from "@lichtblick/suite-base/context/PlayerSelectionContext";
-import { PLAYER_CAPABILITIES } from "@lichtblick/suite-base/players/constants";
+import { isRecordingSource } from "@lichtblick/suite-base/players/constants";
 import { PlayerAlert, PlayerPresence } from "@lichtblick/suite-base/players/types";
 
 /**
@@ -39,10 +39,8 @@ export type PlayerStatus = {
 };
 
 const selectPresence = (ctx: MessagePipelineContext) => ctx.playerState.presence;
-// Live sources can't be played back, or keep a rolling history whose newest data is live
-const selectIsLive = (ctx: MessagePipelineContext) =>
-  !ctx.playerState.capabilities.includes(PLAYER_CAPABILITIES.playbackControl) ||
-  ctx.playerState.capabilities.includes(PLAYER_CAPABILITIES.liveHistory);
+export const selectIsLive = (ctx: MessagePipelineContext): boolean =>
+  !isRecordingSource(ctx.playerState.capabilities);
 const selectHasData = (ctx: MessagePipelineContext) => ctx.playerState.activeData != undefined;
 const selectError = (ctx: MessagePipelineContext) =>
   ctx.playerState.alerts?.find((alert) => alert.severity === "error");
