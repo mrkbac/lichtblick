@@ -197,6 +197,9 @@ export function MessagePipelineProvider({ children, player }: ProviderProps): Re
 
   const msPerFrameRef = useRef<number>(16);
   msPerFrameRef.current = 1000 / (messageRate ?? 60);
+  // Without an explicit message rate, follow the display's refresh rate (e.g. 120 Hz).
+  const matchDisplayRef = useRef(true);
+  matchDisplayRef.current = messageRate == undefined;
 
   // To avoid re-rendering the MessagePipelineProvider and all children when global variables change
   // we register a listener directly on the context to track updates to global variables.
@@ -252,6 +255,7 @@ export function MessagePipelineProvider({ children, player }: ProviderProps): Re
 
     const { listener, cleanupListener } = createPlayerListener({
       msPerFrameRef,
+      matchDisplayRef,
       promisesToWaitForRef,
       store,
       clearAlerts,
@@ -284,6 +288,26 @@ function concatAlerts(origState: PlayerState, alerts: PlayerAlert[]): PlayerStat
 }
 
 /**
+ * Resolves after `ms`, or at the next animation frame if `matchDisplay` is set and that comes
+ * first. The frame lets playback follow the display's refresh rate (120 Hz screens get 120 updates
+ * per second); the timeout keeps the old pace where frames don't run, e.g. in background tabs.
+ */
+export async function waitForFrame(
+  ms: number,
+  { matchDisplay }: { matchDisplay: boolean },
+): Promise<void> {
+  await new Promise<void>((resolve) => {
+    const done = () => {
+      clearTimeout(timer);
+      cancelAnimationFrame(frame);
+      resolve();
+    };
+    const timer = setTimeout(done, ms);
+    const frame = matchDisplay ? requestAnimationFrame(done) : 0;
+  });
+}
+
+/**
  * The creation of the player listener is extracted as a separate function to prevent memory leaks.
  * When multiple closures are created inside of an outer function, V8 allocates one "context" object
  * to be shared by all the inner closures, holding the shared variables they access. As long as any
@@ -308,6 +332,7 @@ function concatAlerts(origState: PlayerState, alerts: PlayerAlert[]): PlayerStat
  */
 function createPlayerListener(args: {
   msPerFrameRef: React.RefObject<number>;
+  matchDisplayRef: React.RefObject<boolean>;
   promisesToWaitForRef: React.RefObject<FramePromise[]>;
   store: StoreApi<MessagePipelineInternalState>;
   clearAlerts: () => void;
@@ -315,7 +340,7 @@ function createPlayerListener(args: {
   listener: (state: PlayerState) => Promise<void>;
   cleanupListener: () => void;
 } {
-  const { msPerFrameRef, promisesToWaitForRef, store, clearAlerts } = args;
+  const { msPerFrameRef, matchDisplayRef, promisesToWaitForRef, store, clearAlerts } = args;
   const updateState = store.getState().dispatch;
   const messageOrderTracker = new MessageOrderTracker();
   let closed = false;
@@ -359,7 +384,7 @@ function createPlayerListener(args: {
       const frameTime = Math.max(0, msPerFrameRef.current - delta);
 
       // Panels have the remaining frame time to invoke pause
-      setTimeout(async () => {
+      void waitForFrame(frameTime, { matchDisplay: matchDisplayRef.current }).then(async () => {
         if (closed) {
           return;
         }
@@ -374,7 +399,7 @@ function createPlayerListener(args: {
           return;
         }
         resolveFn();
-      }, frameTime);
+      });
     }
 
     if (prevPlayerId != undefined && listenerPlayerState.playerId !== prevPlayerId) {

@@ -309,18 +309,24 @@ export function LaunchDefault(): React.ReactElement {
 export function MessageFramerate(): React.ReactElement {
   const { t } = useTranslation("appSettings");
   const [messageRate, setMessageRate] = useAppConfigurationValue<number>(AppSetting.MESSAGE_RATE);
+  // 0 stands for "no cap": playback follows the display's refresh rate.
   const options = useMemo(
-    () => MESSAGE_RATES.map((rate) => ({ key: rate, text: `${rate}`, data: rate })),
-    [],
+    () => [
+      { key: 0, text: t("messageRateDisplay") },
+      ...MESSAGE_RATES.map((rate) => ({ key: rate, text: `${rate}` })),
+    ],
+    [t],
   );
 
   return (
     <Stack>
       <FormLabel>{t("messageRate")} (Hz):</FormLabel>
       <Select
-        value={messageRate ?? 60}
+        value={messageRate ?? 0}
         fullWidth
-        onChange={(event) => void setMessageRate(event.target.value)}
+        onChange={(event) =>
+          void setMessageRate(event.target.value === 0 ? undefined : event.target.value)
+        }
       >
         {options.map((option) => (
           <MenuItem key={option.key} value={option.key}>

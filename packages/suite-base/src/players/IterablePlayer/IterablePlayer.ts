@@ -86,6 +86,8 @@ const SKIM_MIN_ACHIEVED_SPEED = 0.8;
 // Amount to wait until panels have had the chance to subscribe to topics before
 // we start playback
 const START_DELAY_MS = 100;
+// Shortest pause between playback ticks (see #statePlay)
+const MIN_TICK_MS = 4;
 
 // Messages are laid out in blocks with a fixed number of milliseconds.
 const MIN_MEM_CACHE_BLOCK_SIZE_NS = 0.1e9;
@@ -1483,10 +1485,11 @@ export class IterablePlayer implements Player {
         }
 
         const time = Date.now() - start;
-        // make sure we've slept at least 16 millis or so (aprox 1 frame)
-        // to give the UI some time to breathe and not burn in a tight loop
-        if (time < 16) {
-          await delay(16 - time);
+        // Sleep a little so we never burn in a tight loop. The frame pace itself comes from the
+        // listener, which resolves once per display frame (or message rate), so keep this below
+        // one frame even on 240 Hz displays.
+        if (time < MIN_TICK_MS) {
+          await delay(MIN_TICK_MS - time);
         }
       }
     } catch (e: unknown) {

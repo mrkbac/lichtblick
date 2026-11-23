@@ -22,6 +22,7 @@ export const appSettings = {
   general: "General",
   light: "Light",
   messageRate: "Message rate",
+  messageRateDisplay: "Display refresh rate",
   stepSize: "Step size",
   liveHistory: "Live history",
   liveHistoryDescription:
