@@ -80,7 +80,7 @@ function Code({ text, copy = false }: { text: string; copy?: boolean }): React.J
  * What to do when the browser blocks a ws:// connection from this https page: the WebSocket proxy
  * extension (preferred), the per-browser "insecure content" setting, or wss://, and a reload.
  */
-export function WsMixedContentHelp({ url }: { url: string }): React.JSX.Element {
+export default function WsMixedContentHelp({ url }: { url: string }): React.JSX.Element {
   const { classes } = useStyles();
   const { t } = useTranslation("wsMixedContent");
   const browser = detectBrowser();

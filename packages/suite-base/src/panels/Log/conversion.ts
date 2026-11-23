@@ -92,50 +92,36 @@ export function getNormalizedStamp(raw: Partial<RawLog>): Time {
 
 const cache = new WeakMap<MessageEvent, NormalizedLogMessage>();
 
-/**
- * One shared copy of each repeated string. Decoders return a new string per message, so a node
- * name or file repeated in millions of log lines would otherwise be stored millions of times.
- * Bounded so a source with long or unique values can't make it pin much memory: values longer than
- * `maxLength` aren't shared, and it stops adding once it holds `maxChars` characters in total
- * (at most 2 bytes each, so ~2 MB by default). Cleared when the source changes.
- */
-export class StringPool {
-  #strings = new Map<string, string>();
-  #chars = 0;
+// One shared copy of each repeated string. Decoders return a new string per message, so a node
+// name or file repeated in millions of log lines would otherwise be stored millions of times.
+// Bounded so a source with long or unique values can't make it pin much memory: longer values
+// aren't shared, and it stops adding at MAX_SHARED_CHARS characters in total (at most 2 bytes
+// each, so ~2 MB). Cleared when the source changes.
+const MAX_SHARED_LENGTH = 256;
+const MAX_SHARED_CHARS = 1_000_000;
+const sharedStrings = new Map<string, string>();
+let sharedChars = 0;
 
-  public constructor(
-    private readonly maxLength = 256,
-    private readonly maxChars = 1_000_000,
-  ) {}
-
-  /** Characters held, for tests. */
-  public charCount(): number {
-    return this.#chars;
-  }
-
-  public intern(value: string | undefined): string | undefined {
-    if (value == undefined || value.length > this.maxLength) {
-      return value;
-    }
-    const shared = this.#strings.get(value);
-    if (shared != undefined) {
-      return shared;
-    }
-    if (this.#chars + value.length <= this.maxChars) {
-      this.#strings.set(value, value);
-      this.#chars += value.length;
-    }
+function intern(value: string | undefined): string | undefined {
+  if (value == undefined || value.length > MAX_SHARED_LENGTH) {
     return value;
   }
-
-  public clear(): void {
-    this.#strings.clear();
-    this.#chars = 0;
+  const shared = sharedStrings.get(value);
+  if (shared != undefined) {
+    return shared;
   }
+  if (sharedChars + value.length <= MAX_SHARED_CHARS) {
+    sharedStrings.set(value, value);
+    sharedChars += value.length;
+  }
+  return value;
 }
 
-/** Shared names and files of the current source's log lines; cleared when the source changes. */
-export const logStrings = new StringPool();
+/** Drops the shared names and files of the previous source's log lines. */
+export function clearLogStrings(): void {
+  sharedStrings.clear();
+  sharedChars = 0;
+}
 
 /** Normalize a log message event. Results are cached per event object. */
 export function normalizeLogEvent(event: MessageEvent): NormalizedLogMessage {
@@ -148,8 +134,8 @@ export function normalizeLogEvent(event: MessageEvent): NormalizedLogMessage {
       message: getNormalizedMessage(raw),
       stamp: getNormalizedStamp(raw),
       level: getNormalizedLevel(event.schemaName, raw),
-      name: logStrings.intern(raw.name),
-      file: logStrings.intern(raw.file),
+      name: intern(raw.name),
+      file: intern(raw.file),
       line: raw.line,
     };
     cache.set(event, normalized);
