@@ -995,6 +995,22 @@ describe("CurrentLayoutProvider", () => {
       expect(mockUserProfile.setUserProfile).not.toHaveBeenCalled();
     });
 
+    it("keeps the last selected layout over a favorite on a reload", async () => {
+      // Given a last selected layout, a favorite layout and a reloaded page
+      mockUserProfile.getUserProfile.mockResolvedValue({ currentLayoutId: "shared-c" });
+      mockFavorites({ personal: ["personal-b"] });
+      const getEntries = vi
+        .spyOn(performance, "getEntriesByType")
+        .mockReturnValue([{ type: "reload" } as PerformanceNavigationTiming]);
+
+      // When the app opens
+      const selectedLayoutId = await renderAndGetSelectedLayoutId();
+      getEntries.mockRestore();
+
+      // Then the layout shown before the reload is selected again
+      expect(selectedLayoutId).toBe("shared-c");
+    });
+
     it("selects the favorite shared layout", async () => {
       // Given a favorite shared layout
       mockUserProfile.getUserProfile.mockResolvedValue({ currentLayoutId: "personal-a" });

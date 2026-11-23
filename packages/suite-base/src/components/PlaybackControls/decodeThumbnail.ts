@@ -1,17 +1,27 @@
 // SPDX-License-Identifier: MPL-2.0
 
+import { VideoPlayer } from "@lichtblick/den/video";
 import { Immutable, MessageEvent } from "@lichtblick/suite";
 import type { PartialMessage } from "@lichtblick/suite-base/panels/ThreeDeeRender/SceneExtension";
 import { WorkerImageDecoder } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/Images/WorkerImageDecoder";
 import { isCompressedDepthFormat } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/Images/decodeCompressedDepth";
-import { decodeCompressedImageToBitmap } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/Images/decodeImage";
+import {
+  decodeCompressedImageToBitmap,
+  prepareVideoFrame,
+} from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/Images/decodeImage";
 import {
   normalizeCompressedImage,
+  normalizeCompressedVideo,
   normalizeRawImage,
   normalizeRosImage,
 } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/Images/imageNormalizers";
 
-import { COMPRESSED_IMAGE_SCHEMAS, RAW_IMAGE_SCHEMAS, THUMBNAIL_WIDTH } from "./scrubPreview";
+import {
+  COMPRESSED_IMAGE_SCHEMAS,
+  RAW_IMAGE_SCHEMAS,
+  THUMBNAIL_WIDTH,
+  VIDEO_SCHEMAS,
+} from "./scrubPreview";
 import * as foxglove from "../../panels/ThreeDeeRender/foxglove";
 
 /**
@@ -40,5 +50,37 @@ export async function decodeThumbnail(
     const imageData = await getWorker().decode(image, {});
     return await createImageBitmap(imageData, { resizeWidth });
   }
+  if (VIDEO_SCHEMAS.has(schemaName)) {
+    return await decodeVideoKeyframe(message as PartialMessage<never>, resizeWidth);
+  }
   return undefined;
+}
+
+/** Decodes a lone keyframe with a throwaway decoder; anything else yields no thumbnail. */
+async function decodeVideoKeyframe(
+  message: PartialMessage<never>,
+  resizeWidth: number,
+): Promise<ImageBitmap | undefined> {
+  const prepared = prepareVideoFrame(normalizeCompressedVideo(message));
+  if (prepared.type !== "key" || !prepared.decoderConfig || !VideoPlayer.IsSupported()) {
+    return undefined;
+  }
+  const player = new VideoPlayer();
+  try {
+    await player.init(prepared.decoderConfig);
+    if (!player.isInitialized()) {
+      return undefined;
+    }
+    const frame = await player.decode(prepared.data, 0, "key");
+    if (!frame) {
+      return undefined;
+    }
+    try {
+      return await createImageBitmap(frame, { resizeWidth });
+    } finally {
+      frame.close();
+    }
+  } finally {
+    player.close();
+  }
 }
