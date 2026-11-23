@@ -20,20 +20,11 @@ function makeMockContext(): Storage & MockStorage {
   }
 
   return {
-    list: vi.fn().mockImplementation(() => {
-      raise("list");
-    }),
-    all: vi.fn().mockImplementation(() => {
-      raise("all");
-    }),
     get: vi.fn().mockImplementation(() => {
       raise("get");
     }),
     put: vi.fn().mockImplementation(() => {
       raise("put");
-    }),
-    delete: vi.fn().mockImplementation(() => {
-      raise("delete");
     }),
   };
 }

@@ -6,17 +6,23 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 import { Mutex } from "async-mutex";
 
-import { IAppConfiguration, AppConfigurationValue, ChangeHandler } from "@lichtblick/suite-base";
+import {
+  AppConfigurationListeners,
+  AppConfigurationValue,
+  IAppConfiguration,
+} from "@lichtblick/suite-base";
 
 import { SETTINGS_DATASTORE_NAME, SETTINGS_JSON_DATASTORE_KEY } from "../../common/storage";
 import { Storage } from "../../common/types";
 
-export default class NativeStorageAppConfiguration implements IAppConfiguration {
+export default class NativeStorageAppConfiguration
+  extends AppConfigurationListeners
+  implements IAppConfiguration
+{
   static #STORE_NAME = SETTINGS_DATASTORE_NAME;
   static #STORE_KEY = SETTINGS_JSON_DATASTORE_KEY;
 
   readonly #ctx: Storage;
-  #listeners = new Map<string, Set<ChangeHandler>>();
 
   // Protect access to currentValue to avoid read-modify-write races between multiple set() calls.
   #mutex = new Mutex();
@@ -24,6 +30,7 @@ export default class NativeStorageAppConfiguration implements IAppConfiguration 
 
   // Use OsContextAppConfiguration.initialize to create a new instance
   private constructor(ctx: Storage, initialValue: Record<string, AppConfigurationValue>) {
+    super();
     this.#ctx = ctx;
     this.#currentValue = initialValue;
   }
@@ -37,7 +44,6 @@ export default class NativeStorageAppConfiguration implements IAppConfiguration 
     const value = await ctx.get(
       NativeStorageAppConfiguration.#STORE_NAME,
       NativeStorageAppConfiguration.#STORE_KEY,
-      { encoding: "utf8" },
     );
     const currentValue = JSON.parse(value ?? "{}") as Record<string, AppConfigurationValue>;
     const config = new NativeStorageAppConfiguration(ctx, { ...defaults, ...currentValue });
@@ -54,7 +60,6 @@ export default class NativeStorageAppConfiguration implements IAppConfiguration 
       const currentConfig = await this.#ctx.get(
         NativeStorageAppConfiguration.#STORE_NAME,
         NativeStorageAppConfiguration.#STORE_KEY,
-        { encoding: "utf8" },
       );
 
       const newConfig: Record<string, AppConfigurationValue> = {
@@ -69,28 +74,6 @@ export default class NativeStorageAppConfiguration implements IAppConfiguration 
       );
       this.#currentValue = newConfig;
     });
-    const listeners = this.#listeners.get(key);
-    if (listeners) {
-      // Copy the list of listeners to protect against mutation during iteration
-      [...listeners].forEach((listener) => {
-        listener(value);
-      });
-    }
-  }
-
-  public addChangeListener(key: string, cb: ChangeHandler): void {
-    let listeners = this.#listeners.get(key);
-    if (!listeners) {
-      listeners = new Set();
-      this.#listeners.set(key, listeners);
-    }
-    listeners.add(cb);
-  }
-
-  public removeChangeListener(key: string, cb: ChangeHandler): void {
-    const listeners = this.#listeners.get(key);
-    if (listeners) {
-      listeners.delete(cb);
-    }
+    this.notify(key, value);
   }
 }

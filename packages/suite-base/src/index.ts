@@ -19,6 +19,7 @@ export type {
   AppConfigurationValue,
   ChangeHandler,
 } from "./context/AppConfigurationContext";
+export { AppConfigurationListeners } from "./context/AppConfigurationContext";
 export { migratePanelsState } from "./services/migrateLayout";
 export type { IDataSourceFactory } from "./context/PlayerSelectionContext";
 export { default as installDevtoolsFormatters } from "./util/installDevtoolsFormatters";
