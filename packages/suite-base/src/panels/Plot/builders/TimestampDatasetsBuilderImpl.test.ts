@@ -370,19 +370,19 @@ describe("TimestampDatasetsBuilderImpl", () => {
     const firstBatch = items(range(0, 16));
     builder.applyAction({ type: "append-current", series: key, items: firstBatch });
     expect(builder.getCsvData()[0]!.data.length).toBeLessThan(firstBatch.length);
-    expect(builder.getViewportResult(viewport).approximateSeries).toEqual([]);
+    expect(builder.getViewportDatasets(viewport).approximateSeries).toBeUndefined();
 
     builder.applyAction({ type: "append-current", series: key, items: items([5.5]) });
-    expect(builder.getViewportResult(viewport).approximateSeries).toEqual([0]);
+    expect(builder.getViewportDatasets(viewport).approximateSeries).toEqual([0]);
 
     builder.applyAction({
       type: "update-series-config",
       seriesItems: [{ ...derived, configIndex: 1 }],
     });
-    expect(builder.getViewportResult(viewport).approximateSeries).toEqual([1]);
+    expect(builder.getViewportDatasets(viewport).approximateSeries).toEqual([1]);
 
     builder.applyAction({ type: "reset-current", series: key });
-    expect(builder.getViewportResult(viewport).approximateSeries).toEqual([]);
+    expect(builder.getViewportDatasets(viewport).approximateSeries).toBeUndefined();
   });
 
   it("flags smoothing enabled after live samples have already been thinned", () => {
@@ -390,13 +390,13 @@ describe("TimestampDatasetsBuilderImpl", () => {
     const config = seriesItem("0");
     builder.applyAction({ type: "update-series-config", seriesItems: [config] });
     builder.applyAction({ type: "append-current", series: key, items: items(range(0, 12)) });
-    expect(builder.getViewportResult(viewport).approximateSeries).toEqual([]);
+    expect(builder.getViewportDatasets(viewport).approximateSeries).toBeUndefined();
 
     builder.applyAction({
       type: "update-series-config",
       seriesItems: [{ ...config, smoothing: 3 }],
     });
-    expect(builder.getViewportResult(viewport).approximateSeries).toEqual([0]);
+    expect(builder.getViewportDatasets(viewport).approximateSeries).toEqual([0]);
   });
 
   it("keeps original values that are not the plotted number", () => {
@@ -442,7 +442,7 @@ describe("TimestampDatasetsBuilderImpl", () => {
     const datasets = builder.getViewportDatasets({
       ...viewport,
       size: { width: 1500, height: 500 },
-    });
+    }).datasetsByConfigIndex;
 
     // THEN every series gets the full pixel budget (not a tenth of a shared one) and its spike
     for (let i = 0; i < numSeries; i++) {
@@ -463,7 +463,7 @@ describe("TimestampDatasetsBuilderImpl", () => {
     const data = builder.getViewportDatasets({
       ...viewport,
       bounds: { x: { min: 10.5, max: 20 } },
-    })[0]!.data;
+    }).datasetsByConfigIndex[0]!.data;
 
     // THEN the points in view plus one on each side are drawn
     expect(data.map((item) => item.x)).toEqual(range(10, 22));
@@ -483,7 +483,7 @@ describe("TimestampDatasetsBuilderImpl", () => {
     const dataset = builder.getViewportDatasets({
       ...viewport,
       analysis: { mode: "fft", timeRange: { min: 0, max: 1.99 } },
-    })[0]!;
+    }).datasetsByConfigIndex[0]!;
 
     // THEN the peak is at 5 Hz and the tooltip names the frequency
     const peak = dataset.data.reduce((a, b) => (b.y > a.y ? b : a));
@@ -504,7 +504,7 @@ describe("TimestampDatasetsBuilderImpl", () => {
     const data = builder.getViewportDatasets({
       ...viewport,
       analysis: { mode: "histogram", bins: 2 },
-    })[0]!.data;
+    }).datasetsByConfigIndex[0]!.data;
 
     expect(data.map(({ x, y }) => [x, y])).toEqual([
       [-1, 0],
@@ -541,7 +541,7 @@ describe("TimestampDatasetsBuilderImpl", () => {
       size: { width: 100, height: 100 },
       bounds: {},
       analysis: { mode: "histogram", bins: 500 },
-    })[0]!.data;
+    }).datasetsByConfigIndex[0]!.data;
 
     expect(data).toHaveLength(2 * 500 + 2);
   });
@@ -556,7 +556,7 @@ describe("TimestampDatasetsBuilderImpl", () => {
       size: { width: 100, height: 100 },
       bounds: { x: { min: 2.2, max: 2.8 } },
       analysis: { mode: "histogram", bins: 4 },
-    })[0]!.data;
+    }).datasetsByConfigIndex[0]!.data;
 
     // THEN only that bin's top is sent; its corners reach past both view edges
     expect(data.map(({ x }) => x)).toEqual([2, 3]);

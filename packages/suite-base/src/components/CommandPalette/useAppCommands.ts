@@ -754,7 +754,7 @@ export function useAppCommands(): {
       {
         id: "view.settings",
         title: t("settings"),
-        keywords: ["preferences", "theme", "language"],
+        keywords: ["preferences", "theme"],
         run: () => {
           dialogActions.preferences.open();
         },

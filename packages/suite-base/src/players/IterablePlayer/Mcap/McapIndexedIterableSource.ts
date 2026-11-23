@@ -791,24 +791,12 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
         topics: [topic],
         reverse: true,
       })) {
-        const channelInfo = this.#channelInfoById.get(message.channelId);
-        if (!channelInfo) {
+        const result = this.#toResult(message);
+        if (result.type !== "message-event") {
           log.error(`Missing channel info for channel: ${message.channelId} on topic: ${topic}`);
           continue;
         }
-
-        messages.push({
-          topic: channelInfo.channel.topic,
-          receiveTime: fromNanoSec(message.logTime),
-          publishTime: fromNanoSec(message.publishTime),
-          message: message.data,
-          sizeInBytes: message.data.byteLength,
-          schemaName: channelInfo.schemaName ?? "",
-          ...(message.recordOffset != undefined && {
-            recordId: `${this.#recordIdPrefix}:${message.recordOffset}`,
-          }),
-        });
-
+        messages.push(result.msgEvent);
         break;
       }
     }

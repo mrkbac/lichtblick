@@ -68,9 +68,7 @@ import {
   WorkspaceStoreSelectors,
 } from "@lichtblick/suite-base/context/Workspace/WorkspaceContext";
 import { useAppTimeFormat } from "@lichtblick/suite-base/hooks/useAppTimeFormat";
-import { useInteractionCapture } from "@lichtblick/suite-base/hooks/useInteractionCapture";
 import { usePanelDragHandle } from "@lichtblick/suite-base/hooks/usePanelDragHandle";
-import { AppEvent } from "@lichtblick/suite-base/services/IAnalytics";
 import { useMessagePathDrop } from "@lichtblick/suite-base/services/messagePathDragging";
 import {
   clearPanelDrop,
@@ -362,11 +360,6 @@ export default function Panel<
       },
       [childId, togglePanelSelected, isSelected, setSelectedPanelIds, panelSettingsOpen],
     );
-
-    const capturePanelInteraction = useInteractionCapture(AppEvent.PANEL_INTERACTION, {
-      attribute: "data-telemetry-id",
-      data: { type },
-    });
 
     const groupSelectedPanels = useCallback(() => {
       groupPanels({ targetPanelId: childId, panelIds: getSelectedPanelIds() });
@@ -717,13 +710,11 @@ export default function Panel<
                 onPointerDownCapture={focusPanel}
                 onWheelCapture={focusPanel}
                 onFocusCapture={focusPanel}
-                onClickCapture={capturePanelInteraction}
                 hasFullscreenDescendant={hasFullscreenDescendant}
                 fullscreenState={fullscreenState}
                 sourceRect={fullscreenSourceRect}
                 selected={isSelected || (isDragging && isValidTarget && isOver)}
                 data-testid={cx("panel-mouseenter-container", childId)}
-                data-telemetry-id="panel"
                 data-panel-id={childId}
                 ref={panelRootCallbackRef}
               >

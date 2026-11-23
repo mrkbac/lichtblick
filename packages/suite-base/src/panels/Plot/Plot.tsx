@@ -64,7 +64,7 @@ import { randomUUID } from "@lichtblick/suite-base/util/randomUUID";
 import { BoxZoomOverlay } from "./BoxZoomOverlay";
 import { useStyles } from "./Plot.style";
 import { PlotCoordinator } from "./PlotCoordinator";
-import { PlotLegend } from "./PlotLegend";
+import { PlotLegend, sameValues } from "./PlotLegend";
 import { RangeStatsTable, useRangeStats } from "./RangeStats";
 import useGlobalSync from "./hooks/useGlobalSync";
 import usePlotDataHandling from "./hooks/usePlotDataHandling";
@@ -344,11 +344,7 @@ const Plot = (props: PlotProps): React.JSX.Element => {
     setCoordinator(plotCoordinator);
     setApproximateSeries(noApproximateSeries);
     plotCoordinator.on("approximateSeriesChanged", (indices) => {
-      setApproximateSeries((previous) =>
-        previous.length === indices.length && previous.every((index, i) => index === indices[i])
-          ? previous
-          : indices,
-      );
+      setApproximateSeries((previous) => (sameValues(previous, indices) ? previous : indices));
     });
 
     plotCoordinator.setSize({

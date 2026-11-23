@@ -22,6 +22,7 @@ import {
 } from "../SceneExtension";
 import { SettingsTreeEntry } from "../SettingsManager";
 import { SRGBToLinear, stringToRgba } from "../color";
+import { sameBytes } from "../math";
 import {
   normalizeHeader,
   normalizePose,
@@ -237,7 +238,8 @@ export class OccupancyGrids extends SceneExtension<OccupancyGridRenderable> {
     if (
       texture !== renderable.userData.rasterized?.texture ||
       settings !== renderable.userData.rasterized.settings ||
-      !sameCells(previous.data, occupancyGrid.data)
+      // An unchanged republished map skips its upload (normalized grids hold an Int8Array)
+      !sameBytes(previous.data as Int8Array, occupancyGrid.data as Int8Array)
     ) {
       updateTexture(texture, occupancyGrid, settings);
       renderable.userData.rasterized = { texture, settings };
@@ -295,7 +297,6 @@ function createMesh(
   return mesh;
 }
 
-const tempColor = { r: 0, g: 0, b: 0, a: 0 };
 const tempUnknownColor = { r: 0, g: 0, b: 0, a: 0 };
 const tempInvalidColor = { r: 0, g: 0, b: 0, a: 0 };
 const tempMinColor = { r: 0, g: 0, b: 0, a: 0 };
@@ -347,9 +348,16 @@ function updateLut(settings: LayerSettingsOccupancyGrid): void {
     }
     return;
   }
-  for (let value = -128; value <= 127; value++) {
-    paletteColorCached(tempColor, value, settings.colorMode);
-    setLut(value, tempColor.r, tempColor.g, tempColor.b, tempColor.a * settings.alpha);
+  // Palettes are indexed by the cell value as uint8; unknown modes fall back to raw (the settings show an error)
+  const palette: [number, number, number, number][] =
+    settings.colorMode === "costmap"
+      ? (costmapPalette ??= createCostmapPalette())
+      : settings.colorMode === "map"
+        ? (mapPalette ??= createMapPalette())
+        : (rawPalette ??= createRawPalette());
+  for (let value = 0; value < 256; value++) {
+    const [r, g, b, a] = palette[value]!;
+    setLut(value, r, g, b, a * settings.alpha);
   }
 }
 
@@ -369,22 +377,6 @@ function updateTexture(
   }
 
   texture.needsUpdate = true;
-}
-
-/** Whether two grids hold the same cells, so an unchanged republished map skips its upload */
-function sameCells(a: ArrayLike<number>, b: ArrayLike<number>): boolean {
-  if (a === b) {
-    return true;
-  }
-  if (a.length !== b.length) {
-    return false;
-  }
-  for (let i = 0; i < a.length; i++) {
-    if (a[i] !== b[i]) {
-      return false;
-    }
-  }
-  return true;
 }
 
 function createMaterial(
@@ -446,52 +438,6 @@ function normalizeOccupancyGrid(message: PartialMessage<OccupancyGrid>): Occupan
 let costmapPalette: [number, number, number, number][] | undefined;
 let mapPalette: [number, number, number, number][] | undefined;
 let rawPalette: [number, number, number, number][] | undefined;
-
-/**
- * Maps the value to a color using the given palette that is cached after initial use.
- * @param output - RGBA color output of the given value using the palette in the colormode
- * @param value - Int8 or Uint8 value to map to a color
- * @param paletteColorMode - "costmap", "map", or "raw" these are the predefined palette colormodes. Their palette will be used to determine the output color
- */
-function paletteColorCached(
-  output: ColorRGBA,
-  value: number,
-  paletteColorMode: "costmap" | "map" | "raw",
-) {
-  const unsignedValue = value >= 0 ? value : value + 256;
-  if (unsignedValue < 0 || unsignedValue > 255) {
-    output.r = 0;
-    output.g = 0;
-    output.b = 0;
-    output.a = 0;
-  }
-
-  let palette: [number, number, number, number][] | undefined;
-  switch (paletteColorMode) {
-    case "costmap":
-      costmapPalette ??= createCostmapPalette();
-      palette = costmapPalette;
-      break;
-    case "map":
-      mapPalette ??= createMapPalette();
-      palette = mapPalette;
-      break;
-    case "raw":
-      rawPalette ??= createRawPalette();
-      palette = rawPalette;
-      break;
-    default:
-      // Default to raw palette if unknown colormode, the user will have an error already in the settings
-      rawPalette ??= createRawPalette();
-      palette = rawPalette;
-  }
-
-  const colorRaw = palette[Math.trunc(unsignedValue)]!;
-  output.r = colorRaw[0];
-  output.g = colorRaw[1];
-  output.b = colorRaw[2];
-  output.a = colorRaw[3];
-}
 
 // Based off of rviz map implementation
 // https://github.com/ros-visualization/rviz/blob/1f622b8c95b8e188841b5505db2f97394d3e9c6c/src/rviz/default_plugin/map_display.cpp#L284

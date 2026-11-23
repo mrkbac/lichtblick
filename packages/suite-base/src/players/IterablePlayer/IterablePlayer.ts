@@ -29,7 +29,6 @@ import { PLAYER_CAPABILITIES } from "@lichtblick/suite-base/players/constants";
 import { applySamplingGuardToSubscriptions } from "@lichtblick/suite-base/players/samplingGuard";
 import { sameTopicSelection } from "@lichtblick/suite-base/players/subscriptionEquality";
 import {
-  AdvertiseOptions,
   Player,
   PlayerPresence,
   PlayerState,
@@ -513,10 +512,6 @@ export class IterablePlayer implements Player {
     }
   }
 
-  public setPublishers(_publishers: AdvertiseOptions[]): void {
-    // no-op
-  }
-
   public getInspectionIterator(
     topics: readonly string[],
     options?: { start?: Time; end?: Time },
@@ -585,10 +580,6 @@ export class IterablePlayer implements Player {
   public close(): void {
     this.#closeAbort.abort();
     this.#setState("close");
-  }
-
-  public setGlobalVariables(): void {
-    // no-op
   }
 
   public getMetadata(): ReadonlyArray<Readonly<Metadata>> {

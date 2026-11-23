@@ -25,9 +25,6 @@ const storedRecents = vi.hoisted(() => ({
 vi.mock("notistack", () => ({
   useSnackbar: () => ({ enqueueSnackbar: vi.fn(), closeSnackbar: vi.fn() }),
 }));
-vi.mock("@lichtblick/suite-base/context/AnalyticsContext", () => ({
-  useAnalytics: () => ({ logEvent: vi.fn() }),
-}));
 vi.mock("@lichtblick/suite-base/context/CurrentLayoutContext", () => ({
   useCurrentLayoutSelector: () => undefined,
   useCurrentLayoutActions: () => ({ setSelectedLayoutId: vi.fn() }),
@@ -215,8 +212,8 @@ describe("PlayerManager", () => {
 
   it("starts loading a source's player when it is picked and file sources' players once idle", async () => {
     // Given
-    const filePrefetch = vi.fn();
-    const connectionPrefetch = vi.fn();
+    const filePrefetch = vi.fn().mockResolvedValue(undefined);
+    const connectionPrefetch = vi.fn().mockResolvedValue(undefined);
     const file = { ...source("file", () => undefined), prefetch: filePrefetch };
     const connection: IDataSourceFactory = {
       ...source("connection", () => undefined),

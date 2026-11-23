@@ -247,14 +247,6 @@ export class CoordinateFrame<ID extends AnyFrameId = UserFrameId> {
     this.#transforms.setAgeThinning(Number(fullRateDuration), Number(spacing));
   }
 
-  /** Time of the newest transform at or before `time` that lookups can see, if any */
-  public latestTimeAtOrBefore(time: Time): Time | undefined {
-    const history = this.#activeTransforms();
-    const index = history.binarySearch(time, this.#visibleCount(history));
-    const at = index >= 0 ? index : ~index - 1;
-    return at >= 0 ? history.timeAt(at) : undefined;
-  }
-
   #visibleCount(history: TransformHistory): number {
     const receivedUntil = this.#visibility.receivedUntil;
     return receivedUntil == undefined ? history.size() : history.receivedCount(receivedUntil);

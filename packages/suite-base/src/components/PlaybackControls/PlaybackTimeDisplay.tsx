@@ -16,7 +16,6 @@
 
 import { subtract, Time, toSec } from "@foxglove/rostime";
 import { Typography } from "@mui/material";
-import { useMemo } from "react";
 import { makeStyles } from "tss-react/mui";
 
 import { AppSetting } from "@lichtblick/suite-base/AppSetting";
@@ -61,18 +60,6 @@ export default function PlaybackTimeDisplay(props: Props): React.JSX.Element {
   const appTimeFormat = useAppTimeFormat();
   const { classes } = useStyles();
   const { availability, copyLink } = useShareLink();
-  const shareLink = useMemo(
-    () =>
-      availability === "none"
-        ? undefined
-        : {
-            local: availability === "local",
-            copy: () => {
-              void copyLink();
-            },
-          },
-    [availability, copyLink],
-  );
 
   return (
     <>
@@ -85,7 +72,8 @@ export default function PlaybackTimeDisplay(props: Props): React.JSX.Element {
         onPause={props.onPause}
         isPlaying={isPlaying}
         timezone={timezone}
-        shareLink={shareLink}
+        shareLink={availability}
+        copyLink={copyLink}
       />
       {startTime && endTime && currentTime && (
         <Typography variant="body2" className={classes.elapsed} data-testid="PlaybackTime-elapsed">

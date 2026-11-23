@@ -800,23 +800,6 @@ export default class RosbridgePlayer implements Player {
     });
   }
 
-  // Bunch of unsupported stuff. Just don't do anything for these.
-  public startPlayback(): void {
-    // no-op
-  }
-  public pausePlayback(): void {
-    // no-op
-  }
-  public seekPlayback(_time: Time): void {
-    // no-op
-  }
-  public setPlaybackSpeed(_speedFraction: number): void {
-    // no-op
-  }
-  public setGlobalVariables(): void {
-    // no-op
-  }
-
   public getBatchIterator(): undefined {
     // RosbridgePlayer does not support batch iteration
     return undefined;

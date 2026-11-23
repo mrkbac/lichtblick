@@ -43,12 +43,10 @@ export const STATE_TRANSITION_PLUGINS: ChartOptions["plugins"] = {
     zoom: {
       enabled: true,
       mode: "x",
-      speed: 0.1,
     },
     pan: {
       mode: "x",
       enabled: true,
-      threshold: 10,
     },
   },
 };

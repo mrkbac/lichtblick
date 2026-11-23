@@ -18,9 +18,9 @@ import {
 import {
   selectPlayerName,
   selectPlayerPresence,
-  selectSeekPlayback,
 } from "@lichtblick/suite-base/components/MessagePipeline/selectors";
 import { PlayerStatusPill } from "@lichtblick/suite-base/components/PlayerStatus/PlayerStatusPill";
+import { selectIsLive } from "@lichtblick/suite-base/components/PlayerStatus/usePlayerStatus";
 import Stack from "@lichtblick/suite-base/components/Stack";
 import TextMiddleTruncate from "@lichtblick/suite-base/components/TextMiddleTruncate";
 import WssErrorModal from "@lichtblick/suite-base/components/WssErrorModal";
@@ -61,12 +61,9 @@ export function DataSource(): React.JSX.Element {
   const playerName = useMessagePipeline(selectPlayerName);
   const playerPresence = useMessagePipeline(selectPlayerPresence);
   const playerAlerts = useMessagePipeline(selectPlayerAlerts) ?? [];
-  const seek = useMessagePipeline(selectSeekPlayback);
+  const isLiveConnection = useMessagePipeline(selectIsLive);
 
   const { closeSource } = usePlayerSelection();
-
-  // A crude but correct proxy (for our current architecture) for whether a connection is live
-  const isLiveConnection = seek == undefined;
 
   const initializing = playerPresence === PlayerPresence.INITIALIZING;
 

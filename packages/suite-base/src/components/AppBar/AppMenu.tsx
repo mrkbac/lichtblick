@@ -25,10 +25,8 @@ import { useCurrentLayoutActions } from "@lichtblick/suite-base/context/CurrentL
 import { usePlayerSelection } from "@lichtblick/suite-base/context/PlayerSelectionContext";
 import { useWorkspaceActions } from "@lichtblick/suite-base/context/Workspace/useWorkspaceActions";
 import { useInstallPrompt } from "@lichtblick/suite-base/hooks/useInstallPrompt";
-import { useInteractionCapture } from "@lichtblick/suite-base/hooks/useInteractionCapture";
 import { useLayoutTransfer } from "@lichtblick/suite-base/hooks/useLayoutTransfer";
 import { checkForServiceWorkerUpdate } from "@lichtblick/suite-base/hooks/useServiceWorkerUpdate";
-import { AppEvent } from "@lichtblick/suite-base/services/IAnalytics";
 import { shortcutLabel } from "@lichtblick/suite-base/util/keyboardShortcuts";
 
 import { AppMenuProps } from "./types";
@@ -42,7 +40,6 @@ export function AppMenu(props: AppMenuProps): React.JSX.Element {
   const { classes } = useStyles();
   const { t } = useTranslation("appBar");
   const { enqueueSnackbar } = useSnackbar();
-  const captureMenuClick = useInteractionCapture(AppEvent.APP_MENU_CLICK);
 
   const { recentSources, selectRecent } = usePlayerSelection();
   const exportSource = useExportSource();
@@ -119,7 +116,6 @@ export function AppMenu(props: AppMenuProps): React.JSX.Element {
       anchorPosition={anchorPosition}
       disablePortal={disablePortal}
       id="app-menu"
-      onClickCapture={captureMenuClick}
       open={open}
       disableAutoFocusItem
       onClose={handleClose}

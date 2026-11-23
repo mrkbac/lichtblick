@@ -11,7 +11,6 @@ import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { pushAll } from "@lichtblick/den/collection";
 import { useAsync } from "@lichtblick/hooks";
 import Logger from "@lichtblick/log";
-import { KEY_WORKSPACE_PREFIX } from "@lichtblick/suite-base/constants/browserStorageKeys";
 import { createKeyValueStore } from "@lichtblick/suite-base/util/idbKeyValueStore";
 import { randomUUID } from "@lichtblick/suite-base/util/randomUUID";
 import { connectionRecentArgs } from "@lichtblick/suite-base/util/recentSources";
@@ -19,7 +18,7 @@ import { connectionRecentArgs } from "@lichtblick/suite-base/util/recentSources"
 const log = Logger.getLogger(__filename);
 
 const IDB_KEY = "recents";
-const IDB_STORE = createKeyValueStore(`${KEY_WORKSPACE_PREFIX}lichtblick-recents`, "recents");
+const IDB_STORE = createKeyValueStore("lichtblick-recents", "recents");
 
 // Maximum number of unpinned recents to keep
 export const MAX_RECENTS = 100;

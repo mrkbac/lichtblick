@@ -113,14 +113,18 @@ async function measureHeap(dir: string, mcapPath: string): Promise<Metrics> {
   return JSON.parse(out) as Metrics;
 }
 
-/** JS loaded by index.html before anything else runs */
+/** JS the app loads before its first render, as listed by the web build (rspackConfigs.ts) */
 function startupBytes(dir: string): Metrics {
   const out = path.join(dir, "web/.webpack");
-  const html = fs.readFileSync(path.join(out, "index.html"), "utf8");
+  const list = path.join(out, "startup-js.json");
+  // ponytail: a base built before the list existed has no row; drop once every base has it
+  if (!fs.existsSync(list)) {
+    return {};
+  }
   let raw = 0;
   let gzip = 0;
-  for (const [, src] of html.matchAll(/<script[^>]*\ssrc="([^"]+)"/g)) {
-    const data = fs.readFileSync(path.join(out, src!));
+  for (const file of JSON.parse(fs.readFileSync(list, "utf8")) as string[]) {
+    const data = fs.readFileSync(path.join(out, file));
     raw += data.length;
     gzip += zlib.gzipSync(data, { level: 9 }).length;
   }
@@ -342,7 +346,7 @@ async function main(): Promise<void> {
       : problems.length > 0
         ? `**${problems.length} case(s) not comparable.** This fails regardless of labels: make the cases in benchmark/src/perf/cases.ts run on both builds.`
         : failed > 0
-          ? `**${failed} metric(s) over budget.** A deliberate trade-off can be accepted with the \`perf-budget-accepted\` PR label.`
+          ? `**${failed} metric(s) over budget.** A deliberate trade-off can be accepted with the \`perf-budget-accepted\` PR label, then re-run this job.`
           : "All metrics within budget.",
     "",
   ].join("\n");

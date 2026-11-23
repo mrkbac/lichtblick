@@ -37,11 +37,7 @@ describe("UserProfileLocalStorageProvider", () => {
 
   const mockUserProfile: UserProfile = {
     currentLayoutId: createLayoutId(BasicBuilder.string()),
-    firstSeenTime: "2025-01-01T00:00:00.000Z",
-    firstSeenTimeIsFirstLoad: true,
-    onboarding: {
-      settingsTooltipShownForPanelTypes: [BasicBuilder.string()],
-    },
+    favoriteLayoutIds: [createLayoutId(BasicBuilder.string())],
   };
 
   beforeEach(() => {
@@ -139,7 +135,9 @@ describe("UserProfileLocalStorageProvider", () => {
         currentLayoutId: createLayoutId(BasicBuilder.string()),
       };
       mockLocalStorage.getItem.mockReturnValue(JSON.stringify(existingProfile));
-      const newProfile: UserProfile = { firstSeenTime: new Date().toISOString() };
+      const newProfile: UserProfile = {
+        favoriteLayoutIds: [createLayoutId(BasicBuilder.string())],
+      };
       const mergedProfile = { ...existingProfile, ...newProfile };
       mockedLodash.merge.mockReturnValue(mergedProfile);
 
@@ -168,7 +166,7 @@ describe("UserProfileLocalStorageProvider", () => {
       mockLocalStorage.getItem.mockReturnValue(JSON.stringify(existingProfile));
       const updateFunction = (prev: UserProfile) => ({
         ...prev,
-        firstSeenTime: "2025-01-01T00:00:00.000Z",
+        favoriteLayoutIds: [createLayoutId("favorite")],
       });
       const expectedResult = updateFunction(existingProfile);
 
@@ -208,84 +206,6 @@ describe("UserProfileLocalStorageProvider", () => {
 
       // Restore original JSON.stringify
       JSON.stringify = originalStringify;
-    });
-  });
-
-  describe("firstSeenTime initialization", () => {
-    const sysTime = new Date();
-
-    beforeEach(() => {
-      // Mock Date.now() to return a consistent timestamp
-      vi.useFakeTimers();
-      vi.setSystemTime(sysTime.getTime());
-    });
-
-    afterEach(() => {
-      vi.useRealTimers();
-    });
-
-    it("should set firstSeenTime when profile is empty", () => {
-      // Given
-      const updateFunction = (old: UserProfile) => ({
-        ...old,
-        firstSeenTime: old.firstSeenTime ?? new Date().toISOString(),
-        firstSeenTimeIsFirstLoad: old.firstSeenTimeIsFirstLoad ?? old.currentLayoutId == undefined,
-      });
-
-      // When
-      const result = updateFunction({});
-
-      // Then
-      expect(result.firstSeenTime).toBe(sysTime.toISOString());
-      expect(result.firstSeenTimeIsFirstLoad).toBe(true);
-    });
-
-    it("should set firstSeenTimeIsFirstLoad to false when currentLayoutId exists", () => {
-      // Given
-      const updateFunction = (old: UserProfile) => ({
-        ...old,
-        firstSeenTime: old.firstSeenTime ?? new Date().toISOString(),
-        firstSeenTimeIsFirstLoad: old.firstSeenTimeIsFirstLoad ?? old.currentLayoutId == undefined,
-      });
-
-      // When
-      const result = updateFunction({ currentLayoutId: createLayoutId("existing-layout") });
-
-      // Then
-      expect(result.firstSeenTimeIsFirstLoad).toBe(false);
-    });
-
-    it("should not override existing firstSeenTime", () => {
-      // Given
-      const existingFirstSeenTime = new Date().toISOString();
-      const updateFunction = (old: UserProfile) => ({
-        ...old,
-        firstSeenTime: old.firstSeenTime ?? new Date().toISOString(),
-        firstSeenTimeIsFirstLoad: old.firstSeenTimeIsFirstLoad ?? old.currentLayoutId == undefined,
-      });
-
-      // When
-      const result = updateFunction({
-        firstSeenTime: existingFirstSeenTime,
-        firstSeenTimeIsFirstLoad: false,
-      });
-
-      // Then
-      expect(result.firstSeenTime).toBe(existingFirstSeenTime);
-      expect(result.firstSeenTimeIsFirstLoad).toBe(false);
-    });
-
-    it("should handle errors during profile initialization", () => {
-      // Given
-      const errorMessage = "Storage error";
-
-      // When
-      const updateFunction = (_old: UserProfile) => {
-        throw new Error(errorMessage);
-      };
-
-      // Then
-      expect(() => updateFunction({})).toThrow(errorMessage);
     });
   });
 
@@ -329,7 +249,7 @@ describe("UserProfileLocalStorageProvider", () => {
       mockLocalStorage.getItem.mockReturnValue(undefined);
       const profileWithNulls: Partial<UserProfile> = {
         currentLayoutId: undefined,
-        firstSeenTime: undefined,
+        favoriteLayoutIds: undefined,
       };
 
       const wrapper = ({ children }: PropsWithChildren) => (

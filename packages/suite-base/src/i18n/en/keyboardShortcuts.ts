@@ -190,8 +190,6 @@ export const keyboardShortcuts = {
   rawMessagesNextMessage: "Next message on the topic",
   rawMessagesMoveRow: "Move to the previous / next row",
   rawMessagesFirstLastRow: "Move to the first / last row",
-  rawMessagesExpandRow: "Expand row, or move to its first child",
-  rawMessagesCollapseRow: "Collapse row, or move to its parent",
   rawMessagesToggleRow: "Expand or collapse row",
   rawMessagesValueActions: "Show actions for a value",
   rawMessagesDropPath: "Inspect a dropped topic or message path",

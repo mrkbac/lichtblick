@@ -5,7 +5,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { isTime, toSec } from "@foxglove/rostime";
+import { toSec } from "@foxglove/rostime";
 import ErrorIcon from "@mui/icons-material/Error";
 import SquareIcon from "@mui/icons-material/Square";
 import { ButtonBase, Checkbox, Tooltip, Typography, buttonBaseClasses } from "@mui/material";
@@ -20,6 +20,7 @@ import { useSelectedPanels } from "@lichtblick/suite-base/context/CurrentLayoutC
 import { useWorkspaceActions } from "@lichtblick/suite-base/context/Workspace/useWorkspaceActions";
 import { useSeriesDrag } from "@lichtblick/suite-base/panels/shared/useSeriesDrag";
 import { getLineColor } from "@lichtblick/suite-base/util/plotColors";
+import { stampToTime } from "@lichtblick/suite-base/util/time";
 import { customTypography } from "@lichtblick/theme";
 
 import { PlotPathEditor } from "./PlotPathEditor";
@@ -173,11 +174,10 @@ function renderValue(value: unknown): string | number | undefined {
       return formatLegendNumber(value);
     case "string":
       return value;
-    case "object":
-      if (isTime(value)) {
-        return toSec(value);
-      }
-      return undefined;
+    case "object": {
+      const time = stampToTime(value);
+      return time ? formatLegendNumber(toSec(time)) : undefined;
+    }
     default:
       return undefined;
   }
