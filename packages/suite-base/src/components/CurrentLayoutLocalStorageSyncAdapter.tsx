@@ -6,16 +6,14 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { useEffect, useRef } from "react";
-import { useDebounce } from "use-debounce";
+import { useDebouncedCallback } from "use-debounce";
 
-import { useAsync } from "@lichtblick/hooks";
 import Log from "@lichtblick/log";
 import { LOCAL_STORAGE_STUDIO_LAYOUT_KEY } from "@lichtblick/suite-base/constants/browserStorageKeys";
 import {
   LayoutData,
   LayoutID,
   LayoutState,
-  useCurrentLayoutActions,
   useCurrentLayoutSelector,
 } from "@lichtblick/suite-base/context/CurrentLayoutContext";
 import { useLayoutManager } from "@lichtblick/suite-base/context/LayoutManagerContext";
@@ -28,6 +26,12 @@ export function selectLayoutId(state: LayoutState): LayoutID | undefined {
   return state.selectedLayout?.id;
 }
 
+function selectLayoutLoading(state: LayoutState): boolean | undefined {
+  return state.selectedLayout?.loading;
+}
+
+type OwnedLayout = { id: LayoutID; data: LayoutData };
+
 const log = Log.getLogger(__filename);
 
 /** Layout edits reach storage at most this long after they happen. */
@@ -37,27 +41,60 @@ let flushDebouncedLayout: (() => boolean) | undefined;
 
 /**
  * Starts saving a debounced layout edit now instead of after the debounce (see
- * useSaveSessionBeforeReload). Returns whether an edit was pending. Its write starts once React
- * renders the flushed layout and is async: LayoutManager.isBusy() reports it.
+ * useSaveSessionBeforeReload). Returns whether an edit was pending. Its write is async:
+ * LayoutManager.isBusy() reports it.
  */
 export function flushPendingLayoutSave(): boolean {
   return flushDebouncedLayout?.() ?? false;
 }
 
 export function CurrentLayoutLocalStorageSyncAdapter(): React.JSX.Element {
-  const { getCurrentLayoutState } = useCurrentLayoutActions();
   const currentLayoutData = useCurrentLayoutSelector(selectLayoutData);
   const currentLayoutId = useCurrentLayoutSelector(selectLayoutId);
+  const loading = useCurrentLayoutSelector(selectLayoutLoading);
 
   const layoutManager = useLayoutManager();
 
-  const [debouncedLayoutData, debounce] = useDebounce(currentLayoutData, 250, {
-    maxWait: LAYOUT_SAVE_MAX_WAIT_MS,
-  });
+  // The data together with the layout it belongs to. While a layout loads, the state shows the new
+  // id with the previous layout's data, so keep the last loaded pair until loading ends.
+  const owned = useRef<OwnedLayout | undefined>(undefined);
+  if (
+    loading !== true &&
+    (owned.current?.id !== currentLayoutId || owned.current?.data !== currentLayoutData)
+  ) {
+    owned.current =
+      currentLayoutId != undefined && currentLayoutData != undefined
+        ? { id: currentLayoutId, data: currentLayoutData }
+        : undefined;
+  }
+  const layout = owned.current;
+
+  /** A just-selected layout: its first save is the load (plus panel setup), not an edit. */
+  const skipSaveFor = useRef<LayoutID | undefined>(undefined);
+
+  const save = useDebouncedCallback(
+    async ({ id, data }: OwnedLayout) => {
+      localStorage.setItem(LOCAL_STORAGE_STUDIO_LAYOUT_KEY, JSON.stringify(data));
+      if (skipSaveFor.current === id) {
+        skipSaveFor.current = undefined;
+        return;
+      }
+      try {
+        // Only the data (panel configuration), saved to the 'working' copy so the layout shows
+        // as edited. Renames go through layoutManager.updateLayout separately.
+        await layoutManager.updateLayout({ id, data });
+      } catch (error) {
+        log.error(error);
+      }
+    },
+    250,
+    { maxWait: LAYOUT_SAVE_MAX_WAIT_MS },
+  );
+
   useEffect(() => {
     const flush = () => {
-      const pending = debounce.isPending();
-      debounce.flush();
+      const pending = save.isPending();
+      void save.flush();
       return pending;
     };
     flushDebouncedLayout = flush;
@@ -66,57 +103,30 @@ export function CurrentLayoutLocalStorageSyncAdapter(): React.JSX.Element {
         flushDebouncedLayout = undefined;
       }
     };
-  }, [debounce]);
+  }, [save]);
 
-  // Track if this is the initial layout load to prevent false "edited" states
-  const isInitialLayoutLoad = useRef(true);
-
-  // Reset the flag when layout changes
+  const prevId = useRef<LayoutID | undefined>(undefined);
+  const mounted = useRef(false);
   useEffect(() => {
-    isInitialLayoutLoad.current = true;
-  }, [currentLayoutId]);
-
-  useEffect(() => {
-    if (!debouncedLayoutData) {
+    if (!mounted.current) {
+      // The layout present on mount is already stored.
+      mounted.current = true;
+      prevId.current = layout?.id;
+      if (layout) {
+        localStorage.setItem(LOCAL_STORAGE_STUDIO_LAYOUT_KEY, JSON.stringify(layout.data));
+      }
       return;
     }
-
-    const serializedLayoutData = JSON.stringify(debouncedLayoutData);
-    if (serializedLayoutData == undefined) {
-      throw new Error("Failed to serialize layout data");
+    if (layout?.id !== prevId.current) {
+      // Save the previous layout's pending edit to that layout before switching.
+      void save.flush();
+      prevId.current = layout?.id;
+      skipSaveFor.current = layout?.id;
     }
-    localStorage.setItem(LOCAL_STORAGE_STUDIO_LAYOUT_KEY, serializedLayoutData);
-  }, [debouncedLayoutData]);
-
-  // Send new layoutData to layoutManager to be saved
-  useAsync(async () => {
-    const layoutState = getCurrentLayoutState();
-
-    // While loading, the data still belongs to the previous layout.
-    if (!layoutState.selectedLayout || layoutState.selectedLayout.loading === true) {
-      return;
+    if (layout) {
+      void save(layout);
     }
-
-    // Skip updating layout manager during initial layout load to prevent
-    // false "edited" states from panel initialization
-    if (isInitialLayoutLoad.current) {
-      isInitialLayoutLoad.current = false;
-      return;
-    }
-
-    try {
-      // We only update the layout data (panels configuration) here, not the name.
-      // Name changes are handled separately via layoutManager.updateLayout in rename operations.
-      // This ensures that data modifications are saved to the 'working' copy in IDB,
-      // allowing users to see the orange dot indicator for unsaved changes.
-      await layoutManager.updateLayout({
-        id: layoutState.selectedLayout.id,
-        data: debouncedLayoutData,
-      });
-    } catch (error) {
-      log.error(error);
-    }
-  }, [debouncedLayoutData, getCurrentLayoutState, layoutManager]);
+  }, [layout, save]);
 
   return <></>;
 }
