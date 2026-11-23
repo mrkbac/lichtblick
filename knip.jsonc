@@ -73,7 +73,6 @@
       "entry": [
         // Bundled by rspack.config.ts
         "src/entry/*.{ts,tsx}",
-        "src/electronBuilderConfig.js",
         "src/test/setup.ts"
       ],
       // Rspack configs build on suite-base's makeConfig, which owns the loaders

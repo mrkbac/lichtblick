@@ -20,7 +20,7 @@
     "node": ">=26"
   },
   "scripts": {
-    "clean": "bash ci/clean-build.sh",
+    "clean": "rm -rf .webpack */.webpack packages/*/.webpack dist packages/*/dist packages/*/tsconfig.tsbuildinfo storybook-screenshots storybook-static coverage",
     "build:packages": "node ./node_modules/typescript7/bin/tsc --build --builders 1 --verbose packages/*/tsconfig.json packages/*/src/*/tsconfig.json",
     "desktop:build:dev": "rspack build --mode development --config packages/suite-desktop/rspack.config.ts",
     "desktop:build:prod": "rspack build --mode production --config packages/suite-desktop/rspack.config.ts",
@@ -37,7 +37,6 @@
     "format:ci": "biome format --max-diagnostics=none .",
     "lint": "oxlint --report-unused-disable-directives --fix",
     "lint:ci": "oxlint --report-unused-disable-directives --max-warnings 0",
-    "lint:ci:report": "oxlint --report-unused-disable-directives-severity error --quiet -f sarif > lint-report.sarif",
     "lint:knip": "knip",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
@@ -46,9 +45,7 @@
     "test:e2e:web": "playwright test --config=e2e/tests/web/playwright.config.ts",
     "test:e2e:web:debug": "playwright test --config=e2e/tests/web/playwright.config.ts --debug",
     "test:e2e:web:report": "playwright show-report e2e/tests/web/reports",
-    "test:e2e:web:ci": "CI=true playwright test --config=e2e/tests/web/playwright.config.ts",
     "test:e2e:web:smoke": "playwright test --config=e2e/tests/web/playwright.config.ts --grep @smoke",
-    "test:e2e:web:smoke:ci": "CI=true playwright test --config=e2e/tests/web/playwright.config.ts --grep @smoke",
     "test:e2e:summary": "node e2e/ci-helpers/generate-test-summary.ts",
     "perf:budget": "node --expose-gc ci/perf-budget.ts",
     "package:win": "pnpm package --win",

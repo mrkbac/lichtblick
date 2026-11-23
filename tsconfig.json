@@ -6,7 +6,6 @@
   "include": [
     "./*.ts",
     "./*.mts",
-    "./*.js",
     "./ci/**/*.ts",
     "./packages/suite-web/rspack.config.ts",
     "./packages/suite-desktop/rspack.config.ts",

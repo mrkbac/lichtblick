@@ -41,7 +41,7 @@ jobs:
         run: npx playwright install --with-deps chromium
 
       - name: Run E2E Web regression tests
-        run: pnpm test:e2e:web:ci
+        run: pnpm test:e2e:web
 
       - name: Upload Web E2E Test Reports
         if: always()

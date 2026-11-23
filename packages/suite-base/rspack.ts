@@ -97,23 +97,8 @@ export function swcRule({
   };
 }
 
-let currentDirHref: string | undefined;
-let localRequireInstance: NodeJS.Require | undefined;
-
-function initModuleLocals(packageDir: string | undefined): void {
-  if (currentDirHref != undefined) {
-    return;
-  }
-  const dir = packageDir ?? import.meta.dirname;
-  const dirHref = _nodePathToFileURL(dir + "/").href;
-  currentDirHref = dirHref;
-  localRequireInstance = _nodeCreateRequire(dir + "/package.json");
-  // Load .env if present (Node's built-in loader; existing env vars win)
-  const envFile = _nodeFileURLToPath(new URL("../../.env", dirHref));
-  if (fs.existsSync(envFile)) {
-    process.loadEnvFile(envFile);
-  }
-}
+const dirHref = _nodePathToFileURL(import.meta.dirname + "/").href;
+const localRequire = _nodeCreateRequire(import.meta.dirname + "/package.json");
 
 /** What the UI shows about the product; one place to rebrand (root package.json). */
 export type ProductInfo = {
@@ -141,11 +126,6 @@ type Options = {
   /** Specify the app version. */
   version: string;
   product: ProductInfo;
-  /**
-   * Absolute path to the @lichtblick/suite-base package directory.
-   * Defaults to the directory of this file.
-   */
-  packageDir?: string;
 };
 
 // Create a partial webpack configuration required to build app using webpack.
@@ -158,10 +138,11 @@ export function makeConfig(
   Configuration,
   "resolve" | "module" | "plugins" | "node" | "ignoreWarnings" | "optimization"
 > {
-  initModuleLocals(options.packageDir);
-  // After initModuleLocals, currentDirHref and localRequireInstance are guaranteed to be set.
-  const dirHref = currentDirHref!;
-  const localRequire = localRequireInstance!;
+  // Load .env if present (Node's built-in loader; existing env vars win)
+  const envFile = _nodeFileURLToPath(new URL("../../.env", dirHref));
+  if (fs.existsSync(envFile)) {
+    process.loadEnvFile(envFile);
+  }
 
   const isDev = argv.mode === "development";
   const isServe = argv.env?.RSPACK_SERVE ?? false;

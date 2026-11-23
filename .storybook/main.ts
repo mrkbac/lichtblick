@@ -32,8 +32,6 @@ const storybookConfig: StorybookConfig = {
             {
               version: "0.0.0-storybook",
               product: productInfo(packageJson),
-              // Required in ESM context (Storybook) where __dirname is not available in webpack.ts.
-              packageDir: new URL("../packages/suite-base", import.meta.url).pathname,
             },
           );
           return {

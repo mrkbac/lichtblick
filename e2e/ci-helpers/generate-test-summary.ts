@@ -4,7 +4,14 @@
 import * as fs from "fs";
 import * as path from "path";
 
-import type { PlaywrightJSONReport, ReportTestResult } from "./types.ts";
+import type { JSONReport, JSONReportTestResult } from "@playwright/test/reporter";
+
+type ReportTestResult = {
+  title: string;
+  status: JSONReportTestResult["status"];
+  duration: number;
+  retries: number;
+};
 
 function formatDuration(ms: number): string {
   if (ms < 1000) {
@@ -14,7 +21,7 @@ function formatDuration(ms: number): string {
   return `${seconds}s`;
 }
 
-function getStatusIcon(status: string): string {
+function getStatusIcon(status: ReportTestResult["status"]): string {
   switch (status) {
     case "passed":
       return "✅";
@@ -41,7 +48,7 @@ function generateSummary(reportPath: string, reportName: string): void {
     return;
   }
 
-  let report: PlaywrightJSONReport;
+  let report: JSONReport;
 
   try {
     report = JSON.parse(fileContent);
@@ -68,7 +75,7 @@ function generateSummary(reportPath: string, reportName: string): void {
         if (lastResult) {
           tests.push({
             title: testTitle,
-            status: lastResult.status as ReportTestResult["status"],
+            status: lastResult.status,
             duration: lastResult.duration,
             retries: test.results.length - 1,
           });
