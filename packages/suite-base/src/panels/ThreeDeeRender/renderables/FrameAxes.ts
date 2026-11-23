@@ -226,10 +226,12 @@ export class FrameAxes extends SceneExtension<FrameAxisRenderable> {
       }),
     };
 
+    let anyFrameVisible = false;
     let order = 1;
     for (const { label, value: frameId } of this.renderer.coordinateFrameList) {
       const frameKey = `frame:${frameId}`;
       const tfConfig = this.#getRenderableSettingsWithDefaults(configTransforms[frameKey] ?? {});
+      anyFrameVisible ||= tfConfig.visible;
       const frame = this.renderer.transformTree.frame(frameId);
       const offset = this.#offsetFor(frameId);
       const fields = this.#buildFrameFields(frame, offset);
@@ -251,6 +253,7 @@ export class FrameAxes extends SceneExtension<FrameAxisRenderable> {
         node: {
           label: `${t("threeDee:transforms")}${frameCount > 0 ? ` (${frameCount})` : ""}`,
           help: t("threeDee:transformsHelp"),
+          visible: frameCount > 0 ? anyFrameVisible : undefined,
           actions: [
             { id: "show-all", type: "action", label: t("threeDee:showAll") },
             { id: "hide-all", type: "action", label: t("threeDee:hideAll") },
@@ -458,11 +461,8 @@ export class FrameAxes extends SceneExtension<FrameAxisRenderable> {
 
       this.renderer.updateConfig((draft) => {
         for (const frameId of this.renderables.keys()) {
-          const frameKeySanitized = frameId === "settings" ? "$settings" : `frame:${frameId}`;
-          let draftTransforms = draft.transforms[frameKeySanitized];
-          draftTransforms ??= {};
-          draftTransforms = { ...draftTransforms, visible: value };
-          draft.transforms[frameKeySanitized] = draftTransforms;
+          const frameKey = `frame:${frameId}`;
+          draft.transforms[frameKey] = { ...draft.transforms[frameKey], visible: value };
         }
       });
 
@@ -482,6 +482,13 @@ export class FrameAxes extends SceneExtension<FrameAxisRenderable> {
         this.#setOffsets({ ...this.#offsets, frames: {} });
       } else if (path.length === 2 && path[1]!.startsWith("frame:")) {
         this.#handleFrameAction(action.payload.id, path[1]!.replace(/^frame:/, ""));
+      }
+      return;
+    }
+
+    if (path.length === 2 && path[0] === "transforms" && path[1] === "visible") {
+      if (typeof action.payload.value === "boolean") {
+        toggleFrameVisibility(action.payload.value);
       }
       return;
     }
