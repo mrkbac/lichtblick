@@ -3,8 +3,7 @@
 import type { PanelDocs } from "@lichtblick/suite-base/components/PanelDocs/PanelDocs";
 
 const docs: PanelDocs = {
-  intro:
-    "See where playback time and memory go: data loading per topic, memory, main-thread load and the data pipeline, with sparklines over the last ten seconds.",
+  intro: "See where playback time and memory go, with sparklines over the last ten seconds.",
   sections: [
     {
       title: "Data loading",
