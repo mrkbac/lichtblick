@@ -15,13 +15,11 @@ RuleTester.it = it;
 
 const ruleTester = new RuleTester({ languageOptions: { parserOptions: { lang: "ts" } } });
 
-ruleTester.run("lodash-ramda-imports", plugin.rules["lodash-ramda-imports"], {
+ruleTester.run("lodash-imports", plugin.rules["lodash-imports"], {
   valid: [
     /* ts */ `
     import * as _ from "lodash-es";
     _.isEqual(1, 1);
-    import * as R from "ramda";
-    R.equals(1, 1);
     `,
   ],
 
@@ -77,20 +75,6 @@ ruleTester.run("lodash-ramda-imports", plugin.rules["lodash-ramda-imports"], {
         import * as _ from "lodash-es";
         _.isEqual(1, 1);
         _.isEmpty({});
-      `,
-    },
-
-    {
-      code: /* ts */ `
-        import ramda, { isEmpty as ramdaIsEmpty } from "ramda";
-        ramda.equals(1, 1);
-        ramdaIsEmpty({});
-      `,
-      errors: [{ messageId: "useNamespaceImport", data: { name: "R", package: "ramda" } }],
-      output: /* ts */ `
-        import * as R from "ramda";
-        R.equals(1, 1);
-        R.isEmpty({});
       `,
     },
   ],

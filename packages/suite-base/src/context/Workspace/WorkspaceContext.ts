@@ -61,10 +61,6 @@ export type WorkspaceContextStore = {
       open: boolean;
     };
   };
-  featureTours: {
-    active: undefined | string;
-    shown: string[];
-  };
   layoutBrowser: {
     expandedSections: {
       personal: boolean;

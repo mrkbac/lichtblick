@@ -25,9 +25,6 @@ importers:
 
   .:
     devDependencies:
-      '@actions/exec':
-        specifier: 3.0.0
-        version: 3.0.0
       '@biomejs/biome':
         specifier: 2.6.8
         version: 2.6.8
@@ -257,9 +254,6 @@ importers:
       eventemitter3:
         specifier: 5.0.4
         version: 5.0.4
-      lodash-es:
-        specifier: 4.18.1
-        version: 4.18.1
       xacro-parser:
         specifier: 0.3.11
         version: 0.3.11
@@ -267,9 +261,6 @@ importers:
       '@lichtblick/suite':
         specifier: workspace:*
         version: link:../suite
-      '@types/lodash-es':
-        specifier: 4.17.12
-        version: 4.17.12
 
   packages/hooks:
     dependencies:

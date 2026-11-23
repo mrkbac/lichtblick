@@ -24,10 +24,6 @@ const configs = [
     package: "lodash-es",
     preferNamespaceImport: "_",
   },
-  {
-    package: "ramda",
-    preferNamespaceImport: "R",
-  },
 ];
 
 /**

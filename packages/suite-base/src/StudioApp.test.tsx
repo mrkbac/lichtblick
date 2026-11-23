@@ -30,11 +30,10 @@ const mockMultiProvider = vi.fn(function ({
 
 vi.mock("./Workspace", () => ({
   __esModule: true,
-  default: ({ deepLinks, appBarLeftInset, AppBarComponent, ...props }: any) => (
+  default: ({ deepLinks, AppBarComponent, ...props }: any) => (
     <div
       data-testid="workspace"
       data-deep-links={Array.isArray(deepLinks) ? JSON.stringify(deepLinks) : String(deepLinks)}
-      data-app-bar-inset={appBarLeftInset}
     >
       <div data-testid="workspace-props">
         {JSON.stringify(props, (_key, value) => {
@@ -118,14 +117,9 @@ describe("StudioApp", () => {
   const mockSharedRootContext = {
     dataSources: [],
     extensionLoaders: [],
-    nativeAppMenu: undefined,
-    nativeWindow: undefined,
     deepLinks: [],
     enableLaunchPreferenceScreen: false,
     extraProviders: undefined,
-    appBarLeftInset: 0,
-    customWindowControlProps: undefined,
-    onAppBarDoubleClick: undefined,
     AppBarComponent: undefined,
   };
 
@@ -188,17 +182,6 @@ describe("StudioApp", () => {
     expect(workspace).toHaveAttribute("data-deep-links", JSON.stringify(deepLinks));
   });
 
-  it("should pass appBarLeftInset to Workspace component", () => {
-    const appBarLeftInset = 120;
-    renderWithContext({
-      ...mockSharedRootContext,
-      appBarLeftInset,
-    });
-
-    const workspace = screen.getByTestId("workspace");
-    expect(workspace).toHaveAttribute("data-app-bar-inset", "120");
-  });
-
   it("should render AppBarComponent when provided", () => {
     const AppBarComponent = () => <div>Custom AppBar</div>;
     renderWithContext({
@@ -207,34 +190,6 @@ describe("StudioApp", () => {
     });
 
     expect(screen.getByTestId("app-bar-component")).toBeInTheDocument();
-  });
-
-  it("should pass custom window control props to Workspace", () => {
-    const customWindowControlProps = {
-      showCustomWindowControls: true,
-      isMaximized: false,
-      initialZoomFactor: 1.2,
-      onMinimizeWindow: vi.fn(),
-      onMaximizeWindow: vi.fn(),
-      onUnmaximizeWindow: vi.fn(),
-      onCloseWindow: vi.fn(),
-    };
-
-    renderWithContext({
-      ...mockSharedRootContext,
-      customWindowControlProps,
-    });
-
-    const workspaceProps = screen.getByTestId("workspace-props");
-    const props = JSON.parse(workspaceProps.textContent);
-
-    expect(props.showCustomWindowControls).toBe(true);
-    expect(props.isMaximized).toBe(false);
-    expect(props.initialZoomFactor).toBe(1.2);
-    expect(props.onMinimizeWindow).toBe("function");
-    expect(props.onMaximizeWindow).toBe("function");
-    expect(props.onUnmaximizeWindow).toBe("function");
-    expect(props.onCloseWindow).toBe("function");
   });
 
   it("should render LaunchPreference when enableLaunchPreferenceScreen is true", () => {
