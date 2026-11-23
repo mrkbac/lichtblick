@@ -303,7 +303,8 @@ describe("createMessageRangeIterator", () => {
 
       const batches: MessageEvent[][] = [];
       for await (const batch of iterable) {
-        batches.push([...batch]);
+        // Keep the yielded arrays as-is: a consumer may hold on to them after the next pull.
+        batches.push(batch);
       }
 
       // Should have multiple batches due to time-based splitting

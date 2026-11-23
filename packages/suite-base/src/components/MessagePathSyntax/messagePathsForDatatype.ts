@@ -190,7 +190,12 @@ export function validTerminatingStructureItem(
  * Given a datatype, the array of datatypes, and a list of valid types, list out all valid strings
  * for a MessagePathStructure and its corresponding structure item.
  */
-const messagePathsCache = new Map<string, MessagePathsForStructure>();
+// Keyed on the structure object (stable per datatypes object, see messagePathStructures) so a
+// changed schema with the same datatype name doesn't reuse stale paths.
+const messagePathsCache = new WeakMap<
+  MessagePathStructureItemMessage,
+  Map<string, MessagePathsForStructure>
+>();
 
 export function messagePathsForStructure(
   structure: MessagePathStructureItemMessage,
@@ -202,8 +207,13 @@ export function messagePathsForStructure(
     .filter((part): part is MessagePathFilter => part.type === "filter")
     .map((f) => f.repr)
     .join("|");
-  const cacheKey = `${structure.datatype}_${JSON.stringify(validTypes) ?? ""}_${noMultiSlices ?? ""}_${filterRepr}`;
-  const cached = messagePathsCache.get(cacheKey);
+  const cacheKey = `${JSON.stringify(validTypes) ?? ""}_${noMultiSlices ?? ""}_${filterRepr}`;
+  let structureCache = messagePathsCache.get(structure);
+  if (!structureCache) {
+    structureCache = new Map();
+    messagePathsCache.set(structure, structureCache);
+  }
+  const cached = structureCache.get(cacheKey);
   if (cached) {
     return cached;
   }
@@ -268,7 +278,7 @@ export function messagePathsForStructure(
   traverse(structure, "");
   const result = messagePaths.sort(naturalSort("path"));
 
-  messagePathsCache.set(cacheKey, result);
+  structureCache.set(cacheKey, result);
 
   return result;
 }

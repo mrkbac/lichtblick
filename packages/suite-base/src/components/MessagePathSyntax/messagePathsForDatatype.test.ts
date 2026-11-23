@@ -482,6 +482,19 @@ describe("messagePathsForStructure", () => {
     ).toEqual(["", ".markers", ".markers[:]{id==0}", ".markers[:]{id==0}.id"]);
   });
 
+  it("does not reuse cached paths when a datatype with the same name changes", () => {
+    const first = messagePathStructures(
+      new Map([["pkg/Changing", { definitions: [{ name: "a", type: "int32" }] }]]),
+    );
+    const second = messagePathStructures(
+      new Map([["pkg/Changing", { definitions: [{ name: "b", type: "int32" }] }]]),
+    );
+    const paths = (structure: typeof first) =>
+      messagePathsForStructure(unwrap(structure["pkg/Changing"])).map(({ path }) => path);
+    expect(paths(first)).toEqual(["", ".a"]);
+    expect(paths(second)).toEqual(["", ".b"]);
+  });
+
   it("returns an array of possible message paths for the given `validTypes`", () => {
     expect(
       messagePathsForStructure(unwrap(structures["pose_msgs/PoseDebug"]), {

@@ -87,8 +87,8 @@ export function createMessageRangeIterator(params: CreateMessageRangeIteratorPar
           if (performance.now() - lastBatchTime > BATCH_INTERVAL_MS) {
             // Yield the batch if it has been more than 16ms since the last yield
             if (batchMessages.length > 0) {
-              yield batchMessages; // No copy needed - we clear it immediately after
-              batchMessages.length = 0; // Clear the batch
+              // splice hands the consumer its own array; clearing in place would empty it
+              yield batchMessages.splice(0);
               lastBatchTime = performance.now();
             }
           }

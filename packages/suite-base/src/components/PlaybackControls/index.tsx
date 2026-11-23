@@ -176,14 +176,16 @@ export default function PlaybackControls({
       });
     } else {
       // if we are at the end, we need to go back to start (on a live source the end is live)
+      let playFrom = current;
       if (!hasLiveHistory && current && end && start && compare(current, end) >= 0) {
         seek(start);
+        playFrom = start;
       }
       play();
 
       BroadcastManager.getInstance().postMessage({
         type: "play",
-        time: current!,
+        time: playFrom!,
       });
     }
   }, [isPlaying, pause, getPlayableRange, play, seek, hasLiveHistory]);
@@ -204,12 +206,14 @@ export default function PlaybackControls({
           const { start } = getPlayableRange();
           if (start) {
             seek(start);
+            BroadcastManager.getInstance().postMessage({ type: "seek", time: start });
           }
         },
         "playback.seekEnd": () => {
           const { end } = getPlayableRange();
           if (end) {
             seek(end);
+            BroadcastManager.getInstance().postMessage({ type: "seek", time: end });
           }
         },
         ...trimKeyHandlers,

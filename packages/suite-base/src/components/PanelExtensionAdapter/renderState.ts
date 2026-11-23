@@ -103,8 +103,6 @@ function initRenderStateBuilder(): BuildRenderStateFn {
   let prevSeekTime: number | undefined;
   let prevSortedTopics: BuilderRenderStateInput["sortedTopics"] | undefined;
   let prevMessageConverters: BuilderRenderStateInput["messageConverters"] | undefined;
-  // eslint-disable-next-line no-unassigned-vars
-  let prevSharedPanelState: BuilderRenderStateInput["sharedPanelState"];
   let prevCurrentFrame: Immutable<RenderState["currentFrame"]>;
   let prevCollatedConversions: undefined | TopicSchemaConversions;
   let prevConfigTopics: RenderStateConfig["topics"] | undefined;
@@ -211,18 +209,14 @@ function initRenderStateBuilder(): BuildRenderStateFn {
       );
     };
 
-    if (prevSeekTime !== activeData?.lastSeekTime) {
+    const didSeek = prevSeekTime !== activeData?.lastSeekTime;
+    prevSeekTime = activeData?.lastSeekTime;
+    if (didSeek) {
       lastMessageByTopic.clear();
     }
 
     if (watchedFields.has("didSeek")) {
-      updateRenderStateField(
-        "didSeek",
-        prevSeekTime !== activeData?.lastSeekTime,
-        renderState.didSeek,
-        shouldRender,
-      );
-      prevSeekTime = activeData?.lastSeekTime;
+      updateRenderStateField("didSeek", didSeek, renderState.didSeek, shouldRender);
     }
 
     if (watchedFields.has("parameters")) {
@@ -238,7 +232,7 @@ function initRenderStateBuilder(): BuildRenderStateFn {
       updateRenderStateField(
         "sharedPanelState",
         sharedPanelState,
-        prevSharedPanelState,
+        renderState.sharedPanelState,
         shouldRender,
       );
     }

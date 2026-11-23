@@ -41,6 +41,25 @@ describe("simpleGetMessagePathDataItems", () => {
     expect(simpleGetMessagePathDataItems(message, parseMessagePath("/foo.bar[0]")!)).toEqual([3]);
   });
 
+  it.each([
+    ["[-1]", [5]],
+    ["[-3:]", [3, 4, 5]],
+    ["[1:-2]", [2, 3, 4]],
+    ["[-10:1]", [1, 2]],
+    ["[9]", []],
+  ])("resolves negative and out-of-range index %s", (slice, expected) => {
+    const message: MessageEvent = {
+      topic: "/foo",
+      receiveTime: { sec: 0, nsec: 0 },
+      sizeInBytes: 0,
+      schemaName: "datatype",
+      message: { bar: [1, 2, 3, 4, 5] },
+    };
+    expect(simpleGetMessagePathDataItems(message, parseMessagePath(`/foo.bar${slice}`)!)).toEqual(
+      expected,
+    );
+  });
+
   it("returns correct nested values", () => {
     const message: MessageEvent = {
       topic: "/foo",
