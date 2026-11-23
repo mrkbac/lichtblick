@@ -79,6 +79,7 @@ describe("useSessionStorageValue", () => {
 
     // When
     act(() => {
+      sessionStorage.removeItem(testKey);
       window.dispatchEvent(
         new StorageEvent("storage", {
           key: testKey,

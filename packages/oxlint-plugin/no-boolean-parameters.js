@@ -109,19 +109,7 @@ module.exports = {
     type: "suggestion",
     hasSuggestions: true,
     fixable: "code",
-    schema: [
-      {
-        type: "object",
-        properties: {
-          allowLoneParameter: {
-            type: "boolean",
-            default: false,
-          },
-        },
-        additionalProperties: false,
-      },
-    ],
-    defaultOptions: [],
+    schema: [],
     messages: {
       booleanTrap: `Don't use raw boolean value{{paramInfo}} as a parameter{{funcInfo}}; call sites will appear ambiguous (the "boolean trap")`,
       wrapParamInObject: `Replace with {{pattern}}`,
@@ -129,13 +117,9 @@ module.exports = {
   },
 
   create(context) {
-    const { allowLoneParameter } = context.options[0] ?? { allowLoneParameter: false };
     return {
       ":function > AssignmentPattern.params, :function > [typeAnnotation].params, TSFunctionType > [typeAnnotation].params, TSEmptyBodyFunctionExpression > [typeAnnotation].params":
         (param) => {
-          if (allowLoneParameter && param.parent.params.length === 1) {
-            return;
-          }
           if (isBooleanParam(param)) {
             const { paramName, funcName } = getData(param);
             context.report({

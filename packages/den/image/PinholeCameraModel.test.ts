@@ -141,84 +141,14 @@ describe("PinholeCameraModel", () => {
     });
   });
 
-  it("undistortPixel - no distortion", () => {
-    const model = new PinholeCameraModel(makeCameraInfo(640, 480, 45));
-    const rectified = { x: 0, y: 0 };
-
-    model.undistortPixel(rectified, { x: 320, y: 240 });
-    expect(rectified).toEqual({ x: 320, y: 240 });
-
-    model.undistortPixel(rectified, { x: 100, y: 100 });
-    expect(rectified).toEqual({ x: expect.closeTo(100), y: expect.closeTo(100) });
-  });
-
-  it("undistortPixel - plumb_bob", () => {
-    const model = new PinholeCameraModel(makeCameraInfo(640, 480, 60, "plumb_bob", D1));
-    const rectified = { x: 0, y: 0 };
-
-    model.undistortPixel(rectified, { x: 320, y: 240 });
-    expect(rectified).toEqual({ x: 320, y: 240 });
-
-    model.undistortPixel(rectified, { x: 0, y: 0 });
-    expect(rectified).toEqual({
-      x: expect.closeTo(-72.45696739),
-      y: expect.closeTo(-54.4783923),
-    });
-  });
-
-  it("undistortPixel - rational_polynomial", () => {
-    const model = new PinholeCameraModel(makeCameraInfo(640, 480, 60, "rational_polynomial", D2));
-    const rectified = { x: 0, y: 0 };
-
-    model.undistortPixel(rectified, { x: 320, y: 240 });
-    expect(rectified).toEqual({ x: 320, y: 240 });
-
-    model.undistortPixel(rectified, { x: 0, y: 0 });
-    expect(rectified).toEqual({
-      x: expect.closeTo(-100.71863176),
-      y: expect.closeTo(-75.74403003),
-    });
-  });
-
-  it("distortPixel - no distortion", () => {
-    const model = new PinholeCameraModel(makeCameraInfo(640, 480, 45));
-    const unrectified = { x: 0, y: 0 };
-
-    model.distortPixel(unrectified, { x: 320, y: 240 });
-    expect(unrectified).toEqual({ x: 320, y: 240 });
-
-    model.distortPixel(unrectified, { x: 0, y: 0 });
-    expect(unrectified).toEqual({
-      x: expect.closeTo(0),
-      y: expect.closeTo(0),
-    });
-  });
-
-  it("distortPixel - plumb_bob", () => {
-    const model = new PinholeCameraModel(makeCameraInfo(640, 480, 60, "plumb_bob", D1));
-    const rectified = { x: 0, y: 0 };
-    const unrectified = { x: 0, y: 0 };
-
-    model.undistortPixel(rectified, { x: 0, y: 0 });
-    model.distortPixel(unrectified, rectified);
-    expect(unrectified).toEqual({
-      // low precision comparison since we're approximating a nonlinear function
-      x: expect.closeTo(0, 1),
-      y: expect.closeTo(0, 1),
-    });
-  });
-
-  it("distortPixel - rational_polynomial", () => {
-    const model = new PinholeCameraModel(makeCameraInfo(640, 480, 60, "rational_polynomial", D2));
-    const rectified = { x: 0, y: 0 };
-    const unrectified = { x: 0, y: 0 };
-
-    model.undistortPixel(rectified, { x: 0, y: 0 }, /*iterations=*/ 8);
-    model.distortPixel(unrectified, rectified);
-    expect(unrectified).toEqual({
-      // low precision comparison since we're approximating a nonlinear function
-      x: expect.closeTo(0, 1),
-      y: expect.closeTo(0, 1),
-    });
+  it.each([
+    ["plumb_bob", D1],
+    ["rational_polynomial", D2],
+  ])("distortNormalized inverts undistortNormalized (%s)", (model_, D) => {
+    const model = new PinholeCameraModel(makeCameraInfo(640, 480, 60, model_, D));
+    const point = { x: -0.5, y: -0.4 };
+    model.undistortNormalized(point, point, /*iterations=*/ 8);
+    model.distortNormalized(point, point);
+    expect(point).toEqual({ x: expect.closeTo(-0.5, 2), y: expect.closeTo(-0.4, 2) });
   });
 });

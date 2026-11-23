@@ -33,14 +33,6 @@ class Condvar {
   }
 
   /**
-   * Notify one wait.
-   */
-  public notifyOne(): void {
-    const item = this.#waitQueue.shift();
-    item?.();
-  }
-
-  /**
    * Notify all waiting.
    */
   public notifyAll(): void {

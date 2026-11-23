@@ -35,7 +35,7 @@ function toMB(bytes: number): number {
 }
 
 function MemoryUseIndicator(): React.JSX.Element {
-  const memoryInfo = useMemoryInfo({ refreshIntervalMs: 5000 });
+  const memoryInfo = useMemoryInfo(5000);
   const { classes, cx } = useStyles();
 
   // If we can't load memory info (maybe not supported) then we don't show any indicator

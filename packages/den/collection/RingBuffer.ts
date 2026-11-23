@@ -5,17 +5,9 @@ export interface ReadonlyRingBuffer<T> extends Iterable<T> {
   readonly capacity: number;
   /** Number of retained items. */
   size(): number;
-  /**
-   * Total items ever pushed (not reset by eviction). The retained item at index `i` has sequence
-   * number `pushed() - size() + i`, so consumers can process only what is new since they last
-   * looked, see {@link since}.
-   */
-  pushed(): number;
   /** Item at `index` (0 = oldest retained), or undefined when out of range. */
   at(index: number): T | undefined;
   last(): T | undefined;
-  /** Retained items with sequence number `>= seq`, oldest first. */
-  since(seq: number): T[];
   toArray(): T[];
 }
 
@@ -31,7 +23,6 @@ export class RingBuffer<T> implements ReadonlyRingBuffer<T> {
   #items: T[] = [];
   /** Index of the oldest item in #items once the buffer has wrapped. */
   #head = 0;
-  #pushed = 0;
 
   public constructor(capacity: number) {
     if (!Number.isSafeInteger(capacity) || capacity < 0) {
@@ -51,12 +42,7 @@ export class RingBuffer<T> implements ReadonlyRingBuffer<T> {
     return this.#items.length;
   }
 
-  public pushed(): number {
-    return this.#pushed;
-  }
-
   public push(item: T): void {
-    this.#pushed++;
     if (this.capacity === 0) {
       return;
     }
@@ -86,22 +72,8 @@ export class RingBuffer<T> implements ReadonlyRingBuffer<T> {
     return this.at(this.#items.length - 1);
   }
 
-  public since(seq: number): T[] {
-    const first = this.#pushed - this.#items.length;
-    const out: T[] = [];
-    for (let i = Math.max(0, seq - first); i < this.#items.length; i++) {
-      out.push(this.at(i)!);
-    }
-    return out;
-  }
-
   public toArray(): T[] {
-    return this.since(0);
-  }
-
-  public clear(): void {
-    this.#items = [];
-    this.#head = 0;
+    return Array.from(this);
   }
 
   public *[Symbol.iterator](): Iterator<T> {

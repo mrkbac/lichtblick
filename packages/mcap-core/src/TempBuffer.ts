@@ -15,9 +15,11 @@ export class TempBuffer implements IReadable, IWritable {
     if (source instanceof ArrayBuffer) {
       this.#buffer = source;
     } else if (source) {
-      const copy = new Uint8Array(source.byteLength);
-      copy.set(new Uint8Array(source.buffer, source.byteOffset, source.byteLength));
-      this.#buffer = copy.buffer;
+      this.#buffer = new Uint8Array(
+        source.buffer,
+        source.byteOffset,
+        source.byteLength,
+      ).slice().buffer;
     }
   }
 

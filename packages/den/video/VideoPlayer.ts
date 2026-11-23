@@ -316,11 +316,7 @@ export class VideoPlayer extends EventEmitter<VideoPlayerEventTypes> {
   }
 
   #registerFrameWaiter(timestampMicros: number, timeoutMs: number): FrameWaiter {
-    let resolve!: (result: DecodeFramesResult) => void;
-
-    const promise = new Promise<DecodeFramesResult>((res) => {
-      resolve = res;
-    });
+    const { promise, resolve } = Promise.withResolvers<DecodeFramesResult>();
 
     const timeoutId = setTimeout(() => {
       this.#frameWaiters.delete(timestampMicros);
