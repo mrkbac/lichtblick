@@ -201,3 +201,41 @@ it("lets Retry recover from a failed identity write while another tab stays conn
     vi.unstubAllGlobals();
   }
 });
+
+it("lets Retry boot a fresh node after the node failed", async () => {
+  const { scope, run } = stubRuntime();
+  const tab = new MessageChannel();
+  try {
+    await import("./worker");
+    const updates: SessionStatus[] = [];
+    tab.port2.onmessage = (event: MessageEvent<SessionStatus>) => {
+      updates.push(event.data);
+    };
+    scope.onconnect({ ports: [tab.port1] });
+    tab.port2.postMessage("start");
+    await vi.waitFor(() => {
+      expect(run).toHaveBeenCalledOnce();
+    });
+    const failed = run.mock.calls[0]![0] as unknown as { notifyPanicRecover(): void };
+    failed.notifyPanicRecover();
+    await vi.waitFor(() => {
+      expect(updates.at(-1)?.error).toBe("tailscaleFailed");
+    });
+    tab.port2.postMessage("start");
+    await vi.waitFor(() => {
+      expect(run).toHaveBeenCalledTimes(2);
+    });
+    expect(updates.at(-1)?.error).toBeUndefined();
+    // The replaced node is muted; only the fresh one reports.
+    failed.notifyPanicRecover();
+    run.mock.calls[1]![0].notifyState("Running");
+    await vi.waitFor(() => {
+      expect(updates.at(-1)).toMatchObject({ state: "Running", error: undefined });
+    });
+    expect(updates.filter((update) => update.error === "tailscaleFailed")).toHaveLength(1);
+  } finally {
+    tab.port1.close();
+    tab.port2.close();
+    vi.unstubAllGlobals();
+  }
+});

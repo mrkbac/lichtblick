@@ -15,6 +15,7 @@ import Logger from "@lichtblick/log";
 import { AppSetting } from "@lichtblick/suite-base/src/AppSetting";
 
 import { readAppSetting } from "./settings";
+import { resolveInside } from "../common/resolveInside";
 
 const log = Logger.getLogger(__filename);
 
@@ -170,6 +171,19 @@ export function makeCachedRosPackageFinder(
   };
 }
 
+/**
+ * Map a package: URL path to a file under `pkgRoot`. Segments are percent-decoded (so spaces work),
+ * and a segment that decodes to "..", "." or contains a separator is refused so the path cannot
+ * leave the package, also on Windows where "\\" separates.
+ */
+export function resolvePackageResource(pkgRoot: string, pathname: string): string {
+  const segments = pathname.split("/").filter(Boolean).map(decodeURIComponent);
+  if (segments.some((segment) => segment === ".." || segment === "." || /[\\/]/.test(segment))) {
+    throw new Error(`Invalid package resource path: ${pathname}`);
+  }
+  return resolveInside(pkgRoot, ...segments);
+}
+
 export function registerRosPackageProtocolHandlers(): void {
   const findCachedRosPackage = makeCachedRosPackageFinder();
 
@@ -196,7 +210,7 @@ export function registerRosPackageProtocolHandlers(): void {
         );
       }
 
-      const resolvedResourcePath = path.join(pkgRoot, ...relPath.split("/"));
+      const resolvedResourcePath = resolvePackageResource(pkgRoot, relPath);
       log.debug(`Resolved: ${resolvedResourcePath}`);
       // prepend the file:// protocol to the path
       const fileUrl = pathToFileURL(resolvedResourcePath).toString();

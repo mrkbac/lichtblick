@@ -11,6 +11,8 @@ const { mockNativeTheme, mockWindows } = await vi.hoisted(async () => {
   };
 });
 
+const mockOpenExternal = vi.hoisted(() => vi.fn());
+
 vi.mock("electron", async () => {
   const { EventEmitter: Emitter } = await import("events");
   class MockBrowserWindow extends Emitter {
@@ -33,7 +35,7 @@ vi.mock("electron", async () => {
     Menu: { buildFromTemplate: vi.fn(() => ({})), getApplicationMenu: vi.fn() },
     MenuItem: vi.fn(),
     nativeTheme: mockNativeTheme,
-    shell: { openExternal: vi.fn() },
+    shell: { openExternal: mockOpenExternal },
     systemPreferences: { getUserDefault: vi.fn() },
   };
 });
@@ -71,5 +73,22 @@ describe("StudioWindow theme listener", () => {
     mockNativeTheme.emit("updated");
     expect(win.setBackgroundColor).toHaveBeenCalledTimes(1);
     expect(mockNativeTheme.listenerCount("updated")).toBe(0);
+  });
+});
+
+describe("openExternalUrl", () => {
+  it("opens only web and mailto URLs", async () => {
+    const { openExternalUrl } = await import("./StudioWindow");
+    for (const url of ["https://example.org", "http://localhost:8080/", "mailto:foo@example.org"]) {
+      openExternalUrl(url);
+    }
+    for (const url of ["file:///etc/passwd", "smb://example/share", "javascript:alert(1)", "foo"]) {
+      openExternalUrl(url);
+    }
+    expect(mockOpenExternal.mock.calls.map(([url]) => url)).toEqual([
+      "https://example.org",
+      "http://localhost:8080/",
+      "mailto:foo@example.org",
+    ]);
   });
 });

@@ -40,6 +40,14 @@ describe("getFilesToOpen", () => {
       expect(mockIsFileToOpen).toHaveBeenCalledTimes(4); // 2 for args filtering + 2 for final filtering
     });
 
+    it("resolves relative paths against the given working directory", () => {
+      mockParseCLIFlags.mockReturnValue({ source: "b.bag" });
+      mockResolveSourcePaths.mockReturnValue([]);
+
+      expect(getFilesToOpen(["app", "a.mcap"], "/foo")).toEqual([path.resolve("/foo", "a.mcap")]);
+      expect(mockResolveSourcePaths).toHaveBeenCalledWith("b.bag", "/foo");
+    });
+
     it("should filter out invalid files from arguments", () => {
       const argv = ["app", "file1.mcap", "invalid.xyz", "file2.bag"];
       mockParseCLIFlags.mockReturnValue({});
@@ -65,7 +73,10 @@ describe("getFilesToOpen", () => {
 
       const expectedFiles = [path.resolve("source1.mcap"), path.resolve("source2.bag")];
       expect(result).toEqual(expectedFiles);
-      expect(mockResolveSourcePaths).toHaveBeenCalledWith("source1.mcap,source2.bag");
+      expect(mockResolveSourcePaths).toHaveBeenCalledWith(
+        "source1.mcap,source2.bag",
+        process.cwd(),
+      );
     });
 
     it("should handle empty --source parameter", () => {
@@ -76,7 +87,7 @@ describe("getFilesToOpen", () => {
       const result = getFilesToOpen(argv);
 
       expect(result).toEqual([]);
-      expect(mockResolveSourcePaths).toHaveBeenCalledWith("");
+      expect(mockResolveSourcePaths).toHaveBeenCalledWith("", process.cwd());
     });
 
     it("should handle missing --source parameter", () => {
@@ -87,7 +98,7 @@ describe("getFilesToOpen", () => {
       const result = getFilesToOpen(argv);
 
       expect(result).toEqual([]);
-      expect(mockResolveSourcePaths).toHaveBeenCalledWith(undefined);
+      expect(mockResolveSourcePaths).toHaveBeenCalledWith(undefined, process.cwd());
     });
   });
 
@@ -276,7 +287,7 @@ describe("getFilesToOpen", () => {
 
       getFilesToOpen(argv);
 
-      expect(mockResolveSourcePaths).toHaveBeenCalledWith(sourceParam);
+      expect(mockResolveSourcePaths).toHaveBeenCalledWith(sourceParam, process.cwd());
     });
   });
 });

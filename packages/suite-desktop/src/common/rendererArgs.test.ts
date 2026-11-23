@@ -15,4 +15,9 @@ describe("encodeRendererArg & decodeRendererArg", () => {
       "lichtblick://example",
     ]);
   });
+
+  it("round-trips non-Latin-1 deep links", () => {
+    const links = ["lichtblick://open?ds.url=https://example.org/日本/ü 🚗.mcap"];
+    expect(decodeRendererArg("deepLinks", [encodeRendererArg("deepLinks", links)])).toEqual(links);
+  });
 });

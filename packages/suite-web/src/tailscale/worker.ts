@@ -25,6 +25,8 @@ let signingOut: Promise<void> | undefined;
 let node: IPN | undefined;
 let profile: Awaited<ReturnType<typeof openProfile>> | undefined;
 let nodeState = "";
+// Bumped on each (re)start; callbacks of a replaced Go runtime see a newer value and go quiet.
+let generation = 0;
 
 function abortStreams() {
   for (const streams of clients.values()) {
@@ -74,6 +76,8 @@ function updatePeers(json: string, source: "netmap" | "status") {
 }
 
 async function start() {
+  const gen = ++generation;
+  const stale = () => gen !== generation;
   try {
     profile = await openProfile();
   } catch {
@@ -91,7 +95,9 @@ async function start() {
   ).arrayBuffer();
   const { instance } = await WebAssembly.instantiate(wasm, go.importObject);
   void go.run(instance).catch(() => {
-    update({ error: "tailscaleFailed" });
+    if (!stale()) {
+      update({ error: "tailscaleFailed" });
+    }
   });
   const ipn = newIPN({
     ephemeral: false,
@@ -105,6 +111,9 @@ async function start() {
   node = ipn;
   ipn.run({
     notifyState: (state) => {
+      if (stale()) {
+        return;
+      }
       nodeState = state;
       if (signedOut) {
         return;
@@ -119,13 +128,13 @@ async function start() {
       }
     },
     notifyNetMap: (json) => {
-      if (signedOut) {
+      if (signedOut || stale()) {
         return;
       }
       updatePeers(json, "netmap");
     },
     notifyBrowseToURL: (login) => {
-      if (signedOut) {
+      if (signedOut || stale()) {
         return;
       }
       if (new URL(login).origin === "https://login.tailscale.com") {
@@ -135,7 +144,9 @@ async function start() {
       }
     },
     notifyPanicRecover: () => {
-      update({ error: "tailscaleFailed" });
+      if (!stale()) {
+        update({ error: "tailscaleFailed" });
+      }
     },
   });
 }
@@ -195,6 +206,17 @@ scope.onconnect = ({ ports }) => {
         }
       }
     } else if (data === "start") {
+      if (started && status.error === "tailscaleFailed" && !signedOut && !signingOut) {
+        // The Go runtime exited or the node failed; nothing in it is reusable. Drop it and boot a
+        // fresh one. ponytail: IPN has no stop(), so a node that only recovered a panic lingers
+        // (its callbacks muted, its profile closed) until this worker retires.
+        abortStreams();
+        node = undefined;
+        nodeState = "";
+        profile?.close();
+        profile = undefined;
+        started = false;
+      }
       if (started) {
         client.postMessage(status);
         if (node && status.error === "tailscaleStorageError") {

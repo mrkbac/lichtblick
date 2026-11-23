@@ -16,6 +16,11 @@ import type { Storage } from "../common/types";
 
 const log = Logger.getLogger(__filename);
 
+// Datastores and keys become path segments under userData, so allow only plain names: no
+// separators, no leading dot, no "..".
+const DATASTORE_PATTERN = /^[a-z][a-z-]*$/;
+const KEY_PATTERN = /^[\w-]+(?:\.[\w-]+)*$/;
+
 export default class LocalFileStorage implements Storage {
   #userDataPath = ipcRenderer.invoke("getUserDataPath") as Promise<string>;
 
@@ -37,9 +42,7 @@ export default class LocalFileStorage implements Storage {
 
   async #makeFilePath(datastore: string, key: string): Promise<string> {
     const datastoreDir = await this.#ensureDatastorePath(datastore);
-    // check that datastore matches regex [a-z]*
-    // since keys becomes paths under our datastore, we use this to sanitize
-    if (!/[a-z-]/.test(key)) {
+    if (!KEY_PATTERN.test(key)) {
       throw new Error(`key (${key}) contains invalid characters`);
     }
 
@@ -48,9 +51,7 @@ export default class LocalFileStorage implements Storage {
 
   async #ensureDatastorePath(datastore: string): Promise<string> {
     const basePath = await this.#userDataPath;
-    // check that datastore matches regex [a-z]*
-    // since datastore becomes a path under our userDataPath, we use this to sanitize
-    if (!/[a-z-]/.test(datastore)) {
+    if (!DATASTORE_PATTERN.test(datastore)) {
       throw new Error(`datastore (${datastore}) contains invalid characters`);
     }
 

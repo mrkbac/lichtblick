@@ -25,7 +25,8 @@ export function encodeRendererArg<K extends keyof RendererArgTypes>(
   argName: K,
   value: RendererArgTypes[K],
 ): string {
-  return `--${argName}=${btoa(JSON.stringify(value)!)}`;
+  // UTF-8 first: btoa throws on deep links with characters outside Latin-1.
+  return `--${argName}=${Buffer.from(JSON.stringify(value)!).toString("base64")}`;
 }
 
 export function decodeRendererArg<K extends keyof RendererArgTypes>(
@@ -35,7 +36,7 @@ export function decodeRendererArg<K extends keyof RendererArgTypes>(
   const argPrefix = `--${argName}=`;
   const argValue = args.find((str) => str.startsWith(argPrefix))?.substring(argPrefix.length);
   try {
-    return argValue ? JSON.parse(atob(argValue)) : undefined;
+    return argValue ? JSON.parse(Buffer.from(argValue, "base64").toString()) : undefined;
   } catch (error) {
     log.error(error);
     return undefined;

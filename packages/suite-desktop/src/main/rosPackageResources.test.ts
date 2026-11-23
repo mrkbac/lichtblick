@@ -11,6 +11,7 @@ import {
   findRosPackage,
   makeCachedRosPackageFinder,
   registerRosPackageProtocolSchemes,
+  resolvePackageResource,
   rosPackageNameAtPath,
 } from "./rosPackageResources";
 
@@ -30,6 +31,21 @@ describe("rosPackageResources", () => {
         { scheme: "package", privileges: { supportFetchAPI: true, corsEnabled: true } },
       ]);
     });
+  });
+
+  describe("resolvePackageResource", () => {
+    it("decodes each path segment", () => {
+      expect(
+        resolvePackageResource("/pkg", new URL("package://foo/my meshes/a%23b.dae").pathname),
+      ).toBe(path.join("/pkg", "my meshes", "a#b.dae"));
+    });
+
+    it.each(["/%2e%2e/secret", "/a/..%2F..%2Fsecret", "/a/..%5C..%5Csecret", "/%2E", "/%zz"])(
+      "refuses %s",
+      (pathname) => {
+        expect(() => resolvePackageResource("/pkg", pathname)).toThrow();
+      },
+    );
   });
 
   describe("makeCachedRosPackageFinder", () => {
