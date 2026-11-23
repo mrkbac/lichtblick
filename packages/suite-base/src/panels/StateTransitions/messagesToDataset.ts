@@ -28,11 +28,13 @@ type Datum = ChartDataset["data"][0];
 type ConversionState = {
   lastValue?: string | number | bigint | boolean;
   lastDatum?: Datum;
-  lastDatumIndex: number;
   lastIndex: number;
   repeatBlock?: PathSampleColumns;
   repeatIndex: number;
   segment?: Datum;
+  /** The x of the last pushed point, and whether any point went back from it. */
+  lastX: number;
+  unsorted: boolean;
 };
 
 export type LiveDatasetCache = {
@@ -42,7 +44,6 @@ export type LiveDatasetCache = {
     revision: number;
     end: number;
     data: ChartDataset["data"];
-    pointIndices: number[];
     origin: Time;
     state: ConversionState;
   };
@@ -84,36 +85,55 @@ export function messagesToDataset(
     (cached.args.darkenLabels ?? false) === darkenLabels
       ? cached
       : undefined;
-  const origin = checkpoint?.origin ?? startTime;
+  if (
+    checkpoint &&
+    (checkpoint.origin.sec !== startTime.sec || checkpoint.origin.nsec !== startTime.nsec)
+  ) {
+    // Live players can move the playback start forward as their rewind buffer fills. Shift the
+    // cached points onto the new axis in place: no per-point allocation or timestamp lookup.
+    // ponytail: each shift may round x by an ulp (~1e-13 s); rebuild from timestamps if that drift
+    // ever shows.
+    const shift = toSec(subtractTimes(startTime, checkpoint.origin));
+    for (const point of checkpoint.data) {
+      point!.x -= shift;
+    }
+    const { state: cachedState } = checkpoint;
+    cachedState.lastX -= shift;
+    if (cachedState.lastDatum) {
+      cachedState.lastDatum = { ...cachedState.lastDatum, x: cachedState.lastDatum.x - shift };
+    }
+    checkpoint.origin = startTime;
+  }
   const useHeaderStamp = path.timestampMethod === "headerStamp";
-  const xOf = (messages: PathSampleColumns, i: number, zero = origin) => {
+  const xOf = (messages: PathSampleColumns, i: number) => {
     const timestamp = useHeaderStamp ? messages.headerStamp(i) : messages.receiveTime(i);
-    return timestamp ? toSec(subtractTimes(timestamp, zero)) : undefined;
+    return timestamp ? toSec(subtractTimes(timestamp, startTime)) : undefined;
   };
 
   // A repeat with hidden points updates the segment end only, so hold it until the segment ends.
   const state: ConversionState = checkpoint
     ? { ...checkpoint.state }
-    : { lastDatumIndex: -1, lastIndex: -1, repeatIndex: 0 };
+    : { lastIndex: -1, repeatIndex: 0, lastX: -Infinity, unsorted: false };
   const data = checkpoint?.data ?? dataset.data;
-  const pointIndices = liveBlock ? (checkpoint?.pointIndices ?? []) : undefined;
-  const pushPoint = (point: NonNullable<Datum>, index: number) => {
+  const pushPoint = (point: NonNullable<Datum>) => {
     data.push(point);
-    pointIndices?.push(index);
+    if (point.x < state.lastX) {
+      state.unsorted = true;
+    }
+    state.lastX = point.x;
   };
   const takeRepeat = () => {
     if (state.repeatBlock && state.segment) {
       const { labelColor, value, constantName } = state.segment;
       const x = xOf(state.repeatBlock, state.repeatIndex)!;
       state.lastDatum = { x, y, label: undefined, labelColor, value, constantName };
-      state.lastDatumIndex = state.repeatIndex;
     }
     state.repeatBlock = undefined;
   };
   const flush = () => {
     takeRepeat();
     if (state.lastDatum != undefined) {
-      pushPoint(state.lastDatum, state.lastDatumIndex);
+      pushPoint(state.lastDatum);
     }
     state.lastDatum = undefined;
   };
@@ -142,7 +162,7 @@ export function messagesToDataset(
       // A thinned stretch that held several values: draw it as one, like the chart's own [...].
       if (messages.isMixed(i)) {
         flush();
-        pushPoint({ x, y, label: "[...]", labelColor: grey, value: undefined }, i);
+        pushPoint({ x, y, label: "[...]", labelColor: grey, value: undefined });
         state.lastValue = undefined;
         state.lastIndex = i;
         state.segment = undefined;
@@ -155,7 +175,7 @@ export function messagesToDataset(
       // eslint-disable-next-line @lichtblick/strict-equality
       if (rawValue === null) {
         flush();
-        pushPoint({ x, y: Number.NaN }, i);
+        pushPoint({ x, y: Number.NaN });
         state.lastValue = undefined;
         state.lastIndex = -1;
         continue;
@@ -193,11 +213,10 @@ export function messagesToDataset(
         value,
         constantName,
       };
-      state.lastDatumIndex = i;
       state.segment = state.lastDatum;
 
       if (isNewSegment || showPoints) {
-        pushPoint(state.lastDatum, i);
+        pushPoint(state.lastDatum);
 
         // after we add a datum we clear the last datum so we don't try to add it again at the end
         state.lastDatum = undefined;
@@ -205,7 +224,7 @@ export function messagesToDataset(
     }
   };
 
-  if (liveCache && liveBlock && pointIndices) {
+  if (liveCache && liveBlock) {
     // Appends can overwrite the last two rows. Cache only the stable prefix and rewind the
     // temporary tail once the chart has its own data array.
     const stableEnd = Math.max(0, liveBlock.size() - 2);
@@ -216,24 +235,15 @@ export function messagesToDataset(
       revision: liveBlock.prefixRevision(),
       end: stableEnd,
       data,
-      pointIndices,
-      origin,
+      origin: startTime,
       state: { ...state },
     };
     const stableLength = data.length;
     append(liveBlock, stableEnd, liveBlock.size());
     flush();
-    // Live players can move the playback start forward as their rewind buffer fills. Keep the
-    // cached band values and project row timestamps onto the current axis without rounding offsets.
-    dataset.data =
-      origin.sec === startTime.sec && origin.nsec === startTime.nsec
-        ? data.slice()
-        : data.map((point, index) => ({
-            ...point!,
-            x: xOf(liveBlock, pointIndices[index]!, startTime)!,
-          }));
+    dataset.data = data.slice();
+    dataset.xSorted = !state.unsorted;
     data.length = stableLength;
-    pointIndices.length = stableLength;
     return dataset;
   }
 
@@ -247,6 +257,7 @@ export function messagesToDataset(
   // If we never added the last datum (maybe because it was the same state as before), we add
   // it to the data so the user sees the state going until this point.
   flush();
+  dataset.xSorted = !state.unsorted;
 
   return dataset;
 }
