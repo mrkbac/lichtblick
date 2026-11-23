@@ -32,6 +32,14 @@ function selectLayoutLoading(state: LayoutState): boolean | undefined {
 
 type OwnedLayout = { id: LayoutID; data: LayoutData };
 
+function storeLayoutData(data: LayoutData): void {
+  const serialized = JSON.stringify(data);
+  if (serialized == undefined) {
+    throw new Error("Failed to serialize layout data");
+  }
+  localStorage.setItem(LOCAL_STORAGE_STUDIO_LAYOUT_KEY, serialized);
+}
+
 const log = Log.getLogger(__filename);
 
 /** Layout edits reach storage at most this long after they happen. */
@@ -74,7 +82,7 @@ export function CurrentLayoutLocalStorageSyncAdapter(): React.JSX.Element {
 
   const save = useDebouncedCallback(
     async ({ id, data }: OwnedLayout) => {
-      localStorage.setItem(LOCAL_STORAGE_STUDIO_LAYOUT_KEY, JSON.stringify(data));
+      storeLayoutData(data);
       if (skipSaveFor.current === id) {
         skipSaveFor.current = undefined;
         return;
@@ -113,7 +121,7 @@ export function CurrentLayoutLocalStorageSyncAdapter(): React.JSX.Element {
       mounted.current = true;
       prevId.current = layout?.id;
       if (layout) {
-        localStorage.setItem(LOCAL_STORAGE_STUDIO_LAYOUT_KEY, JSON.stringify(layout.data));
+        storeLayoutData(layout.data);
       }
       return;
     }

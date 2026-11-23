@@ -181,7 +181,7 @@ describe("CurrentLayoutLocalStorageSyncAdapter", () => {
     await act(async () => {
       rerender();
     });
-    select("other-layout", { ...mockLayoutData, other: true });
+    select("other-layout", { ...mockLayoutData, globalVariables: { other: true } });
     await act(async () => {
       rerender();
     });
