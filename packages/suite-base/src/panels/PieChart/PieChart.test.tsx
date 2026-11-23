@@ -15,14 +15,10 @@ import { BuiltinPanelExtensionContext } from "@lichtblick/suite-base/components/
 import { useLegendCount } from "@lichtblick/suite-base/components/SettingsTreeEditor/inputs/useLegendCount";
 
 import { PieChart, buildChartConfig, formatTooltip } from "./PieChart";
-import { useSettingsTree } from "./useSettingsTree";
 
 // Jest mock for hooks and context
 vi.mock("@lichtblick/suite-base/components/SettingsTreeEditor/inputs/useLegendCount", () => ({
   useLegendCount: vi.fn(),
-}));
-vi.mock("./useSettingsTree", () => ({
-  useSettingsTree: vi.fn(),
 }));
 
 const mockContext: Partial<BuiltinPanelExtensionContext> = {
@@ -40,14 +36,6 @@ describe("PieChart", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     (useLegendCount as unknown as Mock).mockReturnValue({ legendCount: 10 });
-    (useSettingsTree as Mock).mockReturnValue({
-      general: {
-        fields: {
-          path: { label: "Message path", input: "messagepath", value: "" },
-          title: { label: "Title", input: "string", value: "Pie Chart" },
-        },
-      },
-    });
   });
 
   it("renders the PieChart component with default configuration", () => {

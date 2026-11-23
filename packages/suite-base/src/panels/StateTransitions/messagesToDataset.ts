@@ -15,7 +15,6 @@ import { expandedLineColors } from "@lichtblick/suite-base/util/plotColors";
 import { grey } from "@lichtblick/suite-base/util/toolsColorScheme";
 
 import { conditionMatches, parseCondition } from "./condition";
-import positiveModulo from "./positiveModulo";
 import { MessageDatasetArgs, ValidQueriedDataValue } from "./types";
 
 export const baseColors = [...expandedLineColors];
@@ -277,7 +276,7 @@ export function getColor(value: ValidQueriedDataValue): string {
   const numeric = typeof value === "string" ? Number.NaN : Number(value);
   // ±Infinity (and huge bigints) have no integer index; hash them like strings instead
   const valueForColor = Number.isFinite(numeric) ? Math.round(numeric) : hashString(String(value));
-  return baseColors[positiveModulo(valueForColor, baseColorsLength)]!;
+  return baseColors[((valueForColor % baseColorsLength) + baseColorsLength) % baseColorsLength]!;
 }
 
 export function createLabel(

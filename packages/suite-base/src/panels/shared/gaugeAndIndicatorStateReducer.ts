@@ -98,6 +98,18 @@ function evaluateLatestMessage(
   }
 }
 
+export function initialState({ path }: { path: string }): GaugeAndIndicatorState {
+  return {
+    globalVariables: undefined,
+    path,
+    parsedPath: parseMessagePath(path),
+    latestMessage: undefined,
+    latestMatchingQueriedData: undefined,
+    pathParseError: undefined,
+    error: undefined,
+  };
+}
+
 export function stateReducer(
   state: GaugeAndIndicatorState,
   action: GaugeAndIndicatorAction,

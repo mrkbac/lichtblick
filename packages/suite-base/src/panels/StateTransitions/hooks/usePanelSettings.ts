@@ -20,14 +20,14 @@ import {
 import { usePanelSettingsTreeUpdate } from "@lichtblick/suite-base/providers/PanelStateContextProvider";
 import { SaveConfig } from "@lichtblick/suite-base/types/panels";
 
-import { IUsePanelSettings, PathState, SeriesActionId, StateTransitionConfig } from "../types";
+import { PathState, SeriesActionId, StateTransitionConfig } from "../types";
 
 export function usePanelSettings(
   config: StateTransitionConfig,
   saveConfig: SaveConfig<StateTransitionConfig>,
   paths: PathState[],
   focusedPath?: readonly string[],
-): IUsePanelSettings {
+): void {
   const updatePanelSettingsTree = usePanelSettingsTreeUpdate();
   const { t } = useTranslation("stateTransitions");
 
@@ -105,6 +105,4 @@ export function usePanelSettings(
       nodes: buildSettingsTree(config, paths, t),
     });
   }, [actionHandler, paths, config, focusedPath, t, updatePanelSettingsTree]);
-
-  return { actionHandler };
 }

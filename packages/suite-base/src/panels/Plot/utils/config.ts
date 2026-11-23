@@ -85,7 +85,7 @@ export function isReferenceLinePlotPathType(path: Immutable<PlotPath>): boolean 
 /**
  * Coalesces null, undefined and empty string to undefined.
  */
-function presence<T>(value: undefined | T): undefined | T {
+export function presence<T>(value: undefined | T): undefined | T {
   if (value === "") {
     return undefined;
   }
@@ -96,11 +96,6 @@ function presence<T>(value: undefined | T): undefined | T {
 export function plotPathDisplayName(path: Readonly<PlotPath>, index: number): string {
   return presence(path.label) ?? presence(path.value) ?? `Series ${index + 1}`;
 }
-type DeprecatedPlotConfig = {
-  showSidebar?: boolean;
-  sidebarWidth?: number;
-};
-
 /** "auto" fits the visible data; "hold" never shrinks the axes while the view slides */
 export type PlotYRangeMode = "auto" | "hold";
 
@@ -118,7 +113,7 @@ export function yBound(value: string | number | undefined): number | undefined {
   return Number.isFinite(bound) ? bound : undefined;
 }
 
-export type PlotConfig = DeprecatedPlotConfig & {
+export type PlotConfig = {
   paths: PlotPath[];
   minXValue?: number;
   maxXValue?: number;
