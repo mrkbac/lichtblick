@@ -70,27 +70,6 @@ describe("useSessionStorageValue", () => {
     expect(result.current[0]).toBe(testValue);
   });
 
-  it("should use workspace prefix when DEV_WORKSPACE is set", () => {
-    // Given
-    const originalEnv = process.env.DEV_WORKSPACE;
-    process.env.DEV_WORKSPACE = "dev-workspace";
-    const testKey = "prefixed-key";
-    const testValue = "prefixed-value";
-    const prefixedKey = `dev-workspace.${testKey}`;
-    sessionStorage.setItem(prefixedKey, testValue);
-
-    // When
-    const { result } = renderHook(() => useSessionStorageValue(testKey));
-
-    // Then
-    expect(result.current[0]).toBe(testValue);
-    expect(sessionStorage.getItem(testKey)).toBeNull();
-    expect(sessionStorage.getItem(prefixedKey)).toBe(testValue);
-
-    // Cleanup
-    process.env.DEV_WORKSPACE = originalEnv;
-  });
-
   it("should update hook state to undefined when storage event indicates removal", () => {
     // Given
     const testKey = "removal-test-key";

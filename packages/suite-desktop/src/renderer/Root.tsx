@@ -62,16 +62,6 @@ export default function Root(props: RootProps): React.JSX.Element {
     };
   }, [appConfiguration]);
 
-  useEffect(() => {
-    const handler = () => {
-      desktopBridge.updateLanguage();
-    };
-    appConfiguration.addChangeListener(AppSetting.LANGUAGE, handler);
-    return () => {
-      appConfiguration.removeChangeListener(AppSetting.LANGUAGE, handler);
-    };
-  }, [appConfiguration]);
-
   const [extensionLoaders] = useState(() => [
     new IdbExtensionLoader("org"),
     new DesktopExtensionLoader(desktopBridge),

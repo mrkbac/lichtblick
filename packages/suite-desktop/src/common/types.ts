@@ -131,7 +131,6 @@ interface Desktop {
   reloadWindow(): void;
 
   /** Notify the app that the language setting has been changed */
-  updateLanguage(): void;
 }
 
 export type { Desktop, DesktopExtension, DesktopLayout, NativeMenuBridge, Storage, StorageContent };

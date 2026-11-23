@@ -702,9 +702,6 @@ importers:
       i18next:
         specifier: 27.2.4
         version: 27.2.4(typescript@6.0.3)
-      i18next-browser-languagedetector:
-        specifier: 8.3.1
-        version: 8.3.1
       idb:
         specifier: 8.0.4
         version: 8.0.4
@@ -5603,9 +5600,6 @@ packages:
   hyperdyperid@1.2.0:
     resolution: {integrity: sha512-Y93lCzHYgGWdrJ66yIktxiaGULYc6oGiABxhcO5AufBeOyoIdZF7bIfLaOrbM0iGIOXQQgxxRrFEnb+Y6w1n4A==}
     engines: {node: '>=10.18'}
-
-  i18next-browser-languagedetector@8.3.1:
-    resolution: {integrity: sha512-W7dfKWlmaxuy5zsKsu8vKm7SQ0R6T1Tw7XRMKCh3bt98q9m5Q73GKF1PiqtvcwzC+AZvfUCugbfcIYQkDfHeAg==}
 
   i18next@27.2.4:
     resolution: {integrity: sha512-Twhl6dx3IznvyQEv7rrYH2xBMAmOIjNuj/lPicevTa0d/fxg4Km315MlAI07SOWQcw2pypA4qf39RoMJgJ8WEQ==}
@@ -12752,10 +12746,6 @@ snapshots:
   husky@9.1.7: {}
 
   hyperdyperid@1.2.0: {}
-
-  i18next-browser-languagedetector@8.3.1:
-    dependencies:
-      '@babel/runtime': 7.29.10
 
   i18next@27.2.4(typescript@6.0.3):
     optionalDependencies:
