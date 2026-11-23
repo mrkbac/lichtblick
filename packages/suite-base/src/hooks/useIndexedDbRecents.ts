@@ -116,10 +116,11 @@ export function isSameRecent(a: UnsavedRecentRecord, b: UnsavedRecentRecord): bo
 }
 
 function useIndexedDbRecents(): IRecentsStore {
-  const { value: initialRecents, loading } = useAsync(
-    async () => await IDB_STORE.get<(RecentRecord & OldRecentRecord)[]>(IDB_KEY),
-    [],
-  );
+  const {
+    value: initialRecents,
+    loading,
+    error: loadError,
+  } = useAsync(async () => await IDB_STORE.get<(RecentRecord & OldRecentRecord)[]>(IDB_KEY), []);
 
   const [recents, setRecents] = useState<RecentRecord[]>([]);
   const [recentsLoaded, setRecentsLoaded] = useState(false);
@@ -141,10 +142,14 @@ function useIndexedDbRecents(): IRecentsStore {
     newRecentsRef.current = recentsToSave;
 
     setRecents(recentsToSave);
+    // The stored recents couldn't be read: writing would replace all of them with this session's
+    if (loadError != undefined) {
+      return;
+    }
     IDB_STORE.set(IDB_KEY, recentsToSave).catch((err: unknown) => {
       log.error(err);
     });
-  }, [loading]);
+  }, [loading, loadError]);
 
   // Set the first load records from the store to the state
   useLayoutEffect(() => {

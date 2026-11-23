@@ -348,10 +348,15 @@ function UserScriptEditor(props: Props) {
             saveConfig({ selectedNodeId: scriptId });
           }}
           deleteScript={(scriptId) => {
-            setUserScripts({ ...userScripts, [scriptId]: undefined });
+            if (scriptId !== selectedNodeId) {
+              // keep unsaved edits of the open script; it stays selected
+              saveCurrentNode();
+              setUserScripts({ [scriptId]: undefined });
+              return;
+            }
+            setUserScripts({ [scriptId]: undefined });
             saveConfig({
-              selectedNodeId:
-                Object.keys(userScripts).length > 1 ? Object.keys(userScripts)[0] : undefined,
+              selectedNodeId: Object.keys(userScripts).find((id) => id !== scriptId),
             });
           }}
           selectedScriptId={selectedNodeId}

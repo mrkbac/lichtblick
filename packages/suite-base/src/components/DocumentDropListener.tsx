@@ -17,6 +17,7 @@
 import { useSnackbar } from "notistack";
 import { useCallback, useLayoutEffect, useState } from "react";
 
+import { pushAll } from "@lichtblick/den/collection";
 import Logger from "@lichtblick/log";
 import DropOverlay from "@lichtblick/suite-base/components/DropOverlay";
 import { rememberFolder } from "@lichtblick/suite-base/util/compareSides";
@@ -102,9 +103,18 @@ export default function DocumentDropListener(props: DocumentDropListenerProps): 
 
       for (const directory of directories) {
         // Read the list of files and folders in this directory (non-recursively)
-        const entries = await new Promise<FileSystemEntry[]>((resolve, reject) => {
-          directory.createReader().readEntries(resolve, reject);
-        });
+        // readEntries returns at most ~100 entries per call; read until it returns none
+        const reader = directory.createReader();
+        const entries: FileSystemEntry[] = [];
+        for (;;) {
+          const batch = await new Promise<FileSystemEntry[]>((resolve, reject) => {
+            reader.readEntries(resolve, reject);
+          });
+          if (batch.length === 0) {
+            break;
+          }
+          pushAll(entries, batch);
+        }
 
         // Add all files in this directory to our list of files
         for (const entry of entries) {
@@ -125,10 +135,10 @@ export default function DocumentDropListener(props: DocumentDropListenerProps): 
       }
 
       const filteredFiles = allFiles.filter((file) =>
-        allowedExtensions.includes(extname(file.name)),
+        allowedExtensions.includes(extname(file.name).toLowerCase()),
       );
       const filteredHandles = handles?.filter((handle) =>
-        allowedExtensions.includes(extname(handle.name)),
+        allowedExtensions.includes(extname(handle.name).toLowerCase()),
       );
 
       // Check for no supported files

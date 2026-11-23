@@ -66,7 +66,13 @@ function Publish(props: Props) {
   const { saveConfig, config } = props;
   const { topics, datatypes: dataSourceDatatypes, capabilities } = useDataSourceInfo();
   const { classes } = useActionButtonStyles({ buttonColor: config.buttonColor });
-  const [debouncedTopicName] = useDebounce(config.topicName ?? "", 500);
+  // Topic and schema change together: debouncing only the topic would advertise the new schema on
+  // the old topic
+  const target = useMemo(
+    () => ({ topic: config.topicName ?? "", schemaName: config.datatype }),
+    [config.topicName, config.datatype],
+  );
+  const [debouncedTarget] = useDebounce(target, 500);
   const dataSourceProfile = useMessagePipeline(selectDataSourceProfile);
   const presence = useMessagePipeline(selectPlayerPresence);
   const [invalidFieldCount, setInvalidFieldCount] = useState(0);
@@ -97,8 +103,8 @@ function Publish(props: Props) {
 
   const publish = usePublisher({
     name: "Publish",
-    topic: debouncedTopicName,
-    schemaName: config.datatype,
+    topic: debouncedTarget.topic,
+    schemaName: debouncedTarget.schemaName,
     datatypes,
   });
 

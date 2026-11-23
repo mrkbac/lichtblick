@@ -52,6 +52,28 @@ describe("buildSampleMessage", () => {
     });
   });
 
+  it("stops at recursive types", () => {
+    const recursive = new Map(
+      Object.entries({
+        Node: {
+          definitions: [
+            { name: "parent", type: "Node" },
+            { name: "children", type: "Node", isArray: true },
+            { name: "leaf", type: "Leaf" },
+            { name: "other", type: "Leaf" },
+          ],
+        },
+        Leaf: { definitions: [{ name: "up", type: "Node" }] },
+      }),
+    );
+    expect(buildSampleMessage(recursive, "Node")).toEqual({
+      parent: undefined,
+      children: [],
+      leaf: { up: undefined },
+      other: { up: undefined },
+    });
+  });
+
   it("handles builtin types", () => {
     for (const type in builtinSampleValues) {
       expect(buildSampleMessage(new Map(), type)).toEqual(builtinSampleValues[type]);

@@ -159,14 +159,14 @@ describe("TeleopPanel", () => {
       );
     });
 
-    it("unadvertises the old topic when the topic changes (but not on the first render)", () => {
+    it("unadvertises on every re-advertise, including the first one", () => {
       const advertise = vi.fn();
       const unadvertise = vi.fn();
       const make = () => getMockContext({ advertise, unadvertise });
       const { rerender } = render(<TeleopPanel context={make()} />);
-      rerender(<TeleopPanel context={make()} />);
       expect(unadvertise).not.toHaveBeenCalled();
       rerender(<TeleopPanel context={make()} />);
+      expect(unadvertise).toHaveBeenCalledTimes(1);
       expect(unadvertise).toHaveBeenCalledWith("/cmd");
     });
 

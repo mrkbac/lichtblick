@@ -606,6 +606,7 @@ describe("buildContributionPoints topic converters", () => {
     expect(result.topicConverters).toEqual([
       {
         extensionId: extension.id,
+        extensionNamespace: extension.namespace,
         converter: expect.objectContaining({ type: "topic", outputTopic: "/out" }),
       },
     ]);
