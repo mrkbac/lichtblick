@@ -523,6 +523,32 @@ describe("3D Renderer", () => {
     }
   });
 
+  it("skips resize and drawing while the canvas is empty", async () => {
+    // Given: a panel collapsed to 0 wide, e.g. while another panel is fullscreen
+    const visible = vi.spyOn(document, "visibilityState", "get").mockReturnValue("visible");
+    const renderer = new Renderer({ ...defaultRendererProps, canvas });
+    await renderer.ready;
+    const setSize = vi.spyOn(renderer.gl, "setSize");
+    setSize.mockClear();
+    const render = vi.spyOn(renderer.gl, "render");
+
+    // When
+    renderer.input.emit("resize", new THREE.Vector2(0, 300));
+    // Then: the canvas keeps its last size
+    expect(setSize).not.toHaveBeenCalled();
+
+    // When: the drawing buffer is empty anyway (e.g. the panel mounted collapsed)
+    vi.spyOn(renderer.gl, "getDrawingBufferSize").mockImplementation((target) =>
+      target.set(0, 300),
+    );
+    renderer.animationFrame();
+    // Then
+    expect(render).not.toHaveBeenCalled();
+
+    renderer.dispose();
+    visible.mockRestore();
+  });
+
   it("skips GPU work while the tab is hidden and repaints when it is shown", async () => {
     const visibility = vi.spyOn(document, "visibilityState", "get");
     const requestAnimationFrameSpy = vi
