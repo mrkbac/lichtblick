@@ -178,6 +178,25 @@ export function pointDecayTime(settings: Renderer["config"]["topics"][string] | 
     : 0;
 }
 
+/** A layer's queue between frames: every message of topics with a decay time, else only the latest */
+export function keepDecayingTopics<T>(
+  renderer: Renderer,
+  msgs: MessageEvent<T>[],
+): MessageEvent<T>[] {
+  if (msgs.length === 0) {
+    return msgs;
+  }
+  const finalQueue: MessageEvent<T>[] = [];
+  for (const [topic, topicMsgs] of Map.groupBy(msgs, (msg) => msg.topic)) {
+    if (pointDecayTime(renderer.config.topics[topic]) > 0) {
+      finalQueue.push(...topicMsgs);
+    } else {
+      finalQueue.push(topicMsgs[topicMsgs.length - 1]!);
+    }
+  }
+  return finalQueue;
+}
+
 /**
  * Tells apart distinct records received at the same time with the same header stamp (e.g. the
  * segments of one sweep published together): a 53-bit hash of the whole payload, about 0.3 ms per

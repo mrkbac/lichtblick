@@ -557,8 +557,8 @@ export class VoxelGrids extends SceneExtension<VoxelGridRenderable> {
   public static extensionId = "lichtblick.VoxelGrids";
   #fieldsByTopic = new Map<string, string[]>();
 
-  public constructor(renderer: Renderer, name: string = VoxelGrids.extensionId) {
-    super(name, renderer);
+  public constructor(renderer: Renderer) {
+    super(VoxelGrids.extensionId, renderer);
   }
 
   public override getSubscriptions(): readonly AnyRendererSubscription[] {

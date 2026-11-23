@@ -441,8 +441,8 @@ export class FoxgloveGrid extends SceneExtension<FoxgloveGridRenderable> {
   public static extensionId = "foxglove.Grid";
   #fieldsByTopic = new Map<string, string[]>();
 
-  public constructor(renderer: Renderer, name: string = FoxgloveGrid.extensionId) {
-    super(name, renderer);
+  public constructor(renderer: Renderer) {
+    super(FoxgloveGrid.extensionId, renderer);
   }
 
   public override getSubscriptions(): readonly AnyRendererSubscription[] {

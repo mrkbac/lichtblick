@@ -152,8 +152,8 @@ export class GridMaps extends SceneExtension<GridMapRenderable> {
   public static extensionId = "lichtblick.GridMaps";
   #layersByTopic = new Map<string, string[]>();
 
-  public constructor(renderer: Renderer, name: string = GridMaps.extensionId) {
-    super(name, renderer);
+  public constructor(renderer: Renderer) {
+    super(GridMaps.extensionId, renderer);
   }
 
   public override getSubscriptions(): readonly AnyRendererSubscription[] {

@@ -163,9 +163,8 @@ export class FrameAxes extends SceneExtension<FrameAxisRenderable> {
   public constructor(
     renderer: Renderer,
     defaultRenderableSettings: Partial<LayerSettingsTransform>,
-    name: string = FrameAxes.extensionId,
   ) {
-    super(name, renderer);
+    super(FrameAxes.extensionId, renderer);
 
     const linewidth = this.renderer.config.scene.transforms?.lineWidth ?? DEFAULT_LINE_WIDTH_PX;
     const color = stringToRgb(

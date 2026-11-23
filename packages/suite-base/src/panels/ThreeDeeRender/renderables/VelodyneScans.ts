@@ -29,6 +29,7 @@ import {
 import { VelodyneScan } from "@lichtblick/suite-base/types/Messages";
 
 import { autoSelectColorSettings } from "./colorMode";
+import { keepDecayingTopics } from "./pointExtensionUtils";
 import type { AnyRendererSubscription } from "../IRenderer";
 import type { Renderer } from "../Renderer";
 import { SceneExtension } from "../SceneExtension";
@@ -140,8 +141,8 @@ export class VelodyneScans extends SceneExtension<PointCloudHistoryRenderable> {
   #pointCloudFieldsByTopic = new Map<string, string[]>();
   #velodyneCloudConverter = new VelodyneCloudConverter();
 
-  public constructor(renderer: Renderer, name: string = VelodyneScans.extensionId) {
-    super(name, renderer);
+  public constructor(renderer: Renderer) {
+    super(VelodyneScans.extensionId, renderer);
   }
 
   public override getSubscriptions(): readonly AnyRendererSubscription[] {
@@ -151,32 +152,10 @@ export class VelodyneScans extends SceneExtension<PointCloudHistoryRenderable> {
         schemaNames: VELODYNE_SCAN_DATATYPES,
         subscription: {
           handler: this.#handleVelodyneScan,
-          filterQueue: this.#processMessageQueue.bind(this),
+          filterQueue: (msgs) => keepDecayingTopics(this.renderer, msgs),
         },
       },
     ];
-  }
-
-  #processMessageQueue<T>(msgs: MessageEvent<T>[]): MessageEvent<T>[] {
-    if (msgs.length === 0) {
-      return msgs;
-    }
-    const msgsByTopic = Map.groupBy(msgs, (msg) => msg.topic);
-    const finalQueue: MessageEvent<T>[] = [];
-    for (const [topic, topicMsgs] of msgsByTopic) {
-      const userSettings = (this.renderer.config.topics[topic] ??
-        {}) as Partial<LayerSettingsVelodyneScans>;
-      // if the topic has a decaytime add all messages to queue for topic
-      if ((userSettings.decayTime ?? DEFAULT_SETTINGS.decayTime) > 0) {
-        finalQueue.push(...topicMsgs);
-        continue;
-      }
-      const latestMsg = topicMsgs[topicMsgs.length - 1];
-      if (latestMsg) {
-        finalQueue.push(latestMsg);
-      }
-    }
-    return finalQueue;
   }
 
   public override settingsNodes(): SettingsTreeEntry[] {

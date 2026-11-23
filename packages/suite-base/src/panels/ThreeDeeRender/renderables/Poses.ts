@@ -42,9 +42,7 @@ import {
   PoseWithCovarianceStamped,
   PoseStamped,
   POSE_WITH_COVARIANCE_STAMPED_DATATYPES,
-  MarkerAction,
   MarkerType,
-  TIME_ZERO,
   POSE_STAMPED_DATATYPES,
   PoseWithCovariance,
   ColorRGBA,
@@ -57,6 +55,7 @@ import { BaseSettings } from "../settings";
 import { POSE_DEFAULTS, poseSettingsNode } from "../settingsNodes/topics";
 import { topicIsConvertibleToSchema } from "../topicIsConvertibleToSchema";
 import { makePose } from "../transforms";
+import { normalizeMarker } from "./Markers";
 import { RenderableArrow } from "./markers/RenderableArrow";
 import { RenderableSphere } from "./markers/RenderableSphere";
 
@@ -110,8 +109,8 @@ export class PoseRenderable extends Renderable<PoseUserData> {
 
 export class Poses extends SceneExtension<PoseRenderable> {
   public static extensionId = "foxglove.Poses";
-  public constructor(renderer: Renderer, name: string = Poses.extensionId) {
-    super(name, renderer);
+  public constructor(renderer: Renderer) {
+    super(Poses.extensionId, renderer);
   }
 
   public override getSubscriptions(): readonly AnyRendererSubscription[] {
@@ -416,23 +415,12 @@ export class Poses extends SceneExtension<PoseRenderable> {
 
 export function createArrowMarker(arrowScale: [number, number, number], color: ColorRGBA): Marker {
   const [x, y, z] = arrowScale;
-  return {
-    header: { frame_id: "", stamp: { sec: 0, nsec: 0 } },
-    ns: "",
-    id: 0,
+  return normalizeMarker({
     type: MarkerType.ARROW,
-    action: MarkerAction.ADD,
-    pose: makePose(),
     scale: { x, y, z },
     color,
-    lifetime: TIME_ZERO,
     frame_locked: true,
-    points: [],
-    colors: [],
-    text: "",
-    mesh_resource: "",
-    mesh_use_embedded_materials: false,
-  };
+  });
 }
 
 function createPointMarker(settings: LayerSettingsPose): Marker {
@@ -459,23 +447,14 @@ function createSphereMarker(
   const K = poseMessage.pose.covariance;
   const scale = { x: Math.sqrt(K[0]), y: Math.sqrt(K[7]), z: Math.sqrt(K[14]) };
 
-  return {
+  return normalizeMarker({
     header: poseMessage.header,
-    ns: "",
     id: 1,
     type: MarkerType.SPHERE,
-    action: MarkerAction.ADD,
-    pose: makePose(),
     scale,
     color: stringToRgba(makeRgba(), settings.covarianceColor),
-    lifetime: TIME_ZERO,
     frame_locked: true,
-    points: [],
-    colors: [],
-    text: "",
-    mesh_resource: "",
-    mesh_use_embedded_materials: false,
-  };
+  });
 }
 
 function normalizePoseStamped(pose: PartialMessage<PoseStamped>): PoseStamped {

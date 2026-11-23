@@ -122,8 +122,8 @@ export class Images extends SceneExtension<ImageRenderable> {
 
   protected supportedImageSchemas = ALL_SUPPORTED_IMAGE_SCHEMAS;
 
-  public constructor(renderer: Renderer, name: string = Images.extensionId) {
-    super(name, renderer);
+  public constructor(renderer: Renderer) {
+    super(Images.extensionId, renderer);
     this.customCameraModels = renderer.customCameraModels;
     this.renderer.on("topicsChanged", this.#handleTopicsChanged);
     this.#handleTopicsChanged();

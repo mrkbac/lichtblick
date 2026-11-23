@@ -51,8 +51,8 @@ export class FoxgloveSceneEntities extends SceneExtension<TopicEntities> {
   public static extensionId = "foxglove.SceneEntities";
   #primitivePool = new PrimitivePool(this.renderer);
 
-  public constructor(renderer: Renderer, name: string = FoxgloveSceneEntities.extensionId) {
-    super(name, renderer);
+  public constructor(renderer: Renderer) {
+    super(FoxgloveSceneEntities.extensionId, renderer);
   }
   public override getSubscriptions(): readonly AnyRendererSubscription[] {
     return [

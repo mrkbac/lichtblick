@@ -7,15 +7,14 @@
 
 import { RenderableArrow } from "./RenderableArrow";
 import { RenderableCube } from "./RenderableCube";
-import { RenderableCubeList } from "./RenderableCubeList";
 import { RenderableCylinder } from "./RenderableCylinder";
+import { RenderableInstancedList } from "./RenderableInstancedList";
 import { RenderableLineList } from "./RenderableLineList";
 import { RenderableLineStrip } from "./RenderableLineStrip";
 import { RenderableMarker, getMarkerId } from "./RenderableMarker";
 import { RenderableMeshResource } from "./RenderableMeshResource";
 import { RenderablePoints } from "./RenderablePoints";
 import { RenderableSphere } from "./RenderableSphere";
-import { RenderableSphereList } from "./RenderableSphereList";
 import { RenderableTextViewFacing } from "./RenderableTextViewFacing";
 import { RenderableTriangleList } from "./RenderableTriangleList";
 import type { Renderer } from "../../Renderer";
@@ -28,8 +27,8 @@ const CONSTRUCTORS = {
   [MarkerType.CYLINDER]: RenderableCylinder,
   [MarkerType.LINE_STRIP]: RenderableLineStrip,
   [MarkerType.LINE_LIST]: RenderableLineList,
-  [MarkerType.CUBE_LIST]: RenderableCubeList,
-  [MarkerType.SPHERE_LIST]: RenderableSphereList,
+  [MarkerType.CUBE_LIST]: RenderableInstancedList,
+  [MarkerType.SPHERE_LIST]: RenderableInstancedList,
   [MarkerType.POINTS]: RenderablePoints,
   [MarkerType.TEXT_VIEW_FACING]: RenderableTextViewFacing,
   [MarkerType.MESH_RESOURCE]: RenderableMeshResource,

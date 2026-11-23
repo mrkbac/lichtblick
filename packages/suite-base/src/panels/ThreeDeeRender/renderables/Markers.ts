@@ -33,8 +33,8 @@ const DEFAULT_SETTINGS = MARKER_DEFAULTS;
 
 export class Markers extends SceneExtension<TopicMarkers> {
   public static extensionId = "foxglove.Markers";
-  public constructor(renderer: Renderer, name: string = Markers.extensionId) {
-    super(name, renderer);
+  public constructor(renderer: Renderer) {
+    super(Markers.extensionId, renderer);
   }
   public override getSubscriptions(): readonly AnyRendererSubscription[] {
     return [
@@ -192,24 +192,6 @@ export class Markers extends SceneExtension<TopicMarkers> {
     }
   }
 
-  public addMarkerArray(topic: string, markerArray: Marker[], receiveTime: bigint): void {
-    const firstMarker = markerArray[0];
-    if (!firstMarker) {
-      return;
-    }
-
-    const topicMarkers = this.#getTopicMarkers(topic, firstMarker, receiveTime);
-    const prevNsCount = topicMarkers.namespaces.size;
-    for (const marker of markerArray) {
-      topicMarkers.addMarkerMessage(marker, receiveTime);
-    }
-
-    // If the topic has a new namespace, rebuild the settings node for this topic
-    if (prevNsCount !== topicMarkers.namespaces.size) {
-      this.updateSettingsTree();
-    }
-  }
-
   #getTopicMarkers(topic: string, marker: Marker, receiveTime: bigint): TopicMarkers {
     let topicMarkers = this.renderables.get(topic);
     if (!topicMarkers) {
@@ -231,7 +213,7 @@ export class Markers extends SceneExtension<TopicMarkers> {
   }
 }
 
-function normalizeMarker(marker: PartialMessage<Marker>): Marker {
+export function normalizeMarker(marker: PartialMessage<Marker>): Marker {
   return {
     header: normalizeHeader(marker.header),
     ns: marker.ns ?? "",
