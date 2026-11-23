@@ -1,4 +1,5 @@
 {
   "name": "@types/foxglove__roslibjs",
+  "private": true,
   "types": "index.d.ts"
 }
