@@ -402,8 +402,7 @@ e2e/
 │       │   └── open-mcap-via-url.web.spec.ts
 │       ├── utils/
 │       └── playwright.config.ts          # Web Playwright configuration
-├── fixtures/                             # Test fixtures and data mocks
-└── helpers/                              # Generic test helper functions
+└── fixtures/                             # Test fixtures and data mocks
 ```
 
 #### Running E2E tests

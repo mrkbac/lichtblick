@@ -1,8 +1,204 @@
+// SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import { test } from "@playwright/test";
+import { expect as baseExpect, Locator, Page, test } from "@playwright/test";
 
-import { exerciseSharedMap } from "../../helpers/shared-map";
+import { loadFiles } from "../../fixtures/load-files";
+
+// Software rendering on CI (SwiftShader WebGPU for the scene, WebGL for the map) is slow per frame
+const expect = baseExpect.configure({ timeout: 20_000 });
+
+/**
+ * Color counts of what the panel shows over the map canvas: the map (WebGL) and the 3D scene
+ * (WebGPU, its own canvas stacked above) composite only on screen, so read a screenshot.
+ */
+async function pixels(canvas: Locator) {
+  const rect = (await canvas.boundingBox())!;
+  // A page screenshot clipped to the canvas (both stacked canvases). It waits for a frame, which
+  // software WebGPU can take long for.
+  const png = (await canvas.page().screenshot({ clip: rect, timeout: 90_000 })).toString("base64");
+  return await canvas.page().evaluate(
+    async ({ data, rect: box }) => {
+      const image = new Image();
+      image.src = `data:image/png;base64,${data}`;
+      await image.decode();
+      const { width, height } = image;
+      const context = new OffscreenCanvas(width, height).getContext("2d")!;
+      context.drawImage(image, 0, 0);
+      const pixel = context.getImageData(0, 0, width, height).data;
+      let blue = 0;
+      let red = 0;
+      let green = 0;
+      let redX = 0;
+      let redY = 0;
+      let lineWidth = 0;
+      const column = Math.floor(width * 0.75);
+      for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+          const i = (y * width + x) * 4;
+          if (pixel[i] > 150 && pixel[i + 1] < 80 && pixel[i + 2] < 80) {
+            red++;
+            redX += x;
+            redY += y;
+          }
+          if (pixel[i + 2] > pixel[i] * 2 && pixel[i + 2] > pixel[i + 1] * 2) {
+            blue++;
+          }
+          if (pixel[i + 1] > pixel[i] * 2 && pixel[i + 1] > pixel[i + 2] * 2) {
+            green++;
+            if (x === column) {
+              lineWidth++;
+            }
+          }
+        }
+      }
+      return {
+        blue,
+        red,
+        green,
+        lineWidth: (lineWidth * box.height) / height,
+        x: box.x + ((redX / Math.max(1, red)) * box.width) / width,
+        y: box.y + ((redY / Math.max(1, red)) * box.height) / height,
+        width,
+        height,
+      };
+    },
+    { data: png, rect },
+  );
+}
+
+/** Offline fixture: a red 3D cube at the GPS fix on a green vector road. */
+async function exerciseSharedMap(page: Page): Promise<void> {
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  await page.route("https://shared-map.test/style.json", async (route) => {
+    await route.fulfill({
+      json: {
+        version: 8,
+        glyphs: "https://shared-map.test/{fontstack}/{range}.pbf",
+        sources: {
+          world: {
+            type: "geojson",
+            data: {
+              type: "Feature",
+              properties: {},
+              geometry: {
+                type: "Polygon",
+                coordinates: [
+                  [
+                    [-20, -20],
+                    [20, -20],
+                    [20, 20],
+                    [-20, 20],
+                    [-20, -20],
+                  ],
+                ],
+              },
+            },
+          },
+          road: {
+            type: "geojson",
+            data: {
+              type: "Feature",
+              properties: {},
+              geometry: {
+                type: "LineString",
+                coordinates: [
+                  [10.995, 48],
+                  [11.005, 48],
+                ],
+              },
+            },
+          },
+        },
+        layers: [
+          { id: "background", type: "background", paint: { "background-color": "#e0f0e0" } },
+          { id: "world", type: "fill", source: "world", paint: { "fill-color": "#000077" } },
+          {
+            id: "road",
+            type: "line",
+            source: "road",
+            paint: { "line-color": "#007700", "line-width": 12 },
+          },
+        ],
+      },
+    });
+  });
+  await loadFiles({ mainWindow: page, filenames: "shared-map-layout.json" });
+  const canvas = page
+    .getByTestId("panel-mouseenter-container 3D!shared")
+    .locator("canvas.maplibregl-canvas");
+  await expect(canvas).toBeVisible();
+  await expect(page.getByText("Map rendering", { exact: true })).toHaveCount(0);
+  await loadFiles({ mainWindow: page, filenames: "shared-map.mcap" });
+  // Software WebGPU on CI compiles every pipeline on the CPU before the first frame
+  await expect
+    .poll(async () => (await pixels(canvas)).red, { timeout: 90_000 })
+    .toBeGreaterThan(100);
+  await expect.poll(async () => (await pixels(canvas)).green).toBeGreaterThan(500);
+  const before = await pixels(canvas);
+  expect(before.lineWidth).toBeGreaterThan(5);
+  expect(before.lineWidth).toBeLessThan(20);
+  await page.mouse.move(before.x + 100, before.y);
+  await page.mouse.wheel(0, -350);
+  await expect.poll(async () => (await pixels(canvas)).red).toBeGreaterThan(before.red * 1.2);
+  const after = await pixels(canvas);
+  expect(after.lineWidth).toBeGreaterThan(5);
+  expect(after.lineWidth).toBeLessThan(20);
+  expect(Math.abs(after.lineWidth - before.lineWidth)).toBeLessThanOrEqual(2);
+  // Orthographic views keep the same context and 3D scene; the map explicitly pauses.
+  const originalCanvas = await canvas.elementHandle();
+  // The toggle keeps its name; aria-pressed carries the perspective state.
+  const cameraButton = page.getByRole("button", { name: "3D camera", exact: true });
+  await expect(cameraButton).toHaveAttribute("aria-pressed", "true");
+  await cameraButton.click();
+  await expect(
+    page.getByText("Map is hidden in orthographic view. Switch to perspective to show it."),
+  ).toBeVisible();
+  await expect.poll(async () => (await pixels(canvas)).green).toBe(0);
+  await expect.poll(async () => (await pixels(canvas)).red).toBeGreaterThan(100);
+  expect(await originalCanvas.evaluate((element) => element.isConnected)).toBe(true);
+  await expect(cameraButton).toHaveAttribute("aria-pressed", "false");
+  await cameraButton.click();
+  await expect(canvas).toBeVisible();
+  await expect.poll(async () => (await pixels(canvas)).green).toBeGreaterThan(500);
+  await expect.poll(async () => (await pixels(canvas)).red).toBeGreaterThan(100);
+  await expect(page.locator("canvas.maplibregl-canvas")).toHaveCount(1);
+  // Repeated zoom-out at the native limit must not consume the next inward scroll.
+  await page.getByText("View", { exact: true }).click();
+  const distance = page.getByRole("spinbutton").first();
+  await page.mouse.move(before.x + 100, before.y);
+  for (let i = 0; i < 4; i++) {
+    await page.mouse.wheel(0, 15000);
+    await page.evaluate(async () => {
+      await new Promise<void>((resolve) => {
+        requestAnimationFrame(() => {
+          resolve();
+        });
+      });
+    });
+  }
+  const limit = Number(await distance.inputValue());
+  expect(limit).toBeLessThan(1e9);
+  const zoomedOut = (await pixels(canvas)).blue;
+  expect(zoomedOut).toBeGreaterThan(100);
+  await page.mouse.wheel(0, -350);
+  await expect
+    .poll(async () => Math.abs((await pixels(canvas)).blue - zoomedOut))
+    .toBeGreaterThan(100);
+  await distance.fill("100");
+  await distance.press("Enter");
+  await expect.poll(async () => (await pixels(canvas)).green).toBeGreaterThan(500);
+  await expect.poll(async () => (await pixels(canvas)).red).toBeGreaterThan(100);
+  await page.getByRole("button", { name: "Zoom to data", exact: true }).click();
+  await expect.poll(async () => Number(await distance.inputValue())).toBeLessThan(100);
+  await expect.poll(async () => (await pixels(canvas)).red).toBeGreaterThan(100);
+  const recovered = await pixels(canvas);
+  await page.getByRole("button", { name: "Inspect objects", exact: true }).click();
+  await page.mouse.click(recovered.x, recovered.y);
+  await expect(page.getByText("test-cube", { exact: true }).first()).toBeVisible();
+  expect(errors).toEqual([]);
+}
 
 test("renders sharp vectors and picks the shared 3D scene", { tag: "@smoke" }, async ({ page }) => {
   // Software WebGPU and WebGL in CI need more time for the projection and zoom round trips

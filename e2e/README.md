@@ -102,7 +102,6 @@ install-multiple-extensions.web.spec.ts;
   │   ├── layout-manager.ts          # Layout creation and management
   │   └── index.ts                   # Barrel export
   ├── fixtures/                      # Fixtures for testing (e.g. data mocks)
-  ├── helpers/                       # Generic functions useful for testing
   ├── reports/                       # Automatically generated test reports
   ├── global-setup.ts                # Global setup before testing
   └── global-teardown.ts             # Cleanup after testing (clear DB, stored files, etc.)
