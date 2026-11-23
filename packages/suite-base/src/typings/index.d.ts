@@ -8,7 +8,7 @@
 // Custom types available globally and required when using app components as dependencies
 
 // Global ambient types declared without any `import`/`export` (e.g. `MemoryInfo`,
-// `performance.memory`, `structuredClone`, and the WICG File System Access globals such as
+// `performance.memory`, and the WICG File System Access globals such as
 // `OpenFilePickerOptions`, `window.showOpenFilePicker`, and the `FileSystemFileHandle`
 // permission methods). As of TypeScript 6.0 these global-only `@types` packages are no longer
 // pulled in by automatic type discovery, so we reference them explicitly here to keep the

@@ -5,12 +5,6 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-interface WindowOrWorkerGlobalScope {
-  structuredClone<T>(value: T, options?: StructuredSerializeOptions): T;
-}
-
-declare function structuredClone<T>(value: T, options?: StructuredSerializeOptions): T;
-
 type MemoryInfo = {
   /// Maximum heap size in bytes
   jsHeapSizeLimit: number;
