@@ -5,10 +5,8 @@ import { COLOR_MAPS } from "@lichtblick/suite-base/panels/Gauge/constants";
 import {
   ColorStops,
   ColorModeConfig,
-  ColorMapConfig,
   BuildConicGradientProps,
 } from "@lichtblick/suite-base/panels/Gauge/types";
-import { turboColorString } from "@lichtblick/suite-base/util/colorUtils";
 
 /** Color stops from min (0) to max (1), shared by the arc and slider displays. */
 export function getColorStops(config: BuildConicGradientProps["config"]): ColorStops[] {
@@ -17,22 +15,7 @@ export function getColorStops(config: BuildConicGradientProps["config"]): ColorS
 
   switch (colorMode) {
     case ColorModeConfig.COLORMAP:
-      switch (colorMap) {
-        case ColorMapConfig.RED_YELLOW_GREEN:
-          colorStops = COLOR_MAPS[ColorMapConfig.RED_YELLOW_GREEN];
-          break;
-        case ColorMapConfig.RAINBOW:
-          colorStops = COLOR_MAPS[ColorMapConfig.RAINBOW];
-          break;
-        case ColorMapConfig.TURBO: {
-          const numStops = 20;
-          colorStops = new Array(numStops).fill(undefined).map((_x, i) => ({
-            color: turboColorString(i / (numStops - 1)),
-            location: i / (numStops - 1),
-          }));
-          break;
-        }
-      }
+      colorStops = COLOR_MAPS[colorMap] ?? [];
       break;
     case ColorModeConfig.GRADIENT:
       colorStops = [

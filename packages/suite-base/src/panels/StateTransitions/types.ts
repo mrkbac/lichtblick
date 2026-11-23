@@ -7,7 +7,7 @@
 
 import { Time } from "@foxglove/rostime";
 
-import { SettingsTreeAction, SettingsTreeNodeActionItem } from "@lichtblick/suite";
+import { SettingsTreeNodeActionItem } from "@lichtblick/suite";
 import { PathSampleColumns } from "@lichtblick/suite-base/components/MessagePathSyntax/PathSampleColumns";
 import { SaveConfig } from "@lichtblick/suite-base/types/panels";
 import { TimestampMethod } from "@lichtblick/suite-base/util/time";
@@ -43,10 +43,6 @@ export type PathLegendProps = {
   setFocusedPath: (value: string[] | undefined) => void;
   saveConfig: SaveConfig<StateTransitionConfig>;
 };
-
-export interface IUsePanelSettings {
-  actionHandler: (action: SettingsTreeAction) => void;
-}
 
 export type PathState = {
   path: StateTransitionPath;

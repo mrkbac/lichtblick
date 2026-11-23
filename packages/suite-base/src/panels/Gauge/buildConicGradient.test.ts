@@ -43,7 +43,7 @@ describe("buildConicGradient", () => {
     "should generate a gradient for the RED_YELLOW_GREEN and RAINBOW colormaps",
     (colorMap) => {
       const { props } = setup({ colorMap });
-      const colorStops = COLOR_MAPS[colorMap];
+      const colorStops = COLOR_MAPS[colorMap]!;
 
       const result = buildConicGradient(props);
 

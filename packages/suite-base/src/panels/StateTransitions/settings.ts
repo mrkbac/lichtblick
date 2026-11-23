@@ -32,9 +32,9 @@ export const defaultConfig: StateTransitionConfig = {
   isSynced: true,
 };
 
-// Note - we use memoizeWeak here instead of react memoization to allow us to memoize
-// at the level of individual nodes in our tree. This keeps our DOM updates small since
-// the NodeEditor component is wrapped in a React.memo.
+// Note - makeRootSeriesNode uses memoizeWeak instead of react memoization so the series node
+// keeps its identity while `paths` does. This keeps our DOM updates small since the NodeEditor
+// component is wrapped in a React.memo.
 
 export function setSeriesAction({ label, icon, id }: SeriesAction): SettingsTreeNodeActionItem {
   return {
@@ -46,67 +46,60 @@ export function setSeriesAction({ label, icon, id }: SeriesAction): SettingsTree
   };
 }
 
-export const makeSeriesNode = memoizeWeak(
-  (
-    index: number,
-    {
-      path,
-      canDelete,
-      canReorder,
-      isArray,
-    }: PathState & { canDelete: boolean; canReorder: boolean },
-    t: TFunction<"stateTransitions">,
-  ): DocumentedNode => {
-    const action = setSeriesAction({
-      label: t("labels.deleteSeries"),
-      id: SeriesActionId.DELETE,
-      icon: "Clear",
-    });
-    return {
-      actions: canDelete ? [action] : [],
-      label: stateTransitionPathDisplayName(path, index),
-      reorderable: canReorder,
-      icon: canReorder ? ("DragHandle" as const) : undefined,
-      fields: {
-        value: {
-          ...(isArray ? { error: t("pathErrorMessage") } : {}),
-          input: "messagepath",
-          supportsMathModifiers: true,
-          label: t("labels.messagePath"),
-          help: t("labels.messagePathHelp"),
-          validTypes: PLOTABLE_ROS_TYPES,
-          value: path.value,
-        },
-        condition: {
-          input: "string",
-          label: t("labels.condition"),
-          help: t("labels.conditionHelp"),
-          placeholder: '> 2, == "ERROR"',
-          value: path.condition,
-          ...(path.condition && !parseCondition(path.condition)
-            ? { error: t("conditionErrorMessage") }
-            : {}),
-        },
-        label: {
-          input: "string",
-          label: t("labels.label"),
-          help: t("labels.labelHelp"),
-          value: path.label,
-        },
-        timestampMethod: {
-          input: "select",
-          label: t("labels.timestamp"),
-          help: t("labels.timestampHelp"),
-          options: [
-            { label: t("labels.timestampReceiveTime"), value: "receiveTime" },
-            { label: t("labels.timestampHeaderStamp"), value: "headerStamp" },
-          ],
-          value: path.timestampMethod,
-        },
+export const makeSeriesNode = (
+  index: number,
+  { path, canDelete, canReorder, isArray }: PathState & { canDelete: boolean; canReorder: boolean },
+  t: TFunction<"stateTransitions">,
+): DocumentedNode => {
+  const action = setSeriesAction({
+    label: t("labels.deleteSeries"),
+    id: SeriesActionId.DELETE,
+    icon: "Clear",
+  });
+  return {
+    actions: canDelete ? [action] : [],
+    label: stateTransitionPathDisplayName(path, index),
+    reorderable: canReorder,
+    icon: canReorder ? ("DragHandle" as const) : undefined,
+    fields: {
+      value: {
+        ...(isArray ? { error: t("pathErrorMessage") } : {}),
+        input: "messagepath",
+        supportsMathModifiers: true,
+        label: t("labels.messagePath"),
+        help: t("labels.messagePathHelp"),
+        validTypes: PLOTABLE_ROS_TYPES,
+        value: path.value,
       },
-    };
-  },
-);
+      condition: {
+        input: "string",
+        label: t("labels.condition"),
+        help: t("labels.conditionHelp"),
+        placeholder: '> 2, == "ERROR"',
+        value: path.condition,
+        ...(path.condition && !parseCondition(path.condition)
+          ? { error: t("conditionErrorMessage") }
+          : {}),
+      },
+      label: {
+        input: "string",
+        label: t("labels.label"),
+        help: t("labels.labelHelp"),
+        value: path.label,
+      },
+      timestampMethod: {
+        input: "select",
+        label: t("labels.timestamp"),
+        help: t("labels.timestampHelp"),
+        options: [
+          { label: t("labels.timestampReceiveTime"), value: "receiveTime" },
+          { label: t("labels.timestampHeaderStamp"), value: "headerStamp" },
+        ],
+        value: path.timestampMethod,
+      },
+    },
+  };
+};
 
 export const makeRootSeriesNode = memoizeWeak(
   (paths: PathState[], t: TFunction<"stateTransitions">): DocumentedNode => {

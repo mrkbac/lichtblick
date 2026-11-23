@@ -243,15 +243,10 @@ export type PlotCoordinatorEventTypes = {
 
 export type ConfigBounds = { x: Partial<Bounds1D>; y: Partial<Bounds1D> };
 
-export type HandleAction = {
-  draft: PlotConfig;
-};
-
-export type HandleDeleteSeriesAction = HandleAction & {
-  index: number;
-};
-
-export type HandleUpdateAction = HandleAction & Omit<SettingsTreeActionUpdatePayload, "input">;
+export type HandleUpdateAction = { draft: PlotConfig } & Omit<
+  SettingsTreeActionUpdatePayload,
+  "input"
+>;
 
 export type MakeSeriesNode = {
   path: PlotPath;
@@ -274,11 +269,6 @@ export type MakeRootSeriesNode = {
   xAxisVal?: PlotXAxisVal;
   /** Reference lines can shade series (time display only) */
   canShade?: boolean;
-};
-
-export type HandleMoveSeriesAction = HandleAction & {
-  index: number;
-  direction: "up" | "down";
 };
 
 /** A series shown in the legend of an exported image */

@@ -62,11 +62,9 @@ export default class PlotBuilder {
       paths: PlotBuilder.paths(),
       showLegend: BasicBuilder.boolean(),
       showPlotValuesInLegend: BasicBuilder.boolean(),
-      showSidebar: BasicBuilder.boolean(),
       showXAxisLabels: BasicBuilder.boolean(),
       showYAxisLabels: BasicBuilder.boolean(),
       sidebarDimension: BasicBuilder.number(),
-      sidebarWidth: BasicBuilder.number(),
       xAxisPath: PlotBuilder.basePlotPath(),
       xAxisVal: BasicBuilder.sample([
         "timestamp",

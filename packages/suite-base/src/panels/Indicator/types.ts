@@ -25,13 +25,7 @@ export type IndicatorRule = {
   alertNotify?: boolean;
 };
 
-export type RawValueIndicator =
-  | undefined
-  | boolean
-  | bigint
-  | number
-  | string
-  | { data?: boolean | bigint | number | string };
+export type RawValueIndicator = undefined | boolean | bigint | number | string;
 
 export type IndicatorConfig = {
   /** undefined once cleared in the settings: DEFAULT_FALLBACK_COLOR */

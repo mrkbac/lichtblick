@@ -14,30 +14,24 @@ import {
   Tooltip,
 } from "chart.js";
 import ChartDataLabels from "chartjs-plugin-datalabels";
-import {
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useReducer,
-  useRef,
-  useState,
-  useMemo,
-} from "react";
+import { produce } from "immer";
+import * as _ from "lodash-es";
+import { useCallback, useEffect, useReducer, useRef, useState, useMemo } from "react";
 
 import { parseMessagePath } from "@lichtblick/message-path";
 import { SettingsTreeAction } from "@lichtblick/suite";
 import { BuiltinPanelExtensionContext } from "@lichtblick/suite-base/components/PanelExtensionAdapter";
 import { useLegendCount } from "@lichtblick/suite-base/components/SettingsTreeEditor/inputs/useLegendCount";
 import { replaceDrop } from "@lichtblick/suite-base/panels/shared/pathDrop";
+import { usePathPanel } from "@lichtblick/suite-base/panels/shared/usePathPanel";
 import { createMuiTheme, fontSansSerif } from "@lichtblick/theme";
 
 import { useStyles } from "./PieChart.style";
 import { DEFAULT_CONFIG } from "./constants";
 import { isNumericArrayPath } from "./isNumericArrayPath";
+import { buildSettingsTree } from "./settings";
 import type { PieChartConfig, PieChartDatum, PieChartState } from "./types";
 import { useChartData } from "./useChartData";
-import { useSettingsTree } from "./useSettingsTree";
-import { settingsActionReducer } from "./utils/settingsActionReducer";
 import { stateReducer } from "./utils/stateReducer";
 
 type PieChartProps = {
@@ -143,23 +137,8 @@ export function buildChartConfig(
 }
 
 export function PieChart({ context }: PieChartProps): React.JSX.Element {
-  // panel extensions must notify when they've completed rendering
-  // onRender will setRenderDone to a done callback which we can invoke after we've rendered
   const { classes } = useStyles();
-  const [renderDone, setRenderDone] = useState<() => void>(() => () => {});
   const { legendCount } = useLegendCount();
-  // Follow the app's light/dark theme; the canvas needs the colors as values.
-  const [colorScheme, setColorScheme] = useState<"dark" | "light">("dark");
-  const chartTheme = useMemo((): ChartTheme => {
-    const { palette } = createMuiTheme(colorScheme);
-    return {
-      text: palette.text.primary,
-      mutedText: palette.text.secondary,
-      surface: palette.background.default,
-      border: palette.divider,
-      fontFamily: fontSansSerif,
-    };
-  }, [colorScheme]);
 
   const [config, setConfig] = useState<PieChartConfig>(() => ({
     ...DEFAULT_CONFIG,
@@ -179,16 +158,38 @@ export function PieChart({ context }: PieChartProps): React.JSX.Element {
     }),
   );
 
+  // The tree has no node actions; every field lives under "general"
   const settingsActionHandler = useCallback((action: SettingsTreeAction) => {
-    setConfig((prevConfig) => settingsActionReducer(prevConfig, action));
+    if (action.action === "update") {
+      const { path, value } = action.payload;
+      setConfig(produce((draft) => _.set(draft, path.slice(1), value)));
+    }
   }, []);
 
-  const settingsTree = useSettingsTree({
+  const settingsTree = useMemo(
+    () => buildSettingsTree(config, legendCount, state.pathParseError, state.error?.message),
+    [config, legendCount, state.pathParseError, state.error?.message],
+  );
+
+  // The canvas needs the theme colors as values.
+  const colorScheme = usePathPanel({
+    context,
     config,
-    pathParseError: state.pathParseError,
-    error: state.error?.message,
-    legendCount,
+    dispatch,
+    topicName: state.parsedPath?.topicName,
+    actionHandler: settingsActionHandler,
+    nodes: settingsTree,
   });
+  const chartTheme = useMemo((): ChartTheme => {
+    const { palette } = createMuiTheme(colorScheme);
+    return {
+      text: palette.text.primary,
+      mutedText: palette.text.secondary,
+      surface: palette.background.default,
+      border: palette.divider,
+      fontFamily: fontSansSerif,
+    };
+  }, [colorScheme]);
 
   // Extract raw values from queried message data
   const rawValue = useMemo(
@@ -229,17 +230,6 @@ export function PieChart({ context }: PieChartProps): React.JSX.Element {
     [],
   );
 
-  // Dispatch path change on config.path update
-  useLayoutEffect(() => {
-    dispatch({ type: "path", path: config.path });
-  }, [config.path]);
-
-  // Save panel state and title on config update
-  useEffect(() => {
-    context.saveState(config);
-    context.setDefaultPanelTitle(config.path === "" ? undefined : config.path);
-  }, [config, context]);
-
   // Drop a numeric array field from the topic list to chart it
   useEffect(() => {
     context.unstable_setMessagePathDropConfig(
@@ -251,55 +241,6 @@ export function PieChart({ context }: PieChartProps): React.JSX.Element {
       ),
     );
   }, [context]);
-
-  // Register frame/seek render handler
-  useEffect(() => {
-    context.onRender = (renderState, done) => {
-      setRenderDone(() => done);
-
-      if (renderState.didSeek === true) {
-        dispatch({ type: "seek" });
-      }
-
-      if (renderState.currentFrame) {
-        dispatch({ type: "frame", messages: renderState.currentFrame });
-      }
-
-      if (renderState.colorScheme) {
-        setColorScheme(renderState.colorScheme);
-      }
-    };
-    context.watch("currentFrame");
-    context.watch("didSeek");
-    context.watch("colorScheme");
-
-    return () => {
-      context.onRender = undefined;
-    };
-  }, [context]);
-
-  // Update panel settings editor with latest tree and handler
-  useEffect(() => {
-    context.updatePanelSettingsEditor({
-      actionHandler: settingsActionHandler,
-      nodes: settingsTree,
-    });
-  }, [context, settingsActionHandler, settingsTree]);
-
-  // Subscribe/unsubscribe to topic from parsed path
-  useEffect(() => {
-    if (state.parsedPath?.topicName != undefined) {
-      context.subscribe([{ topic: state.parsedPath.topicName, preload: false }]);
-    }
-    return () => {
-      context.unsubscribeAll();
-    };
-  }, [context, state.parsedPath?.topicName]);
-
-  // Call renderDone after render
-  useEffect(() => {
-    renderDone();
-  }, [renderDone]);
 
   return (
     <div className={classes.root} style={{ color: chartTheme.text }}>

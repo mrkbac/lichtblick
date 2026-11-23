@@ -7,6 +7,7 @@ import {
   ColorStops,
   GaugeConfig,
 } from "@lichtblick/suite-base/panels/Gauge/types";
+import { turboColorString } from "@lichtblick/suite-base/util/colorUtils";
 
 export const DATA_TYPES = [
   "float32",
@@ -35,7 +36,9 @@ export const DEFAULT_CONFIG: GaugeConfig = {
   reverse: false,
 };
 
-export const COLOR_MAPS: Record<ColorMapConfig | ColorModeConfig, ColorStops[]> = {
+const TURBO_STOPS = 20;
+
+export const COLOR_MAPS: Partial<Record<ColorMapConfig, ColorStops[]>> = {
   [ColorMapConfig.RED_YELLOW_GREEN]: [
     { color: "#f00", location: 0 },
     { color: "#ff0", location: 0.5 },
@@ -49,7 +52,8 @@ export const COLOR_MAPS: Record<ColorMapConfig | ColorModeConfig, ColorStops[]> 
     { color: "#ff0", location: 4 / 5 },
     { color: "#f00", location: 1 },
   ],
-  [ColorMapConfig.TURBO]: [],
-  [ColorModeConfig.COLORMAP]: [],
-  [ColorModeConfig.GRADIENT]: [],
+  [ColorMapConfig.TURBO]: Array.from({ length: TURBO_STOPS }, (_x, i) => ({
+    color: turboColorString(i / (TURBO_STOPS - 1)),
+    location: i / (TURBO_STOPS - 1),
+  })),
 };
