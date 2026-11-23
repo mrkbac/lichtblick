@@ -4,6 +4,7 @@
 import { toNanoSec } from "@foxglove/rostime";
 
 import { Immutable, Topic } from "@lichtblick/suite";
+import { SYNC_WINDOW_NS } from "@lichtblick/suite-base/panels/ThreeDeeRender/TimestampSynchronizer";
 import { ALL_SUPPORTED_ANNOTATION_SCHEMAS } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/ImageMode/annotations/normalizeAnnotations";
 import { Annotation } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/ImageMode/annotations/types";
 import { getTopicMatchPrefix } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/Images/topicPrefixMatching";
@@ -18,22 +19,18 @@ export type AnnotationEntry = {
   annotations: Annotation[];
 };
 
-/**
- * Annotation messages stamped this far behind their topic's newest are dropped: an image that late
- * is treated as never coming.
- */
-export const ANNOTATION_WINDOW_NS = 10_000_000_000n;
 /** Backstop for streams whose stamps don't advance, where the time window never drops anything. */
 export const MAX_ANNOTATION_HISTORY = 1000;
 
 /**
- * Drops the entries more than the window behind the newest. Shown image stamps don't cut it
+ * Drops the entries more than the sync window behind the newest (an image that late is treated
+ * as never coming). Shown image stamps don't cut it
  * shorter: a delayed image with an older stamp can still arrive. The newest entry always stays for
  * unsynced drawing.
  */
 export function pruneAnnotationHistory(history: AnnotationEntry[]): void {
   const newest = history[history.length - 1]?.stampNs;
-  const cutoff = newest == undefined ? undefined : newest - ANNOTATION_WINDOW_NS;
+  const cutoff = newest == undefined ? undefined : newest - SYNC_WINDOW_NS;
   let drop = Math.max(0, history.length - MAX_ANNOTATION_HISTORY);
   while (drop < history.length - 1) {
     const stamp = history[drop]!.stampNs;
