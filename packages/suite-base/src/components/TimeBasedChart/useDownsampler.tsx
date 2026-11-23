@@ -8,7 +8,7 @@
 import React, { useMemo, useCallback, useEffect } from "react";
 import { useDebouncedCallback } from "use-debounce";
 
-import type { ObjectData, RpcScales } from "@lichtblick/suite-base/components/Chart/types";
+import type { RpcScales } from "@lichtblick/suite-base/components/Chart/types";
 
 import { Downsampler } from "./Downsampler";
 import { PlotDataProvider, ProviderStateSetter, PlotViewport, ChartDataset } from "./types";
@@ -20,11 +20,11 @@ import { getBounds } from "./useProvider";
  * TimeBasedChart component without using a PlotDataProvider.
  */
 export default function useDownsampler(datasets: ChartDataset[]): {
-  downsampler: PlotDataProvider<ObjectData>;
+  downsampler: PlotDataProvider;
   setScales: (scales: RpcScales) => void;
 } {
   const [view, setView] = React.useState<PlotViewport | undefined>();
-  const [setter, setSetter] = React.useState<ProviderStateSetter<ObjectData> | undefined>();
+  const [setter, setSetter] = React.useState<ProviderStateSetter | undefined>();
 
   const downsampler = useMemo(() => new Downsampler(), []);
 

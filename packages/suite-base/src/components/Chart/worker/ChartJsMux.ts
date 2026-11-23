@@ -36,7 +36,7 @@ import AnnotationPlugin from "chartjs-plugin-annotation";
 
 import { loadDefaultFont } from "@lichtblick/suite-base/panels/shared/loadFont";
 
-import { RpcElement, RpcScales, TypedChartData } from "../types";
+import { RpcElement, RpcScales } from "../types";
 import ChartJSManager, { InitOpts } from "./ChartJSManager";
 import { PanInput, WheelInput } from "./ChartViewport";
 
@@ -44,7 +44,6 @@ type RpcEvent<EventType> = { id: string; event: EventType };
 
 export type ChartUpdateMessage = {
   data?: ChartData<"scatter">;
-  typedData?: TypedChartData;
   height?: number;
   options?: ChartOptions;
   isBoundsReset: boolean;
