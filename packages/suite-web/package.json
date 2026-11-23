@@ -4,7 +4,8 @@
   "private": true,
   "main": "./src/index.tsx",
   "dependencies": {
-    "@lichtblick/suite-base": "workspace:*"
+    "@lichtblick/suite-base": "workspace:*",
+    "@mui/icons-material": "9.5.0"
   },
   "devDependencies": {
     "@lichtblick/log": "workspace:*",

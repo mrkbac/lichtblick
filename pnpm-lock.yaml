@@ -894,6 +894,9 @@ importers:
       '@lichtblick/suite-base':
         specifier: workspace:*
         version: link:../suite-base
+      '@mui/icons-material':
+        specifier: 9.5.0
+        version: 9.5.0(@mui/material@9.5.0(@emotion/react@11.14.0(@types/react@19.3.0)(react@19.3.1))(@emotion/styled@11.14.1(@emotion/react@11.14.0(@types/react@19.3.0)(react@19.3.1))(@types/react@19.3.0)(react@19.3.1))(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1))(@types/react@19.3.0)(react@19.3.1)
     devDependencies:
       '@lichtblick/log':
         specifier: workspace:*
