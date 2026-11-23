@@ -385,9 +385,9 @@ describe("messagesToDataset", () => {
     expect(datum?.labelTextColor).not.toBe(datum?.labelColor);
   });
 
-  it("should return undefined because getTimestampForMessageEvent will return undefined", () => {
+  it("should return undefined because the header stamp lookup will return undefined", () => {
     //forcing path.timestampMethod to be headerStamp without headers in the message
-    //so getTimestampForMessageEvent returns undefined
+    //so the header stamp lookup returns undefined
     const blocks: PathSample[][] = [
       [
         MessageAndDataBuilder(
@@ -409,9 +409,9 @@ describe("messagesToDataset", () => {
     expect(result.data.length).toBe(0);
   });
 
-  it("should return dataset with 1 item on data[] because getTimestampForMessageEvent is called with headerStamp with header", () => {
+  it("should return dataset with 1 item on data[] because the header stamp lookup is called with headerStamp with header", () => {
     //forcing path.timestampMethod to be headerStamp with header in the message
-    //so getTimestampForMessageEvent returns a stamp and therefore a item is added to data[] inisde the ChartDataset object returned
+    //so the header stamp lookup returns a stamp and therefore a item is added to data[] inisde the ChartDataset object returned
     const blocks: PathSample[][] = [
       [
         MessageAndDataBuilder(
