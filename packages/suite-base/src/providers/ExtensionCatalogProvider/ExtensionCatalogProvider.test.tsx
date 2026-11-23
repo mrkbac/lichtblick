@@ -939,6 +939,38 @@ describe("ExtensionCatalogProvider", () => {
       });
     });
 
+    it("replaces the old version's converters and aliases on reinstall", async () => {
+      const { result, extensionInfo } = await setup();
+      const contributions = (): ContributionPoints => ({
+        messageConverters: [
+          {
+            fromSchemaName: "a",
+            toSchemaName: "b",
+            converter: vi.fn(),
+            extensionId: extensionInfo.id,
+            extensionNamespace: extensionInfo.namespace,
+          },
+        ],
+        cameraModels: new Map(),
+        topicAliasFunctions: [{ extensionId: extensionInfo.id, aliasFunction: vi.fn() }],
+        topicConverters: [],
+        panelSettings: {},
+        panels: {},
+      });
+      const v1 = contributions();
+      const v2 = contributions();
+
+      act(() => {
+        result.current.mergeState(extensionInfo, v1);
+      });
+      act(() => {
+        result.current.mergeState({ ...extensionInfo, version: "2.0.0" }, v2);
+      });
+
+      expect(extensionConverters(result.current)).toEqual([v2.messageConverters[0]]);
+      expect(result.current.installedTopicAliasFunctions).toEqual(v2.topicAliasFunctions);
+    });
+
     it("should add an entry for the same extension id installed in a different namespace", async () => {
       // Setup with the extension installed in "local" namespace
       const { result, extensionInfo } = await setup();

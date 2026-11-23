@@ -96,7 +96,7 @@ class RemoteDataSourceFactory implements IDataSourceFactory {
     let extension = "";
 
     urls.forEach((url) => {
-      extension = extname(new URL(url).pathname);
+      extension = extname(new URL(url).pathname).toLowerCase();
       nextExtension = this.checkExtensionMatch(extension, nextExtension);
     });
 
@@ -159,7 +159,7 @@ class RemoteDataSourceFactory implements IDataSourceFactory {
   #validateUrl(newValue: string): Error | undefined {
     try {
       const url = new URL(newValue);
-      const extension = extname(url.pathname) as AllowedFileExtensions;
+      const extension = extname(url.pathname).toLowerCase() as AllowedFileExtensions;
 
       if (extension.length === 0) {
         return new Error("URL must end with a filename and extension");

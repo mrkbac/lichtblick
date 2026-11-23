@@ -181,24 +181,30 @@ function createExtensionRegistryStore(
         cameraModels,
       }: ContributionPoints,
     ) => {
+      // A reinstall (e.g. an update) replaces everything the old version contributed; appending
+      // would keep the old converters and aliases running ahead of the new ones
+      const notOld = ({ extensionId }: { extensionId?: string }) => extensionId !== info.id;
       set((state) => ({
         installedExtensions: _.uniqBy(
           [info, ...(state.installedExtensions ?? [])],
           extensionUniqueKey,
         ),
-        installedPanels: { ...state.installedPanels, ...panels },
+        installedPanels: { ..._.pickBy(state.installedPanels, notOld), ...panels },
         installedMessageConverters: withBuiltinConverters([
-          ...state.installedMessageConverters!,
+          ...state.installedMessageConverters!.filter(notOld),
           ...messageConverters,
         ]),
         installedTopicAliasFunctions: [
-          ...state.installedTopicAliasFunctions!,
+          ...state.installedTopicAliasFunctions!.filter(notOld),
           ...topicAliasFunctions,
         ],
-        installedTopicConverters: [...state.installedTopicConverters, ...topicConverters],
+        installedTopicConverters: [
+          ...state.installedTopicConverters.filter(notOld),
+          ...topicConverters,
+        ],
         panelSettings: { ...state.panelSettings, ...panelSettings },
         installedCameraModels: new Map([
-          ...state.installedCameraModels,
+          ...[...state.installedCameraModels].filter(([, model]) => notOld(model)),
           ...Array.from(cameraModels.entries()),
         ]),
       }));

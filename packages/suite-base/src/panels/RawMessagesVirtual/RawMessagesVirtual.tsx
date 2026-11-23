@@ -207,7 +207,7 @@ const RawMessagesVirtual = (props: PropsRawMessagesVirtual): React.JSX.Element =
         );
       }
 
-      if (diffEnabled && _.isEqual({}, diff)) {
+      if (diffEnabled && _.isEmpty(diff)) {
         return <EmptyState>No difference found</EmptyState>;
       }
 

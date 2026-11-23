@@ -37,23 +37,29 @@ export const builtinSampleValues: Record<string, unknown> = {
 export default function buildSampleMessage(
   datatypes: Immutable<RosDatatypes>,
   datatype: string,
+  // types being built further up this branch; recursive (e.g. protobuf) schemas stop here
+  ancestors: ReadonlySet<string> = new Set(),
 ): unknown {
   const builtin = builtinSampleValues[datatype];
   if (builtin != undefined) {
     return builtin;
   }
   const fields = datatypes.get(datatype)?.definitions;
-  if (!fields) {
+  if (!fields || ancestors.has(datatype)) {
     return undefined;
   }
+  const path = new Set(ancestors).add(datatype);
   const obj: Record<string, unknown> = {};
   for (const field of fields) {
     if (field.isConstant ?? false) {
       continue;
     }
-    const sample = buildSampleMessage(datatypes, field.type);
+    const recursive = path.has(field.type);
+    const sample = buildSampleMessage(datatypes, field.type, path);
     if (field.isArray ?? false) {
-      if (field.arrayLength != undefined) {
+      if (recursive) {
+        obj[field.name] = [];
+      } else if (field.arrayLength != undefined) {
         obj[field.name] = new Array(field.arrayLength).fill(sample);
       } else {
         obj[field.name] = [sample];

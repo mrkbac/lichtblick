@@ -83,8 +83,7 @@ export class AudioPlayer {
   public cut(): void {
     this.#epoch++;
     this.#fadeOut();
-    this.#decoder?.close();
-    this.#decoder = undefined;
+    this.#closeDecoder();
     this.#fallbackQueue = Promise.resolve();
     this.#pending = new Uint8Array(0);
     this.#g726 = undefined;
@@ -159,8 +158,16 @@ export class AudioPlayer {
   }
 
   public close(): void {
-    this.#decoder?.close();
+    this.#closeDecoder();
     void this.#ctx.close().catch(() => {});
+  }
+
+  /** A decoder that hit an error is already closed, and closing it again throws. */
+  #closeDecoder(): void {
+    if (this.#decoder != undefined && this.#decoder.state !== "closed") {
+      this.#decoder.close();
+    }
+    this.#decoder = undefined;
   }
 
   #newSession(): GainNode {
@@ -174,7 +181,7 @@ export class AudioPlayer {
   #decode(codec: string, chunk: AudioChunk, idealStart: number): void {
     const key = `${codec}/${chunk.sampleRate}/${chunk.channels}`;
     if (this.#decoder?.state !== "configured" || key !== this.#decoderKey) {
-      this.#decoder?.close();
+      this.#closeDecoder();
       const decoder = new AudioDecoder({
         output: (data) => {
           const planes = Array.from({ length: data.numberOfChannels }, (_, ch) => {
@@ -194,6 +201,9 @@ export class AudioPlayer {
           numberOfChannels: chunk.channels,
         });
       } catch (err) {
+        if (decoder.state !== "closed") {
+          decoder.close();
+        }
         this.onError?.(`Can't decode "${chunk.format}" audio: ${String(err)}`);
         return;
       }

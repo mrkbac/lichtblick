@@ -90,6 +90,11 @@ describe("keysToPad and combinePads", () => {
     expect(state.right).toEqual({ x: -1, y: 0 });
   });
 
+  it("clamps keys bound to the same direction to full deflection", () => {
+    const state = keysToPad(new Set(["w", "arrowup", "a", "arrowleft"]));
+    expect(state.left).toEqual({ x: -1, y: 1 });
+  });
+
   it("lets the first source that moves a stick win and merges buttons", () => {
     // Given the pointer on the left stick and a gamepad on both sticks
     const pointer = pad({ left: { x: 0, y: 0.2 }, buttons: new Set(["a"]) });

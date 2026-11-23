@@ -341,7 +341,6 @@ function TeleopPanel(props: Readonly<TeleopPanelProps>): React.JSX.Element {
   }, [config, updateCommand]);
 
   // advertise topic
-  const isInitialMount = useRef(true);
   useLayoutEffect(() => {
     if (!currentTopic) {
       return;
@@ -375,10 +374,7 @@ function TeleopPanel(props: Readonly<TeleopPanelProps>): React.JSX.Element {
       if (lastPublishedActive.current) {
         publishStop();
       }
-      if (!isInitialMount.current) {
-        context.unadvertise?.(currentTopic);
-      }
-      isInitialMount.current = false;
+      context.unadvertise?.(currentTopic);
     };
   }, [context, currentTopic, messageType, publishStop]);
 

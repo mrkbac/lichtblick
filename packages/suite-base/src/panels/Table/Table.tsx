@@ -235,10 +235,15 @@ export default function Table({
     return getColumnsFromObject(maybeMessage as CellValue, accessorPath);
   }, [accessorPath, value]);
 
-  const [{ pageIndex, pageSize }, setPagination] = React.useState<PaginationState>({
-    pageIndex: 0,
-    pageSize: 10,
-  });
+  const [{ pageIndex: requestedPageIndex, pageSize }, setPagination] =
+    React.useState<PaginationState>({
+      pageIndex: 0,
+      pageSize: 10,
+    });
+
+  const rowCount = Array.isArray(value) || isTypedArray(value) ? value.length : 1;
+  // Stay on the last page when the rows shrink below the current one
+  const pageIndex = Math.min(requestedPageIndex, Math.max(0, Math.ceil(rowCount / pageSize) - 1));
 
   const pagination = React.useMemo(
     () => ({
@@ -248,7 +253,6 @@ export default function Table({
     [pageIndex, pageSize],
   );
 
-  const rowCount = Array.isArray(value) || isTypedArray(value) ? value.length : 1;
   // Only the shown page of a typed array becomes regular numbers, not all of a point cloud's bytes
   const pageRows = React.useMemo(() => {
     const start = pageIndex * pageSize;

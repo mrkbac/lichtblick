@@ -141,7 +141,12 @@ export function keysToPad(keys: ReadonlySet<string>): PadState {
       stick.y += binding.vector.y;
     }
   }
-  return { ...NEUTRAL_PAD, left, right };
+  // Two keys bound to one direction (w + arrowup) must not exceed full deflection
+  const clampStick = (v: TeleopVector): TeleopVector => ({
+    x: Math.max(-1, Math.min(1, v.x)),
+    y: Math.max(-1, Math.min(1, v.y)),
+  });
+  return { ...NEUTRAL_PAD, left: clampStick(left), right: clampStick(right) };
 }
 
 /** Each stick follows the first source that moves it; triggers take the max, buttons the union */

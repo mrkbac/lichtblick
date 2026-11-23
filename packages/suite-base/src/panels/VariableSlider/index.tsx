@@ -79,9 +79,14 @@ function VariableSliderPanel(props: Props): React.JSX.Element {
   const { min = 0, max = 10, step = 1 } = sliderProps;
   const globalVariableValue = globalVariables[globalVariableName];
   const theme = useTheme();
-  const [sliderValue, setSliderValue] = useState<number | number[]>(
-    typeof globalVariableValue === "number" ? globalVariableValue : 0,
-  );
+  const externalValue = typeof globalVariableValue === "number" ? globalVariableValue : 0;
+  const [sliderValue, setSliderValue] = useState<number | number[]>(externalValue);
+  // Follow changes made elsewhere (another panel, a renamed variable)
+  const [syncedValue, setSyncedValue] = useState(externalValue);
+  if (syncedValue !== externalValue) {
+    setSyncedValue(externalValue);
+    setSliderValue(externalValue);
+  }
 
   useVariableSliderSettings(config, saveConfig);
 

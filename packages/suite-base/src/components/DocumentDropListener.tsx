@@ -102,9 +102,18 @@ export default function DocumentDropListener(props: DocumentDropListenerProps): 
 
       for (const directory of directories) {
         // Read the list of files and folders in this directory (non-recursively)
-        const entries = await new Promise<FileSystemEntry[]>((resolve, reject) => {
-          directory.createReader().readEntries(resolve, reject);
-        });
+        // readEntries returns at most ~100 entries per call; read until it returns none
+        const reader = directory.createReader();
+        const entries: FileSystemEntry[] = [];
+        for (;;) {
+          const batch = await new Promise<FileSystemEntry[]>((resolve, reject) => {
+            reader.readEntries(resolve, reject);
+          });
+          if (batch.length === 0) {
+            break;
+          }
+          entries.push(...batch);
+        }
 
         // Add all files in this directory to our list of files
         for (const entry of entries) {
