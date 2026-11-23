@@ -19,19 +19,18 @@ import {
 } from "@lichtblick/suite-base/players/types";
 
 import { BlockTopicProcessor } from "./BlockTopicProcessor";
-import { IStateProcessor } from "./IStateProcessor";
 
 export type TopicAliasMap = Map<string, string[]>;
 type MessageBlocks = readonly (undefined | MessageBlock)[];
 
 /**
- * StateProcessor implements IStateProcessor to apply topic aliases to player state and subscriptions.
+ * AliasingStateProcessor applies topic aliases to player state and subscriptions.
  *
  * Note: it uses a set of memoized members to keep referential equality for the output player state
  * when the input is unchanged. This is important for downstream consumers which rely on referential
  * equality to detect changes and to avoid doing work when there are no changes.
  */
-export class AliasingStateProcessor implements IStateProcessor {
+export class AliasingStateProcessor {
   #alerts: PlayerAlert[] = [];
 
   /** Source topic to a list of aliases for the topic */

@@ -30,7 +30,7 @@ import {
 import { PREV_MSG_METHOD } from "@lichtblick/suite-base/panels/RawMessagesCommon/constants";
 import {
   NodeState,
-  RawMessagesPanelConfig,
+  RawMessagesVirtualPanelConfig,
 } from "@lichtblick/suite-base/panels/RawMessagesCommon/types";
 import PanelSetup from "@lichtblick/suite-base/stories/PanelSetup";
 
@@ -39,14 +39,14 @@ const noDiffConfig = {
   diffTopicPath: "",
   diffEnabled: false,
   showFullMessageForDiff: false,
-} as RawMessagesPanelConfig;
+} as RawMessagesVirtualPanelConfig;
 
 const diffConfig = {
   topicPath: "/baz/enum_advanced",
   diffMethod: "custom",
   diffTopicPath: "/another/baz/enum_advanced",
   diffEnabled: true,
-} as RawMessagesPanelConfig;
+} as RawMessagesVirtualPanelConfig;
 
 const scrollToBottom: StoryObj["play"] = async ({ canvasElement }) => {
   const scrollContainers = canvasElement.querySelectorAll("[data-testid=panel-scroll-container]");

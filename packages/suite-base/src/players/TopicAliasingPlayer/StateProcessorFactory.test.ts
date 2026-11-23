@@ -6,18 +6,17 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { AliasingStateProcessor } from "./AliasingStateProcessor";
-import { NoopStateProcessor } from "./NoopStateProcessor";
 import { StateProcessorFactory } from "./StateProcessorFactory";
 
 describe("StateProcessorFactory", () => {
-  it("builds a noop state processor when there are no aliases", () => {
+  it("builds no state processor when there are no aliases", () => {
     const factory = new StateProcessorFactory();
     const processor = factory.buildStateProcessor({
       aliasFunctions: [],
       topics: [],
       variables: {},
     });
-    expect(processor).toBeInstanceOf(NoopStateProcessor);
+    expect(processor).toBeUndefined();
   });
 
   it("builds processor when there are aliases", () => {

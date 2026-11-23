@@ -31,7 +31,7 @@ import { emptyPose } from "@lichtblick/suite-base/util/Pose";
 import { getColorConverter } from "./colorMode";
 import type { DynamicBufferGeometry } from "../DynamicBufferGeometry";
 import type { AnyRendererSubscription } from "../IRenderer";
-import { BaseUserData, Renderable } from "../Renderable";
+import { BaseUserData, ChildUserData, Renderable } from "../Renderable";
 import type { Renderer } from "../Renderer";
 import { PartialMessage, PartialMessageEvent, SceneExtension } from "../SceneExtension";
 import { SettingsTreeEntry, SettingsTreeNodeWithActionHandler } from "../SettingsManager";
@@ -78,7 +78,9 @@ const INVALID_LASERSCAN = "INVALID_LASERSCAN";
 
 const tempColor = { r: 0, g: 0, b: 0, a: 0 };
 
-type LaserScanUserData = BaseUserData & {
+type LaserScanUserData = ChildUserData & {
+  /** The scan's frame, set with each scan for the decay history */
+  frameId: string;
   /** Undefined once a newer decay entry exists (see releaseMessage) */
   laserScan: NormalizedLaserScan | undefined;
   originalMessage: Record<string, RosValue> | undefined;
@@ -127,12 +129,8 @@ class LaserScanHistoryRenderable extends Renderable<LaserScanHistoryUserData> {
     const points = new LaserScanRenderable(
       topic,
       {
-        receiveTime: -1n, // unused
-        messageTime: -1n, // unused
-        frameId: "", // the scan's frame, set with each scan for the decay history
+        frameId: "",
         pose: userData.latestLaserScan.pose,
-        settingsPath: [], //unused
-        settings: { visible: true }, //unused
         topic,
         laserScan: userData.latestLaserScan,
         originalMessage: userData.latestOriginalMessage,

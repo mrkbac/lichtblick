@@ -11,52 +11,27 @@ import { addFoxgloveSchema } from "@lichtblick/suite-base/util/foxgloveSchemas";
 // in `util/foxgloveSchemas` so the player layer can share it without importing a panel module.
 export { COMPRESSED_VIDEO_DATATYPES } from "@lichtblick/suite-base/util/foxgloveSchemas";
 
-export const FRAME_TRANSFORM_DATATYPES = new Set<string>();
-addFoxgloveSchema(FRAME_TRANSFORM_DATATYPES, "foxglove.FrameTransform");
+const foxgloveSchemas = (...schemas: string[]): Set<string> =>
+  schemas.reduce((output, schema) => addFoxgloveSchema(output, schema), new Set<string>());
 
-export const FRAME_TRANSFORMS_DATATYPES = new Set<string>();
-addFoxgloveSchema(FRAME_TRANSFORMS_DATATYPES, "foxglove.FrameTransforms");
-
-export const POINTCLOUD_DATATYPES = new Set<string>();
-addFoxgloveSchema(POINTCLOUD_DATATYPES, "foxglove.PointCloud");
-
-export const LASERSCAN_DATATYPES = new Set<string>();
-addFoxgloveSchema(LASERSCAN_DATATYPES, "foxglove.LaserScan");
-
-export const RAW_IMAGE_DATATYPES = new Set<string>();
-addFoxgloveSchema(RAW_IMAGE_DATATYPES, "foxglove.RawImage");
-
-export const COMPRESSED_IMAGE_DATATYPES = new Set<string>();
-addFoxgloveSchema(COMPRESSED_IMAGE_DATATYPES, "foxglove.CompressedImage");
-
-export const CAMERA_CALIBRATION_DATATYPES = new Set<string>();
-addFoxgloveSchema(CAMERA_CALIBRATION_DATATYPES, "foxglove.CameraCalibration");
-
-export const SCENE_UPDATE_DATATYPES = new Set<string>();
-addFoxgloveSchema(SCENE_UPDATE_DATATYPES, "foxglove.SceneUpdate");
-
-export const POSE_IN_FRAME_DATATYPES = new Set<string>();
-addFoxgloveSchema(POSE_IN_FRAME_DATATYPES, "foxglove.PoseInFrame");
-
-export const POSES_IN_FRAME_DATATYPES = new Set<string>();
-addFoxgloveSchema(POSES_IN_FRAME_DATATYPES, "foxglove.PosesInFrame");
-
-export const GRID_DATATYPES = new Set<string>();
-addFoxgloveSchema(GRID_DATATYPES, "foxglove.Grid");
-
-export const VOXEL_GRID_DATATYPES = new Set<string>();
-addFoxgloveSchema(VOXEL_GRID_DATATYPES, "foxglove.VoxelGrid");
-
-export const IMAGE_ANNOTATIONS_DATATYPES = new Set<string>();
-addFoxgloveSchema(IMAGE_ANNOTATIONS_DATATYPES, "foxglove.ImageAnnotations");
-
-export const ODOMETRY_DATATYPES = new Set<string>();
-addFoxgloveSchema(ODOMETRY_DATATYPES, "foxglove.Odometry");
-
-export const POINT3_IN_FRAME_DATATYPES = new Set<string>();
-addFoxgloveSchema(POINT3_IN_FRAME_DATATYPES, "foxglove.Point3InFrame");
+export const FRAME_TRANSFORM_DATATYPES = foxgloveSchemas("foxglove.FrameTransform");
+export const FRAME_TRANSFORMS_DATATYPES = foxgloveSchemas("foxglove.FrameTransforms");
+export const POINTCLOUD_DATATYPES = foxgloveSchemas("foxglove.PointCloud");
+export const LASERSCAN_DATATYPES = foxgloveSchemas("foxglove.LaserScan");
+export const RAW_IMAGE_DATATYPES = foxgloveSchemas("foxglove.RawImage");
+export const COMPRESSED_IMAGE_DATATYPES = foxgloveSchemas("foxglove.CompressedImage");
+export const CAMERA_CALIBRATION_DATATYPES = foxgloveSchemas("foxglove.CameraCalibration");
+export const SCENE_UPDATE_DATATYPES = foxgloveSchemas("foxglove.SceneUpdate");
+export const POSE_IN_FRAME_DATATYPES = foxgloveSchemas("foxglove.PoseInFrame");
+export const POSES_IN_FRAME_DATATYPES = foxgloveSchemas("foxglove.PosesInFrame");
+export const GRID_DATATYPES = foxgloveSchemas("foxglove.Grid");
+export const VOXEL_GRID_DATATYPES = foxgloveSchemas("foxglove.VoxelGrid");
+export const IMAGE_ANNOTATIONS_DATATYPES = foxgloveSchemas("foxglove.ImageAnnotations");
+export const ODOMETRY_DATATYPES = foxgloveSchemas("foxglove.Odometry");
+export const POINT3_IN_FRAME_DATATYPES = foxgloveSchemas("foxglove.Point3InFrame");
 
 /** `foxglove.JointStates`, and `foxglove.JointState` for a topic that carries a single joint. */
-export const JOINT_STATES_DATATYPES = new Set<string>();
-addFoxgloveSchema(JOINT_STATES_DATATYPES, "foxglove.JointStates");
-addFoxgloveSchema(JOINT_STATES_DATATYPES, "foxglove.JointState");
+export const JOINT_STATES_DATATYPES = foxgloveSchemas(
+  "foxglove.JointStates",
+  "foxglove.JointState",
+);

@@ -77,17 +77,6 @@ export const UncontrolledValueLight: Story = {
   parameters: { colorScheme: "light" },
 };
 
-export const SortWhenFilteringFalse: Story = {
-  args: {
-    items: ["bab", "bb", "a2", "a1"],
-    sortWhenFiltering: false,
-    value: "b",
-    filterText: "b",
-  },
-  name: "sortWhenFiltering=false",
-  play: clickInput,
-};
-
 export const ManyItems: Story = {
   args: {
     items: Array.from({ length: 999 }, (_, i) => `item_${i + 1}`),

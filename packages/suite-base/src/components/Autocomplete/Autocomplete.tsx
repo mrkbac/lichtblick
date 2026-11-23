@@ -81,13 +81,10 @@ export function Autocomplete(
     disabled,
     filterText = value ?? "",
     items,
-    onBlur: onBlurCallback,
     onChange: onChangeCallback,
     onSelect: onSelectCallback,
     placeholder,
     readOnly,
-    selectOnFocus,
-    sortWhenFiltering = true,
     variant = "filled",
   }: AutocompleteProps = props;
 
@@ -99,10 +96,9 @@ export function Autocomplete(
     return new Fzf(items, {
       // v1 algorithm is significantly faster on long lists of items.
       fuzzy: items.length > FAST_FIND_ITEM_CUTOFF ? "v1" : "v2",
-      sort: sortWhenFiltering,
       limit: MAX_FZF_MATCHES,
     });
-  }, [items, sortWhenFiltering]);
+  }, [items]);
 
   const autocompleteItems = useMemo(() => {
     return filterText ? fzf.find(filterText) : fzfUnfiltered;
@@ -121,8 +117,7 @@ export function Autocomplete(
 
   const blur = useCallback(() => {
     inputRef.current?.blur();
-    onBlurCallback?.();
-  }, [onBlurCallback]);
+  }, []);
 
   // Give callers an opportunity to control autocomplete
   useImperativeHandle(ref, () => ({ setSelectionRange, focus, blur }), [
@@ -197,7 +192,6 @@ export function Autocomplete(
         // it does not understand that our ListboxAdapter needs a tuple and not a ReactNode
         return [optProps, option, state] satisfies ListboxAdapterChild as React.ReactNode;
       }}
-      selectOnFocus={selectOnFocus}
       size="small"
       value={value ?? null}
     />

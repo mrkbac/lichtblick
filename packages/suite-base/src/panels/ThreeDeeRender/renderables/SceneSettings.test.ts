@@ -13,7 +13,6 @@ import { setupVitestCanvasMock } from "vitest-canvas-mock";
 
 import { Asset } from "@lichtblick/suite-base/components/PanelExtensionAdapter";
 import { Renderer } from "@lichtblick/suite-base/panels/ThreeDeeRender/Renderer";
-import { DEFAULT_SCENE_EXTENSION_CONFIG } from "@lichtblick/suite-base/panels/ThreeDeeRender/SceneExtensionConfig";
 import {
   DEFAULT_CAMERA_STATE,
   DEFAULT_ORBIT_CONTROLS_CONFIG,
@@ -131,7 +130,6 @@ function makeRenderer(config: RendererConfig = makeDefaultConfig()): Renderer {
     config,
     interfaceMode: "3d",
     fetchAsset,
-    sceneExtensionConfig: DEFAULT_SCENE_EXTENSION_CONFIG,
     testOptions: {},
     customCameraModels: new Map(),
     canvas,

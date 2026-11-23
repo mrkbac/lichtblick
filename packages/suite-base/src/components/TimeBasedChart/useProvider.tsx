@@ -14,18 +14,15 @@
 //   found at http://www.apache.org/licenses/LICENSE-2.0
 //   You may not use this file except in compliance with the License.
 
-import { ChartDataset, ChartData } from "chart.js";
-import React, { useEffect, useMemo, useCallback } from "react";
+import { ChartDataset } from "chart.js";
+import { useEffect, useState } from "react";
 
-import { iterateObjects, iterateTyped } from "@lichtblick/suite-base/components/Chart/datasets";
-import type { ObjectData, TypedData } from "@lichtblick/suite-base/components/Chart/types";
+import { iterateObjects } from "@lichtblick/suite-base/components/Chart/datasets";
+import type { ObjectData } from "@lichtblick/suite-base/components/Chart/types";
 
 import { PlotDataProvider, ProviderState, Bounds, PlotViewport } from "./types";
 
-type Datasets<T> = ChartDataset<"scatter", T>[];
-type Data<T> = ChartData<"scatter", T>;
-
-export function getBounds(data: Datasets<ObjectData>): Bounds | undefined {
+export function getBounds(data: ChartDataset<"scatter", ObjectData>[]): Bounds | undefined {
   let xMin: number | undefined;
   let xMax: number | undefined;
   let yMin: number | undefined;
@@ -52,157 +49,19 @@ export function getBounds(data: Datasets<ObjectData>): Bounds | undefined {
   return { x: { min: xMin, max: xMax }, y: { min: yMin, max: yMax } };
 }
 
-export function getTypedBounds(data: Datasets<TypedData[]>): Bounds | undefined {
-  let xMin: number | undefined;
-  let xMax: number | undefined;
-  let yMin: number | undefined;
-  let yMax: number | undefined;
-
-  for (const dataset of data) {
-    for (const item of iterateTyped(dataset.data)) {
-      const { x, y } = item;
-
-      if (!isNaN(x)) {
-        xMin = Math.min(xMin ?? x, x);
-        xMax = Math.max(xMax ?? x, x);
-      }
-
-      if (!isNaN(y)) {
-        yMin = Math.min(yMin ?? y, y);
-        yMax = Math.max(yMax ?? y, y);
-      }
-    }
-  }
-
-  if (xMin == undefined || xMax == undefined || yMin == undefined || yMax == undefined) {
-    return undefined;
-  }
-
-  return { x: { min: xMin, max: xMax }, y: { min: yMin, max: yMax } };
-}
-
-function mergeBounds(a: Bounds, b: Bounds): Bounds {
-  return {
-    x: {
-      min: Math.min(a.x.min, b.x.min),
-      max: Math.max(a.x.max, b.x.max),
-    },
-    y: {
-      min: Math.min(a.y.min, b.y.min),
-      max: Math.max(a.y.max, b.y.max),
-    },
-  };
-}
-
-type State<T> = ProviderState<T>;
-type Dataset<T> = Datasets<T>[0];
-// Given a merging strategy, `makeMerge` returns a function that can be used to
-// merge `ProviderState`s.
-const makeMerge =
-  <T,>(mergeData: (dataA: T, dataB: T) => T) =>
-  (a: State<T>, b: State<T>): State<T> => {
-    return {
-      bounds: mergeBounds(a.bounds, b.bounds),
-      data: {
-        datasets: a.data.datasets.slice(0, b.data.datasets.length).map(
-          (aSet, i): Dataset<T> => ({
-            ...aSet,
-            data: mergeData(aSet.data, b.data.datasets[i]!.data),
-          }),
-        ),
-      },
-    };
-  };
-
-export const mergeNormal = makeMerge<ObjectData>((a: ObjectData, b: ObjectData) => [...a, ...b]);
-export const mergeTyped = makeMerge<TypedData[]>((a: TypedData[], b: TypedData[]) => a.concat(b));
-
-type DataState<T> = {
-  full: ProviderState<T> | undefined;
-  partial: ProviderState<T> | undefined;
-};
-
-export default function useProvider<T>(
+export default function useProvider(
   view: PlotViewport,
-  // Calculates the bounds of the given datasets.
-  getDatasetBounds: (data: Datasets<T>) => Bounds | undefined,
-  mergeState: (a: ProviderState<T>, b: ProviderState<T>) => ProviderState<T>,
-  data: Data<T> | undefined,
-  provider: PlotDataProvider<T> | undefined,
-): ProviderState<T> | undefined {
-  const [state, setState] = React.useState<DataState<T> | undefined>();
-
-  const setFull = React.useCallback((newFull: ProviderState<T>) => {
-    setState({
-      full: newFull,
-      partial: undefined,
-    });
-  }, []);
-
-  const addPartial = useCallback(
-    (newPartial: ProviderState<T>) => {
-      setState((oldState) => {
-        if (oldState == undefined) {
-          return {
-            full: undefined,
-            partial: newPartial,
-          };
-        }
-
-        const { partial: oldPartial } = oldState;
-
-        return {
-          ...oldState,
-          partial: oldPartial != undefined ? mergeState(oldPartial, newPartial) : newPartial,
-        };
-      });
-    },
-    [mergeState],
-  );
+  provider: PlotDataProvider,
+): ProviderState | undefined {
+  const [state, setState] = useState<ProviderState | undefined>();
 
   useEffect(() => {
-    if (provider == undefined) {
-      return;
-    }
-    provider.register(setFull, addPartial);
-  }, [provider, addPartial, setFull]);
+    provider.register(setState);
+  }, [provider]);
 
   useEffect(() => {
-    if (provider == undefined) {
-      return;
-    }
     provider.setView(view);
   }, [provider, view]);
 
-  return useMemo(() => {
-    if (provider != undefined) {
-      if (state == undefined) {
-        return undefined;
-      }
-
-      const { full, partial } = state;
-      if (partial == undefined) {
-        return full;
-      }
-
-      if (full == undefined) {
-        return undefined;
-      }
-
-      return mergeState(full, partial);
-    }
-
-    if (data == undefined) {
-      return undefined;
-    }
-
-    const bounds = getDatasetBounds(data.datasets);
-    return {
-      bounds: bounds ?? {
-        x: { min: 0, max: 0 },
-        y: { min: 0, max: 0 },
-      },
-      data,
-    };
-  }, [data, provider, state, getDatasetBounds, mergeState]);
+  return state;
 }

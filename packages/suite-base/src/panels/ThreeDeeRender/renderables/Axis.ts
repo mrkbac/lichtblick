@@ -8,7 +8,7 @@
 import * as THREE from "three";
 
 import type { Renderer } from "../Renderer";
-import { arrowHeadSubdivisions, arrowShaftSubdivisions, DetailLevel } from "../lod";
+import { GEOMETRY_SEGMENTS } from "../constants";
 import { ColorRGBA } from "../ros";
 import { AXIS_LENGTH } from "../settings";
 
@@ -40,8 +40,8 @@ export class Axis extends THREE.Object3D {
 
     // Create three arrow shafts
     const shaftGeometry = this.#renderer.sharedGeometry.getGeometry(
-      `${this.constructor.name}-shaft-${this.#renderer.maxLod}`,
-      () => createShaftGeometry(this.#renderer.maxLod),
+      `${this.constructor.name}-shaft`,
+      createShaftGeometry,
     );
     this.#shaftMesh = new THREE.InstancedMesh(shaftGeometry, standardMaterial(COLOR_WHITE), 3);
     this.#shaftMesh.frustumCulled = false;
@@ -50,8 +50,8 @@ export class Axis extends THREE.Object3D {
 
     // Create three arrow heads
     const headGeometry = this.#renderer.sharedGeometry.getGeometry(
-      `${this.constructor.name}-head-${this.#renderer.maxLod}`,
-      () => createHeadGeometry(this.#renderer.maxLod),
+      `${this.constructor.name}-head`,
+      createHeadGeometry,
     );
 
     this.#headMesh = new THREE.InstancedMesh(headGeometry, standardMaterial(COLOR_WHITE), 3);
@@ -108,18 +108,16 @@ export class Axis extends THREE.Object3D {
   }
 }
 
-function createShaftGeometry(lod: DetailLevel): THREE.CylinderGeometry {
-  const subdivs = arrowShaftSubdivisions(lod);
-  const shaftGeometry = new THREE.CylinderGeometry(0.5, 0.5, 1, subdivs, 1, false);
+function createShaftGeometry(): THREE.CylinderGeometry {
+  const shaftGeometry = new THREE.CylinderGeometry(0.5, 0.5, 1, GEOMETRY_SEGMENTS, 1, false);
   shaftGeometry.rotateZ(-PI_2);
   shaftGeometry.translate(0.5, 0, 0);
   shaftGeometry.computeBoundingSphere();
   return shaftGeometry;
 }
 
-function createHeadGeometry(lod: DetailLevel): THREE.ConeGeometry {
-  const subdivs = arrowHeadSubdivisions(lod);
-  const headGeometry = new THREE.ConeGeometry(0.5, 1, subdivs, 1, false);
+function createHeadGeometry(): THREE.ConeGeometry {
+  const headGeometry = new THREE.ConeGeometry(0.5, 1, GEOMETRY_SEGMENTS, 1, false);
   headGeometry.rotateZ(-PI_2);
   headGeometry.translate(0.5, 0, 0);
   headGeometry.computeBoundingSphere();

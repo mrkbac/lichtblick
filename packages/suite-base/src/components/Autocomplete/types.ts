@@ -12,15 +12,11 @@ export type AutocompleteProps = {
   hasError?: boolean;
   inputStyle?: CSSProperties;
   items: readonly string[];
-  menuStyle?: CSSProperties;
   minWidth?: number;
-  onBlur?: () => void;
   onChange?: (event: React.SyntheticEvent, text: string) => void;
   onSelect: (value: string, autocomplete: IAutocomplete) => void;
   placeholder?: string;
   readOnly?: boolean;
-  selectOnFocus?: boolean;
-  sortWhenFiltering?: boolean;
   value?: string;
   variant?: TextFieldProps["variant"];
 };

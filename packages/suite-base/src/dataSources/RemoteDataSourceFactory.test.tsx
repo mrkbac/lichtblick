@@ -138,27 +138,6 @@ describe("RemoteDataSourceFactory", () => {
     expect(result).toBe(mockPlayer);
   });
 
-  it("should pass configured hydration overrides into multi-url initArgs", async () => {
-    factory = new RemoteDataSourceFactory({
-      maxHydratedSources: 4,
-      maxHydratedBytes: 5678,
-      initConcurrency: 3,
-    });
-    const mockArgs = { urls: ["https://example.com/test1.mcap", "https://example.com/test2.mcap"] };
-
-    await factory.initialize(mockArgs);
-
-    expect(WorkerSerializedIterableSource).toHaveBeenCalledWith({
-      initWorker: expect.any(Function),
-      initArgs: {
-        urls: ["https://example.com/test1.mcap", "https://example.com/test2.mcap"],
-        maxHydratedSources: 4,
-        maxHydratedBytes: 5678,
-        initConcurrency: 3,
-      },
-    });
-  });
-
   it("should send cookies and keep the flag in the URL when ds.includeCredentials=true", async () => {
     const mockArgs = {
       urls: ["https://example.com/test1.mcap", "https://example.com/test2.mcap"],

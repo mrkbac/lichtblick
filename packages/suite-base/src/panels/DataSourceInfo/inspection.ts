@@ -162,7 +162,7 @@ export function finishInspection(state: InspectionState): TopicInspection {
       : rates.length % 2 === 0
         ? (rates[middle - 1]! + rates[middle]!) / 2
         : rates[middle];
-  const intervals = [...state.sample].sort((a, b) => a - b);
+  const intervals = state.sample.toSorted((a, b) => a - b);
   const medianIntervalNs =
     intervals.length === 0
       ? undefined

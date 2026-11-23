@@ -16,7 +16,6 @@ import { isAbsoluteTime, formatTimeRaw } from "@lichtblick/suite-base/util/time"
 import { customTypography } from "@lichtblick/theme";
 
 type Props = {
-  disableDate?: boolean;
   horizontal?: boolean;
   time: Time;
   title?: string;
@@ -30,7 +29,7 @@ const useStyles = makeStyles()(() => ({
 
 export default function Timestamp(props: Props): React.JSX.Element {
   const { classes } = useStyles();
-  const { disableDate = false, horizontal = false, time, title } = props;
+  const { horizontal = false, time, title } = props;
   const { formatDate, formatTime } = useAppTimeFormat();
   const currentTimeStr = useMemo(() => formatTime(time), [time, formatTime]);
   const rawTimeStr = useMemo(() => formatTimeRaw(time), [time]);
@@ -55,19 +54,15 @@ export default function Timestamp(props: Props): React.JSX.Element {
       alignItems={horizontal ? "center" : "flex-start"}
       justifyContent={horizontal ? "flex-start" : "center"}
     >
-      {!disableDate && (
-        <>
-          <Typography
-            className={classes.numericValue}
-            noWrap
-            variant="inherit"
-            style={{ fontWeight: !horizontal ? 700 : undefined }}
-          >
-            {date}
-          </Typography>
-          {horizontal && <>&nbsp;</>}
-        </>
-      )}
+      <Typography
+        className={classes.numericValue}
+        noWrap
+        variant="inherit"
+        style={{ fontWeight: !horizontal ? 700 : undefined }}
+      >
+        {date}
+      </Typography>
+      {horizontal && <>&nbsp;</>}
 
       <Stack direction="row" alignItems="center" flexShrink={0} gap={0.5}>
         <Typography variant="inherit" className={classes.numericValue}>

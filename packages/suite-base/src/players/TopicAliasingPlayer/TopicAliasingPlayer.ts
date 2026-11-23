@@ -21,8 +21,7 @@ import {
   SubscribePayload,
 } from "@lichtblick/suite-base/players/types";
 
-import { IStateProcessor } from "./IStateProcessor";
-import { NoopStateProcessor } from "./NoopStateProcessor";
+import type { AliasingStateProcessor } from "./AliasingStateProcessor";
 import {
   StateFactoryInput,
   StateProcessorFactory,
@@ -52,7 +51,8 @@ export class TopicAliasingPlayer implements Player {
   #skipAliasing: boolean;
 
   #stateProcessorFactory: StateProcessorFactory = new StateProcessorFactory();
-  #stateProcessor: IStateProcessor = new NoopStateProcessor();
+  // Undefined when nothing is aliased: state and subscriptions pass through unchanged
+  #stateProcessor: AliasingStateProcessor | undefined;
 
   #lastPlayerState?: PlayerState;
 
@@ -114,7 +114,8 @@ export class TopicAliasingPlayer implements Player {
 
   public setSubscriptions(subscriptions: SubscribePayload[]): void {
     this.#subscriptions = subscriptions;
-    this.#aliasedSubscriptions = this.#stateProcessor.aliasSubscriptions(subscriptions);
+    this.#aliasedSubscriptions =
+      this.#stateProcessor?.aliasSubscriptions(subscriptions) ?? subscriptions;
     this.#player.setSubscriptions(this.#aliasedSubscriptions);
   }
 
@@ -246,7 +247,8 @@ export class TopicAliasingPlayer implements Player {
       this.#lastPlayerState = playerState;
 
       // Process the player state using the latest aliases
-      const newState = this.#stateProcessor.process(playerState, this.#subscriptions);
+      const newState =
+        this.#stateProcessor?.process(playerState, this.#subscriptions) ?? playerState;
       await listener(newState);
     });
   }
@@ -256,7 +258,8 @@ export class TopicAliasingPlayer implements Player {
    * changed then call setSubscriptions on the wrapped player.
    */
   #resetSubscriptions() {
-    const aliasedSubscriptions = this.#stateProcessor.aliasSubscriptions(this.#subscriptions);
+    const aliasedSubscriptions =
+      this.#stateProcessor?.aliasSubscriptions(this.#subscriptions) ?? this.#subscriptions;
     if (!_.isEqual(this.#aliasedSubscriptions, aliasedSubscriptions)) {
       this.#aliasedSubscriptions = aliasedSubscriptions;
       this.#player.setSubscriptions(aliasedSubscriptions);

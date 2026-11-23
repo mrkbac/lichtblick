@@ -28,14 +28,6 @@ type Datum = { x: number; y: number } & {
 export type ObjectData = (Datum | undefined)[];
 export type ChartData = ChartJsChartData<"scatter", ObjectData>;
 
-export type TypedData = {
-  x: Float32Array;
-  y: Float32Array;
-  value: (string | number | bigint | boolean | undefined)[];
-  constantName?: string[];
-};
-export type TypedChartData = ChartJsChartData<"scatter", TypedData[]>;
-
 export type RpcScale = {
   // min scale value
   min: number;

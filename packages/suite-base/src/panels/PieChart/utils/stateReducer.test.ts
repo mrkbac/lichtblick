@@ -62,6 +62,19 @@ describe("stateReducer", () => {
     expect(newState).toEqual(initialState);
   });
 
+  it("seek keeps the path", () => {
+    const initialState = PieChartBuilder.pieChartState({
+      path: "/example/path",
+      parsedPath: { topicName: "test-topic", topicNameRepr: "test-topic", messagePath: [] },
+      error: new Error("Test error"),
+    });
+    const newState = stateReducer(initialState, { type: "seek" });
+
+    expect(newState.error).toBeUndefined();
+    expect(newState.path).toEqual(initialState.path);
+    expect(newState.parsedPath).toEqual(initialState.parsedPath);
+  });
+
   it("handles empty state gracefully", () => {
     const action: PieChartAction = { type: "seek" };
     // @ts-expect-error: intentionally testing undefined state

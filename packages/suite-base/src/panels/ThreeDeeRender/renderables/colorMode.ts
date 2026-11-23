@@ -8,7 +8,6 @@
 import * as THREE from "three";
 
 import { rgbaGradient, rgbaToLinear, SRGBToLinear, stringToRgba } from "../color";
-import { clamp } from "../math";
 import type { ColorRGBA } from "../ros";
 import {
   bestColorByField,
@@ -89,7 +88,7 @@ function getColorBgra(output: ColorRGBA, colorValue: number): void {
 // taken from http://docs.ros.org/jade/api/rviz/html/c++/point__cloud__transformers_8cpp_source.html
 // line 47
 function rainbowLinear(output: ColorRGBA, pct: number): void {
-  const h = (1.0 - clamp(pct, 0, 1)) * 5.0 + 1.0;
+  const h = (1.0 - THREE.MathUtils.clamp(pct, 0, 1)) * 5.0 + 1.0;
   const i = Math.floor(h);
   let f = h % 1;
   // if i is even
@@ -133,13 +132,13 @@ const v2 = new THREE.Vector2();
 // adapted from https://gist.github.com/mikhailov-work/0d177465a8151eb6ede1768d51d476c7
 function turboLinear(output: ColorRGBA, pct: number): void {
   // Clamp the input between [0.0, 1.0], then scale to the range [0.01, 1.0]
-  const x = clamp(pct, 0.0, 1.0) * 0.99 + 0.01;
+  const x = THREE.MathUtils.clamp(pct, 0.0, 1.0) * 0.99 + 0.01;
   v4.set(1, x, x * x, x * x * x);
   v2.set(v4.z, v4.w);
   v2.multiplyScalar(v4.z);
-  output.r = SRGBToLinear(clamp(v4.dot(kRedVec4) + v2.dot(kRedVec2), 0, 1));
-  output.g = SRGBToLinear(clamp(v4.dot(kGreenVec4) + v2.dot(kGreenVec2), 0, 1));
-  output.b = SRGBToLinear(clamp(v4.dot(kBlueVec4) + v2.dot(kBlueVec2), 0, 1));
+  output.r = SRGBToLinear(THREE.MathUtils.clamp(v4.dot(kRedVec4) + v2.dot(kRedVec2), 0, 1));
+  output.g = SRGBToLinear(THREE.MathUtils.clamp(v4.dot(kGreenVec4) + v2.dot(kGreenVec2), 0, 1));
+  output.b = SRGBToLinear(THREE.MathUtils.clamp(v4.dot(kBlueVec4) + v2.dot(kBlueVec2), 0, 1));
   output.a = 1;
 }
 

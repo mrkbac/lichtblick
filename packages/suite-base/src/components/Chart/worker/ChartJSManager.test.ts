@@ -13,7 +13,7 @@ import {
   ScatterController,
 } from "chart.js";
 
-import { RpcScales, TypedChartData } from "@lichtblick/suite-base/components/Chart/types";
+import { RpcScales } from "@lichtblick/suite-base/components/Chart/types";
 import { BasicBuilder } from "@lichtblick/test-builders";
 
 import ChartJSManager, { InitOpts } from "./ChartJSManager";
@@ -286,32 +286,6 @@ describe("ChartJSManager", () => {
 
       // Then
       expect([x.min, x.max]).toEqual([0, 10]);
-    });
-
-    it("should fit the x scale to typed data when bounds are reset", async () => {
-      // Given
-      const manager = await createManager();
-      const options = createOptions();
-      options.scales!.x = { type: "linear" };
-      const typedData: TypedChartData = {
-        datasets: [
-          {
-            data: [
-              {
-                x: new Float32Array([2, 6]),
-                y: new Float32Array([-9, -9]),
-                value: ["off", "on"],
-              },
-            ],
-          },
-        ],
-      };
-
-      // When
-      const { x } = requireScales(manager.update({ options, typedData, isBoundsReset: true }));
-
-      // Then
-      expect([x.min, x.max]).toEqual([2, 6]);
     });
   });
 
