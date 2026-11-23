@@ -12,10 +12,6 @@ import {
 } from "@lichtblick/suite-base/context/PlayerSelectionContext";
 import { loadIterablePlayer } from "@lichtblick/suite-base/dataSources/playerModules";
 import { createMcapSourceWorker } from "@lichtblick/suite-base/players/IterablePlayer/Mcap/createMcapSourceWorker";
-import {
-  MultiFileHydrationOverrides,
-  addMultiFileHydrationOverrides,
-} from "@lichtblick/suite-base/players/IterablePlayer/shared/multiFileHydrationOptions";
 import { Player } from "@lichtblick/suite-base/players/types";
 import { remoteCompareNames } from "@lichtblick/suite-base/util/compareSides";
 import { extname } from "@lichtblick/suite-base/util/path";
@@ -53,8 +49,6 @@ function parseCompareOffsets(value: string | undefined, sideCount: number): numb
 }
 
 class RemoteDataSourceFactory implements IDataSourceFactory {
-  private readonly multiFileHydrationOverrides?: MultiFileHydrationOverrides;
-
   public id = "remote-file";
 
   // The remote file feature use to be handled by two separate factories with these IDs.
@@ -83,12 +77,6 @@ class RemoteDataSourceFactory implements IDataSourceFactory {
   };
 
   public warning = "Loading large files over HTTP can be slow";
-
-  // Optional pass-through for future multi-file hydration tuning experiments. Omitted by default
-  // so existing behavior remains unchanged until a caller explicitly opts in.
-  public constructor(multiFileHydrationOverrides?: MultiFileHydrationOverrides) {
-    this.multiFileHydrationOverrides = multiFileHydrationOverrides;
-  }
 
   public prefetch = loadIterablePlayer;
 
@@ -132,15 +120,12 @@ class RemoteDataSourceFactory implements IDataSourceFactory {
     const initArgs =
       urls.length === 1
         ? { url: urls[0], credentials }
-        : addMultiFileHydrationOverrides(
-            {
-              urls: [...urls],
-              credentials,
-              compare,
-              ...(compareOffsets != undefined && { compareOffsets }),
-            },
-            this.multiFileHydrationOverrides,
-          );
+        : {
+            urls: [...urls],
+            credentials,
+            compare,
+            ...(compareOffsets != undefined && { compareOffsets }),
+          };
     const source = new WorkerSerializedIterableSource({ initWorker, initArgs });
 
     return new IterablePlayer({

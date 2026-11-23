@@ -7,7 +7,7 @@
 
 import { createTheme, Theme } from "@mui/material/styles";
 
-import * as components from "./components";
+import { components } from "./components";
 import * as palette from "./palette";
 import { typography } from "./typography";
 

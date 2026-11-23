@@ -39,7 +39,7 @@ vi.mock("./ModelCache", () => ({
 }));
 
 vi.mock("./SceneExtensionConfig", () => ({
-  DEFAULT_SCENE_EXTENSION_CONFIG: {},
+  SCENE_EXTENSIONS: [],
 }));
 
 const createMockRenderer = (overrides?: Record<string, any>) => {

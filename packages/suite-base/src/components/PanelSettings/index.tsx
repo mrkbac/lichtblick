@@ -5,6 +5,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 import { Divider, Typography } from "@mui/material";
 import { useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -16,8 +17,10 @@ import { PanelSideScope } from "@lichtblick/suite-base/components/Compare/Compar
 import EmptyState from "@lichtblick/suite-base/components/EmptyState";
 import { useMessagePipelineGetter } from "@lichtblick/suite-base/components/MessagePipeline";
 import { useMonitorSetup } from "@lichtblick/suite-base/components/MonitorSetupContext";
+import { usePanelGuideStore } from "@lichtblick/suite-base/components/PanelDocs/PanelGuide";
 import { ActionMenu } from "@lichtblick/suite-base/components/PanelSettings/ActionMenu";
 import { buildSettingsTree } from "@lichtblick/suite-base/components/PanelSettings/settingsTree";
+import ToolbarIconButton from "@lichtblick/suite-base/components/PanelToolbar/ToolbarIconButton";
 import { PanelWindowContext } from "@lichtblick/suite-base/components/PanelWindow";
 import SettingsTreeEditor from "@lichtblick/suite-base/components/SettingsTreeEditor";
 import { ShareJsonModal } from "@lichtblick/suite-base/components/ShareJsonModal";
@@ -62,6 +65,8 @@ export default function PanelSettings({
   selectedPanelIdsForTests,
 }: PanelSettingsProps): React.JSX.Element {
   const { t } = useTranslation("panelSettings");
+  const { t: tToolbar } = useTranslation("panelToolbar");
+  const showPanelGuide = usePanelGuideStore((state) => state.show);
   const data = useCurrentLayoutSelector(selectLayoutData);
   const inWindow = useContext(PanelWindowContext)?.isOpen === true;
   const detached = useMonitorSetup()?.detachedPanelIds ?? EMPTY_IDS;
@@ -217,6 +222,7 @@ export default function PanelSettings({
   }
 
   const showTitleField = panelInfo != undefined && panelInfo.hasCustomToolbar !== true;
+  const hasPanelGuide = panelInfo?.docs != undefined;
   const title = panelInfo?.title ?? t("unknown");
 
   return (
@@ -238,7 +244,7 @@ export default function PanelSettings({
       {shareModal}
       <Stack gap={2} justifyContent="flex-start" flex="auto">
         <Stack flex="auto">
-          {settingsTree && (
+          {(settingsTree != undefined || hasPanelGuide) && (
             <>
               <Stack
                 paddingLeft={0.75}
@@ -247,15 +253,27 @@ export default function PanelSettings({
                 justifyContent="space-between"
               >
                 <Typography variant="subtitle2">{t("panelName", { title })}</Typography>
-                <ActionMenu
-                  key={1}
-                  fontSize="small"
-                  allowShare
-                  onReset={resetToDefaults}
-                  onShare={() => {
-                    setShowShareModal(true);
-                  }}
-                />
+                <Stack direction="row" alignItems="center">
+                  {hasPanelGuide && (
+                    <ToolbarIconButton
+                      aria-label={tToolbar("panelInfo")}
+                      title={tToolbar("panelInfo")}
+                      onClick={() => {
+                        showPanelGuide(panelType);
+                      }}
+                    >
+                      <InfoOutlinedIcon />
+                    </ToolbarIconButton>
+                  )}
+                  <ActionMenu
+                    fontSize="small"
+                    allowShare
+                    onReset={resetToDefaults}
+                    onShare={() => {
+                      setShowShareModal(true);
+                    }}
+                  />
+                </Stack>
               </Stack>
               <Divider />
             </>

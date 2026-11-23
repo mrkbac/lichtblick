@@ -8,7 +8,6 @@ import { setupVitestCanvasMock } from "vitest-canvas-mock";
 import { SettingsTreeAction } from "@lichtblick/suite";
 import { Asset } from "@lichtblick/suite-base/components/PanelExtensionAdapter";
 import { Renderer } from "@lichtblick/suite-base/panels/ThreeDeeRender/Renderer";
-import { DEFAULT_SCENE_EXTENSION_CONFIG } from "@lichtblick/suite-base/panels/ThreeDeeRender/SceneExtensionConfig";
 import { DEFAULT_CAMERA_STATE } from "@lichtblick/suite-base/panels/ThreeDeeRender/camera";
 import { DEFAULT_PUBLISH_SETTINGS } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/PublishSettings";
 import { BasicBuilder } from "@lichtblick/test-builders";
@@ -59,7 +58,6 @@ const defaultRendererProps = {
   config: defaultRendererConfig,
   interfaceMode: "3d" as const,
   fetchAsset,
-  sceneExtensionConfig: DEFAULT_SCENE_EXTENSION_CONFIG,
   testOptions: {},
   customCameraModels: new Map(),
 };

@@ -34,11 +34,7 @@ import { Topic } from "@lichtblick/suite-base/players/types";
 
 import { PREV_MSG_METHOD } from "./constants";
 import { NodeState } from "./types";
-import type {
-  UseSharedRawMessagesLogicProps,
-  SharedConfig,
-  UseSharedRawMessagesLogicResult,
-} from "./types";
+import type { PropsRawMessagesVirtual, UseSharedRawMessagesLogicResult } from "./types";
 import {
   dataWithoutWrappingArray,
   generateDeepKeyPaths,
@@ -56,14 +52,11 @@ const LATEST_PER_RENDER_TICK_SAMPLING = Object.freeze({
   mode: "latest-per-render-tick" as const,
 });
 
-/**
- * Shared hook that contains all the common logic for both RawMessages and RawMessagesVirtual panels.
- * This includes state management, message subscriptions, expansion logic, and common callbacks.
- */
-export function useSharedRawMessagesLogic<T extends SharedConfig>({
+/** State, message subscriptions, expansion and stepping logic of the Raw Messages panel. */
+export function useSharedRawMessagesLogic({
   config,
   saveConfig,
-}: UseSharedRawMessagesLogicProps<T>): UseSharedRawMessagesLogicResult {
+}: PropsRawMessagesVirtual): UseSharedRawMessagesLogicResult {
   const { topicPath, diffMethod, diffTopicPath, diffEnabled } = config;
   const { topics, datatypes } = useDataSourceInfo();
   const { setMessagePathDropConfig } = usePanelContext();
@@ -79,7 +72,7 @@ export function useSharedRawMessagesLogic<T extends SharedConfig>({
       handleDrop(paths) {
         const path = paths[0];
         if (path) {
-          saveConfig({ topicPath: path.path } as Partial<T>);
+          saveConfig({ topicPath: path.path });
           setExpansion("none");
         }
       },
@@ -202,20 +195,20 @@ export function useSharedRawMessagesLogic<T extends SharedConfig>({
   const onTopicPathChange = useCallback(
     (newTopicPath: string) => {
       setExpansion("none");
-      saveConfig({ topicPath: newTopicPath } as Partial<T>);
+      saveConfig({ topicPath: newTopicPath });
     },
     [saveConfig],
   );
 
   const onDiffTopicPathChange = useCallback(
     (newDiffTopicPath: string) => {
-      saveConfig({ diffTopicPath: newDiffTopicPath } as Partial<T>);
+      saveConfig({ diffTopicPath: newDiffTopicPath });
     },
     [saveConfig],
   );
 
   const onToggleDiff = useCallback(() => {
-    saveConfig({ diffEnabled: !diffEnabled } as Partial<T>);
+    saveConfig({ diffEnabled: !diffEnabled });
   }, [diffEnabled, saveConfig]);
 
   const onToggleExpandAll = useCallback(() => {
@@ -244,7 +237,7 @@ export function useSharedRawMessagesLogic<T extends SharedConfig>({
   );
 
   useEffect(() => {
-    saveConfig({ expansion } as Partial<T>);
+    saveConfig({ expansion });
   }, [expansion, saveConfig]);
 
   // Message stepping: seek to the previous/next message on the topic. Only for sources that can

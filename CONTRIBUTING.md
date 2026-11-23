@@ -124,16 +124,11 @@ Lichtblick is organized as a **monorepo** managed with pnpm workspaces:
 
 ```
 lichtblick/
-├── desktop/               # Electron desktop app entry points
-│   ├── main/              # Main process
-│   ├── preload/           # Preload scripts
-│   ├── renderer/          # Renderer process
-├── web/                   # Web app entry point
 ├── packages/
 │   ├── suite/             # Core application logic
 │   ├── suite-base/        # Shared base components, panels, and players
-│   ├── suite-desktop/     # Desktop-specific functionality
-│   ├── suite-web/         # Web-specific functionality
+│   ├── suite-desktop/     # Electron app: build config, main/preload/renderer
+│   ├── suite-web/         # Web app (PWA): build config, entry point
 │   ├── theme/             # Theming and styling
 │   ├── hooks/             # Shared React hooks
 │   ├── log/               # Logging utilities

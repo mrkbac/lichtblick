@@ -5,16 +5,13 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 import ListAltIcon from "@mui/icons-material/ListAlt";
 import SettingsIcon from "@mui/icons-material/Settings";
 import { Badge } from "@mui/material";
 import React, { Ref, useCallback, useContext, useMemo } from "react";
-import { useTranslation } from "react-i18next";
 
 import { CompareSidePicker } from "@lichtblick/suite-base/components/Compare/CompareSidePicker";
 import PanelContext from "@lichtblick/suite-base/components/PanelContext";
-import { usePanelGuideStore } from "@lichtblick/suite-base/components/PanelDocs/PanelGuide";
 import { useStyles } from "@lichtblick/suite-base/components/PanelToolbar/PanelToolbarControls.style";
 import ToolbarIconButton from "@lichtblick/suite-base/components/PanelToolbar/ToolbarIconButton";
 import { PanelToolbarControlsProps } from "@lichtblick/suite-base/components/PanelToolbar/types";
@@ -51,8 +48,6 @@ function PanelToolbarControlsComponent(
   const panelCatalog = useContext(PanelCatalogContext);
   const { setSelectedPanelIds } = useSelectedPanels();
   const { openPanelSettings } = useWorkspaceActions();
-  const showPanelGuide = usePanelGuideStore((state) => state.show);
-  const { t } = useTranslation("panelToolbar");
 
   const hasSettingsSelector = useCallback(
     (store: PanelStateStore) => (panelId ? store.settingsTrees[panelId] != undefined : false),
@@ -75,7 +70,8 @@ function PanelToolbarControlsComponent(
 
   // Show the settings button so that panel title is editable, unless we have a custom
   // toolbar in which case the title wouldn't be visible.
-  const showSettingsButton = panelInfo?.hasCustomToolbar !== true || hasSettings;
+  const showSettingsButton =
+    panelInfo?.hasCustomToolbar !== true || hasSettings || panelInfo.docs != undefined;
 
   return (
     <Stack direction="row" alignItems="center" paddingLeft={1} ref={ref} fullHeight={true}>
@@ -99,16 +95,6 @@ function PanelToolbarControlsComponent(
           <ListAltIcon color={showLogs === true ? "primary" : undefined} />
         </ToolbarIconButton>
       </Badge>
-      {panelInfo?.docs != undefined && (
-        <ToolbarIconButton
-          title={t("panelInfo")}
-          onClick={() => {
-            showPanelGuide(panelType);
-          }}
-        >
-          <InfoOutlinedIcon />
-        </ToolbarIconButton>
-      )}
       {showSettingsButton && (
         <ToolbarIconButton title="Settings" onClick={openSettings}>
           <SettingsIcon />

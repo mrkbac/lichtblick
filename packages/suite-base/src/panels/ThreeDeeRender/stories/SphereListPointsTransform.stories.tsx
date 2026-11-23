@@ -6,17 +6,15 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { StoryObj } from "storybook-react-rsbuild";
-import { DeepWritable } from "ts-essentials";
 
 import { MessageEvent } from "@lichtblick/suite";
 import { Topic } from "@lichtblick/suite-base/players/types";
 import PanelSetup from "@lichtblick/suite-base/stories/PanelSetup";
-import { SphereListMarker } from "@lichtblick/suite-base/types/Messages";
 
 import { makeColor, rad2deg } from "./common";
 import useDelayedFixture from "./useDelayedFixture";
 import ThreeDeePanel from "../index";
-import { TransformStamped } from "../ros";
+import { Marker, TransformStamped } from "../ros";
 
 export default {
   title: "panels/ThreeDeeRender",
@@ -25,11 +23,7 @@ export default {
 
 export const SphereListPointsTransform: StoryObj = {
   render: function Story() {
-    function makeSphere(
-      id: string,
-      color: string,
-      scale: number,
-    ): MessageEvent<DeepWritable<SphereListMarker>> {
+    function makeSphere(id: number, color: string, scale: number): MessageEvent<Marker> {
       return {
         topic: "/sphere",
         receiveTime: { sec: 10, nsec: 0 },
@@ -53,7 +47,11 @@ export const SphereListPointsTransform: StoryObj = {
           ],
           scale: { x: scale, y: scale, z: scale },
           color: makeColor(color, 1),
+          colors: [],
           lifetime: { sec: 0, nsec: 0 },
+          text: "",
+          mesh_resource: "",
+          mesh_use_embedded_materials: false,
         },
         schemaName: "visualization_msgs/Marker",
         sizeInBytes: 0,
@@ -85,22 +83,22 @@ export const SphereListPointsTransform: StoryObj = {
       sizeInBytes: 0,
     };
 
-    const sphere1 = makeSphere("sphere1", "#ff0000", 0.1);
+    const sphere1 = makeSphere(1, "#ff0000", 0.1);
     sphere1.message.pose.position.x = 0.5;
 
-    const sphere2 = makeSphere("sphere2", "#00ff00", 0.1);
+    const sphere2 = makeSphere(2, "#00ff00", 0.1);
     sphere2.message.pose.position.y = 0.5;
 
-    const sphere3 = makeSphere("sphere3", "#0000ff", 0.1);
+    const sphere3 = makeSphere(3, "#0000ff", 0.1);
     sphere3.message.pose.position.z = 0.5;
 
-    const sphere4 = makeSphere("sphere4", "#ff0000", 0.2);
+    const sphere4 = makeSphere(4, "#ff0000", 0.2);
     sphere4.message.points[0]!.x = 0.75;
 
-    const sphere5 = makeSphere("sphere5", "#00ff00", 0.2);
+    const sphere5 = makeSphere(5, "#00ff00", 0.2);
     sphere5.message.points[0]!.y = 0.75;
 
-    const sphere6 = makeSphere("sphere6", "#0000ff", 0.2);
+    const sphere6 = makeSphere(6, "#0000ff", 0.2);
     sphere6.message.points[0]!.z = 0.75;
 
     const fixture = useDelayedFixture({

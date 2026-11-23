@@ -516,7 +516,6 @@ describe("URDF requests", () => {
           },
           removeTransform: vi.fn(),
           sharedGeometry: { getGeometry: (_key: string, create: () => unknown) => create() },
-          maxLod: 0,
         },
       );
       const parent = extension.renderables.get("robot")!;

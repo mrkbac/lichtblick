@@ -61,11 +61,6 @@ export function isCompressedVideoKeyframe(
   return isVideoKeyframe(frameMsg.format, frameMsg.data, resolvedCodec);
 }
 
-export function getVideoDecoderConfig(frameMsg: CompressedVideo): VideoDecoderConfig | undefined {
-  const codec = canonicalVideoCodec(frameMsg.format);
-  return codec == undefined ? undefined : VIDEO_CODECS[codec].decoderConfig(frameMsg.data);
-}
-
 export function prepareVideoFrame(
   frameMsg: CompressedVideo,
   context?: PrepareVideoFrameContext,

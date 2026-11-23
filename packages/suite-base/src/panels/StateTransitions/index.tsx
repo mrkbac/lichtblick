@@ -374,17 +374,13 @@ function StateTransitions(props: StateTransitionPanelProps) {
       <Stack fullWidth fullHeight flex="auto" overflowX="hidden" overflowY="auto">
         <div className={classes.chartWrapper} ref={sizeRef}>
           <TimeBasedChart
-            zoom
             isSynced={config.isSynced}
-            showXAxisLabels
             width={width ?? 0}
             height={height}
             data={data}
             dataBounds={databounds}
             resetButtonPaddingBottom={2}
-            type="scatter"
             xAxes={xScale}
-            xAxisIsPlaybackTime
             yAxes={yScale}
             plugins={STATE_TRANSITION_PLUGINS}
             annotations={annotations}

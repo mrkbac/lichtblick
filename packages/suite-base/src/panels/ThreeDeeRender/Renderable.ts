@@ -13,21 +13,25 @@ import type { Renderer } from "./Renderer";
 import type { BaseSettings } from "./settings";
 import type { Pose } from "./transforms";
 
-export type BaseUserData = {
+/** What every Renderable carries; children of a topic's renderable need no more */
+export type ChildUserData = {
+  /** Local position and orientation of the Renderable */
+  pose: Pose;
+  /** Topic that the Renderable belongs to, if applicable*/
+  topic?: string;
+};
+
+export type BaseUserData = ChildUserData & {
   /** Timestamp when the associated `MessageEvent` was received */
   receiveTime: bigint;
   /** Timestamp extracted from a field in the associated message, such as `header.stamp` */
   messageTime: bigint;
   /** Coordinate frame this Renderable exists in */
   frameId: string;
-  /** Local position and orientation of the Renderable */
-  pose: Pose;
   /** Settings tree path where errors will be displayed */
   settingsPath: ReadonlyArray<string>;
   /** User-customizable settings for this Renderable */
   settings: BaseSettings;
-  /** Topic that the Renderable belongs to, if applicable*/
-  topic?: string;
 };
 
 /**
@@ -38,7 +42,7 @@ export type BaseUserData = {
  * TRenderer may be set to `undefined` to opt out of access to the bloated Renderer interface.
  */
 export class Renderable<
-  TUserData extends BaseUserData = BaseUserData,
+  TUserData extends ChildUserData = BaseUserData,
   TRenderer extends Renderer | undefined = Renderer,
 > extends THREE.Object3D {
   /** Identifies this class as inheriting from `Renderable` */

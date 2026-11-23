@@ -7,11 +7,7 @@
 
 import type { ChartData as AbstractChartData } from "chart.js";
 
-import type {
-  ObjectData,
-  ChartData,
-  TypedData,
-} from "@lichtblick/suite-base/components/Chart/types";
+import type { ObjectData, ChartData } from "@lichtblick/suite-base/components/Chart/types";
 
 // alias types for convenience
 export type ChartDataset = ChartData["datasets"][0] & {
@@ -39,23 +35,19 @@ export type PlotViewport = {
   bounds: Bounds;
 };
 
-export type ProviderState<T> = {
-  data: AbstractChartData<"scatter", T>;
+export type ProviderState = {
+  data: AbstractChartData<"scatter", ObjectData>;
   // the bounds of the data contained in the `data` field
   bounds: Bounds;
 };
 
-export type ProviderStateSetter<T> = (state: ProviderState<T>) => void;
+export type ProviderStateSetter = (state: ProviderState) => void;
 
 /**
- * PlotDataProvider gives the user of a TimeBasedChart more granular control
- * over the data the plot displays, including giving it access to the current
- * viewport.
+ * PlotDataProvider feeds the TimeBasedChart its (downsampled) data and receives
+ * the current viewport.
  */
-export type PlotDataProvider<T> = {
+export type PlotDataProvider = {
   setView: (view: PlotViewport) => void;
-  register: (setter: ProviderStateSetter<T>, addPartial: ProviderStateSetter<T>) => void;
+  register: (setter: ProviderStateSetter) => void;
 };
-
-export type ObjectDataProvider = PlotDataProvider<ObjectData>;
-export type TypedDataProvider = PlotDataProvider<TypedData[]>;

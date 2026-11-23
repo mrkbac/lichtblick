@@ -13,7 +13,15 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-import { BlobReadable, McapIndexedReader, McapStreamReader } from "@lichtblick/mcap-core";
+import {
+  BlobReadable,
+  McapByteReader,
+  McapIndexedReader,
+  McapTypes,
+  decompressChunk,
+  parseMagic,
+  parseRecord,
+} from "@lichtblick/mcap-core";
 import { loadDecompressHandlers } from "@lichtblick/mcap-support";
 import { DeserializingIterableSource } from "@lichtblick/suite-base/players/IterablePlayer/DeserializingIterableSource";
 import { IIterableSource } from "@lichtblick/suite-base/players/IterablePlayer/IIterableSource";
@@ -188,11 +196,37 @@ describe.skipIf(file == undefined)("Boreas showcase recording", () => {
   }, 300_000);
 
   it("streams every record, CRCs checked, in the order written", async () => {
-    const reader = new McapStreamReader({
-      decompressHandlers: await loadDecompressHandlers(),
-      includeChunks: true,
-      validateCrcs: true,
-    });
+    const decompressHandlers = await loadDecompressHandlers();
+    const readable = new BlobReadable(await blob());
+    const view = (data: Uint8Array) =>
+      new McapByteReader(new DataView(data.buffer, data.byteOffset, data.byteLength));
+    /** Every record in file order, each chunk followed by the records in it */
+    async function* records(): AsyncGenerator<McapTypes.TypedMcapRecord> {
+      const size = await readable.size();
+      parseMagic(view(await readable.read(0n, 8n)));
+      for (let offset = 8n; ; ) {
+        const length = 9n + view(await readable.read(offset + 1n, 8n)).uint64();
+        const record = parseRecord(view(await readable.read(offset, length)), true)!;
+        offset += length;
+        yield record;
+        if (record.type === "Chunk") {
+          const chunk = view(decompressChunk(decompressHandlers, record));
+          for (let inner; (inner = parseRecord(chunk, true)); ) {
+            yield inner;
+          }
+          if (chunk.bytesRemaining() !== 0) {
+            throw new Error(`${chunk.bytesRemaining()} bytes remaining in chunk`);
+          }
+        } else if (record.type === "Footer") {
+          parseMagic(view(await readable.read(offset, 8n)));
+          if (offset + 8n !== size) {
+            throw new Error("Bytes after the MCAP footer and trailing magic");
+          }
+          return;
+        }
+      }
+    }
+
     const topics = new Map<number, string>();
     const counts = new Map<string, number>();
     let chunks = 0;
@@ -200,30 +234,26 @@ describe.skipIf(file == undefined)("Boreas showcase recording", () => {
     let inChunk = 0;
     let outOfOrder = 0;
     let lastInChunk = 0n;
-    for await (const piece of (await blob()).stream()) {
-      reader.append(piece);
-      for (let record; (record = reader.nextRecord()); ) {
-        if (record.type === "Chunk") {
-          chunks += 1;
-          inChunk = Number(record.uncompressedSize);
-          lastInChunk = 0n;
-        } else if (record.type === "Channel") {
-          topics.set(record.id, record.topic);
-        } else if (record.type === "Message") {
-          const topic = topics.get(record.channelId)!;
-          counts.set(topic, (counts.get(topic) ?? 0) + 1);
-          if (inChunk === 0) {
-            unchunked += 1;
-          } else {
-            outOfOrder += record.logTime < lastInChunk ? 1 : 0;
-            lastInChunk = record.logTime;
-          }
-        } else if (record.type === "MessageIndex" || record.type === "DataEnd") {
-          inChunk = 0;
+    for await (const record of records()) {
+      if (record.type === "Chunk") {
+        chunks += 1;
+        inChunk = Number(record.uncompressedSize);
+        lastInChunk = 0n;
+      } else if (record.type === "Channel") {
+        topics.set(record.id, record.topic);
+      } else if (record.type === "Message") {
+        const topic = topics.get(record.channelId)!;
+        counts.set(topic, (counts.get(topic) ?? 0) + 1);
+        if (inChunk === 0) {
+          unchunked += 1;
+        } else {
+          outOfOrder += record.logTime < lastInChunk ? 1 : 0;
+          lastInChunk = record.logTime;
         }
+      } else if (record.type === "MessageIndex" || record.type === "DataEnd") {
+        inChunk = 0;
       }
     }
-    expect(reader.done()).toBe(true);
     expect(chunks).toBe(expectations.container.chunk_count + expectations.container.empty_chunks);
     expect(unchunked).toBe(expectations.container.unchunked_messages);
     expect(outOfOrder > 0).toBe(expectations.container.out_of_order_chunks > 0);

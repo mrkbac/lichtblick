@@ -89,7 +89,7 @@ export class CustomDatasetsBuilder implements IDatasetsBuilder {
       // No reset on seek: without a range source, accumulated x-axis data is irrecoverable
       // (same reasoning as y-axis series in buildCurrentSeriesActions).
       if (this.#xParsedPath) {
-        const pathItems = parseXPathItems(msgEvents, this.#xParsedPath);
+        const pathItems = readMessagePathItems(msgEvents, this.#xParsedPath);
 
         this.#pendingDispatch.push({
           type: "append-current-x",
@@ -155,7 +155,7 @@ export class CustomDatasetsBuilder implements IDatasetsBuilder {
         this.#xFullBounds = undefined;
       }
       if (this.#xParsedPath) {
-        const pathItems = parseXPathItems(messages, this.#xParsedPath);
+        const pathItems = readMessagePathItems(messages, this.#xParsedPath);
         if (pathItems.length > 0) {
           this.#xFullBounds = computeBounds(this.#xFullBounds, pathItems);
           this.#pendingDispatch.push({ type: "append-full-x", items: pathItems });
@@ -264,13 +264,6 @@ export function readXYItems(
     }
   }
   return out;
-}
-
-function parseXPathItems(
-  messages: Immutable<MessageEvent[]>,
-  xParsedPath: Immutable<MessagePath>,
-): ValueItem[] {
-  return readMessagePathItems(messages, xParsedPath);
 }
 
 function readMessagePathItems(

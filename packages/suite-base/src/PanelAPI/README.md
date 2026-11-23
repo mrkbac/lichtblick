@@ -24,24 +24,25 @@ Using this hook inside a panel will cause the panel to re-render automatically w
 };
 ```
 
-## [`PanelAPI.useMessagesByTopic()`](useMessagesByTopic.js)
+## [`PanelAPI.useMessageHistory()`](useMessageHistory.ts)
 
-`useMessagesByTopic()` is a small wrapper around `PanelAPI.useMessageReducer` (see below). It makes it easy to just request some messages on some topics, without doing any transformations on the messages. This is convenient, but also means that the entire messages are kept in memory, so it's recommended to only use this for a small number of messages at a time (small `historySize`). To keep a long history of a few values, use `usePathSampleHistory()`, which stores only the decoded values.
+`useMessageHistory()` is a small wrapper around `PanelAPI.useMessageReducer` (see below). It keeps the newest `historySize` items per topic, where `map` turns each message into an item once, when it arrives. Keep only what the panel draws instead of whole messages, so a long history doesn't hold every decoded message. To keep a long history of a few values, use `usePathSampleHistory()`, which stores only the decoded values.
 
 Each topic's history is a `RingBuffer` that is appended in place, so a long history costs nothing extra per frame. `historySize` is required and must be finite.
 
 Using this hook will cause the panel to re-render when any new messages come in on the requested topics.
 
 ```js
-PanelAPI.useMessagesByTopic(props: {|
+PanelAPI.useMessageHistory<T>(props: {|
   topics: string[],
-  historySize: number // Number of messages to keep per topic. Required, finite.
-|}): { [topic: string]: ReadonlyRingBuffer<MessageEvent> };
+  historySize: number, // Number of items to keep per topic. Required, finite.
+  map: (message: MessageEvent) => T | undefined, // Stable; undefined skips the message.
+|}): { [topic: string]: ReadonlyRingBuffer<T> };
 ```
 
 ## [`PanelAPI.useMessageReducer()`](useMessageReducer.js)
 
-`useMessageReducer()` provides panels a way to access [messages](http://wiki.ros.org/Messages) from [topics](http://wiki.ros.org/Topics). `useMessageReducer` is a fairly **low-level API** that many panels will use via `PanelAPI.useMessagesByTopic` (see above). Users can define how to initialize a custom state, and how to update the state based on incoming messages.
+`useMessageReducer()` provides panels a way to access [messages](http://wiki.ros.org/Messages) from [topics](http://wiki.ros.org/Topics). `useMessageReducer` is a fairly **low-level API** that many panels will use via `PanelAPI.useMessageHistory` (see above). Users can define how to initialize a custom state, and how to update the state based on incoming messages.
 
 Using this hook will cause the panel to re-render when any new messages come in on the requested topics.
 
