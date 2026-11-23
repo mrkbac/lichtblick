@@ -4,7 +4,37 @@ import fs from "fs/promises";
 import os from "os";
 import path from "path";
 
-import { listAsarFiles } from "./afterPack";
+import { download, listAsarFiles } from "./afterPack";
+
+describe("download", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("retries network errors and 5xx responses, then returns the body", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("socket hang up"))
+      .mockResolvedValueOnce(new Response("", { status: 503 }))
+      .mockResolvedValueOnce(new Response("zip"));
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(download("https://example.com/a.zip", 0)).resolves.toEqual(
+      new TextEncoder().encode("zip"),
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
+  it("gives up after 3 tries, and at once on a 4xx", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response("", { status: 502 }));
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(download("https://example.com/a.zip", 0)).rejects.toThrow("failed: 502");
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+
+    fetchMock.mockClear().mockResolvedValue(new Response("", { status: 404 }));
+    await expect(download("https://example.com/a.zip", 0)).rejects.toThrow("failed: 404");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+});
 
 type AsarEntry = { files?: Record<string, AsarEntry>; size?: number; offset?: string };
 

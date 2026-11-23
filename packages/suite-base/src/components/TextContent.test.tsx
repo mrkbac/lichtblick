@@ -12,15 +12,10 @@ import { BasicBuilder } from "@lichtblick/test-builders";
 type SetupProps = {
   children: React.ReactNode;
   style?: React.CSSProperties;
-  allowMarkdownHtml?: boolean;
 };
 
-function setup({ children, style, allowMarkdownHtml }: SetupProps) {
-  return render(
-    <TextContent style={style} allowMarkdownHtml={allowMarkdownHtml}>
-      {children}
-    </TextContent>,
-  );
+function setup({ children, style }: SetupProps) {
+  return render(<TextContent style={style}>{children}</TextContent>);
 }
 
 describe("TextContent", () => {
@@ -61,18 +56,8 @@ describe("TextContent", () => {
     });
   });
 
-  describe("allowMarkdownHtml", () => {
-    it("should render raw HTML when allowMarkdownHtml is true", () => {
-      // When
-      setup({
-        children: `<span data-testid="raw-html">${sampleText}</span>`,
-        allowMarkdownHtml: true,
-      });
-      // Then
-      expect(screen.getByTestId("raw-html")).toHaveTextContent(sampleText);
-    });
-
-    it("should not render raw HTML when allowMarkdownHtml is not set", () => {
+  describe("raw HTML", () => {
+    it("should not render raw HTML", () => {
       // When
       setup({ children: `<span data-testid="raw-html">${sampleText}</span>` });
       // Then

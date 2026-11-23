@@ -40,7 +40,6 @@ updates:
       playwright:
         patterns:
           - "@playwright/test"
-          - "playwright"
       localization:
         patterns:
           - "i18next"
