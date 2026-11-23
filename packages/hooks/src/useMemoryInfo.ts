@@ -5,13 +5,24 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-/// <reference types="foxglove__web" />
-
 import { useEffect, useState } from "react";
 
 import Logger from "@lichtblick/log";
 
 const log = Logger.getLogger(__filename);
+
+/** Chrome-only `performance.memory`, in bytes. */
+export type MemoryInfo = {
+  /** Maximum heap size */
+  jsHeapSizeLimit: number;
+  /** Current JS heap size, including free space not occupied by any JS objects */
+  totalJSHeapSize: number;
+  /** Memory used by JS objects, including V8 internal objects */
+  usedJSHeapSize: number;
+};
+
+const readMemoryInfo = (): MemoryInfo | undefined =>
+  (window.performance as { memory?: MemoryInfo }).memory;
 
 type UseMemoryInfoOptions = {
   refreshIntervalMs: number;
@@ -19,16 +30,16 @@ type UseMemoryInfoOptions = {
 
 export function useMemoryInfo(opt: UseMemoryInfoOptions): MemoryInfo | undefined {
   const { refreshIntervalMs } = opt;
-  const [memoryInfo, setMemoryInfo] = useState<MemoryInfo | undefined>(window.performance.memory);
+  const [memoryInfo, setMemoryInfo] = useState<MemoryInfo | undefined>(readMemoryInfo);
 
   useEffect(() => {
-    if (!window.performance.memory) {
+    if (!readMemoryInfo()) {
       log.info("No memory information available");
       return;
     }
 
     const interval = setInterval(() => {
-      setMemoryInfo(window.performance.memory);
+      setMemoryInfo(readMemoryInfo());
     }, refreshIntervalMs);
     return () => {
       clearInterval(interval);

@@ -5,13 +5,11 @@
 .webpack-desktop/
 benchmark/.artifacts/
 benchmark/.perf/
-ci/apt/packages
 dist/
 node_modules/
-storybook-screenshots/
 storybook-static/
 tmp/
-# for jest --coverage
+# vitest --coverage
 coverage/
 .env
 
@@ -25,8 +23,5 @@ benchmark/e2e/reports/*
 benchmark/test-results/*
 test-results/*
 
-.pnp.*
-
 lint-report.sarif
 blob-report/*
-.eslintcache

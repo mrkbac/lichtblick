@@ -18,7 +18,6 @@ Lichtblick is an integrated visualization and diagnosis tool for robotics, built
 - [AI-Assisted Development](#ai-assisted-development)
 - [Pull Request Guidelines](#pull-request-guidelines)
 - [Reporting Issues](#reporting-issues)
-- [Version Increment](#version-increment)
 - [Localization](#localization)
 - [License](#license)
 - [Credits](#credits)
@@ -60,7 +59,7 @@ External contributors do not have write access to the repository. To contribute,
 3. **Add the upstream remote** (to keep your fork up to date):
 
    ```sh
-   git remote add upstream https://github.com/lichtblick-suite/lichtblick.git
+   git remote add upstream https://github.com/mrkbac/lichtblick.git
    ```
 
 ### For internal team members
@@ -68,7 +67,7 @@ External contributors do not have write access to the repository. To contribute,
 Core team members with write access can clone the repository directly and create branches following the [Branching Strategy](#branching-strategy---git-flow):
 
 ```sh
-git clone https://github.com/lichtblick-suite/lichtblick.git
+git clone https://github.com/mrkbac/lichtblick.git
 cd lichtblick
 ```
 
@@ -562,47 +561,13 @@ If you want a fresh review of an existing PR, comment:
 
 ## Reporting Issues
 
-- **Bug reports:** Use the [Bug Report template](https://github.com/lichtblick-suite/lichtblick/issues/new?template=bug.md) on GitHub.
-- **Feature requests (recommended):** Use the [SDD Feature Request template](https://github.com/lichtblick-suite/lichtblick/issues/new?template=sdd-feature-request.yml) on GitHub.
-- **Feature ideas (early-stage):** Start a [Discussion](https://github.com/lichtblick-suite/lichtblick/discussions/new/choose) when the request is still exploratory.
-- **Questions:** Search existing [Discussions](https://github.com/lichtblick-suite/lichtblick/discussions) or ask on [Robotics Stack Exchange](https://robotics.stackexchange.com/questions/ask).
+Open an [issue](https://github.com/mrkbac/lichtblick/issues/new) with:
 
-### SDD Feature Request Template: Why and How
-
-The SDD Feature Request template adds a lightweight **spec-first** workflow so contributors define the request before implementation starts.
-
-Why this is necessary:
-
-- It makes scope explicit early (`Problem statement`, `Proposed solution`, `Scope and non-goals`).
-- It improves review quality by requiring clear `Acceptance criteria` and `Definition of done`.
-- It reduces rework by documenting risks and dependencies up front.
-
-How to use it:
-
-1. Open the template from the feature request link above.
-2. Fill all required fields (`Problem statement`, `Proposed solution`, `Acceptance criteria`, `Definition of done`, `Scope and non-goals`).
-3. Add `Risks and dependencies` when relevant.
-4. Submit the issue before opening an implementation PR, and link the issue in your PR description.
-
-When reporting a bug, please include:
-
-- Lichtblick version
+- Version
 - Platform (OS, browser, desktop)
 - Data source type (e.g., MCAP file, ROS 1/2 native, rosbridge)
 - Steps to reproduce
 - Expected vs. actual behavior
-
----
-
-## Version Increment
-
-The version format: `<major>.<minor>.<patch>`. Version bumps are **determined automatically** by the CI release workflow based on the branch name used:
-
-| Component | Branch Prefix    | Description                                                                            |
-| --------- | ---------------- | -------------------------------------------------------------------------------------- |
-| **MAJOR** | `release/major/` | Breaking changes — removed or reworked APIs. Users should expect a non-trivial update. |
-| **MINOR** | `release/minor/` | New functionality added without breaking backward compatibility.                       |
-| **PATCH** | `hotfix/`        | Bug fixes, security patches, and minor improvements.                                   |
 
 ---
 

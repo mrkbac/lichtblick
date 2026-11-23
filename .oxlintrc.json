@@ -15,11 +15,8 @@
   "ignorePatterns": [
     "**/.webpack/**",
     "**/.webpack-desktop/**",
-    "**/.yarn/**",
     "**/.storybook/**",
     "**/dist/**",
-    "**/out/**",
-    "**/template/**",
     "packages/**/wasm/*.js",
     "storybook-static/**",
     "**/coverage/**",
