@@ -405,8 +405,7 @@ function Chart(props: Props): React.JSX.Element {
       return;
     }
 
-    const threshold = props.options.plugins?.zoom?.pan?.threshold ?? 10;
-    return listenForPan(container, threshold, {
+    return listenForPan(container, 10, {
       onStart: ({ deltaX, deltaY }) => {
         hasPannedSinceMouseDown.current = true;
         void rpcSendRef.current?.<RpcScales>("panstart", {
@@ -430,7 +429,7 @@ function Chart(props: Props): React.JSX.Element {
         maybeUpdateScales(scales, { userInteraction: true });
       },
     });
-  }, [maybeUpdateScales, panEnabled, props.options.plugins?.zoom?.pan?.threshold]);
+  }, [maybeUpdateScales, panEnabled]);
 
   const onWheel = useCallback(
     async (event: React.WheelEvent<HTMLElement>) => {
