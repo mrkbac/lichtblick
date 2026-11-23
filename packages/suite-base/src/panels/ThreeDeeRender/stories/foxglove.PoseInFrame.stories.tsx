@@ -173,12 +173,3 @@ export const Foxglove_PoseInFrame: StoryObj = {
     await userEvent.click(await screen.findByTestId("settings__nodeHeaderToggle__topics-/pose1"));
   },
 };
-
-export const Foxglove_PoseInFrame_Chinese: StoryObj = {
-  ...Foxglove_PoseInFrame,
-  parameters: { forceLanguage: "zh" },
-};
-export const Foxglove_PoseInFrame_Japanese: StoryObj = {
-  ...Foxglove_PoseInFrame,
-  parameters: { forceLanguage: "ja" },
-};

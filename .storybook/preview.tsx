@@ -9,8 +9,7 @@ import "@lichtblick/suite-base/util/installSetImmediate";
 
 import { GlobalStyles } from "@mui/material";
 import { StoryContext } from "storybook-react-rsbuild";
-import { useMemo, useRef, useEffect } from "react";
-import { useTranslation } from "react-i18next";
+import { useMemo, useRef } from "react";
 
 import { Condvar } from "@lichtblick/den/async";
 import CssBaseline from "@lichtblick/suite-base/components/CssBaseline";
@@ -18,7 +17,7 @@ import GlobalCss from "@lichtblick/suite-base/components/GlobalCss";
 import MultiProvider from "@lichtblick/suite-base/components/MultiProvider";
 import StudioToastProvider from "@lichtblick/suite-base/components/StudioToastProvider";
 import AppConfigurationContext from "@lichtblick/suite-base/context/AppConfigurationContext";
-import { initI18n, Language } from "@lichtblick/suite-base/i18n";
+import { initI18n } from "@lichtblick/suite-base/i18n";
 import TimelineInteractionStateProvider from "@lichtblick/suite-base/providers/TimelineInteractionStateProvider";
 import ReadySignalContext from "@lichtblick/suite-base/stories/ReadySignalContext";
 import ThemeProvider from "@lichtblick/suite-base/theme/ThemeProvider";
@@ -182,30 +181,6 @@ function WithContextProviders(Child: React.ComponentType, ctx: StoryContext): Re
   return <Child />;
 }
 
-function WithI18n({
-  ctx,
-  children,
-}: React.PropsWithChildren<{ ctx: StoryContext }>): React.JSX.Element {
-  const lang = ctx.parameters.forceLanguage ?? "en";
-  const { i18n } = useTranslation();
-  useEffect(() => {
-    void i18n.changeLanguage(lang as Language);
-  }, [i18n, lang]);
-  return <>{children}</>;
-}
-
-function WithI18nUnlessDisabled(Child: React.ComponentType, ctx: StoryContext): React.JSX.Element {
-  const { disableI18n = false }: { disableI18n?: boolean } = ctx.parameters;
-  if (disableI18n) {
-    return <Child />;
-  }
-  return (
-    <WithI18n ctx={ctx}>
-      <Child />
-    </WithI18n>
-  );
-}
-
 export const loaders = [
   async (ctx: StoryContext): Promise<void> => {
     const { disableI18n = false }: { disableI18n?: boolean } = ctx.parameters;
@@ -221,7 +196,7 @@ export const loaders = [
   },
 ];
 
-export const decorators = [WithContextProviders, WithI18nUnlessDisabled];
+export const decorators = [WithContextProviders];
 
 export const parameters = {
   // Disable default padding around the page body

@@ -36,14 +36,6 @@ export const Foxglove_PointCloud_RGBA_Settings: StoryObj = {
     );
   },
 };
-export const Foxglove_PointCloud_RGBA_SettingsChinese: StoryObj = {
-  ...Foxglove_PointCloud_RGBA_Settings,
-  parameters: { forceLanguage: "zh" },
-};
-export const Foxglove_PointCloud_RGBA_SettingsJapanese: StoryObj = {
-  ...Foxglove_PointCloud_RGBA_Settings,
-  parameters: { forceLanguage: "ja" },
-};
 
 export const Foxglove_PointCloud_Gradient_Settings: StoryObj = {
   render: () => <Foxglove_PointCloud colorMode="gradient" includeSettings />,
@@ -53,14 +45,6 @@ export const Foxglove_PointCloud_Gradient_Settings: StoryObj = {
       await screen.findByTestId("settings__nodeHeaderToggle__topics-/pointcloud"),
     );
   },
-};
-export const Foxglove_PointCloud_Gradient_SettingsChinese: StoryObj = {
-  ...Foxglove_PointCloud_Gradient_Settings,
-  parameters: { forceLanguage: "zh" },
-};
-export const Foxglove_PointCloud_Gradient_SettingsJapanese: StoryObj = {
-  ...Foxglove_PointCloud_Gradient_Settings,
-  parameters: { forceLanguage: "ja" },
 };
 
 export const Foxglove_PointCloud_RGBA: StoryObj = {

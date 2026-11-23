@@ -188,12 +188,3 @@ export const Foxglove_PosesInFrame: StoryObj = {
     );
   },
 };
-
-export const Foxglove_PosesInFrame_Chinese: StoryObj = {
-  ...Foxglove_PosesInFrame,
-  parameters: { forceLanguage: "zh" },
-};
-export const Foxglove_PosesInFrame_Japanese: StoryObj = {
-  ...Foxglove_PosesInFrame,
-  parameters: { forceLanguage: "ja" },
-};

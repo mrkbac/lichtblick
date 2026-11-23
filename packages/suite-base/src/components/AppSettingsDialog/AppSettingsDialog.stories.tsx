@@ -5,7 +5,6 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { screen, userEvent } from "storybook/test";
 import { StoryObj } from "storybook-react-rsbuild";
 
 import ExtensionMarketplaceContext, {
@@ -95,46 +94,10 @@ export const Default: StoryObj = {
   },
 };
 
-export const DefaultChinese: StoryObj = {
-  ...Default,
-  parameters: { forceLanguage: "zh" },
-};
-
-export const DefaultJapanese: StoryObj = {
-  ...Default,
-  parameters: { forceLanguage: "ja" },
-};
-
-export const ChangingLanguage: StoryObj = {
-  render: function Story() {
-    return <AppSettingsDialog open />;
-  },
-
-  play: async () => {
-    const { click, keyboard } = userEvent.setup();
-    const input = await screen.findByText("English", { exact: false });
-    await click(input);
-
-    await keyboard("中文");
-    const item = await screen.findByText("中文", { exact: false });
-    await click(item);
-  },
-};
-
 export const General: StoryObj = {
   render: () => {
     return <AppSettingsDialog open activeTab="general" />;
   },
-};
-
-export const GeneralChinese: StoryObj = {
-  ...General,
-  parameters: { forceLanguage: "zh" },
-};
-
-export const GeneralJapanese: StoryObj = {
-  ...General,
-  parameters: { forceLanguage: "ja" },
 };
 
 export const Privacy: StoryObj = {
@@ -143,30 +106,10 @@ export const Privacy: StoryObj = {
   },
 };
 
-export const PrivacyChinese: StoryObj = {
-  ...Privacy,
-  parameters: { forceLanguage: "zh" },
-};
-
-export const PrivacyJapanese: StoryObj = {
-  ...Privacy,
-  parameters: { forceLanguage: "ja" },
-};
-
 export const Extensions: StoryObj = {
   render: () => {
     return <AppSettingsDialog open activeTab="extensions" />;
   },
-};
-
-export const ExtensionsChinese: StoryObj = {
-  ...Extensions,
-  parameters: { forceLanguage: "zh" },
-};
-
-export const ExtensionsJapanese: StoryObj = {
-  ...Extensions,
-  parameters: { forceLanguage: "ja" },
 };
 
 export const Advanced: StoryObj = {
@@ -179,14 +122,4 @@ export const About: StoryObj = {
   render: () => {
     return <AppSettingsDialog open activeTab="about" />;
   },
-};
-
-export const AboutChinese: StoryObj = {
-  ...About,
-  parameters: { forceLanguage: "zh" },
-};
-
-export const AboutJapanese: StoryObj = {
-  ...About,
-  parameters: { forceLanguage: "ja" },
 };

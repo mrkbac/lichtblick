@@ -26,8 +26,6 @@ export default {
 type Story = StoryObj<typeof AppBar>;
 
 export const Default: Story = {};
-export const DefaultChinese: Story = { parameters: { forceLanguage: "zh" } };
-export const DefaultJapanese: Story = { parameters: { forceLanguage: "ja" } };
 
 export const DragRegion: Story = {
   args: { debugDragRegion: true },
@@ -102,16 +100,6 @@ export const PlayerStates: Story = {
   parameters: { colorScheme: "light" },
 };
 
-export const PlayerStatesChinese: Story = {
-  ...PlayerStates,
-  parameters: { colorScheme: "light", forceLanguage: "zh" },
-};
-
-export const PlayerStatesJapanese: Story = {
-  ...PlayerStates,
-  parameters: { colorScheme: "light", forceLanguage: "ja" },
-};
-
 const fileSources: MockMessagePipelineProps[] = [
   "mcap-local-file",
   "ros1-local-bagfile",
@@ -175,13 +163,4 @@ export const DataSources: Story = {
     Grid,
   ],
   parameters: { colorScheme: "light" },
-};
-
-export const DataSourcesChinese: Story = {
-  ...DataSources,
-  parameters: { colorScheme: "light", forceLanguage: "zh" },
-};
-export const DataSourcesJapanese: Story = {
-  ...DataSources,
-  parameters: { colorScheme: "light", forceLanguage: "ja" },
 };
