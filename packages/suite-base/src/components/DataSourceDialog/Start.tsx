@@ -14,12 +14,13 @@ import {
   List,
   ListItem,
   ListItemButton,
+  TextField,
   ToggleButton,
   ToggleButtonGroup,
   Tooltip,
   Typography,
 } from "@mui/material";
-import { useMemo, useState } from "react";
+import { useImperativeHandle, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import Catalog from "@lichtblick/suite-base/components/Catalog/Catalog";
@@ -31,7 +32,10 @@ import { filterRecordings } from "@lichtblick/suite-base/components/Catalog/sear
 import { CatalogRecording } from "@lichtblick/suite-base/components/Catalog/types";
 import { useCatalogFolder } from "@lichtblick/suite-base/components/Catalog/useCatalogFolder";
 import DontShowThisAgainCheckbox from "@lichtblick/suite-base/components/DataSourceDialog/DontShowThisAgainCheckbox";
-import { OpenUrlInput } from "@lichtblick/suite-base/components/DataSourceDialog/OpenUrlInput";
+import {
+  OpenUrlInput,
+  START_ADDRESS_INPUT_ID,
+} from "@lichtblick/suite-base/components/DataSourceDialog/OpenUrlInput";
 import {
   DEFAULT_CATALOG,
   SavedCatalogs,
@@ -53,7 +57,9 @@ import { splitRecentTitle } from "@lichtblick/suite-base/util/recentSources";
 // Number of recents listed on the All tab, unless searching
 const RECENTS_PREVIEW_COUNT = 5;
 
-type View = "all" | "catalog" | "recent" | "recordings";
+export type StartHandle = { focusAddress: () => void };
+
+type View = "all" | "catalog" | "recent" | "recordings" | "live";
 type Kind = "all" | "file" | "remote" | "live";
 
 function recentKind(recent: RecentSource): Exclude<Kind, "all"> {
@@ -75,9 +81,15 @@ function catalogMatch(
  * The start page: open anything (URL, files, folder), and search recent sources and the
  * recordings of a local folder in one place.
  */
-export default function Start(): React.JSX.Element {
-  const { recentSources, selectRecent, removeRecent, togglePinRecent, clearRecents } =
-    usePlayerSelection();
+export default function Start({ ref }: { ref?: React.Ref<StartHandle> }): React.JSX.Element {
+  const {
+    availableSources,
+    recentSources,
+    selectRecent,
+    removeRecent,
+    togglePinRecent,
+    clearRecents,
+  } = usePlayerSelection();
   const { classes } = useStyles();
   const { t } = useTranslation("openDialog");
   const { dialogActions } = useWorkspaceActions();
@@ -85,6 +97,19 @@ export default function Start(): React.JSX.Element {
 
   const [query, setQuery] = useState("");
   const [view, setView] = useState<View>("all");
+  useImperativeHandle(
+    ref,
+    () => ({
+      focusAddress() {
+        if (view === "live") {
+          setView("all");
+        } else {
+          document.getElementById(START_ADDRESS_INPUT_ID)?.focus();
+        }
+      },
+    }),
+    [view],
+  );
   const [kindFilter, setKind] = useState<Kind>("all");
   // The kind filter belongs to the Recent tab; All shows every kind.
   const kind = view === "recent" ? kindFilter : "all";
@@ -131,6 +156,9 @@ export default function Start(): React.JSX.Element {
   // Search recents with the catalog's query language; a recent that is in the catalog matches
   // on its topics, duration and so on too.
   const filteredRecents = useMemo(() => {
+    if (view !== "all" && view !== "recent") {
+      return [];
+    }
     const byKind = recentSources.filter((recent) => kind === "all" || recentKind(recent) === kind);
     if (query.trim() === "") {
       return byKind;
@@ -145,7 +173,7 @@ export default function Start(): React.JSX.Element {
     );
     const matches = new Set(filterRecordings(asRecordings, query).map((r) => r.id));
     return byKind.filter((recent) => matches.has(recent.id));
-  }, [recentSources, kind, query, catalogByName]);
+  }, [recentSources, kind, query, catalogByName, view]);
 
   const searching = query.trim() !== "" || kind !== "all";
   const visibleRecents =
@@ -176,15 +204,37 @@ export default function Start(): React.JSX.Element {
     }
   };
 
+  const liveSections =
+    view === "live"
+      ? availableSources.flatMap(({ id, LiveDevices, disabledReason }) =>
+          LiveDevices && disabledReason == undefined
+            ? [<LiveDevices key={id} query={query} />]
+            : [],
+        )
+      : [];
+
   return (
     <Stack className={classes.page}>
-      <OpenUrlInput
-        value={query}
-        onChange={setQuery}
-        topMatch={topMatch}
-        onOpenTopMatch={openTopMatch}
-        onOpenCatalog={openCatalog}
-      />
+      {view === "live" ? (
+        <TextField
+          type="search"
+          size="small"
+          placeholder={t("searchLiveDevices")}
+          slotProps={{ htmlInput: { "aria-label": t("searchLiveDevices") } }}
+          value={query}
+          onChange={(event) => {
+            setQuery(event.target.value);
+          }}
+        />
+      ) : (
+        <OpenUrlInput
+          value={query}
+          onChange={setQuery}
+          topMatch={topMatch}
+          onOpenTopMatch={openTopMatch}
+          onOpenCatalog={openCatalog}
+        />
+      )}
 
       {/* What to show on the left; the controls for that view on the right. */}
       <div className={classes.tabRow}>
@@ -203,6 +253,7 @@ export default function Start(): React.JSX.Element {
           <ToggleButton value="catalog">{t("tabCatalog")}</ToggleButton>
           <ToggleButton value="recent">{t("tabRecent")}</ToggleButton>
           <ToggleButton value="recordings">{t("tabRecordings")}</ToggleButton>
+          <ToggleButton value="live">{t("tabLive")}</ToggleButton>
         </ToggleButtonGroup>
         <div className={classes.spacer} />
         {view === "recent" && (
@@ -329,6 +380,15 @@ export default function Start(): React.JSX.Element {
           )}
         </Stack>
       )}
+
+      {view === "live" &&
+        (liveSections.length > 0 ? (
+          liveSections
+        ) : (
+          <Typography variant="body2" color="textSecondary">
+            {t("noLiveDeviceSources")}
+          </Typography>
+        ))}
 
       {view === "recordings" && (
         <LiveRecordingsList

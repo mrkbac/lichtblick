@@ -42,6 +42,22 @@ export default class FoxgloveWebSocketDataSourceFactory implements IDataSourceFa
     ],
   };
 
+  public hidden?: boolean;
+  public LiveDevices?: IDataSourceFactory["LiveDevices"];
+  public prepareTransport?: IDataSourceFactory["prepareTransport"];
+  public AccountMenuItems?: IDataSourceFactory["AccountMenuItems"];
+
+  public constructor(
+    options?: Pick<
+      IDataSourceFactory,
+      "id" | "displayName" | "hidden" | "prepareTransport" | "AccountMenuItems" | "LiveDevices"
+    >,
+  ) {
+    if (options) {
+      Object.assign(this, options);
+    }
+  }
+
   public prefetch = loadFoxgloveWebSocketPlayer;
 
   public async initialize(args: DataSourceFactoryInitializeArgs): Promise<Player | undefined> {
@@ -54,6 +70,7 @@ export default class FoxgloveWebSocketDataSourceFactory implements IDataSourceFa
     return new FoxgloveWebSocketPlayer({
       url,
       sourceId: this.id,
+      transport: args.transport,
     });
   }
 }

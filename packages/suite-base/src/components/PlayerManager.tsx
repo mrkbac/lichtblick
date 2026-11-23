@@ -264,6 +264,8 @@ export default function PlayerManager(
   // Bumped on every selectSource/closeSource call, so a slow earlier selection can tell it was
   // superseded and won't apply its player or layout late.
   const selectionSeq = useRef(0);
+  const pendingTransport = useRef<AbortController | undefined>(undefined);
+  useEffect(() => () => pendingTransport.current?.abort(), []);
 
   // Player code loads on demand (see dataSources/playerModules). Once the app is idle after
   // starting, load it for the file and sample sources, so opening one rarely waits for a chunk.
@@ -292,6 +294,7 @@ export default function PlayerManager(
     async (sourceId: string, args?: DataSourceArgs) => {
       log.debug(`Select Source: ${sourceId}`);
       const seq = ++selectionSeq.current;
+      pendingTransport.current?.abort();
 
       const foundSource = playerSources.find(
         (source) => (source.id === sourceId || source.legacyIds?.includes(sourceId)) ?? false,
@@ -313,12 +316,36 @@ export default function PlayerManager(
         initArgs: DataSourceFactoryInitializeArgs,
       ): Promise<{ player: Player | undefined } | undefined> => {
         const newPlayer = await foundSource.initialize(initArgs);
+        if (initArgs.transport && !newPlayer) {
+          throw new Error("Unable to initialize player");
+        }
         if (!isMounted() || seq !== selectionSeq.current) {
           newPlayer?.close();
           return undefined;
         }
         return { player: newPlayer };
       };
+      let transport: DataSourceFactoryInitializeArgs["transport"];
+      if (args?.type === "connection" && foundSource.prepareTransport) {
+        const controller = new AbortController();
+        pendingTransport.current = controller;
+        try {
+          transport = await foundSource.prepareTransport(controller.signal);
+          if (controller.signal.aborted) {
+            transport.dispose?.();
+            return;
+          }
+        } catch (error) {
+          if (!controller.signal.aborted) {
+            enqueueSnackbar(toError(error).message, { variant: "error" });
+          }
+          return;
+        } finally {
+          if (pendingTransport.current === controller) {
+            pendingTransport.current = undefined;
+          }
+        }
+      }
       // Only once the new player exists: a failed initialize keeps the current player running,
       // and it still needs its selection (Compare, Export).
       const commitSelection = (
@@ -426,7 +453,9 @@ export default function PlayerManager(
             const initialized = await initializePlayer({
               params: args.params,
               ...(args.urls != undefined && { urls: args.urls }),
+              transport,
             });
+            transport = undefined; // The initialized player owns its backend.
             if (!initialized) {
               return;
             }
@@ -565,6 +594,7 @@ export default function PlayerManager(
 
         enqueueSnackbar("Unable to initialize player", { variant: "error" });
       } catch (error) {
+        transport?.dispose?.();
         // A superseded selection (closed or replaced meanwhile) shouldn't surface its error
         if (seq === selectionSeq.current) {
           enqueueSnackbar(toError(error).message, { variant: "error" });
@@ -658,6 +688,7 @@ export default function PlayerManager(
 
   const closeSource = useCallback(() => {
     selectionSeq.current++;
+    pendingTransport.current?.abort();
     // Dropping the player makes MessagePipelineProvider close() it (e.g. closes the websocket).
     setBasePlayer(undefined);
     setSelectedSource(undefined);

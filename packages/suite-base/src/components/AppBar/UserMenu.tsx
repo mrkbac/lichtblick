@@ -6,6 +6,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { ListSubheader, Menu, MenuItem, PaperProps } from "@mui/material";
+import { useTranslation } from "react-i18next";
 import { makeStyles } from "tss-react/mui";
 
 import { isSafeUrl } from "@lichtblick/suite-base/api/organization/client";
@@ -13,6 +14,7 @@ import {
   OrganizationState,
   useOrganization,
 } from "@lichtblick/suite-base/context/OrganizationContext";
+import type { IDataSourceFactory } from "@lichtblick/suite-base/context/PlayerSelectionContext";
 
 const useStyles = makeStyles()({
   menuList: {
@@ -21,8 +23,7 @@ const useStyles = makeStyles()({
 });
 
 /**
- * Whether the account menu has anything to show; without it the avatar button is hidden.
- * While the session loads the button is shown (clicks are ignored) so it doesn't pop in and shift the app bar.
+ * Reserve space for organization accounts while their session loads.
  */
 export function hasUserMenu(organization: OrganizationState): boolean {
   return (
@@ -34,22 +35,29 @@ export function hasUserMenu(organization: OrganizationState): boolean {
 }
 
 type UserMenuProps = {
+  accountSources: readonly IDataSourceFactory[];
   handleClose: () => void;
   anchorEl?: HTMLElement;
   open: boolean;
 };
 
 /** The account menu: login, the signed-in user, the server's links and logout. */
-export function UserMenu({ anchorEl, handleClose, open }: UserMenuProps): React.JSX.Element {
+export function UserMenu({
+  accountSources,
+  anchorEl,
+  handleClose,
+  open,
+}: UserMenuProps): React.JSX.Element {
   const { classes } = useStyles();
-  const organizationItems = useOrganizationMenuItems();
+  const { t } = useTranslation("appBar");
+  const loginLabel = t(accountSources.length > 0 ? "signInToServer" : "logIn");
+  const organizationItems = useOrganizationMenuItems(handleClose, loginLabel);
   return (
     <Menu
       anchorEl={anchorEl}
       id="user-menu"
       open={open}
       onClose={handleClose}
-      onClick={handleClose}
       slotProps={{
         list: {
           className: classes.menuList,
@@ -61,12 +69,16 @@ export function UserMenu({ anchorEl, handleClose, open }: UserMenuProps): React.
       }}
     >
       {organizationItems}
+      {open &&
+        accountSources.map(({ id, AccountMenuItems }) =>
+          AccountMenuItems ? <AccountMenuItems key={id} onClose={handleClose} /> : undefined,
+        )}
     </Menu>
   );
 }
 
 /** Menu items for the organization status; empty when there is nothing to show. */
-function useOrganizationMenuItems(): React.JSX.Element[] {
+function useOrganizationMenuItems(onClose: () => void, loginLabel: string): React.JSX.Element[] {
   const organization = useOrganization();
   switch (organization.status) {
     case "disabled":
@@ -84,8 +96,14 @@ function useOrganizationMenuItems(): React.JSX.Element[] {
         return [];
       }
       return [
-        <MenuItem key="login" onClick={() => void login()}>
-          Log in
+        <MenuItem
+          key="login"
+          onClick={() => {
+            onClose();
+            void login();
+          }}
+        >
+          {loginLabel}
         </MenuItem>,
       ];
     }
@@ -107,6 +125,7 @@ function useOrganizationMenuItems(): React.JSX.Element[] {
               key={`link-${link.id}`}
               component="a"
               href={link.url}
+              onClick={onClose}
               target="_blank"
               rel="noopener noreferrer"
             >
@@ -114,7 +133,13 @@ function useOrganizationMenuItems(): React.JSX.Element[] {
             </MenuItem>
           );
         }),
-        <MenuItem key="logout" onClick={logout}>
+        <MenuItem
+          key="logout"
+          onClick={() => {
+            onClose();
+            logout();
+          }}
+        >
           Log out
         </MenuItem>,
       ];

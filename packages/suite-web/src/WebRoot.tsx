@@ -5,7 +5,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { useMemo, useState } from "react";
+import { lazy, Suspense, useMemo, useState } from "react";
 
 import {
   AppSetting,
@@ -24,8 +24,12 @@ import {
 } from "@lichtblick/suite-base";
 import { APP_CONFIG } from "@lichtblick/suite-base/constants/config";
 import { AppParametersInput } from "@lichtblick/suite-base/context/AppParametersContext";
+import { sharedI18nObject } from "@lichtblick/suite-base/i18n";
 
 import LocalStorageAppConfiguration from "./services/LocalStorageAppConfiguration";
+
+const TailscaleDevices = lazy(async () => await import("./tailscale/TailscaleDevices"));
+const TailscaleMenu = lazy(async () => await import("./tailscale/TailscaleMenu"));
 
 const isDevelopment = process.env.NODE_ENV === "development";
 
@@ -58,6 +62,25 @@ export function WebRoot(props: { children: React.JSX.Element }): React.JSX.Eleme
     new Ros1LocalBagDataSourceFactory(),
     new Ros2LocalBagDataSourceFactory(),
     new FoxgloveWebSocketDataSourceFactory(),
+    new FoxgloveWebSocketDataSourceFactory({
+      id: "tailscale",
+      displayName: sharedI18nObject.t("openDialog:tailscaleConnect"),
+      hidden: true,
+      prepareTransport: async (signal) => {
+        const { prepareTailscaleTransport } = await import("./tailscale/TailscaleAccount");
+        return await prepareTailscaleTransport(signal);
+      },
+      LiveDevices: (deviceProps) => (
+        <Suspense fallback={null}>
+          <TailscaleDevices {...deviceProps} />
+        </Suspense>
+      ),
+      AccountMenuItems: (menuProps) => (
+        <Suspense fallback={null}>
+          <TailscaleMenu {...menuProps} />
+        </Suspense>
+      ),
+    }),
     new RosbridgeDataSourceFactory(),
     new UlogLocalDataSourceFactory(),
     new CsvLocalDataSourceFactory(),

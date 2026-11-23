@@ -4,6 +4,7 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
+
 import { MessageDefinition, isMsgDefEqual } from "@foxglove/message-definition";
 import CommonRosTypes from "@foxglove/rosmsg-msgs-common";
 import { MessageWriter as Ros1MessageWriter } from "@foxglove/rosmsg-serialization";
@@ -41,6 +42,7 @@ import { parseChannel } from "@lichtblick/mcap-support";
 import { ParameterValue } from "@lichtblick/suite";
 import { Asset } from "@lichtblick/suite-base/components/PanelExtensionAdapter";
 import { APP_CONFIG } from "@lichtblick/suite-base/constants/config";
+import type { LiveConnectionBackend } from "@lichtblick/suite-base/players/LiveConnectionBackend";
 import {
   LIVE_QUEUE_MAX_BYTES,
   LiveMessageQueue,
@@ -77,13 +79,8 @@ import { ros2CommonDatatypes } from "@lichtblick/suite-base/util/ros2CommonDatat
 import rosDatatypesToMessageDefinition from "@lichtblick/suite-base/util/rosDatatypesToMessageDefinition";
 import { toError } from "@lichtblick/suite-base/util/toError";
 
-import ExtensionProxySocket, {
-  isMixedContentWs,
-  needsExtensionProxy,
-  PROXY_MISSING_REASON,
-} from "./ExtensionProxySocket";
+import { isMixedContentWs, PROXY_MISSING_REASON } from "./ExtensionProxySocket";
 import { JsonMessageWriter } from "./JsonMessageWriter";
-import WorkerSocketAdapter from "./WorkerSocketAdapter";
 import {
   FALLBACK_PUBLICATION_ENCODING,
   GET_ALL_PARAMS_PERIOD_MS,
@@ -111,6 +108,7 @@ import {
   ResolvedChannel,
   ResolvedService,
 } from "./types";
+import { webSocketBackend } from "./webSocketBackend";
 
 // FoxgloveClient emits this for an error event that carries no error
 const OPAQUE_SOCKET_ERROR = "WebSocket error";
@@ -140,6 +138,7 @@ const readHeapUsage = (): HeapUsage | undefined =>
 export default class FoxgloveWebSocketPlayer implements Player {
   readonly #sourceId: string;
 
+  #transport: LiveConnectionBackend;
   #url: string; // WebSocket URL.
   /** Name the server gives itself, once known. */
   #serverName?: string;
@@ -240,10 +239,13 @@ export default class FoxgloveWebSocketPlayer implements Player {
   public constructor({
     url,
     sourceId,
+    transport,
   }: {
     url: string;
     sourceId: string;
+    transport?: LiveConnectionBackend;
   }) {
+    this.#transport = transport ?? webSocketBackend;
     this.#url = url;
     this.#name = url;
     this.#sourceId = sourceId;
@@ -251,6 +253,7 @@ export default class FoxgloveWebSocketPlayer implements Player {
       sourceId: this.#sourceId,
       parameters: { url: this.#url },
     };
+    this.#open();
     this.#unsubscribeHistorySettings = liveHistorySettings.subscribe(({ windowSec, diskMiB }) => {
       if (diskMiB === 0) {
         this.#stopRecording();
@@ -259,7 +262,6 @@ export default class FoxgloveWebSocketPlayer implements Player {
       this.#applyHistoryMemoryLimit();
       this.#emitState();
     });
-    this.#open();
   }
 
   #open = (): void => {
@@ -271,6 +273,12 @@ export default class FoxgloveWebSocketPlayer implements Player {
     }
     log.info(`Opening connection to ${this.#url}`);
 
+    const subprotocols = [FoxgloveClient.SUPPORTED_SUBPROTOCOL, "foxglove.sdk.v1"];
+
+    const ws = this.#transport.open(this.#url, subprotocols);
+    this.#ws = ws;
+    this.#client = new FoxgloveClient({ ws });
+
     // Set a timeout to abort the connection if we are still not connected by then.
     // This will abort hanging connection attempts that can for whatever reason not
     // establish a connection with the server.
@@ -278,20 +286,13 @@ export default class FoxgloveWebSocketPlayer implements Player {
       this.#client?.close();
     }, 10000);
 
-    const subprotocols = [FoxgloveClient.SUPPORTED_SUBPROTOCOL, "foxglove.sdk.v1"];
-
-    const ws = needsExtensionProxy(this.#url)
-      ? new ExtensionProxySocket(this.#url, subprotocols)
-      : typeof Worker !== "undefined"
-        ? new WorkerSocketAdapter(this.#url, subprotocols)
-        : (new WebSocket(this.#url, subprotocols) as IWebSocket);
-    this.#ws = ws;
-    this.#client = new FoxgloveClient({ ws });
-
     // FoxgloveClient emits an error for opcodes it doesn't know, so intercept playback state
     // messages before they reach it.
     const clientOnMessage = ws.onmessage;
     ws.onmessage = (event: { data: unknown }) => {
+      if (this.#closed || this.#ws !== ws) {
+        return;
+      }
       const { data } = event;
       if (isPlaybackStateMessage(data)) {
         if (this.#serverControlsPlayback) {
@@ -347,7 +348,7 @@ export default class FoxgloveWebSocketPlayer implements Player {
     });
     this.#client.on("error", (err) => {
       log.error(err);
-      if (opened || !isMixedContentWs(this.#url)) {
+      if (opened || this.#transport !== webSocketBackend || !isMixedContentWs(this.#url)) {
         return;
       }
       const message = (err as unknown as undefined | { message?: unknown })?.message;
@@ -365,8 +366,13 @@ export default class FoxgloveWebSocketPlayer implements Player {
     // this during a disconnect event. Any necessary state clearing is handled once a new connection
     // is established
     this.#client.on("close", (event) => {
+      if (this.#closed || this.#ws !== ws) {
+        return;
+      }
       log.info("Connection closed:", event);
-      this.#presence = PlayerPresence.RECONNECTING;
+      const close = event as { retryable?: boolean; reason?: string } | undefined;
+      const terminal = close?.retryable === false;
+      this.#presence = terminal ? PlayerPresence.ERROR : PlayerPresence.RECONNECTING;
       this.#stopRecording();
       this.#connectedAtMs = undefined;
 
@@ -378,12 +384,15 @@ export default class FoxgloveWebSocketPlayer implements Player {
         clearTimeout(this.#connectionAttemptTimeout);
       }
 
-      this.#client?.close();
+      this.#ws = undefined;
       this.#client = undefined;
       this.#serverControlsPlayback = false;
 
-      const reason = (event as { reason?: unknown } | undefined)?.reason;
-      if (reason === PROXY_MISSING_REASON) {
+      if (
+        this.#transport === webSocketBackend &&
+        close?.reason === PROXY_MISSING_REASON &&
+        !terminal
+      ) {
         // No extension: try the browser's own connection first. It works when the site may load
         // insecure content, and Chrome may first ask for local network access. Only explain the
         // block if that fails too.
@@ -391,7 +400,12 @@ export default class FoxgloveWebSocketPlayer implements Player {
         this.#openTimeout = setTimeout(this.#open, 0);
         return;
       }
-      if (blockedAsMixedContent) {
+      if (terminal) {
+        this.#alerts.addAlert("ws:connection-failed", {
+          severity: "error",
+          message: close.reason ?? "Connection failed",
+        });
+      } else if (blockedAsMixedContent) {
         this.#alerts.addAlert("ws:connection-failed", {
           severity: "error",
           message: "Your browser blocked ws:// from this https page",
@@ -409,7 +423,9 @@ export default class FoxgloveWebSocketPlayer implements Player {
       }
 
       this.#emitState();
-      this.#openTimeout = setTimeout(this.#open, 3000);
+      if (!terminal) {
+        this.#openTimeout = setTimeout(this.#open, 3000);
+      }
     });
 
     this.#client.on("serverInfo", (event) => {
@@ -1140,12 +1156,17 @@ export default class FoxgloveWebSocketPlayer implements Player {
   }
 
   public close(): void {
+    if (this.#closed) {
+      return;
+    }
     this.#closed = true;
+    clearTimeout(this.#connectionAttemptTimeout);
     clearTimeout(this.#reviewEmitTimer);
     this.#stopRecording();
     this.#unsubscribeHistorySettings();
     this.#clearHistory();
     this.#client?.close();
+    this.#transport.dispose?.();
     if (this.#openTimeout != undefined) {
       clearTimeout(this.#openTimeout);
       this.#openTimeout = undefined;

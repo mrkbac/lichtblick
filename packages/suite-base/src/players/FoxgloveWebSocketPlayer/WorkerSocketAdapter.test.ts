@@ -30,6 +30,21 @@ describe("WorkerSocketAdapter", () => {
     expect(workerMock.terminate).toHaveBeenCalled();
   });
 
+  it("ends a stream once when the backend loses its worker", () => {
+    const socket = new WorkerSocketAdapter(wsUrl);
+    const closed = vi.fn();
+    socket.onclose = closed;
+    socket.fail("Connection lost");
+    socket.fail("Connection lost");
+    workerMock.onmessage({ data: { type: "close", data: { code: 1000 } } });
+    expect(closed).toHaveBeenCalledExactlyOnceWith({
+      code: 1006,
+      reason: "Connection lost",
+      retryable: false,
+    });
+    expect(workerMock.terminate).toHaveBeenCalledOnce();
+  });
+
   it("WorkerSocketAdapter should send a message", () => {
     const socket = new WorkerSocketAdapter(wsUrl);
     const message = BasicBuilder.string();

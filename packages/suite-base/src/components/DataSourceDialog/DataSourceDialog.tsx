@@ -22,7 +22,7 @@ import { SAMPLES_CATALOG_URL } from "@lichtblick/suite-base/dataSources/constant
 import { useSourcePick } from "@lichtblick/suite-base/util/sourcePick";
 
 import { CatalogUrlView } from "./CatalogUrlView";
-import Start from "./Start";
+import Start, { type StartHandle } from "./Start";
 
 export type DataSourceDialogItem = "start" | "file" | "demo" | "remote";
 
@@ -40,7 +40,11 @@ const useStyles = makeStyles()(() => ({
 
 const selectDataSourceDialog = (store: WorkspaceContextStore) => store.dialogs.dataSource;
 
-export function DataSourceDialog(): React.JSX.Element {
+export function DataSourceDialog({
+  startRef,
+}: {
+  startRef?: React.Ref<StartHandle>;
+}): React.JSX.Element {
   const { classes } = useStyles();
   const { dialogActions } = useWorkspaceActions();
   const { item: activeView, catalogUrl } = useWorkspaceStore(selectDataSourceDialog);
@@ -120,7 +124,7 @@ export function DataSourceDialog(): React.JSX.Element {
             onOpened={onModalClose}
           />
         ) : (
-          <Start />
+          <Start ref={startRef} />
         )}
       </Stack>
     </Dialog>
