@@ -51,7 +51,6 @@ describe("MaybeCollapsedValue", () => {
       render(<MaybeCollapsedValue itemLabel={longText} />);
 
       const button = screen.getByRole("button");
-      expect(button).toHaveAttribute("tabIndex", "0");
       expect(button).toHaveAttribute("aria-expanded", "false");
       expect(button).toHaveStyle({ cursor: "pointer" });
     });
@@ -67,21 +66,23 @@ describe("MaybeCollapsedValue", () => {
       expect(screen.queryByText(/…/)).not.toBeInTheDocument();
     });
 
-    it("should expand text when Enter key is pressed", () => {
+    it("should expand text when Enter key is pressed", async () => {
+      const user = userEvent.setup();
       render(<MaybeCollapsedValue itemLabel={longText} />);
 
-      const button = screen.getByRole("button");
-      fireEvent.keyDown(button, { key: "Enter" });
+      await user.tab();
+      await user.keyboard("{Enter}");
 
       expect(screen.getByRole("button")).toHaveTextContent(longText);
       expect(screen.getByRole("button").textContent).not.toContain("…");
     });
 
-    it("should expand text when Space key is pressed", () => {
+    it("should expand text when Space key is pressed", async () => {
+      const user = userEvent.setup();
       render(<MaybeCollapsedValue itemLabel={longText} />);
 
-      const button = screen.getByRole("button");
-      fireEvent.keyDown(button, { key: " " });
+      await user.tab();
+      await user.keyboard(" ");
 
       expect(screen.getByRole("button")).toHaveTextContent(longText);
       expect(screen.getByRole("button").textContent).not.toContain("…");
@@ -116,7 +117,6 @@ describe("MaybeCollapsedValue", () => {
       const button = screen.getByRole("button");
       await user.click(button);
 
-      expect(button).not.toHaveAttribute("tabIndex");
       expect(button.style.cursor).toBe("inherit");
     });
 

@@ -19,7 +19,7 @@ import { WatchTree } from "./WatchTree";
 import { WATCH_BUTTONS } from "./buttons";
 import { Schema, pathsForEnter } from "./compile";
 import { WatchRow } from "./config";
-import { EnumNames, autoDecimals, formatAge, formatValue, isExpandable, isStale } from "./format";
+import { EnumNames, autoDecimals, formatAge, formatValue, isExpandable } from "./format";
 import { WATCH_SHORTCUTS } from "./shortcuts";
 
 export const DRAG_TYPE = "application/x-lichtblick-watch-row";
@@ -213,12 +213,28 @@ export const WatchRowView = memo(function WatchRowViewInner({
   const { t } = useTranslation("watch");
   const { classes, cx } = useStyles();
   const theme = useTheme();
-  const buttonTitles = {
-    copyValue: usePanelButtonTitle(WATCH_BUTTONS.copyValue),
-    editPath: usePanelButtonTitle(WATCH_BUTTONS.editPath),
-    duplicate: usePanelButtonTitle(WATCH_BUTTONS.duplicate),
-    remove: usePanelButtonTitle(WATCH_BUTTONS.remove),
-  };
+  const actionButtons = [
+    {
+      action: "copy",
+      Icon: WATCH_BUTTONS.copyValue.icon,
+      title: usePanelButtonTitle(WATCH_BUTTONS.copyValue),
+    },
+    {
+      action: "edit",
+      Icon: WATCH_BUTTONS.editPath.icon,
+      title: usePanelButtonTitle(WATCH_BUTTONS.editPath),
+    },
+    {
+      action: "duplicate",
+      Icon: WATCH_BUTTONS.duplicate.icon,
+      title: usePanelButtonTitle(WATCH_BUTTONS.duplicate),
+    },
+    {
+      action: "remove",
+      Icon: WATCH_BUTTONS.remove.icon,
+      title: usePanelButtonTitle(WATCH_BUTTONS.remove),
+    },
+  ] as const;
   const [expanded, setExpanded] = useState(false);
 
   const rootRef = useRef<HTMLDivElement>(null);
@@ -255,7 +271,7 @@ export const WatchRowView = memo(function WatchRowViewInner({
     }
     const age = now - time;
     const text = formatAge(age);
-    const stale = isStale(age, staleAfterSec);
+    const stale = age > staleAfterSec;
     if (ageEl) {
       if (ageEl.textContent !== text) {
         ageEl.textContent = text;
@@ -435,46 +451,18 @@ export const WatchRowView = memo(function WatchRowViewInner({
         {sparklines && <canvas ref={sparkRef} className={classes.sparkline} />}
         {showAge && <span ref={ageRef} data-age className={classes.age} />}
         <span data-actions className={classes.actions}>
-          <Tooltip title={buttonTitles.copyValue}>
-            <IconButton
-              size="small"
-              onClick={() => {
-                onAction("copy", row.id);
-              }}
-            >
-              <WATCH_BUTTONS.copyValue.icon fontSize="inherit" />
-            </IconButton>
-          </Tooltip>
-          <Tooltip title={buttonTitles.editPath}>
-            <IconButton
-              size="small"
-              onClick={() => {
-                onAction("edit", row.id);
-              }}
-            >
-              <WATCH_BUTTONS.editPath.icon fontSize="inherit" />
-            </IconButton>
-          </Tooltip>
-          <Tooltip title={buttonTitles.duplicate}>
-            <IconButton
-              size="small"
-              onClick={() => {
-                onAction("duplicate", row.id);
-              }}
-            >
-              <WATCH_BUTTONS.duplicate.icon fontSize="inherit" />
-            </IconButton>
-          </Tooltip>
-          <Tooltip title={buttonTitles.remove}>
-            <IconButton
-              size="small"
-              onClick={() => {
-                onAction("remove", row.id);
-              }}
-            >
-              <WATCH_BUTTONS.remove.icon fontSize="inherit" />
-            </IconButton>
-          </Tooltip>
+          {actionButtons.map(({ action, Icon, title }) => (
+            <Tooltip key={action} title={title}>
+              <IconButton
+                size="small"
+                onClick={() => {
+                  onAction(action, row.id);
+                }}
+              >
+                <Icon fontSize="inherit" />
+              </IconButton>
+            </Tooltip>
+          ))}
         </span>
       </div>
       {expanded && treeValue && (

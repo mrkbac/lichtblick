@@ -22,7 +22,6 @@ import { PanelIconButton } from "@lichtblick/suite-base/components/PanelButton";
 import { CellValue, TableFeatures } from "@lichtblick/suite-base/panels/Table/types";
 
 import { TABLE_BUTTONS } from "./buttons";
-import { sanitizeAccessorPath } from "./sanitizeAccessorPath";
 
 const useStyles = makeStyles()((theme) => ({
   objectCell: {
@@ -75,7 +74,7 @@ export default function TableCell({
   return (
     <span
       className={classes.objectCell}
-      data-testid={`expand-cell-${sanitizeAccessorPath(accessorPath)}-${row.index}`}
+      data-testid={`expand-cell-${accessorPath.replaceAll(".", "-")}-${row.index}`}
       onClick={toggleIsExpanded}
     >
       Object

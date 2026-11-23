@@ -333,13 +333,11 @@ export function useSharedRawMessagesLogic({
   }, [canStepNext, getBatchIterator, getPipelineState, seekTo, topic]);
 
   return {
-    topicRosPath,
     topic,
     rootStructureItem,
     baseItem,
     diffItem,
     expansion,
-    setExpansion,
     canExpandAll,
     onTopicPathChange,
     onDiffTopicPathChange,

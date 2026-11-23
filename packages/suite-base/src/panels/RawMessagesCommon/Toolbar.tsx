@@ -45,9 +45,8 @@ function ToolbarComponent(props: PropsToolbar): React.JSX.Element {
     onTopicPathChange,
     saveConfig,
     showFullMessageForDiff,
-    topic,
     topicPath,
-    searchOpen = false,
+    searchOpen,
     onToggleSearch,
   } = props;
 
@@ -83,17 +82,15 @@ function ToolbarComponent(props: PropsToolbar): React.JSX.Element {
         >
           <expandButton.icon fontSize="small" />
         </IconButton>
-        {onToggleSearch && (
-          <IconButton
-            className={cx(classes.iconButton, { "Mui-selected": searchOpen })}
-            title={searchKey != undefined ? `${searchTitle} (${searchKey})` : searchTitle}
-            aria-label={searchTitle}
-            onClick={onToggleSearch}
-            size="small"
-          >
-            <SearchButton.icon fontSize="small" />
-          </IconButton>
-        )}
+        <IconButton
+          className={cx(classes.iconButton, { "Mui-selected": searchOpen })}
+          title={searchKey != undefined ? `${searchTitle} (${searchKey})` : searchTitle}
+          aria-label={searchTitle}
+          onClick={onToggleSearch}
+          size="small"
+        >
+          <SearchButton.icon fontSize="small" />
+        </IconButton>
         <Stack fullWidth paddingLeft={0.25}>
           <MessagePathInput
             index={0}
@@ -126,7 +123,6 @@ function ToolbarComponent(props: PropsToolbar): React.JSX.Element {
               supportsMathModifiers
               path={diffTopicPath}
               onChange={onDiffTopicPathChange}
-              {...(topic ? { prioritizedDatatype: topic.schemaName } : {})}
             />
           )}
           <FormControlLabel

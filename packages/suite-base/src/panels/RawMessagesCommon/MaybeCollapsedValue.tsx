@@ -47,13 +47,6 @@ export default function MaybeCollapsedValue({
     >
       <button
         onClick={expandText}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === " ") {
-            e.preventDefault();
-            expandText();
-          }
-        }}
-        tabIndex={showingEntireLabel ? undefined : 0}
         style={{
           cursor: showingEntireLabel ? "inherit" : "pointer",
         }}

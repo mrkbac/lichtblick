@@ -7,7 +7,7 @@
 
 import { Divider, Paper, Tab, Tabs, tabClasses, tabsClasses } from "@mui/material";
 import * as monacoApi from "monaco-editor/editor/editor.api.js";
-import { SyntheticEvent, useCallback, useMemo, useState } from "react";
+import { SyntheticEvent, useCallback, useState } from "react";
 import { makeStyles } from "tss-react/mui";
 
 import { usePanelButtonTitle } from "@lichtblick/suite-base/components/PanelButton";
@@ -107,46 +107,26 @@ export function Sidebar({
     setActiveTab(false);
   };
 
-  const handleTabSelection = useCallback(
-    (_event: SyntheticEvent, newValue: TabOption) => {
-      if (activeTab === newValue) {
-        setActiveTab(false);
-        return;
-      }
-      setActiveTab(newValue);
+  const tabs = [
+    {
+      value: "nodes",
+      button: USER_SCRIPTS_BUTTONS.scripts,
+      title: `${scriptsTitle} (${Object.keys(userScripts).length})`,
+      testId: "node-explorer",
     },
-    [activeTab],
-  );
-
-  const tabPanels = useMemo(
-    () => ({
-      nodes: (
-        <ScriptsList
-          scripts={userScripts}
-          selectScript={selectScript}
-          deleteScript={deleteScript}
-          addNewScript={addNewNode}
-          onClose={handleClose}
-          selectedScriptId={selectedScriptId}
-          selectedScript={selectedScript}
-          setUserScripts={setUserScripts}
-        />
-      ),
-      utils: <Utilities onClose={handleClose} gotoUtils={gotoUtils} script={script} />,
-      templates: <Templates onClose={handleClose} addNewNode={addNewNode} />,
-    }),
-    [
-      addNewNode,
-      deleteScript,
-      gotoUtils,
-      script,
-      selectScript,
-      selectedScript,
-      selectedScriptId,
-      setUserScripts,
-      userScripts,
-    ],
-  );
+    {
+      value: "utils",
+      button: USER_SCRIPTS_BUTTONS.utilities,
+      title: utilitiesTitle,
+      testId: "utils-explorer",
+    },
+    {
+      value: "templates",
+      button: USER_SCRIPTS_BUTTONS.templates,
+      title: templatesTitle,
+      testId: "templates-explorer",
+    },
+  ] as const;
 
   return (
     <Paper elevation={0}>
@@ -155,37 +135,46 @@ export function Sidebar({
           className={classes.tabs}
           orientation="vertical"
           value={activeTab}
-          onChange={handleTabSelection}
+          onChange={(_event: SyntheticEvent, newValue: TabOption) => {
+            setActiveTab(newValue);
+          }}
         >
-          <Tab
-            disableRipple
-            value="nodes"
-            title={`${scriptsTitle} (${Object.keys(userScripts).length})`}
-            icon={<USER_SCRIPTS_BUTTONS.scripts.icon />}
-            data-testid="node-explorer"
-            onClick={activeTab === "nodes" ? handleClose : undefined}
-          />
-          <Tab
-            disableRipple
-            value="utils"
-            title={utilitiesTitle}
-            icon={<USER_SCRIPTS_BUTTONS.utilities.icon />}
-            data-testid="utils-explorer"
-            onClick={activeTab === "utils" ? handleClose : undefined}
-          />
-          <Tab
-            disableRipple
-            value="templates"
-            title={templatesTitle}
-            icon={<USER_SCRIPTS_BUTTONS.templates.icon />}
-            data-testid="templates-explorer"
-            onClick={activeTab === "templates" ? handleClose : undefined}
-          />
+          {tabs.map((tab) => (
+            <Tab
+              key={tab.value}
+              disableRipple
+              value={tab.value}
+              title={tab.title}
+              icon={<tab.button.icon />}
+              data-testid={tab.testId}
+              // Clicking the open tab closes it (Tabs only reports changes)
+              onClick={activeTab === tab.value ? handleClose : undefined}
+            />
+          ))}
         </Tabs>
         {activeTab !== false && (
           <>
             <Divider flexItem orientation="vertical" />
-            <div className={classes.explorerWrapper}>{tabPanels[activeTab]}</div>
+            <div className={classes.explorerWrapper}>
+              {activeTab === "nodes" && (
+                <ScriptsList
+                  scripts={userScripts}
+                  selectScript={selectScript}
+                  deleteScript={deleteScript}
+                  addNewScript={addNewNode}
+                  onClose={handleClose}
+                  selectedScriptId={selectedScriptId}
+                  selectedScript={selectedScript}
+                  setUserScripts={setUserScripts}
+                />
+              )}
+              {activeTab === "utils" && (
+                <Utilities onClose={handleClose} gotoUtils={gotoUtils} script={script} />
+              )}
+              {activeTab === "templates" && (
+                <Templates onClose={handleClose} addNewNode={addNewNode} />
+              )}
+            </div>
           </>
         )}
         <Divider flexItem orientation="vertical" />

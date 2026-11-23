@@ -5,18 +5,12 @@ import { ReactNode, useCallback, useMemo, useState } from "react";
 
 import { MessagePathStructureItem } from "@lichtblick/message-path";
 import { MessagePathDataItem } from "@lichtblick/suite-base/components/MessagePathSyntax/useCachedGetMessagePathDataItems";
-import { OpenSiblingPanel } from "@lichtblick/suite-base/types/panels";
 import { enumValuesByDatatypeAndField } from "@lichtblick/suite-base/util/enums";
 
 import ObjectSummary from "./ObjectSummary";
 import Value from "./Value";
 import { getStructureItemForPath, getValueActionForValue } from "./getValueActionForValue";
-import {
-  RenderDiffLabelFunction,
-  UseValueRendererProps,
-  ValueAction,
-  ValueRendererFunction,
-} from "./types";
+import { UseValueRendererProps, ValueAction, ValueRendererFunction } from "./types";
 import { getConstantNameByKeyPath, getValueLabels } from "./utils";
 
 function HoverArea({
@@ -120,40 +114,4 @@ export function useValueRenderer({
   );
 
   return valueRenderer;
-}
-
-/**
- * Hook that provides a render function for diff labels.
- */
-export function useRenderDiffLabel({
-  onTopicPathChange,
-  openSiblingPanel,
-}: {
-  onTopicPathChange: (path: string) => void;
-  openSiblingPanel: OpenSiblingPanel;
-}): RenderDiffLabelFunction {
-  const renderDiffLabel = useCallback(
-    (label: string, itemValue: unknown) => {
-      const { arrLabel, itemLabel } = getValueLabels({
-        constantName: undefined,
-        label,
-        itemValue,
-        keyPath: [],
-      });
-      return (
-        <Value
-          arrLabel={arrLabel}
-          basePath=""
-          itemLabel={itemLabel}
-          itemValue={itemValue}
-          valueAction={undefined}
-          onTopicPathChange={onTopicPathChange}
-          openSiblingPanel={openSiblingPanel}
-        />
-      );
-    },
-    [onTopicPathChange, openSiblingPanel],
-  );
-
-  return renderDiffLabel;
 }

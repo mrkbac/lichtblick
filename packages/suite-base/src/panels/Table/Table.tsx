@@ -33,7 +33,6 @@ import Stack from "@lichtblick/suite-base/components/Stack";
 
 import TableCell from "./TableCell";
 import { TABLE_BUTTONS } from "./buttons";
-import { sanitizeAccessorPath } from "./sanitizeAccessorPath";
 import { CellValue, MergedColumnsType, TableFeatures, tableFeatureSet } from "./types";
 
 type TypedArray =
@@ -315,7 +314,7 @@ export default function Table({
                       id={column.id}
                       onClick={header.column.getToggleSortingHandler()}
                       key={column.id}
-                      data-testid={`column-header-${sanitizeAccessorPath(column.id)}`}
+                      data-testid={`column-header-${column.id.replaceAll(".", "-")}`}
                     >
                       {flexRender(header.column.columnDef.header, header.getContext())}
                     </th>

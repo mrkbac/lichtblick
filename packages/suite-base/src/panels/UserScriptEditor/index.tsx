@@ -192,16 +192,9 @@ function UserScriptEditor(props: Props) {
   const selectedNodeLogs =
     (selectedNodeId != undefined ? userScriptStates[selectedNodeId]?.logs : undefined) ?? [];
 
-  // The current node name is editable via the "tab". The tab uses a controlled input. React requires
-  // that we render the new text on the next render for the controlled input to retain the cursor position.
-  // For this we use setInputTitle within the onChange event of the input control.
-  //
-  // We also update the input title when the script changes using a layout effect below.
-  const [inputTitle, setInputTitle] = useState<string>(() => {
-    return currentScript
-      ? currentScript.filePath + (currentScript.readOnly ? " (READONLY)" : "")
-      : "script name";
-  });
+  const inputTitle = currentScript
+    ? currentScript.filePath + (currentScript.readOnly ? " (READONLY)" : "")
+    : "script name";
 
   const prefersDarkMode = theme.palette.mode === "dark";
 
@@ -235,14 +228,6 @@ function UserScriptEditor(props: Props) {
       ]);
     }
   }, [props.config.additionalBackStackItems, selectedScript]);
-
-  useLayoutEffect(() => {
-    setInputTitle(() => {
-      return currentScript
-        ? currentScript.filePath + (currentScript.readOnly ? " (READONLY)" : "")
-        : "script name";
-    });
-  }, [currentScript]);
 
   const saveCurrentNode = useCallback(() => {
     if (
@@ -377,13 +362,11 @@ function UserScriptEditor(props: Props) {
         >
           {scriptBackStack.length > 1 && (
             <Stack direction="row" alignItems="center" gap={1}>
-              {scriptBackStack.length > 1 && (
-                <PanelIconButton
-                  button={USER_SCRIPTS_BUTTONS.goBack}
-                  data-testid="go-back"
-                  onClick={goBack}
-                />
-              )}
+              <PanelIconButton
+                button={USER_SCRIPTS_BUTTONS.goBack}
+                data-testid="go-back"
+                onClick={goBack}
+              />
               {selectedNodeId != undefined && selectedScript && (
                 <div style={{ position: "relative" }}>{inputTitle}</div>
               )}
