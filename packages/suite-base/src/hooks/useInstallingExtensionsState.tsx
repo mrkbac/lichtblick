@@ -63,27 +63,24 @@ export function useInstallingExtensionsState({
         // Extensions whose browser cache (IndexedDB) loader failed
         let cacheFailures = 0;
 
-        const byNamespace = Map.groupBy(extensionsData, (e) => e.namespace ?? "local");
-        for (const [namespace, extensions] of byNamespace) {
-          // One at a time, so the progress snackbar advances per extension
-          for (const extension of extensions) {
-            for (const { success, error, loaderResults } of await installExtensions(namespace, [
-              extension,
-            ])) {
-              if (success) {
-                installed++;
-                if (error != undefined && loaderResults) {
-                  warned++;
-                }
-              } else {
-                failed++;
+        // One at a time, so the progress snackbar advances per extension
+        for (const extension of extensionsData) {
+          for (const { success, error, loaderResults } of await installExtensions("local", [
+            extension,
+          ])) {
+            if (success) {
+              installed++;
+              if (error != undefined && loaderResults) {
+                warned++;
               }
-              if (loaderResults?.some((r) => r.loaderType === "browser" && !r.success) === true) {
-                cacheFailures++;
-              }
+            } else {
+              failed++;
             }
-            setInstallingProgress({ installed, total, inProgress: true });
+            if (loaderResults?.some((r) => r.loaderType === "browser" && !r.success) === true) {
+              cacheFailures++;
+            }
           }
+          setInstallingProgress({ installed, total, inProgress: true });
         }
 
         if (failed === 0 && warned === 0) {

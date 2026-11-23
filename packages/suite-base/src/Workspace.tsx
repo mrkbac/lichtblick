@@ -277,7 +277,6 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
       try {
         await handleFilesRef.current(
           await Promise.all(fileHandles.map(async (h) => await h.getFile())),
-          undefined,
           fileHandles,
         );
       } catch (error) {
@@ -302,7 +301,7 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
         ? await Promise.all(handles.map(async (h) => await h.getFile()))
         : (files ?? []);
 
-      void handleFiles(filesArray, undefined, handles);
+      void handleFiles(filesArray, handles);
     },
     [handleFiles],
   );

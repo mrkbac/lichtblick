@@ -56,7 +56,6 @@ describe("useInstallingExtensionsState", () => {
   const createExtensionData = (count: number): ExtensionData[] => {
     return Array.from({ length: count }, () => ({
       buffer: new Uint8Array([BasicBuilder.number()]),
-      namespace: "local" as const,
     }));
   };
 

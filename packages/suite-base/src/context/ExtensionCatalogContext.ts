@@ -23,7 +23,6 @@ import { InstalledMessageConverter } from "@lichtblick/suite-base/types/messageC
 export type ExtensionData = {
   buffer: Uint8Array;
   file?: File;
-  namespace?: Namespace;
 };
 
 export type RegisteredPanel = {

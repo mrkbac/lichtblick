@@ -211,7 +211,7 @@ describe("useHandleFiles", () => {
     );
 
     await act(async () => {
-      await handleFiles(files, "local", handles);
+      await handleFiles(files, handles);
     });
 
     expect(selectSource).toHaveBeenCalledWith(availableSources[0]!.id, { type: "file", handles });
