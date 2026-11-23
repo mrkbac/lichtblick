@@ -21,7 +21,34 @@ function createTimelineInteractionStateStore(): StoreApi<TimelineInteractionStat
   return createStore((set) => {
     return {
       eventsAtHoverValue: {},
+      focusedPanelId: undefined,
+      panelTimeRanges: new Map(),
       globalBounds: undefined,
+
+      setFocusedPanel: (panelId) => {
+        set((store) => (store.focusedPanelId === panelId ? store : { focusedPanelId: panelId }));
+      },
+
+      clearFocusedPanel: (panelId) => {
+        set((store) => (store.focusedPanelId === panelId ? { focusedPanelId: undefined } : store));
+      },
+
+      setPanelTimeRange: (panelId, range) => {
+        set((store) => {
+          const previous = store.panelTimeRanges.get(panelId);
+          if (previous?.min === range?.min && previous?.max === range?.max) {
+            return store;
+          }
+          const panelTimeRanges = new Map(store.panelTimeRanges);
+          if (range == undefined) {
+            panelTimeRanges.delete(panelId);
+          } else {
+            panelTimeRanges.set(panelId, { min: range.min, max: range.max });
+          }
+          return { panelTimeRanges };
+        });
+      },
+
       hoveredEvent: undefined,
       hoverValue: undefined,
 
