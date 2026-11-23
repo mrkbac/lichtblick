@@ -13,6 +13,7 @@ import {
 } from "../IIterableSource";
 import { ComparedSource, compareLabel, prefixTopic } from "./ComparedSource";
 import { MultiIterableSource } from "./MultiIterableSource";
+import type { McapIterableSource } from "../Mcap/McapIterableSource";
 
 // A recording with one message per second on /imu, starting at `startSec`
 class FakeSource implements IIterableSource<Uint8Array> {
@@ -63,6 +64,9 @@ class FakeSource implements IIterableSource<Uint8Array> {
   public getEnd = (): Time => ({ sec: this.#start.sec + 2, nsec: 0 });
 }
 
+// MultiIterableSource only opens MCAPs; this fake stands in for one
+const FakeMcapSource = FakeSource as unknown as typeof McapIterableSource;
+
 describe("compared recordings", () => {
   it("returns shifted compare sides and timeline on first initialization", async () => {
     const source = new MultiIterableSource(
@@ -72,7 +76,7 @@ describe("compared recordings", () => {
         compare: ["first", "first", "second"],
         compareOffsets: [-2, 3.5],
       },
-      FakeSource,
+      FakeMcapSource,
     );
     const init = await source.initialize();
     expect(init.start).toEqual({ sec: 0, nsec: 0 });
@@ -90,7 +94,7 @@ describe("compared recordings", () => {
         files: [{ startSec: 100 }, { startSec: 500 }] as unknown as Blob[],
         compare: ["run 1", "run 2"],
       },
-      FakeSource,
+      FakeMcapSource,
     );
     const init = await source.initialize();
     expect(init.topics.map((topic) => topic.name).sort()).toEqual(["/a/imu", "/b/imu"]);
@@ -192,7 +196,7 @@ describe("compared recordings", () => {
         files: [{ startSec: 100 }, { startSec: 500 }, { startSec: 103 }] as unknown as Blob[],
         compare: ["folder a", "folder b", "folder a"],
       },
-      FakeSource,
+      FakeMcapSource,
     );
     const init = await source.initialize();
     expect(
@@ -220,7 +224,7 @@ describe("compared recordings", () => {
         files: [{ startSec: 100 }, { startSec: 500 }] as unknown as Blob[],
         compare: ["a", "b"],
       },
-      FakeSource,
+      FakeMcapSource,
     );
     await source.initialize();
     // A comparison keeps updating, so it reports moved sides at any time
@@ -282,7 +286,7 @@ describe("compared recordings", () => {
         files: [{ startSec: 0 }, { startSec: 500 }] as unknown as Blob[],
         compare: ["a", "b"],
       },
-      FakeSource,
+      FakeMcapSource,
     );
     await source.initialize();
     const update = source.waitForUpdate();

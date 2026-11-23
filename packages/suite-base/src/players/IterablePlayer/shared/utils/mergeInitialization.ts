@@ -3,10 +3,11 @@
 
 import { compare, Time } from "@foxglove/rostime";
 
-import {
-  InitMetadata,
-  InitTopicStatsMap,
-} from "@lichtblick/suite-base/players/IterablePlayer/shared/types";
+import type { Initialization } from "@lichtblick/suite-base/players/IterablePlayer/IIterableSource";
+
+export type InitMetadata = Initialization["metadata"];
+
+export type InitTopicStatsMap = Initialization["topicStats"];
 
 export const setStartTime = (accumulated: Time, current: Time): Time => {
   return compare(current, accumulated) < 0 ? current : accumulated;

@@ -14,7 +14,6 @@
 //   found at http://www.apache.org/licenses/LICENSE-2.0
 //   You may not use this file except in compliance with the License.
 
-import { MessageDefinition } from "@foxglove/message-definition";
 import { Time } from "@foxglove/rostime";
 
 import type { IWritable } from "@lichtblick/mcap-core";
@@ -42,14 +41,6 @@ export type MessageEvent<T = unknown> = SuiteMessageEvent<T> & {
   serializedSizeInBytes?: number;
   /** Opaque identifier of a recording record, stable across reads in the same player. */
   recordId?: string;
-};
-
-export type MessageDefinitionsByTopic = {
-  [topic: string]: string;
-};
-
-export type ParsedMessageDefinitionsByTopic = {
-  [topic: string]: MessageDefinition[];
 };
 
 export type TopicSelection = Map<string, SubscribePayload>;

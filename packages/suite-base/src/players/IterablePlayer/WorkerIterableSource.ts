@@ -125,11 +125,6 @@ class WorkerIterableSourceBase<MessageType> implements IIterableSource<MessageTy
     const messageCursorPromise = this.#sourceWorkerRemote.getMessageCursor(rest, abort);
 
     const cursor: IMessageCursor<MessageType> = {
-      async next() {
-        const messageCursor = await messageCursorPromise;
-        return await messageCursor.next();
-      },
-
       async nextBatch(durationMs: number) {
         const messageCursor = await messageCursorPromise;
         const packed = await messageCursor.nextBatch(durationMs);

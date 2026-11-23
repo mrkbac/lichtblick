@@ -6,10 +6,6 @@ import { Semaphore } from "async-mutex";
 
 import Logger from "@lichtblick/log";
 import {
-  IterableSourceConstructor,
-  MultiSource,
-} from "@lichtblick/suite-base/players/IterablePlayer/shared/types";
-import {
   accumulateMap,
   mergeMetadata,
   mergeTopicStats,
@@ -37,8 +33,29 @@ import {
 } from "../IIterableSource";
 import { ComparedSource, compareLabel } from "./ComparedSource";
 import { HydratedSourcePool } from "./HydratedSourcePool";
+import type { McapIterableSource } from "../Mcap/McapIterableSource";
 
 const log = Logger.getLogger(__filename);
+
+export type MultiSource = (
+  | {
+      type: "files";
+      // Local files; a string is a remote URL, so a comparison can mix both
+      files: (Blob | string)[];
+    }
+  | {
+      type: "urls";
+      urls: string[];
+      credentials?: RequestCredentials;
+    }
+) & {
+  // Keep recordings apart instead of merging them: the side name of each file/URL, in order. Each
+  // side's topics go under its own prefix (/a, /b, … in order of first appearance), files with the
+  // same side name are merged, and every side is shifted to start at the same time.
+  compare?: readonly string[];
+  /** Initial offsets in seconds, in order of first appearance of each side. */
+  compareOffsets?: readonly number[];
+};
 
 // Default total cache budget for remote sources, matching the single-file default.
 const DEFAULT_CACHE_TOTAL_BYTES = 1024 * 1024 * 500; // 500 MiB
@@ -80,11 +97,9 @@ function compareStartWithOffsets(initialStart: Time, offsets: readonly number[])
   return compare(initialStart, lowest) < 0 ? lowest : initialStart;
 }
 
-export class MultiIterableSource<T extends ISerializedIterableSource, P>
-  implements ISerializedIterableSource
-{
+export class MultiIterableSource implements ISerializedIterableSource {
   public readonly sourceType = "serialized";
-  private SourceConstructor: IterableSourceConstructor<T, P>;
+  private SourceConstructor: typeof McapIterableSource;
   private dataSource: MultiSource;
   private sourceImpl: IIterableSource<Uint8Array>[] = [];
   #pool: HydratedSourcePool | undefined;
@@ -110,7 +125,7 @@ export class MultiIterableSource<T extends ISerializedIterableSource, P>
 
   public constructor(
     dataSource: MultiSource,
-    SourceConstructor: IterableSourceConstructor<T, P>,
+    SourceConstructor: typeof McapIterableSource,
     prebuilt?: IIterableSource<Uint8Array>[],
   ) {
     this.dataSource = dataSource;
@@ -154,9 +169,9 @@ export class MultiIterableSource<T extends ISerializedIterableSource, P>
       );
     }
 
-    // Read-ahead stays on so sequential remote reads coalesce into fewer requests. With several
-    // sources it gets a small buffer (well under the per-source cache floor); a single source keeps
-    // getNewConnection's own default.
+    // Read-ahead stays on (the default) so sequential remote reads coalesce into fewer requests.
+    // With several sources it gets a small buffer (well under the per-source cache floor); a
+    // single source keeps getNewConnection's own default.
     const readAheadBufferBytes = numSources > 1 ? DEFAULT_READ_AHEAD_BUFFER_BYTES : undefined;
 
     const sources: IIterableSource<Uint8Array>[] = entries.map((entry) =>
@@ -166,11 +181,10 @@ export class MultiIterableSource<T extends ISerializedIterableSource, P>
             url: entry,
             credentials,
             cacheSizeInBytes: perSourceCache,
-            readAheadEnabled: true,
             readAheadBufferBytes,
             pool: this.#pool,
-          } as P)
-        : new this.SourceConstructor({ type: "file", file: entry, pool: this.#pool } as P),
+          })
+        : new this.SourceConstructor({ type: "file", file: entry, pool: this.#pool }),
     );
 
     // Bound local and remote initialization (`concurrency`): concurrent MCAP summary parsing can
@@ -234,10 +248,7 @@ export class MultiIterableSource<T extends ISerializedIterableSource, P>
     sources: IIterableSource<Uint8Array>[],
     concurrency: number,
   ): Promise<Initialization[]> {
-    // Normalize overrides to a positive integer permit count.
-    const floored = Math.floor(concurrency);
-    const permits = Number.isFinite(floored) && floored >= 1 ? floored : 1;
-    const semaphore = new Semaphore(permits);
+    const semaphore = new Semaphore(concurrency);
     // Promise.all preserves input order regardless of settle order, so the returned
     // initializations stay aligned with `sources`.
     return await Promise.all(

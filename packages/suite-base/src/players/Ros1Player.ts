@@ -31,7 +31,6 @@ import {
   PlayerAlert,
   PublishPayload,
   SubscribePayload,
-  Topic,
   TopicStats,
   TopicWithSchemaName,
 } from "@lichtblick/suite-base/players/types";
@@ -202,13 +201,6 @@ export default class Ros1Player implements Player {
     }
   }
 
-  #topicsChanged = (newTopics: Topic[]): boolean => {
-    if (!this.#providerTopics || newTopics.length !== this.#providerTopics.length) {
-      return true;
-    }
-    return !_.isEqual(this.#providerTopics, newTopics);
-  };
-
   #requestTopics = async (): Promise<void> => {
     if (this.#requestTopicsTimeout) {
       clearTimeout(this.#requestTopicsTimeout);
@@ -227,7 +219,7 @@ export default class Ros1Player implements Player {
       // Sort them for easy comparison
       const sortedTopics = _.sortBy(topics, "name");
 
-      if (this.#topicsChanged(sortedTopics)) {
+      if (!_.isEqual(this.#providerTopics, sortedTopics)) {
         // Remove stats entries for removed topics
         const topicsSet = new Set<string>(topics.map((topic) => topic.name));
         for (const topic of this.#providerTopicsStats.keys()) {

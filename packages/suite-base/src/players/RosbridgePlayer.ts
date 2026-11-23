@@ -42,7 +42,6 @@ import {
   PlayerState,
   PublishPayload,
   SubscribePayload,
-  Topic,
   PlayerPresence,
   ServiceTypeInfo,
   TopicStats,
@@ -232,13 +231,6 @@ export default class RosbridgePlayer implements Player {
     });
   };
 
-  #topicsChanged = (newTopics: Topic[]): boolean => {
-    if (!this.#providerTopics || newTopics.length !== this.#providerTopics.length) {
-      return true;
-    }
-    return !_.isEqual(this.#providerTopics, newTopics);
-  };
-
   async #requestTopics(opt?: { forceUpdate: boolean }): Promise<void> {
     const { forceUpdate = false } = opt ?? {};
     // clear alerts before each topics request so we don't have stale alerts from previous failed requests
@@ -311,7 +303,7 @@ export default class RosbridgePlayer implements Player {
       // we want to bail and avoid parsing definitions, updating readers, subscribers, etc.
       // However, during a re-connect, we _do_ want to refresh this list and re-subscribe
       const sortedTopics = _.sortBy(topics, "name");
-      if (!forceUpdate && !this.#topicsChanged(sortedTopics)) {
+      if (!forceUpdate && _.isEqual(this.#providerTopics, sortedTopics)) {
         return;
       }
 

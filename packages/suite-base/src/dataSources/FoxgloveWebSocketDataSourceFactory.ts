@@ -9,6 +9,7 @@ import {
   IDataSourceFactory,
   DataSourceFactoryInitializeArgs,
 } from "@lichtblick/suite-base/context/PlayerSelectionContext";
+import { validateWebSocketUrl } from "@lichtblick/suite-base/dataSources/constants";
 import { loadFoxgloveWebSocketPlayer } from "@lichtblick/suite-base/dataSources/playerModules";
 import { Player } from "@lichtblick/suite-base/players/types";
 
@@ -26,18 +27,7 @@ export default class FoxgloveWebSocketDataSourceFactory implements IDataSourceFa
         id: "url",
         label: "WebSocket URL",
         defaultValue: "ws://localhost:8765",
-        validate: (newValue: string): Error | undefined => {
-          try {
-            const url = new URL(newValue);
-            if (url.protocol !== "ws:" && url.protocol !== "wss:") {
-              return new Error(`Invalid protocol: ${url.protocol}`);
-            }
-            return undefined;
-          } catch (err: unknown) {
-            console.error(err);
-            return new Error("Enter a valid url");
-          }
-        },
+        validate: validateWebSocketUrl,
       },
     ],
   };

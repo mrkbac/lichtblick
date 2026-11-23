@@ -9,6 +9,7 @@ import {
   IDataSourceFactory,
   DataSourceFactoryInitializeArgs,
 } from "@lichtblick/suite-base/context/PlayerSelectionContext";
+import { validateWebSocketUrl } from "@lichtblick/suite-base/dataSources/constants";
 import { loadRosbridgePlayer } from "@lichtblick/suite-base/dataSources/playerModules";
 import { Player } from "@lichtblick/suite-base/players/types";
 
@@ -25,18 +26,7 @@ class RosbridgeDataSourceFactory implements IDataSourceFactory {
         id: "url",
         label: "WebSocket URL",
         defaultValue: "ws://localhost:9090",
-        validate: (newValue: string): Error | undefined => {
-          try {
-            const url = new URL(newValue);
-            if (url.protocol !== "ws:" && url.protocol !== "wss:") {
-              return new Error(`Invalid protocol: ${url.protocol}`);
-            }
-            return undefined;
-          } catch (err: unknown) {
-            console.error(err);
-            return new Error("Enter a valid url");
-          }
-        },
+        validate: validateWebSocketUrl,
       },
     ],
   };
