@@ -15,8 +15,6 @@ import {
   UserProfileStorageContext,
 } from "@lichtblick/suite-base/context/UserProfileStorageContext";
 
-const DEFAULT_PROFILE: UserProfile = {};
-
 /**
  * A provider for UserProfileStorage that stores data in localStorage.
  */
@@ -25,13 +23,14 @@ export default function UserProfileLocalStorageProvider({
 }: React.PropsWithChildren): React.JSX.Element {
   const getUserProfile = useCallback(async (): Promise<UserProfile> => {
     const item = localStorage.getItem(LOCAL_STORAGE_PROFILE_DATA);
-    return item != undefined ? (JSON.parse(item) as UserProfile) : DEFAULT_PROFILE;
+    // A fresh object each time: merging into a shared default would leak into later profiles.
+    return item != undefined ? (JSON.parse(item) as UserProfile) : {};
   }, []);
 
   const setUserProfile = useCallback(
     async (value: UserProfile | ((prev: UserProfile) => UserProfile)) => {
       const item = localStorage.getItem(LOCAL_STORAGE_PROFILE_DATA);
-      const prev = item != undefined ? (JSON.parse(item) as UserProfile) : DEFAULT_PROFILE;
+      const prev = item != undefined ? (JSON.parse(item) as UserProfile) : {};
       const newProfile = typeof value === "function" ? value(prev) : _.merge(prev, value);
       localStorage.setItem(LOCAL_STORAGE_PROFILE_DATA, JSON.stringify(newProfile) ?? "");
     },
