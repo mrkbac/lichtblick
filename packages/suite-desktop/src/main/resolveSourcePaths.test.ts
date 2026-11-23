@@ -228,3 +228,10 @@ describe("resolveSourcePaths", () => {
     expect(result[1]).toContain(file3.name);
   });
 });
+
+it("resolves relative --source paths against the given working directory", () => {
+  fs.writeFileSync(nodePath.join(tmpRoot, "example.mcap"), "");
+  expect(resolveSourcePaths("example.mcap", tmpRoot)).toEqual([
+    nodePath.join(tmpRoot, "example.mcap"),
+  ]);
+});

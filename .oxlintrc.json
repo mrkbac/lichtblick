@@ -290,6 +290,7 @@
         "packages/suite-base/rspack.ts",
         "packages/suite-desktop/src/main/**",
         "packages/suite-desktop/src/preload/**",
+        "packages/suite-desktop/src/common/resolveInside.ts",
         "packages/suite-desktop/src/rspack*.ts",
         "packages/suite-desktop/src/afterPack.ts",
         "packages/suite-desktop/src/electronBuilderConfig.js",

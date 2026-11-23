@@ -12,7 +12,7 @@ import { opensFoxgloveLinks } from "./settings";
 
 const log = Logger.getLogger(__filename);
 
-export const createNewWindow = (argv: string[]): void => {
+export const createNewWindow = (argv: string[], cwd?: string): void => {
   const options = { acceptFoxglove: opensFoxgloveLinks() };
   const deepLinks = getDeepLinks(argv.slice(1), options);
 
@@ -26,7 +26,7 @@ export const createNewWindow = (argv: string[]): void => {
 
   const newWindow = new StudioWindow(deepLinks);
 
-  const filesToOpen = getFilesToOpen(argv);
+  const filesToOpen = getFilesToOpen(argv, cwd);
 
   // Wait for the window to be ready before injecting files
   newWindow.getBrowserWindow().webContents.once("did-finish-load", async () => {

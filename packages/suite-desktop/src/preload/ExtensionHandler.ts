@@ -9,7 +9,12 @@ import { dirname, join as pathJoin } from "path";
 import Logger from "@lichtblick/log";
 
 import { ExtensionPackageJson, PackageName } from "./types";
+import { resolveInside } from "../common/resolveInside";
 import { DesktopExtension, LoadedExtension } from "../common/types";
+
+// Package names and versions become one folder name; anything else could leave the extensions folder.
+const SAFE_NAME = /^[\w.~-]+$/;
+const SAFE_VERSION = /^[\w.+-]+$/;
 
 export class ExtensionsHandler {
   private readonly log = Logger.getLogger(__filename);
@@ -84,6 +89,10 @@ export class ExtensionsHandler {
    */
   private static getPackageDirname(pkgJson: ExtensionPackageJson): string {
     const pkgId = ExtensionsHandler.getPackageId(pkgJson);
+    const { name } = ExtensionsHandler.parsePackageName(pkgJson.name);
+    if (!SAFE_NAME.test(name) || !SAFE_VERSION.test(pkgJson.version)) {
+      throw new Error(`package.json "name" or "version" contains invalid characters`);
+    }
     const dir = `${pkgId}-${pkgJson.version}`;
     if (dir.length >= this.MAX_EXTENSION_DIR_LENGTH) {
       throw new Error(`package.json publisher.name-version is too long`);
@@ -189,7 +198,7 @@ export class ExtensionsHandler {
     const packagePath = pathJoin(extension.directory, "package.json");
     const packageData = await readFile(packagePath, { encoding: "utf-8" });
     const packageJson = JSON.parse(packageData) as ExtensionPackageJson;
-    const sourcePath = pathJoin(extension.directory, packageJson.main);
+    const sourcePath = resolveInside(extension.directory, packageJson.main);
 
     return { raw: await readFile(sourcePath, { encoding: "utf-8" }) };
   }
@@ -224,14 +233,18 @@ export class ExtensionsHandler {
     // Build the extension folder name based on package.json fields
     const dir = ExtensionsHandler.getPackageDirname(pkgJson);
 
+    // Check every target path before touching the disk, so a hostile archive (zip slip) writes nothing
+    const extensionBaseDir = resolveInside(this.userExtensionsDir, dir);
+    const entries = Object.entries(archive.files).map(
+      ([relPath, zipObj]) => [resolveInside(extensionBaseDir, relPath), zipObj] as const,
+    );
+
     // Delete any previous installation and create the extension folder
-    const extensionBaseDir = pathJoin(this.userExtensionsDir, dir);
     await rm(extensionBaseDir, { recursive: true, force: true });
     await mkdir(extensionBaseDir, { recursive: true });
 
     // Unpack all files into the extension folder
-    for (const [relPath, zipObj] of Object.entries(archive.files)) {
-      const filePath = pathJoin(extensionBaseDir, relPath);
+    for (const [filePath, zipObj] of entries) {
       if (zipObj.dir) {
         await mkdir(dirname(filePath), { recursive: true });
       } else {

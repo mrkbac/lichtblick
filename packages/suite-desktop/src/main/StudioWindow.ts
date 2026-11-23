@@ -42,6 +42,19 @@ const rendererPath = MAIN_WINDOW_WEBPACK_ENTRY;
 const closeMenuItem: MenuItemConstructorOptions = isMac ? { role: "close" } : { role: "quit" };
 const log = Logger.getLogger(__filename);
 
+// Renderer content (layouts, extensions, markdown) picks these URLs, so never hand the OS a
+// file:, smb: or custom-scheme URL that could launch a local program.
+const EXTERNAL_PROTOCOLS = new Set(["http:", "https:", "mailto:"]);
+
+/** Open `url` in the default browser or mail client if it is a web or mailto URL. */
+export function openExternalUrl(url: string): void {
+  if (URL.canParse(url) && EXTERNAL_PROTOCOLS.has(new URL(url).protocol)) {
+    void shell.openExternal(url);
+  } else {
+    log.warn(`Refusing to open external URL: ${url}`);
+  }
+}
+
 const { t } = i18n;
 
 // The native window background shows through behind the traffic lights and in the rounded
@@ -133,7 +146,7 @@ function newStudioWindow(deepLinks: string[] = []): BrowserWindow {
 
   // Open all new windows in an external browser
   browserWindow.webContents.setWindowOpenHandler(({ url }) => {
-    void shell.openExternal(url);
+    openExternalUrl(url);
     return { action: "deny" };
   });
 
@@ -145,7 +158,7 @@ function newStudioWindow(deepLinks: string[] = []): BrowserWindow {
     const isExternal = targetHost !== currentHost;
     if (isExternal) {
       event.preventDefault();
-      void shell.openExternal(reqUrl);
+      openExternalUrl(reqUrl);
     }
   });
 

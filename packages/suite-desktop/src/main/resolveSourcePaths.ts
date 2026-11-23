@@ -34,7 +34,10 @@ export function isPathToDirectory(paths: string[]): boolean {
   }
 }
 
-export function resolveSourcePaths(sourceParameter: string | undefined): string[] {
+export function resolveSourcePaths(
+  sourceParameter: string | undefined,
+  cwd = process.cwd(),
+): string[] {
   if (!sourceParameter) {
     return [];
   }
@@ -48,7 +51,7 @@ export function resolveSourcePaths(sourceParameter: string | undefined): string[
     .map((filePath) =>
       filePath.startsWith("~") ? path.join(os.homedir(), filePath.slice(1)) : filePath,
     )
-    .map((filePath) => path.resolve(filePath));
+    .map((filePath) => path.resolve(cwd, filePath));
 
   const filesToOpen: string[] = [];
 

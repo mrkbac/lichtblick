@@ -20,7 +20,6 @@ import {
   LICHTBLICK_SCHEME,
   toLichtblickDeepLink,
 } from "./deepLinks";
-import { isFileToOpen } from "./fileUtils";
 import getDevModeIcon from "./getDevModeIcon";
 import { getFilesToOpen } from "./getFilesToOpen";
 import injectFilesToOpen from "./injectFilesToOpen";
@@ -90,26 +89,26 @@ export async function main(): Promise<void> {
   // If another instance of the app is already open, this call triggers the "second-instance" event
   // in the original instance and returns false.
   // In case of forcing multiple instances, we will open a new window and inject the files and deep links manually.
+  // Either way this process quits: the running instance opens the files or the new window.
   if (!app.requestSingleInstanceLock()) {
-    if (forceMultipleWindows) {
-      log.info(
-        `An instance of ${LICHTBLICK_PRODUCT_NAME} is already running. Forcing a new window to run in this instance.`,
-      );
-    } else {
-      log.info(`Another instance of ${LICHTBLICK_PRODUCT_NAME} is already running. Quitting.`);
-      app.quit();
-    }
+    log.info(
+      forceMultipleWindows
+        ? `An instance of ${LICHTBLICK_PRODUCT_NAME} is already running. It will open a new window.`
+        : `Another instance of ${LICHTBLICK_PRODUCT_NAME} is already running. Quitting.`,
+    );
+    app.quit();
     return;
   }
 
   // Forward urls/files opened in a second instance to our default handlers so it's as if we opened them with this instance.
   // In case of forcing multiple instances, we will open a new window and inject the files and deep links manually.
-  app.on("second-instance", (_ev, argv, _workingDirectory) => {
+  // Relative file arguments are relative to the second instance's working directory, not ours.
+  app.on("second-instance", (_ev, argv, workingDirectory) => {
     log.debug("Received arguments from second app instance:", argv);
 
     if (forceMultipleWindows) {
       log.debug("second-instance: Forcing a new window to run in this instance.");
-      createNewWindow(argv);
+      createNewWindow(argv, workingDirectory);
       return;
     }
 
@@ -123,10 +122,7 @@ export async function main(): Promise<void> {
       app.emit("open-url", { preventDefault() {} }, link);
     }
 
-    const files = argv
-      .slice(1)
-      .filter((arg) => !arg.startsWith("--")) // Filter out flags
-      .filter((arg) => isFileToOpen(arg));
+    const files = getFilesToOpen(argv, workingDirectory);
     for (const file of files) {
       app.emit("open-file", { preventDefault() {} }, file);
     }

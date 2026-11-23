@@ -599,6 +599,30 @@ describe("ExtensionsHandler", () => {
       expect(writeFile).toHaveBeenCalledWith(join(expectedDir, "file.txt"), expect.any(Uint8Array));
     });
 
+    it("writes nothing when an archive entry escapes the extension folder", async () => {
+      mockArchive.files["../../escaped.txt"] = { async: vi.fn() };
+
+      await expect(extensionsHandler.install(new Uint8Array())).rejects.toThrow("escapes");
+      expect(rm).not.toHaveBeenCalled();
+      expect(writeFile).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      { name: "foo/../../bar", version: "1.0.0" },
+      { name: "@foo/../../bar", version: "1.0.0" },
+      { name: "foo", version: "1.0.0/../../../bar" },
+      { name: "foo", version: "1.0.0\\..\\bar" },
+    ])("rejects unsafe name or version $name@$version", async ({ name, version }) => {
+      mockArchive.files["package.json"].async.mockResolvedValue(
+        JSON.stringify({ name, version, main: "main.js", publisher: "foo" }),
+      );
+
+      await expect(extensionsHandler.install(new Uint8Array())).rejects.toThrow(
+        "invalid characters",
+      );
+      expect(rm).not.toHaveBeenCalled();
+    });
+
     it("should throw an error if package.json is missing", async () => {
       // Given
       const foxeFileData = new Uint8Array([1, 2, 3]);
@@ -679,7 +703,7 @@ describe("ExtensionsHandler", () => {
     it("should return the list of installed extensionsXXXX", async () => {
       // Given
       const extensionId = genericString();
-      const desktopExtension = generateDesktopExtension();
+      const desktopExtension = generateDesktopExtension({ directory: join(rootDir, "foo") });
 
       getByIdSpy.mockResolvedValue(desktopExtension);
       (readFile as Mock).mockReturnValueOnce(JSON.stringify(desktopExtension.packageJson));
