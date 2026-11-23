@@ -16,14 +16,10 @@
     "dist",
     "src"
   ],
-  "scripts": {
-    "prepack": "tsc -b"
-  },
   "devDependencies": {
     "@testing-library/react": "16.3.3",
     "@types/lodash-es": "^4",
-    "react": "19.3.1",
-    "typescript": "6.0.3"
+    "react": "19.3.1"
   },
   "dependencies": {
     "@lichtblick/log": "workspace:*",

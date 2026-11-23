@@ -6,7 +6,6 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { Button } from "@mui/material";
-import * as _ from "lodash-es";
 import { useMemo, useRef, useState, ReactElement, useEffect } from "react";
 
 import Stack from "@lichtblick/suite-base/components/Stack";
@@ -40,10 +39,12 @@ export default function VariablesList(): ReactElement {
       previousGlobalVariablesRef.current = globalVariables;
       return;
     }
-    const newChangedVariables = _.union(
-      Object.keys(globalVariables),
-      Object.keys(previousGlobalVariablesRef.current ?? {}),
-    ).filter((name) => {
+    const newChangedVariables = [
+      ...new Set([
+        ...Object.keys(globalVariables),
+        ...Object.keys(previousGlobalVariablesRef.current ?? {}),
+      ]),
+    ].filter((name) => {
       const previousValue = previousGlobalVariablesRef.current?.[name];
       return previousValue !== globalVariables[name];
     });

@@ -10,7 +10,6 @@ import HelpIcon from "@mui/icons-material/Help";
 import InfoIcon from "@mui/icons-material/Info";
 import WarningIcon from "@mui/icons-material/Warning";
 import { List, ListItem, ListItemIcon, ListItemText, Typography } from "@mui/material";
-import * as _ from "lodash-es";
 import { ReactElement } from "react";
 import { makeStyles } from "tss-react/mui";
 
@@ -64,9 +63,11 @@ const DiagnosticsSection = ({ diagnostics }: Props): ReactElement => {
     <List dense disablePadding>
       {diagnostics.map(({ severity, message, source, startColumn, startLineNumber }, i) => {
         const severityLabel =
-          (_.invert(DIAGNOSTIC_SEVERITY) as Record<string, keyof typeof DIAGNOSTIC_SEVERITY>)[
-            severity
-          ] ?? "Error";
+          (
+            Object.fromEntries(
+              Object.entries(DIAGNOSTIC_SEVERITY).map(([key, value]) => [value, key]),
+            ) as Record<string, keyof typeof DIAGNOSTIC_SEVERITY>
+          )[severity] ?? "Error";
 
         const errorLoc =
           startLineNumber != undefined && startColumn != undefined

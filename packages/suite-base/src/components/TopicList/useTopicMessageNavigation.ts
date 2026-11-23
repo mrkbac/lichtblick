@@ -8,9 +8,8 @@
  */
 
 import { Time, compare, subtract as subtractTime } from "@foxglove/rostime";
-import { enableMapSet } from "immer";
+import { enableMapSet, produce } from "immer";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useImmer } from "use-immer";
 
 import Logger from "@lichtblick/log";
 import {
@@ -66,7 +65,7 @@ export function useTopicMessageNavigation({
   isTopicSubscribed: boolean;
 }): UseTopicMessageNavigationReturn {
   const [isNavigating, setIsNavigating] = useState(false);
-  const [boundariesCache, setBoundariesCache] = useImmer(() => new Map<string, TopicBoundaries>());
+  const [boundariesCache, setBoundariesCache] = useState(() => new Map<string, TopicBoundaries>());
   const navigationAbortControllerRef = useRef<AbortController | undefined>(undefined);
 
   // Abort any in-progress navigation when the component unmounts
@@ -130,19 +129,21 @@ export function useTopicMessageNavigation({
   // fallback for non-MCAP sources or when topicStats is temporarily unavailable.
   const updateBoundariesCache = useCallback(
     (topic: string, updates: Partial<TopicBoundaries>) => {
-      setBoundariesCache((draft) => {
-        const existing = draft.get(topic) ?? {};
-        const next = { ...existing, ...updates };
-        // Writing equal values would still make a new state and re-run discovery
-        if (
-          sameTime(existing.first, next.first) &&
-          sameTime(existing.last, next.last) &&
-          sameTime(existing.lastAtEnd, next.lastAtEnd)
-        ) {
-          return;
-        }
-        draft.set(topic, next);
-      });
+      setBoundariesCache(
+        produce((draft) => {
+          const existing = draft.get(topic) ?? {};
+          const next = { ...existing, ...updates };
+          // Writing equal values would still make a new state and re-run discovery
+          if (
+            sameTime(existing.first, next.first) &&
+            sameTime(existing.last, next.last) &&
+            sameTime(existing.lastAtEnd, next.lastAtEnd)
+          ) {
+            return;
+          }
+          draft.set(topic, next);
+        }),
+      );
     },
     [setBoundariesCache],
   );

@@ -15,11 +15,5 @@
   "files": [
     "dist",
     "src"
-  ],
-  "scripts": {
-    "prepack": "tsc -b"
-  },
-  "devDependencies": {
-    "typescript": "6.0.3"
-  }
+  ]
 }

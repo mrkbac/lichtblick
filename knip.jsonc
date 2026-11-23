@@ -65,7 +65,6 @@
         "events",
         "@svgr/webpack",
         "css-loader",
-        "nearley-loader",
         "style-loader"
       ]
     },
@@ -91,10 +90,6 @@
     "packages/oxlint-plugin": {
       // JSDoc-only `import("estree")` types, provided by oxlint
       "ignoreDependencies": ["estree"]
-    },
-    "packages/message-path": {
-      // Ambient `*.ne` module declaration
-      "entry": ["src/typings/extensions.ts"]
     }
   }
 }

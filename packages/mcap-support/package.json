@@ -17,12 +17,8 @@
     "dist",
     "src"
   ],
-  "scripts": {
-    "prepack": "tsc -b"
-  },
   "devDependencies": {
-    "@foxglove/cdr": "3.5.1",
-    "typescript": "6.0.3"
+    "@foxglove/cdr": "3.5.1"
   },
   "dependencies": {
     "@foxglove/message-definition": "0.5.0",

@@ -9,12 +9,8 @@
     "src",
     "LICENSE"
   ],
-  "scripts": {
-    "prepack": "tsc -b"
-  },
   "devDependencies": {
-    "@types/lodash-es": "^4",
-    "typescript": "6.0.3"
+    "@types/lodash-es": "^4"
   },
   "dependencies": {
     "@foxglove/crc": "1.0.1",

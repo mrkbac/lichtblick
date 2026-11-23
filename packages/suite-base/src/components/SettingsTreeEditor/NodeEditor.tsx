@@ -32,6 +32,7 @@ import {
   Typography,
 } from "@mui/material";
 import { TFunction } from "i18next";
+import { produce } from "immer";
 import * as _ from "lodash-es";
 import memoizeWeak from "memoize-weak";
 import React, {
@@ -44,7 +45,6 @@ import React, {
   useState,
 } from "react";
 import { useTranslation } from "react-i18next";
-import { useImmer } from "use-immer";
 
 import { filterMap } from "@lichtblick/den/collection";
 import { parseMessagePath, quoteTopicNameIfNeeded } from "@lichtblick/message-path";
@@ -206,7 +206,7 @@ function NodeEditorComponent(props: Readonly<NodeEditorProps>): React.JSX.Elemen
     topicNamespace,
     unfilteredSettings,
   } = props;
-  const [state, setState] = useImmer<NodeEditorState>({
+  const [state, setState] = useState<NodeEditorState>({
     editing: false,
     focusedPath: undefined,
     open: defaultOpen,
@@ -380,17 +380,21 @@ function NodeEditorComponent(props: Readonly<NodeEditorProps>): React.JSX.Elemen
 
   const selectVisibilityFilter = (action: EditorSettingsTreeAction) => {
     if (action.action === "update" && action.payload.input === "select") {
-      setState((draft) => {
-        draft.visibilityFilter = action.payload.value as SelectVisibilityFilterValue;
-      });
+      setState(
+        produce((draft) => {
+          draft.visibilityFilter = action.payload.value as SelectVisibilityFilterValue;
+        }),
+      );
     }
   };
 
   const textFilterHandler = (action: EditorSettingsTreeAction) => {
     if (action.action === "update" && action.payload.input === "string") {
-      setState((draft) => {
-        draft.textFilter = action.payload.value as string;
-      });
+      setState(
+        produce((draft) => {
+          draft.textFilter = action.payload.value as string;
+        }),
+      );
     }
   };
 
@@ -441,9 +445,11 @@ function NodeEditorComponent(props: Readonly<NodeEditorProps>): React.JSX.Elemen
       focusedPath != undefined && _.isEqual(props.path, focusedPath.slice(0, props.path.length));
 
     if (isOnFocusedPath) {
-      setState((draft) => {
-        draft.open = true;
-      });
+      setState(
+        produce((draft) => {
+          draft.open = true;
+        }),
+      );
     }
 
     if (isFocused) {
@@ -654,24 +660,30 @@ function NodeEditorComponent(props: Readonly<NodeEditorProps>): React.JSX.Elemen
   );
 
   const toggleEditing = useCallback(() => {
-    setState((draft) => {
-      draft.editing = !draft.editing;
-    });
+    setState(
+      produce((draft) => {
+        draft.editing = !draft.editing;
+      }),
+    );
   }, [setState]);
 
   const toggleOpen = useCallback(() => {
-    setState((draft) => {
-      if (!draft.editing) {
-        draft.open = !draft.open;
-      }
-    });
+    setState(
+      produce((draft) => {
+        if (!draft.editing) {
+          draft.open = !draft.open;
+        }
+      }),
+    );
   }, [setState]);
 
   useEffect(() => {
     if (topicNamespace?.expandKey != undefined) {
-      setState((draft) => {
-        draft.open = true;
-      });
+      setState(
+        produce((draft) => {
+          draft.open = true;
+        }),
+      );
     }
   }, [setState, topicNamespace?.expandKey]);
 
@@ -1000,9 +1012,11 @@ function NodeEditorComponent(props: Readonly<NodeEditorProps>): React.JSX.Elemen
             placeholder={t("filterTopics")}
             slotProps={{ htmlInput: { "aria-label": t("filterTopics") } }}
             onChange={(event) => {
-              setState((draft) => {
-                draft.textFilter = event.target.value;
-              });
+              setState(
+                produce((draft) => {
+                  draft.textFilter = event.target.value;
+                }),
+              );
             }}
           />
           <div className={classes.topicFilterControls}>
@@ -1014,9 +1028,11 @@ function NodeEditorComponent(props: Readonly<NodeEditorProps>): React.JSX.Elemen
               aria-label={t("filterListHelp")}
               onChange={(_event, value: SelectVisibilityFilterValue | null) => {
                 if (value != undefined) {
-                  setState((draft) => {
-                    draft.visibilityFilter = value;
-                  });
+                  setState(
+                    produce((draft) => {
+                      draft.visibilityFilter = value;
+                    }),
+                  );
                 }
               }}
             >
@@ -1044,9 +1060,11 @@ function NodeEditorComponent(props: Readonly<NodeEditorProps>): React.JSX.Elemen
                 selected={state.topicTree}
                 aria-label={t("groupTopicsByName")}
                 onChange={() => {
-                  setState((draft) => {
-                    draft.topicTree = !draft.topicTree;
-                  });
+                  setState(
+                    produce((draft) => {
+                      draft.topicTree = !draft.topicTree;
+                    }),
+                  );
                 }}
               >
                 <AccountTreeIcon className={classes.topicFilterIcon} />
@@ -1071,9 +1089,11 @@ function NodeEditorComponent(props: Readonly<NodeEditorProps>): React.JSX.Elemen
                   label={filterLabel}
                   aria-pressed={selected}
                   onClick={() => {
-                    setState((draft) => {
-                      draft.topicQuickFilter = selected ? undefined : id;
-                    });
+                    setState(
+                      produce((draft) => {
+                        draft.topicQuickFilter = selected ? undefined : id;
+                      }),
+                    );
                   }}
                 />
               );

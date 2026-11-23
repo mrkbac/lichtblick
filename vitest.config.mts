@@ -1,22 +1,10 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import fs from "node:fs";
-import { createRequire } from "node:module";
 import path from "node:path";
 import { Plugin } from "vite";
 import { defineConfig, defineProject } from "vitest/config";
 import type { InlineConfig } from "vitest/node";
-
-// nearley's compiler internals ship without types or ESM entry points
-const require = createRequire(import.meta.url);
-const nearley = require("nearley") as typeof import("nearley");
-const nearleyCompile = require("nearley/lib/compile") as (
-  ast: unknown,
-  opts: object,
-) => { config: Record<string, string> };
-const nearleyGenerate = require("nearley/lib/generate") as (info: unknown, name: string) => string;
-const nearleyGrammar =
-  require("nearley/lib/nearley-language-bootstrapped") as import("nearley").CompiledRules;
 
 const root = import.meta.dirname;
 const suiteBaseSrc = path.join(root, "packages/suite-base/src");
@@ -24,8 +12,7 @@ const suiteBaseSetup = path.join(suiteBaseSrc, "test/setup.ts");
 // Real globals (not compile-time defines) so tests can override them, as with jest's `globals`
 const testGlobals = path.join(suiteBaseSrc, "test/globals.ts");
 
-/** Compiles .ne grammars (like nearley-loader) and exposes .bin/.template files as strings
- * and .wasm files as data: URLs. */
+/** Exposes .bin/.template files as strings and .wasm files as data: URLs. */
 function testAssets(): Plugin {
   return {
     name: "lichtblick-test-assets",
@@ -38,13 +25,6 @@ function testAssets(): Plugin {
         // A URL, as in the app; fetch() reads data: URLs in Node too
         const url = `data:application/wasm;base64,${fs.readFileSync(id).toString("base64")}`;
         return `export default ${JSON.stringify(url)};`;
-      }
-      if (id.endsWith(".ne")) {
-        const parser = new nearley.Parser(nearley.Grammar.fromCompiled(nearleyGrammar));
-        parser.feed(fs.readFileSync(id, "utf8"));
-        const info = nearleyCompile(parser.results[0], {});
-        info.config.preprocessor = "esmodule";
-        return nearleyGenerate(info, "grammar");
       }
       return undefined;
     },

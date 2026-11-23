@@ -20,11 +20,13 @@ export function describeChange(
   }
   const prevIds = getAllPanelIds(prev);
   const names = (ids: string[]) =>
-    _.uniq(ids.map((id) => panelTitle(getPanelTypeFromId(id)))).join(", ");
-  const added = _.difference(nextIds, prevIds);
-  const removed = _.difference(prevIds, nextIds);
-  const edited = _.intersection(prevIds, nextIds).filter(
-    (id) => !_.isEqual(prev.configById[id], next.configById[id]),
+    [...new Set(ids.map((id) => panelTitle(getPanelTypeFromId(id))))].join(", ");
+  const prevSet = new Set(prevIds);
+  const nextSet = new Set(nextIds);
+  const added = [...nextSet.difference(prevSet)];
+  const removed = [...prevSet.difference(nextSet)];
+  const edited = [...prevSet].filter(
+    (id) => nextSet.has(id) && !_.isEqual(prev.configById[id], next.configById[id]),
   );
 
   const lines: string[] = [];

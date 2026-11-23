@@ -29,7 +29,6 @@ updates:
         patterns:
           - "electron"
           - "electron-*"
-          - "builder-util"
       vitest:
         patterns:
           - "vitest"

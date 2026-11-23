@@ -5,8 +5,6 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import * as _ from "lodash-es";
-
 import { Immutable } from "@lichtblick/suite";
 import { mergeSubscriptions } from "@lichtblick/suite-base/components/MessagePipeline/subscriptions";
 import { SubscribePayload } from "@lichtblick/suite-base/players/types";
@@ -59,7 +57,7 @@ export function remapVirtualSubscriptions(
     .map(
       (v): SubscriberInputs => [
         v,
-        inputsByOutputTopic.has(v.topic) ? _.uniq(sourceInputs(v.topic)) : undefined,
+        inputsByOutputTopic.has(v.topic) ? [...new Set(sourceInputs(v.topic))] : undefined,
       ],
     )
     .filter(([, topics]) => topics?.length !== 0);

@@ -13,6 +13,9 @@
 # easier for both humans and computers to understand what's going on.
 #
 # For more examples, please see parseRosPath.test.js
+# Compiled to grammar.gen.ts by `pnpm gen:grammar`.
+@preprocessor typescript
+
 # A time-series modifier (e.g. `.@derivative`) and the modifiers after it are moved out of
 # `messagePath` by parseMessagePath.
 main -> topicName messagePath:?

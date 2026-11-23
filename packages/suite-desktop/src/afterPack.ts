@@ -5,10 +5,9 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { log, Arch } from "builder-util";
 import { execFile } from "child_process";
 import crypto from "crypto";
-import type { AfterPackContext } from "electron-builder";
+import { Arch, log, type AfterPackContext } from "electron-builder";
 import fs from "fs/promises";
 import path from "path";
 import { promisify } from "util";

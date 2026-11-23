@@ -124,7 +124,9 @@ function StateTransitions(props: StateTransitionPanelProps) {
 
   // Series with a condition need exact matches even once their samples are thinned.
   const changesPaths = useMemo(
-    () => _.uniq(paths.filter((path) => parseCondition(path.condition)).map((path) => path.value)),
+    () => [
+      ...new Set(paths.filter((path) => parseCondition(path.condition)).map((path) => path.value)),
+    ],
     [paths],
   );
 

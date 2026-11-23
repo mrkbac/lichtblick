@@ -16,7 +16,7 @@
 
 import { Grammar, Parser } from "nearley";
 
-import grammar from "./grammar.ne";
+import grammar from "./grammar.gen";
 import { STREAM_MODIFIERS } from "./modifiers";
 import { MessagePath, MessagePathModifier, MessagePathPart } from "./types";
 

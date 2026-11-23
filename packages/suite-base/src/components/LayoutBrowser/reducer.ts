@@ -5,9 +5,9 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+import { produce } from "immer";
 import * as _ from "lodash-es";
-import { Dispatch } from "react";
-import { useImmerReducer } from "use-immer";
+import { Dispatch, useReducer } from "react";
 
 import {
   LayoutSelectionState,
@@ -71,10 +71,12 @@ function reducer(draft: LayoutSelectionState, action: LayoutSelectionAction) {
   }
 }
 
+const immerReducer = produce(reducer);
+
 export function useLayoutBrowserReducer(
   props: Pick<LayoutSelectionState, "busy" | "error" | "online" | "lastSelectedId">,
 ): [LayoutSelectionState, Dispatch<LayoutSelectionAction>] {
-  return useImmerReducer(reducer, {
+  return useReducer(immerReducer, {
     ...props,
     selectedIds: [],
     multiAction: undefined,
