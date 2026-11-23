@@ -27,15 +27,7 @@ import {
 } from "../common/types";
 import { LICHTBLICK_PRODUCT_NAME, LICHTBLICK_PRODUCT_VERSION } from "../common/webpackDefines";
 
-// Since we have no way of modifying `window.process.argv` we use a sentinel cookie and reload
-// hack to reset the page without deep links. By setting a session cookie and reloading
-// we allow this preload script to read the cookie and ignore deep links in `getDeepLinks`
-const ignoreDeepLinks = document.cookie.includes("fox.ignoreDeepLinks=true");
-document.cookie = "fox.ignoreDeepLinks=;max-age=0;";
-
-const deepLinks = ignoreDeepLinks
-  ? []
-  : (decodeRendererArg("deepLinks", window.process.argv) ?? []);
+const deepLinks = decodeRendererArg("deepLinks", window.process.argv) ?? [];
 
 export function main(): void {
   const log = Logger.getLogger(__filename);
@@ -129,15 +121,6 @@ export function main(): void {
     getDeepLinks(): string[] {
       return deepLinks;
     },
-    resetDeepLinks(): void {
-      // See `ignoreDeepLinks` comment above for why we do this hack to reset deep links
-
-      // set a session cookie called "fox.ignoreDeepLinks"
-      document.cookie = "fox.ignoreDeepLinks=true;";
-
-      // Reload the window so the new preloader script can read the cookie
-      window.location.reload();
-    },
     // Layout management
     async fetchLayouts() {
       const userLayoutsDir = pathJoin(
@@ -172,11 +155,8 @@ export function main(): void {
   const storageBridge: Storage = {
     // Context bridge cannot expose "classes" only exposes functions
     // We use .bind to attach the localFileStorage instance as _this_ to the function
-    list: localFileStorage.list.bind(localFileStorage),
-    all: localFileStorage.all.bind(localFileStorage),
     get: localFileStorage.get.bind(localFileStorage),
     put: localFileStorage.put.bind(localFileStorage),
-    delete: localFileStorage.delete.bind(localFileStorage),
   };
 
   const menuBridge: NativeMenuBridge = {
