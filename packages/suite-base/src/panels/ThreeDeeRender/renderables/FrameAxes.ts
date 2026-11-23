@@ -39,6 +39,7 @@ import {
   DEFAULT_TF_LABEL_SIZE,
   frameFields,
   PRECISION_ADJUST_DEGREES,
+  staticTransformTopicsNode,
   transformSettingsNode,
 } from "../settingsNodes/global";
 import { isThreeDeeShortcut } from "../shortcuts";
@@ -224,6 +225,12 @@ export class FrameAxes extends SceneExtension<FrameAxisRenderable> {
         hasOffsets,
       }),
     };
+    const transformTopics = this.renderer.transformTopicNames();
+    if (transformTopics.length > 0) {
+      children.staticTopics = staticTransformTopicsNode(transformTopics, (topic) =>
+        this.renderer.isStaticTransformTopic(topic),
+      );
+    }
 
     let anyFrameVisible = false;
     let order = 1;
@@ -494,6 +501,12 @@ export class FrameAxes extends SceneExtension<FrameAxisRenderable> {
 
     if (path.length !== 3) {
       return; // Doesn't match the pattern of ["transforms", "settings" | `frame:${frameId}`, field]
+    }
+
+    if (path[1] === "staticTopics") {
+      this.renderer.setStaticTransformTopic(path[2]!, { isStatic: action.payload.value === true });
+      this.updateSettingsTree();
+      return;
     }
 
     if (path[1] === "settings") {

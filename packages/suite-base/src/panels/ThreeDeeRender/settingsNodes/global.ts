@@ -394,6 +394,38 @@ export function rotationConventionHelp(convention: RotationConvention): string {
 }
 
 /**
+ * Default for a transform topic's "static" setting: by convention, static transforms are published
+ * on `tf_static`-style topics. Users override it per topic under Transforms > Static topics.
+ */
+export function defaultIsStaticTransformTopic(topic: string): boolean {
+  return topic.endsWith("tf_static") || topic.endsWith("static_transform");
+}
+
+/** The "Static topics" child of the Transforms node: one switch per transform topic */
+export function staticTransformTopicsNode(
+  topics: readonly string[],
+  isStatic: (topic: string) => boolean,
+): DocumentedNode {
+  return {
+    label: t("threeDee:staticTransformTopics"),
+    help: t("threeDee:staticTransformTopicsHelp"),
+    defaultExpansionState: "collapsed",
+    order: 0,
+    fields: Object.fromEntries(
+      [...topics].sort().map((topic) => [
+        topic,
+        {
+          label: topic,
+          help: t("threeDee:staticTransformTopicsHelp"),
+          input: "boolean" as const,
+          value: isStatic(topic),
+        },
+      ]),
+    ),
+  };
+}
+
+/**
  * The "Settings" child of the Transforms node. `keyboardFrames`: frames that have a parent, so
  * they can be adjusted; `hasOffsets`: some frame is adjusted.
  */

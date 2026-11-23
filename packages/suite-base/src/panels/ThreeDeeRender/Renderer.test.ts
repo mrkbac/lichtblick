@@ -26,7 +26,11 @@ import { HOVER_PICK_THROTTLE_MS } from "@lichtblick/suite-base/panels/ThreeDeeRe
 import { CameraStateSettings } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/CameraStateSettings";
 import { DEFAULT_PUBLISH_SETTINGS } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/PublishSettings";
 import { TFMessage, TransformStamped } from "@lichtblick/suite-base/panels/ThreeDeeRender/ros";
-import { makePose, Transform } from "@lichtblick/suite-base/panels/ThreeDeeRender/transforms";
+import {
+  AddTransformResult,
+  makePose,
+  Transform,
+} from "@lichtblick/suite-base/panels/ThreeDeeRender/transforms";
 import { BasicBuilder } from "@lichtblick/test-builders";
 
 import { DynamicBufferGeometry } from "./DynamicBufferGeometry";
@@ -666,8 +670,14 @@ describe("3D Renderer", () => {
 
       expect(hoveredSpy).toHaveBeenCalledTimes(1);
 
+      // The trailing pick is at where the cursor stopped, not where the throttle started
       vi.advanceTimersByTime(HOVER_PICK_THROTTLE_MS);
-      hoverCanvas.dispatchEvent(new MouseEvent("pointermove", { clientX: 13, clientY: 13 }));
+      await flushPicks();
+      expect(hoveredSpy).toHaveBeenCalledTimes(2);
+      expect(hoveredSpy.mock.calls[1]![1]).toEqual(expect.objectContaining({ x: 12, y: 12 }));
+
+      // No move since: no further pick
+      vi.advanceTimersByTime(HOVER_PICK_THROTTLE_MS * 2);
       await flushPicks();
       expect(hoveredSpy).toHaveBeenCalledTimes(2);
 
@@ -2885,5 +2895,142 @@ describe("Renderer batch message processing", () => {
     expect(renderer.transformTree.frame("child1")).toBeDefined();
     expect(renderer.transformTree.frame("child2")).toBeDefined();
     expect(renderer.transformTree.frame("child3")).toBeDefined();
+  });
+});
+
+describe("Renderer review fixes", () => {
+  let canvas = document.createElement("canvas");
+  beforeEach(() => {
+    vi.clearAllMocks();
+    setupVitestCanvasMock();
+    const parent = document.createElement("div");
+    canvas = document.createElement("canvas");
+    parent.appendChild(canvas);
+  });
+  afterEach(() => {
+    (console.warn as Mock).mockClear();
+  });
+
+  const noPreload = {
+    ...defaultRendererConfig,
+    scene: { transforms: { enablePreloading: false } },
+  };
+
+  it("keeps the transform tree when leaving image-only mode it was not in", () => {
+    const renderer = new Renderer({ ...defaultRendererProps, canvas });
+    renderer.transformTree.setComplete(true);
+    renderer.addTransformMessages([createTFMessageEvent("root", "a", 1n, [1n])]);
+
+    renderer.disableImageOnlySubscriptionMode();
+
+    expect(renderer.transformTree.frame("a")?.transformsSize()).toBe(1);
+    expect(renderer.transformTree.isComplete()).toBe(true);
+    renderer.dispose();
+  });
+
+  it("marks a cleared transform tree incomplete so its history is read again", () => {
+    const renderer = new Renderer({
+      ...defaultRendererProps,
+      interfaceMode: "image" as const,
+      canvas,
+    });
+    renderer.enableImageOnlySubscriptionMode();
+    renderer.transformTree.setComplete(true);
+
+    renderer.disableImageOnlySubscriptionMode();
+
+    expect(renderer.transformTree.isComplete()).toBe(false);
+    renderer.dispose();
+  });
+
+  it("deselects a renderable that clear() removed from the scene", () => {
+    const renderer = new Renderer({ ...defaultRendererProps, canvas });
+    const detached = new THREE.Object3D();
+    // @ts-expect-error - a plain object stands in for a disposed renderable
+    renderer.setSelectedRenderable({ renderable: detached });
+    const selected = vi.fn();
+    renderer.on("selectedRenderable", selected);
+
+    renderer.clear();
+
+    expect(selected).toHaveBeenCalledWith(undefined, renderer);
+    renderer.dispose();
+  });
+
+  it("keeps rendering after a frame throws", () => {
+    const renderer = new Renderer({ ...defaultRendererProps, canvas });
+    // The frame handler's first step
+    const step = vi.spyOn(renderer, "setCurrentTime").mockImplementationOnce(() => {
+      throw new Error("boom");
+    });
+
+    expect(() => {
+      renderer.animationFrame();
+    }).toThrow("boom");
+    renderer.animationFrame();
+
+    expect(step).toHaveBeenCalledTimes(2);
+    renderer.dispose();
+  });
+
+  it.each([
+    { x: 0, y: 0, z: 0, w: 0 },
+    { x: NaN, y: 0, z: 0, w: 1 },
+    { x: 0, y: 0, z: 0, w: Infinity },
+  ])("rejects the rotation %o with a settings error", (rotation) => {
+    const renderer = new Renderer({ ...defaultRendererProps, canvas });
+
+    const result = renderer.addTransform("parent", "child", 1n, { x: 0, y: 0, z: 0 }, rotation);
+
+    expect(result).toBe(AddTransformResult.INVALID);
+    expect(renderer.transformTree.frame("child")?.transformsSize() ?? 0).toBe(0);
+    expect(renderer.settings.errors.errors.errorAtPath(["transforms", "frame:child"])).toContain(
+      "Invalid transform",
+    );
+    renderer.dispose();
+  });
+
+  it("takes whether a topic is static from its setting, not its name", () => {
+    const renderer = new Renderer({
+      ...defaultRendererProps,
+      canvas,
+      config: {
+        ...noPreload,
+        scene: {
+          transforms: {
+            enablePreloading: false,
+            staticTopics: { "/poses": true, "/tf_static": false },
+          },
+        },
+      },
+    });
+    renderer.setCurrentTime(100n);
+    renderer.addMessageEvent(createTFMessageEvent("root", "fromPoses", 10n, [10n], "/poses"));
+    renderer.addMessageEvent(
+      createTFMessageEvent("root", "fromTfStatic", 10n, [10n], "/tf_static"),
+    );
+    renderer.animationFrame();
+
+    renderer.setCurrentTime(20n);
+    renderer.handleSeek(100n);
+
+    expect(renderer.transformTree.frame("fromPoses")?.transformsSize()).toBe(1);
+    expect(renderer.transformTree.frame("fromTfStatic")?.transformsSize() ?? 0).toBe(0);
+    renderer.dispose();
+  });
+
+  it("forgets a topic's static transforms when it is set to not static", () => {
+    const renderer = new Renderer({ ...defaultRendererProps, canvas, config: noPreload });
+    expect(renderer.isStaticTransformTopic("/tf_static")).toBe(true);
+    renderer.setCurrentTime(100n);
+    renderer.addMessageEvent(createTFMessageEvent("root", "a", 10n, [10n], "/tf_static"));
+    renderer.animationFrame();
+    expect(renderer.isStaticTransformFrame("a")).toBe(true);
+
+    renderer.setStaticTransformTopic("/tf_static", { isStatic: false });
+
+    expect(renderer.isStaticTransformTopic("/tf_static")).toBe(false);
+    expect(renderer.isStaticTransformFrame("a")).toBe(false);
+    renderer.dispose();
   });
 });
