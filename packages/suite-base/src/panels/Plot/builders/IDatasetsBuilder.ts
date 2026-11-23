@@ -151,11 +151,12 @@ interface IDatasetsBuilder {
   setSeries(series: Immutable<SeriesItem[]>): void;
 
   /**
-   * Optional: return the x-axis topic name if this builder uses a separate x-axis topic
-   * (e.g. custom x-axis mode). The coordinator will subscribe to this topic in addition to
-   * the y-series topics so that handleMessageRange receives batches for it.
+   * Optional: return the x-axis path if this builder reads a separate x-axis path (e.g. custom
+   * x-axis mode). The coordinator subscribes to its topic in addition to the y-series topics so
+   * that handleMessageRange receives batches for it, and restarts that read when the path changes.
+   * The returned object must keep its identity while the path is unchanged.
    */
-  getXTopic?(): string | undefined;
+  getXPath?(): Immutable<MessagePath> | undefined;
 
   getViewportDatasets(viewport: Immutable<Viewport>): Promise<GetViewportDatasetsResult>;
 

@@ -143,6 +143,8 @@ export class PlotCoordinator extends EventEmitter<PlotCoordinatorEventTypes> {
   private readonly rangeSubscriptionCancels = new Map<string, RangeSubscription[]>();
   private startTime: Immutable<Time> | undefined;
   private seriesKeysByTopic = new Map<string, Set<SeriesConfigKey>>();
+  /** The builder's x path the range reads were last started for */
+  private rangeXPath: Immutable<MessagePath> | undefined;
   /** Tracks activeData.topics reference to detect when topics change (e.g. user script update).*/
   private lastTopicsRef: readonly Topic[] | undefined;
 
@@ -214,6 +216,7 @@ export class PlotCoordinator extends EventEmitter<PlotCoordinatorEventTypes> {
       }
     }
 
+    this.syncRangeXPath();
     this.subscribeTopicRanges(this.seriesKeysByTopic);
 
     if (this.isTimeseriesPlot) {
@@ -598,7 +601,7 @@ export class PlotCoordinator extends EventEmitter<PlotCoordinatorEventTypes> {
     });
 
     // If the builder uses a separate x-axis topic (e.g. custom x-axis), subscribe to it too.
-    const xTopic = this.datasetsBuilder.getXTopic?.();
+    const xTopic = this.datasetsBuilder.getXPath?.()?.topicName;
     if (xTopic && !newSeriesKeysByTopic.has(xTopic)) {
       newSeriesKeysByTopic.set(xTopic, new Set<SeriesConfigKey>());
     }
@@ -940,6 +943,34 @@ export class PlotCoordinator extends EventEmitter<PlotCoordinatorEventTypes> {
       cancel();
     }
     this.rangeSubscriptionCancels.delete(topic);
+  }
+
+  /**
+   * A new x path needs its topic read from the start, even when that topic is already read for a
+   * series (the x data was reset when the path changed).
+   */
+  private syncRangeXPath(): void {
+    const xPath = this.datasetsBuilder.getXPath?.();
+    if (xPath === this.rangeXPath) {
+      return;
+    }
+    const oldTopic = this.rangeXPath?.topicName;
+    this.rangeXPath = xPath;
+    if (oldTopic != undefined && this.seriesKeysByTopic.get(oldTopic)?.size === 0) {
+      this.seriesKeysByTopic.delete(oldTopic);
+    }
+    const xTopic = xPath?.topicName;
+    if (xTopic == undefined) {
+      return;
+    }
+    if (!this.seriesKeysByTopic.has(xTopic)) {
+      this.seriesKeysByTopic.set(xTopic, new Set());
+    }
+    // The primary read feeds the x-axis; an inactive entry is restarted by subscribeTopicRanges
+    const primary = this.rangeSubscriptionCancels.get(xTopic)?.[0];
+    if (primary) {
+      primary.active = false;
+    }
   }
 
   private subscribeTopicRanges(seriesKeysByTopic: Map<string, Set<SeriesConfigKey>>): void {

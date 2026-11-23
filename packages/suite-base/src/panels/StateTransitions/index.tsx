@@ -167,14 +167,15 @@ function StateTransitions(props: StateTransitionPanelProps) {
 
   const showPoints = config.showPoints === true;
 
-  const { pathState, data, minY, matchStarts, matchesApproximate } = useStateTransitionsData(
-    paths,
-    startTime,
-    newItemsByPath,
-    decodedMessages,
-    showPoints,
-    theme.palette.mode,
-  );
+  const { pathState, data, datasetPathIndexes, minY, matchStarts, matchesApproximate } =
+    useStateTransitionsData(
+      paths,
+      startTime,
+      newItemsByPath,
+      decodedMessages,
+      showPoints,
+      theme.palette.mode,
+    );
 
   const { yScale, xScale, databounds, width, sizeRef } = useChartScalesAndBounds(
     minY,
@@ -196,6 +197,7 @@ function StateTransitions(props: StateTransitionPanelProps) {
   const deltaModeResetKey = useAppendOnlyKey(pathSignatures);
   const deltaMode = useStateTransitionsDeltaMode({
     datasets: data.datasets,
+    datasetPathIndexes,
     resetKey: deltaModeResetKey,
   });
   const { markerA, markerB } = deltaMode;

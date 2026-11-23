@@ -59,8 +59,8 @@ export class CustomDatasetsBuilder implements IDatasetsBuilder {
 
   #hasRangeSource: boolean = false;
 
-  public getXTopic(): string | undefined {
-    return this.#xParsedPath?.topicName;
+  public getXPath(): Immutable<MessagePath> | undefined {
+    return this.#xParsedPath;
   }
 
   public constructor() {

@@ -91,6 +91,7 @@ function useStateTransitionsData(
     if (!startTime) {
       return {
         data: { datasets: [] },
+        datasetPathIndexes: [],
         minY: undefined,
         pathState: [],
         matchStarts: [],
@@ -100,6 +101,7 @@ function useStateTransitionsData(
 
     let outMinY: number | undefined;
     const outDatasets: ChartDatasets = [];
+    const datasetPathIndexes: number[] = [];
     const outPathState: PathState[] = [];
     const matchStarts = new Set<number>();
     let matchesApproximate = false;
@@ -122,6 +124,7 @@ function useStateTransitionsData(
         isArray,
       });
       outDatasets.push(newBlockDataSet);
+      datasetPathIndexes.push(pathIndex);
       if (hasCondition) {
         matchesApproximate =
           addMatches(blocksForPath, newBlockDataSet, datasetArgs, matchStarts) ||
@@ -137,6 +140,7 @@ function useStateTransitionsData(
 
       const newPathDataSet = messagesToDataset({ ...datasetArgs, blocks: [items] }, cache.drawn);
       outDatasets.push(newPathDataSet);
+      datasetPathIndexes.push(pathIndex);
       if (hasCondition) {
         matchesApproximate =
           addMatches([items], newPathDataSet, datasetArgs, matchStarts, cache.exact) ||
@@ -146,6 +150,7 @@ function useStateTransitionsData(
 
     return {
       data: { datasets: outDatasets },
+      datasetPathIndexes,
       minY: outMinY,
       pathState: outPathState,
       matchStarts: [...matchStarts].sort((a, b) => a - b),

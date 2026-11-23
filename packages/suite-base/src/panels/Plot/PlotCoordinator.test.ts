@@ -4,7 +4,7 @@ import type { Theme } from "@mui/material";
 import { EventEmitter } from "eventemitter3";
 import type { Mock, Mocked } from "vitest";
 
-import { parseMessagePath } from "@lichtblick/message-path";
+import { MessagePath, parseMessagePath } from "@lichtblick/message-path";
 import { simpleGetMessagePathDataItems } from "@lichtblick/suite-base/components/MessagePathSyntax/simpleGetMessagePathDataItems";
 import { stringifyMessagePath } from "@lichtblick/suite-base/components/MessagePathSyntax/stringifyRosPath";
 import { fillInGlobalVariablesInPath } from "@lichtblick/suite-base/components/MessagePathSyntax/useCachedGetMessagePathDataItems";
@@ -650,6 +650,39 @@ describe("PlotCoordinator", () => {
 
       // Then — no new subscription opened
       expect(mockSubscribeMessageRange).not.toHaveBeenCalled();
+    });
+
+    it("restarts the read of an already-read topic when the x path moves onto it", () => {
+      // Given — an active read of /foo for a series, x path on another topic
+      mockSubscribeMessageRange.mockImplementation(
+        ({
+          onNewRangeIterator,
+        }: {
+          onNewRangeIterator: (iter: AsyncIterable<unknown>) => Promise<void>;
+        }) => {
+          void onNewRangeIterator((async function* () {})());
+          return vi.fn();
+        },
+      );
+      let xPath = { topicName: "/bar" };
+      datasetsBuilder.getXPath = vi.fn(() => xPath as MessagePath);
+      plotCoordinator["seriesKeysByTopic"] = PlotCoordinatorBuilder.seriesKeysByTopic([
+        ["/foo", ["/foo.val"]],
+      ]);
+      const state = PlayerBuilder.playerState({ activeData: PlayerBuilder.activeData() });
+      plotCoordinator.handlePlayerState(state);
+      mockSubscribeMessageRange.mockClear();
+
+      // When — the x path moves onto /foo
+      xPath = { topicName: "/foo" };
+      plotCoordinator.handlePlayerState(state);
+
+      // Then — /foo is read again so the x data is filled, and the old x topic is dropped
+      expect(mockSubscribeMessageRange).toHaveBeenCalledTimes(1);
+      expect(mockSubscribeMessageRange).toHaveBeenCalledWith(
+        expect.objectContaining({ topic: "/foo" }),
+      );
+      expect(plotCoordinator["seriesKeysByTopic"].has("/bar")).toBe(false);
     });
 
     it("retries subscription when previous was inactive (no-op cancel)", () => {
@@ -1375,9 +1408,9 @@ describe("PlotCoordinator", () => {
         expect(map.has("/bar")).toBe(true);
       });
 
-      it("includes the xTopic from getXTopic when not already present", () => {
+      it("includes the xTopic from getXPath when not already present", () => {
         // Given
-        datasetsBuilder.getXTopic = vi.fn().mockReturnValue("/xtopic");
+        datasetsBuilder.getXPath = vi.fn().mockReturnValue({ topicName: "/xtopic" });
         const path = PlotBuilder.path({
           value: "/foo",
           timestampMethod: "receiveTime",
@@ -1396,7 +1429,7 @@ describe("PlotCoordinator", () => {
 
       it("does not add xTopic if it is already covered by a series", () => {
         // Given
-        datasetsBuilder.getXTopic = vi.fn().mockReturnValue("/foo");
+        datasetsBuilder.getXPath = vi.fn().mockReturnValue({ topicName: "/foo" });
         const path = PlotBuilder.path({
           value: "/foo",
           timestampMethod: "receiveTime",

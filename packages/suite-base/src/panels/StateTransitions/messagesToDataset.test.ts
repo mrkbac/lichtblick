@@ -246,6 +246,11 @@ describe("messagesToDataset helper functions", () => {
     expect(baseColors).toContain(result);
   });
 
+  it("should return a color for non-finite numbers", () => {
+    expect(baseColors).toContain(getColor(Infinity));
+    expect(baseColors).toContain(getColor(-Infinity));
+  });
+
   it("should return a color for a number input", () => {
     const value = BasicBuilder.number();
     const result = getColor(value);

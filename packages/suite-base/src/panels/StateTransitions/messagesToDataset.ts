@@ -274,7 +274,9 @@ export function isValidValue(value: unknown): value is number | string | bigint 
 }
 
 export function getColor(value: ValidQueriedDataValue): string {
-  const valueForColor = typeof value === "string" ? hashString(value) : Math.round(Number(value));
+  const numeric = typeof value === "string" ? Number.NaN : Number(value);
+  // ±Infinity (and huge bigints) have no integer index; hash them like strings instead
+  const valueForColor = Number.isFinite(numeric) ? Math.round(numeric) : hashString(String(value));
   return baseColors[positiveModulo(valueForColor, baseColorsLength)]!;
 }
 

@@ -9,6 +9,8 @@ export type UseStateTransitionsData = {
   data: {
     datasets: ChartDatasets;
   };
+  /** Index into `paths` for each entry of `data.datasets` (a path can have two datasets). */
+  datasetPathIndexes: number[];
   minY: number | undefined;
   /** Sorted seconds-since-start where any condition series becomes true. */
   matchStarts: number[];
