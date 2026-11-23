@@ -32,6 +32,7 @@ import { makeStyles } from "tss-react/mui";
 import { filterMap } from "@lichtblick/den/collection";
 import { useMountedState } from "@lichtblick/hooks";
 import Logger from "@lichtblick/log";
+import { usePublishPanelTimeRange } from "@lichtblick/suite-base/PanelAPI";
 import ChartComponent from "@lichtblick/suite-base/components/Chart/index";
 import { RpcElement, RpcScales } from "@lichtblick/suite-base/components/Chart/types";
 import KeyListener from "@lichtblick/suite-base/components/KeyListener";
@@ -606,6 +607,11 @@ export default function TimeBasedChart(props: Props): React.JSX.Element {
     [isMounted, updateTooltip],
   );
 
+  const publishTimeRange = usePublishPanelTimeRange();
+  useEffect(() => {
+    publishTimeRange(xAxisIsPlaybackTime ? currentScalesRef.current?.x : undefined);
+  }, [publishTimeRange, xAxisIsPlaybackTime]);
+
   const onScalesUpdate = useCallback(
     (scales: RpcScales, { userInteraction }: { userInteraction: boolean }) => {
       if (!isMounted()) {
@@ -630,6 +636,9 @@ export default function TimeBasedChart(props: Props): React.JSX.Element {
       }
 
       currentScalesRef.current = scales;
+      if (xAxisIsPlaybackTime) {
+        publishTimeRange(scales.x);
+      }
       if (scales.x != undefined && scales.y != undefined) {
         const { x, y } = scales;
         setViewportBounds({
@@ -702,7 +711,15 @@ export default function TimeBasedChart(props: Props): React.JSX.Element {
         };
       });
     },
-    [componentId, isMounted, isSynced, setGlobalBounds, setScales],
+    [
+      componentId,
+      isMounted,
+      isSynced,
+      publishTimeRange,
+      setGlobalBounds,
+      setScales,
+      xAxisIsPlaybackTime,
+    ],
   );
 
   useEffect(() => {
