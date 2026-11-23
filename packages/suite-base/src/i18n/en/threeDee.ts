@@ -47,7 +47,7 @@ export const threeDee = {
   enablePreloading: "Enable preloading",
   staticTransformTopics: "Static topics",
   staticTransformTopicsHelp:
-    "Transforms from a static topic are valid at every time and kept when seeking back, like tf_static. Defaults to on for topics named like tf_static.",
+    "Transforms received from a static topic are kept and re-applied when seeking back, so they are not lost before the topic publishes again. Applies to transforms received after it is turned on. Defaults to on for topics named like tf_static.",
   enablePreloadingTooltip:
     "Keep the transforms of the whole recording in memory, so seeking rarely needs to read them again. Very long recordings keep fewer transforms per frame to fit in memory. When off, transforms are read around the new time after each seek, which uses less memory.",
   loadingTransforms_one: "Loading transforms: {{formattedCount}} message",

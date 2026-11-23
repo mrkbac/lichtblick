@@ -2990,6 +2990,23 @@ describe("Renderer review fixes", () => {
     renderer.dispose();
   });
 
+  it("reports an invalid first transform on the transforms node and clears it on valid data", () => {
+    const renderer = new Renderer({ ...defaultRendererProps, canvas, config: noPreload });
+    const errors = renderer.settings.errors.errors;
+    renderer.setCurrentTime(100n);
+    const event = createTFMessageEvent("root", "child", 10n, [10n], "/tf");
+    event.message.transforms[0]!.transform.rotation.w = NaN;
+    renderer.addMessageEvent(event);
+    renderer.animationFrame();
+    expect(errors.errorAtPath(["transforms"])).toContain('"child" on topic "/tf"');
+
+    renderer.addMessageEvent(createTFMessageEvent("root", "child", 11n, [11n], "/tf"));
+    renderer.animationFrame();
+    expect(errors.errorAtPath(["transforms"])).toBeUndefined();
+    expect(errors.errorAtPath(["transforms", "frame:child"])).toBeUndefined();
+    renderer.dispose();
+  });
+
   it("takes whether a topic is static from its setting, not its name", () => {
     const renderer = new Renderer({
       ...defaultRendererProps,

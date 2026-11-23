@@ -1678,6 +1678,18 @@ export class Renderer extends EventEmitter<RendererEvents> {
         options.receiveTime,
       );
 
+      // On the parent node too: a frame whose first transform is invalid has no node of its own
+      const invalidId = `${INVALID_TRANSFORM}:${childId}`;
+      if (result === AddTransformResult.INVALID) {
+        this.settings.errors.add(
+          ["transforms"],
+          invalidId,
+          `Invalid transform for frame "${childId}" on topic "${options.topic}": translation must be finite and rotation a finite, non-zero quaternion. Transform message dropped.`,
+        );
+      } else {
+        this.settings.errors.remove(["transforms"], invalidId);
+      }
+
       if (options.isStatic && isAddedTransform(result)) {
         this.#staticTransformCache.set(childId, {
           topic: options.topic,
@@ -1719,6 +1731,10 @@ export class Renderer extends EventEmitter<RendererEvents> {
         this.settings.errors.add(errorSettingsPath, INVALID_TRANSFORM, message);
       }
       return AddTransformResult.INVALID;
+    }
+    this.settings.errors.remove(["transforms", `frame:${childFrameId}`], INVALID_TRANSFORM);
+    if (errorSettingsPath) {
+      this.settings.errors.remove(errorSettingsPath, INVALID_TRANSFORM);
     }
 
     tempVec3[0] = t.x;
