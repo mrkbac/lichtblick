@@ -18,7 +18,7 @@ import React, { useEffect } from "react";
 import { makeStyles } from "tss-react/mui";
 
 import { parseMessagePath, MessagePath } from "@lichtblick/message-path";
-import { useMessagesByTopic } from "@lichtblick/suite-base/PanelAPI";
+import { useMessageHistory } from "@lichtblick/suite-base/PanelAPI";
 import EmptyState from "@lichtblick/suite-base/components/EmptyState";
 import MessagePathInput from "@lichtblick/suite-base/components/MessagePathSyntax/MessagePathInput";
 import { useCachedGetMessagePathDataItems } from "@lichtblick/suite-base/components/MessagePathSyntax/useCachedGetMessagePathDataItems";
@@ -26,6 +26,7 @@ import Panel from "@lichtblick/suite-base/components/Panel";
 import { usePanelContext } from "@lichtblick/suite-base/components/PanelContext";
 import PanelToolbar from "@lichtblick/suite-base/components/PanelToolbar";
 import Stack from "@lichtblick/suite-base/components/Stack";
+import { MessageEvent } from "@lichtblick/suite-base/players/types";
 import { SaveConfig } from "@lichtblick/suite-base/types/panels";
 import { customTypography } from "@lichtblick/theme";
 
@@ -33,6 +34,8 @@ import Table from "./Table";
 
 type Config = { topicPath: string };
 type Props = { config: Config; saveConfig: SaveConfig<Config> };
+
+const identity = (message: MessageEvent) => message;
 
 const useStyles = makeStyles()(() => ({
   toolbar: {
@@ -58,7 +61,7 @@ function TablePanel({ config, saveConfig }: Props) {
     [topicPath],
   );
   const topicName = topicRosPath?.topicName ?? "";
-  const msgs = useMessagesByTopic({ topics: [topicName], historySize: 1 })[topicName];
+  const msgs = useMessageHistory({ topics: [topicName], historySize: 1, map: identity })[topicName];
   const cachedGetMessagePathDataItems = useCachedGetMessagePathDataItems([topicPath]);
   const msg = msgs?.last();
   const cachedMessages = msg ? (cachedGetMessagePathDataItems(topicPath, msg) ?? []) : [];

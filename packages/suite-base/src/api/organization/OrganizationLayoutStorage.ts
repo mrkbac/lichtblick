@@ -2,17 +2,15 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import { pushAll } from "@lichtblick/den/collection";
-import {
-  SaveNewLayoutParams,
-  UpdateLayoutRequest,
-  UpdateLayoutResponse,
-} from "@lichtblick/suite-base/api/layouts/types";
 import { LayoutID } from "@lichtblick/suite-base/context/CurrentLayoutContext";
 import { ISO8601Timestamp } from "@lichtblick/suite-base/services/ILayoutStorage";
 import { IRemoteLayoutFavoritesStorage } from "@lichtblick/suite-base/services/IRemoteLayoutFavoritesStorage";
 import {
   IRemoteLayoutStorage,
   RemoteLayout,
+  SaveNewLayoutParams,
+  UpdateLayoutRequest,
+  UpdateLayoutResponse,
 } from "@lichtblick/suite-base/services/IRemoteLayoutStorage";
 import {
   decodeLayoutTrust,

@@ -50,8 +50,9 @@ const MIN_CACHE_PER_SOURCE_BYTES = 1024 * 1024 * 10; // 10 MiB
 // the per-source cache budget.
 const DEFAULT_READ_AHEAD_BUFFER_BYTES = 1024 * 1024 * 2; // 2 MiB
 
-// Defaults for the optional MultiSourceHydrationOptions overrides (see shared/types.ts for the
-// rationale behind each knob). Heuristic; tune against real datasets.
+// Sources initialized at once: concurrent MCAP schema parsing spikes worker memory (and, for
+// remote sources, the request burst from concurrent summary reads). Heuristic; tune against real
+// datasets.
 const DEFAULT_INIT_CONCURRENCY = 4;
 // Opening a remote file mostly waits on a round trip, so more of them overlap. Measured with 60
 // files at 80 ms latency: 4 at once took 1.3 s, 8 took 0.7 s, 16 took 0.4 s. Kept at 8 because
@@ -61,11 +62,11 @@ const DEFAULT_REMOTE_INIT_CONCURRENCY = 8;
 // rebuild their reader, cache, and parsed channels on re-hydration.
 // Keep the smaller defaults until eviction can preserve the cheap per-source connection/cache
 // while only dropping heavyweight reader state.
+// Readers beyond either budget are closed (LRU) and re-opened on demand.
 const DEFAULT_MAX_HYDRATED_SOURCES = 4;
 const DEFAULT_MAX_HYDRATED_BYTES = 1024 * 1024 * 512; // 512 MiB
 
-// Earliest-by-start sources to prewarm for t=0 playback. Not part of MultiSourceHydrationOptions:
-// intentionally fixed and small to avoid a large open/request burst.
+// Earliest-by-start sources to prewarm for t=0 playback. Small to avoid a large open/request burst.
 const PREWARM_EARLIEST_COUNT = 3;
 
 // Each update makes the player reload its preloaded blocks, so the sources' updates (each file
@@ -120,62 +121,52 @@ export class MultiIterableSource<T extends ISerializedIterableSource, P>
   private async loadMultipleSources(): Promise<Initialization[]> {
     const { type } = this.dataSource;
     const concurrency =
-      this.dataSource.initConcurrency ??
-      (type === "urls" ? DEFAULT_REMOTE_INIT_CONCURRENCY : DEFAULT_INIT_CONCURRENCY);
+      type === "urls" ? DEFAULT_REMOTE_INIT_CONCURRENCY : DEFAULT_INIT_CONCURRENCY;
     if (this.#prebuilt) {
       this.sourceImpl.push(...this.#prebuilt);
       return await this.initializeSources(this.#prebuilt, concurrency);
     }
 
-    // Construct one bounded reader pool before branching; files and URLs use the same overrides.
-    const maxHydratedCount = this.dataSource.maxHydratedSources ?? DEFAULT_MAX_HYDRATED_SOURCES;
-    const maxHydratedBytes = this.dataSource.maxHydratedBytes ?? DEFAULT_MAX_HYDRATED_BYTES;
+    // One bounded reader pool shared by files and URLs
     this.#pool = new HydratedSourcePool({
-      maxBytes: maxHydratedBytes,
-      maxCount: maxHydratedCount,
+      maxBytes: DEFAULT_MAX_HYDRATED_BYTES,
+      maxCount: DEFAULT_MAX_HYDRATED_SOURCES,
     });
 
     // Local files and remote URLs; a comparison of files may add URLs to them
     const entries: (Blob | string)[] =
       this.dataSource.type === "files" ? this.dataSource.files : this.dataSource.urls;
-    const remote = this.dataSource.type === "urls" ? this.dataSource : undefined;
+    const credentials = this.dataSource.type === "urls" ? this.dataSource.credentials : undefined;
     const numSources = entries.filter((entry) => typeof entry === "string").length;
 
     // Split remote cache budget across sources, but keep a floor so large fan-out sessions do
     // not drop below a single MCAP metadata read and crash CachedFilelike.
-    const totalCache: number = remote?.totalCacheSizeInBytes ?? DEFAULT_CACHE_TOTAL_BYTES;
-    const minPerSource: number = remote?.minCachePerSourceBytes ?? MIN_CACHE_PER_SOURCE_BYTES;
-    const perSourceCache: number = Math.max(
-      minPerSource,
-      Math.floor(totalCache / Math.max(1, numSources)),
+    const perSourceCache = Math.max(
+      MIN_CACHE_PER_SOURCE_BYTES,
+      Math.floor(DEFAULT_CACHE_TOTAL_BYTES / Math.max(1, numSources)),
     );
 
-    if (perSourceCache * numSources > totalCache) {
+    if (perSourceCache * numSources > DEFAULT_CACHE_TOTAL_BYTES) {
       log.warn(
-        `Cache budget (${totalCache} bytes) is less than minimum per-source cache ` +
-          `(${minPerSource} bytes) × ${numSources} sources. ` +
+        `Cache budget (${DEFAULT_CACHE_TOTAL_BYTES} bytes) is less than minimum per-source cache ` +
+          `(${MIN_CACHE_PER_SOURCE_BYTES} bytes) × ${numSources} sources. ` +
           `Each source will use ${perSourceCache} bytes; total may exceed budget.`,
       );
     }
 
-    // Keep read-ahead enabled by default so sequential remote reads still coalesce into fewer
-    // requests, but pair it with a small bounded buffer to stay within the per-source cache.
-    // Callers can still opt out with readAheadEnabled: false.
-    const readAheadEnabled: boolean = remote?.readAheadEnabled ?? true;
-    const readAheadBufferBytes: number | undefined =
-      remote?.readAheadBufferBytes ??
-      (numSources > 1
-        ? Math.min(DEFAULT_READ_AHEAD_BUFFER_BYTES, Math.floor(perSourceCache / 4))
-        : undefined);
+    // Read-ahead stays on so sequential remote reads coalesce into fewer requests. With several
+    // sources it gets a small buffer (well under the per-source cache floor); a single source keeps
+    // getNewConnection's own default.
+    const readAheadBufferBytes = numSources > 1 ? DEFAULT_READ_AHEAD_BUFFER_BYTES : undefined;
 
     const sources: IIterableSource<Uint8Array>[] = entries.map((entry) =>
       typeof entry === "string"
         ? new this.SourceConstructor({
             type: "url",
             url: entry,
-            credentials: remote?.credentials,
+            credentials,
             cacheSizeInBytes: perSourceCache,
-            readAheadEnabled,
+            readAheadEnabled: true,
             readAheadBufferBytes,
             pool: this.#pool,
           } as P)

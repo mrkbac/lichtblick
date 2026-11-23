@@ -29,18 +29,12 @@ import DatalabelPlugin from "chartjs-plugin-datalabels";
 import { type Options as DatalabelsPluginOptions } from "chartjs-plugin-datalabels/types/options";
 
 import Logger from "@lichtblick/log";
-import {
-  ObjectData,
-  RpcElement,
-  RpcScales,
-  TypedChartData,
-} from "@lichtblick/suite-base/components/Chart/types";
+import { ObjectData, RpcElement, RpcScales } from "@lichtblick/suite-base/components/Chart/types";
 // Not the package index: it pulls MUI component styles and icons, which crash in a worker
 import { fontMonospace } from "@lichtblick/theme/src/typography";
 
 import { ChartViewport, PanInput, WheelInput } from "./ChartViewport";
 import { lineSegmentLabelColor } from "./lineSegments";
-import { proxyTyped } from "./proxy";
 
 const log = Logger.getLogger(__filename);
 
@@ -174,14 +168,12 @@ export default class ChartJSManager {
     height,
     isBoundsReset,
     data,
-    typedData,
   }: {
     options?: ChartOptions;
     width?: number;
     height?: number;
     isBoundsReset: boolean;
     data?: ChartData<"scatter">;
-    typedData?: TypedChartData;
   }): RpcScales {
     const instance = this.#chartInstance;
     if (instance == undefined) {
@@ -248,8 +240,6 @@ export default class ChartJSManager {
 
     if (data != undefined) {
       instance.data = data;
-    } else if (typedData != undefined) {
-      instance.data = proxyTyped(typedData);
     }
 
     // While the chartjs API doesn't indicate update should be called after resize, in practice

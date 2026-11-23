@@ -11,7 +11,7 @@ import PieChartBuilder from "@lichtblick/suite-base/testing/builders/PieChartBui
 import { stateReducer } from "./stateReducer";
 import type { PieChartAction } from "../types";
 
-describe("handleFrame", () => {
+describe("stateReducer frame", () => {
   it("returns early when pathParseError is set", () => {
     const initialState = PieChartBuilder.pieChartState({
       pathParseError: "Invalid path",

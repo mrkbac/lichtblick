@@ -13,12 +13,8 @@ import { SidebarItem, SidebarProps } from "@lichtblick/suite-base/components/Sid
 import { BasicBuilder } from "@lichtblick/test-builders";
 
 describe("Sidebars", () => {
-  const renderComponent = async (overrides: Partial<SidebarProps<string, string, string>> = {}) => {
-    const defaultProps: SidebarProps<string, string, string> = {
-      items: new Map(),
-      bottomItems: new Map(),
-      selectedKey: undefined,
-      onSelectKey: vi.fn(),
+  const renderComponent = async (overrides: Partial<SidebarProps<string, string>> = {}) => {
+    const defaultProps: SidebarProps<string, string> = {
       children: <div>Content</div>,
       leftItems: new Map(),
       selectedLeftKey: undefined,
@@ -35,10 +31,6 @@ describe("Sidebars", () => {
 
     const ui: React.ReactElement = (
       <Sidebars
-        items={defaultProps.items}
-        bottomItems={defaultProps.bottomItems}
-        selectedKey={defaultProps.selectedKey}
-        onSelectKey={defaultProps.onSelectKey}
         leftItems={defaultProps.leftItems}
         selectedLeftKey={defaultProps.selectedLeftKey}
         onSelectLeftKey={defaultProps.onSelectLeftKey}

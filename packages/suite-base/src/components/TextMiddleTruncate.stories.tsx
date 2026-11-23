@@ -50,22 +50,8 @@ export const Default: StoryObj = {
         <div>Long text:</div>
         <TextMiddleTruncate text="Some long text Lorem ipsum dolor sit amet consectetur adipisicing elit. Voluptate laborum amet velit eius cum modi qui. Sapiente natus unde assumenda." />
 
-        <div>Specifify endTextLength as 20:</div>
-        <TextMiddleTruncate
-          endTextLength={20}
-          text="Some long text Lorem ipsum dolor sit amet consectetur adipisicing elit. Voluptate laborum amet velit eius cum modi qui. Sapiente natus unde assumenda."
-        />
-
-        <div>Show the last part of topic name with visibile text:</div>
-        <TextMiddleTruncate
-          endTextLength={LONG_TOPIC_NAME.split("/").pop()!.length + 1}
-          text={LONG_TOPIC_NAME}
-        />
-
-        <div>Whitespace handling</div>
-        <div style={{ width: "12em" }}>
-          <TextMiddleTruncate text="Open a new connection…" endTextLength={18} />
-        </div>
+        <div>Long topic name:</div>
+        <TextMiddleTruncate text={LONG_TOPIC_NAME} />
       </div>
     );
   },

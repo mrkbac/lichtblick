@@ -25,7 +25,7 @@ type Entry = {
  * Bounded LRU pool of hydrated (heavyweight) sources. Residency is bounded by a hybrid budget:
  * a primary byte budget (`maxBytes`, via each entry's estimated `weight`) and a safety count cap
  * (`maxCount`). Least-recently-used *unpinned* entries are closed when the pool is over either
- * bound, but never below `minResident` entries and never while pinned (so the pool may temporarily
+ * bound, but never the last resident entry and never while pinned (so the pool may temporarily
  * exceed its bounds when more than the budget's worth of sources are active at once).
  *
  * With no `maxBytes` set the pool is a pure count cap, and with no `weigh` hook every entry
@@ -37,7 +37,6 @@ type Entry = {
 export class HydratedSourcePool {
   readonly #maxBytes: number;
   readonly #maxCount: number;
-  readonly #minResident: number;
   // Insertion order is LRU order: the first entry is the least-recently-used.
   readonly #entries = new Map<object, Entry>();
   #totalWeight = 0;
@@ -52,9 +51,6 @@ export class HydratedSourcePool {
         ? Math.max(1, Math.floor(options.maxCount))
         : Number.POSITIVE_INFINITY;
     this.#maxBytes = options.maxBytes ?? Number.POSITIVE_INFINITY;
-    // Never let the resident floor exceed the count cap (Math.min with Infinity is a no-op when
-    // maxCount is unset).
-    this.#minResident = Math.min(this.#maxCount, Math.max(1, Math.floor(options.minResident ?? 1)));
   }
 
   // eslint-disable-next-line @lichtblick/no-getters-setters
@@ -216,13 +212,14 @@ export class HydratedSourcePool {
 
   // True when the pool exceeds either bound and may shed a least-recently-used unpinned entry.
   #isOverCapacity(): boolean {
-    if (this.#entries.size <= this.#minResident) {
+    // Keep at least one entry, even one heavier than the whole byte budget
+    if (this.#entries.size <= 1) {
       return false;
     }
     return this.#entries.size > this.#maxCount || this.#totalWeight > this.#maxBytes;
   }
 
-  // Close least-recently-used unpinned entries until within budget, `minResident` is reached, or
+  // Close least-recently-used unpinned entries until within budget, one entry is left, or
   // only pinned entries remain (in which case the pool temporarily exceeds its bounds).
   async #evictBeyondCapacity(): Promise<void> {
     while (this.#isOverCapacity()) {

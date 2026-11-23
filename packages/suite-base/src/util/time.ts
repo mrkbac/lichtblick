@@ -17,8 +17,9 @@
 import { fromRFC3339String, fromString, Time } from "@foxglove/rostime";
 
 import log from "@lichtblick/log";
-import { MessageEvent } from "@lichtblick/suite-base/players/types";
-import { MarkerArray, StampedMessage } from "@lichtblick/suite-base/types/Messages";
+import { Header, StampedMessage } from "@lichtblick/suite-base/types/Messages";
+
+type MarkerArray = Readonly<{ markers: readonly { header: Header }[] }>;
 
 export type TimestampMethod = "receiveTime" | "headerStamp";
 
@@ -35,15 +36,6 @@ const DURATION_20_YEARS_SEC = 20 * 365 * 24 * 60 * 60;
 // Values "too small" to be absolute epoch-based times are probably relative durations.
 export function isAbsoluteTime(time: Time): boolean {
   return time.sec > DURATION_20_YEARS_SEC;
-}
-
-export function getTimestampForMessageEvent(
-  messageEvent: MessageEvent,
-  timestampMethod?: TimestampMethod,
-): Time | undefined {
-  return timestampMethod === "headerStamp"
-    ? getTimestampForMessage(messageEvent.message)
-    : messageEvent.receiveTime;
 }
 
 /**

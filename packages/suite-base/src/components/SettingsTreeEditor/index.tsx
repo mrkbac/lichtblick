@@ -61,8 +61,9 @@ export default function SettingsTreeEditor({
       focusedPath,
       path: makeStablePath(key),
       settings: root,
+      unfilteredSettings: settings.nodes[key],
     }));
-  }, [filteredNodes, actionHandler, filterText, focusedPath]);
+  }, [filteredNodes, actionHandler, filterText, focusedPath, settings.nodes]);
 
   const { selectedPanelIds } = useSelectedPanels();
   const selectedPanelId = useMemo(

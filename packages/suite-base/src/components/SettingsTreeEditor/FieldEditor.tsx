@@ -476,7 +476,7 @@ function FieldLabel({
 }
 
 function FieldEditorComponent(props: Readonly<FieldEditorProps>): React.JSX.Element {
-  const indent = Math.min(props.path.length, 4);
+  const indent = Math.min(props.indent ?? props.path.length, 4);
   const paddingLeft = 0.75 + 2 * (indent - 1);
   const { classes, cx } = useStyles();
 

@@ -50,7 +50,6 @@ import {
   ImageUserData,
 } from "./Images/ImageRenderable";
 import { ALL_CAMERA_INFO_SCHEMAS, AnyImage, CompressedVideo } from "./Images/ImageTypes";
-import { MultiMap } from "./Images/MultiMap";
 import { filterCompressedVideoQueue } from "./Images/filterCompressedVideoQueue";
 import {
   normalizeCompressedImage,
@@ -95,7 +94,7 @@ export class Images extends SceneExtension<ImageRenderable> {
    * is used for retrieving an image renderable, which is indexed by image
    * topic, when receiving a camera info message.
    */
-  #cameraInfoToImageTopics = new MultiMap<string, string>();
+  #cameraInfoToImageTopics = new Map<string, Set<string>>();
 
   /**
    * Map of camera info topic name -> normalized CameraInfo message
@@ -358,7 +357,7 @@ export class Images extends SceneExtension<ImageRenderable> {
 
     // Add this camera_info_topic -> image_topic mapping
     if (cameraInfoTopic !== prevCameraInfoTopic && cameraInfoTopic != undefined) {
-      this.#cameraInfoToImageTopics.set(cameraInfoTopic, imageTopic);
+      this.#mapCameraInfoToImage(cameraInfoTopic, imageTopic);
     }
 
     const renderable = this.renderables.get(imageTopic);
@@ -372,7 +371,7 @@ export class Images extends SceneExtension<ImageRenderable> {
     // The camera info topic changed for our renderable
     // Remove the previous camera_info_topic -> image_topic mapping
     if (prevCameraInfoTopic != undefined && prevCameraInfoTopic !== cameraInfoTopic) {
-      this.#cameraInfoToImageTopics.delete(prevCameraInfoTopic, imageTopic);
+      this.#cameraInfoToImageTopics.get(prevCameraInfoTopic)?.delete(imageTopic);
     }
 
     // apply camera info to new renderable
@@ -629,7 +628,7 @@ export class Images extends SceneExtension<ImageRenderable> {
     }
 
     assert(settings.cameraInfoTopic != undefined);
-    this.#cameraInfoToImageTopics.set(settings.cameraInfoTopic, imageTopic);
+    this.#mapCameraInfoToImage(settings.cameraInfoTopic, imageTopic);
 
     // Look up the camera info for our renderable
     const cameraInfo = this.#cameraInfoByTopic.get(settings.cameraInfoTopic);
@@ -641,6 +640,15 @@ export class Images extends SceneExtension<ImageRenderable> {
       );
     } else {
       this.#recomputeCameraModel(renderable, cameraInfo);
+    }
+  }
+
+  #mapCameraInfoToImage(cameraInfoTopic: string, imageTopic: string): void {
+    const imageTopics = this.#cameraInfoToImageTopics.get(cameraInfoTopic);
+    if (imageTopics) {
+      imageTopics.add(imageTopic);
+    } else {
+      this.#cameraInfoToImageTopics.set(cameraInfoTopic, new Set([imageTopic]));
     }
   }
 

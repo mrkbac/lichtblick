@@ -12,87 +12,27 @@ import path from "path";
 import Logger from "@lichtblick/log";
 
 import { DATASTORES_DIR_NAME } from "../common/storage";
-import type { Storage, StorageContent } from "../common/types";
+import type { Storage } from "../common/types";
 
 const log = Logger.getLogger(__filename);
 
 export default class LocalFileStorage implements Storage {
   #userDataPath = ipcRenderer.invoke("getUserDataPath") as Promise<string>;
 
-  public async list(datastore: string): Promise<string[]> {
-    const datastoreDir = await this.#ensureDatastorePath(datastore);
-    const result = new Array<string>();
-
-    const entries = await fs.readdir(datastoreDir);
-    for (const entry of entries) {
-      result.push(entry);
-    }
-
-    return result;
-  }
-
-  public async all(datastore: string): Promise<Uint8Array[]> {
-    const datastoreDir = await this.#ensureDatastorePath(datastore);
-    const result = new Array<Uint8Array>();
-
-    try {
-      for (const entry of await this.list(datastore)) {
-        const filePath = path.join(datastoreDir, entry);
-        const content = await fs.readFile(filePath);
-        result.push(new Uint8Array(content));
-      }
-    } catch (err: unknown) {
-      if ((err as NodeJS.ErrnoException).code !== "ENOENT") {
-        throw err;
-      }
-    }
-
-    return result;
-  }
-
-  public async get(
-    datastore: string,
-    key: string,
-    options?: { encoding: undefined },
-  ): Promise<Uint8Array | undefined>;
-  public async get(
-    datastore: string,
-    key: string,
-    options: { encoding: "utf8" },
-  ): Promise<string | undefined>;
-  public async get(
-    datastore: string,
-    key: string,
-    options?: { encoding?: "utf8" },
-  ): Promise<StorageContent | undefined> {
+  public async get(datastore: string, key: string): Promise<string | undefined> {
     const filePath = await this.#makeFilePath(datastore, key);
-    const result = await fs.readFile(filePath, options ?? null).catch((err: unknown) => {
+    return await fs.readFile(filePath, "utf8").catch((err: unknown) => {
       if ((err as NodeJS.ErrnoException).code !== "ENOENT") {
         throw err;
       }
       return undefined;
     });
-
-    if (result == undefined) {
-      return undefined;
-    }
-
-    if (typeof result === "string") {
-      return result;
-    }
-
-    return new Uint8Array(result);
   }
 
-  public async put(datastore: string, key: string, value: StorageContent): Promise<void> {
+  public async put(datastore: string, key: string, value: string): Promise<void> {
     const filePath = await this.#makeFilePath(datastore, key);
     log.debug(`Writing ${key} to ${filePath}`);
     await fs.writeFile(filePath, value);
-  }
-
-  public async delete(datastore: string, key: string): Promise<void> {
-    const filePath = await this.#makeFilePath(datastore, key);
-    await fs.unlink(filePath);
   }
 
   async #makeFilePath(datastore: string, key: string): Promise<string> {

@@ -2,8 +2,6 @@
 
 import { Time, add, clampTime, fromSec, subtract, toSec } from "@foxglove/rostime";
 import { Fzf } from "fzf";
-import { useEffect } from "react";
-import { create } from "zustand";
 
 import {
   MessagePathStructureItem,
@@ -311,33 +309,4 @@ export function pushRecentCommandId(recent: readonly string[], id: string): stri
     // Storage full or disabled: recents just won't persist.
   }
   return next;
-}
-
-// ---- Registry for commands contributed by other components ----
-
-type RegistryState = { contributions: ReadonlyMap<string, readonly Command[]> };
-
-export const useCommandRegistry = create<RegistryState>(() => ({
-  contributions: new Map(),
-}));
-
-/**
- * Adds commands to the palette while the calling component is mounted. Memoize `commands`;
- * every new array re-registers.
- *
- * @public
- */
-export function useRegisterCommands(key: string, commands: readonly Command[]): void {
-  useEffect(() => {
-    useCommandRegistry.setState(({ contributions }) => ({
-      contributions: new Map(contributions).set(key, commands),
-    }));
-    return () => {
-      useCommandRegistry.setState(({ contributions }) => {
-        const next = new Map(contributions);
-        next.delete(key);
-        return { contributions: next };
-      });
-    };
-  }, [key, commands]);
 }

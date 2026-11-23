@@ -14,7 +14,7 @@ import AppConfigurationContext, {
 } from "@lichtblick/suite-base/context/AppConfigurationContext";
 import {
   NodeState,
-  RawMessagesPanelConfig,
+  RawMessagesVirtualPanelConfig,
   UseSharedRawMessagesLogicResult,
 } from "@lichtblick/suite-base/panels/RawMessagesCommon/types";
 import PanelSetup from "@lichtblick/suite-base/stories/PanelSetup";
@@ -80,8 +80,8 @@ function createMockMessageDataItem(
   };
 }
 
-function renderComponent(configOverrides: Partial<RawMessagesPanelConfig> = {}) {
-  const rawMessageConfig: RawMessagesPanelConfig = {
+function renderComponent(configOverrides: Partial<RawMessagesVirtualPanelConfig> = {}) {
+  const rawMessageConfig: RawMessagesVirtualPanelConfig = {
     topicPath: "",
     diffEnabled: false,
     diffMethod: "custom",
@@ -139,7 +139,7 @@ describe("Given RawMessagesVirtual", () => {
   describe("When no topic is selected", () => {
     it("Then displays 'No topic selected' message", () => {
       // Given
-      const config: Partial<RawMessagesPanelConfig> = {
+      const config: Partial<RawMessagesVirtualPanelConfig> = {
         topicPath: "",
       };
 
@@ -154,7 +154,7 @@ describe("Given RawMessagesVirtual", () => {
   describe("When topic is selected but no message received", () => {
     it("Then displays 'Waiting for next message' message", () => {
       // Given
-      const config: Partial<RawMessagesPanelConfig> = {
+      const config: Partial<RawMessagesVirtualPanelConfig> = {
         topicPath: "/test/topic",
       };
 
@@ -169,7 +169,7 @@ describe("Given RawMessagesVirtual", () => {
   describe("When diff is enabled", () => {
     it("Then displays diff waiting message when base and diff items not available", () => {
       // Given
-      const config: Partial<RawMessagesPanelConfig> = {
+      const config: Partial<RawMessagesVirtualPanelConfig> = {
         topicPath: "/test/topic",
         diffEnabled: true,
         diffMethod: "custom",
@@ -212,7 +212,7 @@ describe("Given RawMessagesVirtual", () => {
         }),
       );
 
-      const config: Partial<RawMessagesPanelConfig> = {
+      const config: Partial<RawMessagesVirtualPanelConfig> = {
         topicPath: topicName,
         fontSize,
       };
@@ -255,7 +255,7 @@ describe("Given RawMessagesVirtual", () => {
         }),
       );
 
-      const config: Partial<RawMessagesPanelConfig> = {
+      const config: Partial<RawMessagesVirtualPanelConfig> = {
         topicPath: topicName,
       };
 
@@ -292,7 +292,7 @@ describe("Given RawMessagesVirtual", () => {
         }),
       );
 
-      const config: Partial<RawMessagesPanelConfig> = {
+      const config: Partial<RawMessagesVirtualPanelConfig> = {
         topicPath: topicName,
       };
 
@@ -327,7 +327,7 @@ describe("Given RawMessagesVirtual", () => {
         }),
       );
 
-      const config: Partial<RawMessagesPanelConfig> = {
+      const config: Partial<RawMessagesVirtualPanelConfig> = {
         topicPath: topicName,
       };
 
@@ -367,7 +367,7 @@ describe("Given RawMessagesVirtual", () => {
         }),
       );
 
-      const config: Partial<RawMessagesPanelConfig> = {
+      const config: Partial<RawMessagesVirtualPanelConfig> = {
         topicPath: topicName,
       };
 
@@ -419,7 +419,7 @@ describe("Given RawMessagesVirtual", () => {
         }),
       );
 
-      const config: Partial<RawMessagesPanelConfig> = {
+      const config: Partial<RawMessagesVirtualPanelConfig> = {
         topicPath: topicName,
         diffEnabled: true,
         diffTopicPath: diffTopicName,
@@ -471,7 +471,7 @@ describe("Given RawMessagesVirtual", () => {
         }),
       );
 
-      const config: Partial<RawMessagesPanelConfig> = {
+      const config: Partial<RawMessagesVirtualPanelConfig> = {
         topicPath: topicName,
         diffEnabled: true,
         diffTopicPath: diffTopicName,
@@ -522,7 +522,7 @@ describe("Given RawMessagesVirtual", () => {
         }),
       );
 
-      const config: Partial<RawMessagesPanelConfig> = {
+      const config: Partial<RawMessagesVirtualPanelConfig> = {
         topicPath: topicName,
       };
 
@@ -574,7 +574,7 @@ describe("Given RawMessagesVirtual", () => {
         }),
       );
 
-      const config: Partial<RawMessagesPanelConfig> = {
+      const config: Partial<RawMessagesVirtualPanelConfig> = {
         topicPath: topicName,
       };
 
@@ -612,7 +612,7 @@ describe("Given RawMessagesVirtual", () => {
         }),
       );
 
-      const config: Partial<RawMessagesPanelConfig> = {
+      const config: Partial<RawMessagesVirtualPanelConfig> = {
         topicPath: topicName,
       };
 
@@ -662,7 +662,7 @@ describe("Given RawMessagesVirtual", () => {
         }),
       );
 
-      const config: Partial<RawMessagesPanelConfig> = {
+      const config: Partial<RawMessagesVirtualPanelConfig> = {
         topicPath: topicName,
       };
 

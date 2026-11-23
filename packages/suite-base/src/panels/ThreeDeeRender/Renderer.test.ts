@@ -21,7 +21,6 @@ import {
   Renderer,
   stopThreeAnimationLoop,
 } from "@lichtblick/suite-base/panels/ThreeDeeRender/Renderer";
-import { DEFAULT_SCENE_EXTENSION_CONFIG } from "@lichtblick/suite-base/panels/ThreeDeeRender/SceneExtensionConfig";
 import { DEFAULT_CAMERA_STATE } from "@lichtblick/suite-base/panels/ThreeDeeRender/camera";
 import { HOVER_PICK_THROTTLE_MS } from "@lichtblick/suite-base/panels/ThreeDeeRender/constants";
 import { CameraStateSettings } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/CameraStateSettings";
@@ -201,7 +200,6 @@ const defaultRendererProps = {
   config: defaultRendererConfig,
   interfaceMode: "3d" as const,
   fetchAsset,
-  sceneExtensionConfig: DEFAULT_SCENE_EXTENSION_CONFIG,
   testOptions: {},
   customCameraModels: new Map(),
 };
@@ -1820,6 +1818,28 @@ describe("3D Renderer", () => {
 
     // Then: Should update config
     expect(updateConfigSpy).toHaveBeenCalled();
+
+    renderer.dispose();
+  });
+
+  it("offers quick filters for supported topic types and converted schemas", () => {
+    const renderer = new Renderer({ ...defaultRendererProps, canvas });
+    renderer.setTopics([
+      { name: "/points", schemaName: "sensor_msgs/msg/PointCloud2" },
+      { name: "/image", schemaName: "custom.Image", convertibleTo: ["foxglove.RawImage"] },
+      { name: "/markers", schemaName: "foxglove.SceneUpdate" },
+      { name: "/other", schemaName: "custom.Other" },
+    ]);
+
+    expect(
+      renderer.settings.tree().topics?.topicQuickFilters?.map(({ id, topics }) => [id, topics]),
+    ).toEqual([
+      ["pointClouds", ["/points"]],
+      ["images", ["/image"]],
+      ["markers", ["/markers"]],
+    ]);
+    renderer.setTopics([]);
+    expect(renderer.settings.tree().topics?.topicQuickFilters).toEqual([]);
 
     renderer.dispose();
   });

@@ -182,11 +182,6 @@ export async function main(): Promise<void> {
     preloaderFileInputIsReady = true;
   });
 
-  ipcMain.handle("setRepresentedFilename", (ev, filePath: string | undefined) => {
-    const browserWindow = BrowserWindow.fromId(ev.sender.id);
-    browserWindow?.setRepresentedFilename(filePath ?? "");
-  });
-
   const openUrls: string[] = [];
 
   // works on osx - even when app is closed

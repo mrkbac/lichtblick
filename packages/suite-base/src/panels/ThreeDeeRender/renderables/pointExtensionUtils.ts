@@ -9,7 +9,11 @@ import i18next from "i18next";
 import * as THREE from "three/webgpu";
 
 import { DynamicBufferGeometry } from "@lichtblick/suite-base/panels/ThreeDeeRender/DynamicBufferGeometry";
-import { BaseUserData, Renderable } from "@lichtblick/suite-base/panels/ThreeDeeRender/Renderable";
+import {
+  BaseUserData,
+  ChildUserData,
+  Renderable,
+} from "@lichtblick/suite-base/panels/ThreeDeeRender/Renderable";
 import type { Renderer } from "@lichtblick/suite-base/panels/ThreeDeeRender/Renderer";
 import {
   MISSING_TRANSFORM,
@@ -74,7 +78,7 @@ export function pointStyle<T extends LayerSettingsPointExtension>(settings: T): 
  * Points decoded into a geometry's position/color arrays (CPU), drawn by a {@link RasterPoints}
  * that reads those same arrays. Picking reports the point index as the instance.
  */
-export class PointsRenderable<TUserData extends BaseUserData = BaseUserData> extends Renderable<
+export class PointsRenderable<TUserData extends ChildUserData = ChildUserData> extends Renderable<
   TUserData,
   /*TRenderer=*/ undefined
 > {

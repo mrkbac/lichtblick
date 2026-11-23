@@ -1,8 +1,6 @@
 // SPDX-FileCopyrightText: Copyright (c) Foxglove Technologies Inc
 // SPDX-License-Identifier: MIT
 
-import { crc32 } from "@foxglove/crc";
-
 import { Opcode } from "./constants.ts";
 
 export function uint16LE(n: number): Uint8Array {
@@ -34,13 +32,6 @@ export function uint32PrefixedBytes(data: Uint8Array): Uint8Array {
   return result;
 }
 
-export function uint64PrefixedBytes(data: Uint8Array): Uint8Array {
-  const result = new Uint8Array(8 + data.length);
-  new DataView(result.buffer).setBigUint64(0, BigInt(data.length), true);
-  result.set(data, 8);
-  return result;
-}
-
 export function record(type: Opcode, data: number[]): Uint8Array {
   const result = new Uint8Array(1 + 8 + data.length);
   result[0] = type;
@@ -64,11 +55,6 @@ export function keyValues<K, V>(
     offset += ser.length;
   }
   return result;
-}
-
-export function crcSuffix(data: number[]): number[] {
-  const crc = crc32(Uint8Array.from(data));
-  return [...data, ...uint32LE(crc)];
 }
 
 export async function collect<T>(iterable: AsyncIterable<T>): Promise<T[]> {

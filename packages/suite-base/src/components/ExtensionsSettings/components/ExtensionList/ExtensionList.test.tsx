@@ -10,10 +10,7 @@ import "@testing-library/jest-dom/vitest";
 
 import { Immutable } from "@lichtblick/suite";
 import ExtensionList from "@lichtblick/suite-base/components/ExtensionsSettings/components/ExtensionList/ExtensionList";
-import {
-  displayNameForNamespace,
-  generatePlaceholderList,
-} from "@lichtblick/suite-base/components/ExtensionsSettings/components/ExtensionList/utils";
+import { generatePlaceholderList } from "@lichtblick/suite-base/components/ExtensionsSettings/components/ExtensionList/utils";
 import { useExtensionCatalog } from "@lichtblick/suite-base/context/ExtensionCatalogContext";
 import { ExtensionMarketplaceDetail } from "@lichtblick/suite-base/context/ExtensionMarketplaceContext";
 import ExtensionBuilder from "@lichtblick/suite-base/testing/builders/ExtensionBuilder";
@@ -37,17 +34,6 @@ vi.mock("notistack", async () => ({
 }));
 
 describe("ExtensionList utility functions", () => {
-  describe("displayNameForNamespace", () => {
-    it("returns 'Organization' for 'org'", () => {
-      expect(displayNameForNamespace("org")).toBe("Organization");
-    });
-
-    it("returns the namespace itself for other values", () => {
-      const customNamespace = BasicBuilder.string();
-      expect(displayNameForNamespace(customNamespace)).toBe(customNamespace);
-    });
-  });
-
   describe("generatePlaceholderList", () => {
     it("renders a placeholder list with the given message", () => {
       const message = BasicBuilder.string();
@@ -107,8 +93,7 @@ describe("ExtensionList Component", () => {
     );
 
     // Then
-    //Since namespace passed was 'org' displayNameForNamespace() transformed it to 'Organization'
-    expect(screen.getByText("Organization")).toBeInTheDocument();
+    expect(screen.getByText(mockNamespace)).toBeInTheDocument();
 
     expect(screen.getByText("Extension")).toBeInTheDocument();
     expect(screen.getByText("Extension2")).toBeInTheDocument();

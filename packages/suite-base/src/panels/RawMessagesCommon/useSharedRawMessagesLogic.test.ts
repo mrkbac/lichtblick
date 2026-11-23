@@ -6,7 +6,7 @@ import type { Time } from "@foxglove/rostime";
 import { renderHook, act, waitFor } from "@testing-library/react";
 import type { Mock } from "vitest";
 
-import type { SharedConfig, UseSharedRawMessagesLogicProps } from "./types";
+import type { PropsRawMessagesVirtual, RawMessagesVirtualPanelConfig } from "./types";
 import { useSharedRawMessagesLogic } from "./useSharedRawMessagesLogic";
 
 const TOPIC = "/some/topic";
@@ -46,17 +46,19 @@ vi.mock("@lichtblick/suite-base/components/MessagePathSyntax/useMessageDataItem"
 }));
 
 const setup = (inputOverride?: {
-  config?: Partial<SharedConfig>;
-  saveConfig?: UseSharedRawMessagesLogicProps<SharedConfig>["saveConfig"];
+  config?: Partial<RawMessagesVirtualPanelConfig>;
+  saveConfig?: PropsRawMessagesVirtual["saveConfig"];
 }) => {
-  const defaultConfig: SharedConfig = {
+  const defaultConfig: RawMessagesVirtualPanelConfig = {
     topicPath: "some/topic",
     diffMethod: "custom",
     diffTopicPath: "some/diff/topic",
     diffEnabled: false,
+    showFullMessageForDiff: false,
+    fontSize: undefined,
   };
 
-  const input: UseSharedRawMessagesLogicProps<SharedConfig> = {
+  const input: PropsRawMessagesVirtual = {
     config: {
       ...defaultConfig,
       ...inputOverride?.config,

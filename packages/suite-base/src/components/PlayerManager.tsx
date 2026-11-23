@@ -453,7 +453,6 @@ export default function PlayerManager(
             const initialized = await initializePlayer({
               params: args.params,
               ...(args.urls != undefined && { urls: args.urls }),
-              sourceMetadata: args.sourceMetadata,
               transport,
             });
             transport = undefined; // The initialized player owns its backend.

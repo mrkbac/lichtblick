@@ -16,8 +16,6 @@
 
 import type { Mock } from "vitest";
 
-import { MessageEvent } from "@lichtblick/suite";
-
 import * as time from "./time";
 
 describe("time.formatTimeRaw", () => {
@@ -38,50 +36,6 @@ describe("time.formatTimeRaw", () => {
     expect(time.formatTimeRaw({ sec: -1, nsec: 0 })).toEqual("(invalid negative time)");
     expect(console.error).toHaveBeenCalled();
     (console.error as Mock).mockClear();
-  });
-});
-
-describe("time.getTimestampForMessageEvent", () => {
-  it("uses headerStamp when available", () => {
-    const messageBase: Omit<MessageEvent, "message"> = {
-      topic: "/foo",
-      receiveTime: { sec: 1000, nsec: 0 },
-      sizeInBytes: 0,
-      schemaName: "stamped",
-    };
-
-    expect(
-      time.getTimestampForMessageEvent(
-        {
-          ...messageBase,
-          message: { header: { stamp: { sec: 123, nsec: 456 }, seq: 0, frame_id: "" } },
-        },
-        "headerStamp",
-      ),
-    ).toEqual({ sec: 123, nsec: 456 });
-    expect(
-      time.getTimestampForMessageEvent(
-        {
-          ...messageBase,
-          message: {
-            header: { stamp: { sec: 0, nsec: 0 }, seq: 0, frame_id: "" },
-          },
-        },
-        "headerStamp",
-      ),
-    ).toEqual({ sec: 0, nsec: 0 });
-    expect(
-      time.getTimestampForMessageEvent({ ...messageBase, message: {} }, "headerStamp"),
-    ).toEqual(undefined);
-    expect(
-      time.getTimestampForMessageEvent(
-        {
-          ...messageBase,
-          message: { header: { stamp: 1694712977, seq: 0, frame_id: "" } },
-        },
-        "headerStamp",
-      ),
-    ).toEqual(undefined);
   });
 });
 

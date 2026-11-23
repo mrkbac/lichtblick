@@ -27,10 +27,6 @@ type Story = StoryObj<typeof AppBar>;
 
 export const Default: Story = {};
 
-export const DragRegion: Story = {
-  args: { debugDragRegion: true },
-};
-
 const Grid = (Story: React.ComponentType): React.JSX.Element => (
   <Stack overflowY="auto">
     <div style={{ display: "grid", gridTemplateColumns: "max-content auto", alignItems: "center" }}>

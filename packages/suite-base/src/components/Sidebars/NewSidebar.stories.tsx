@@ -44,9 +44,6 @@ const Z = () => <>{longText}</>;
 type LeftKey = "a" | "b" | "c";
 type RightKey = "x" | "y" | "z";
 
-const ITEMS = new Map<string, SidebarItem>([]);
-const BOTTOM_ITEMS = new Map<string, SidebarItem>([]);
-
 const LEFT_ITEMS = new Map<LeftKey, SidebarItem>([
   ["a", { title: "A", component: A }],
   ["b", { title: "B", component: B }],
@@ -76,14 +73,8 @@ function Story({
   return (
     <div style={{ height: "100%" }}>
       <Sidebars
-        items={ITEMS}
-        bottomItems={BOTTOM_ITEMS}
         rightItems={RIGHT_ITEMS}
         leftItems={LEFT_ITEMS}
-        selectedKey={undefined}
-        onSelectKey={() => {
-          // no-op
-        }}
         selectedRightKey={selectedRightKey}
         onSelectRightKey={setSelectedRightKey}
         selectedLeftKey={selectedLeftKey}

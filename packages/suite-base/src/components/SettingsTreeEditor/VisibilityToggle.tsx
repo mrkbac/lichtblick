@@ -25,7 +25,7 @@ const useStyles = makeStyles()((theme) => ({
 export function VisibilityToggle(
   props: CheckboxProps & { size: IconButtonProps["size"] },
 ): React.JSX.Element {
-  const { className, onChange, ...rest } = props;
+  const { className, onChange, title = "Toggle visibility", ...rest } = props;
   const { classes, cx } = useStyles();
 
   const handleChange: CheckboxProps["onChange"] = (event, checked) => {
@@ -41,7 +41,7 @@ export function VisibilityToggle(
       data-testid="VisibilityToggle"
       onChange={handleChange}
       {...rest}
-      title="Toggle visibility"
+      title={title}
       icon={
         <SvgIcon fontSize="small" viewBox="0 0 16 16" color="disabled">
           {/* Eye open */}

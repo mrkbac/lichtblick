@@ -9,7 +9,6 @@ import { setupVitestCanvasMock } from "vitest-canvas-mock";
 
 import { MessageEvent, SettingsTreeAction } from "@lichtblick/suite";
 import { Renderer } from "@lichtblick/suite-base/panels/ThreeDeeRender/Renderer";
-import { DEFAULT_SCENE_EXTENSION_CONFIG } from "@lichtblick/suite-base/panels/ThreeDeeRender/SceneExtensionConfig";
 import { DEFAULT_CAMERA_STATE } from "@lichtblick/suite-base/panels/ThreeDeeRender/camera";
 import { DEFAULT_PUBLISH_SETTINGS } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/PublishSettings";
 
@@ -155,7 +154,6 @@ describe("FoxgloveGrid", () => {
       config,
       interfaceMode: "3d",
       fetchAsset: vi.fn(),
-      sceneExtensionConfig: DEFAULT_SCENE_EXTENSION_CONFIG,
       testOptions: {},
       customCameraModels: new Map(),
       canvas,

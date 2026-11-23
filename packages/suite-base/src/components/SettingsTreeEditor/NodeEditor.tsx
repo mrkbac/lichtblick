@@ -10,13 +10,27 @@ import {
   draggable,
   dropTargetForElements,
 } from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
+import AccountTreeIcon from "@mui/icons-material/AccountTree";
 import ArrowDownIcon from "@mui/icons-material/ArrowDropDown";
 import ArrowRightIcon from "@mui/icons-material/ArrowRight";
 import CheckIcon from "@mui/icons-material/Check";
 import EditIcon from "@mui/icons-material/Edit";
 import ErrorIcon from "@mui/icons-material/Error";
+import ViewListIcon from "@mui/icons-material/ViewList";
+import VisibilityOffIcon from "@mui/icons-material/VisibilityOffOutlined";
+import VisibilityIcon from "@mui/icons-material/VisibilityOutlined";
 import WarningIcon from "@mui/icons-material/Warning";
-import { Button, Divider, IconButton, TextField, Tooltip, Typography } from "@mui/material";
+import {
+  Button,
+  Chip,
+  Divider,
+  IconButton,
+  TextField,
+  ToggleButton,
+  ToggleButtonGroup,
+  Tooltip,
+  Typography,
+} from "@mui/material";
 import { TFunction } from "i18next";
 import * as _ from "lodash-es";
 import memoizeWeak from "memoize-weak";
@@ -66,6 +80,7 @@ import { FieldEditor } from "./FieldEditor";
 import { NodeActionsMenu } from "./NodeActionsMenu";
 import { VisibilityToggle } from "./VisibilityToggle";
 import { icons } from "./icons";
+import { buildTopicNameTree, TopicNameTreeEntry } from "./topicNameTree";
 import { filterTreeNodes, prepareSettingsNodes } from "./utils";
 
 function ExpansionArrow({ expanded }: Readonly<{ expanded: boolean }>): React.JSX.Element {
@@ -188,6 +203,8 @@ function NodeEditorComponent(props: Readonly<NodeEditorProps>): React.JSX.Elemen
     focusedPath,
     reorderContext,
     settings = {},
+    topicNamespace,
+    unfilteredSettings,
   } = props;
   const [state, setState] = useImmer<NodeEditorState>({
     editing: false,
@@ -195,15 +212,22 @@ function NodeEditorComponent(props: Readonly<NodeEditorProps>): React.JSX.Elemen
     open: defaultOpen,
     textFilter: "",
     visibilityFilter: "all",
+    topicTree: false,
   });
   const { t } = useTranslation("settingsEditor");
   const { classes, cx, theme } = useStyles();
 
-  const indent = props.path.length;
+  const indent = props.indent ?? props.path.length;
+  const label = props.displayLabel ?? settings.label ?? t("general");
   const ownKey = props.path.at(-1) ?? "";
   const allowVisibilityToggle = props.settings?.visible != undefined;
   const visible = props.settings?.visible !== false;
   const selectVisibilityFilterEnabled = props.settings?.enableVisibilityFilter === true;
+  const topicTreeEnabled = selectVisibilityFilterEnabled && settings.enableTopicNameTree === true;
+  const mixedVisibility = visible && topicNamespace?.topics.some(([, shown]) => !shown) === true;
+  const namespaceVisibilityLabel = topicNamespace
+    ? t(visible ? "hideNamespace" : "showNamespace", { namespace: label })
+    : undefined;
   // Lichtblick API: `reorderable: true` dispatches "reorder-node". Children of a Foxglove
   // `childrenReorderable` parent use `reorderContext` and dispatch "reorder-children" instead.
   const isReorderable = reorderContext == undefined && settings.reorderable === true;
@@ -371,6 +395,18 @@ function NodeEditorComponent(props: Readonly<NodeEditorProps>): React.JSX.Elemen
   };
 
   const toggleVisibility = () => {
+    if (topicNamespace) {
+      const parentPath = props.path.slice(0, -1);
+      for (const [topic, shown] of topicNamespace.topics) {
+        if (shown === visible) {
+          actionHandler({
+            action: "update",
+            payload: { input: "boolean", path: [...parentPath, topic, "visible"], value: !visible },
+          });
+        }
+      }
+      return;
+    }
     actionHandler({
       action: "update",
       payload: { input: "boolean", path: [...props.path, "visible"], value: !visible },
@@ -417,7 +453,7 @@ function NodeEditorComponent(props: Readonly<NodeEditorProps>): React.JSX.Elemen
 
   const { fields, children } = settings;
   const hasChildren = children != undefined && Object.keys(children).length > 0;
-  const hasProperties = fields != undefined || hasChildren;
+  const hasProperties = fields != undefined || hasChildren || topicNamespace != undefined;
 
   const rootRef = useRef<HTMLDivElement>(null);
 
@@ -429,10 +465,11 @@ function NodeEditorComponent(props: Readonly<NodeEditorProps>): React.JSX.Elemen
         key={key}
         field={field}
         path={makeStablePath(props.path, key)}
+        indent={indent + 1}
         actionHandler={actionHandler}
       />
     ),
-    [props.path, actionHandler],
+    [props.path, actionHandler, indent],
   );
 
   const fieldEditors = useMemo(
@@ -470,14 +507,29 @@ function NodeEditorComponent(props: Readonly<NodeEditorProps>): React.JSX.Elemen
     return preparedNodes.filter(([, child]) => filterFn(child));
   }, [preparedNodes, filterFn]);
 
+  const quickFilterTopics = useMemo(() => {
+    const quickFilter = settings.topicQuickFilters?.find(({ id }) => id === state.topicQuickFilter);
+    return quickFilter ? new Set(quickFilter.topics) : undefined;
+  }, [settings.topicQuickFilters, state.topicQuickFilter]);
+
   const filteredNodes = useMemo(() => {
+    const matchingNodes = quickFilterTopics
+      ? visibilityFilteredNodes.filter(([key]) => quickFilterTopics.has(key))
+      : visibilityFilteredNodes;
     if (state.textFilter.length === 0) {
-      return visibilityFilteredNodes;
+      return matchingNodes;
     }
-    const nodesRecord: Immutable<EditorSettingsTreeNodes> =
-      Object.fromEntries(visibilityFilteredNodes);
+    const nodesRecord: Immutable<EditorSettingsTreeNodes> = Object.fromEntries(matchingNodes);
     return prepareSettingsNodes(filterTreeNodes(nodesRecord, state.textFilter));
-  }, [visibilityFilteredNodes, state.textFilter]);
+  }, [quickFilterTopics, visibilityFilteredNodes, state.textFilter]);
+
+  const topicTree = useMemo(() => {
+    if (!topicTreeEnabled || !state.topicTree) {
+      return undefined;
+    }
+    const allTopics = prepareSettingsNodes(unfilteredSettings?.children ?? children ?? {});
+    return buildTopicNameTree(allTopics, filteredNodes);
+  }, [topicTreeEnabled, state.topicTree, unfilteredSettings?.children, children, filteredNodes]);
 
   const childReorderContext = useMemo((): ChildReorderContext | undefined => {
     if (childrenReorderable == undefined || childrenReorderable === false) {
@@ -499,6 +551,64 @@ function NodeEditorComponent(props: Readonly<NodeEditorProps>): React.JSX.Elemen
   }, [childrenReorderable, preparedNodes, filteredNodes.length, filter, props.path]);
 
   const childNodes = useMemo(() => {
+    if (topicTree) {
+      const expandMatches =
+        (filter ?? "").length > 0 ||
+        state.textFilter.length > 0 ||
+        state.visibilityFilter !== "all" ||
+        quickFilterTopics != undefined;
+      // A new filter reopens matching namespaces; an unchanged one keeps manual collapses.
+      const filterKey = expandMatches
+        ? JSON.stringify([filter, state.textFilter, state.visibilityFilter, state.topicQuickFilter])
+        : undefined;
+      const focusedTopic = focusedPath?.[props.path.length];
+      const focusInList =
+        focusedTopic != undefined &&
+        _.isEqual(props.path, focusedPath?.slice(0, props.path.length));
+      const renderEntry = (entry: TopicNameTreeEntry, depth: number): React.JSX.Element => {
+        if (entry.type === "topic") {
+          return (
+            <NodeEditor
+              key={`topic:${entry.key}`}
+              actionHandler={actionHandler}
+              defaultOpen={entry.settings.defaultExpansionState !== "collapsed"}
+              displayLabel={entry.label}
+              filter={filter}
+              focusedPath={focusedPath}
+              indent={depth}
+              path={makeStablePath(props.path, entry.key)}
+              settings={entry.settings}
+              unfilteredSettings={unfilteredSettings?.children?.[entry.key]}
+            />
+          );
+        }
+        return (
+          <NodeEditor
+            key={`namespace:${entry.key}`}
+            actionHandler={actionHandler}
+            defaultOpen={false}
+            indent={depth}
+            path={makeStablePath(props.path, `namespace:${entry.key}`)}
+            settings={{
+              label: entry.label,
+              icon: "Folder",
+              visible:
+                entry.topics.length > 0 ? entry.topics.some(([, shown]) => shown) : undefined,
+            }}
+            topicNamespace={{
+              topics: entry.topics,
+              children: entry.children.map((child) => renderEntry(child, depth + 1)),
+              expandKey:
+                filterKey ??
+                (focusInList && focusedTopic.startsWith(entry.key + "/")
+                  ? `focus:${focusedTopic}`
+                  : undefined),
+            }}
+          />
+        );
+      };
+      return topicTree.map((entry) => renderEntry(entry, indent + 1));
+    }
     return filterMap(filteredNodes, ([key, child]) => (
       <NodeEditor
         actionHandler={actionHandler}
@@ -507,11 +617,27 @@ function NodeEditorComponent(props: Readonly<NodeEditorProps>): React.JSX.Elemen
         focusedPath={focusedPath}
         key={key}
         settings={child}
+        unfilteredSettings={unfilteredSettings?.children?.[key]}
         path={makeStablePath(props.path, key)}
+        indent={indent + 1}
         reorderContext={child.reorderable === false ? undefined : childReorderContext}
       />
     ));
-  }, [filteredNodes, actionHandler, filter, focusedPath, props.path, childReorderContext]);
+  }, [
+    topicTree,
+    filteredNodes,
+    actionHandler,
+    filter,
+    focusedPath,
+    props.path,
+    childReorderContext,
+    indent,
+    state.textFilter,
+    state.visibilityFilter,
+    state.topicQuickFilter,
+    quickFilterTopics,
+    unfilteredSettings?.children,
+  ]);
 
   const IconComponent = settings.icon ? icons[settings.icon] : undefined;
 
@@ -540,6 +666,14 @@ function NodeEditorComponent(props: Readonly<NodeEditorProps>): React.JSX.Elemen
       }
     });
   }, [setState]);
+
+  useEffect(() => {
+    if (topicNamespace?.expandKey != undefined) {
+      setState((draft) => {
+        draft.open = true;
+      });
+    }
+  }, [setState, topicNamespace?.expandKey]);
 
   const onLabelKeyDown = useCallback(
     (event: React.KeyboardEvent) => {
@@ -683,7 +817,7 @@ function NodeEditorComponent(props: Readonly<NodeEditorProps>): React.JSX.Elemen
       <div
         className={cx(classes.nodeHeader, {
           [classes.focusedNode]: isFocused,
-          [classes.nodeHeaderVisible]: visible,
+          [classes.nodeHeaderVisible]: visible && topicNamespace == undefined,
           [classes.nodeHeaderDragging]: isDragging,
           [classes.nodeHeaderDropBefore]: dropEdge === "before",
           [classes.nodeHeaderDropAfter]: dropEdge === "after",
@@ -703,6 +837,19 @@ function NodeEditorComponent(props: Readonly<NodeEditorProps>): React.JSX.Elemen
             marginLeft: theme.spacing(0.75 + 2 * indent),
           }}
           onClick={toggleOpen}
+          role={topicNamespace ? "button" : undefined}
+          tabIndex={topicNamespace ? 0 : undefined}
+          aria-expanded={topicNamespace ? state.open : undefined}
+          onKeyDown={
+            topicNamespace
+              ? (event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    toggleOpen();
+                  }
+                }
+              : undefined
+          }
           data-testid={`settings__nodeHeaderToggle__${props.path.join("-")}`}
         >
           {dragHandleIcon}
@@ -750,14 +897,11 @@ function NodeEditorComponent(props: Readonly<NodeEditorProps>): React.JSX.Elemen
                 fontWeight: indent < 2 ? 600 : 400,
                 cursor: dragItem ? "grab" : undefined,
               }}
-              title={settings.help}
+              title={settings.help ?? (props.displayLabel != undefined ? ownKey : undefined)}
               ref={dragItem ? nodeDragRef : undefined}
               data-testid={dragItem ? "settings-node-drag-source" : undefined}
             >
-              <HighlightChars
-                str={settings.label ?? t("general")}
-                indices={substringPositions(settings.label ?? t("general"), filter)}
-              />
+              <HighlightChars str={label} indices={substringPositions(label, filter)} />
             </Typography>
           )}
         </div>
@@ -780,6 +924,14 @@ function NodeEditorComponent(props: Readonly<NodeEditorProps>): React.JSX.Elemen
             <VisibilityToggle
               size="small"
               checked={visible}
+              indeterminate={mixedVisibility}
+              title={namespaceVisibilityLabel}
+              slotProps={{
+                input: {
+                  "aria-label": namespaceVisibilityLabel,
+                  "aria-checked": mixedVisibility ? "mixed" : undefined,
+                },
+              }}
               onChange={toggleVisibility}
               style={{ opacity: allowVisibilityToggle ? 1 : 0 }}
               disabled={!allowVisibilityToggle}
@@ -837,7 +989,98 @@ function NodeEditorComponent(props: Readonly<NodeEditorProps>): React.JSX.Elemen
           <div className={classes.fieldPadding} />
         </>
       )}
-      {state.open && selectVisibilityFilterEnabled && hasChildren && (
+      {state.open && topicTreeEnabled && hasChildren && (
+        <div className={classes.topicFilterRow}>
+          <TextField
+            className={classes.topicFilterInput}
+            variant="filled"
+            size="small"
+            type="search"
+            value={state.textFilter}
+            placeholder={t("filterTopics")}
+            slotProps={{ htmlInput: { "aria-label": t("filterTopics") } }}
+            onChange={(event) => {
+              setState((draft) => {
+                draft.textFilter = event.target.value;
+              });
+            }}
+          />
+          <div className={classes.topicFilterControls}>
+            <ToggleButtonGroup
+              className={classes.topicVisibilityFilter}
+              size="small"
+              exclusive
+              value={state.visibilityFilter}
+              aria-label={t("filterListHelp")}
+              onChange={(_event, value: SelectVisibilityFilterValue | null) => {
+                if (value != undefined) {
+                  setState((draft) => {
+                    draft.visibilityFilter = value;
+                  });
+                }
+              }}
+            >
+              <Tooltip title={t("topicVisibilityAll")}>
+                <ToggleButton value="all" aria-label={t("topicVisibilityAll")}>
+                  <ViewListIcon className={classes.topicFilterIcon} />
+                </ToggleButton>
+              </Tooltip>
+              <Tooltip title={t("topicVisibilityShown")}>
+                <ToggleButton value="visible" aria-label={t("topicVisibilityShown")}>
+                  <VisibilityIcon className={classes.topicFilterIcon} />
+                </ToggleButton>
+              </Tooltip>
+              <Tooltip title={t("topicVisibilityHidden")}>
+                <ToggleButton value="invisible" aria-label={t("topicVisibilityHidden")}>
+                  <VisibilityOffIcon className={classes.topicFilterIcon} />
+                </ToggleButton>
+              </Tooltip>
+            </ToggleButtonGroup>
+            <Tooltip title={t("groupTopicsByName")}>
+              <ToggleButton
+                className={classes.topicTreeToggle}
+                size="small"
+                value="tree"
+                selected={state.topicTree}
+                aria-label={t("groupTopicsByName")}
+                onChange={() => {
+                  setState((draft) => {
+                    draft.topicTree = !draft.topicTree;
+                  });
+                }}
+              >
+                <AccountTreeIcon className={classes.topicFilterIcon} />
+              </ToggleButton>
+            </Tooltip>
+          </div>
+        </div>
+      )}
+      {state.open &&
+        topicTreeEnabled &&
+        hasChildren &&
+        (settings.topicQuickFilters?.length ?? 0) > 0 && (
+          <div className={classes.topicTypeFilters} role="group" aria-label={t("topicTypeFilters")}>
+            {settings.topicQuickFilters?.map(({ id, label: filterLabel }) => {
+              const selected = state.topicQuickFilter === id;
+              return (
+                <Chip
+                  key={id}
+                  size="small"
+                  variant={selected ? "filled" : "outlined"}
+                  color={selected ? "primary" : "default"}
+                  label={filterLabel}
+                  aria-pressed={selected}
+                  onClick={() => {
+                    setState((draft) => {
+                      draft.topicQuickFilter = selected ? undefined : id;
+                    });
+                  }}
+                />
+              );
+            })}
+          </div>
+        )}
+      {state.open && selectVisibilityFilterEnabled && !topicTreeEnabled && hasChildren && (
         <>
           <Stack paddingBottom={0.5} style={{ gridColumn: "span 2" }} />
           <FieldEditor
@@ -860,7 +1103,7 @@ function NodeEditorComponent(props: Readonly<NodeEditorProps>): React.JSX.Elemen
           />
         </>
       )}
-      {state.open && childNodes}
+      {state.open && (topicNamespace?.children ?? childNodes)}
       {indent === 1 && <Divider style={{ gridColumn: "span 2" }} />}
     </>
   );

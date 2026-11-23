@@ -8,10 +8,13 @@ import type { Mock } from "vitest";
 import "@testing-library/jest-dom/vitest";
 
 import { IdbLayoutStorage } from "@lichtblick/suite-base/IdbLayoutStorage";
-import { LayoutsAPI } from "@lichtblick/suite-base/api/layouts/LayoutsAPI";
 import { SharedRootContext } from "@lichtblick/suite-base/context/SharedRootContext";
+import UserProfileLocalStorageProvider from "@lichtblick/suite-base/providers/UserProfileLocalStorageProvider";
 
 import { StudioApp } from "./StudioApp";
+import StudioToastProvider from "./components/StudioToastProvider";
+import CurrentLayoutProvider from "./providers/CurrentLayoutProvider";
+import LayoutManagerProvider from "./providers/LayoutManagerProvider";
 
 // Mock all the heavy dependencies
 const mockMultiProvider = vi.fn(function ({
@@ -82,14 +85,6 @@ vi.mock("@lichtblick/suite-base/IdbLayoutStorage", () => ({
   }),
 }));
 
-vi.mock("@lichtblick/suite-base/api/layouts/LayoutsAPI", () => ({
-  LayoutsAPI: vi.fn().mockImplementation(function () {
-    return {
-      mockRemoteLayoutStorage: true,
-    };
-  }),
-}));
-
 vi.mock("@lichtblick/suite-base/context/OrganizationContext", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@lichtblick/suite-base/context/OrganizationContext")>()),
   useOrganizationSession: () => ({ status: "disabled" }),
@@ -119,7 +114,6 @@ describe("StudioApp", () => {
     extensionLoaders: [],
     deepLinks: [],
     enableLaunchPreferenceScreen: false,
-    extraProviders: undefined,
     AppBarComponent: undefined,
   };
 
@@ -220,23 +214,18 @@ describe("StudioApp", () => {
     expect(providerCount).toBeGreaterThan(5);
   });
 
-  it("should include extra providers when provided", () => {
-    const ExtraProvider1 = ({ children }: React.PropsWithChildren) => <div>{children}</div>;
-    const ExtraProvider2 = ({ children }: React.PropsWithChildren) => <div>{children}</div>;
+  it("puts the toast provider outside the layout providers that show toasts", () => {
+    renderWithContext();
 
-    renderWithContext({
-      ...mockSharedRootContext,
-      extraProviders: [<ExtraProvider1 key="1" />, <ExtraProvider2 key="2" />],
-    });
-
-    const multiProvider = screen.getByTestId("multi-provider");
-    const providerCount = parseInt(multiProvider.getAttribute("data-provider-count") ?? "0", 10);
-    const multiProviderProps = mockMultiProvider.mock.calls[0]?.[0];
-    const providerTypes = multiProviderProps?.providers.map((provider) => provider.type) ?? [];
-
-    // Should have extra providers added
-    expect(providerCount).toBeGreaterThan(7);
-    expect(providerTypes.slice(0, 2)).toEqual([ExtraProvider1, ExtraProvider2]);
+    const providerTypes = mockMultiProvider.mock.calls[0]![0].providers.map(
+      (provider) => provider.type,
+    );
+    expect(providerTypes.indexOf(StudioToastProvider)).toBeLessThan(
+      providerTypes.indexOf(CurrentLayoutProvider),
+    );
+    expect(providerTypes.indexOf(UserProfileLocalStorageProvider)).toBeLessThan(
+      providerTypes.indexOf(LayoutManagerProvider),
+    );
   });
 
   it("should handle context menu prevention", () => {
@@ -244,44 +233,6 @@ describe("StudioApp", () => {
     renderWithContext();
 
     expect(addEventListenerSpy).toHaveBeenCalledWith("contextmenu", expect.any(Function));
-  });
-
-  it("should create remote layout storage when workspace is provided", () => {
-    // Mock URL with workspace parameter
-    global.URL = vi.fn().mockImplementation(function () {
-      return {
-        searchParams: {
-          get: vi.fn().mockImplementation(function (key) {
-            if (key === "workspace") {
-              return "test-workspace";
-            }
-            return undefined;
-          }),
-        },
-      };
-    }) as any;
-
-    renderWithContext();
-
-    expect(vi.mocked(LayoutsAPI)).toHaveBeenCalledWith("test-workspace");
-  });
-
-  it("should not create remote layout storage when no workspace is provided", () => {
-    // Clear previous calls
-    vi.mocked(LayoutsAPI).mockClear();
-
-    // Mock URL without workspace parameter
-    global.URL = vi.fn().mockImplementation(function () {
-      return {
-        searchParams: {
-          get: vi.fn().mockReturnValue(undefined),
-        },
-      };
-    }) as any;
-
-    renderWithContext();
-
-    expect(vi.mocked(LayoutsAPI)).not.toHaveBeenCalled();
   });
 
   it("should create IdbLayoutStorage", () => {

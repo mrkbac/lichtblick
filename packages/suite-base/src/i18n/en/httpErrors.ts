@@ -2,15 +2,6 @@
 // SPDX-License-Identifier: MPL-2.0
 
 export const httpErrors = {
-  networkError: "Network connection error. Please check your connection.",
-  badRequest: "Invalid request. Please check your input and try again.",
-  unauthorized: "You are not authenticated.",
-  forbidden: "You do not have permission to perform this action.",
-  notFound: "The requested resource was not found.",
-  conflict: "The resource already exists or has been modified.",
-  internalServerError: "Server error. Please try again later.",
-  clientError: "Request error. Please check your input and try again.",
-  serverError: "Server error. Please try again later.",
   remoteFileCors:
     "The server at {{origin}} blocked this site from reading the file (CORS). It must send an Access-Control-Allow-Origin header that allows {{appOrigin}} (or *), and Access-Control-Expose-Headers: Accept-Ranges, Content-Length.",
   remoteFileCorsCredentials:

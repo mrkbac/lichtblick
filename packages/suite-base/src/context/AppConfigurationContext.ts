@@ -24,6 +24,31 @@ export interface IAppConfiguration {
   removeChangeListener(key: string, cb: ChangeHandler): void;
 }
 
+/** The per-key change listeners every IAppConfiguration needs; call `notify` after a set. */
+export abstract class AppConfigurationListeners {
+  readonly #listeners = new Map<string, Set<ChangeHandler>>();
+
+  public addChangeListener(key: string, cb: ChangeHandler): void {
+    let listeners = this.#listeners.get(key);
+    if (!listeners) {
+      listeners = new Set();
+      this.#listeners.set(key, listeners);
+    }
+    listeners.add(cb);
+  }
+
+  public removeChangeListener(key: string, cb: ChangeHandler): void {
+    this.#listeners.get(key)?.delete(cb);
+  }
+
+  protected notify(key: string, value: AppConfigurationValue): void {
+    // Copy the listeners to protect against mutation during iteration
+    for (const listener of [...(this.#listeners.get(key) ?? [])]) {
+      listener(value);
+    }
+  }
+}
+
 const AppConfigurationContext = createContext<IAppConfiguration | undefined>(undefined);
 AppConfigurationContext.displayName = "AppConfigurationContext";
 

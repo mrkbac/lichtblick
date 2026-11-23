@@ -2,9 +2,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import { BadgeProps } from "@mui/material";
-import { ComponentProps, PropsWithChildren } from "react";
-
-import { BuiltinIcon } from "@lichtblick/suite-base/components/BuiltinIcon";
+import { PropsWithChildren } from "react";
 
 export type SidebarItemBadge = {
   color?: BadgeProps["color"];
@@ -14,9 +12,7 @@ export type SidebarItemBadge = {
 export type SidebarItem = {
   badge?: SidebarItemBadge;
   component?: React.ComponentType;
-  iconName?: ComponentProps<typeof BuiltinIcon>["name"];
   title: string;
-  url?: string;
 };
 
 export type NewSidebarProps<K> = {
@@ -27,12 +23,7 @@ export type NewSidebarProps<K> = {
   setActiveTab: (newValue: K) => void;
 };
 
-export type SidebarProps<OldLeftKey, LeftKey, RightKey> = PropsWithChildren<{
-  items: Map<OldLeftKey, SidebarItem>;
-  bottomItems: Map<OldLeftKey, SidebarItem>;
-  selectedKey: OldLeftKey | undefined;
-  onSelectKey: (key: OldLeftKey | undefined) => void;
-
+export type SidebarProps<LeftKey, RightKey> = PropsWithChildren<{
   leftItems: Map<LeftKey, SidebarItem>;
   selectedLeftKey: LeftKey | undefined;
   onSelectLeftKey: (item: LeftKey | undefined) => void;

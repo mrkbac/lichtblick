@@ -18,7 +18,6 @@ import {
   overwriteFetch,
   waitForFonts,
   initI18n,
-  IDataSourceFactory,
   IAppConfiguration,
 } from "@lichtblick/suite-base";
 
@@ -38,13 +37,7 @@ function LogAfterRender(props: React.PropsWithChildren): React.JSX.Element {
   return <>{props.children}</>;
 }
 
-type MainParams = {
-  dataSources?: IDataSourceFactory[];
-  extraProviders?: React.JSX.Element[];
-  appConfiguration: IAppConfiguration;
-};
-
-export async function main(params: MainParams): Promise<void> {
+export async function main(params: { appConfiguration: IAppConfiguration }): Promise<void> {
   log.debug("initializing renderer");
 
   installDevtoolsFormatters();
@@ -70,12 +63,7 @@ export async function main(params: MainParams): Promise<void> {
   const root = createRoot(rootEl);
   root.render(
     <LogAfterRender>
-      <Root
-        appParameters={cliFlags}
-        appConfiguration={params.appConfiguration}
-        extraProviders={params.extraProviders}
-        dataSources={params.dataSources}
-      />
+      <Root appParameters={cliFlags} appConfiguration={params.appConfiguration} />
     </LogAfterRender>,
   );
 }

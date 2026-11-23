@@ -15,6 +15,7 @@ import {
   APP_SHORTCUTS,
   PLAYBACK_SHORTCUTS,
 } from "@lichtblick/suite-base/components/KeyboardShortcuts/appShortcuts";
+import { useLayoutTemplateCommands } from "@lichtblick/suite-base/components/LayoutTemplates";
 import { useStructureItemsByPathStore } from "@lichtblick/suite-base/components/MessagePathSyntax/useStructureItemsByPathStore";
 import {
   MessagePipelineContext,
@@ -255,6 +256,7 @@ export function useAppCommands(): {
   // Read the current time lazily so the palette does not re-render on every frame.
   const getPipeline = useMessagePipelineGetter();
   const { availability: shareAvailability, copyLink: copyShareLink } = useShareLink();
+  const templateCommands = useLayoutTemplateCommands();
 
   const commands = useMemo(() => {
     const list: Command[] = [];
@@ -789,6 +791,7 @@ export function useAppCommands(): {
         run: showShortcuts,
       },
     );
+    pushAll(list, templateCommands);
     return list;
   }, [
     addPanel,
@@ -830,6 +833,7 @@ export function useAppCommands(): {
     sidebarActions,
     startTime,
     t,
+    templateCommands,
     topics,
   ]);
 

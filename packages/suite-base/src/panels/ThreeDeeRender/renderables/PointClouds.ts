@@ -36,7 +36,7 @@ import {
 import type { MessageEvent, RosObject, RosValue } from "@lichtblick/suite-base/players/types";
 
 import type { AnyRendererSubscription } from "../IRenderer";
-import { BaseUserData, Renderable } from "../Renderable";
+import { BaseUserData, ChildUserData, Renderable } from "../Renderable";
 import type { Renderer } from "../Renderer";
 import { PartialMessage, PartialMessageEvent, SceneExtension } from "../SceneExtension";
 import { SettingsTreeEntry, SettingsTreeNodeWithActionHandler } from "../SettingsManager";
@@ -162,7 +162,7 @@ const tempFieldReaders: PointCloudFieldReaders = {
   float32XyzOffsets: undefined,
 };
 
-type PointCloudUserData = BaseUserData & {
+type PointCloudUserData = ChildUserData & {
   /** Undefined once a newer decay entry exists (see releaseMessage) */
   pointCloud: PointCloud | PointCloud2 | undefined;
   originalMessage: Record<string, RosValue> | undefined;
@@ -234,12 +234,7 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
     const points = new PointCloudRenderable(
       topic,
       {
-        receiveTime: -1n, // unused
-        messageTime: -1n, // unused
-        frameId: "", //unused
         pose: getPose(userData.latestPointCloud),
-        settingsPath: [], //unused
-        settings: { visible: true }, //unused
         topic,
         pointCloud: userData.latestPointCloud,
         originalMessage: userData.latestOriginalMessage,
@@ -266,12 +261,8 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
     const stixels = new StixelsRenderable(
       topic,
       {
-        receiveTime: -1n, // unused
-        messageTime: -1n, // unused
-        frameId: "", //unused
+        frameId: "",
         pose: getPose(userData.latestPointCloud),
-        settingsPath: [], //unused
-        settings: { visible: true }, //unused
         topic,
       },
       stixelGeometry,
@@ -667,12 +658,8 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
       const stixels = new StixelsRenderable(
         topic,
         {
-          receiveTime: -1n, // unused
-          messageTime: -1n, // unused
-          frameId: "", //unused
+          frameId: "",
           pose: getPose(pointCloud),
-          settingsPath: [], //unused
-          settings: { visible: true }, //unused
           topic,
         },
         stixelGeometry,
@@ -786,12 +773,8 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
     const stixels = new StixelsRenderable(
       this.userData.topic,
       {
-        receiveTime: -1n, // unused
-        messageTime: -1n, // unused
         frameId,
         pose: getPose(pointCloud),
-        settingsPath: [], //unused
-        settings: { visible: true }, //unused
         topic: this.userData.topic,
       },
       createStixelGeometry(this.userData.topic, THREE.StaticDrawUsage),
@@ -1841,7 +1824,12 @@ function createStixelGeometry(topic: string, usage: THREE.Usage): DynamicBufferG
   return geometry;
 }
 
-class StixelsRenderable extends Renderable<BaseUserData, /*TRenderer=*/ undefined> {
+type StixelsUserData = ChildUserData & {
+  /** The scan's frame, used when painting with a camera */
+  frameId: string;
+};
+
+class StixelsRenderable extends Renderable<StixelsUserData, /*TRenderer=*/ undefined> {
   #stixels: THREE.LineSegments<DynamicBufferGeometry, THREE.LineBasicMaterial>;
   public readonly geometry: DynamicBufferGeometry;
   #cameraOriginalColors: Uint8Array | undefined;
@@ -1850,7 +1838,7 @@ class StixelsRenderable extends Renderable<BaseUserData, /*TRenderer=*/ undefine
 
   public constructor(
     name: string,
-    userData: BaseUserData,
+    userData: StixelsUserData,
     geometry: DynamicBufferGeometry,
     material: THREE.LineBasicMaterial,
   ) {

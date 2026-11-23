@@ -11,7 +11,6 @@ export type ForwardedMenuEvent =
   | "open-file"
   | "open-demo"
   | "open-help-about"
-  | "open-help-docs"
   | "open-help-general";
 
 export type ForwardedWindowEvent = "enter-full-screen" | "leave-full-screen";
@@ -37,26 +36,11 @@ interface NativeMenuBridge {
   addIpcEventListener(eventName: ForwardedMenuEvent, handler: () => void): UnregisterFn;
 }
 
-// Items suitable for storage
-type StorageContent = string | Uint8Array;
-
+/** Text files in the app's datastores (the settings file) */
 interface Storage {
-  // list items in the datastore
-  list(datastore: string): Promise<string[]>;
-  // get all the items in the datastore
-  all(datastore: string): Promise<StorageContent[]>;
-  // get a single item from the datastore
-  get(
-    datastore: string,
-    key: string,
-    options?: { encoding: undefined },
-  ): Promise<Uint8Array | undefined>;
-  get(datastore: string, key: string, options: { encoding: "utf8" }): Promise<string | undefined>;
-  // put a single item into the datastore
-  // This will replace any existing item with the same key
-  put(datastore: string, key: string, value: StorageContent): Promise<void>;
-  // remove an item from the datastore
-  delete(datastore: string, key: string): Promise<void>;
+  get(datastore: string, key: string): Promise<string | undefined>;
+  // Replaces any existing item with the same key
+  put(datastore: string, key: string, value: string): Promise<void>;
 }
 
 type DesktopExtension = {
@@ -80,9 +64,6 @@ export type LoadedExtension = {
 };
 
 interface Desktop {
-  /** https://www.electronjs.org/docs/tutorial/represented-file */
-  setRepresentedFilename(path: string | undefined): Promise<void>;
-
   addIpcEventListener(eventName: ForwardedWindowEvent, handler: () => void): UnregisterFn;
 
   /**
@@ -93,9 +74,6 @@ interface Desktop {
 
   // Get an array of deep links provided on app launch
   getDeepLinks: () => string[];
-
-  // Reset the deep links. After reset, `getDeepLinks` will return an empty array.
-  resetDeepLinks: () => void;
 
   // Get an array of available extensions and parsed package.json files
   getExtensions: () => Promise<DesktopExtension[]>;
@@ -122,4 +100,4 @@ interface Desktop {
   /** Notify the app that the language setting has been changed */
 }
 
-export type { Desktop, DesktopExtension, DesktopLayout, NativeMenuBridge, Storage, StorageContent };
+export type { Desktop, DesktopExtension, DesktopLayout, NativeMenuBridge, Storage };

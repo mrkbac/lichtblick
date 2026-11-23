@@ -6,18 +6,12 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { Typography } from "@mui/material";
-import { CSSProperties, Fragment, PropsWithChildren } from "react";
+import { CSSProperties, PropsWithChildren } from "react";
 import { makeStyles } from "tss-react/mui";
 
 import Stack from "@lichtblick/suite-base/components/Stack";
 
 const useStyles = makeStyles()((theme) => ({
-  leadingItems: {
-    display: "flex",
-    alignItems: "center",
-    marginLeft: theme.spacing(-1),
-    gap: theme.spacing(0.5),
-  },
   toolbar: {
     minHeight: 56,
     flexShrink: 0,
@@ -33,7 +27,6 @@ export function SidebarContent({
   disableToolbar = false,
   title,
   children,
-  leadingItems,
   overflow = "auto",
   trailingItems,
 }: PropsWithChildren<SidebarContentProps>): React.JSX.Element {
@@ -43,13 +36,6 @@ export function SidebarContent({
     <Stack overflow={overflow} fullHeight flex="auto" gap={1}>
       {!disableToolbar && (
         <div className={classes.toolbar}>
-          {leadingItems != undefined && (
-            <div className={classes.leadingItems}>
-              {leadingItems.map((item, i) => (
-                <Fragment key={i}>{item}</Fragment>
-              ))}
-            </div>
-          )}
           <Typography component="h2" variant="h4" style={{ fontWeight: 800, flex: "auto" }}>
             {title}
           </Typography>
@@ -73,9 +59,6 @@ type SidebarContentProps = {
   title?: string;
   disablePadding?: boolean;
   disableToolbar?: boolean;
-
-  /** Buttons/items to display on the leading (left) side of the header */
-  leadingItems?: React.ReactNode[];
 
   /** Overflow style of root element
    * @default: "auto"

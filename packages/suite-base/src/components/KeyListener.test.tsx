@@ -178,22 +178,6 @@ describe("KeyListener", () => {
     });
   });
 
-  describe("keypress events", () => {
-    it("should call handler when key is pressed", () => {
-      // Given
-      const key = "a";
-      const keyPressHandlers = { [key]: mockHandler };
-      setup({ global: true, keyPressHandlers });
-
-      // When
-      const event = new KeyboardEvent("keypress", { key });
-      document.dispatchEvent(event);
-
-      // Then
-      expect(mockHandler).toHaveBeenCalledTimes(1);
-    });
-  });
-
   describe("editable element detection", () => {
     it("should ignore events from input elements", () => {
       // Given

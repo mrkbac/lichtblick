@@ -6,47 +6,21 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { AllowedFileExtensions } from "@lichtblick/suite-base/constants/allowedFileExtensions";
-import {
-  IDataSourceFactory,
-  DataSourceFactoryInitializeArgs,
-} from "@lichtblick/suite-base/context/PlayerSelectionContext";
-import { loadIterablePlayer } from "@lichtblick/suite-base/dataSources/playerModules";
-import { Player } from "@lichtblick/suite-base/players/types";
+import { LocalFileDataSourceFactory } from "@lichtblick/suite-base/dataSources/LocalFileDataSourceFactory";
 
-class UlogLocalDataSourceFactory implements IDataSourceFactory {
-  public id = "ulog-local-file";
-  public type: IDataSourceFactory["type"] = "file";
-  public displayName = "PX4 ULog";
-  public iconName: IDataSourceFactory["iconName"] = "OpenFile";
-  public supportedFileTypes = [AllowedFileExtensions.ULG, AllowedFileExtensions.ULOG];
-
-  public prefetch = loadIterablePlayer;
-
-  public async initialize(args: DataSourceFactoryInitializeArgs): Promise<Player | undefined> {
-    const { IterablePlayer, WorkerIterableSource } = await loadIterablePlayer();
-    const file = args.file;
-    if (!file) {
-      return;
-    }
-
-    const source = new WorkerIterableSource({
-      initWorker: () => {
-        return new Worker(
+export default class UlogLocalDataSourceFactory extends LocalFileDataSourceFactory {
+  public constructor() {
+    super({
+      id: "ulog-local-file",
+      displayName: "PX4 ULog",
+      supportedFileTypes: [AllowedFileExtensions.ULG, AllowedFileExtensions.ULOG],
+      initWorker: () =>
+        new Worker(
           new URL(
             "@lichtblick/suite-base/players/IterablePlayer/ulog/UlogIterableSourceWorker.worker",
             import.meta.url,
           ),
-        );
-      },
-      initArgs: { file },
-    });
-
-    return new IterablePlayer({
-      source,
-      name: file.name,
-      sourceId: this.id,
+        ),
     });
   }
 }
-
-export default UlogLocalDataSourceFactory;

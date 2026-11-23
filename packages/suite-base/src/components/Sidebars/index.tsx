@@ -55,11 +55,9 @@ function ResizeHandle({
   );
 }
 
-export default function Sidebars<
-  OldLeftKey extends string,
-  LeftKey extends string,
-  RightKey extends string,
->(props: SidebarProps<OldLeftKey, LeftKey, RightKey>): React.JSX.Element {
+export default function Sidebars<LeftKey extends string, RightKey extends string>(
+  props: SidebarProps<LeftKey, RightKey>,
+): React.JSX.Element {
   const {
     children,
     leftItems,
