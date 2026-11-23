@@ -12,8 +12,6 @@ import { GlobalVariables } from "@lichtblick/suite-base/hooks/useGlobalVariables
 import { PlayerAlert, Topic } from "@lichtblick/suite-base/players/types";
 
 import { AliasingStateProcessor, TopicAliasMap } from "./AliasingStateProcessor";
-import { IStateProcessor } from "./IStateProcessor";
-import { NoopStateProcessor } from "./NoopStateProcessor";
 
 export type TopicAliasFunctions = Array<{ extensionId: string; aliasFunction: TopicAliasFunction }>;
 
@@ -24,14 +22,15 @@ export type StateFactoryInput = {
 };
 
 /**
- * StateProcessorFactory builds instances of IStateProcessor from sets of inputs.
+ * StateProcessorFactory builds an AliasingStateProcessor from a set of inputs, or none when
+ * nothing is aliased.
  *
  * Its purpose is to manage idempotency and memoization of the input and output to only build a new
  * processor when a set of alias function outputs results in a semantically different output.
  */
 export class StateProcessorFactory {
   #aliases: TopicAliasMap = new Map();
-  #stateProcessor: IStateProcessor = new NoopStateProcessor();
+  #stateProcessor: AliasingStateProcessor | undefined;
 
   /**
    * Build a state processor instance from the inputs.
@@ -41,7 +40,7 @@ export class StateProcessorFactory {
    * output values change. If the output values are unchanged, the existing state processor
    * instance is returned.
    */
-  public buildStateProcessor(input: Im<StateFactoryInput>): IStateProcessor {
+  public buildStateProcessor(input: Im<StateFactoryInput>): AliasingStateProcessor | undefined {
     const mappings = input.aliasFunctions.map((mapper) => ({
       extensionId: mapper.extensionId,
       aliases: mapper.aliasFunction({
@@ -53,14 +52,7 @@ export class StateProcessorFactory {
     const anyMappings = mappings.some((map) => [...map.aliases].length > 0);
     if (!anyMappings) {
       this.#aliases = new Map();
-
-      // We are already using a no-op state processor so we can keep the same reference Technically
-      // with a no-op processor its ok if the reference changes since its a no-op but this check
-      // keeps the semnatics more consistent.
-      if (this.#stateProcessor instanceof NoopStateProcessor) {
-        return this.#stateProcessor;
-      }
-      return (this.#stateProcessor = new NoopStateProcessor());
+      return (this.#stateProcessor = undefined);
     }
 
     const { aliasMap, alerts } = mergeAliases(mappings, input);
