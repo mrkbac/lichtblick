@@ -210,7 +210,14 @@ export function registerRosPackageProtocolHandlers(): void {
         );
       }
 
-      const resolvedResourcePath = resolvePackageResource(pkgRoot, relPath);
+      let resolvedResourcePath: string;
+      try {
+        resolvedResourcePath = resolvePackageResource(pkgRoot, relPath);
+      } catch (err: unknown) {
+        // A malformed escape (a bare "%") or a path leaving the package is the request's fault
+        log.warn("Invalid ROS package url", request.url, err);
+        return new Response(String(err), { status: 400 });
+      }
       log.debug(`Resolved: ${resolvedResourcePath}`);
       // prepend the file:// protocol to the path
       const fileUrl = pathToFileURL(resolvedResourcePath).toString();

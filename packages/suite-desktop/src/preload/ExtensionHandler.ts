@@ -4,7 +4,7 @@
 import { existsSync } from "fs";
 import { mkdir, readdir, readFile, rm, writeFile } from "fs/promises";
 import JSZip from "jszip";
-import { dirname, join as pathJoin } from "path";
+import { dirname, join as pathJoin, resolve } from "path";
 
 import Logger from "@lichtblick/log";
 
@@ -235,9 +235,13 @@ export class ExtensionsHandler {
 
     // Check every target path before touching the disk, so a hostile archive (zip slip) writes nothing
     const extensionBaseDir = resolveInside(this.userExtensionsDir, dir);
-    const entries = Object.entries(archive.files).map(
-      ([relPath, zipObj]) => [resolveInside(extensionBaseDir, relPath), zipObj] as const,
-    );
+    const entries = Object.entries(archive.files)
+      // Some zip tools add a "./" entry for the archive root; it names the folder itself.
+      .filter(
+        ([relPath, zipObj]) =>
+          !(zipObj.dir && resolve(extensionBaseDir, relPath) === extensionBaseDir),
+      )
+      .map(([relPath, zipObj]) => [resolveInside(extensionBaseDir, relPath), zipObj] as const);
 
     // Delete any previous installation and create the extension folder
     await rm(extensionBaseDir, { recursive: true, force: true });

@@ -92,3 +92,25 @@ describe("openExternalUrl", () => {
     ]);
   });
 });
+
+describe("isAppUrl", () => {
+  it("allows only the packaged renderer page among file:// URLs", async () => {
+    const { isAppUrl } = await import("./StudioWindow");
+    const app = "file:///app/resources/app.asar/.webpack/renderer/index.html";
+    expect(isAppUrl(`${app}?ds=foo#bar`, app)).toBe(true);
+    expect(isAppUrl("file:///tmp/example.html", app)).toBe(false);
+    expect(isAppUrl("file:///app/resources/app.asar/.webpack/renderer/other.html", app)).toBe(
+      false,
+    );
+    expect(isAppUrl("https://example.org/", app)).toBe(false);
+    expect(isAppUrl("not a url", app)).toBe(false);
+  });
+
+  it("compares origins for the dev server", async () => {
+    const { isAppUrl } = await import("./StudioWindow");
+    const app = "http://localhost:8080/index.html";
+    expect(isAppUrl("http://localhost:8080/foo", app)).toBe(true);
+    expect(isAppUrl("http://localhost:9090/", app)).toBe(false);
+    expect(isAppUrl("file:///tmp/example.html", app)).toBe(false);
+  });
+});
