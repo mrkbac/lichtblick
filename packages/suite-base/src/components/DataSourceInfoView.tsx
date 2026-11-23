@@ -175,7 +175,7 @@ function StartTimeField({ startTime }: { startTime?: Time }): React.JSX.Element 
     <Field label={t("startTime")} copyText={startTime && formatTimeRaw(startTime)}>
       {startTime ? (
         <>
-          <Timestamp horizontal time={startTime} />
+          <Timestamp time={startTime} />
           {isAbsoluteTime(startTime) && (
             <Typography className={classes.secondary} variant="inherit">
               {formatTimeAgo(toMillis(startTime), now, i18n.language)}
@@ -200,7 +200,7 @@ function EndTimeAndDurationFields(props: { startTime?: Time; isLive: boolean }):
     <>
       {!isLive && (
         <Field label={t("endTime")} copyText={endTime && formatTimeRaw(endTime)}>
-          {endTime ? <Timestamp horizontal time={endTime} /> : <EmptyValue />}
+          {endTime ? <Timestamp time={endTime} /> : <EmptyValue />}
         </Field>
       )}
       <Field label={t("duration")} copyText={duration && formatTimeRaw(duration)}>

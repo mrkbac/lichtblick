@@ -5,15 +5,10 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import AddIcon from "@mui/icons-material/Add";
-import CloudOffIcon from "@mui/icons-material/CloudOff";
-import FileOpenOutlinedIcon from "@mui/icons-material/FileOpenOutlined";
 import {
   Alert,
   Button,
-  CircularProgress,
   Divider,
-  IconButton,
   List,
   ListItem,
   ListItemButton,
@@ -27,7 +22,6 @@ import { useTranslation } from "react-i18next";
 import { useAsyncFn } from "@lichtblick/hooks";
 import Logger from "@lichtblick/log";
 import { LayoutTemplateMenu } from "@lichtblick/suite-base/components/LayoutTemplates";
-import { SidebarContent } from "@lichtblick/suite-base/components/SidebarContent";
 import Stack from "@lichtblick/suite-base/components/Stack";
 import {
   LayoutID,
@@ -326,47 +320,7 @@ export default function LayoutBrowser({
   };
 
   return (
-    <SidebarContent
-      title="Layouts"
-      disablePadding
-      disableToolbar
-      trailingItems={[
-        (layouts.loading || state.busy || pendingMultiAction) && (
-          <Stack key="loading" alignItems="center" justifyContent="center" padding={1}>
-            <CircularProgress size={18} variant="indeterminate" />
-          </Stack>
-        ),
-        (!state.online || state.error != undefined) && (
-          <IconButton
-            color="primary"
-            key="offline"
-            disabled
-            title={state.error != undefined ? "Layouts are not synced" : "Offline"}
-          >
-            <CloudOffIcon />
-          </IconButton>
-        ),
-        <IconButton
-          color="primary"
-          key="add-layout"
-          onClick={createNewLayout}
-          aria-label="Create new layout"
-          data-testid="add-layout"
-          title="Create new layout"
-        >
-          <AddIcon />
-        </IconButton>,
-        <IconButton
-          color="primary"
-          key="import-layout"
-          onClick={importLayout}
-          aria-label="Import layout"
-          title="Import layout"
-        >
-          <FileOpenOutlinedIcon />
-        </IconButton>,
-      ].filter(Boolean)}
-    >
+    <Stack fullHeight flex="auto" overflow="auto">
       {promptModal}
       {shareDialog}
       {templateMenuAnchor && (
@@ -461,6 +415,6 @@ export default function LayoutBrowser({
           />
         )}
       </Stack>
-    </SidebarContent>
+    </Stack>
   );
 }

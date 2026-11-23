@@ -17,7 +17,7 @@
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 import MoreVertIcon from "@mui/icons-material/MoreVert";
 import { Divider, Menu, MenuItem } from "@mui/material";
-import React, { MouseEvent, useCallback, useContext, useMemo, useRef, useState } from "react";
+import React, { MouseEvent, useCallback, useContext, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { makeStyles } from "tss-react/mui";
 
@@ -41,10 +41,6 @@ const useStyles = makeStyles()((theme) => ({
     gap: theme.spacing(1),
     alignItems: "center",
 
-    ".root-span": {
-      display: "flex",
-      marginLeft: theme.spacing(-0.25),
-    },
     "&.Mui-selected": {
       backgroundColor: theme.palette.action.hover,
 
@@ -121,92 +117,6 @@ function PanelActionsDropdownComponent({ isUnknownPanel }: Props): React.JSX.Ele
     handleMenuClose();
   }, [panelContext]);
 
-  const menuItems = useMemo(() => {
-    const items = [];
-
-    if (!isUnknownPanel) {
-      items.push(
-        {
-          key: "vsplit",
-          text: t("splitRight"),
-          onClick: () => {
-            split(panelContext?.id, "row");
-          },
-        },
-        {
-          key: "hsplit",
-          text: t("splitDown"),
-          onClick: () => {
-            split(panelContext?.id, "column");
-          },
-        },
-      );
-    }
-
-    if (panelContext?.isFullscreen !== true && panelWindow?.isOpen !== true) {
-      items.push({
-        key: "enter-fullscreen",
-        text: t("fullscreen"),
-        onClick: enterFullscreen,
-        "data-testid": "panel-menu-fullscreen",
-      });
-    }
-
-    if (panelWindow) {
-      if (panelWindow.isOpen) {
-        items.push({
-          key: "return",
-          text: t("returnToWorkspace"),
-          onClick: () => {
-            handleMenuClose();
-            panelWindow.close();
-          },
-        });
-      } else {
-        items.push({
-          key: "popout",
-          text: t("openPopout"),
-          onClick: () => {
-            panelWindow.open("popout");
-            handleMenuClose();
-          },
-        });
-        if (panelWindow.supportsPiP) {
-          items.push({
-            key: "pip",
-            text: t("openPictureInPicture"),
-            onClick: () => {
-              panelWindow.open("pip");
-              handleMenuClose();
-            },
-          });
-        }
-      }
-    }
-    items.push({ key: "divider", type: "divider" });
-
-    items.push({
-      key: "remove",
-      text: t("removePanel"),
-      onClick: close,
-      "data-testid": "panel-menu-remove",
-      className: classes.error,
-    });
-
-    return items;
-  }, [
-    classes.error,
-    close,
-    enterFullscreen,
-    isUnknownPanel,
-    panelContext?.id,
-    panelContext?.isFullscreen,
-    panelWindow,
-    split,
-    t,
-  ]);
-
-  const buttonRef = useRef<HTMLDivElement>(null);
   const type = panelContext?.type;
 
   if (type == undefined) {
@@ -214,7 +124,7 @@ function PanelActionsDropdownComponent({ isUnknownPanel }: Props): React.JSX.Ele
   }
 
   return (
-    <div ref={buttonRef}>
+    <div>
       <ToolbarIconButton
         id="panel-menu-button"
         aria-controls={menuOpen ? "panel-menu" : undefined}
@@ -258,26 +168,94 @@ function PanelActionsDropdownComponent({ isUnknownPanel }: Props): React.JSX.Ele
           onClose={handleSubmenuClose}
         />
         <Divider variant="middle" />
-        {menuItems.map((item, idx) =>
-          item.type === "divider" ? (
-            <Divider key={`divider-${idx}`} variant="middle" />
-          ) : (
-            <MenuItem
-              key={item.key}
-              onClick={(event) => {
-                event.stopPropagation();
-                item.onClick?.();
-              }}
-              onMouseEnter={() => {
-                setSubmenuAnchorEl(undefined);
-              }}
-              className={cx(classes.menuItem, item.className)}
-              data-testid={item["data-testid"]}
-            >
-              {item.text}
-            </MenuItem>
-          ),
+        {!isUnknownPanel && (
+          <MenuItem
+            onClick={(event) => {
+              event.stopPropagation();
+              split(panelContext?.id, "row");
+            }}
+            onMouseEnter={handleSubmenuClose}
+            className={classes.menuItem}
+          >
+            {t("splitRight")}
+          </MenuItem>
         )}
+        {!isUnknownPanel && (
+          <MenuItem
+            onClick={(event) => {
+              event.stopPropagation();
+              split(panelContext?.id, "column");
+            }}
+            onMouseEnter={handleSubmenuClose}
+            className={classes.menuItem}
+          >
+            {t("splitDown")}
+          </MenuItem>
+        )}
+        {panelContext?.isFullscreen !== true && panelWindow?.isOpen !== true && (
+          <MenuItem
+            onClick={(event) => {
+              event.stopPropagation();
+              enterFullscreen();
+            }}
+            onMouseEnter={handleSubmenuClose}
+            className={classes.menuItem}
+            data-testid="panel-menu-fullscreen"
+          >
+            {t("fullscreen")}
+          </MenuItem>
+        )}
+        {panelWindow?.isOpen === true && (
+          <MenuItem
+            onClick={(event) => {
+              event.stopPropagation();
+              handleMenuClose();
+              panelWindow.close();
+            }}
+            onMouseEnter={handleSubmenuClose}
+            className={classes.menuItem}
+          >
+            {t("returnToWorkspace")}
+          </MenuItem>
+        )}
+        {panelWindow?.isOpen === false && (
+          <MenuItem
+            onClick={(event) => {
+              event.stopPropagation();
+              panelWindow.open("popout");
+              handleMenuClose();
+            }}
+            onMouseEnter={handleSubmenuClose}
+            className={classes.menuItem}
+          >
+            {t("openPopout")}
+          </MenuItem>
+        )}
+        {panelWindow?.isOpen === false && panelWindow.supportsPiP && (
+          <MenuItem
+            onClick={(event) => {
+              event.stopPropagation();
+              panelWindow.open("pip");
+              handleMenuClose();
+            }}
+            onMouseEnter={handleSubmenuClose}
+            className={classes.menuItem}
+          >
+            {t("openPictureInPicture")}
+          </MenuItem>
+        )}
+        <Divider variant="middle" />
+        <MenuItem
+          onClick={(event) => {
+            event.stopPropagation();
+            close();
+          }}
+          onMouseEnter={handleSubmenuClose}
+          className={cx(classes.menuItem, classes.error)}
+          data-testid="panel-menu-remove"
+        >
+          {t("removePanel")}
+        </MenuItem>
       </Menu>
     </div>
   );

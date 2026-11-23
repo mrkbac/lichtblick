@@ -37,27 +37,23 @@ import { PanelToolbarControls } from "./PanelToolbarControls";
 // and has a place to add custom controls via it's children property
 export default React.memo<PanelToolbarProps>(function PanelToolbar({
   additionalIcons,
-  backgroundColor,
   children,
   className,
   isUnknownPanel = false,
 }: PanelToolbarProps) {
   const { classes, cx } = useStyles();
   const { t } = useTranslation("panelToolbar");
+  const panelContext = useContext(PanelContext);
   const {
     isFullscreen,
     exitFullscreen,
     enterFullscreen,
     config: { [PANEL_TITLE_CONFIG_KEY]: customTitle } = {},
-  } = useContext(PanelContext) ?? {};
-
-  const panelContext = useContext(PanelContext);
+  } = panelContext ?? {};
   const panelWindow = useContext(PanelWindowContext);
   // The extra copies of a panel showing every compared recording keep their toolbar's space only
   const { secondary } = useContext(CompareCopyContext);
 
-  // Help-shown state must be hoisted outside the controls container so the modal can remain visible
-  // when the panel is no longer hovered.
   const additionalIconsWithHelp = useMemo(() => {
     return (
       <>
@@ -104,7 +100,6 @@ export default React.memo<PanelToolbarProps>(function PanelToolbar({
       data-testid="mosaic-drag-handle"
       ref={rootDragRef}
       style={{
-        backgroundColor,
         cursor: rootDragRef != undefined ? "grab" : "auto",
         visibility: secondary ? "hidden" : undefined,
       }}

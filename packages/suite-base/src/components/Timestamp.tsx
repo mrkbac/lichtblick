@@ -16,9 +16,7 @@ import { isAbsoluteTime, formatTimeRaw } from "@lichtblick/suite-base/util/time"
 import { customTypography } from "@lichtblick/theme";
 
 type Props = {
-  horizontal?: boolean;
   time: Time;
-  title?: string;
 };
 
 const useStyles = makeStyles()(() => ({
@@ -29,7 +27,7 @@ const useStyles = makeStyles()(() => ({
 
 export default function Timestamp(props: Props): React.JSX.Element {
   const { classes } = useStyles();
-  const { horizontal = false, time, title } = props;
+  const { time } = props;
   const { formatDate, formatTime } = useAppTimeFormat();
   const currentTimeStr = useMemo(() => formatTime(time), [time, formatTime]);
   const rawTimeStr = useMemo(() => formatTimeRaw(time), [time]);
@@ -37,7 +35,7 @@ export default function Timestamp(props: Props): React.JSX.Element {
 
   if (!isAbsoluteTime(time)) {
     return (
-      <Stack title={title} direction="row" alignItems="center" flexGrow={0}>
+      <Stack direction="row" alignItems="center" flexGrow={0}>
         <Typography className={classes.numericValue} variant="inherit">
           {rawTimeStr}
         </Typography>
@@ -46,24 +44,11 @@ export default function Timestamp(props: Props): React.JSX.Element {
   }
 
   return (
-    <Stack
-      title={title}
-      gap={horizontal ? 0 : 1}
-      flexWrap={horizontal ? "nowrap" : "wrap"}
-      direction={horizontal ? "row" : "column"}
-      alignItems={horizontal ? "center" : "flex-start"}
-      justifyContent={horizontal ? "flex-start" : "center"}
-    >
-      <Typography
-        className={classes.numericValue}
-        noWrap
-        variant="inherit"
-        style={{ fontWeight: !horizontal ? 700 : undefined }}
-      >
+    <Stack direction="row" alignItems="center">
+      <Typography className={classes.numericValue} noWrap variant="inherit">
         {date}
       </Typography>
-      {horizontal && <>&nbsp;</>}
-
+      &nbsp;
       <Stack direction="row" alignItems="center" flexShrink={0} gap={0.5}>
         <Typography variant="inherit" className={classes.numericValue}>
           {currentTimeStr}

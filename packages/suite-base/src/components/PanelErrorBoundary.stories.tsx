@@ -37,18 +37,3 @@ export const Default: StoryObj = {
     );
   },
 };
-
-export const ShowingDetails: StoryObj = {
-  render: () => {
-    return (
-      <PanelErrorBoundary
-        showErrorDetails
-        hideErrorSourceLocations
-        onRemovePanel={action("onRemovePanel")}
-        onResetPanel={action("onResetPanel")}
-      >
-        <Broken />
-      </PanelErrorBoundary>
-    );
-  },
-};

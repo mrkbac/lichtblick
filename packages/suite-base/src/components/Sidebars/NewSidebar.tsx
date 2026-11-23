@@ -19,10 +19,6 @@ const TabOverflowMenu = lazy(async () => ({
   default: (await import("@lichtblick/suite-base/components/TabOverflowMenu")).TabOverflowMenu,
 }));
 
-function Noop(): React.JSX.Element | undefined {
-  return undefined;
-}
-
 export function NewSidebar<K extends string>({
   items,
   anchor,
@@ -43,9 +39,7 @@ export function NewSidebar<K extends string>({
     [activeTab, setActiveTab],
   );
 
-  const SelectedComponent = useMemo(() => {
-    return (activeTab != undefined && items.get(activeTab)?.component) ?? Noop;
-  }, [activeTab, items]);
+  const Selected = activeTab != undefined ? items.get(activeTab)?.component : undefined;
 
   const memoizedTabs = useMemo(() => {
     return Array.from(items.entries(), ([key, item]) => (
@@ -112,9 +106,7 @@ export function NewSidebar<K extends string>({
       </Stack>
       <Divider />
       {activeTab != undefined && (
-        <div className={classes.tabContent}>
-          {SelectedComponent !== false ? <SelectedComponent /> : <></>}
-        </div>
+        <div className={classes.tabContent}>{Selected && <Selected />}</div>
       )}
     </Stack>
   );

@@ -8,9 +8,11 @@
 import Logger from "@lichtblick/log";
 import { MessageEvent, Subscription } from "@lichtblick/suite";
 import { CreateMessageRangeIteratorParams } from "@lichtblick/suite-base/components/PanelExtensionAdapter";
-import { BATCH_INTERVAL_MS } from "@lichtblick/suite-base/components/PanelExtensionAdapter/contants";
 
 const log = Logger.getLogger(__filename);
+
+// Target interval for batching messages: 16ms aligns with a 60Hz update rate.
+export const BATCH_INTERVAL_MS = 16;
 
 /**
  * Creates an async iterable that processes messages from a raw batch iterator,

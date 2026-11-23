@@ -14,7 +14,6 @@ function SearchBar(
     TextFieldProps & {
       onClear?: () => void;
       showClearIcon?: boolean;
-      startAdornment?: React.ReactNode;
     }
   >,
 ): React.JSX.Element {
@@ -26,7 +25,6 @@ function SearchBar(
     onChange,
     onClear,
     showClearIcon = false,
-    startAdornment = <SearchIcon fontSize="small" data-testid="SearchIcon" />,
     ...rest
   } = props;
 
@@ -47,7 +45,7 @@ function SearchBar(
           input: {
             startAdornment: (
               <InputAdornment className={classes.filterStartAdornment} position="start">
-                {startAdornment}
+                <SearchIcon fontSize="small" data-testid="SearchIcon" />
               </InputAdornment>
             ),
             endAdornment: showClearIcon && (

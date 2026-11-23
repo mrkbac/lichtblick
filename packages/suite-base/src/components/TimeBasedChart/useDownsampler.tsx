@@ -11,44 +11,41 @@ import { useDebouncedCallback } from "use-debounce";
 import type { RpcScales } from "@lichtblick/suite-base/components/Chart/types";
 
 import { Downsampler } from "./Downsampler";
-import { PlotDataProvider, ProviderStateSetter, PlotViewport, ChartDataset } from "./types";
-import { getBounds } from "./useProvider";
+import { getBounds } from "./getBounds";
+import { ProviderState, PlotViewport, ChartDataset } from "./types";
 
 const EMPTY_BOUNDS = { x: { min: 0, max: 0 }, y: { min: 0, max: 0 } };
 
 /**
- * useDownsampler downsamples the given datasets before providing them to the
- * TimeBasedChart. This is used primarily for downsampling data passed into the
- * TimeBasedChart component without using a PlotDataProvider.
+ * useDownsampler downsamples the given datasets for the current viewport and
+ * returns the latest downsampled data for the TimeBasedChart.
  */
-export default function useDownsampler(datasets: ChartDataset[]): {
-  downsampler: PlotDataProvider;
+export default function useDownsampler(
+  datasets: ChartDataset[],
+  view: PlotViewport,
+): {
+  provided: ProviderState | undefined;
   setScales: (scales: RpcScales) => void;
 } {
-  const [view, setView] = React.useState<PlotViewport | undefined>();
-  const [setter, setSetter] = React.useState<ProviderStateSetter | undefined>();
+  const [provided, setProvided] = React.useState<ProviderState | undefined>();
 
   const downsampler = useMemo(() => new Downsampler(), []);
 
   // Stable callback to run the downsampler and update the latest copy of the downsampled datasets
   const applyDownsample = useCallback(() => {
-    if (setter == undefined) {
-      return;
-    }
-
     const downsampled = downsampler.downsample();
     if (downsampled == undefined) {
       return;
     }
 
-    setter({
+    setProvided({
       // No plottable points left: still hand over the (empty) datasets so stale data is cleared
       bounds: getBounds(downsampled) ?? EMPTY_BOUNDS,
       data: {
         datasets: downsampled,
       },
     });
-  }, [setter, downsampler]);
+  }, [downsampler]);
 
   // Debounce calls to invoke the downsampler
   const queueDownsample = useDebouncedCallback(
@@ -79,17 +76,5 @@ export default function useDownsampler(datasets: ChartDataset[]): {
     queueDownsample();
   }, [downsampler, datasets, queueDownsample]);
 
-  return React.useMemo(() => {
-    return {
-      downsampler: {
-        setView,
-        // setSetter cannot take two arguments, so we can't just write
-        // `register: setSetter`
-        register: (newSetter) => {
-          setSetter(() => newSetter);
-        },
-      },
-      setScales,
-    };
-  }, [setScales]);
+  return { provided, setScales };
 }

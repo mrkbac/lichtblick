@@ -14,7 +14,6 @@ import { useStyles } from "@lichtblick/suite-base/components/PanelSettings/Actio
 import { ActionMenuProps } from "@lichtblick/suite-base/components/PanelSettings/types";
 
 export function ActionMenu({
-  allowShare,
   onReset,
   onShare,
   fontSize = "medium",
@@ -22,16 +21,13 @@ export function ActionMenu({
   const { classes, cx } = useStyles();
   const [anchorEl, setAnchorEl] = useState<undefined | HTMLElement>();
   const { t } = useTranslation("panelSettings");
-  const [isMenuOpen, setMenuOpen] = useState(false);
 
   const handleClick = useCallback((event: React.MouseEvent<HTMLButtonElement>) => {
     setAnchorEl(event.currentTarget);
-    setMenuOpen(true);
   }, []);
 
   const handleClose = useCallback(() => {
     setAnchorEl(undefined);
-    setMenuOpen(false);
   }, []);
 
   const handleShare = useCallback(() => {
@@ -43,6 +39,8 @@ export function ActionMenu({
     onReset();
     handleClose();
   }, [onReset, handleClose]);
+
+  const isMenuOpen = anchorEl != undefined;
 
   return (
     <div>
@@ -69,9 +67,7 @@ export function ActionMenu({
           },
         }}
       >
-        <MenuItem disabled={!allowShare} aria-disabled={!allowShare} onClick={handleShare}>
-          {t("importOrExportSettingsWithEllipsis")}
-        </MenuItem>
+        <MenuItem onClick={handleShare}>{t("importOrExportSettingsWithEllipsis")}</MenuItem>
         <MenuItem onClick={handleReset}>{t("resetToDefaults")}</MenuItem>
       </Menu>
     </div>

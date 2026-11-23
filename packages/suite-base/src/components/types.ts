@@ -59,8 +59,6 @@ export type PanelContextType<T> = {
 };
 
 export type PanelErrorBoundaryProps = {
-  showErrorDetails?: boolean;
-  hideErrorSourceLocations?: boolean;
   onResetPanel: () => void;
   onRemovePanel: () => void;
   onLogError?: (message: string, error?: Error) => void;

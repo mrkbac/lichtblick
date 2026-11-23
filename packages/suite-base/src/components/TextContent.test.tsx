@@ -9,13 +9,8 @@ import "@testing-library/jest-dom/vitest";
 import TextContent from "@lichtblick/suite-base/components/TextContent";
 import { BasicBuilder } from "@lichtblick/test-builders";
 
-type SetupProps = {
-  children: React.ReactNode;
-  style?: React.CSSProperties;
-};
-
-function setup({ children, style }: SetupProps) {
-  return render(<TextContent style={style}>{children}</TextContent>);
+function setup({ children }: { children: React.ReactNode }) {
+  return render(<TextContent>{children}</TextContent>);
 }
 
 describe("TextContent", () => {
@@ -46,13 +41,6 @@ describe("TextContent", () => {
       // Then
       const link = screen.getByRole("link", { name: sampleText });
       expect(link).toHaveAttribute("href", "https://example.com");
-    });
-
-    it("should apply the provided style to the container", () => {
-      // When
-      const { container } = setup({ children: sampleText, style: { color: "red" } });
-      // Then
-      expect(container.firstChild).toHaveStyle({ color: "rgb(255, 0, 0)" });
     });
   });
 

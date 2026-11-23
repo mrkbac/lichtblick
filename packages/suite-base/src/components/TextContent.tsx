@@ -15,8 +15,8 @@
 //   You may not use this file except in compliance with the License.
 
 import { Link } from "@mui/material";
-import { CSSProperties, PropsWithChildren } from "react";
-import Markdown, { type Options } from "react-markdown";
+import { PropsWithChildren } from "react";
+import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { makeStyles } from "tss-react/mui";
 
@@ -181,20 +181,13 @@ function linkRenderer(linkProps: React.AnchorHTMLAttributes<HTMLAnchorElement>):
   );
 }
 
-type Props = {
-  style?: CSSProperties;
-  /** Extra element renderers merged over the defaults (e.g. to make task-list checkboxes interactive). */
-  components?: Options["components"];
-};
-
-export default function TextContent(props: PropsWithChildren<Props>): React.ReactElement | null {
-  const { children, style, components } = props;
+export default function TextContent({ children }: PropsWithChildren): React.ReactElement | null {
   const { classes } = useStyles();
 
   return (
-    <div className={classes.root} style={style}>
+    <div className={classes.root}>
       {typeof children === "string" ? (
-        <Markdown remarkPlugins={[remarkGfm]} components={{ a: linkRenderer, ...components }}>
+        <Markdown remarkPlugins={[remarkGfm]} components={{ a: linkRenderer }}>
           {children}
         </Markdown>
       ) : (

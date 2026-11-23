@@ -233,7 +233,6 @@ export default function PanelSettings({
       trailingItems={[
         <ActionMenu
           key={1}
-          allowShare
           onReset={resetToDefaults}
           onShare={() => {
             setShowShareModal(true);
@@ -267,7 +266,6 @@ export default function PanelSettings({
                   )}
                   <ActionMenu
                     fontSize="small"
-                    allowShare
                     onReset={resetToDefaults}
                     onShare={() => {
                       setShowShareModal(true);

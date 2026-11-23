@@ -18,7 +18,6 @@ export type BuildSettingsTreeProps = {
 };
 
 export type ActionMenuProps = {
-  allowShare: boolean;
   onReset: () => void;
   onShare: () => void;
   fontSize?: SvgIconProps["fontSize"];
