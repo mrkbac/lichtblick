@@ -4,6 +4,7 @@
 export const attachments = {
   attachmentContents: "Attachment contents",
   close: "Close",
+  copy: "Copy",
   download: "Download",
   missing: "The attachment is no longer in the file.",
   needsLocalFile: "Previews need a single recording opened as a local file.",
