@@ -44,7 +44,6 @@ const Z = () => <>{longText}</>;
 type LeftKey = "a" | "b" | "c";
 type RightKey = "x" | "y" | "z";
 
-
 const LEFT_ITEMS = new Map<LeftKey, SidebarItem>([
   ["a", { title: "A", component: A }],
   ["b", { title: "B", component: B }],

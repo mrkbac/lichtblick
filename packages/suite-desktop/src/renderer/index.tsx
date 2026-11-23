@@ -63,10 +63,7 @@ export async function main(params: { appConfiguration: IAppConfiguration }): Pro
   const root = createRoot(rootEl);
   root.render(
     <LogAfterRender>
-      <Root
-        appParameters={cliFlags}
-        appConfiguration={params.appConfiguration}
-      />
+      <Root appParameters={cliFlags} appConfiguration={params.appConfiguration} />
     </LogAfterRender>,
   );
 }

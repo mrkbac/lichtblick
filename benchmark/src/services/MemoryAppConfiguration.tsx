@@ -17,10 +17,7 @@ import {
  *
  * Configuration does not survive any reload nor is it persisted.
  */
-export class MemoryAppConfiguration
-  extends AppConfigurationListeners
-  implements IAppConfiguration
-{
+export class MemoryAppConfiguration extends AppConfigurationListeners implements IAppConfiguration {
   #values = new Map<string, AppConfigurationValue>();
 
   public constructor({ defaults }: { defaults?: { [key: string]: AppConfigurationValue } }) {
