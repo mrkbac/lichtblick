@@ -136,6 +136,16 @@ describe("FoxgloveWebSocketPlayer reconnect", () => {
     }).not.toThrow();
   });
 
+  it("doesn't advertise on a socket that is still connecting", async () => {
+    await drop();
+    const next = MockWebSocket.lastInstance!;
+    player.setPublishers([{ topic: "/foo", schemaName: "S" }]);
+    expect(next.sentOps()).toEqual([]);
+
+    connect();
+    expect(next.sentOps().filter(({ op }) => op === "advertise")).toHaveLength(1);
+  });
+
   it("rejects pending service calls when the connection closes", async () => {
     const call = player.callService("/svc", {});
     await expect(Promise.all([call, drop()])).rejects.toThrow("Connection closed");

@@ -319,7 +319,6 @@ export default class FoxgloveWebSocketPlayer implements Player {
       this.#stopRecording();
       this.#recorderUnavailable = false; // a new connection tries recording again
       this.#alerts.clear();
-      this.#servicesByName.clear();
       this.#dropConnectionState();
 
       // Re-assign members that are emitted as player state
@@ -1921,6 +1920,11 @@ export default class FoxgloveWebSocketPlayer implements Player {
    * are restored once the next connection advertises its channels.
    */
   #dropConnectionState(): void {
+    // Until the next serverInfo, nothing may be sent: the next socket may still be connecting
+    this.#playerCapabilities = this.#playerCapabilities.filter(
+      (cap) => cap !== PLAYER_CAPABILITIES.advertise && cap !== PLAYER_CAPABILITIES.callServices,
+    );
+    this.#servicesByName.clear();
     this.#channelsById.clear();
     this.#channelsByTopic.clear();
     for (const topic of this.#resolvedSubscriptionsByTopic.keys()) {
