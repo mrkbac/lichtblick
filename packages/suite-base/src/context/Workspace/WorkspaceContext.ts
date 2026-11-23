@@ -14,21 +14,6 @@ import { AppSettingsTab } from "@lichtblick/suite-base/components/AppSettingsDia
 import { DataSourceDialogItem } from "@lichtblick/suite-base/components/DataSourceDialog/DataSourceDialog";
 import { IDataSourceFactory } from "@lichtblick/suite-base/context/PlayerSelectionContext";
 
-export const SidebarItemKeys = [
-  "account",
-  "add-panel",
-  "app-bar-tour",
-  "app-settings",
-  "connection",
-  "extensions",
-  "help",
-  "layouts",
-  "panel-settings",
-  "logs-settings",
-  "variables",
-] as const;
-export type SidebarItemKey = (typeof SidebarItemKeys)[number];
-
 export const LeftSidebarItemKeys = [
   "panel-settings",
   "topics",

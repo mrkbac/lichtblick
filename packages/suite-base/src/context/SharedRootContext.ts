@@ -11,6 +11,7 @@ import { AppBarProps } from "@lichtblick/suite-base/components/AppBar";
 import { IAppConfiguration } from "@lichtblick/suite-base/context/AppConfigurationContext";
 import { AppParametersInput } from "@lichtblick/suite-base/context/AppParametersContext";
 import { IDataSourceFactory } from "@lichtblick/suite-base/context/PlayerSelectionContext";
+import { LayoutLoader } from "@lichtblick/suite-base/services/ILayoutLoader";
 import { IExtensionLoader } from "@lichtblick/suite-base/services/extension/IExtensionLoader";
 
 interface ISharedRootContext {
@@ -19,10 +20,14 @@ interface ISharedRootContext {
   appParameters?: AppParametersInput;
   dataSources: IDataSourceFactory[];
   extensionLoaders: readonly IExtensionLoader[];
+  layoutLoaders?: readonly LayoutLoader[];
+  /** Organization API to sign in to for shared layouts; none when undefined. */
+  organizationApiUrl?: string;
   enableLaunchPreferenceScreen?: boolean;
   enableGlobalCss?: boolean;
-  extraProviders?: readonly React.JSX.Element[];
   AppBarComponent?: (props: AppBarProps) => React.JSX.Element;
+  appBarLeftInset?: number;
+  onAppBarDoubleClick?: () => void;
 }
 
 const SharedRootContext = createContext<ISharedRootContext>({

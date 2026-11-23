@@ -12,15 +12,10 @@ import {
 } from "@lichtblick/suite-base/context/PlayerSelectionContext";
 import { useInstallingExtensionsState } from "@lichtblick/suite-base/hooks/useInstallingExtensionsState";
 import { useLayoutTransfer } from "@lichtblick/suite-base/hooks/useLayoutTransfer";
-import { Namespace } from "@lichtblick/suite-base/types";
 import { extname } from "@lichtblick/suite-base/util/path";
 
 type UseHandleFiles = {
-  handleFiles: (
-    files: File[],
-    namespace?: Namespace,
-    handles?: FileSystemFileHandle[],
-  ) => Promise<void>;
+  handleFiles: (files: File[], handles?: FileSystemFileHandle[]) => Promise<void>;
 };
 
 type UseHandleFilesProps = {
@@ -49,7 +44,7 @@ export function useHandleFiles({
   const { parseAndInstallLayout } = useLayoutTransfer();
 
   const handleFiles = useCallback(
-    async (files: File[], namespace: Namespace = "local", handles?: FileSystemFileHandle[]) => {
+    async (files: File[], handles?: FileSystemFileHandle[]) => {
       if (files.length === 0) {
         return;
       }
@@ -62,7 +57,7 @@ export function useHandleFiles({
         try {
           if (file.name.endsWith(AllowedFileExtensions.FOXE)) {
             const buffer = await file.arrayBuffer();
-            extensionsData.push({ buffer: new Uint8Array(buffer), file, namespace });
+            extensionsData.push({ buffer: new Uint8Array(buffer), file });
           } else if (file.name.endsWith(AllowedFileExtensions.JSON)) {
             layoutFiles.push(file);
           } else {
@@ -76,7 +71,7 @@ export function useHandleFiles({
       if (layoutFiles.length > 0) {
         pause?.();
         layoutFiles.forEach(async (file) => {
-          await parseAndInstallLayout(file, namespace);
+          await parseAndInstallLayout(file, "local");
         });
       }
 

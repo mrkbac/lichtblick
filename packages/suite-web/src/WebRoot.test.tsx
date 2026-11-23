@@ -20,9 +20,7 @@ vi.mock("@lichtblick/suite-base", () => {
   return {
     __esModule: true,
     AppSetting: { SHOW_DEBUG_PANELS: "showDebugPanels" },
-    IdbExtensionLoader: Stub,
     WebExtensionLoader: Stub,
-    RemoteExtensionLoader: Stub,
     FoxgloveWebSocketDataSourceFactory: Stub,
     McapLocalDataSourceFactory: Stub,
     RemoteDataSourceFactory: Stub,
@@ -56,7 +54,7 @@ describe("WebRoot", () => {
 
   const renderWebRoot = () =>
     render(
-      <WebRoot extraProviders={undefined} dataSources={undefined}>
+      <WebRoot>
         <div />
       </WebRoot>,
     );

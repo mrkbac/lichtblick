@@ -20,7 +20,6 @@ export type AppURLState = {
   dsParams?: Record<string, string>;
   dsParamsArray?: Record<string, string[]>;
   layoutId?: LayoutID;
-  mcapBundleId?: string;
   time?: Time;
 };
 
@@ -101,7 +100,6 @@ export function readableHref(url: URL): string {
 export function parseAppURLState(url: URL): AppURLState | undefined {
   const ds = url.searchParams.get("ds") ?? undefined;
   const layoutUrl = url.searchParams.get("layoutUrl");
-  const mcapBundleId = url.searchParams.get("mcap-bundle") ?? undefined;
   const timeString = url.searchParams.get("time");
   const time = parseTimeUrlString(timeString ?? undefined);
   const dsParams: Record<string, string> = {};
@@ -125,7 +123,6 @@ export function parseAppURLState(url: URL): AppURLState | undefined {
       time,
       ds,
       layoutUrl,
-      mcapBundleId,
       dsParams: _.isEmpty(dsParams) ? undefined : dsParams,
       dsParamsArray: urls.length > 1 ? { urls } : undefined,
     },

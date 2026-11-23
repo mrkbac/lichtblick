@@ -23,7 +23,6 @@ import { InstalledMessageConverter } from "@lichtblick/suite-base/types/messageC
 export type ExtensionData = {
   buffer: Uint8Array;
   file?: File;
-  namespace?: Namespace;
 };
 
 export type RegisteredPanel = {
@@ -57,14 +56,6 @@ export type UseInstallingExtensionsStateProps = {
   playerEvents: {
     play: (() => void) | undefined;
   };
-};
-
-export type ExtensionSnackbar = {
-  name: string;
-  namespace: Namespace;
-  error: string;
-  success: string;
-  warning: string;
 };
 
 export type ExtensionCatalog = Immutable<{

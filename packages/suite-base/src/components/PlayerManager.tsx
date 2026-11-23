@@ -426,7 +426,6 @@ export default function PlayerManager(
             const initialized = await initializePlayer({
               params: args.params,
               ...(args.urls != undefined && { urls: args.urls }),
-              sourceMetadata: args.sourceMetadata,
             });
             if (!initialized) {
               return;

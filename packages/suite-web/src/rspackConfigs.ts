@@ -102,21 +102,17 @@ export type ConfigParams = {
   contextPath: string;
   entrypoint: string;
   outputPath: string;
-  publicPath?: string;
   /** Source map (`devtool`) setting to use for production builds */
   prodSourceMap: Configuration["devtool"];
   /** Set the app version information */
   version: string;
   /** Name and links for the UI, page title and web manifest */
   product: ProductInfo;
-  /** Needs to be overridden for react-router */
-  historyApiFallback?: DevServer["historyApiFallback"];
 };
 
-const devServer = (params: ConfigParams): DevServer => ({
+const devServer: DevServer = {
   // Everything is served from memory; never serve stale files (e.g. a prod sw.js) from disk
   static: false,
-  historyApiFallback: params.historyApiFallback,
   hot: true,
   // The problem and solution are described at <https://github.com/webpack/webpack-dev-server/issues/1604>.
   // When running in dev mode two errors are logged to the dev console:
@@ -138,7 +134,7 @@ const devServer = (params: ConfigParams): DevServer => ({
             runtimeErrors: isOverlayRuntimeError,
           },
   },
-});
+};
 
 export const mainConfig =
   (params: ConfigParams) =>
@@ -303,10 +299,10 @@ export const mainConfig =
       context: params.contextPath,
       entry: params.entrypoint,
       devtool: isDev ? "eval-cheap-module-source-map" : params.prodSourceMap,
-      devServer: devServer(params),
+      devServer,
 
       output: {
-        publicPath: params.publicPath ?? "auto",
+        publicPath: "auto",
 
         // Output filenames should include content hashes in order to cache bust when new versions are available
         filename: isDev ? "[name].js" : "[name].[contenthash].js",

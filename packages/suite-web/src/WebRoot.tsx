@@ -8,17 +8,13 @@
 import { useMemo, useState } from "react";
 
 import {
-  AppBarProps,
   AppSetting,
   CsvLocalDataSourceFactory,
   IExtensionLoader,
   FoxgloveWebSocketDataSourceFactory,
-  IDataSourceFactory,
-  IdbExtensionLoader,
   WebExtensionLoader,
   McapLocalDataSourceFactory,
   RemoteDataSourceFactory,
-  RemoteExtensionLoader,
   Ros1LocalBagDataSourceFactory,
   Ros2LocalBagDataSourceFactory,
   RosbridgeDataSourceFactory,
@@ -34,12 +30,7 @@ import LocalStorageAppConfiguration from "./services/LocalStorageAppConfiguratio
 const isDevelopment = process.env.NODE_ENV === "development";
 
 /** Configures browser services and keeps protocol callbacks inside the installed web app. */
-export function WebRoot(props: {
-  extraProviders: React.JSX.Element[] | undefined;
-  dataSources: IDataSourceFactory[] | undefined;
-  AppBarComponent?: (props: AppBarProps) => React.JSX.Element;
-  children: React.JSX.Element;
-}): React.JSX.Element {
+export function WebRoot(props: { children: React.JSX.Element }): React.JSX.Element {
   const appConfiguration = useMemo(
     () =>
       new LocalStorageAppConfiguration({
@@ -50,18 +41,9 @@ export function WebRoot(props: {
     [],
   );
 
-  const defaultExtensionLoaders: IExtensionLoader[] = [
-    new IdbExtensionLoader("org"),
-    new WebExtensionLoader(),
-  ];
   const url = new URL(globalThis.location.href);
   const [isProtocolLaunch] = useState(() => url.searchParams.has("protocol"));
-  const workspace = url.searchParams.get("workspace");
-
-  if (workspace && APP_CONFIG.apiUrl) {
-    defaultExtensionLoaders.push(new RemoteExtensionLoader("org", workspace));
-  }
-  const [extensionLoaders] = useState(() => defaultExtensionLoaders);
+  const [extensionLoaders] = useState<IExtensionLoader[]>(() => [new WebExtensionLoader()]);
 
   const layout = url.searchParams.get("layout");
   const [appParameters] = useState<AppParametersInput>(() => {
@@ -72,21 +54,17 @@ export function WebRoot(props: {
     return params;
   });
 
-  const dataSources = useMemo(() => {
-    const sources = [
-      new Ros1LocalBagDataSourceFactory(),
-      new Ros2LocalBagDataSourceFactory(),
-      new FoxgloveWebSocketDataSourceFactory(),
-      new RosbridgeDataSourceFactory(),
-      new UlogLocalDataSourceFactory(),
-      new CsvLocalDataSourceFactory(),
-      new SampleBoreasDataSourceFactory(),
-      new McapLocalDataSourceFactory(),
-      new RemoteDataSourceFactory(),
-    ];
-
-    return props.dataSources ?? sources;
-  }, [props.dataSources]);
+  const [dataSources] = useState(() => [
+    new Ros1LocalBagDataSourceFactory(),
+    new Ros2LocalBagDataSourceFactory(),
+    new FoxgloveWebSocketDataSourceFactory(),
+    new RosbridgeDataSourceFactory(),
+    new UlogLocalDataSourceFactory(),
+    new CsvLocalDataSourceFactory(),
+    new SampleBoreasDataSourceFactory(),
+    new McapLocalDataSourceFactory(),
+    new RemoteDataSourceFactory(),
+  ]);
 
   return (
     <SharedRoot
@@ -96,9 +74,8 @@ export function WebRoot(props: {
       appConfiguration={appConfiguration}
       appParameters={appParameters}
       extensionLoaders={extensionLoaders}
+      organizationApiUrl={APP_CONFIG.apiUrl}
       enableGlobalCss
-      extraProviders={props.extraProviders}
-      AppBarComponent={props.AppBarComponent}
     >
       {props.children}
     </SharedRoot>

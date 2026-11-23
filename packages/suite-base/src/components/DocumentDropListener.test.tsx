@@ -23,12 +23,6 @@ import type { Mock } from "vitest";
 import DocumentDropListener from "@lichtblick/suite-base/components/DocumentDropListener";
 import ThemeProvider from "@lichtblick/suite-base/theme/ThemeProvider";
 
-vi.mock("@lichtblick/suite-base/constants/config", () => ({
-  APP_CONFIG: {
-    apiUrl: "https://api.example.com",
-  },
-}));
-
 describe("<DocumentDropListener>", () => {
   let wrapper: HTMLDivElement;
   let windowDragoverHandler: typeof vi.fn;

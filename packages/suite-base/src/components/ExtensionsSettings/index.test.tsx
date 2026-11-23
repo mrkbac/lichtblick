@@ -85,7 +85,7 @@ describe("ExtensionsSettings", () => {
 
     expect(screen.getByTestId("SearchBarComponent")).toBeInTheDocument();
 
-    expect(screen.getByText("Organization")).toBeInTheDocument();
+    expect(screen.getByText("org")).toBeInTheDocument();
     expect(screen.getByText("Org2")).toBeInTheDocument();
     expect(screen.getByText("MarketPlace")).toBeInTheDocument();
   });

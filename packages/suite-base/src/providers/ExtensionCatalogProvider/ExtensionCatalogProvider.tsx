@@ -22,8 +22,6 @@ import {
 } from "@lichtblick/suite-base/context/ExtensionCatalogContext";
 import {
   extensionUniqueKey,
-  loadSingleExtension,
-  serverLoaderFirst,
   tryInstallSingleLoader,
   removeExtensionData,
 } from "@lichtblick/suite-base/providers/ExtensionCatalogProvider/utils";
@@ -67,10 +65,6 @@ function createExtensionRegistryStore(
   loaders: readonly IExtensionLoader[],
   mockMessageConverters: readonly RegisterMessageConverterArgs<unknown>[] | undefined,
 ): StoreApi<ExtensionCatalog> {
-  const orgCacheLoader: IExtensionLoader | undefined = loaders.find(
-    (extensionLoader) => extensionLoader.namespace === "org" && extensionLoader.type === "browser",
-  );
-
   return createStore((set, get) => {
     // Keep refresh snapshots from overwriting a newer install or uninstall.
     let pending = Promise.resolve();
@@ -122,16 +116,11 @@ function createExtensionRegistryStore(
       let extensionName = extension.file?.name ?? "Unknown extension";
       let mergedInfo: ExtensionInfo | undefined;
       let hasAnySuccess = false;
-      let externalId: string | undefined;
 
-      // Sort loaders to prioritize server loaders first (to get externalId)
-      const sortedLoaders = _.sortBy(extensionLoaders, serverLoaderFirst);
-
-      for (const loader of sortedLoaders) {
-        const result = await tryInstallSingleLoader(loader, extension, externalId);
+      for (const loader of extensionLoaders) {
+        const result = await tryInstallSingleLoader(loader, extension);
 
         if (result.success) {
-          externalId = result.externalId ?? externalId;
           extensionName = result.info.displayName || result.info.name || extensionName;
 
           // Only merge state once for the first successful installation
@@ -236,11 +225,7 @@ function createExtensionRegistryStore(
           topicConverters,
           cameraModels,
         } = contributionPoints;
-        const unwrappedExtensionSource = await loadSingleExtension(
-          extension,
-          loader,
-          orgCacheLoader,
-        );
+        const { raw: unwrappedExtensionSource } = await loader.loadExtension(extension.id);
         const newContributionPoints = await buildContributionPoints(
           extension,
           unwrappedExtensionSource,
@@ -327,10 +312,8 @@ function createExtensionRegistryStore(
         }
       };
 
-      const localAndRemoteLoaders = loaders.filter(
-        (loader) => loader.namespace === "local" || loader.type === "server",
-      );
-      await Promise.all(localAndRemoteLoaders.map(processLoader));
+      const localLoaders = loaders.filter((loader) => loader.namespace === "local");
+      await Promise.all(localLoaders.map(processLoader));
 
       log.info(
         `Loaded ${installedExtensions.length} extensions in ${(performance.now() - start).toFixed(1)}ms`,
@@ -350,8 +333,7 @@ function createExtensionRegistryStore(
     };
 
     const uninstallExtension = async (namespace: Namespace, id: string) => {
-      const localLoaderType = isDesktopApp() ? "filesystem" : "browser";
-      const loaderType: TypeExtensionLoader = namespace === "local" ? localLoaderType : "server";
+      const loaderType: TypeExtensionLoader = isDesktopApp() ? "filesystem" : "browser";
 
       const namespaceLoader = loaders.find(
         (loader) => loader.namespace === namespace && loader.type === loaderType,
@@ -369,9 +351,7 @@ function createExtensionRegistryStore(
       }
 
       try {
-        await namespaceLoader.uninstallExtension(
-          loaderType === "server" ? extension.externalId! : extension.id,
-        );
+        await namespaceLoader.uninstallExtension(extension.id);
       } catch (error) {
         log.warn(
           `Failed to uninstall extension ${extension.id} from loader ${namespaceLoader.type}:`,

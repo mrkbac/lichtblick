@@ -35,6 +35,9 @@ vi.mock("@lichtblick/suite-base/hooks/useShareLink", () => ({
 vi.mock("@lichtblick/suite-base/context/Workspace/WorkspaceContext");
 vi.mock("@lichtblick/suite-base/context/Workspace/useWorkspaceActions");
 vi.mock("@lichtblick/suite-base/hooks/useAddPanel");
+vi.mock("@lichtblick/suite-base/components/LayoutTemplates", () => ({
+  useLayoutTemplateCommands: () => [],
+}));
 vi.mock("@lichtblick/suite-base/hooks/useLayoutTransfer");
 vi.mock("@lichtblick/suite-base/components/ColorSchemeThemeProvider", () => ({
   useToggleColorScheme: () => vi.fn(),

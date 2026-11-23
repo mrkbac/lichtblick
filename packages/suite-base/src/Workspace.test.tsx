@@ -7,7 +7,6 @@ import "@testing-library/jest-dom/vitest";
 import { act, render, waitFor } from "@testing-library/react";
 import type { Mock } from "vitest";
 
-import { McapBundleFile } from "@lichtblick/suite-base/api/mcapBundle/types";
 import {
   useMessagePipeline,
   useMessagePipelineGetter,
@@ -51,13 +50,6 @@ vi.mock("notistack", () => ({
   useSnackbar: () => ({ enqueueSnackbar: mockEnqueueSnackbar }),
 }));
 
-// ── api ───────────────────────────────────────────────────────────────────────
-const mockGetMcapBundle = vi.fn();
-vi.mock("@lichtblick/suite-base/api/mcapBundle/McapBundleAPI", () => ({
-  __esModule: true,
-  default: { getMcapBundle: (...args: unknown[]) => mockGetMcapBundle(...args) },
-}));
-
 // ── components (rendered as null — Sidebars is the exception below) ────────────
 vi.mock("@lichtblick/suite-base/components/Sidebars", () => ({
   __esModule: true,
@@ -71,10 +63,6 @@ vi.mock("@lichtblick/suite-base/components/AlertList/AlertsList", () => ({
 }));
 vi.mock("@lichtblick/suite-base/components/DataSourceDialog/DataSourceDialog", () => ({
   DataSourceDialog: () => undefined,
-}));
-vi.mock("@lichtblick/suite-base/components/DataSourceSidebar/DataSourceSidebar", () => ({
-  __esModule: true,
-  default: () => undefined,
 }));
 vi.mock("@lichtblick/suite-base/components/DocumentDropListener", () => ({
   __esModule: true,
@@ -90,9 +78,6 @@ vi.mock("@lichtblick/suite-base/components/KeyListener", () => ({
 vi.mock("@lichtblick/suite-base/components/LayoutBrowser", () => ({
   __esModule: true,
   default: () => undefined,
-}));
-vi.mock("@lichtblick/suite-base/components/LayoutTemplates", () => ({
-  LayoutTemplateCommands: () => undefined,
 }));
 const { mockPanelLayoutMount } = vi.hoisted(() => ({ mockPanelLayoutMount: vi.fn() }));
 vi.mock("@lichtblick/suite-base/components/PanelLayout", async () => {
@@ -121,7 +106,6 @@ vi.mock("@lichtblick/suite-base/components/Stack", () => ({
 }));
 vi.mock("@lichtblick/suite-base/components/StudioLogsSettings/StudioLogsSettings", () => ({
   StudioLogsSettings: () => undefined,
-  StudioLogsSettingsSidebar: () => undefined,
 }));
 vi.mock("@lichtblick/suite-base/components/SyncAdapters", () => ({
   SyncAdapters: () => undefined,
@@ -549,7 +533,7 @@ describe("Workspace - session-based MCAP resolution", () => {
     await act(async () => {
       await consume({ files: [handle], targetURL: "http://localhost/" });
     });
-    expect(handleFiles).toHaveBeenCalledWith([file], undefined, [handle]);
+    expect(handleFiles).toHaveBeenCalledWith([file], [handle]);
     (handle.getFile as Mock).mockRejectedValue(new Error("denied"));
     await act(async () => {
       await consume({ files: [handle] });
@@ -559,8 +543,7 @@ describe("Workspace - session-based MCAP resolution", () => {
     });
   });
 
-  it("drops a pending protocol bundle and seek when a file launch arrives", async () => {
-    const stale = Promise.withResolvers<McapBundleFile[]>();
+  it("drops a pending protocol seek when a file launch arrives", async () => {
     const setConsumer = vi.fn();
     const seek = vi.fn();
     window.launchQueue = { setConsumer };
@@ -577,18 +560,20 @@ describe("Workspace - session-based MCAP resolution", () => {
       selector(pipeline),
     );
     (useMessagePipelineGetter as Mock).mockReturnValue(() => pipeline);
-    mockGetMcapBundle.mockReturnValue(stale.promise);
     (parseAppURLState as Mock).mockReturnValue(undefined);
     const { rerender } = render(<Workspace />);
     const consume = setConsumer.mock.calls[0]![0] as (params: LaunchParams) => Promise<void>;
     (parseAppURLState as Mock).mockReturnValue({
-      mcapBundleId: "session",
+      ds: "remote-file",
+      dsParams: { url: "https://example.com/old.mcap" },
       time: { sec: 123, nsec: 0 },
     });
     await act(async () => {
-      await consume({ files: [], targetURL: protocolCallback("mcap-bundle=session&time=123") });
+      await consume({
+        files: [],
+        targetURL: protocolCallback("ds=remote-file&ds.url=https://example.com/old.mcap&time=123"),
+      });
     });
-    const signal = mockGetMcapBundle.mock.calls[0]![1] as AbortSignal;
     const handle = {
       kind: "file",
       getFile: vi.fn().mockResolvedValue(new File(["data"], "data.mcap")),
@@ -596,138 +581,9 @@ describe("Workspace - session-based MCAP resolution", () => {
     await act(async () => {
       await consume({ files: [handle], targetURL: "http://localhost/" });
     });
-    expect(signal.aborted).toBe(true);
     pipeline = { ...pipeline, playerState: { ...pipeline.playerState, playerId: "file" } };
     rerender(<Workspace />);
-    await act(async () => {
-      stale.resolve([{ url: "https://example.com/old.mcap", metadata: {} }]);
-      await stale.promise;
-    });
-    expect(mockSelectSource).not.toHaveBeenCalled();
     expect(seek).not.toHaveBeenCalled();
-  });
-
-  it("should fetch session and call selectSource with resolved URLs and metadata", async () => {
-    // Given
-    const mcapBundleId = "test-session-123";
-    const mockMcaps = [
-      { url: "https://example.com/file1.mcap", metadata: { robot: "r1" } },
-      { url: "https://example.com/file2.mcap", metadata: { robot: "r2" } },
-    ];
-    mockGetMcapBundle.mockResolvedValue(mockMcaps);
-    (parseAppURLState as Mock).mockReturnValue({ mcapBundleId });
-
-    // When
-    render(<Workspace deepLinks={["https://app.example.com/?mcap-bundle=test-session-123"]} />);
-
-    // Then
-    await waitFor(() => {
-      expect(mockGetMcapBundle).toHaveBeenCalledWith(mcapBundleId, expect.any(AbortSignal));
-    });
-    await waitFor(() => {
-      expect(mockSelectSource).toHaveBeenCalledWith("remote-file", {
-        type: "connection",
-        params: undefined,
-        urls: ["https://example.com/file1.mcap", "https://example.com/file2.mcap"],
-        sourceMetadata: [{ robot: "r1" }, { robot: "r2" }],
-      });
-    });
-  });
-
-  it("does not refetch a bundle for a cold URL rewrite but handles repeated queued launches", async () => {
-    const setConsumer = vi.fn();
-    window.launchQueue = { setConsumer };
-    mockGetMcapBundle.mockResolvedValue([{ url: "https://example.com/data.mcap", metadata: {} }]);
-    (parseAppURLState as Mock).mockImplementation(() => ({ mcapBundleId: "session" }));
-    const { rerender } = render(
-      <Workspace deepLinks={[protocolCallback("mcap-bundle=session")]} />,
-    );
-    await waitFor(() => {
-      expect(mockSelectSource).toHaveBeenCalledTimes(1);
-    });
-    rerender(<Workspace deepLinks={["http://localhost/?mcap-bundle=session"]} />);
-    expect(mockGetMcapBundle).toHaveBeenCalledTimes(1);
-    const consume = setConsumer.mock.calls[0]![0] as (params: LaunchParams) => Promise<void>;
-    await act(async () => {
-      await consume({ files: [], targetURL: protocolCallback("mcap-bundle=session") });
-    });
-    expect(mockGetMcapBundle).toHaveBeenCalledTimes(1);
-    for (const count of [2, 3]) {
-      await act(async () => {
-        await consume({ files: [], targetURL: protocolCallback("mcap-bundle=session") });
-      });
-      await waitFor(() => {
-        expect(mockSelectSource).toHaveBeenCalledTimes(count);
-      });
-      expect(mockGetMcapBundle).toHaveBeenCalledTimes(count);
-    }
-  });
-
-  it("ignores a superseded bundle response that resolves after cancellation", async () => {
-    const stale = Promise.withResolvers<McapBundleFile[]>();
-    const setConsumer = vi.fn();
-    window.launchQueue = { setConsumer };
-    mockGetMcapBundle.mockReturnValue(stale.promise);
-    (parseAppURLState as Mock).mockReturnValue({ mcapBundleId: "old-session" });
-    render(<Workspace deepLinks={["http://localhost/?mcap-bundle=old-session"]} />);
-    const signal = mockGetMcapBundle.mock.calls[0]![1] as AbortSignal;
-    (parseAppURLState as Mock).mockReturnValue({
-      ds: "remote-file",
-      dsParams: { url: "https://example.com/new.mcap" },
-    });
-    const consume = setConsumer.mock.calls[0]![0] as (params: LaunchParams) => Promise<void>;
-    await act(async () => {
-      await consume({
-        files: [],
-        targetURL: protocolCallback("ds=remote-file&ds.url=https://example.com/new.mcap"),
-      });
-    });
-    expect(signal.aborted).toBe(true);
-    expect(mockSelectSource).toHaveBeenCalledExactlyOnceWith("remote-file", {
-      type: "connection",
-      params: { url: "https://example.com/new.mcap" },
-      sourceMetadata: undefined,
-    });
-    await act(async () => {
-      stale.resolve([{ url: "https://example.com/old.mcap", metadata: {} }]);
-      await stale.promise;
-    });
-    expect(mockSelectSource).toHaveBeenCalledTimes(1);
-    expect(mockEnqueueSnackbar).not.toHaveBeenCalled();
-  });
-
-  it("should show error snackbar when session fetch fails", async () => {
-    // Given
-    const mcapBundleId = "failing-session";
-    mockGetMcapBundle.mockRejectedValue(new Error("Network error"));
-    (parseAppURLState as Mock).mockReturnValue({ mcapBundleId });
-
-    // When
-    render(<Workspace deepLinks={["https://app.example.com/?mcap-bundle=failing-session"]} />);
-
-    // Then
-    await waitFor(() => {
-      expect(mockGetMcapBundle).toHaveBeenCalledWith(mcapBundleId, expect.any(AbortSignal));
-    });
-    await waitFor(() => {
-      expect(mockEnqueueSnackbar).toHaveBeenCalledWith("Failed to load session data sources", {
-        variant: "error",
-      });
-    });
-  });
-
-  it("should not fetch session when mcapBundleId is not present", () => {
-    // Given
-    (parseAppURLState as Mock).mockReturnValue({
-      ds: "remote-file",
-      dsParams: { url: "https://example.com/file.mcap" },
-    });
-
-    // When
-    render(<Workspace deepLinks={["https://app.example.com/?ds=remote-file"]} />);
-
-    // Then
-    expect(mockGetMcapBundle).not.toHaveBeenCalled();
   });
 });
 

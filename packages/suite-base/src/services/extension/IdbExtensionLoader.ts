@@ -68,10 +68,7 @@ export class IdbExtensionLoader implements IExtensionLoader {
     };
   }
 
-  public async installExtension({
-    foxeFileData,
-    externalId,
-  }: InstallExtensionProps): Promise<ExtensionInfo> {
+  public async installExtension({ foxeFileData }: InstallExtensionProps): Promise<ExtensionInfo> {
     log.debug("[IndexedDB] Installing extension");
 
     const decompressedData = await decompressFile(foxeFileData);
@@ -97,7 +94,6 @@ export class IdbExtensionLoader implements IExtensionLoader {
         qualifiedName: rawInfo.displayName || rawInfo.name,
         readme,
         changelog,
-        externalId,
         size: foxeFileData.length,
       },
     };

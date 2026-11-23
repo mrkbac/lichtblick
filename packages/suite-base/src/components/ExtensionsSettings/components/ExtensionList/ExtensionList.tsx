@@ -38,10 +38,7 @@ import {
   ExtensionListProps,
   initialPagination,
 } from "@lichtblick/suite-base/components/ExtensionsSettings/components/ExtensionList/types";
-import {
-  displayNameForNamespace,
-  generatePlaceholderList,
-} from "@lichtblick/suite-base/components/ExtensionsSettings/components/ExtensionList/utils";
+import { generatePlaceholderList } from "@lichtblick/suite-base/components/ExtensionsSettings/components/ExtensionList/utils";
 import { useExtensionOperations } from "@lichtblick/suite-base/components/ExtensionsSettings/hooks/useExtensionOperations";
 import {
   ExtensionActionsLabel,
@@ -354,7 +351,7 @@ export default function ExtensionList({
     <Stack key={namespace} gap={1} paddingBottom={2}>
       <Stack paddingY={0} paddingX={2}>
         <Typography component="div" variant="overline" color="textSecondary">
-          {displayNameForNamespace(namespace)}
+          {namespace}
         </Typography>
       </Stack>
       {renderComponent()}

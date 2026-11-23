@@ -11,7 +11,6 @@
 // See typings/index.d.ts for additional included references
 /// <reference types="./typings" />
 
-export { App } from "./App";
 export { SharedRoot } from "./SharedRoot";
 export { StudioApp } from "./StudioApp";
 export type { NetworkInterface, OsContext } from "./OsContext";
@@ -20,10 +19,8 @@ export type {
   AppConfigurationValue,
   ChangeHandler,
 } from "./context/AppConfigurationContext";
+export { AppConfigurationListeners } from "./context/AppConfigurationContext";
 export { migratePanelsState } from "./services/migrateLayout";
-export type { INativeAppMenu, NativeAppMenuEvent } from "./context/NativeAppMenuContext";
-export { default as NativeWindowContext } from "./context/NativeWindowContext";
-export type { INativeWindow, NativeWindowEvent } from "./context/NativeWindowContext";
 export type { IDataSourceFactory } from "./context/PlayerSelectionContext";
 export { default as installDevtoolsFormatters } from "./util/installDevtoolsFormatters";
 export { default as overwriteFetch } from "./util/overwriteFetch";
@@ -31,7 +28,6 @@ export { default as waitForFonts } from "./util/waitForFonts";
 export { initI18n } from "./i18n";
 export { completeLoginRedirect } from "./api/organization/oidc";
 export type { Namespace } from "./types";
-export { RemoteExtensionLoader } from "./services/extension/RemoteExtensionLoader";
 export type {
   IExtensionLoader,
   TypeExtensionLoader,
@@ -56,7 +52,7 @@ export { default as SampleBoreasDataSourceFactory } from "./dataSources/SampleBo
 export { LaunchPreferenceValue } from "@lichtblick/suite-base/types/LaunchPreferenceValue";
 export { reportError, setReportErrorHandler } from "./reportError";
 export { makeWorkspaceContextInitialState } from "./providers/WorkspaceContextProvider";
-export type { AppBarProps } from "./components/AppBar";
+export { AppBar, type AppBarProps } from "./components/AppBar";
+export { useWorkspaceActions } from "./context/Workspace/useWorkspaceActions";
 export { WebExtensionLoader } from "./services/extension/WebExtensionLoader";
-export { IdbExtensionLoader } from "./services/extension/IdbExtensionLoader";
 export { LOCAL_STORAGE_APP_CONFIGURATION } from "./constants/browserStorageKeys";

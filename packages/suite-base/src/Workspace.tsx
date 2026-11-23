@@ -31,7 +31,6 @@ import { pushAll } from "@lichtblick/den/collection";
 import Logger from "@lichtblick/log";
 import { AppSetting } from "@lichtblick/suite-base/AppSetting";
 import { useStyles } from "@lichtblick/suite-base/Workspace.style";
-import McapBundleAPI from "@lichtblick/suite-base/api/mcapBundle/McapBundleAPI";
 import { AlertsList } from "@lichtblick/suite-base/components/AlertList/AlertsList";
 import { AppBar } from "@lichtblick/suite-base/components/AppBar";
 import { AttachmentList } from "@lichtblick/suite-base/components/Attachments/AttachmentList";
@@ -44,7 +43,6 @@ import {
   DataSourceDialogItem,
 } from "@lichtblick/suite-base/components/DataSourceDialog/DataSourceDialog";
 import { START_ADDRESS_INPUT_ID } from "@lichtblick/suite-base/components/DataSourceDialog/OpenUrlInput";
-import DataSourceSidebar from "@lichtblick/suite-base/components/DataSourceSidebar/DataSourceSidebar";
 import DocumentDropListener from "@lichtblick/suite-base/components/DocumentDropListener";
 import { EventsList } from "@lichtblick/suite-base/components/EventsList";
 import KeyListener from "@lichtblick/suite-base/components/KeyListener";
@@ -52,7 +50,6 @@ import { KeyboardShortcuts } from "@lichtblick/suite-base/components/KeyboardSho
 import { APP_SHORTCUTS } from "@lichtblick/suite-base/components/KeyboardShortcuts/appShortcuts";
 import LayoutBrowser from "@lichtblick/suite-base/components/LayoutBrowser";
 import LayoutHistoryList from "@lichtblick/suite-base/components/LayoutHistoryList";
-import { LayoutTemplateCommands } from "@lichtblick/suite-base/components/LayoutTemplates";
 import { LiveRecordingsDialog } from "@lichtblick/suite-base/components/LiveRecordingsDialog";
 import {
   MessagePipelineContext,
@@ -77,10 +74,7 @@ import PlaybackControls from "@lichtblick/suite-base/components/PlaybackControls
 import Sidebars from "@lichtblick/suite-base/components/Sidebars";
 import { SidebarItem } from "@lichtblick/suite-base/components/Sidebars/types";
 import Stack from "@lichtblick/suite-base/components/Stack";
-import {
-  StudioLogsSettings,
-  StudioLogsSettingsSidebar,
-} from "@lichtblick/suite-base/components/StudioLogsSettings/StudioLogsSettings";
+import { StudioLogsSettings } from "@lichtblick/suite-base/components/StudioLogsSettings/StudioLogsSettings";
 import { SyncAdapters } from "@lichtblick/suite-base/components/SyncAdapters";
 import { TopicList } from "@lichtblick/suite-base/components/TopicList/TopicList";
 import VariablesList from "@lichtblick/suite-base/components/VariablesList";
@@ -92,7 +86,6 @@ import { usePlayerSelection } from "@lichtblick/suite-base/context/PlayerSelecti
 import {
   LeftSidebarItemKey,
   RightSidebarItemKey,
-  SidebarItemKey,
   WorkspaceContextStore,
   useWorkspaceStore,
 } from "@lichtblick/suite-base/context/Workspace/WorkspaceContext";
@@ -112,7 +105,7 @@ import { useStructureItemsStoreManager } from "@lichtblick/suite-base/panels/Plo
 import { PlayerPresence } from "@lichtblick/suite-base/players/types";
 import { PanelStateContextProvider } from "@lichtblick/suite-base/providers/PanelStateContextProvider";
 import WorkspaceContextProvider from "@lichtblick/suite-base/providers/WorkspaceContextProvider";
-import { Namespace, WorkspaceProps } from "@lichtblick/suite-base/types";
+import { WorkspaceProps } from "@lichtblick/suite-base/types";
 import { useAppLaunch } from "@lichtblick/suite-base/util/appLaunch";
 import { parseAppURLState } from "@lichtblick/suite-base/util/appURLState";
 import useBroadcast from "@lichtblick/suite-base/util/broadcast/useBroadcast";
@@ -216,10 +209,6 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
 
   const [compactPanels = false] = useAppConfigurationValue<boolean>(AppSetting.COMPACT_PANELS);
 
-  const [enableStudioLogsSidebar = false] = useAppConfigurationValue<boolean>(
-    AppSetting.SHOW_DEBUG_PANELS,
-  );
-
   // When a player is activated, hide the open dialog.
   useLayoutEffect(() => {
     if (
@@ -253,7 +242,6 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
   const [launchedURL, setLaunchedURL] = useState<URL>();
   const initialLaunchURL = useRef(props.deepLinks?.[0]);
   const layoutRequest = useRef<AbortController>(undefined);
-  const bundleRequest = useRef<AbortController>(undefined);
   useEffect(() => () => layoutRequest.current?.abort(), [launchedURL]);
 
   // One consumer handles both file and protocol launches; focus-existing never reloads the app.
@@ -277,10 +265,9 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
           setLaunchedURL(url);
         }
       }
-      // A file launch supersedes any protocol launch still waiting on its layout, bundle or seek.
+      // A file launch supersedes any protocol launch still waiting on its layout or seek.
       if (files.length > 0) {
         layoutRequest.current?.abort();
-        bundleRequest.current?.abort();
         setUnappliedTime({});
       }
       const fileHandles = files.filter((h): h is FileSystemFileHandle => h.kind === "file");
@@ -290,7 +277,6 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
       try {
         await handleFilesRef.current(
           await Promise.all(fileHandles.map(async (h) => await h.getFile())),
-          undefined,
           fileHandles,
         );
       } catch (error) {
@@ -310,72 +296,21 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
   }, [appLaunchURL]);
 
   const dropHandler = useCallback(
-    async ({
-      files,
-      handles,
-      namespace = "local",
-    }: {
-      files?: File[];
-      handles?: FileSystemFileHandle[];
-      namespace?: Namespace;
-    }) => {
+    async ({ files, handles }: { files?: File[]; handles?: FileSystemFileHandle[] }) => {
       const filesArray = handles
         ? await Promise.all(handles.map(async (h) => await h.getFile()))
         : (files ?? []);
 
-      void handleFiles(filesArray, namespace, handles);
+      void handleFiles(filesArray, handles);
     },
     [handleFiles],
   );
-
-  // Since the _component_ field of a sidebar item entry is a component and accepts no additional
-  // props we need to wrap our DataSourceSidebar component to connect the open data source action to
-  // open the data source dialog.
-  const DataSourceSidebarItem = useMemo(() => {
-    return function DataSourceSidebarItemImpl() {
-      return <DataSourceSidebar disableToolbar />;
-    };
-  }, []);
 
   const PanelSettingsSidebar = useMemo(() => {
     return function PanelSettingsSidebarImpl() {
       return <PanelSettings disableToolbar />;
     };
   }, []);
-
-  const [sidebarItems, sidebarBottomItems] = useMemo(() => {
-    const topItems = new Map<SidebarItemKey, SidebarItem>([
-      [
-        "connection",
-        {
-          iconName: "DatabaseSettings",
-          title: "Data source",
-          component: DataSourceSidebarItem,
-          badge:
-            alertCount > 0
-              ? { count: alertCount, color: severityToBadgeColor(highestSeverity) }
-              : undefined,
-        },
-      ],
-    ]);
-
-    topItems.set("panel-settings", {
-      iconName: "PanelSettings",
-      title: "Panel settings",
-      component: PanelSettings,
-    });
-    if (enableStudioLogsSidebar) {
-      topItems.set("logs-settings", {
-        iconName: "BacklogList",
-        title: "Studio logs settings",
-        component: StudioLogsSettingsSidebar,
-      });
-    }
-
-    const bottomItems = new Map<SidebarItemKey, SidebarItem>([]);
-
-    return [topItems, bottomItems];
-  }, [DataSourceSidebarItem, alertCount, highestSeverity, enableStudioLogsSidebar]);
 
   const eventsSupported = useEvents(selectEventsSupported);
   // Events come from the recording's foxglove.Event topics, no account needed
@@ -504,12 +439,11 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
         ds: string | undefined;
         dsParams: Record<string, string> | undefined;
         urls?: readonly string[];
-        sourceMetadata?: Record<string, unknown>[];
         layoutUrl?: string;
       }
     | undefined
   >(
-    targetUrlState && !targetUrlState.mcapBundleId
+    targetUrlState
       ? {
           ds: targetUrlState.ds,
           dsParams: targetUrlState.dsParams,
@@ -531,7 +465,7 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
     appliedLaunchURL.current = launchedURL;
     const state = parseAppURLState(launchedURL);
     setUnappliedSourceArgs(
-      state && !state.mcapBundleId
+      state
         ? {
             ds: state.ds,
             dsParams: state.dsParams,
@@ -542,53 +476,9 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
     );
     setUnappliedTime({
       time: state?.time,
-      previousPlayerId:
-        state?.ds || state?.mcapBundleId ? getMessagePipeline().playerState.playerId : undefined,
+      previousPlayerId: state?.ds ? getMessagePipeline().playerState.playerId : undefined,
     });
   }, [launchedURL, getMessagePipeline]);
-
-  // Resolve MCAP bundle URLs when mcapBundleId is present.
-  const mcapBundleId = targetUrlState?.mcapBundleId;
-  useEffect(() => {
-    if (!mcapBundleId) {
-      return;
-    }
-
-    const controller = new AbortController();
-    bundleRequest.current = controller;
-    const { signal } = controller;
-
-    void (async () => {
-      try {
-        const mcaps = await McapBundleAPI.getMcapBundle(mcapBundleId, signal);
-        if (signal.aborted) {
-          return;
-        }
-        if (mcaps.length === 0) {
-          enqueueSnackbar("Session contains no data sources", { variant: "error" });
-          return;
-        }
-
-        const urls = mcaps.map((mcap) => mcap.url);
-        setUnappliedSourceArgs({
-          ds: "remote-file",
-          dsParams: undefined,
-          urls,
-          sourceMetadata: mcaps.map((mcap) => mcap.metadata),
-        });
-      } catch (error) {
-        if (signal.aborted) {
-          return;
-        }
-        log.error("Failed to fetch session MCAP URLs:", error);
-        enqueueSnackbar("Failed to load session data sources", { variant: "error" });
-      }
-    })();
-
-    return () => {
-      controller.abort();
-    };
-  }, [mcapBundleId, launchedURL, enqueueSnackbar]);
 
   const selectEvent = useEvents(selectSelectEvent);
 
@@ -727,7 +617,7 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
     let shouldUpdate = false;
 
     // Apply any available data source args
-    const { ds, dsParams, sourceMetadata, urls } = unappliedSourceArgs;
+    const { ds, dsParams, urls } = unappliedSourceArgs;
     if (ds) {
       log.debug("Initialising source from url", unappliedSourceArgs);
       const open = ({ installed }: { installed: boolean }) => {
@@ -735,7 +625,6 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
           type: "connection",
           params: dsParams,
           ...(urls != undefined && { urls }),
-          sourceMetadata,
           // The link's layout is what the sender wants shown, not the sample's own.
           ...(installed && { keepLayout: true }),
         });
@@ -819,7 +708,6 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
       <KeyListener global keyDownHandlers={keyDownHandlers} />
       <LayoutShortcutListener />
       <CommandPalette />
-      <LayoutTemplateCommands />
       <KeyboardShortcuts />
       <PanelGuide />
       <LiveRecordingsDialog />
@@ -836,11 +724,7 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
       >
         {appBar}
         <Sidebars
-          selectedKey=""
-          onSelectKey={() => {}}
-          items={sidebarItems}
           leftItems={leftSidebarItems}
-          bottomItems={sidebarBottomItems}
           selectedLeftKey={leftSidebarOpen ? leftSidebarItem : undefined}
           onSelectLeftKey={sidebarActions.left.selectItem}
           leftSidebarSize={leftSidebarSize}

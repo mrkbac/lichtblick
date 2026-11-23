@@ -69,8 +69,6 @@ export const commandPalette = {
   seekToEnd: "Seek to end",
   seekTo: "Seek to {{offset}}",
   seekBy: "Seek {{offset}}",
-  seekDetail: "Offset from start of recording",
-  seekRelativeDetail: "Relative to the current time",
   copyLink: "Copy link to this moment",
   copyLinkDetail: "Source, time and layout",
   copyLinkLocalDetail: "Not available for local files",

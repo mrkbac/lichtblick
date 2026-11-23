@@ -13,12 +13,11 @@ export type LoadedExtension = {
   raw: string;
 };
 
-export type TypeExtensionLoader = "browser" | "server" | "filesystem";
+export type TypeExtensionLoader = "browser" | "filesystem";
 
 export type InstallExtensionProps = {
   foxeFileData: Uint8Array;
   file?: File;
-  externalId?: string;
 };
 
 /**

@@ -7,10 +7,7 @@ import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 
 import { useDataSourceInfo } from "@lichtblick/suite-base/PanelAPI";
-import {
-  Command,
-  useRegisterCommands,
-} from "@lichtblick/suite-base/components/CommandPalette/commands";
+import { Command } from "@lichtblick/suite-base/components/CommandPalette/commands";
 import { useCurrentLayoutActions } from "@lichtblick/suite-base/context/CurrentLayoutContext";
 import { useLayoutManager } from "@lichtblick/suite-base/context/LayoutManagerContext";
 import useCallbackWithToast from "@lichtblick/suite-base/hooks/useCallbackWithToast";
@@ -65,12 +62,12 @@ function useLayoutTemplates(): {
   return { previews, create };
 }
 
-/** Adds "New layout from template: …" commands to the command palette. */
-export function LayoutTemplateCommands(): undefined {
+/** "New layout from template: …" commands for the command palette. */
+export function useLayoutTemplateCommands(): Command[] {
   const { t } = useTranslation("layoutTemplates");
   const { t: tPalette } = useTranslation("commandPalette");
   const { previews, create } = useLayoutTemplates();
-  const commands = useMemo(
+  return useMemo(
     () =>
       previews.map(
         (preview): Command => ({
@@ -86,8 +83,6 @@ export function LayoutTemplateCommands(): undefined {
       ),
     [create, previews, t, tPalette],
   );
-  useRegisterCommands("layoutTemplates", commands);
-  return undefined;
 }
 
 /** Menu of layout templates, each with the topics it would use. */
