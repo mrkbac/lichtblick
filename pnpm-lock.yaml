@@ -239,8 +239,6 @@ importers:
 
   packages/@types/foxglove__roslibjs: {}
 
-  packages/@types/foxglove__web: {}
-
   packages/@types/memoize-weak: {}
 
   packages/den:
@@ -280,9 +278,6 @@ importers:
       '@testing-library/react':
         specifier: 16.3.3
         version: 16.3.3(@testing-library/dom@10.4.2)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
-      '@types/foxglove__web':
-        specifier: workspace:*
-        version: link:../@types/foxglove__web
       '@types/lodash-es':
         specifier: ^4
         version: 4.17.12
@@ -615,9 +610,6 @@ importers:
       '@types/foxglove__roslibjs':
         specifier: workspace:*
         version: link:../@types/foxglove__roslibjs
-      '@types/foxglove__web':
-        specifier: workspace:*
-        version: link:../@types/foxglove__web
       '@types/geojson':
         specifier: 7946.0.16
         version: 7946.0.16

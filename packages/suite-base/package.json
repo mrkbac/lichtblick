@@ -108,7 +108,6 @@
     "@testing-library/user-event": "14.6.13",
     "@types/base16": "^1.0.5",
     "@types/foxglove__roslibjs": "workspace:*",
-    "@types/foxglove__web": "workspace:*",
     "@types/geojson": "7946.0.16",
     "@types/memoize-weak": "workspace:*",
     "@types/nearley": "2.11.5",
