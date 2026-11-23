@@ -979,6 +979,46 @@ describe("renderState", () => {
     });
   });
 
+  it("keeps the latest message for forced conversion when the panel doesn't watch didSeek", () => {
+    const buildRenderState = initRenderStateBuilder();
+    const converter = vi.fn((_msg, event) => event.topicConfig?.flag ?? "default");
+    const baseInput: BuilderRenderStateInput = {
+      watchedFields: new Set(["currentFrame"]),
+      playerState: PlayerBuilder.playerState({
+        activeData: PlayerBuilder.activeData({ lastSeekTime: 1 }),
+      }),
+      appSettings: undefined,
+      currentFrame: [
+        {
+          topic: "test",
+          schemaName: "schema",
+          receiveTime: { sec: 0, nsec: 0 },
+          sizeInBytes: 1,
+          message: {},
+        },
+      ],
+      colorScheme: undefined,
+      globalVariables: EMPTY_GLOBAL_VARIABLES,
+      hoverValue: undefined,
+      sharedPanelState: {},
+      sortedTopics: [{ name: "test", schemaName: "schema" }],
+      subscriptions: [{ topic: "test", convertTo: "converted" }],
+      messageConverters: [{ fromSchemaName: "schema", toSchemaName: "converted", converter }],
+      forceConversion: new Set(),
+      config: { topics: { test: { flag: "initial" } } },
+    };
+
+    buildRenderState(baseInput);
+    const state = buildRenderState({
+      ...baseInput,
+      currentFrame: undefined,
+      forceConversion: new Set(["test"]),
+      config: { topics: { test: { flag: "forced" } } },
+    });
+
+    expect(state?.currentFrame).toMatchObject([{ message: "forced" }]);
+  });
+
   it("should deliver new message when a second converter from the same topic is enabled", () => {
     const buildRenderState = initRenderStateBuilder();
     const initialState = makeInitialState();
@@ -1489,6 +1529,17 @@ describe("renderState", () => {
 
     expect(state).toEqual({
       sharedPanelState: {},
+    });
+  });
+
+  it("does not re-render when sharedPanelState is unchanged", () => {
+    const { buildRenderState, input } = setup({ watchedFields: new Set(["sharedPanelState"]) });
+    const sharedPanelState = { a: 1 };
+    expect(buildRenderState({ ...input, sharedPanelState })).toEqual({ sharedPanelState });
+    expect(buildRenderState({ ...input, sharedPanelState })).toBeUndefined();
+    const next = { a: 2 };
+    expect(buildRenderState({ ...input, sharedPanelState: next })).toEqual({
+      sharedPanelState: next,
     });
   });
 

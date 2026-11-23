@@ -79,7 +79,7 @@ function filterToString(filter: Immutable<MessagePathFilter>): string {
     return `{${filter.repr}}`;
   }
 
-  return `{${filter.path.join(".")}==${
+  return `{${filter.path.join(".")}${filter.operator}${
     typeof filter.value === "bigint" ? filter.value.toString() : JSON.stringify(filter.value)
   }}`;
 }

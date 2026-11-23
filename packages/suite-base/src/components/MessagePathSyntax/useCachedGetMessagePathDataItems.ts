@@ -44,6 +44,7 @@ import { filterMatches } from "./filterMatches";
 import { TypicalFilterNames } from "./isTypicalFilterName";
 import { messagePathStructures } from "./messagePathsForDatatype";
 import { resolveEnumNamesInPath } from "./resolveEnumNames";
+import { sliceIndexRange } from "./simpleGetMessagePathDataItems";
 
 type ValueInMapRecord<T> = T extends Map<unknown, infer I> ? I : never;
 
@@ -306,8 +307,10 @@ export function getMessagePathDataItems(
 
       // If the `pathItem` is a slice, iterate over all the relevant elements in the array.
       const arrayLength = value.length as number;
-      for (let i = startIdx; i <= Math.min(endIdx, arrayLength - 1); i++) {
-        const index = i >= 0 ? i : arrayLength + i;
+      const { first, last } = sliceIndexRange(startIdx, endIdx, arrayLength);
+      for (let index = first; index <= last; index++) {
+        // Show negative slices as offsets from the end, since that's how the user wrote them.
+        const i = startIdx < 0 ? index - arrayLength : index;
         const arrayElement = value[index];
         if (arrayElement == undefined) {
           continue;

@@ -13,6 +13,20 @@ import { isTypedArray } from "@lichtblick/suite-base/types/isTypedArray";
 import { filterMatches } from "./filterMatches";
 
 /**
+ * Resolve an inclusive slice `[start:end]` to absolute array indices. Negative bounds count from
+ * the end of the array (`-1` is the last element). Returns an empty range when nothing matches.
+ */
+export function sliceIndexRange(
+  start: number,
+  end: number,
+  length: number,
+): { first: number; last: number } {
+  const first = Math.max(0, start < 0 ? length + start : start);
+  const last = Math.min(length - 1, end < 0 ? length + end : end);
+  return { first, last };
+}
+
+/**
  * Execute the given message path to extract item(s) from the message.
  */
 export function simpleGetMessagePathDataItems(
@@ -43,8 +57,8 @@ export function simpleGetMessagePathDataItems(
         if (typeof pathPart.start === "object" || typeof pathPart.end === "object") {
           throw new Error("Variables in slices are not supported");
         }
-        const { start, end } = pathPart;
-        for (let i = start; i < value.length && i <= end; i++) {
+        const { first, last } = sliceIndexRange(pathPart.start, pathPart.end, value.length);
+        for (let i = first; i <= last; i++) {
           traverse(value[i], pathIndex + 1);
         }
         return;

@@ -30,6 +30,7 @@ describe("stringifyRosPath", () => {
     '/topic.foo{bar=="baz"}.a{bar=="baz"}.b{bar==3}.c{bar==-1}.d{bar==false}.e[:]{bar.baz==true}',
     '/topic{foo=="bar"}{baz==2}.a[3].b{x=="y"}',
     "/topic.foo{bar==$}.a{bar.baz==$my_var_1}",
+    "/topic.foo{x>5}.a{x<5}.b{x!=5}.c{x>=5}.d{x<=5}",
   ];
   it.each(paths)("returns original string for: %s", (str) => {
     expect(stringifyMessagePath(parseMessagePath(str)!)).toEqual(str);

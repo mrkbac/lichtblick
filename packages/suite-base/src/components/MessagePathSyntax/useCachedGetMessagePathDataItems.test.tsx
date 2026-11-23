@@ -308,6 +308,37 @@ describe("useCachedGetMessagePathDataItems", () => {
       ]);
     });
 
+    it.each([
+      ["[-3:]", [3, 4, 5]],
+      ["[1:-2]", [2, 3, 4]],
+      ["[-10:1]", [1, 2]],
+      ["[3:1]", []],
+    ])("normalizes negative and out-of-range slice %s", (slice, expected) => {
+      const messages: MessageEvent[] = [
+        {
+          topic: "/some/topic",
+          receiveTime: { sec: 0, nsec: 0 },
+          message: { some_array: [1, 2, 3, 4, 5] },
+          schemaName: "datatype",
+          sizeInBytes: 0,
+        },
+      ];
+      const topics: Topic[] = [{ name: "/some/topic", schemaName: "some_datatype" }];
+      const datatypes: RosDatatypes = new Map(
+        Object.entries({
+          some_datatype: { definitions: [{ name: "some_array", type: "int32", isArray: true }] },
+        }),
+      );
+
+      const items = addValuesWithPathsToItems(
+        messages,
+        `/some/topic.some_array${slice}`,
+        topics,
+        datatypes,
+      );
+      expect(items[0]!.map((item) => item.value)).toEqual(expected);
+    });
+
     it("returns nothing for invalid topics", () => {
       const messages: MessageEvent[] = [
         {
