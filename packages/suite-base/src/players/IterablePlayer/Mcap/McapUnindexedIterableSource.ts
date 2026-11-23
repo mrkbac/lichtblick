@@ -36,6 +36,7 @@ import {
 } from "@lichtblick/suite-base/players/types";
 import { RosDatatypes } from "@lichtblick/suite-base/types/RosDatatypes";
 import type { ReadOptions } from "@lichtblick/suite-base/util/CachedFilelike.types";
+import { abortable } from "@lichtblick/suite-base/util/abortable";
 import { toError } from "@lichtblick/suite-base/util/toError";
 
 const DURATION_YEAR_SEC = 365 * 24 * 60 * 60;
@@ -625,16 +626,17 @@ export class McapUnindexedIterableSource implements ISerializedIterableSource {
     if (cached) {
       return cached;
     }
-    // Cancellable reads must not abort a chunk load another reader still needs.
+    // Concurrent readers (playback, backfill) share one load, so a chunk is read and counted once.
+    // A cancellable read joins a shared load but loads alone, so its abort can't fail other readers.
+    const shared = this.#chunkLoads.get(i);
+    if (shared) {
+      return await abortable(shared, readOptions?.signal);
+    }
     if (readOptions?.signal) {
       return await this.#loadChunk(i, readOptions);
     }
-    // Concurrent readers (playback, backfill) share one load, so a chunk is read and counted once
-    let load = this.#chunkLoads.get(i);
-    if (!load) {
-      load = this.#loadChunk(i).finally(() => this.#chunkLoads.delete(i));
-      this.#chunkLoads.set(i, load);
-    }
+    const load = this.#loadChunk(i).finally(() => this.#chunkLoads.delete(i));
+    this.#chunkLoads.set(i, load);
     return await load;
   }
 
