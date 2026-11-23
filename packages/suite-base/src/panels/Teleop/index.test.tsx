@@ -7,9 +7,14 @@ import { render } from "@testing-library/react";
 import type { MockedFunction } from "vitest";
 
 import { useCrash } from "@lichtblick/hooks";
-import { TeleopPanelAdapterProps } from "@lichtblick/suite-base/panels/Teleop/types";
+import { SaveConfig } from "@lichtblick/suite-base/types/panels";
 
 import TeleopPanelAdapter from "./index";
+
+type TeleopPanelAdapterProps = {
+  config: unknown;
+  saveConfig: SaveConfig<unknown>;
+};
 
 // Mock dependencies
 vi.mock("@lichtblick/hooks", () => ({

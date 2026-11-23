@@ -20,13 +20,62 @@ const DAG_LAYOUT = {
   ranker: "longest-path",
 };
 
+export const LABEL_MAX_WIDTH = 200;
+
+const LABELED_BOX: Cytoscape.Css.Node = {
+  content: "data(label)",
+  shape: "round-rectangle",
+  height: "20px",
+  "background-color": "#000",
+  "border-width": "1px",
+  padding: "4px",
+  "font-size": "16px",
+  "text-max-width": `${LABEL_MAX_WIDTH}px`,
+  "text-wrap": "ellipsis",
+  "text-valign": "center",
+  "text-halign": "center",
+};
+
+const STYLESHEET: Cytoscape.StylesheetStyle[] = [
+  {
+    selector: "edge",
+    style: {
+      "target-arrow-shape": "triangle",
+      "line-color": "rgb(190, 190, 187)",
+      "target-arrow-color": "rgb(190, 190, 187)",
+      "curve-style": "bezier",
+    },
+  },
+  {
+    selector: 'node[type="node"]',
+    style: { ...LABELED_BOX, "border-color": "rgb(69, 165, 255)", color: "rgb(69, 165, 255)" },
+  },
+  {
+    selector: 'node[type="topic"]',
+    style: {
+      content: "data(label)",
+      shape: "diamond",
+      width: "40px",
+      height: "40px",
+      "background-color": "rgb(183, 157, 202)",
+      "font-size": "16px",
+      "text-outline-color": "#000",
+      "text-outline-width": "2px",
+      color: "#fff",
+    },
+  },
+  {
+    selector: 'node[type="service"]',
+    style: { ...LABELED_BOX, "border-color": "rgb(255, 107, 130)", color: "rgb(255, 107, 130)" },
+  },
+];
+
 export interface GraphMutation {
   fit: () => void;
   resetUserPanZoom: () => void;
 }
 
 type Props = {
-  style: Cytoscape.StylesheetStyle[];
   elements: cytoscape.ElementDefinition[];
   rankDir: string;
   graphRef: RefObject<GraphMutation | undefined>;
@@ -47,6 +96,7 @@ export default function Graph(props: Props): React.JSX.Element {
 
     cy.current = Cytoscape({
       container: graphRef.current,
+      style: STYLESHEET,
       zoom: 0.7,
     });
 
@@ -88,10 +138,6 @@ export default function Graph(props: Props): React.JSX.Element {
       cy.current.fit();
     }
   }, [elements, rankDir]);
-
-  useEffect(() => {
-    cy.current?.style(props.style);
-  }, [props.style]);
 
   return <div ref={graphRef} style={{ width: "100%", height: "100%" }} />;
 }

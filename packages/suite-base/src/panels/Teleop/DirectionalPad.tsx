@@ -7,47 +7,25 @@
 
 import Stack from "@lichtblick/suite-base/components/Stack";
 import { svgPathsDisabled, svgPathsEnabled } from "@lichtblick/suite-base/panels/Teleop/constants";
-import {
-  DirectionalPadAction,
-  DirectionalPadProps,
-} from "@lichtblick/suite-base/panels/Teleop/types";
+import { DirectionalPadProps, TeleopVector } from "@lichtblick/suite-base/panels/Teleop/types";
 
 import { useStyles } from "./DirectionalPad.style";
 
+const BUTTONS: { vector: TeleopVector; path: string; icon: string }[] = [
+  { vector: { x: 0, y: 1 }, path: svgPathsEnabled.up, icon: svgPathsDisabled.up },
+  { vector: { x: 0, y: -1 }, path: svgPathsEnabled.down, icon: svgPathsDisabled.down },
+  { vector: { x: -1, y: 0 }, path: svgPathsEnabled.left, icon: svgPathsDisabled.left },
+  { vector: { x: 1, y: 0 }, path: svgPathsEnabled.right, icon: svgPathsDisabled.right },
+];
+
 function DirectionalPad(props: Readonly<DirectionalPadProps>): React.JSX.Element {
-  const { onAction, disabled = false, vector = { x: 0, y: 0 } } = props;
+  const { onAction, vector = { x: 0, y: 0 } } = props;
 
   const { classes, cx } = useStyles();
-
-  const isActionActive = (action: DirectionalPadAction): boolean => {
-    switch (action) {
-      case DirectionalPadAction.UP:
-        return vector.y > 0;
-      case DirectionalPadAction.DOWN:
-        return vector.y < 0;
-      case DirectionalPadAction.LEFT:
-        return vector.x < 0;
-      case DirectionalPadAction.RIGHT:
-        return vector.x > 0;
-    }
-  };
 
   const release = () => {
     onAction?.();
   };
-
-  // Pointer events cover mouse, touch and pen
-  const makePointerHandlers = (action: DirectionalPadAction) =>
-    disabled
-      ? undefined
-      : {
-          onPointerDown: () => {
-            onAction?.(action);
-          },
-          onPointerUp: release,
-          onPointerLeave: release,
-          onPointerCancel: release,
-        };
 
   return (
     <Stack
@@ -64,57 +42,28 @@ function DirectionalPad(props: Readonly<DirectionalPadProps>): React.JSX.Element
           event.preventDefault();
         }}
       >
-        <g opacity={1}>
-          {/* UP button */}
-          <g {...makePointerHandlers(DirectionalPadAction.UP)} role="button">
+        {BUTTONS.map((button) => (
+          // Pointer events cover mouse, touch and pen
+          <g
+            key={button.path}
+            role="button"
+            onPointerDown={() => {
+              onAction?.(button.vector);
+            }}
+            onPointerUp={release}
+            onPointerLeave={release}
+            onPointerCancel={release}
+          >
             <path
               className={cx(classes.button, {
-                active: isActionActive(DirectionalPadAction.UP),
-                disabled,
+                // active when the command points the same way on this button's axis
+                active: button.vector.x * vector.x + button.vector.y * vector.y > 0,
               })}
-              d={svgPathsEnabled.up}
+              d={button.path}
             />
-            <path className={cx(classes.buttonIcon, { disabled })} d={svgPathsDisabled.up} />
+            <path className={classes.buttonIcon} d={button.icon} />
           </g>
-
-          {/* DOWN button */}
-          <g {...makePointerHandlers(DirectionalPadAction.DOWN)} role="button">
-            <path
-              className={cx(classes.button, {
-                active: isActionActive(DirectionalPadAction.DOWN),
-                disabled,
-              })}
-              d={svgPathsEnabled.down}
-            />
-            <path className={cx(classes.buttonIcon, { disabled })} d={svgPathsDisabled.down} />
-          </g>
-        </g>
-
-        <g opacity={1}>
-          {/* LEFT button */}
-          <g {...makePointerHandlers(DirectionalPadAction.LEFT)} role="button">
-            <path
-              className={cx(classes.button, {
-                active: isActionActive(DirectionalPadAction.LEFT),
-                disabled,
-              })}
-              d={svgPathsEnabled.left}
-            />
-            <path className={cx(classes.buttonIcon, { disabled })} d={svgPathsDisabled.left} />
-          </g>
-
-          {/* RIGHT button */}
-          <g {...makePointerHandlers(DirectionalPadAction.RIGHT)} role="button">
-            <path
-              className={cx(classes.button, {
-                active: isActionActive(DirectionalPadAction.RIGHT),
-                disabled,
-              })}
-              d={svgPathsEnabled.right}
-            />
-            <path className={cx(classes.buttonIcon, { disabled })} d={svgPathsDisabled.right} />
-          </g>
-        </g>
+        ))}
       </svg>
     </Stack>
   );

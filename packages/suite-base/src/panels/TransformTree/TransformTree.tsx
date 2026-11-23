@@ -7,9 +7,11 @@ import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import WarningFilledIcon from "@mui/icons-material/Warning";
 import { Tooltip } from "@mui/material";
 import { TFunction } from "i18next";
+import * as _ from "lodash-es";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { useDeepMemo } from "@lichtblick/hooks";
 import { SettingsTreeAction } from "@lichtblick/suite";
 import {
   useBlocksSubscriptions,
@@ -74,8 +76,6 @@ import {
   EMPTY_TRANSFORM_STATE,
   measureBetween,
   mergeEntries,
-  sameFields,
-  sameRow,
   TransformState,
 } from "./tree";
 import { FrameEntries, FrameEntry, FrameRow, FrameWarning, TransformTreeConfig } from "./types";
@@ -185,19 +185,16 @@ export function TransformTree({ config, saveConfig }: Props): React.JSX.Element 
     () => resolveTopics(config, transformTopics),
     [config, transformTopics],
   );
-  // Keyed by the names so unrelated config changes (e.g. collapsing a frame) keep the same
-  // arrays, which would otherwise reset the data and resubscribe. Topic names have no newlines.
-  const visibleKey = resolvedTopics
-    .filter((topic) => topic.visible)
-    .map(({ name }) => name)
-    .join("\n");
-  const staticKey = resolvedTopics
-    .filter((topic) => topic.visible && topic.isStatic)
-    .map(({ name }) => name)
-    .join("\n");
-  const visibleTopics = useMemo(() => (visibleKey ? visibleKey.split("\n") : []), [visibleKey]);
+  // Deep-memoized so unrelated config changes (e.g. collapsing a frame) keep the same arrays,
+  // which would otherwise reset the data and resubscribe.
+  const visibleTopics = useDeepMemo(
+    resolvedTopics.filter((topic) => topic.visible).map(({ name }) => name),
+  );
+  const staticTopicNames = useDeepMemo(
+    resolvedTopics.filter((topic) => topic.visible && topic.isStatic).map(({ name }) => name),
+  );
   const visibleTopicSet = useMemo(() => new Set(visibleTopics), [visibleTopics]);
-  const staticTopics = useMemo(() => new Set(staticKey ? staticKey.split("\n") : []), [staticKey]);
+  const staticTopics = useMemo(() => new Set(staticTopicNames), [staticTopicNames]);
 
   const convention = config.rotationConvention ?? DEFAULT_ROTATION_CONVENTION;
 
@@ -592,6 +589,7 @@ export function TransformTree({ config, saveConfig }: Props): React.JSX.Element 
   );
 }
 
+// Rows are rebuilt on every update, so compare them by value: unchanged rows skip rendering.
 const FrameTableRow = memo(function FrameTableRowImpl({
   row,
   collapsed,
@@ -819,12 +817,4 @@ const FrameTableRow = memo(function FrameTableRowImpl({
       </td>
     </tr>
   );
-}, sameRowProps);
-
-/** Rows are rebuilt on every update, so compare them by value: unchanged rows skip rendering. */
-function sameRowProps<P extends { row: FrameRow }>(prev: P, next: P): boolean {
-  return (
-    sameFields({ ...prev, row: undefined }, { ...next, row: undefined }) &&
-    sameRow(prev.row, next.row)
-  );
-}
+}, _.isEqual);

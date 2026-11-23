@@ -15,7 +15,6 @@
 //   You may not use this file except in compliance with the License.
 
 import { FormControlLabel, IconButton, Radio, RadioGroup, Tooltip } from "@mui/material";
-import Cytoscape from "cytoscape";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { makeStyles } from "tss-react/mui";
 
@@ -28,71 +27,8 @@ import PanelToolbar from "@lichtblick/suite-base/components/PanelToolbar";
 import { PANEL_TOOLBAR_HEIGHT } from "@lichtblick/suite-base/components/PanelToolbar/constants";
 import { measureTextWidth } from "@lichtblick/suite-base/util/measureTextWidth";
 
-import Graph, { GraphMutation } from "./Graph";
+import Graph, { GraphMutation, LABEL_MAX_WIDTH } from "./Graph";
 import { TOPIC_GRAPH_BUTTONS } from "./buttons";
-
-const LABEL_MAX_WIDTH = 200;
-const STYLESHEET: Cytoscape.StylesheetStyle[] = [
-  {
-    selector: "edge",
-    style: {
-      "target-arrow-shape": "triangle",
-      "line-color": "rgb(190, 190, 187)",
-      "target-arrow-color": "rgb(190, 190, 187)",
-      "curve-style": "bezier",
-    },
-  },
-  {
-    selector: 'node[type="node"]',
-    style: {
-      content: "data(label)",
-      shape: "round-rectangle",
-      height: "20px",
-      "background-color": "#000",
-      "border-color": "rgb(69, 165, 255)",
-      "border-width": "1px",
-      padding: "4px",
-      "font-size": "16px",
-      "text-max-width": `${LABEL_MAX_WIDTH}px`,
-      "text-wrap": "ellipsis",
-      "text-valign": "center",
-      "text-halign": "center",
-      color: "rgb(69, 165, 255)",
-    },
-  },
-  {
-    selector: 'node[type="topic"]',
-    style: {
-      content: "data(label)",
-      shape: "diamond",
-      width: "40px",
-      height: "40px",
-      "background-color": "rgb(183, 157, 202)",
-      "font-size": "16px",
-      "text-outline-color": "#000",
-      "text-outline-width": "2px",
-      color: "#fff",
-    },
-  },
-  {
-    selector: 'node[type="service"]',
-    style: {
-      content: "data(label)",
-      shape: "round-rectangle",
-      height: "20px",
-      "background-color": "#000",
-      "border-color": "rgb(255, 107, 130)",
-      "border-width": "1px",
-      padding: "4px",
-      "font-size": "16px",
-      "text-max-width": "200px",
-      "text-wrap": "ellipsis",
-      "text-valign": "center",
-      "text-halign": "center",
-      color: "rgb(255, 107, 130)",
-    },
-  },
-];
 
 const useStyles = makeStyles()((theme) => ({
   root: {
@@ -131,14 +67,6 @@ const topicVisibilityToLabelMap: Record<TopicVisibility, string> = {
   "disconnected-sub": "Disconnected subscribed topics",
 };
 
-function unionInto<T>(dest: Set<T>, ...iterables: ReadonlySet<T>[]): void {
-  for (const iterable of iterables) {
-    for (const item of iterable) {
-      dest.add(item);
-    }
-  }
-}
-
 /** Displays publisher/subscriber relationships with floating graph and visibility controls. */
 function TopicGraph() {
   const { classes } = useStyles();
@@ -160,21 +88,21 @@ function TopicGraph() {
   const [showServices, setShowServices] = useState<boolean>(true);
   const [topicVisibility, setTopicVisibility] = useState<TopicVisibility>("all");
 
-  const topicPassesConditions = useCallback(
-    ({
-      topicIdWithSubscriptions,
-      topic,
-    }: {
-      topicIdWithSubscriptions: Set<string>;
-      topic: string;
-    }): boolean => {
-      const publishedTopicsWithFallback = publishedTopics ?? new Map([]);
-      const published = publishedTopicsWithFallback.has(topic);
-      const subscribed = topicIdWithSubscriptions.has(topic);
-
-      if (topicVisibility === "none") {
-        return false;
-      }
+  const elements = useMemo<cytoscape.ElementDefinition[]>(() => {
+    const output: cytoscape.ElementDefinition[] = [];
+    const nodeIds = new Set(
+      [publishedTopics, subscribedTopics, services].flatMap((map) =>
+        [...(map?.values() ?? [])].flatMap((nodes) => [...nodes]),
+      ),
+    );
+    const topicIds = new Set([
+      ...(publishedTopics?.keys() ?? []),
+      ...(subscribedTopics?.keys() ?? []),
+    ]);
+    const serviceIds = services?.keys() ?? [];
+    const topicPassesConditions = (topic: string): boolean => {
+      const published = publishedTopics?.has(topic) ?? false;
+      const subscribed = subscribedTopics?.has(topic) ?? false;
       return (
         topicVisibility === "all" ||
         (topicVisibility === "published" && published) ||
@@ -183,35 +111,7 @@ function TopicGraph() {
         (topicVisibility === "disconnected-pub" && published && !subscribed) ||
         (topicVisibility === "disconnected-sub" && subscribed && !published)
       );
-    },
-    [publishedTopics, topicVisibility],
-  );
-
-  const elements = useMemo<cytoscape.ElementDefinition[]>(() => {
-    const output: cytoscape.ElementDefinition[] = [];
-    const nodeIds = new Set<string>();
-    const topicIds = new Set<string>();
-    const topicIdWithSubscriptions = new Set<string>();
-    const serviceIds = new Set<string>();
-    if (publishedTopics != undefined) {
-      publishedTopics.forEach((curNodes, topic) => {
-        unionInto(nodeIds, curNodes);
-        topicIds.add(topic);
-      });
-    }
-    if (subscribedTopics != undefined) {
-      subscribedTopics.forEach((curNodes, topic) => {
-        unionInto(nodeIds, curNodes);
-        topicIds.add(topic);
-        topicIdWithSubscriptions.add(topic);
-      });
-    }
-    if (services != undefined) {
-      services.forEach((curNodes, topic) => {
-        unionInto(nodeIds, curNodes);
-        serviceIds.add(topic);
-      });
-    }
+    };
 
     for (const node of nodeIds) {
       const widthPx = Math.min(LABEL_MAX_WIDTH, measureTextWidth(node, "16px Arial"));
@@ -222,7 +122,7 @@ function TopicGraph() {
     }
     if (topicVisibility !== "none") {
       for (const topic of topicIds) {
-        if (!topicPassesConditions({ topicIdWithSubscriptions, topic })) {
+        if (!topicPassesConditions(topic)) {
           continue;
         }
         output.push({
@@ -261,7 +161,7 @@ function TopicGraph() {
       default:
         if (publishedTopics != undefined) {
           for (const [topic, publishers] of publishedTopics.entries()) {
-            if (!topicPassesConditions({ topicIdWithSubscriptions, topic })) {
+            if (!topicPassesConditions(topic)) {
               continue;
             }
 
@@ -275,7 +175,7 @@ function TopicGraph() {
 
         if (subscribedTopics != undefined) {
           for (const [topic, subscribers] of subscribedTopics.entries()) {
-            if (!topicPassesConditions({ topicIdWithSubscriptions, topic })) {
+            if (!topicPassesConditions(topic)) {
               continue;
             }
 
@@ -297,14 +197,7 @@ function TopicGraph() {
     }
 
     return output;
-  }, [
-    publishedTopics,
-    subscribedTopics,
-    services,
-    topicVisibility,
-    topicPassesConditions,
-    showServices,
-  ]);
+  }, [publishedTopics, subscribedTopics, services, topicVisibility, showServices]);
 
   const graph = useRef<GraphMutation>(undefined);
 
@@ -396,12 +289,7 @@ function TopicGraph() {
           </div>
         </ExpandingToolbar>
       </div>
-      <Graph
-        style={STYLESHEET}
-        elements={elements}
-        rankDir={lrOrientation ? "LR" : "TB"}
-        graphRef={graph}
-      />
+      <Graph elements={elements} rankDir={lrOrientation ? "LR" : "TB"} graphRef={graph} />
     </>
   );
 }

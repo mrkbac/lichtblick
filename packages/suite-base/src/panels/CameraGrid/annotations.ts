@@ -86,12 +86,7 @@ export function pickAnnotations(
   if (!sync) {
     return history[history.length - 1];
   }
-  for (let i = history.length - 1; i >= 0; i--) {
-    if (history[i]!.stampNs === imageStampNs) {
-      return history[i];
-    }
-  }
-  return undefined;
+  return history.findLast((entry) => entry.stampNs === imageStampNs);
 }
 
 const cssCache = new WeakMap<Immutable<Color>, string>();

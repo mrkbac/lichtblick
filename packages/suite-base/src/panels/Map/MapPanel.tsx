@@ -24,7 +24,7 @@ import { makeStyles } from "tss-react/mui";
 import { useDebounce } from "use-debounce";
 
 import { filterMap } from "@lichtblick/den/collection";
-import { useLatest } from "@lichtblick/hooks";
+import { useDeepMemo, useLatest } from "@lichtblick/hooks";
 import Logger from "@lichtblick/log";
 import { MessagePath, parseMessagePath } from "@lichtblick/message-path";
 import { MessageEvent, SettingsTreeAction, Topic } from "@lichtblick/suite";
@@ -360,19 +360,10 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
 
   // Stable identity unless the set of enabled position topics changes, so unrelated settings
   // (layer opacity, colors, ...) don't re-read the whole recording.
-  const navTopicsKey = enabledTopics
-    .filter((t) => !isGeoJSONSchema(t.schemaName))
-    .map((t) => `${t.name}\0${t.schemaName}`)
-    .join("\n");
-  const navTopics = useMemo(
-    () =>
-      navTopicsKey === ""
-        ? []
-        : navTopicsKey.split("\n").map((line) => {
-            const [name, schemaName] = line.split("\0") as [string, string];
-            return { name, schemaName };
-          }),
-    [navTopicsKey],
+  const navTopics = useDeepMemo(
+    enabledTopics
+      .filter((t) => !isGeoJSONSchema(t.schemaName))
+      .map(({ name, schemaName }) => ({ name, schemaName })),
   );
 
   const colors = useMemo(() => {
@@ -471,23 +462,23 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
   // --- Subscriptions ----------------------------------------------------------------------
 
   // Message paths that color a track, parsed. Stable unless the set of paths changes.
-  const colorPathsKey = [
-    ...new Set(
-      enabledTopics.flatMap((topic) => {
-        const style = config.topicStyles[topic.name];
-        return style?.colorBy === "path" && style.colorPath ? [style.colorPath] : [];
-      }),
-    ),
-  ]
-    .sort()
-    .join("\n");
+  const colorPathNames = useDeepMemo(
+    [
+      ...new Set(
+        enabledTopics.flatMap((topic) => {
+          const style = config.topicStyles[topic.name];
+          return style?.colorBy === "path" && style.colorPath ? [style.colorPath] : [];
+        }),
+      ),
+    ].sort(),
+  );
   const colorPaths = useMemo(
     () =>
-      filterMap(colorPathsKey === "" ? [] : colorPathsKey.split("\n"), (path) => {
+      filterMap(colorPathNames, (path) => {
         const parsed = parseMessagePath(path);
         return parsed ? { path, parsed } : undefined;
       }),
-    [colorPathsKey],
+    [colorPathNames],
   );
   const colorPathsRef = useLatest(colorPaths);
 

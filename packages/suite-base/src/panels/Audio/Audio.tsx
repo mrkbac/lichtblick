@@ -5,7 +5,7 @@ import { subtract, toSec } from "@foxglove/rostime";
 import ErrorOutlineOutlinedIcon from "@mui/icons-material/ErrorOutlineOutlined";
 import VolumeOffOutlinedIcon from "@mui/icons-material/VolumeOffOutlined";
 import { Button, Slider, Typography } from "@mui/material";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { useTranslation } from "react-i18next";
 import { keyframes } from "tss-react";
 import { makeStyles } from "tss-react/mui";
@@ -35,8 +35,8 @@ import { randomUUID } from "@lichtblick/suite-base/util/randomUUID";
 import { AudioPlayer } from "./AudioPlayer";
 import { Waveform } from "./Waveform";
 import { AUDIO_BUTTONS } from "./buttons";
-import { AUDIO_SCHEMAS, extractAudioChunk } from "./decode";
-import { buildSettingsTree, FORMAT_LABELS, settingsUpdate } from "./settings";
+import { AUDIO_SCHEMAS, extractAudioChunk, FORMAT_LABELS } from "./decode";
+import { buildSettingsTree, settingsUpdate } from "./settings";
 import { AudioConfig } from "./types";
 
 const fadeIn = keyframes`from { opacity: 0; } to { opacity: 1; }`;
@@ -85,7 +85,6 @@ export function Audio({ config, saveConfig }: Props): React.JSX.Element {
   const schemaName = topics.find((info) => info.name === topic)?.schemaName;
 
   const [player, setPlayer] = useState<AudioPlayer>();
-  const [running, setRunning] = useState(false);
   const [playing, setPlaying] = useState(false);
   const [info, setInfo] = useState<string>();
   const [error, setError] = useState<string>();
@@ -96,15 +95,19 @@ export function Audio({ config, saveConfig }: Props): React.JSX.Element {
       return;
     }
     const newPlayer = new AudioPlayer();
-    newPlayer.onStateChange = () => {
-      setRunning(newPlayer.isRunning());
-    };
     newPlayer.onError = setError;
     setPlayer(newPlayer);
     return () => {
       newPlayer.close();
     };
   }, [webAudio]);
+  const running = useSyncExternalStore(
+    useCallback(
+      (listener: () => void) => player?.subscribeRunning(listener) ?? (() => {}),
+      [player],
+    ),
+    () => player?.isRunning() ?? false,
+  );
 
   useEffect(() => {
     player?.setVolume(config.muted ? 0 : config.volume);

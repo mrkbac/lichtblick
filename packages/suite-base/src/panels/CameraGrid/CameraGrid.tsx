@@ -14,6 +14,7 @@ import {
 import { useTranslation } from "react-i18next";
 import { makeStyles } from "tss-react/mui";
 
+import { useDeepMemo } from "@lichtblick/hooks";
 import { Immutable, SettingsTreeAction, Topic } from "@lichtblick/suite";
 import { BuiltinPanelExtensionContext } from "@lichtblick/suite-base/components/PanelExtensionAdapter";
 import { useElementSize } from "@lichtblick/suite-base/hooks/useElementSize";
@@ -240,16 +241,17 @@ export function CameraGrid({
   const addAllTopicNames = useMemo(() => imageTopicNames(topics, { includeRaw: false }), [topics]);
   const annotationTopics = useMemo(() => annotationTopicNames(topics), [topics]);
   const visibleTiles = useMemo(() => config.tiles.filter((tile) => tile.visible), [config.tiles]);
-  // One line per tile: its image topic, then its annotation topics, tab-separated. A string, so
-  // unrelated config changes (rotation, labels) don't resubscribe.
-  const subscribedKey = visibleTiles
-    .map((tile) => [tile.topic, ...tileAnnotationTopics(tile, annotationTopics)].join("\t"))
-    .join("\n");
+  // Per tile: its image topic, then its annotation topics. Deep-memoized so unrelated config
+  // changes (rotation, labels) don't resubscribe.
+  const subscribedTiles = useDeepMemo(
+    visibleTiles.map((tile) => [tile.topic, ...tileAnnotationTopics(tile, annotationTopics)]),
+  );
   // Video decoding needs every frame since the last keyframe, so only still images are sampled.
-  const videoTopicsKey = (topics ?? [])
-    .filter((topic) => imageKind(topic.schemaName) === "video")
-    .map((topic) => topic.name)
-    .join("\n");
+  const videoTopicNames = useDeepMemo(
+    (topics ?? [])
+      .filter((topic) => imageKind(topic.schemaName) === "video")
+      .map((topic) => topic.name),
+  );
 
   useEffect(() => {
     return () => {
@@ -278,15 +280,11 @@ export function CameraGrid({
   }, [context, renderer]);
 
   useEffect(() => {
-    const lines = subscribedKey === "" ? [] : subscribedKey.split("\n");
     const annotationsByTile = new Map(
-      lines.map((line) => {
-        const [topic = "", ...annotations] = line.split("\t");
-        return [topic, annotations];
-      }),
+      subscribedTiles.map(([topic = "", ...annotations]) => [topic, annotations]),
     );
     const subscribed = [...annotationsByTile.keys()];
-    const videoTopics = new Set(videoTopicsKey.split("\n"));
+    const videoTopics = new Set(videoTopicNames);
     renderer.setTopics(subscribed, annotationsByTile);
     // Annotations are small and unsampled, so syncing can find the one stamped like the image.
     const annotations = new Set([...annotationsByTile.values()].flat());
@@ -298,7 +296,7 @@ export function CameraGrid({
       ),
       ...[...annotations].map((topic) => ({ topic })),
     ]);
-  }, [context, renderer, subscribedKey, videoTopicsKey]);
+  }, [context, renderer, subscribedTiles, videoTopicNames]);
 
   useEffect(() => {
     renderer.setOptions({ linkZoom: config.linkZoom, syncAnnotations: config.syncAnnotations });

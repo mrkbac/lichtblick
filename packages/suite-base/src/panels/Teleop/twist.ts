@@ -14,7 +14,6 @@ import {
 import {
   AxisInput,
   ButtonSetting,
-  DirectionalPadAction,
   PadState,
   TeleopConfig,
   TeleopVector,
@@ -65,19 +64,6 @@ export function padsEqual(a: PadState, b: PadState): boolean {
 
 export function hasButton(pad: PadState, button: ButtonSetting): boolean {
   return button !== "none" && pad.buttons.has(button);
-}
-
-export function actionToVector(action: DirectionalPadAction): TeleopVector {
-  switch (action) {
-    case DirectionalPadAction.UP:
-      return { x: 0, y: 1 };
-    case DirectionalPadAction.DOWN:
-      return { x: 0, y: -1 };
-    case DirectionalPadAction.LEFT:
-      return { x: -1, y: 0 };
-    case DirectionalPadAction.RIGHT:
-      return { x: 1, y: 0 };
-  }
 }
 
 /** Radial deadzone, rescaled so output starts at 0 just past the deadzone */

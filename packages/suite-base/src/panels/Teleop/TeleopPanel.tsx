@@ -10,6 +10,7 @@ import { Button, Slider, Typography } from "@mui/material";
 import * as _ from "lodash-es";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 
+import { useLatest } from "@lichtblick/hooks";
 import { SettingsTreeAction, Topic } from "@lichtblick/suite";
 import EmptyState from "@lichtblick/suite-base/components/EmptyState";
 import { usePanelButtonTitle } from "@lichtblick/suite-base/components/PanelButton";
@@ -29,7 +30,6 @@ import {
 } from "@lichtblick/suite-base/panels/Teleop/constants";
 import { TELEOP_SHORTCUTS } from "@lichtblick/suite-base/panels/Teleop/shortcuts";
 import {
-  actionToVector,
   combinePads,
   computeTwist,
   hasButton,
@@ -47,7 +47,6 @@ import {
 } from "@lichtblick/suite-base/panels/Teleop/twist";
 import {
   ButtonName,
-  DirectionalPadAction,
   OutputType,
   PadState,
   TeleopConfig,
@@ -214,10 +213,7 @@ function TeleopPanel(props: Readonly<TeleopPanelProps>): React.JSX.Element {
 
   // Input handlers and timers read the latest values through this ref so they don't need to be
   // re-registered on every config change.
-  const latest = useRef({ config, enabled });
-  useLayoutEffect(() => {
-    latest.current = { config, enabled };
-  }, [config, enabled]);
+  const latest = useLatest({ config, enabled });
 
   // whether the last message sent moved the robot; cleanup stops it even when stopOnRelease
   // skipped the zero
@@ -236,7 +232,7 @@ function TeleopPanel(props: Readonly<TeleopPanelProps>): React.JSX.Element {
         console.error("Failed to publish message:", error);
       }
     },
-    [context],
+    [context, latest],
   );
   const publishStop = useCallback(() => {
     publishCommand(IDLE);
@@ -297,7 +293,7 @@ function TeleopPanel(props: Readonly<TeleopPanelProps>): React.JSX.Element {
     } else if (!active && wasActive && cfg.stopOnRelease) {
       publishStop();
     }
-  }, [publishCommand, publishStop]);
+  }, [latest, publishCommand, publishStop]);
 
   // bumping this remounts the on-screen controls, dropping their drag and pointer capture so a
   // mouse whose release we never saw can't keep driving
@@ -471,7 +467,7 @@ function TeleopPanel(props: Readonly<TeleopPanelProps>): React.JSX.Element {
       setGamepadName(undefined);
       updateCommand();
     };
-  }, [gamepadEnabled, changeSpeed, emergencyStop, updateCommand]);
+  }, [gamepadEnabled, changeSpeed, emergencyStop, latest, updateCommand]);
 
   const setPointerLeft = useCallback(
     (next?: TeleopVector) => {
@@ -486,12 +482,6 @@ function TeleopPanel(props: Readonly<TeleopPanelProps>): React.JSX.Element {
       updateCommand();
     },
     [updateCommand],
-  );
-  const onDirectionalPadAction = useCallback(
-    (action?: DirectionalPadAction) => {
-      setPointerLeft(action == undefined ? undefined : actionToVector(action));
-    },
-    [setPointerLeft],
   );
   const pressFaceButton = useCallback(
     (button: ButtonName) => {
@@ -590,7 +580,7 @@ function TeleopPanel(props: Readonly<TeleopPanelProps>): React.JSX.Element {
     config.mode === "dpad" && (
       <DirectionalPad
         key={`dpad-${releaseCount}`}
-        onAction={onDirectionalPadAction}
+        onAction={setPointerLeft}
         vector={command.pad.left}
       />
     ),

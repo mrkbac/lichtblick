@@ -15,12 +15,14 @@ export function speedUnitLabel(units: Units): string {
   return SPEED_UNITS[units].label;
 }
 
+const SPEED_WINDOW_SEC = 0.5;
+
 /**
- * Ground speed at each fix in display units (NaN where unknown), over at least `windowSeconds` so
+ * Ground speed at each fix in display units (NaN where unknown), over at least `SPEED_WINDOW_SEC` so
  * GNSS jitter between consecutive fixes doesn't dominate. The first fix takes the speed of the
  * next one.
  */
-export function speedValues(track: TrackStore, units: Units, windowSeconds = 0.5): Float64Array {
+export function speedValues(track: TrackStore, units: Units): Float64Array {
   const { time, lon, lat } = track.columns;
   const values = new Float64Array(track.length);
   // Rows appended since the last call are all that's new: reuse the rest. The newest row can be
@@ -30,18 +32,17 @@ export function speedValues(track: TrackStore, units: Units, windowSeconds = 0.5
   if (
     cached?.version === track.version &&
     cached.units === units &&
-    cached.windowSeconds === windowSeconds &&
     cached.values.length > 2 &&
     cached.values.length <= track.length
   ) {
     start = cached.values.length - 1;
     values.set(cached.values.subarray(0, start));
   }
-  let from = Math.max(0, upperBound(time, 0, start, time[start]! - windowSeconds) - 1);
+  let from = Math.max(0, upperBound(time, 0, start, time[start]! - SPEED_WINDOW_SEC) - 1);
   for (let i = start; i < track.length; i++) {
     const t = time[i]!;
-    // Advance `from` to the latest fix still at least `windowSeconds` back.
-    while (from + 1 < i && t - time[from + 1]! >= windowSeconds) {
+    // Advance `from` to the latest fix still at least `SPEED_WINDOW_SEC` back.
+    while (from + 1 < i && t - time[from + 1]! >= SPEED_WINDOW_SEC) {
       from++;
     }
     const dt = t - time[from]!;
@@ -54,13 +55,13 @@ export function speedValues(track: TrackStore, units: Units, windowSeconds = 0.5
   if (start === 0 && values.length > 1 && isNaN(values[0]!)) {
     values[0] = values[1]!;
   }
-  speedCache.set(track, { version: track.version, units, windowSeconds, values });
+  speedCache.set(track, { version: track.version, units, values });
   return values;
 }
 
 const speedCache = new WeakMap<
   TrackStore,
-  { version: number; units: Units; windowSeconds: number; values: Float64Array }
+  { version: number; units: Units; values: Float64Array }
 >();
 
 /** For each fix, the latest sample at or before it (NaN if none). */

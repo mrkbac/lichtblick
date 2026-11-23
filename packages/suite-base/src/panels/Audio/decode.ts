@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
+import type { AudioConfig } from "./types";
+
 /** PCM sample formats decoded in JS, without the browser's decoders. */
 export type PcmFormat = "s16" | "s16be" | "s32" | "f32" | "u8" | "mulaw" | "alaw";
 /** Compressed formats handed to WebCodecs `AudioDecoder` or `decodeAudioData`. */
@@ -9,33 +11,31 @@ export type CompressedFormat = "opus" | "mp3" | "aac" | "vorbis" | "flac" | "wav
 export type G726Format = `${"" | "aal2-"}g726-${16 | 24 | 32 | 40}`;
 export type AudioFormat = PcmFormat | CompressedFormat | G726Format;
 
-export const G726_FORMATS: readonly G726Format[] = [
-  "g726-16",
-  "g726-24",
-  "g726-32",
-  "g726-40",
-  "aal2-g726-16",
-  "aal2-g726-24",
-  "aal2-g726-32",
-  "aal2-g726-40",
-];
+export const FORMAT_LABELS: Record<AudioFormat, string> = {
+  s16: "PCM 16-bit",
+  s16be: "PCM 16-bit big-endian",
+  s32: "PCM 32-bit",
+  f32: "PCM float32",
+  u8: "PCM 8-bit unsigned",
+  mulaw: "G.711 µ-law",
+  alaw: "G.711 A-law",
+  opus: "Opus",
+  mp3: "MP3",
+  aac: "AAC (ADTS)",
+  vorbis: "Ogg Vorbis (file per message)",
+  flac: "FLAC (file per message)",
+  wav: "WAV (file per message)",
+  "g726-16": "G.726 16 kbit/s",
+  "g726-24": "G.726 24 kbit/s",
+  "g726-32": "G.726 32 kbit/s",
+  "g726-40": "G.726 40 kbit/s",
+  "aal2-g726-16": "G.726 16 kbit/s (AAL2)",
+  "aal2-g726-24": "G.726 24 kbit/s (AAL2)",
+  "aal2-g726-32": "G.726 32 kbit/s (AAL2)",
+  "aal2-g726-40": "G.726 40 kbit/s (AAL2)",
+};
 
-export const AUDIO_FORMATS: readonly AudioFormat[] = [
-  "s16",
-  "s16be",
-  "s32",
-  "f32",
-  "u8",
-  "mulaw",
-  "alaw",
-  "opus",
-  "mp3",
-  "aac",
-  "vorbis",
-  "flac",
-  "wav",
-  ...G726_FORMATS,
-];
+export const AUDIO_FORMATS = Object.keys(FORMAT_LABELS) as readonly AudioFormat[];
 
 /** Schemas whose topics the panel offers and auto-selects. */
 export const AUDIO_SCHEMAS: ReadonlySet<string> = new Set([
@@ -83,7 +83,7 @@ export function normalizeFormat(raw: string): AudioFormat | undefined {
     .toLowerCase()
     .replace(/^audio\//, "")
     .replace(/^pcm[-_]/, "");
-  return AUDIO_FORMATS.find((format) => format === name) ?? ALIASES[name];
+  return Object.hasOwn(FORMAT_LABELS, name) ? (name as AudioFormat) : ALIASES[name];
 }
 
 export function isG726(format: AudioFormat): format is G726Format {
@@ -91,7 +91,7 @@ export function isG726(format: AudioFormat): format is G726Format {
 }
 
 export function isPcm(format: AudioFormat): format is PcmFormat {
-  return !isG726(format) && !["opus", "mp3", "aac", "vorbis", "flac", "wav"].includes(format);
+  return format in BYTES_PER_SAMPLE;
 }
 
 /**
@@ -132,12 +132,7 @@ export type AudioChunk = {
   data: Uint8Array;
 };
 
-export type ChunkOverrides = {
-  /** "auto" uses the message's `format` field. */
-  format: AudioFormat | "auto";
-  sampleRate: number;
-  channels: number;
-};
+export type ChunkOverrides = Pick<AudioConfig, "format" | "sampleRate" | "channels">;
 
 function toBytes(value: unknown): Uint8Array | undefined {
   if (value instanceof Uint8Array) {

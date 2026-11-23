@@ -20,9 +20,3 @@ export const Basic: StoryObj = {
     return <DirectionalPad onAction={action("click")} />;
   },
 };
-
-export const Disabled: StoryObj = {
-  render: () => {
-    return <DirectionalPad disabled onAction={action("click")} />;
-  },
-};

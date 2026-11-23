@@ -45,19 +45,12 @@ export const INTERACTIVE_LAYERS = {
 } as const;
 
 export function emptyOverlayData(): OverlayData {
-  const empty = (): FeatureCollection => ({
-    type: "FeatureCollection",
-    features: [],
-  });
-  return {
-    [OVERLAY.track]: empty(),
-    [OVERLAY.trackLine]: empty(),
-    [OVERLAY.accuracy]: empty(),
-    [OVERLAY.geojson]: empty(),
-    [OVERLAY.current]: empty(),
-    [OVERLAY.preview]: empty(),
-    [OVERLAY.measure]: empty(),
-  };
+  return Object.fromEntries(
+    Object.values(OVERLAY).map((source): [OverlaySource, FeatureCollection] => [
+      source,
+      { type: "FeatureCollection", features: [] },
+    ]),
+  ) as OverlayData;
 }
 
 const get = (name: string): ["get", string] => ["get", name];
@@ -481,18 +474,13 @@ export function geoJsonFeatures(
   return collection(features);
 }
 
-/** Direction of travel to `to` from the latest fix before `end` at least `minDistance` meters back. */
-export function headingFromTrack(
-  track: TrackStore,
-  end: number,
-  to: LngLat,
-  minDistance = 1,
-): number | undefined {
+/** Direction of travel to `to` from the latest fix before `end` at least 1 m back. */
+export function headingFromTrack(track: TrackStore, end: number, to: LngLat): number | undefined {
   // ponytail: 500 fixes back at most, so a long stop doesn't scan the whole track.
   for (let i = end - 1; i >= Math.max(0, end - 500); i--) {
     const from = track.lngLat(i);
     // ponytail: below 1 m GNSS jitter dominates, so a stationary receiver keeps its last heading.
-    if (distanceMeters(from, to) >= minDistance) {
+    if (distanceMeters(from, to) >= 1) {
       return bearingDegrees(from, to);
     }
   }

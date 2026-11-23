@@ -5,18 +5,11 @@ import { Divider, IconButton, Paper, Tooltip, Typography } from "@mui/material";
 import type { FeatureCollection } from "geojson";
 import { Marker } from "maplibre-gl";
 import type { IControl, Map as MapLibreMap, MapMouseEvent, PointLike } from "maplibre-gl";
-import {
-  RefObject,
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { RefObject, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { makeStyles } from "tss-react/mui";
 
+import { useLatest } from "@lichtblick/hooks";
 import OverlayToolbar, {
   OverlayToolGroup,
   useIsShorterThan,
@@ -412,10 +405,7 @@ export function MapToolbar(props: Props): React.JSX.Element {
   // Bumped when terrain tiles finish loading, so elevations get re-read.
   const [terrainTick, setTerrainTick] = useState(0);
   // Mirror for the map event handlers, which are bound once per tool.
-  const stateRef = useRef({ measurements, selectedId });
-  useLayoutEffect(() => {
-    stateRef.current = { measurements, selectedId };
-  }, [measurements, selectedId]);
+  const stateRef = useLatest({ measurements, selectedId });
 
   useEffect(() => {
     measuringRef.current = tool != undefined;
@@ -695,7 +685,7 @@ export function MapToolbar(props: Props): React.JSX.Element {
       map.off("contextmenu", onContextMenu);
       window.removeEventListener("keydown", onKey, true);
     };
-  }, [map, tool]);
+  }, [map, stateRef, tool]);
 
   const selected = measurements.find((m) => m.id === selectedId);
 
