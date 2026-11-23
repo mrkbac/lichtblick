@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import { Pin16Filled } from "@fluentui/react-icons";
+import PushPinIcon from "@mui/icons-material/PushPin";
 import { Tooltip, Typography } from "@mui/material";
 import { useTranslation } from "react-i18next";
 
@@ -55,7 +55,9 @@ export function RecentSourceLabel({ recent, hidePinIndicator = false }: Props): 
             </Typography>
           )}
         </div>
-        {recent.pinned === true && !hidePinIndicator && <Pin16Filled className={classes.pin} />}
+        {recent.pinned === true && !hidePinIndicator && (
+          <PushPinIcon style={{ fontSize: 16 }} className={classes.pin} />
+        )}
       </div>
     </Tooltip>
   );

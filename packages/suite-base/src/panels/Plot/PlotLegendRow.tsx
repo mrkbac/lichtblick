@@ -5,8 +5,9 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { ErrorCircle16Filled, Square12Filled } from "@fluentui/react-icons";
 import { isTime, toSec } from "@foxglove/rostime";
+import ErrorIcon from "@mui/icons-material/Error";
+import SquareIcon from "@mui/icons-material/Square";
 import { ButtonBase, Checkbox, Tooltip, Typography, buttonBaseClasses } from "@mui/material";
 import { MouseEventHandler } from "react";
 import { useTranslation } from "react-i18next";
@@ -265,8 +266,8 @@ export function PlotLegendRow({
           size="small"
           title={toggleTitle}
           style={{ color: getLineColor(path.color, index) }}
-          icon={<ToggleButton.icon />}
-          checkedIcon={<Square12Filled />}
+          icon={<ToggleButton.icon style={{ fontSize: 12 }} />}
+          checkedIcon={<SquareIcon style={{ fontSize: 12 }} />}
           onClick={(event) => {
             event.stopPropagation();
           }} // prevent toggling from opening settings
@@ -319,7 +320,7 @@ export function PlotLegendRow({
             placement="top"
             title="Mismatch in the number of elements in x-axis and y-axis messages"
           >
-            <ErrorCircle16Filled className={classes.errorIcon} />
+            <ErrorIcon style={{ fontSize: 16 }} className={classes.errorIcon} />
           </Tooltip>
         )}
       </div>
@@ -346,7 +347,7 @@ export function PlotLegendRow({
           }}
           data-testid="series-settings"
         >
-          <SettingsButton.icon />
+          <SettingsButton.icon style={{ fontSize: 16 }} />
         </ButtonBase>
         <ButtonBase
           title={deleteTitle}
@@ -354,7 +355,7 @@ export function PlotLegendRow({
           onClick={handleDeletePath}
           data-testid="delete-series"
         >
-          <DeleteButton.icon />
+          <DeleteButton.icon style={{ fontSize: 12 }} />
         </ButtonBase>
       </div>
     </div>
@@ -396,7 +397,7 @@ export function PlotLegendAddRow({
           aria-label={addTitle}
           data-testid="add-series"
         >
-          <AddButton.icon />
+          <AddButton.icon style={{ fontSize: 12 }} />
         </ButtonBase>
       </div>
       <div className={classes.plotName}>

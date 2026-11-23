@@ -5,7 +5,8 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { Dismiss20Filled, Warning24Filled } from "@fluentui/react-icons";
+import CloseIcon from "@mui/icons-material/Close";
+import WarningIcon from "@mui/icons-material/Warning";
 import {
   Button,
   IconButton,
@@ -100,7 +101,7 @@ function CompatibilityBannerBase({
   return (
     <div className={cx(classes.root, { [classes.fullscreen]: !isDismissable })}>
       <Stack direction={!isDismissable ? "column" : "row"} alignItems="center" gap={2}>
-        <Warning24Filled className={classes.icon} />
+        <WarningIcon className={classes.icon} />
 
         <div>
           <Typography variant="subtitle2">
@@ -124,7 +125,7 @@ function CompatibilityBannerBase({
 
         {isDismissable && (
           <IconButton edge="end" color="inherit" size="small" onClick={onDismiss}>
-            <Dismiss20Filled />
+            <CloseIcon fontSize="small" />
           </IconButton>
         )}
       </Stack>

@@ -1,7 +1,8 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import { ErrorCircle20Regular, PlugDisconnected20Regular } from "@fluentui/react-icons";
+import ErrorOutlineOutlinedIcon from "@mui/icons-material/ErrorOutlineOutlined";
+import PowerOffOutlinedIcon from "@mui/icons-material/PowerOffOutlined";
 import { Button, CircularProgress, Typography } from "@mui/material";
 import { useTranslation } from "react-i18next";
 import { makeStyles } from "tss-react/mui";
@@ -108,9 +109,9 @@ export function PanelPlayerState(): React.ReactNode {
         <>
           <span className={classes.tinyHidden}>
             {status.kind === "failed" ? (
-              <ErrorCircle20Regular className={classes.errorIcon} />
+              <ErrorOutlineOutlinedIcon fontSize="small" className={classes.errorIcon} />
             ) : (
-              <PlugDisconnected20Regular />
+              <PowerOffOutlinedIcon fontSize="small" />
             )}
           </span>
           <Typography variant="body2">

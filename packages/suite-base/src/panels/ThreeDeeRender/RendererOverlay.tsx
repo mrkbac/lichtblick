@@ -5,7 +5,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { ArrowRouting20Filled } from "@fluentui/react-icons";
+import RouteIcon from "@mui/icons-material/Route";
 import {
   Button,
   IconButton,
@@ -534,7 +534,7 @@ export const RendererOverlay = memo(function RendererOverlay(
                       size="small"
                       onClick={onDownloadImage}
                     >
-                      <DownloadIcon />
+                      <DownloadIcon fontSize="small" />
                     </IconButton>
                   </Tooltip>
                 ) : (
@@ -568,7 +568,7 @@ export const RendererOverlay = memo(function RendererOverlay(
                         size="small"
                         onClick={() => renderer?.zoomToData()}
                       >
-                        <ZoomToDataIcon />
+                        <ZoomToDataIcon fontSize="small" />
                       </IconButton>
                     </Tooltip>
                     <OverlayToolGroup
@@ -576,7 +576,7 @@ export const RendererOverlay = memo(function RendererOverlay(
                       label={measureTitle}
                       icon={
                         framePicking ? (
-                          <ArrowRouting20Filled />
+                          <RouteIcon fontSize="small" />
                         ) : (
                           <MeasureIcon filled={props.measureActive} />
                         )
@@ -619,7 +619,11 @@ export const RendererOverlay = memo(function RendererOverlay(
                             setFramePicking(!framePicking);
                           }}
                         >
-                          {framePicking ? <ArrowRouting20Filled /> : <MeasureFramesIcon />}
+                          {framePicking ? (
+                            <RouteIcon fontSize="small" />
+                          ) : (
+                            <MeasureFramesIcon fontSize="small" />
+                          )}
                         </IconButton>
                       </Tooltip>
                     </OverlayToolGroup>

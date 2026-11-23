@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import { ErrorCircle16Filled } from "@fluentui/react-icons";
+import ErrorIcon from "@mui/icons-material/Error";
 import { ButtonBase, CircularProgress, Tooltip } from "@mui/material";
 import { useTranslation } from "react-i18next";
 import { makeStyles } from "tss-react/mui";
@@ -84,9 +84,11 @@ export function PlayerStatusPill(): React.ReactNode {
         }}
       >
         {(busy || kind === "reconnecting") && <CircularProgress size={10} color="inherit" />}
-        {(kind === "failed" || (kind === "ready" && error != undefined)) && <ErrorCircle16Filled />}
+        {(kind === "failed" || (kind === "ready" && error != undefined)) && (
+          <ErrorIcon style={{ fontSize: 16 }} />
+        )}
         {kind === "live" && error == undefined && <span className={classes.liveDot} />}
-        {kind === "live" && error != undefined && <ErrorCircle16Filled />}
+        {kind === "live" && error != undefined && <ErrorIcon style={{ fontSize: 16 }} />}
         <span className={classes.label}>{label}</span>
       </ButtonBase>
     </Tooltip>

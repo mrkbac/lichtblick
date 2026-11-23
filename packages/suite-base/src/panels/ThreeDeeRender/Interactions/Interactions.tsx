@@ -114,7 +114,7 @@ function InteractionsBaseComponent({
   return (
     <ExpandingToolbar
       tooltip={title}
-      icon={<Icon />}
+      icon={<Icon fontSize="small" />}
       toolbarItems={toolbarItems}
       selectedTab={interactionsTabType}
       onSelectTab={(newSelectedTab) => {

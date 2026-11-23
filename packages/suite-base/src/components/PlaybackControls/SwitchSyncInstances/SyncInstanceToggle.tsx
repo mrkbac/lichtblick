@@ -1,7 +1,8 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import { WindowMultiple20Regular, WindowMultipleOff20Regular } from "@fluentui/react-icons";
+import SyncIcon from "@mui/icons-material/Sync";
+import SyncDisabledIcon from "@mui/icons-material/SyncDisabled";
 import { Tooltip, Typography, useTheme } from "@mui/material";
 import { useTranslation } from "react-i18next";
 
@@ -59,7 +60,7 @@ const SyncInstanceToggle = (): React.JSX.Element => {
         aria-disabled={alone}
         color={syncInstances ? "primary" : "inherit"}
         style={alone ? { color: theme.palette.text.disabled } : undefined}
-        icon={syncInstances ? <WindowMultiple20Regular /> : <WindowMultipleOff20Regular />}
+        icon={syncInstances ? <SyncIcon fontSize="small" /> : <SyncDisabledIcon fontSize="small" />}
         onClick={() => {
           if (!alone) {
             setSyncInstances(!syncInstances);

@@ -5,8 +5,9 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { ArrowDownload20Filled, Delete20Regular } from "@fluentui/react-icons";
 import CloseIcon from "@mui/icons-material/Close";
+import DeleteOutlinedIcon from "@mui/icons-material/DeleteOutlined";
+import FileDownloadIcon from "@mui/icons-material/FileDownload";
 import {
   Button,
   IconButton,
@@ -119,7 +120,7 @@ export function ShareJsonModal({
       <DialogActions>
         <Stack direction="row" gap={1}>
           <IconButton onClick={handleDownload} title="Download" aria-label="Download">
-            <ArrowDownload20Filled />
+            <FileDownloadIcon fontSize="small" />
           </IconButton>
           <CopyButton color="inherit" getText={getText} />
           <HoverableIconButton
@@ -129,7 +130,7 @@ export function ShareJsonModal({
             }}
             title="Clear"
             aria-label="Clear"
-            icon={<Delete20Regular />}
+            icon={<DeleteOutlinedIcon fontSize="small" />}
           />
         </Stack>
 

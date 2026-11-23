@@ -5,38 +5,34 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import {
-  Braces20Regular,
-  BranchFork20Regular,
-  Code20Regular,
-  Cube20Regular,
-  DataLine20Regular,
-  DataPie20Regular,
-  Database20Regular,
-  Eye20Regular,
-  Gauge20Regular,
-  Grid20Regular,
-  HeartPulse20Regular,
-  Image20Regular,
-  Joystick20Regular,
-  Lightbulb20Regular,
-  Map20Regular,
-  Note20Regular,
-  Options20Regular,
-  Organization20Regular,
-  PlugConnected20Regular,
-  Pulse20Regular,
-  RowTriple20Regular,
-  Send20Regular,
-  Speaker220Regular,
-  Stethoscope20Regular,
-  TabDesktop20Regular,
-  Table20Regular,
-  TextBulletListLtr20Regular,
-  Timeline20Regular,
-  ToggleMultiple20Regular,
-  TopSpeed20Regular,
-} from "@fluentui/react-icons";
+import AccountTreeOutlinedIcon from "@mui/icons-material/AccountTreeOutlined";
+import CodeIcon from "@mui/icons-material/Code";
+import DataObjectIcon from "@mui/icons-material/DataObject";
+import FormatListBulletedIcon from "@mui/icons-material/FormatListBulleted";
+import GridViewOutlinedIcon from "@mui/icons-material/GridViewOutlined";
+import HubOutlinedIcon from "@mui/icons-material/HubOutlined";
+import ImageOutlinedIcon from "@mui/icons-material/ImageOutlined";
+import LightbulbOutlinedIcon from "@mui/icons-material/LightbulbOutlined";
+import MapOutlinedIcon from "@mui/icons-material/MapOutlined";
+import MedicalServicesOutlinedIcon from "@mui/icons-material/MedicalServicesOutlined";
+import MonitorHeartOutlinedIcon from "@mui/icons-material/MonitorHeartOutlined";
+import PieChartOutlineOutlinedIcon from "@mui/icons-material/PieChartOutlineOutlined";
+import PowerOutlinedIcon from "@mui/icons-material/PowerOutlined";
+import SendOutlinedIcon from "@mui/icons-material/SendOutlined";
+import ShowChartIcon from "@mui/icons-material/ShowChart";
+import SpeedOutlinedIcon from "@mui/icons-material/SpeedOutlined";
+import SportsEsportsOutlinedIcon from "@mui/icons-material/SportsEsportsOutlined";
+import StickyNote2OutlinedIcon from "@mui/icons-material/StickyNote2Outlined";
+import StorageOutlinedIcon from "@mui/icons-material/StorageOutlined";
+import TabOutlinedIcon from "@mui/icons-material/TabOutlined";
+import TableChartOutlinedIcon from "@mui/icons-material/TableChartOutlined";
+import TableRowsOutlinedIcon from "@mui/icons-material/TableRowsOutlined";
+import TuneIcon from "@mui/icons-material/Tune";
+import TuneOutlinedIcon from "@mui/icons-material/TuneOutlined";
+import ViewInArOutlinedIcon from "@mui/icons-material/ViewInArOutlined";
+import ViewTimelineOutlinedIcon from "@mui/icons-material/ViewTimelineOutlined";
+import VisibilityOutlinedIcon from "@mui/icons-material/VisibilityOutlined";
+import VolumeUpOutlinedIcon from "@mui/icons-material/VolumeUpOutlined";
 import { TFunction } from "i18next";
 
 import { PanelInfo } from "@lichtblick/suite-base/context/PanelCatalogContext";
@@ -108,7 +104,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
       multiple: true,
       config: (topics) => ({ topics: visibleTopics(topics) }),
     },
-    icon: Cube20Regular,
+    icon: ViewInArOutlinedIcon,
     keywords: ["scene", "pointcloud", "lidar", "markers", "rviz"],
     description: t("3DPanelDescription"),
     thumbnail: threeDeeRenderThumbnail,
@@ -119,7 +115,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
   {
     title: t("ROSDiagnosticsDetail"),
     type: "DiagnosticStatusPanel",
-    icon: HeartPulse20Regular,
+    icon: MonitorHeartOutlinedIcon,
     description: t("ROSDiagnosticsDetailDescription"),
     thumbnail: diagnosticStatusThumbnail,
     module: async () => await import("./DiagnosticStatus"),
@@ -130,7 +126,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
   {
     title: t("ROSDiagnosticSummary"),
     type: "DiagnosticSummary",
-    icon: Stethoscope20Regular,
+    icon: MedicalServicesOutlinedIcon,
     description: t("ROSDiagnosticSummaryDescription"),
     thumbnail: diagnosticSummaryThumbnail,
     module: async () => await import("./DiagnosticSummary"),
@@ -142,7 +138,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
     title: t("image"),
     type: "Image",
     openIn: { kind: "topic" },
-    icon: Image20Regular,
+    icon: ImageOutlinedIcon,
     keywords: ["camera", "video", "picture"],
     description: t("imageDescription"),
     thumbnail: imageThumbnail,
@@ -154,7 +150,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
     title: t("cameraGrid"),
     type: "CameraGrid",
     openIn: { kind: "topic", multiple: true },
-    icon: Grid20Regular,
+    icon: GridViewOutlinedIcon,
     keywords: ["cameras", "images", "multi camera"],
     description: t("cameraGridDescription"),
     thumbnail: cameraGridThumbnail,
@@ -166,7 +162,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
     title: t("indicator"),
     type: "Indicator",
     openIn: { kind: "field" },
-    icon: Lightbulb20Regular,
+    icon: LightbulbOutlinedIcon,
     description: t("indicatorDescription"),
     thumbnail: indicatorThumbnail,
     module: async () => await import("./Indicator"),
@@ -176,7 +172,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
   {
     title: t("stack"),
     type: "Stack",
-    icon: RowTriple20Regular,
+    icon: TableRowsOutlinedIcon,
     keywords: ["layout", "scroll", "list", "grid", "vstack", "hstack", "container"],
     description: t("stackDescription"),
     thumbnail: stackThumbnail,
@@ -186,7 +182,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
   {
     title: t("tab"),
     type: "Tab",
-    icon: TabDesktop20Regular,
+    icon: TabOutlinedIcon,
     description: t("tabDescription"),
     thumbnail: tabThumbnail,
     module: async () => await import("./Tab"),
@@ -199,7 +195,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
   {
     title: t("gauge"),
     type: "Gauge",
-    icon: Gauge20Regular,
+    icon: SpeedOutlinedIcon,
     description: t("gaugeDescription"),
     thumbnail: gaugeThumbnail,
     module: async () => await import("./Gauge"),
@@ -209,7 +205,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
   {
     title: t("teleop"),
     type: "Teleop",
-    icon: Joystick20Regular,
+    icon: SportsEsportsOutlinedIcon,
     keywords: ["joystick", "cmd_vel", "drive"],
     description: t("teleopDescription"),
     thumbnail: teleopThumbnail,
@@ -220,7 +216,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
   {
     title: t("map"),
     type: "map",
-    icon: Map20Regular,
+    icon: MapOutlinedIcon,
     keywords: ["gps", "navsat", "geo"],
     description: t("mapDescription"),
     thumbnail: mapThumbnail,
@@ -231,7 +227,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
   {
     title: t("parameters"),
     type: "Parameters",
-    icon: Options20Regular,
+    icon: TuneIcon,
     description: t("parametersDescription"),
     thumbnail: parametersThumbnail,
     module: async () => await import("./Parameters"),
@@ -242,7 +238,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
     title: t("plot"),
     type: "Plot",
     openIn: { kind: "field", multiple: true },
-    icon: DataLine20Regular,
+    icon: ShowChartIcon,
     keywords: ["chart", "graph", "timeseries", "line"],
     description: t("plotDescription"),
     thumbnail: plotThumbnail,
@@ -253,7 +249,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
   {
     title: t("pieChart"),
     type: "PieChart",
-    icon: DataPie20Regular,
+    icon: PieChartOutlineOutlinedIcon,
     description: t("pieChartDescription"),
     thumbnail: pieChartThumbnail,
     module: async () => await import("./PieChart"),
@@ -263,7 +259,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
   {
     title: t("publish"),
     type: "Publish",
-    icon: Send20Regular,
+    icon: SendOutlinedIcon,
     keywords: ["send", "rostopic pub"],
     description: t("publishDescription"),
     thumbnail: publishThumbnail,
@@ -274,7 +270,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
   {
     title: t("callService"),
     type: "CallService",
-    icon: PlugConnected20Regular,
+    icon: PowerOutlinedIcon,
     keywords: ["rosservice", "srv"],
     description: t("callServiceDescription"),
     thumbnail: publishThumbnail,
@@ -286,7 +282,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
     title: t("rawMessages"),
     type: "RawMessages",
     openIn: { kind: "path" },
-    icon: Braces20Regular,
+    icon: DataObjectIcon,
     keywords: ["json", "inspect", "echo"],
     description: t("rawMessagesDescription"),
     thumbnail: rawMessagesThumbnail,
@@ -299,7 +295,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
     // Alias of Raw Messages for layouts saved with this type; not offered in the panel list.
     title: t("rawMessages"),
     type: "RawMessagesVirtual",
-    icon: Braces20Regular,
+    icon: DataObjectIcon,
     description: t("rawMessagesDescription"),
     thumbnail: rawMessagesThumbnail,
     module: async () => await import("./RawMessagesVirtual"),
@@ -312,7 +308,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
     title: t("audio"),
     type: "Audio",
     openIn: { kind: "topic" },
-    icon: Speaker220Regular,
+    icon: VolumeUpOutlinedIcon,
     description: t("audioDescription"),
     thumbnail: audioThumbnail,
     module: async () => await import("./Audio"),
@@ -323,7 +319,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
     title: t("log"),
     type: "RosOut",
     openIn: { kind: "topic", config: ([topic]) => ({ topicToRender: topic }) },
-    icon: TextBulletListLtr20Regular,
+    icon: FormatListBulletedIcon,
     keywords: ["rosout", "console", "logs"],
     description: t("logDescription"),
     thumbnail: logThumbnail,
@@ -335,7 +331,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
     title: t("stateTransitions"),
     type: "StateTransitions",
     openIn: { kind: "field", multiple: true },
-    icon: Timeline20Regular,
+    icon: ViewTimelineOutlinedIcon,
     keywords: ["enum", "states", "timeline"],
     description: t("stateTransitionsDescription"),
     thumbnail: stateTransitionsThumbnail,
@@ -347,7 +343,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
     title: t("table"),
     type: "Table",
     openIn: { kind: "path" },
-    icon: Table20Regular,
+    icon: TableChartOutlinedIcon,
     description: t("tableDescription"),
     thumbnail: tableThumbnail,
     module: async () => await import("./Table"),
@@ -358,7 +354,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
   {
     title: t("topicGraph"),
     type: "TopicGraph",
-    icon: Organization20Regular,
+    icon: HubOutlinedIcon,
     keywords: ["rqt_graph", "nodes", "computation graph"],
     description: t("topicGraphDescription"),
     thumbnail: topicGraphThumbnail,
@@ -369,7 +365,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
   {
     title: t("transformTree"),
     type: "TransformTree",
-    icon: BranchFork20Regular,
+    icon: AccountTreeOutlinedIcon,
     keywords: ["tf", "tf_static", "frames", "transforms"],
     description: t("transformTreeDescription"),
     module: async () => await import("./TransformTree"),
@@ -379,7 +375,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
   {
     title: t("dataSourceInfo"),
     type: "SourceInfo",
-    icon: Database20Regular,
+    icon: StorageOutlinedIcon,
     keywords: ["topics", "metadata", "info"],
     description: t("dataSourceInfoDescription"),
     thumbnail: dataSourceInfoThumbnail,
@@ -390,7 +386,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
   {
     title: t("notes"),
     type: "Notes",
-    icon: Note20Regular,
+    icon: StickyNote2OutlinedIcon,
     description: t("notesDescription"),
     thumbnail: notesThumbnail,
     module: async () => await import("./Notes"),
@@ -400,7 +396,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
   {
     title: t("topicHealth"),
     type: "TopicHealth",
-    icon: Pulse20Regular,
+    icon: MonitorHeartOutlinedIcon,
     keywords: ["hz", "frequency", "rate", "stats"],
     description: t("topicHealthDescription"),
     thumbnail: topicHealthThumbnail,
@@ -411,7 +407,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
   {
     title: t("watch"),
     type: "Watch",
-    icon: Eye20Regular,
+    icon: VisibilityOutlinedIcon,
     description: t("watchDescription"),
     thumbnail: watchThumbnail,
     module: async () => await import("./Watch"),
@@ -421,7 +417,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
   {
     title: t("variableSlider"),
     type: "GlobalVariableSliderPanel",
-    icon: ToggleMultiple20Regular,
+    icon: TuneOutlinedIcon,
     description: t("variableSliderDescription"),
     thumbnail: variableSliderThumbnail,
     module: async () => await import("./VariableSlider"),
@@ -430,7 +426,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
   {
     title: t("userScripts"),
     type: "NodePlayground",
-    icon: Code20Regular,
+    icon: CodeIcon,
     keywords: ["code", "script", "typescript"],
     description: t("userScriptsDescription"),
     thumbnail: userScriptEditorThumbnail,
@@ -441,7 +437,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
   {
     title: t("playbackPerformance"),
     type: "PlaybackPerformance",
-    icon: TopSpeed20Regular,
+    icon: SpeedOutlinedIcon,
     description: t("playbackPerformanceDescription"),
     module: async () => await import("./PlaybackPerformance"),
     docs: async () => await import("./PlaybackPerformance/docs"),

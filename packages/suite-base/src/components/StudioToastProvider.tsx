@@ -5,13 +5,11 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import {
-  CheckmarkCircle20Regular,
-  Dismiss16Filled,
-  Info20Regular,
-  Warning20Regular,
-  ErrorCircle20Regular,
-} from "@fluentui/react-icons";
+import CheckCircleOutlineOutlinedIcon from "@mui/icons-material/CheckCircleOutlineOutlined";
+import CloseIcon from "@mui/icons-material/Close";
+import ErrorOutlineOutlinedIcon from "@mui/icons-material/ErrorOutlineOutlined";
+import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
+import WarningAmberIcon from "@mui/icons-material/WarningAmber";
 import { Grow, IconButton } from "@mui/material";
 import {
   SnackbarProvider,
@@ -93,7 +91,7 @@ const CloseSnackbarAction = ({ id }: { id: SnackbarKey }) => {
         closeSnackbar(id);
       }}
     >
-      <Dismiss16Filled />
+      <CloseIcon style={{ fontSize: 16 }} />
     </IconButton>
   );
 };
@@ -118,11 +116,11 @@ export default function StudioToastProvider({ children }: PropsWithChildren): Re
       }}
       action={(id) => <CloseSnackbarAction id={id} />}
       iconVariant={{
-        default: <Info20Regular className={classes.icon} />,
-        info: <Info20Regular className={classes.icon} />,
-        error: <ErrorCircle20Regular className={classes.icon} />,
-        warning: <Warning20Regular className={classes.icon} />,
-        success: <CheckmarkCircle20Regular className={classes.icon} />,
+        default: <InfoOutlinedIcon fontSize="small" className={classes.icon} />,
+        info: <InfoOutlinedIcon fontSize="small" className={classes.icon} />,
+        error: <ErrorOutlineOutlinedIcon fontSize="small" className={classes.icon} />,
+        warning: <WarningAmberIcon fontSize="small" className={classes.icon} />,
+        success: <CheckCircleOutlineOutlinedIcon fontSize="small" className={classes.icon} />,
       }}
       anchorOrigin={{
         vertical: "top",
