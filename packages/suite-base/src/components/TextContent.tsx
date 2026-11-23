@@ -194,10 +194,7 @@ export default function TextContent(props: PropsWithChildren<Props>): React.Reac
   return (
     <div className={classes.root} style={style}>
       {typeof children === "string" ? (
-        <Markdown
-          remarkPlugins={[remarkGfm]}
-          components={{ a: linkRenderer, ...components }}
-        >
+        <Markdown remarkPlugins={[remarkGfm]} components={{ a: linkRenderer, ...components }}>
           {children}
         </Markdown>
       ) : (

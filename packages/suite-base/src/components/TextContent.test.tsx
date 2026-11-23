@@ -15,11 +15,7 @@ type SetupProps = {
 };
 
 function setup({ children, style }: SetupProps) {
-  return render(
-    <TextContent style={style}>
-      {children}
-    </TextContent>,
-  );
+  return render(<TextContent style={style}>{children}</TextContent>);
 }
 
 describe("TextContent", () => {
