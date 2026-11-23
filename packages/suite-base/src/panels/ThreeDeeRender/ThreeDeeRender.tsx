@@ -81,8 +81,6 @@ import { useGpuRecovery } from "./useGpuRecovery";
 
 import "maplibre-gl/dist/maplibre-gl.css";
 
-const LAYER_ERROR_LOG_GRACE_MS = 3000;
-
 const log = Logger.getLogger(__filename);
 
 /** Transforms are read back this far before a read-back scan's oldest header stamp */
@@ -491,7 +489,6 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
     return reportPersistentErrors(
       renderer.settings.errors,
       handleLayerErrorUpdate,
-      LAYER_ERROR_LOG_GRACE_MS,
       () => renderer.currentTime,
     );
   }, [renderer, handleLayerErrorUpdate]);
