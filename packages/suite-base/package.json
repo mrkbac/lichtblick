@@ -52,7 +52,6 @@
     "@emotion/cache": "11.14.0",
     "@emotion/react": "11.14.0",
     "@emotion/styled": "11.14.1",
-    "@fluentui/react-icons": "2.0.347",
     "@foxglove/avl": "1.0.0",
     "@foxglove/comlink": "4.4.3",
     "@foxglove/crc": "1.0.1",

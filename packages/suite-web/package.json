@@ -7,7 +7,6 @@
     "@lichtblick/suite-base": "workspace:*"
   },
   "devDependencies": {
-    "@fluentui/react-icons": "2.0.347",
     "@lichtblick/log": "workspace:*",
     "@lichtblick/test-builders": "1.0.1",
     "@lichtblick/theme": "workspace:*",

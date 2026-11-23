@@ -450,9 +450,6 @@ importers:
       '@emotion/styled':
         specifier: 11.14.1
         version: 11.14.1(@emotion/react@11.14.0(@types/react@19.3.0)(react@19.3.1))(@types/react@19.3.0)(react@19.3.1)
-      '@fluentui/react-icons':
-        specifier: 2.0.347
-        version: 2.0.347(react@19.3.1)
       '@foxglove/avl':
         specifier: 1.0.0
         version: 1.0.0
@@ -898,9 +895,6 @@ importers:
         specifier: workspace:*
         version: link:../suite-base
     devDependencies:
-      '@fluentui/react-icons':
-        specifier: 2.0.347
-        version: 2.0.347(react@19.3.1)
       '@lichtblick/log':
         specifier: workspace:*
         version: link:../log
@@ -952,9 +946,6 @@ importers:
       '@emotion/styled':
         specifier: 11.14.1
         version: 11.14.1(@emotion/react@11.14.0(@types/react@19.3.0)(react@19.3.1))(@types/react@19.3.0)(react@19.3.1)
-      '@fluentui/react-icons':
-        specifier: 2.0.347
-        version: 2.0.347(react@19.3.1)
       '@mui/icons-material':
         specifier: 9.5.0
         version: 9.5.0(@mui/material@9.5.0(@emotion/react@11.14.0(@types/react@19.3.0)(react@19.3.1))(@emotion/styled@11.14.1(@emotion/react@11.14.0(@types/react@19.3.0)(react@19.3.1))(@types/react@19.3.0)(react@19.3.1))(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1))(@types/react@19.3.0)(react@19.3.1)
@@ -2040,11 +2031,6 @@ packages:
       '@noble/hashes':
         optional: true
 
-  '@fluentui/react-icons@2.0.347':
-    resolution: {integrity: sha512-cu5VrxrdT6ccwhUy2TKOMpIKt0Sm0PRcv7E2Ez9ko4RgiGhveP5CKyZFFhauYz6lpl/BmNlnJepnWETxTFRhHQ==}
-    peerDependencies:
-      react: '>=16.8.0 <20.0.0'
-
   '@foxglove/avl@1.0.0':
     resolution: {integrity: sha512-5lV6ZzeiCgtTlEOsoxqvBN6B8S91AyOMS68ImUrETSalmFKOM5XO8YhPMWsUW0QR3431CwQhKa2buSCu2TFcfA==}
     engines: {node: '>= 14'}
@@ -2147,17 +2133,6 @@ packages:
 
   '@foxglove/xmlrpc@1.4.0':
     resolution: {integrity: sha512-DeVRciMYcU053vaJQT/hokhq/BLGqtdYcEFcb6z6+fcVh+p60u/eDIFof94Q6tE/6cWGHxtCAGnmWRzPIuavMg==}
-
-  '@griffel/core@1.21.4':
-    resolution: {integrity: sha512-Pt6tjaBCOYYC76L7U5yl3r+UqOGXEbeskvYuqUsUzaVQR2ueoMErA2+bRjvVPFr8NvvhPVU+QNBqd9Deg5st2A==}
-
-  '@griffel/react@1.7.8':
-    resolution: {integrity: sha512-kTegyzZoRqpRNUQ8Fd6QWLC8MUqSyO+/GDC/ffbEG8Y6JDole98rBrOVA/NN9PDD61/ktsd2UqtsTNwtAG6q3w==}
-    peerDependencies:
-      react: '>=16.14.0 <20.0.0'
-
-  '@griffel/style-types@1.4.3':
-    resolution: {integrity: sha512-sFxMK19oFUPQSmyCKT1Pvj5Nu/ODvhMczqhGjVAoksDTXUj1za40WA0CXqV3o+xxKWPec+K/rbS78jJLmomsQA==}
 
   '@humanfs/core@0.19.2':
     resolution: {integrity: sha512-UhXNm+CFMWcbChXywFwkmhqjs3PRCmcSa/hfBgLIb7oQ5HNb1wS0icWsGtSAUNgefHeI+eBrA8I1fxmbHsGdvA==}
@@ -7090,9 +7065,6 @@ packages:
       '@rsbuild/core':
         optional: true
 
-  rtl-css-js@1.16.1:
-    resolution: {integrity: sha512-lRQgou1mu19e+Ya0LsTvKrVJ5TYUbqCVPAiImX3UfLTenarvPUl1QFdvu5Z3PYmHT9RCcwIfbjRQBntExyj3Zg==}
-
   run-applescript@7.1.0:
     resolution: {integrity: sha512-DPe5pVFaAsinSaV6QjQ6gdiedWDcRCbUuiQfQa2wmWV7+xC9bGulGI8+TdRmoFkAPaBXk8CrAbnlY2ISniJ47Q==}
     engines: {node: '>=18'}
@@ -7396,9 +7368,6 @@ packages:
 
   stylis@4.2.0:
     resolution: {integrity: sha512-Orov6g6BB1sDfYgzWfTHDOxamtX1bE/zo104Dh9e6fqJ3PooipYyfJ0pUmrZO2wAvO8YbEyeFrkV91XTsGMSrw==}
-
-  stylis@4.4.0:
-    resolution: {integrity: sha512-5Z9ZpRzfuH6l/UAvCPAPUo3665Nk2wLaZU3x+TLHKVzIz33+sbJqbtrYoC3KD4/uVOr2Zp+L0LySezP9OHV9yA==}
 
   sumchecker@3.0.1:
     resolution: {integrity: sha512-MvjXzkz/BOfyVDkG0oFOtBxHX2u3gKbMHIF/dXblZsgD3BWOFLmHovIpZY7BykJdAjcqRCBi1WYBNdEC9yI7vg==}
@@ -9322,12 +9291,6 @@ snapshots:
     optionalDependencies:
       '@noble/hashes': 1.8.0
 
-  '@fluentui/react-icons@2.0.347(react@19.3.1)':
-    dependencies:
-      '@griffel/react': 1.7.8(react@19.3.1)
-      react: 19.3.1
-      tslib: 2.9.1
-
   '@foxglove/avl@1.0.0': {}
 
   '@foxglove/cdr@3.5.1': {}
@@ -9455,25 +9418,6 @@ snapshots:
       byte-base64: 1.1.0
       sax: 1.6.0
       xmlbuilder2: 4.0.3
-
-  '@griffel/core@1.21.4':
-    dependencies:
-      '@emotion/hash': 0.9.2
-      '@griffel/style-types': 1.4.3
-      csstype: 3.2.3
-      rtl-css-js: 1.16.1
-      stylis: 4.4.0
-      tslib: 2.9.1
-
-  '@griffel/react@1.7.8(react@19.3.1)':
-    dependencies:
-      '@griffel/core': 1.21.4
-      react: 19.3.1
-      tslib: 2.9.1
-
-  '@griffel/style-types@1.4.3':
-    dependencies:
-      csstype: 3.2.3
 
   '@humanfs/core@0.19.2':
     dependencies:
@@ -14623,10 +14567,6 @@ snapshots:
     optionalDependencies:
       '@rsbuild/core': 2.3.3
 
-  rtl-css-js@1.16.1:
-    dependencies:
-      '@babel/runtime': 7.29.10
-
   run-applescript@7.1.0: {}
 
   safe-array-concat@1.1.4:
@@ -14988,8 +14928,6 @@ snapshots:
       inline-style-parser: 0.2.7
 
   stylis@4.2.0: {}
-
-  stylis@4.4.0: {}
 
   sumchecker@3.0.1:
     dependencies:
