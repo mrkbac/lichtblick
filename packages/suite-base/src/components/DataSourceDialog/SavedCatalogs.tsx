@@ -21,7 +21,6 @@ import { CatalogBackend } from "@lichtblick/suite-base/components/Catalog/types"
 import { useCatalogFolder } from "@lichtblick/suite-base/components/Catalog/useCatalogFolder";
 import { useCatalogUrl } from "@lichtblick/suite-base/components/Catalog/useCatalogUrl";
 import Stack from "@lichtblick/suite-base/components/Stack";
-import { KEY_WORKSPACE_PREFIX } from "@lichtblick/suite-base/constants/browserStorageKeys";
 import { useWorkspaceActions } from "@lichtblick/suite-base/context/Workspace/useWorkspaceActions";
 
 type SavedCatalog = {
@@ -30,7 +29,7 @@ type SavedCatalog = {
   hidden?: boolean;
 } & ({ kind: "local" } | { kind: "remote"; url: string });
 
-const STORAGE_KEY = `${KEY_WORKSPACE_PREFIX}saved-catalogs`;
+const STORAGE_KEY = "saved-catalogs";
 export const DEFAULT_CATALOG = "last";
 const DEFAULT_SOURCE: SavedCatalog = { id: DEFAULT_CATALOG, kind: "local" };
 
