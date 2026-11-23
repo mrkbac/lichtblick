@@ -17,6 +17,7 @@
 import { useSnackbar } from "notistack";
 import { useCallback, useLayoutEffect, useState } from "react";
 
+import { pushAll } from "@lichtblick/den/collection";
 import Logger from "@lichtblick/log";
 import DropOverlay from "@lichtblick/suite-base/components/DropOverlay";
 import { rememberFolder } from "@lichtblick/suite-base/util/compareSides";
@@ -112,7 +113,7 @@ export default function DocumentDropListener(props: DocumentDropListenerProps): 
           if (batch.length === 0) {
             break;
           }
-          entries.push(...batch);
+          pushAll(entries, batch);
         }
 
         // Add all files in this directory to our list of files
