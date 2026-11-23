@@ -42,7 +42,7 @@ import { parseColor } from "@lichtblick/suite-base/util/parseColor";
 import { customTypography } from "@lichtblick/theme";
 
 import { FrameMeasureOverlay } from "./FrameMeasureOverlay";
-import { InteractionContextMenu, Interactions, SelectionObject, TabType } from "./Interactions";
+import { InteractionContextMenu, Interactions, SelectionObject } from "./Interactions";
 import { HoverTooltip } from "./Interactions/HoverTooltip";
 import type { HoverEntityInfo } from "./Interactions/types";
 import { MeasurePanel } from "./MeasurePanel";
@@ -265,7 +265,7 @@ export const RendererOverlay = memo(function RendererOverlay(
   const [selectedRenderable, setSelectedRenderable] = useState<PickedRenderable | undefined>(
     undefined,
   );
-  const [interactionsTabType, setInteractionsTabType] = useState<TabType | undefined>(undefined);
+  const [inspecting, setInspecting] = useState(false);
   const renderer = useRenderer();
   // The fixed frame appears once transforms arrive; the overlay re-renders only when that changes
   const [hasFixedFrame, setHasFixedFrame] = useState(renderer?.fixedFrameId != undefined);
@@ -288,9 +288,9 @@ export const RendererOverlay = memo(function RendererOverlay(
   // Toggle object selection mode on/off in the renderer
   useEffect(() => {
     if (renderer) {
-      renderer.setPickingEnabled(interactionsTabType != undefined);
+      renderer.setPickingEnabled(inspecting);
     }
-  }, [interactionsTabType, renderer]);
+  }, [inspecting, renderer]);
 
   useRendererEvent(
     "renderablesClicked",
@@ -519,10 +519,12 @@ export const RendererOverlay = memo(function RendererOverlay(
           (props.interfaceMode === "3d" || mousePresent) && (
             <Interactions
               addPanel={props.addPanel}
-              interactionsTabType={interactionsTabType}
+              inspecting={inspecting}
               onShowTopicSettings={props.onShowTopicSettings}
               selectedObject={selectedObject}
-              setInteractionsTabType={setInteractionsTabType}
+              onToggleInspecting={() => {
+                setInspecting((old) => !old);
+              }}
               timezone={props.timezone}
               toolbarItems={
                 props.interfaceMode === "image" ? (

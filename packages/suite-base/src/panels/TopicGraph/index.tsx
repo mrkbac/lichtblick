@@ -142,7 +142,7 @@ function unionInto<T>(dest: Set<T>, ...iterables: ReadonlySet<T>[]): void {
 /** Displays publisher/subscriber relationships with floating graph and visibility controls. */
 function TopicGraph() {
   const { classes } = useStyles();
-  const [selectedTab, setSelectedTab] = useState<"Topics" | undefined>(undefined);
+  const [expanded, setExpanded] = useState(false);
 
   const publishedTopics = useMessagePipeline(
     useCallback((ctx) => ctx.playerState.activeData?.publishedTopics, []),
@@ -376,9 +376,9 @@ function TopicGraph() {
             </>
           }
           title="Topics"
-          selectedTab={selectedTab}
-          onSelectTab={(newSelectedTab) => {
-            setSelectedTab(newSelectedTab);
+          expanded={expanded}
+          onToggle={() => {
+            setExpanded((old) => !old);
           }}
         >
           <div className={classes.toolbarContent}>

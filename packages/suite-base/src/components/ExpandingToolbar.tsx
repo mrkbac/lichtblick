@@ -55,14 +55,14 @@ export function ToolGroupFixedSizePane({ children }: { children: ReactNode }): R
   );
 }
 
-type Props<T extends string> = {
+type Props = {
   checked?: boolean;
   children: ReactNode;
   icon: ReactNode;
-  /** Header of the expanded pane; also the value passed to onSelectTab when opening. */
-  title: T;
-  onSelectTab: (name: T | undefined) => void;
-  selectedTab?: T; // collapse the toolbar if selectedTab is undefined
+  /** Header of the expanded pane. */
+  title: string;
+  expanded: boolean;
+  onToggle: () => void;
   tooltip: string;
   dataTest?: string;
   /** The panel's other floating controls, joined below the toggle into one toolbar. */
@@ -70,19 +70,18 @@ type Props<T extends string> = {
 };
 
 /** Expands a floating control into a pane while leaving the surrounding canvas interactive. */
-export default function ExpandingToolbar<T extends string>({
+export default function ExpandingToolbar({
   children,
   checked,
   icon,
-  onSelectTab,
-  selectedTab,
+  expanded,
+  onToggle,
   title,
   tooltip,
   dataTest,
   toolbarItems,
-}: Props<T>): React.JSX.Element {
+}: Props): React.JSX.Element {
   const { classes } = useStyles();
-  const expanded = selectedTab != undefined;
 
   const toolbar = (
     <OverlayToolbar>
@@ -92,9 +91,7 @@ export default function ExpandingToolbar<T extends string>({
           aria-pressed={expanded || checked === true}
           aria-label={tooltip}
           data-testid={`ExpandingToolbar-${tooltip}`}
-          onClick={() => {
-            onSelectTab(expanded ? undefined : title);
-          }}
+          onClick={onToggle}
         >
           {icon}
         </IconButton>
@@ -119,13 +116,7 @@ export default function ExpandingToolbar<T extends string>({
             <Typography variant="button" component="div" className={classes.title}>
               {title}
             </Typography>
-            <IconButton
-              size="small"
-              className={classes.minimizeButton}
-              onClick={() => {
-                onSelectTab(undefined);
-              }}
-            >
+            <IconButton size="small" className={classes.minimizeButton} onClick={onToggle}>
               <CloseFullscreenIcon fontSize="small" />
             </IconButton>
           </Stack>

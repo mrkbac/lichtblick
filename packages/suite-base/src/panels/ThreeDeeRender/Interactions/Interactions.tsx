@@ -29,9 +29,6 @@ import { InteractionData } from "./types";
 import { THREE_DEE_BUTTONS } from "../buttons";
 import { Pose } from "../transforms";
 
-export const OBJECT_TAB_TYPE = "Selected object";
-export type TabType = typeof OBJECT_TAB_TYPE;
-
 export type SelectionObject = {
   object: {
     pose: Pose;
@@ -42,10 +39,10 @@ export type SelectionObject = {
 
 type Props = {
   addPanel: LayoutActions["addPanel"];
-  interactionsTabType?: TabType;
+  inspecting: boolean;
   onShowTopicSettings?: (topic: string) => void;
   selectedObject?: SelectionObject;
-  setInteractionsTabType: (arg0?: TabType) => void;
+  onToggleInspecting: () => void;
   timezone: string | undefined;
   /** The panel's other floating controls, shown in the same toolbar below the inspect button. */
   toolbarItems?: React.ReactNode;
@@ -102,9 +99,9 @@ const SelectedObjectPane = React.memo<SelectedObjectPaneProps>(function Selected
 function InteractionsBaseComponent({
   addPanel,
   selectedObject,
-  interactionsTabType,
+  inspecting,
   onShowTopicSettings,
-  setInteractionsTabType,
+  onToggleInspecting,
   timezone,
   toolbarItems,
 }: Props): React.JSX.Element {
@@ -115,11 +112,9 @@ function InteractionsBaseComponent({
       tooltip={title}
       icon={<Icon fontSize="small" />}
       toolbarItems={toolbarItems}
-      title={OBJECT_TAB_TYPE}
-      selectedTab={interactionsTabType}
-      onSelectTab={(newSelectedTab) => {
-        setInteractionsTabType(newSelectedTab);
-      }}
+      title="Selected object"
+      expanded={inspecting}
+      onToggle={onToggleInspecting}
     >
       <SelectedObjectPane
         addPanel={addPanel}
