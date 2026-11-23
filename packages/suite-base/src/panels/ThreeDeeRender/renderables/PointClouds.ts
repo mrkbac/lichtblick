@@ -433,12 +433,7 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
     }
 
     // Invalid point cloud checks
-    let warnings = 0;
-    const warn = (message: string) => {
-      warnings++;
-      this.#warn(message);
-    };
-    if (!this.#validatePointCloud(pointCloud, this.#invalidError, warn)) {
+    if (!this.#validatePointCloud(pointCloud)) {
       return;
     }
 
@@ -448,7 +443,7 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
     }
     // A clean cloud clears the previous message's error (only then, so a cloud that keeps
     // failing or warning doesn't remove and re-add it on every message)
-    if (warnings === 0) {
+    if (!this.#warned) {
       this.renderer.settings.errors.removeFromTopic(this.userData.topic, INVALID_POINTCLOUD);
     }
 
@@ -860,22 +855,19 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
     lastEntry.renderable.decoded = undefined;
   };
 
-  /** A problem that still lets the cloud be drawn */
-  #warn = (message: string): void => {
-    this.renderer.settings.errors.addToTopic(this.userData.topic, INVALID_POINTCLOUD, message);
-  };
+  /** Whether the last validated cloud had a tolerated problem */
+  #warned = false;
 
-  /**
-   * `report` gets why a cloud can't be drawn (by default an error that blanks the latest scan),
-   * `warn` a tolerated problem
-   */
-  #validatePointCloud(
-    pointCloud: PointCloud | PointCloud2,
-    report = this.#invalidError,
-    warn = this.#warn,
-  ): boolean {
+  #warn(message: string): void {
+    this.#warned = true;
+    this.renderer.settings.errors.addToTopic(this.userData.topic, INVALID_POINTCLOUD, message);
+  }
+
+  /** `report` gets why a cloud can't be drawn (by default an error that blanks the latest scan) */
+  #validatePointCloud(pointCloud: PointCloud | PointCloud2, report = this.#invalidError): boolean {
+    this.#warned = false;
     return "header" in pointCloud
-      ? this.#validateRosPointCloud(pointCloud, report, warn)
+      ? this.#validateRosPointCloud(pointCloud, report)
       : this.#validateFoxglovePointCloud(pointCloud, report);
   }
 
@@ -897,11 +889,7 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
     return true;
   }
 
-  #validateRosPointCloud(
-    pointCloud: PointCloud2,
-    report: (message: string) => void,
-    warn: (message: string) => void,
-  ): boolean {
+  #validateRosPointCloud(pointCloud: PointCloud2, report: (message: string) => void): boolean {
     const data = pointCloud.data;
 
     if (pointCloud.is_bigendian) {
@@ -924,13 +912,13 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
 
     if (data.length < pointCloud.height * pointCloud.row_step) {
       const message = `PointCloud2 data length ${data.length} is less than height ${pointCloud.height} * row_step ${pointCloud.row_step}`;
-      warn(message);
+      this.#warn(message);
       // Allow this error for now since we currently ignore row_step
     }
 
     if (pointCloud.width * pointCloud.point_step > pointCloud.row_step) {
       const message = `PointCloud2 width ${pointCloud.width} * point_step ${pointCloud.point_step} is greater than row_step ${pointCloud.row_step}`;
-      warn(message);
+      this.#warn(message);
       // Allow this error for now since we currently ignore row_step
     }
 

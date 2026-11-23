@@ -261,8 +261,6 @@ export class RenderableModels extends RenderablePrimitive {
 
         if (originalUpdateCount !== this.#updateCount) {
           // another update has come in, bail before doing any mutations
-          // A fresh clone shares geometry/materials with the cached model and owns no GPU
-          // resources, so there is nothing to dispose here.
           return;
         }
         if (renderable) {
