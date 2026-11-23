@@ -15,10 +15,12 @@ import {
 } from "@lichtblick/suite-base/components/MessagePipeline/selectors";
 import { useAppConfigurationValue } from "@lichtblick/suite-base/hooks";
 import type { WorkerImageDecoder } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/Images/WorkerImageDecoder";
+import { readVideoGopForSeekTarget } from "@lichtblick/suite-base/players/IterablePlayer/videoSeekBackfill";
 
 import {
   ThumbnailCache,
   findCachedMessage,
+  isPreviewFrame,
   previewableTopics,
   requestThumbnail,
   resolvePreviewTopic,
@@ -26,6 +28,8 @@ import {
 } from "./scrubPreview";
 
 const DEBOUNCE_MS = 40;
+
+async function* emptyIterator(): AsyncIterableIterator<never> {}
 
 /** Image topics available for the scrub preview, and the one currently selected (if any). */
 export function usePreviewTopic(): {
@@ -86,9 +90,26 @@ export function useScrubPreview(stamp: Time | undefined): ImageBitmap | undefine
       onResult: setBitmap,
       load: async (signal) => {
         const pipeline = getPipeline();
-        const msg =
-          findCachedMessage(pipeline.playerState.progress.messageCache, endTime, topic, stamp) ??
-          (await pipeline.getMessageAtTime(topic, stamp, signal));
+        let msg =
+          findCachedMessage(
+            pipeline.playerState.progress.messageCache,
+            endTime,
+            topic,
+            stamp,
+            isPreviewFrame,
+          ) ?? (await pipeline.getMessageAtTime(topic, stamp, signal));
+        if (msg && !isPreviewFrame(msg)) {
+          // A video delta frame: read back to its GOP's keyframe.
+          const gop = await readVideoGopForSeekTarget(
+            msg,
+            {
+              messageIterator: ({ start, end }) =>
+                pipeline.getBatchIterator(topic, { start, end }) ?? emptyIterator(),
+            },
+            () => signal,
+          );
+          msg = gop[0];
+        }
         if (!msg || signal.aborted) {
           return undefined;
         }

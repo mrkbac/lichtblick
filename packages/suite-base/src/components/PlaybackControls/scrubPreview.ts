@@ -3,7 +3,10 @@
 
 import { compare, subtract, Time, toSec } from "@foxglove/rostime";
 
+import { isVideoKeyframe } from "@lichtblick/den/video";
 import { Immutable, MessageEvent } from "@lichtblick/suite";
+import type { PartialMessage } from "@lichtblick/suite-base/panels/ThreeDeeRender/SceneExtension";
+import { normalizeCompressedVideo } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/Images/imageNormalizers";
 import { BlockCache } from "@lichtblick/suite-base/players/types";
 
 import * as foxglove from "../../panels/ThreeDeeRender/foxglove";
@@ -14,6 +17,7 @@ export const COMPRESSED_IMAGE_SCHEMAS = new Set([
   ...ros.COMPRESSED_IMAGE_DATATYPES,
   ...foxglove.COMPRESSED_IMAGE_DATATYPES,
 ]);
+export const VIDEO_SCHEMAS: ReadonlySet<string> = foxglove.COMPRESSED_VIDEO_DATATYPES;
 
 /** Display width of the thumbnail in CSS pixels. */
 export const THUMBNAIL_WIDTH = 192;
@@ -32,7 +36,9 @@ export function previewableTopics(
     .filter(
       ({ schemaName }) =>
         schemaName != undefined &&
-        (RAW_IMAGE_SCHEMAS.has(schemaName) || COMPRESSED_IMAGE_SCHEMAS.has(schemaName)),
+        (RAW_IMAGE_SCHEMAS.has(schemaName) ||
+          COMPRESSED_IMAGE_SCHEMAS.has(schemaName) ||
+          VIDEO_SCHEMAS.has(schemaName)),
     )
     .map(({ name }) => name)
     .sort();
@@ -55,6 +61,18 @@ export function resolvePreviewTopic(
   return imageTopics[0];
 }
 
+/**
+ * Whether a message can be shown as a thumbnail on its own. Video shows the keyframe at or before
+ * the hovered time (like storyboard previews): it decodes without the rest of the GOP.
+ */
+export function isPreviewFrame({ schemaName, message }: Immutable<MessageEvent>): boolean {
+  if (!VIDEO_SCHEMAS.has(schemaName)) {
+    return true;
+  }
+  const { format, data } = normalizeCompressedVideo(message as PartialMessage<never>);
+  return isVideoKeyframe(format, data);
+}
+
 export function timeBucket(stamp: Time, start: Time, end: Time, count = BUCKET_COUNT): number {
   const duration = toSec(subtract(end, start));
   if (duration <= 0) {
@@ -65,7 +83,8 @@ export function timeBucket(stamp: Time, start: Time, end: Time, count = BUCKET_C
 }
 
 /**
- * Find the latest message on `topic` at or before `time` in the preloaded block cache.
+ * Find the latest message on `topic` at or before `time` that passes `accept` in the preloaded
+ * block cache.
  * Returns `undefined` when the cache can't answer (topic not fully loaded for the blocks needed),
  * in which case the caller should fall back to the player's backfill.
  */
@@ -74,6 +93,7 @@ export function findCachedMessage(
   endTime: Time,
   topic: string,
   time: Time,
+  accept: (message: Immutable<MessageEvent>) => boolean = () => true,
 ): Immutable<MessageEvent> | undefined {
   if (!cache || cache.blocks.length === 0) {
     return undefined;
@@ -86,7 +106,7 @@ export function findCachedMessage(
       return undefined;
     }
     for (let i = messages.length - 1; i >= 0; i--) {
-      if (compare(messages[i]!.receiveTime, time) <= 0) {
+      if (compare(messages[i]!.receiveTime, time) <= 0 && accept(messages[i]!)) {
         return messages[i];
       }
     }
