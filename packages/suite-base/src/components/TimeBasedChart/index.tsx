@@ -52,7 +52,6 @@ import TimeBasedChartTooltipContent, {
 } from "./TimeBasedChartTooltipContent";
 import { VerticalBarWrapper } from "./VerticalBarWrapper";
 import useDownsample from "./useDownsampler";
-import useProvider from "./useProvider";
 
 const useStyles = makeStyles()((theme) => ({
   root: {
@@ -159,14 +158,13 @@ export default function TimeBasedChart(props: Props): React.JSX.Element {
     [width, height, viewportBounds],
   );
 
-  const { downsampler, setScales } = useDownsample(
+  const { provided, setScales } = useDownsample(
     React.useMemo(
       () => (data?.datasets ?? []).filter((dataset) => dataset.label != undefined),
       [data],
     ),
+    view,
   );
-
-  const provided = useProvider(view, downsampler);
 
   React.useEffect(() => {
     setDatasetBounds((oldBounds) => {

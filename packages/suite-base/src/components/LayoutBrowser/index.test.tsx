@@ -93,15 +93,6 @@ vi.mock("./LayoutSection", () => ({
   default: vi.fn(() => <div data-testid="layout-section" />),
 }));
 
-vi.mock("@lichtblick/suite-base/components/SidebarContent", () => ({
-  SidebarContent: ({ children, title }: { children: React.ReactNode; title: string }) => (
-    <div data-testid="sidebar-content">
-      <span>{title}</span>
-      {children}
-    </div>
-  ),
-}));
-
 describe("LayoutBrowser", () => {
   const mockLayoutManager = new MockLayoutManager();
   let dispatchMock: Mock;
@@ -142,7 +133,7 @@ describe("LayoutBrowser", () => {
 
   it("renders without crashing", () => {
     render(<LayoutBrowser />);
-    expect(screen.getByTestId("sidebar-content")).toBeInTheDocument();
+    expect(screen.getByTestId("create-new-layout")).toBeInTheDocument();
   });
 
   describe("processAction useEffect", () => {

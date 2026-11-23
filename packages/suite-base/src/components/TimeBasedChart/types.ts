@@ -40,14 +40,3 @@ export type ProviderState = {
   // the bounds of the data contained in the `data` field
   bounds: Bounds;
 };
-
-export type ProviderStateSetter = (state: ProviderState) => void;
-
-/**
- * PlotDataProvider feeds the TimeBasedChart its (downsampled) data and receives
- * the current viewport.
- */
-export type PlotDataProvider = {
-  setView: (view: PlotViewport) => void;
-  register: (setter: ProviderStateSetter) => void;
-};

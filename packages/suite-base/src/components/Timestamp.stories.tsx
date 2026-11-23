@@ -40,7 +40,6 @@ function TimestampStory(props: PropsWithChildren<Props>): React.JSX.Element {
           padding: 2,
         }}
       >
-        <Timestamp horizontal time={time} />
         <Timestamp time={time} />
       </Stack>
     </AppConfigurationContext.Provider>

@@ -34,8 +34,6 @@ function renderErrorBoundary(
     onResetPanel?: () => void;
     onRemovePanel?: () => void;
     onLogError?: (message: string, error?: Error) => void;
-    showErrorDetails?: boolean;
-    hideErrorSourceLocations?: boolean;
   } = {},
 ) {
   const defaultProps = {
@@ -242,37 +240,6 @@ describe("PanelErrorBoundary", () => {
       // Then - still shows first error (error boundary behavior)
       expect(screen.getByText("First error")).toBeTruthy();
       expect(screen.queryByText("Second error")).toBeFalsy();
-    });
-  });
-
-  describe("Given error boundary with custom props", () => {
-    it("When showErrorDetails is provided Then displays error UI with details", () => {
-      // Given
-      const errorComponent = (
-        <ErrorThrowingComponent triggerError={true} errorMessage="Detailed error" />
-      );
-
-      // When
-      renderErrorBoundary(errorComponent, { showErrorDetails: true });
-
-      // Then
-      expect(screen.getByText("This panel encountered an unexpected error")).toBeTruthy();
-      expect(screen.getByText("Detailed error")).toBeTruthy();
-      expect(screen.getByText("Hide details")).toBeTruthy();
-    });
-
-    it("When hideErrorSourceLocations is provided Then shows error message without source locations", () => {
-      // Given
-      const errorComponent = (
-        <ErrorThrowingComponent triggerError={true} errorMessage="Source error" />
-      );
-
-      // When
-      renderErrorBoundary(errorComponent, { hideErrorSourceLocations: true });
-
-      // Then
-      expect(screen.getByText("This panel encountered an unexpected error")).toBeTruthy();
-      expect(screen.getByText("Source error")).toBeTruthy();
     });
   });
 

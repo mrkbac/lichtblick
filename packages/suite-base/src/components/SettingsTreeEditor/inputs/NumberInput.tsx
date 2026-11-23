@@ -9,7 +9,7 @@ import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 import { IconButton, TextFieldProps, TextField } from "@mui/material";
 import * as _ from "lodash-es";
-import { ReactNode, useCallback, useRef } from "react";
+import { useCallback, useRef } from "react";
 import { makeStyles } from "tss-react/mui";
 
 import { useLatest } from "@lichtblick/hooks";
@@ -66,8 +66,6 @@ const useStyles = makeStyles()((theme) => ({
 
 export function NumberInput(
   props: {
-    iconUp?: ReactNode;
-    iconDown?: ReactNode;
     max?: number;
     min?: number;
     precision?: number;
@@ -82,8 +80,6 @@ export function NumberInput(
   const { classes, cx } = useStyles();
   const {
     value,
-    iconDown,
-    iconUp,
     step = 1,
     min,
     max,
@@ -191,7 +187,7 @@ export function NumberInput(
                 updateValue((value ?? placeHolderValue ?? 0) - (event.shiftKey ? step * 10 : step));
               }}
             >
-              {iconDown ?? <ChevronLeftIcon fontSize="small" />}
+              <ChevronLeftIcon fontSize="small" />
             </IconButton>
           ),
           endAdornment: (
@@ -204,7 +200,7 @@ export function NumberInput(
                 updateValue((value ?? placeHolderValue ?? 0) + (event.shiftKey ? step * 10 : step));
               }}
             >
-              {iconUp ?? <ChevronRightIcon fontSize="small" />}
+              <ChevronRightIcon fontSize="small" />
             </IconButton>
           ),
         },

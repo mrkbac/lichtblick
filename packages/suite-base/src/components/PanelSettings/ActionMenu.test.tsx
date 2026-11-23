@@ -27,7 +27,6 @@ describe("ActionMenu", () => {
 
   const renderComponent = (propsOverride: Partial<ActionMenuProps> = {}) => {
     const props: ActionMenuProps = {
-      allowShare: true,
       onReset: vi.fn(),
       onShare: vi.fn(),
       ...propsOverride,
@@ -66,16 +65,5 @@ describe("ActionMenu", () => {
     await user.click(screen.getByText("resetToDefaults"));
 
     expect(props.onReset).toHaveBeenCalled();
-  });
-
-  it("should disable the share item if allowShare is false", async () => {
-    const { user, props } = renderComponent({ allowShare: false });
-
-    await user.click(screen.getByTestId("basic-button"));
-    const shareItem = screen.getByText("importOrExportSettingsWithEllipsis");
-    // Ignore error if click is not possible
-    await user.click(shareItem).catch(() => {});
-
-    expect(props.onShare).not.toHaveBeenCalled();
   });
 });

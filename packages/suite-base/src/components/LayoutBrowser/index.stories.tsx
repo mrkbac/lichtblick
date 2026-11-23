@@ -302,7 +302,7 @@ export const AddLayout: StoryObj = {
   parameters: { colorScheme: "dark" },
 
   play: async () => {
-    const button = await screen.findByTestId("add-layout");
+    const button = await screen.findByTestId("create-new-layout");
     await fireEvent.click(button);
   },
 };

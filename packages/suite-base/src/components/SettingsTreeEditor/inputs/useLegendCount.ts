@@ -8,14 +8,10 @@ import { create } from "zustand";
 
 export const useLegendCount = create<{
   legendCount: number;
-  setLegendCount: (newCount: number) => void;
   increment: () => void;
   decrement: () => void;
 }>()((set) => ({
   legendCount: 10,
-  setLegendCount: (legendCount) => {
-    set({ legendCount });
-  },
   increment: () => {
     set((state) => ({ legendCount: state.legendCount + 1 }));
   },

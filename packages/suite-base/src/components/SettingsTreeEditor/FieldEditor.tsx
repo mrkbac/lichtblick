@@ -23,7 +23,7 @@ import {
 } from "@mui/material";
 import React, { useCallback } from "react";
 
-import { Immutable } from "@lichtblick/suite";
+import { Immutable, SettingsTreeFieldVec2, SettingsTreeFieldVec3 } from "@lichtblick/suite";
 import MessagePathInput from "@lichtblick/suite-base/components/MessagePathSyntax/MessagePathInput";
 import { useStyles } from "@lichtblick/suite-base/components/SettingsTreeEditor/FieldEditor.style";
 import { LegendControls } from "@lichtblick/suite-base/components/SettingsTreeEditor/inputs/LegendControls";
@@ -35,7 +35,7 @@ import {
 import Stack from "@lichtblick/suite-base/components/Stack";
 import { randomUUID } from "@lichtblick/suite-base/util/randomUUID";
 
-import { ColorGradientInput, ColorPickerInput, NumberInput, Vec2Input, Vec3Input } from "./inputs";
+import { ColorGradientInput, ColorPickerInput, NumberInput, VecInput } from "./inputs";
 
 /** Used to allow both undefined and empty string in select inputs. */
 const UNDEFINED_SENTINEL_VALUE = randomUUID();
@@ -350,7 +350,8 @@ function FieldInput({
       );
     case "vec3":
       return (
-        <Vec3Input
+        <VecInput<NonNullable<SettingsTreeFieldVec3["value"]>>
+          size={3}
           step={field.step}
           placeholder={field.placeholder}
           value={field.value}
@@ -366,7 +367,8 @@ function FieldInput({
       );
     case "vec2":
       return (
-        <Vec2Input
+        <VecInput<NonNullable<SettingsTreeFieldVec2["value"]>>
+          size={2}
           step={field.step}
           value={field.value}
           placeholder={field.placeholder}
@@ -408,35 +410,8 @@ function FieldLabel({
 }: Readonly<{ field: Immutable<EditorSettingsTreeField> }>): React.JSX.Element {
   const { classes } = useStyles();
 
-  if (field.input === "vec2") {
-    const labels = field.labels ?? ["X", "Y"];
-    return (
-      <div className={classes.multiLabelWrapper}>
-        <Typography
-          title={field.help ?? field.label}
-          variant="subtitle2"
-          noWrap
-          color="textSecondary"
-          style={{ flex: "auto" }}
-        >
-          {field.label}
-        </Typography>
-        {labels.map((label, index) => (
-          <Typography
-            key={label}
-            title={field.label}
-            variant="subtitle2"
-            noWrap
-            color="textSecondary"
-            style={{ gridColumn: index === 0 ? "span 1" : "2 / span 1", flex: "auto" }}
-          >
-            {label}
-          </Typography>
-        ))}
-      </div>
-    );
-  } else if (field.input === "vec3") {
-    const labels = field.labels ?? ["X", "Y", "Z"];
+  if (field.input === "vec2" || field.input === "vec3") {
+    const labels = field.labels ?? ["X", "Y", "Z"].slice(0, field.input === "vec2" ? 2 : 3);
     return (
       <div className={classes.multiLabelWrapper}>
         <Typography

@@ -23,12 +23,6 @@ import { makeStyles } from "tss-react/mui";
 
 import { APP_BAR_HEIGHT } from "@lichtblick/suite-base/components/AppBar/constants";
 
-const anchorWithOffset = (origin: "top" | "bottom") => ({
-  "&.notistack-SnackbarContainer": {
-    top: origin === "top" ? APP_BAR_HEIGHT : undefined,
-  },
-});
-
 const useStyles = makeStyles<void, "icon" | "dismissButton">()((theme, _params, classes) => ({
   icon: {},
   dismissButton: {
@@ -70,14 +64,10 @@ const useStyles = makeStyles<void, "icon" | "dismissButton">()((theme, _params, 
 }));
 
 const useContainerStyles = makeStyles()({
-  /* eslint-disable tss-unused-classes/unused-classes */
-  containerAnchorOriginBottomCenter: anchorWithOffset("bottom"),
-  containerAnchorOriginBottomRight: anchorWithOffset("bottom"),
-  containerAnchorOriginBottomLeft: anchorWithOffset("bottom"),
-  containerAnchorOriginTopCenter: anchorWithOffset("top"),
-  containerAnchorOriginTopRight: anchorWithOffset("top"),
-  containerAnchorOriginTopLeft: anchorWithOffset("top"),
-  /* eslint-enable tss-unused-classes/unused-classes */
+  // eslint-disable-next-line tss-unused-classes/unused-classes
+  containerAnchorOriginTopCenter: {
+    "&.notistack-SnackbarContainer": { top: APP_BAR_HEIGHT },
+  },
 });
 
 const CloseSnackbarAction = ({ id }: { id: SnackbarKey }) => {

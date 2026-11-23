@@ -15,12 +15,11 @@
 //   You may not use this file except in compliance with the License.
 
 import { ChartDataset } from "chart.js";
-import { useEffect, useState } from "react";
 
 import { iterateObjects } from "@lichtblick/suite-base/components/Chart/datasets";
 import type { ObjectData } from "@lichtblick/suite-base/components/Chart/types";
 
-import { PlotDataProvider, ProviderState, Bounds, PlotViewport } from "./types";
+import { Bounds } from "./types";
 
 export function getBounds(data: ChartDataset<"scatter", ObjectData>[]): Bounds | undefined {
   let xMin: number | undefined;
@@ -47,21 +46,4 @@ export function getBounds(data: ChartDataset<"scatter", ObjectData>[]): Bounds |
   }
 
   return { x: { min: xMin, max: xMax }, y: { min: yMin, max: yMax } };
-}
-
-export default function useProvider(
-  view: PlotViewport,
-  provider: PlotDataProvider,
-): ProviderState | undefined {
-  const [state, setState] = useState<ProviderState | undefined>();
-
-  useEffect(() => {
-    provider.register(setState);
-  }, [provider]);
-
-  useEffect(() => {
-    provider.setView(view);
-  }, [provider, view]);
-
-  return state;
 }

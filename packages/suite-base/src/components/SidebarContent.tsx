@@ -6,7 +6,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { Typography } from "@mui/material";
-import { CSSProperties, PropsWithChildren } from "react";
+import { PropsWithChildren } from "react";
 import { makeStyles } from "tss-react/mui";
 
 import Stack from "@lichtblick/suite-base/components/Stack";
@@ -27,13 +27,12 @@ export function SidebarContent({
   disableToolbar = false,
   title,
   children,
-  overflow = "auto",
   trailingItems,
 }: PropsWithChildren<SidebarContentProps>): React.JSX.Element {
   const { classes } = useStyles();
 
   return (
-    <Stack overflow={overflow} fullHeight flex="auto" gap={1}>
+    <Stack overflow="auto" fullHeight flex="auto" gap={1}>
       {!disableToolbar && (
         <div className={classes.toolbar}>
           <Typography component="h2" variant="h4" style={{ fontWeight: 800, flex: "auto" }}>
@@ -59,11 +58,6 @@ type SidebarContentProps = {
   title?: string;
   disablePadding?: boolean;
   disableToolbar?: boolean;
-
-  /** Overflow style of root element
-   * @default: "auto"
-   */
-  overflow?: CSSProperties["overflow"];
 
   /** Buttons/items to display on the trailing (right) side of the header */
   trailingItems?: React.ReactNode[];
