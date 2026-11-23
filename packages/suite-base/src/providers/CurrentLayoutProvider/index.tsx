@@ -62,6 +62,12 @@ import { IncompatibleLayoutVersionAlert } from "./IncompatibleLayoutVersionAlert
 
 const log = Logger.getLogger(__filename);
 
+/** Whether this page load is a reload (browser reload, an update's reload) rather than a new start. */
+function isPageReload(): boolean {
+  const [navigation] = performance.getEntriesByType("navigation") as PerformanceNavigationTiming[];
+  return navigation?.type === "reload";
+}
+
 /**
  * Concrete implementation of CurrentLayoutContext.Provider which handles
  * automatically restoring the current layout from LayoutStorage.
@@ -428,17 +434,19 @@ export default function CurrentLayoutProvider({
     if (!loadedFavorites) {
       log.warn(`Favorite layouts took longer than ${FAVORITES_TIMEOUT_MS}ms to load, continuing`);
     }
-    const favoriteLayout = findFavoriteLayout(layouts, loadedFavorites ?? layoutManager.favorites);
-    if (favoriteLayout) {
-      await selectInitial(favoriteLayout.id, { saveToProfile: false });
-      return;
-    }
-
     // Retrieve the selected layout id from the user's profile. If there's no layout specified
     // or we can't load it then save and select a default layout
     const layout = currentLayoutId
       ? layouts.find((element) => element.id === currentLayoutId)
       : undefined;
+
+    // A favorite is what the app opens with, but a reload keeps the layout that was shown (e.g. a
+    // sample's own layout).
+    const favoriteLayout = findFavoriteLayout(layouts, loadedFavorites ?? layoutManager.favorites);
+    if (favoriteLayout && !(layout && isPageReload())) {
+      await selectInitial(favoriteLayout.id, { saveToProfile: false });
+      return;
+    }
 
     if (layout) {
       await selectInitial(layout.id, { saveToProfile: false });
