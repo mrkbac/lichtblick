@@ -64,10 +64,6 @@ vi.mock("@lichtblick/suite-base/components/AlertList/AlertsList", () => ({
 vi.mock("@lichtblick/suite-base/components/DataSourceDialog/DataSourceDialog", () => ({
   DataSourceDialog: () => undefined,
 }));
-vi.mock("@lichtblick/suite-base/components/DataSourceSidebar/DataSourceSidebar", () => ({
-  __esModule: true,
-  default: () => undefined,
-}));
 vi.mock("@lichtblick/suite-base/components/DocumentDropListener", () => ({
   __esModule: true,
   default: () => undefined,
@@ -113,7 +109,6 @@ vi.mock("@lichtblick/suite-base/components/Stack", () => ({
 }));
 vi.mock("@lichtblick/suite-base/components/StudioLogsSettings/StudioLogsSettings", () => ({
   StudioLogsSettings: () => undefined,
-  StudioLogsSettingsSidebar: () => undefined,
 }));
 vi.mock("@lichtblick/suite-base/components/SyncAdapters", () => ({
   SyncAdapters: () => undefined,

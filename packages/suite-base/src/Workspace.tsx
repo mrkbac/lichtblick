@@ -43,7 +43,6 @@ import {
   DataSourceDialogItem,
 } from "@lichtblick/suite-base/components/DataSourceDialog/DataSourceDialog";
 import { START_ADDRESS_INPUT_ID } from "@lichtblick/suite-base/components/DataSourceDialog/OpenUrlInput";
-import DataSourceSidebar from "@lichtblick/suite-base/components/DataSourceSidebar/DataSourceSidebar";
 import DocumentDropListener from "@lichtblick/suite-base/components/DocumentDropListener";
 import { EventsList } from "@lichtblick/suite-base/components/EventsList";
 import KeyListener from "@lichtblick/suite-base/components/KeyListener";
@@ -76,10 +75,7 @@ import PlaybackControls from "@lichtblick/suite-base/components/PlaybackControls
 import Sidebars from "@lichtblick/suite-base/components/Sidebars";
 import { SidebarItem } from "@lichtblick/suite-base/components/Sidebars/types";
 import Stack from "@lichtblick/suite-base/components/Stack";
-import {
-  StudioLogsSettings,
-  StudioLogsSettingsSidebar,
-} from "@lichtblick/suite-base/components/StudioLogsSettings/StudioLogsSettings";
+import { StudioLogsSettings } from "@lichtblick/suite-base/components/StudioLogsSettings/StudioLogsSettings";
 import { SyncAdapters } from "@lichtblick/suite-base/components/SyncAdapters";
 import { TopicList } from "@lichtblick/suite-base/components/TopicList/TopicList";
 import VariablesList from "@lichtblick/suite-base/components/VariablesList";
@@ -91,7 +87,6 @@ import { usePlayerSelection } from "@lichtblick/suite-base/context/PlayerSelecti
 import {
   LeftSidebarItemKey,
   RightSidebarItemKey,
-  SidebarItemKey,
   WorkspaceContextStore,
   useWorkspaceStore,
 } from "@lichtblick/suite-base/context/Workspace/WorkspaceContext";
@@ -215,10 +210,6 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
 
   const [compactPanels = false] = useAppConfigurationValue<boolean>(AppSetting.COMPACT_PANELS);
 
-  const [enableStudioLogsSidebar = false] = useAppConfigurationValue<boolean>(
-    AppSetting.SHOW_DEBUG_PANELS,
-  );
-
   // When a player is activated, hide the open dialog.
   useLayoutEffect(() => {
     if (
@@ -317,54 +308,11 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
     [handleFiles],
   );
 
-  // Since the _component_ field of a sidebar item entry is a component and accepts no additional
-  // props we need to wrap our DataSourceSidebar component to connect the open data source action to
-  // open the data source dialog.
-  const DataSourceSidebarItem = useMemo(() => {
-    return function DataSourceSidebarItemImpl() {
-      return <DataSourceSidebar disableToolbar />;
-    };
-  }, []);
-
   const PanelSettingsSidebar = useMemo(() => {
     return function PanelSettingsSidebarImpl() {
       return <PanelSettings disableToolbar />;
     };
   }, []);
-
-  const [sidebarItems, sidebarBottomItems] = useMemo(() => {
-    const topItems = new Map<SidebarItemKey, SidebarItem>([
-      [
-        "connection",
-        {
-          iconName: "DatabaseSettings",
-          title: "Data source",
-          component: DataSourceSidebarItem,
-          badge:
-            alertCount > 0
-              ? { count: alertCount, color: severityToBadgeColor(highestSeverity) }
-              : undefined,
-        },
-      ],
-    ]);
-
-    topItems.set("panel-settings", {
-      iconName: "PanelSettings",
-      title: "Panel settings",
-      component: PanelSettings,
-    });
-    if (enableStudioLogsSidebar) {
-      topItems.set("logs-settings", {
-        iconName: "BacklogList",
-        title: "Studio logs settings",
-        component: StudioLogsSettingsSidebar,
-      });
-    }
-
-    const bottomItems = new Map<SidebarItemKey, SidebarItem>([]);
-
-    return [topItems, bottomItems];
-  }, [DataSourceSidebarItem, alertCount, highestSeverity, enableStudioLogsSidebar]);
 
   const eventsSupported = useEvents(selectEventsSupported);
   // Events come from the recording's foxglove.Event topics, no account needed
@@ -779,11 +727,7 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
       >
         {appBar}
         <Sidebars
-          selectedKey=""
-          onSelectKey={() => {}}
-          items={sidebarItems}
           leftItems={leftSidebarItems}
-          bottomItems={sidebarBottomItems}
           selectedLeftKey={leftSidebarOpen ? leftSidebarItem : undefined}
           onSelectLeftKey={sidebarActions.left.selectItem}
           leftSidebarSize={leftSidebarSize}

@@ -168,10 +168,6 @@ function WindowContents({
         </Stack>
       </AppBarContainer>
       <Sidebars
-        items={EMPTY_ITEMS}
-        bottomItems={EMPTY_ITEMS}
-        selectedKey={undefined}
-        onSelectKey={() => {}}
         leftItems={items}
         selectedLeftKey={left.open ? "panel-settings" : undefined}
         onSelectLeftKey={(key) => {
