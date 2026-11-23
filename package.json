@@ -15,7 +15,7 @@
     "name": "Lichtblick",
     "email": "lichtblick@bmwgroup.com"
   },
-  "homepage": "https://lichtblick-suite.github.io/docs/",
+  "homepage": "https://digitalis.marko.im/",
   "engines": {
     "node": ">=26"
   },
