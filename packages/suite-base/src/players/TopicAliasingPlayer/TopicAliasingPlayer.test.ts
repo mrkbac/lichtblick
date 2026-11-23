@@ -411,6 +411,70 @@ describe("TopicAliasingPlayer", () => {
     ]);
   });
 
+  it("applies new alias functions to the last state", async () => {
+    const fakePlayer = new FakePlayer();
+    const player = new TopicAliasingPlayer(fakePlayer);
+    player.setAliasFunctions([
+      { extensionId: "a", aliasFunction: () => [{ sourceTopicName: "/foo", name: "/a" }] },
+    ]);
+    const listener = vi.fn();
+    player.setListener(listener);
+    await fakePlayer.emit(
+      mockPlayerState(undefined, {
+        isPlaying: false,
+        topics: [{ name: "/foo", schemaName: "any.schema" }],
+      }),
+    );
+    listener.mockClear();
+
+    player.setAliasFunctions([
+      { extensionId: "b", aliasFunction: () => [{ sourceTopicName: "/foo", name: "/b" }] },
+    ]);
+    await vi.waitFor(() => {
+      expect(listener).toHaveBeenCalledWith(
+        expect.objectContaining({
+          activeData: expect.objectContaining({
+            topics: [
+              { name: "/foo", schemaName: "any.schema" },
+              { name: "/b", aliasedFromName: "/foo", schemaName: "any.schema" },
+            ],
+          }),
+        }),
+      );
+    });
+
+    // Removing all aliases un-aliases the subscriptions again
+    player.setSubscriptions([{ topic: "/b" }]);
+    expect(fakePlayer.subscriptions).toEqual([{ topic: "/foo" }]);
+    player.setAliasFunctions([]);
+    expect(fakePlayer.subscriptions).toEqual([{ topic: "/b" }]);
+  });
+
+  it("doesn't drop a state the wrapped player emits during another emit", async () => {
+    const fakePlayer = new FakePlayer();
+    const player = new TopicAliasingPlayer(fakePlayer);
+    let release: () => void = () => {};
+    const seen: PlayerState[] = [];
+    player.setListener(async (state) => {
+      seen.push(state);
+      if (seen.length === 1) {
+        await new Promise<void>((resolve) => {
+          release = resolve;
+        });
+      }
+    });
+    const first = mockPlayerState(undefined, { isPlaying: true });
+    const second = mockPlayerState(undefined, { isPlaying: false });
+    const firstEmit = fakePlayer.emit(first);
+    await vi.waitFor(() => {
+      expect(seen).toHaveLength(1);
+    });
+    const secondEmit = fakePlayer.emit(second);
+    release();
+    await Promise.all([firstEmit, secondEmit]);
+    expect(seen.map((state) => state.activeData?.isPlaying)).toEqual([true, false]);
+  });
+
   it("returs the correct metadata", () => {
     const fakePlayer = new FakePlayer();
     const player = new TopicAliasingPlayer(fakePlayer);

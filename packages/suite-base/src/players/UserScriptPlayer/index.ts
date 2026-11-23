@@ -464,7 +464,10 @@ export default class UserScriptPlayer implements Player {
       // Prune the script registration cache so it doesn't grow forever.
       // We add one to the count so we don't have to recompile scripts if users undo/redo script changes.
       const maxScriptRegistrationCacheCount = Object.keys(userScripts).length + 1;
-      state.scriptRegistrationCache.splice(maxScriptRegistrationCacheCount);
+      // Entries are pushed as scripts compile, so the newest are at the end.
+      state.scriptRegistrationCache = state.scriptRegistrationCache.slice(
+        -maxScriptRegistrationCacheCount,
+      );
       // This code causes us to reset workers twice because the seeking resets the workers too
       this.#invalidateBatchIteratorCache();
       // Create new Topic objects so downstream consumers (e.g. PlotCoordinator) can detect

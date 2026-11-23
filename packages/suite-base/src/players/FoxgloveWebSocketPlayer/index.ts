@@ -223,8 +223,10 @@ export default class FoxgloveWebSocketPlayer implements Player {
   #servicesByName = new Map<string, ResolvedService>();
   #serviceResponseCbs = new Map<
     ServiceCallRequest["callId"],
-    (response: ServiceCallResponse) => void
+    { resolve: (response: ServiceCallResponse) => void; reject: (error: Error) => void }
   >();
+  /** Last publishers requested via setPublishers, re-advertised after a reconnect. */
+  #requestedPublications: AdvertiseOptions[] = [];
   #publishedTopics?: Map<string, Set<string>>;
   #subscribedTopics?: Map<string, Set<string>>;
   #advertisedServices?: Map<string, Set<string>>;
@@ -312,20 +314,13 @@ export default class FoxgloveWebSocketPlayer implements Player {
       }
       this.#presence = PlayerPresence.PRESENT;
       this.#resetSessionState();
+      this.#playerCapabilities = []; // serverInfo re-adds what this connection supports
       this.#connectedAtMs = Date.now();
       this.#stopRecording();
       this.#recorderUnavailable = false; // a new connection tries recording again
       this.#alerts.clear();
-      this.#channelsById.clear();
-      this.#channelsByTopic.clear();
       this.#servicesByName.clear();
-      this.#serviceResponseCbs.clear();
-      this.#publicationsByTopic.clear();
-      for (const topic of this.#resolvedSubscriptionsByTopic.keys()) {
-        this.#unresolvedSubscriptions.add(topic);
-      }
-      this.#resolvedSubscriptionsById.clear();
-      this.#resolvedSubscriptionsByTopic.clear();
+      this.#dropConnectionState();
 
       // Re-assign members that are emitted as player state
       this.#profile = undefined;
@@ -387,6 +382,7 @@ export default class FoxgloveWebSocketPlayer implements Player {
       this.#ws = undefined;
       this.#client = undefined;
       this.#serverControlsPlayback = false;
+      this.#dropConnectionState();
 
       if (
         this.#transport === webSocketBackend &&
@@ -984,7 +980,7 @@ export default class FoxgloveWebSocketPlayer implements Player {
     });
 
     this.#client.on("serviceCallResponse", (response) => {
-      const responseCallback = this.#serviceResponseCbs.get(response.callId);
+      const responseCallback = this.#serviceResponseCbs.get(response.callId)?.resolve;
       if (!responseCallback) {
         this.#alerts.addAlert(`callService:${response.callId}`, {
           severity: "error",
@@ -1166,6 +1162,7 @@ export default class FoxgloveWebSocketPlayer implements Player {
     this.#unsubscribeHistorySettings();
     this.#clearHistory();
     this.#client?.close();
+    this.#dropConnectionState();
     this.#transport.dispose?.();
     if (this.#openTimeout != undefined) {
       clearTimeout(this.#openTimeout);
@@ -1240,6 +1237,7 @@ export default class FoxgloveWebSocketPlayer implements Player {
   public setPublishers(publishers: AdvertiseOptions[]): void {
     // Filter out duplicates.
     const uniquePublications = _.uniqWith(publishers, _.isEqual);
+    this.#requestedPublications = uniquePublications;
 
     // Save publications and return early if we are not connected or the advertise capability is missing.
     if (
@@ -1367,13 +1365,16 @@ export default class FoxgloveWebSocketPlayer implements Player {
     this.#client.sendServiceCallRequest(serviceCallRequest);
 
     return await new Promise<Record<string, unknown>>((resolve, reject) => {
-      this.#serviceResponseCbs.set(serviceCallRequest.callId, (response: ServiceCallResponse) => {
-        try {
-          const data = parsedResponse.deserialize(response.data);
-          resolve(data as Record<string, unknown>);
-        } catch (error: unknown) {
-          reject(toError(error));
-        }
+      this.#serviceResponseCbs.set(serviceCallRequest.callId, {
+        resolve: (response: ServiceCallResponse) => {
+          try {
+            const data = parsedResponse.deserialize(response.data);
+            resolve(data as Record<string, unknown>);
+          } catch (error: unknown) {
+            reject(toError(error));
+          }
+        },
+        reject,
       });
     });
   }
@@ -1419,6 +1420,12 @@ export default class FoxgloveWebSocketPlayer implements Player {
     });
 
     this.#fetchedAssets.set(uri, promise);
+    // A failed fetch must not stay cached, so a later call can retry it
+    promise.catch(() => {
+      if (this.#fetchedAssets.get(uri) === promise) {
+        this.#fetchedAssets.delete(uri);
+      }
+    });
     return await promise;
   }
 
@@ -1908,6 +1915,41 @@ export default class FoxgloveWebSocketPlayer implements Player {
     );
   }
 
+  /**
+   * Forget everything tied to the current socket: channel and subscription ids, advertised
+   * publications and in-flight requests. Subscriptions and publications are queued again so they
+   * are restored once the next connection advertises its channels.
+   */
+  #dropConnectionState(): void {
+    this.#channelsById.clear();
+    this.#channelsByTopic.clear();
+    for (const topic of this.#resolvedSubscriptionsByTopic.keys()) {
+      this.#unresolvedSubscriptions.add(topic);
+    }
+    this.#resolvedSubscriptionsById.clear();
+    this.#resolvedSubscriptionsByTopic.clear();
+    this.#publicationsByTopic.clear();
+    this.#unresolvedPublications = this.#requestedPublications;
+    const error = new Error("Connection closed");
+    for (const { reject } of this.#serviceResponseCbs.values()) {
+      reject(error);
+    }
+    this.#serviceResponseCbs.clear();
+    this.#failPendingAssetRequests("Connection closed");
+  }
+
+  #failPendingAssetRequests(reason: string): void {
+    for (const [requestId, callback] of this.#fetchAssetRequests) {
+      callback({
+        op: BinaryOpcode.FETCH_ASSET_RESPONSE,
+        status: FetchAssetStatus.ERROR,
+        requestId,
+        error: reason,
+      });
+    }
+    this.#fetchAssetRequests.clear();
+  }
+
   #resetSessionState(): void {
     this.#startTime = undefined;
     this.#endTime = undefined;
@@ -1925,15 +1967,7 @@ export default class FoxgloveWebSocketPlayer implements Player {
     this.#alerts.clear();
     this.#parameters = new Map();
     this.#fetchedAssets.clear();
-    for (const [requestId, callback] of this.#fetchAssetRequests) {
-      callback({
-        op: BinaryOpcode.FETCH_ASSET_RESPONSE,
-        status: FetchAssetStatus.ERROR,
-        requestId,
-        error: "WebSocket connection reset",
-      });
-    }
-    this.#fetchAssetRequests.clear();
+    this.#failPendingAssetRequests("WebSocket connection reset");
     this.#parameterTypeByName.clear();
     this.#messageSizes.clear();
   }

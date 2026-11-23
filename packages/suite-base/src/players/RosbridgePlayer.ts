@@ -105,6 +105,8 @@ export default class RosbridgePlayer implements Player {
   #latestClient?: roslib.Ros; // The newest roslibjs client, connected or still connecting.
   #id: string = randomUUID(); // Unique ID for this player.
   #isRefreshing = false; // True if currently refreshing the node graph.
+  /** Rejecters of requests in flight on the current connection, failed when it closes. */
+  #pendingRequests = new Set<(error: Error) => void>();
   #listener?: (arg0: PlayerState) => Promise<void>; // Listener for _emitState().
   #closed: boolean = false; // Whether the player has been completely closed using close().
   #providerTopics?: TopicWithSchemaName[]; // Topics as published by the WebSocket.
@@ -211,6 +213,12 @@ export default class RosbridgePlayer implements Player {
       }
       rosClient.close(); // ensure the underlying worker is cleaned up
       this.#rosClient = undefined;
+      const closedError = new Error("Connection closed");
+      for (const reject of this.#pendingRequests) {
+        reject(closedError);
+      }
+      this.#pendingRequests.clear();
+      this.#isRefreshing = false;
       this.#serviceTypeCache.clear();
       this.#serviceDetailsCache.clear();
       // Services may change type on reconnect. A new #services map also makes in-flight
@@ -671,7 +679,7 @@ export default class RosbridgePlayer implements Player {
     }
 
     const rosClient = this.#rosClient;
-    const serviceTypePromise = new Promise<string>((resolve, reject) => {
+    const serviceTypePromise = this.#request<string>((resolve, reject) => {
       rosClient.getServiceType(service, resolve, reject);
     });
 
@@ -696,7 +704,7 @@ export default class RosbridgePlayer implements Player {
     const key = `${kind}:${serviceType}`;
     let promise = this.#serviceDetailsCache.get(key);
     if (!promise) {
-      promise = new Promise<RosapiTypeDef[]>((resolve, reject) => {
+      promise = this.#request<RosapiTypeDef[]>((resolve, reject) => {
         const onResult = (result: { typedefs: RosapiTypeDef[] }) => {
           resolve(result.typedefs);
         };
@@ -787,7 +795,7 @@ export default class RosbridgePlayer implements Player {
     });
 
     // Send the service request
-    return await new Promise<Record<string, unknown>>((resolve, reject) => {
+    return await this.#request<Record<string, unknown>>((resolve, reject) => {
       proxy.callService(
         request,
         (response: Record<string, unknown>) => {
@@ -845,21 +853,22 @@ export default class RosbridgePlayer implements Player {
   // Refreshes the full system state graph. Runs in the background so we don't
   // block app startup while mapping large node graphs.
   async #refreshSystemState(): Promise<void> {
-    if (this.#isRefreshing) {
+    const rosClient = this.#rosClient;
+    if (this.#isRefreshing || !rosClient) {
       return;
     }
     try {
       this.#isRefreshing = true;
 
-      const nodes = await new Promise<string[]>((resolve, reject) => {
-        this.#rosClient?.getNodes((fetchedNodes) => {
+      const nodes = await this.#request<string[]>((resolve, reject) => {
+        rosClient.getNodes((fetchedNodes) => {
           resolve(fetchedNodes);
         }, reject);
       });
 
       const promises = nodes.map(async (node) => {
-        return await new Promise<RosNodeDetails>((resolve, reject) => {
-          this.#rosClient?.getNodeDetails(
+        return await this.#request<RosNodeDetails>((resolve, reject) => {
+          rosClient.getNodeDetails(
             node,
             (subscriptions, publications, services) => {
               resolve({
@@ -874,6 +883,9 @@ export default class RosbridgePlayer implements Player {
       });
 
       const results = await Promise.allSettled(promises);
+      if (this.#rosClient !== rosClient) {
+        return; // the connection closed meanwhile; the next one refreshes again
+      }
       const fulfilled = filterMap(results, (item) =>
         item.status === "fulfilled" ? item.value : undefined,
       );
@@ -884,14 +896,38 @@ export default class RosbridgePlayer implements Player {
       this.#emitState();
       void this.#resolveServiceTypes();
     } catch (error) {
+      if (this.#rosClient !== rosClient) {
+        return; // "Connection closed": the connection alert already explains it
+      }
       this.#alerts.addAlert("requestTopics:system-state", {
         severity: "error",
         message: "Failed to fetch node details from rosbridge",
         error: toError(error),
       });
     } finally {
-      this.#isRefreshing = false;
+      if (this.#rosClient === rosClient) {
+        this.#isRefreshing = false;
+      }
     }
+  }
+
+  /** A rosbridge request that also rejects when the connection closes before it settles. */
+  async #request<T>(
+    start: (resolve: (value: T) => void, reject: (error: Error) => void) => void,
+  ): Promise<T> {
+    return await new Promise<T>((resolve, reject) => {
+      this.#pendingRequests.add(reject);
+      start(
+        (value) => {
+          this.#pendingRequests.delete(reject);
+          resolve(value);
+        },
+        (error) => {
+          this.#pendingRequests.delete(reject);
+          reject(error);
+        },
+      );
+    });
   }
 }
 

@@ -55,6 +55,7 @@ export class TopicAliasingPlayer implements Player {
   #stateProcessor: AliasingStateProcessor | undefined;
 
   #lastPlayerState?: PlayerState;
+  #reemitQueued = false;
 
   // We only want to be emitting one state at a time however we also queue emits from global
   // variable updates which can happen at a different time to new state from the wrapped player. The
@@ -106,6 +107,7 @@ export class TopicAliasingPlayer implements Player {
   public setAliasFunctions(aliasFunctions: Immutable<TopicAliasFunctions>): void {
     this.#inputs = { ...this.#inputs, aliasFunctions };
     this.#skipAliasing = aliasFunctions.length === 0;
+    this.#reprocessLastState();
   }
 
   public close(): void {
@@ -170,43 +172,8 @@ export class TopicAliasingPlayer implements Player {
   public setGlobalVariables(globalVariables: GlobalVariables): void {
     this.#player.setGlobalVariables?.(globalVariables);
 
-    // Set this before the lastPlayerstate skip below so we have global variables when
-    // a player state is provided later.
     this.#inputs = { ...this.#inputs, variables: globalVariables };
-
-    // We can skip re-processing if we don't have any alias functions setup or we have not
-    // had any player state provided yet. The player state handler onPlayerState will handle alias
-    // function processing when it is called.
-    if (
-      this.#skipAliasing ||
-      this.#lastPlayerState == undefined ||
-      this.#inputs.topics == undefined
-    ) {
-      return;
-    }
-
-    const stateProcessor = this.#stateProcessorFactory.buildStateProcessor(this.#inputs);
-
-    // If we have a new state processor, it means something about the aliases has changed and we
-    // need to re-process the existing player state
-    const shouldReprocess = stateProcessor !== this.#stateProcessor;
-    this.#stateProcessor = stateProcessor;
-
-    // If we have a new processor we might also have new subscriptions for downstream
-    if (shouldReprocess) {
-      this.#resetSubscriptions();
-    }
-
-    // Re-process the last player state if the processor has changed since we might have new downstream topics
-    // for panels to subscribe or get new re-mapped messages.
-    //
-    // Skip this if we are playing and allow the next player state update to handle this to avoid
-    // these emits interfering with player state updates. It does assume the player is emitting
-    // state relatively quickly when playing so the new aliases are injected. If this assumption
-    // changes this bail might need revisiting.
-    if (shouldReprocess && this.#lastPlayerState.activeData?.isPlaying === false) {
-      void this.#onPlayerState(this.#lastPlayerState);
-    }
+    this.#reprocessLastState();
   }
 
   public async fetchAsset(uri: string): Promise<Asset> {
@@ -217,39 +184,65 @@ export class TopicAliasingPlayer implements Player {
   }
 
   async #onPlayerState(playerState: PlayerState) {
-    // If we are already emitting a player state, avoid emitting another one
-    // This is a guard against global variable emits
-    if (this.#listener?.isLocked() === true) {
-      return;
-    }
-
-    return await this.#listener?.runExclusive(async (listener) => {
-      if (this.#skipAliasing) {
-        await listener(playerState);
-        return;
-      }
-
-      // The player topics have changed so we need to re-build the aliases because player topics
-      // are an input to the alias functions.
-      if (playerState.activeData?.topics !== this.#inputs.topics) {
-        this.#inputs = { ...this.#inputs, topics: playerState.activeData?.topics };
-        const stateProcessor = this.#stateProcessorFactory.buildStateProcessor(this.#inputs);
-
-        // if the state processor is changed, then we might need to re-process subscriptions since
-        // we might now be able to produce new subscriptions
-        if (this.#stateProcessor !== stateProcessor) {
-          this.#stateProcessor = stateProcessor;
-          this.#resetSubscriptions();
-        }
-      }
-
-      // remember the last player state so we can re-use it when global variables are set
+    // States from the wrapped player are never dropped: the mutex queues them behind an emit
+    // already in progress.
+    await this.#listener?.runExclusive(async (listener) => {
+      // Remember the last player state so we can re-process it when the alias inputs change
       this.#lastPlayerState = playerState;
 
-      // Process the player state using the latest aliases
-      const newState =
-        this.#stateProcessor?.process(playerState, this.#subscriptions) ?? playerState;
-      await listener(newState);
+      // Player topics are an input to the alias functions, so new topics re-build the aliases
+      if (playerState.activeData?.topics !== this.#inputs.topics) {
+        this.#inputs = { ...this.#inputs, topics: playerState.activeData?.topics };
+        this.#updateStateProcessor();
+      }
+
+      await listener(this.#process(playerState));
+    });
+  }
+
+  #process(playerState: PlayerState): PlayerState {
+    return this.#stateProcessor?.process(playerState, this.#subscriptions) ?? playerState;
+  }
+
+  /**
+   * Build the state processor for the current inputs. When it changes, re-alias the subscriptions.
+   * @returns whether the processor changed
+   */
+  #updateStateProcessor(): boolean {
+    // Alias functions need the player's topics, so nothing is aliased before the first state
+    const stateProcessor =
+      this.#skipAliasing || this.#inputs.topics == undefined
+        ? undefined
+        : this.#stateProcessorFactory.buildStateProcessor(this.#inputs);
+    if (stateProcessor === this.#stateProcessor) {
+      return false;
+    }
+    this.#stateProcessor = stateProcessor;
+    this.#resetSubscriptions();
+    return true;
+  }
+
+  /**
+   * Apply changed alias functions or global variables to the last player state, so panels see the
+   * new aliased topics and messages.
+   *
+   * Skipped while playing: the player's next state picks up the new aliases, and an extra emit
+   * would interfere with playback. It assumes a playing player emits state quickly.
+   */
+  #reprocessLastState(): void {
+    if (!this.#updateStateProcessor() || this.#lastPlayerState?.activeData?.isPlaying !== false) {
+      return;
+    }
+    // Coalesce: one queued re-emit of the latest state covers any number of input changes
+    if (this.#reemitQueued || !this.#listener) {
+      return;
+    }
+    this.#reemitQueued = true;
+    void this.#listener.runExclusive(async (listener) => {
+      this.#reemitQueued = false;
+      if (this.#lastPlayerState) {
+        await listener(this.#process(this.#lastPlayerState));
+      }
     });
   }
 
