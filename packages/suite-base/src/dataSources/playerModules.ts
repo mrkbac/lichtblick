@@ -26,8 +26,3 @@ export const loadRos1Player = async (): Promise<typeof Ros1Player> =>
 
 export const loadVelodynePlayer = async (): Promise<typeof VelodynePlayer> =>
   (await import("@lichtblick/suite-base/players/VelodynePlayer")).default;
-
-/** Starts loading a player chunk without waiting for it; a failure surfaces on the real load. */
-export function prefetch(load: () => Promise<unknown>): void {
-  load().catch(() => {});
-}

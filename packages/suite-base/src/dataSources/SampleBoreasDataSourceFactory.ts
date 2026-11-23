@@ -15,7 +15,7 @@ import {
   SAMPLE_BOREAS_DATA_SOURCE_TYPE,
   SAMPLE_BOREAS_DATA_SOURCE_URL,
 } from "@lichtblick/suite-base/dataSources/constants";
-import { loadIterablePlayer, prefetch } from "@lichtblick/suite-base/dataSources/playerModules";
+import { loadIterablePlayer } from "@lichtblick/suite-base/dataSources/playerModules";
 import { createMcapSourceWorker } from "@lichtblick/suite-base/players/IterablePlayer/Mcap/createMcapSourceWorker";
 import { Player } from "@lichtblick/suite-base/players/types";
 
@@ -33,9 +33,7 @@ class SampleBoreasDataSourceFactory implements IDataSourceFactory {
   // Bump when SampleBoreasLayout.json changes so saved copies are replaced. 2: acceleration slider.
   public sampleLayoutVersion = 2;
 
-  public prefetch = (): void => {
-    prefetch(loadIterablePlayer);
-  };
+  public prefetch = loadIterablePlayer;
 
   public async initialize(): Promise<Player | undefined> {
     const { IterablePlayer, WorkerSerializedIterableSource, expandVideoSeekBackfill } =

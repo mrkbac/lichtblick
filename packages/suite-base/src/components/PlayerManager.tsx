@@ -80,6 +80,7 @@ import {
   connectionRecentArgs,
   recentArgs,
   recentFileTitle,
+  urlsOf,
 } from "@lichtblick/suite-base/util/recentSources";
 import { takeSourcePick } from "@lichtblick/suite-base/util/sourcePick";
 import { toError } from "@lichtblick/suite-base/util/toError";
@@ -94,6 +95,11 @@ const LAST_FILE_SOURCE_KEY = "lichtblick.lastFileSource";
 type LastFileSource = { sourceId: string; title: string; recentId?: string };
 
 // Reopening on reload is a convenience: blocked storage or a bad value must not break the app
+/** Starts loading a source's player code without waiting; a failure surfaces when it opens */
+function prefetch(source: IDataSourceFactory): void {
+  source.prefetch?.().catch(() => {});
+}
+
 function readLastFile(): LastFileSource | undefined {
   try {
     const value = JSON.parse(sessionStorage.getItem(LAST_FILE_SOURCE_KEY) ?? "null") as unknown;
@@ -270,7 +276,7 @@ export default function PlayerManager(
     const prefetchAll = () => {
       for (const source of playerSources) {
         if (source.type !== "connection") {
-          source.prefetch?.();
+          prefetch(source);
         }
       }
     };
@@ -303,7 +309,7 @@ export default function PlayerManager(
 
       // Start loading the player's code while the rest of the selection (permission prompts,
       // reading file handles) runs
-      foundSource.prefetch?.();
+      prefetch(foundSource);
 
       // Factories may load their player's code first. Resolves undefined when a newer selection
       // or a close superseded this one meanwhile; a player built for it anyway is closed again.
@@ -433,8 +439,7 @@ export default function PlayerManager(
               return;
             }
             // Remote recordings (not live connections) can be compared like local files
-            const url = args.params?.url;
-            const urls = args.urls ?? (url == undefined ? [] : [url]);
+            const urls = urlsOf(args);
             const withCookies = args.params?.includeCredentials === "true";
             // One remote file can also be exported
             const remoteFile: RemoteFileSelection | undefined =

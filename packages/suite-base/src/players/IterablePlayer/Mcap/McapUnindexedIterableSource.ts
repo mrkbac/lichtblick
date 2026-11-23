@@ -5,7 +5,6 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { crc32 } from "@foxglove/crc";
 import { Time, fromNanoSec, subtract, toNanoSec, toSec, toRFC3339String } from "@foxglove/rostime";
 import * as _ from "lodash-es";
 
@@ -14,6 +13,7 @@ import {
   MCAP_MAGIC,
   McapByteReader,
   McapTypes,
+  decompressChunk,
   Opcode,
   isKnownOpcode,
   parseRecord,
@@ -36,6 +36,7 @@ import {
 } from "@lichtblick/suite-base/players/types";
 import { RosDatatypes } from "@lichtblick/suite-base/types/RosDatatypes";
 import type { ReadOptions } from "@lichtblick/suite-base/util/CachedFilelike.types";
+import { abortable } from "@lichtblick/suite-base/util/abortable";
 import { toError } from "@lichtblick/suite-base/util/toError";
 
 const DURATION_YEAR_SEC = 365 * 24 * 60 * 60;
@@ -203,7 +204,7 @@ export class McapUnindexedIterableSource implements ISerializedIterableSource {
       if (chunk?.type !== "Chunk") {
         throw new Error("Unreadable chunk");
       }
-      const records = decompress(decompressHandlers, chunk);
+      const records = decompressChunk(decompressHandlers, chunk);
       const chunkIndex = this.#chunkOffsets.length;
       const view = new DataView(records.buffer, records.byteOffset, records.byteLength);
       const countBefore = columns.count;
@@ -625,16 +626,17 @@ export class McapUnindexedIterableSource implements ISerializedIterableSource {
     if (cached) {
       return cached;
     }
-    // Cancellable reads must not abort a chunk load another reader still needs.
+    // Concurrent readers (playback, backfill) share one load, so a chunk is read and counted once.
+    // A cancellable read joins a shared load but loads alone, so its abort can't fail other readers.
+    const shared = this.#chunkLoads.get(i);
+    if (shared) {
+      return await abortable(shared, readOptions?.signal);
+    }
     if (readOptions?.signal) {
       return await this.#loadChunk(i, readOptions);
     }
-    // Concurrent readers (playback, backfill) share one load, so a chunk is read and counted once
-    let load = this.#chunkLoads.get(i);
-    if (!load) {
-      load = this.#loadChunk(i).finally(() => this.#chunkLoads.delete(i));
-      this.#chunkLoads.set(i, load);
-    }
+    const load = this.#loadChunk(i).finally(() => this.#chunkLoads.delete(i));
+    this.#chunkLoads.set(i, load);
     return await load;
   }
 
@@ -648,7 +650,7 @@ export class McapUnindexedIterableSource implements ISerializedIterableSource {
     if (chunk?.type !== "Chunk") {
       throw new Error(`Chunk at offset ${this.#chunkOffsets[i]} changed since it was read`);
     }
-    const records = decompress(this.#decompressHandlers!, chunk);
+    const records = decompressChunk(this.#decompressHandlers!, chunk);
     this.#chunkCache.set(
       BigInt(this.#chunkOffsets[i]!),
       new DataView(records.buffer, records.byteOffset, records.byteLength),
@@ -887,22 +889,6 @@ function recordEnd(view: DataView, at: number): number {
     throw new Error("Chunk ends in the middle of a record");
   }
   return end;
-}
-
-function decompress(handlers: McapTypes.DecompressHandlers, chunk: McapTypes.Chunk): Uint8Array {
-  let records = chunk.records;
-  // An empty chunk has nothing to decompress (as in McapIndexedReader and McapStreamReader)
-  if (chunk.compression !== "" && chunk.records.byteLength > 0) {
-    const handler = handlers[chunk.compression];
-    if (!handler) {
-      throw new Error(`Unsupported compression ${chunk.compression}`);
-    }
-    records = handler(chunk.records, chunk.uncompressedSize);
-  }
-  if (chunk.uncompressedCrc !== 0 && crc32(records) !== chunk.uncompressedCrc) {
-    throw new Error("Chunk CRC mismatch");
-  }
-  return records;
 }
 
 function byteReader(bytes: Uint8Array): McapByteReader {
