@@ -5,7 +5,6 @@ import { crc32 } from "@foxglove/crc";
 
 import McapByteReader from "./McapByteReader.ts";
 import { McapIndexedReader } from "./McapIndexedReader.ts";
-import McapStreamReader from "./McapStreamReader.ts";
 import { McapWriter } from "./McapWriter.ts";
 import { TempBuffer } from "./TempBuffer.ts";
 import { Opcode } from "./constants.ts";
@@ -14,14 +13,31 @@ import { collect, keyValues, record, string, uint16LE, uint32LE, uint64LE } from
 import type { TypedMcapRecord } from "./types.ts";
 import { LIBRARY_IDENTIFIER, VERSION } from "./version.ts";
 
+function bytes(data: Uint8Array): McapByteReader {
+  return new McapByteReader(new DataView(data.buffer, data.byteOffset, data.byteLength));
+}
+
+/** Every record in file order, each (uncompressed) chunk replaced by the records in it */
 function readAsMcapStream(data: Uint8Array) {
-  const reader = new McapStreamReader();
-  reader.append(data);
+  const reader = bytes(data);
+  parseMagic(reader);
   const records: TypedMcapRecord[] = [];
-  for (let rec; (rec = reader.nextRecord()); ) {
-    records.push(rec);
+  for (let rec; (rec = parseRecord(reader, true)); ) {
+    if (rec.type === "Chunk") {
+      const chunk = bytes(rec.records);
+      for (let inner; (inner = parseRecord(chunk, true)); ) {
+        records.push(inner);
+      }
+      if (chunk.bytesRemaining() !== 0) {
+        throw new Error(`${chunk.bytesRemaining()} bytes remaining in chunk`);
+      }
+    } else {
+      records.push(rec);
+    }
   }
-  expect(reader.done()).toBe(true);
+  expect(records.at(-1)?.type).toBe("Footer");
+  expect(parseMagic(reader)).toBeDefined();
+  expect(reader.bytesRemaining()).toBe(0);
   return records;
 }
 
@@ -142,12 +158,7 @@ describe("McapWriter", () => {
     });
     await writer.end();
 
-    const reader = new McapStreamReader();
-    reader.append(tempBuffer.get());
-    const records: TypedMcapRecord[] = [];
-    for (let rec; (rec = reader.nextRecord()); ) {
-      records.push(rec);
-    }
+    const records = readAsMcapStream(tempBuffer.get());
 
     expect(records).toEqual<TypedMcapRecord[]>([
       {

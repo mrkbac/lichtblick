@@ -750,7 +750,7 @@ function decompress(
   records: Uint8Array,
   uncompressedSize: bigint,
 ): Uint8Array {
-  // An empty chunk has nothing to decompress (as in McapIndexedReader and McapStreamReader)
+  // An empty chunk has nothing to decompress (as in McapIndexedReader)
   if (compression === "" || records.byteLength === 0) {
     return records;
   }
