@@ -208,10 +208,24 @@ const usePlotInteractionHandlers = ({
         return;
       }
 
+      const zoomMode = zoomModeForModifiers(event);
+      // Pinch (reported as ctrl+wheel), ctrl/cmd+wheel and the axis-zoom modifiers zoom; a plain
+      // scroll or swipe pans both axes.
+      if (zoomMode == undefined && !event.ctrlKey && !event.metaKey) {
+        // Line-mode deltas (a notched mouse wheel in Firefox) count lines, not pixels
+        const scale = event.deltaMode === WheelEvent.DOM_DELTA_LINE ? 16 : 1;
+        coordinator.addInteractionEvent({
+          type: "scroll",
+          deltaX: event.deltaX * scale,
+          deltaY: event.deltaY * scale,
+        });
+        return;
+      }
+
       const boundingRect = event.currentTarget.getBoundingClientRect();
       coordinator.addInteractionEvent({
         type: "wheel",
-        zoomMode: zoomModeForModifiers(event),
+        zoomMode,
         // Shift+wheel scrolls horizontally on some platforms, so the delta can arrive as deltaX.
         deltaY: event.deltaY !== 0 ? event.deltaY : event.deltaX,
         clientX: event.clientX,

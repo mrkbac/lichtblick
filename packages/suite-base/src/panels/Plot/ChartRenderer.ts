@@ -633,6 +633,9 @@ export class ChartRenderer {
       case "wheel":
         this.#viewport.wheel(event);
         break;
+      case "scroll":
+        this.#viewport.scroll(event);
+        break;
       case "panstart":
         this.#viewport.panstart(event);
         break;
