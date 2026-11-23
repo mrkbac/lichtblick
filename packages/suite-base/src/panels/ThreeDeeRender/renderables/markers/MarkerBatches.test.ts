@@ -339,34 +339,71 @@ describe("MarkerBatches", () => {
     );
   });
 
-  it("batches matching opaque labels and keeps the original marker meshes for picking", () => {
+  it("batches opaque labels of one size and color and keeps the original meshes for picking", () => {
     topic.addMarkerMessage({ ...marker(1, MarkerType.TEXT_VIEW_FACING), text: "ABC" }, 0n);
     topic.addMarkerMessage({ ...marker(2, MarkerType.TEXT_VIEW_FACING), text: "ABC" }, 0n);
-    topic.addMarkerMessage({ ...marker(3, MarkerType.TEXT_VIEW_FACING), text: "DEF" }, 0n);
+    topic.addMarkerMessage({ ...marker(3, MarkerType.TEXT_VIEW_FACING), text: "DE" }, 0n);
     topic.addMarkerMessage({ ...marker(4, MarkerType.TEXT_VIEW_FACING, 0.5), text: "ABC" }, 0n);
     topic.startFrame(0n, "map", "map");
 
     const glyphBatches = topic.children.find((child) => child instanceof TextMarkerBatches)!;
     const batch = glyphBatches.children[0] as THREE.Mesh<THREE.InstancedBufferGeometry>;
     expect(glyphBatches.children).toHaveLength(1);
-    expect(batch.geometry.instanceCount).toBe(6);
+    expect(batch.geometry.instanceCount).toBe(8);
     const offsets = batch.geometry.getAttribute("labelOrigin");
     expect(offsets.getX(0)).toBe(0);
     expect(offsets.getX(3)).toBe(1);
+    expect(offsets.getX(6)).toBe(2);
+    expect(offsets.getX(7)).toBe(2);
+
+    // Each label is centered on its own origin, as its own anchor point would center it
+    const { fontManager } = renderer.labelPool;
+    const box = batch.geometry.getAttribute("instanceBoxPosition");
+    const abc = fontManager.layout("ABC");
+    const de = fontManager.layout("DE");
+    expect(box.getX(0)).toBeCloseTo(abc.chars[0]!.left - abc.width / 2, 5);
+    expect(box.getX(6)).toBeCloseTo(de.chars[0]!.left - de.width / 2, 5);
+    expect(box.getX(7)).toBeCloseTo(de.chars[1]!.left - de.width / 2, 5);
+    expect(box.getY(6)).toBeCloseTo(-de.height / 2, 5);
+
     const mesh = (id: number) => (byId(id) as RenderableTextViewFacing).label.mesh;
     expect(mesh(1).layers.mask).toBe(1 << LAYER_PICK_ONLY);
     expect(mesh(2).layers.mask).toBe(1 << LAYER_PICK_ONLY);
-    expect(mesh(3).layers.mask).toBe(1 << LAYER_DEFAULT);
+    expect(mesh(3).layers.mask).toBe(1 << LAYER_PICK_ONLY);
     expect(mesh(4).layers.mask).toBe(1 << LAYER_DEFAULT);
     expect(batch.userData.picking).toBe(false);
 
-    topic.addMarkerMessage(
-      { ...marker(1, MarkerType.TEXT_VIEW_FACING), action: MarkerAction.DELETE },
-      0n,
-    );
+    // A changed text is laid out again
+    topic.addMarkerMessage({ ...marker(3, MarkerType.TEXT_VIEW_FACING), text: "ABCD" }, 0n);
+    topic.startFrame(0n, "map", "map");
+    const abcd = fontManager.layout("ABCD");
+    expect(batch.geometry.instanceCount).toBe(10);
+    expect(box.getX(9)).toBeCloseTo(abcd.chars[3]!.left - abcd.width / 2, 5);
+
+    for (const id of [1, 2]) {
+      topic.addMarkerMessage(
+        { ...marker(id, MarkerType.TEXT_VIEW_FACING), action: MarkerAction.DELETE },
+        0n,
+      );
+    }
     topic.startFrame(0n, "map", "map");
     expect(glyphBatches.children).toHaveLength(0);
-    expect(mesh(2).layers.mask).toBe(1 << LAYER_DEFAULT);
+    expect(mesh(3).layers.mask).toBe(1 << LAYER_DEFAULT);
+  });
+
+  it("splits labels across batches to bound each glyph buffer", () => {
+    const text = "X".repeat(5000);
+    for (let id = 1; id <= 5; id++) {
+      topic.addMarkerMessage({ ...marker(id, MarkerType.TEXT_VIEW_FACING), text }, 0n);
+    }
+    topic.startFrame(0n, "map", "map");
+
+    const glyphBatches = topic.children.find((child) => child instanceof TextMarkerBatches)!;
+    const counts = glyphBatches.children.map(
+      (child) => (child as THREE.Mesh<THREE.InstancedBufferGeometry>).geometry.instanceCount,
+    );
+    // 3 + 2 labels; a single leftover label would draw on its own
+    expect(counts).toEqual([15_000, 10_000]);
   });
 
   it("refreshes text scale and glyph buffers on paused redraws", () => {
