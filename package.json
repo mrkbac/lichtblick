@@ -20,7 +20,7 @@
     "node": ">=26"
   },
   "scripts": {
-    "clean": "rm -rf .webpack */.webpack packages/*/.webpack dist packages/*/dist packages/*/tsconfig.tsbuildinfo storybook-screenshots storybook-static coverage",
+    "clean": "node -e \"const fs = require('node:fs'); for (const p of fs.globSync(['.webpack', '*/.webpack', 'packages/*/.webpack', 'dist', 'packages/*/dist', 'packages/*/tsconfig.tsbuildinfo', 'storybook-screenshots', 'storybook-static', 'coverage'])) fs.rmSync(p, { recursive: true, force: true })\"",
     "build:packages": "node ./node_modules/typescript7/bin/tsc --build --builders 1 --verbose packages/*/tsconfig.json packages/*/src/*/tsconfig.json",
     "desktop:build:dev": "rspack build --mode development --config packages/suite-desktop/rspack.config.ts",
     "desktop:build:prod": "rspack build --mode production --config packages/suite-desktop/rspack.config.ts",
