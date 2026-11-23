@@ -15,6 +15,7 @@ import { createStixelMaterial, PointCloudHistoryRenderable, PointClouds } from "
 import { getColorConverter } from "./colorMode";
 import { DecayPointRing } from "./pointClouds/DecayPointRing";
 import { DECAY_LIMITED, payloadFingerprint } from "./pointExtensionUtils";
+import { normalizeCameraInfo } from "./projections";
 
 // A spy around the payload hash, to check playback doesn't compute it
 vi.mock("./pointExtensionUtils", async (importOriginal) => {
@@ -267,6 +268,74 @@ describe("PointCloudHistoryRenderable decay", () => {
       instanceDetails: (instanceId: number) => Record<string, unknown> | undefined;
     };
     expect(latest.instanceDetails(0)).toMatchObject({ x: POSITIONS[0]![0] });
+  });
+
+  it("paints a backfilled scan using a matching camera frame and deduplicates its fallback version", () => {
+    let hasTransform = true;
+    const transformTree = {
+      version: 0,
+      apply: (_output: unknown, input: unknown) => (hasTransform ? input : undefined),
+    };
+    const rendererOverride = {
+      ...rendererMock,
+      transformTree,
+    } as unknown as Renderer;
+    const cameraSettings = {
+      colorMode: "flat" as const,
+      colorCameraTopic: "/camera/color",
+      hideUnpaintedCameraPoints: true,
+      decayTime: 10,
+      stixelsEnabled: true,
+    };
+    const { renderable, settings } = decode(makeCloud(), cameraSettings, rendererOverride);
+    const config = { ...settings, ...cameraSettings };
+    renderable.updatePointCloud(makeCloud(), undefined, config, 10n);
+    const older = makeCloud();
+    const camera = {
+      time: 0n,
+      frameId: "camera",
+      calibration: normalizeCameraInfo({
+        K: [1, 0, 0, 0, 1, 0, 0, 0, 1],
+        width: 1,
+        height: 1,
+      }),
+      pixels: { width: 1, height: 1, data: Uint8ClampedArray.of(255, 0, 0, 255) },
+    };
+    renderable.addOlderScan(older, config, 5n, undefined, camera);
+    const olderStixels = renderable.children.at(-1) as unknown as {
+      geometry: DynamicBufferGeometry;
+    };
+    const stixelColors = olderStixels.geometry.attributes.color!.array;
+    renderable.addOlderScan(older, config, 5n);
+
+    const ring = renderable.children.find((child) => child instanceof DecayPointRing)!;
+    const colors = ring.points().colorAttribute().array;
+    expect(ring.scanCount()).toBe(1);
+    expect(Array.from(new Uint8Array(colors.buffer, colors.byteOffset, 8))).toEqual([
+      255, 0, 0, 255, 255, 255, 255, 0,
+    ]);
+    expect(renderable.userData.receiveTime).toBe(10n);
+    expect(Array.from(stixelColors.slice(0, 8))).toEqual([255, 0, 0, 255, 255, 0, 0, 255]);
+
+    const newCamera = {
+      ...camera,
+      pixels: { width: 1, height: 1, data: Uint8ClampedArray.of(0, 255, 0, 255) },
+    };
+    hasTransform = false;
+    renderable.repaintFromCamera(newCamera);
+    expect(renderable.waitingToRepaint).toBe(true);
+    hasTransform = true;
+    transformTree.version++;
+    renderable.repaintFromCamera(newCamera);
+    expect(renderable.waitingToRepaint).toBe(false);
+    expect(Array.from(stixelColors.slice(0, 8))).toEqual([0, 255, 0, 255, 0, 255, 0, 255]);
+    const latest = renderable.children[0] as unknown as { geometry: DynamicBufferGeometry };
+    expect(Array.from(latest.geometry.attributes.color!.array.slice(0, 4))).toEqual([
+      0, 255, 0, 255,
+    ]);
+
+    renderable.applySettings({ ...config, colorFromCamera: false });
+    expect(Array.from(stixelColors.slice(0, 8))).toEqual(Array(8).fill(255));
   });
 
   it("adds an older scan's stixels to the stixel history too", () => {

@@ -5,6 +5,7 @@ import * as THREE from "three";
 
 import { Images } from "./Images";
 import type { Renderer } from "../Renderer";
+import { makePose } from "../transforms";
 import type { ImageRenderable } from "./Images/ImageRenderable";
 
 function hiddenRenderable() {
@@ -12,7 +13,10 @@ function hiddenRenderable() {
     userData: { topic: "hidden", settings: { visible: false }, settingsPath: ["topics", "hidden"] },
     dispose: vi.fn(),
     flushPendingDecodes: vi.fn(),
-  }) as unknown as ImageRenderable & { dispose: ReturnType<typeof vi.fn> };
+  }) as unknown as ImageRenderable & {
+    dispose: ReturnType<typeof vi.fn>;
+    flushPendingDecodes: ReturnType<typeof vi.fn>;
+  };
 }
 
 describe("Images", () => {
@@ -36,6 +40,74 @@ describe("Images", () => {
     expect(images.renderables.size).toBe(0);
     expect(hidden.parent).toBeNull();
   });
+
+  it.each(["/camera/color", "/camera/color/image_raw/compressed"])(
+    "keeps hidden paint camera %s subscribed and applies calibration when shown",
+    (topic) => {
+      const renderer = {
+        on: vi.fn(),
+        off: vi.fn(),
+        topics: [{ name: "/camera/color/camera_info", schemaName: "sensor_msgs/CameraInfo" }],
+        customCameraModels: new Map(),
+        transformTree: { apply: vi.fn(() => makePose()) },
+        updateConfig: vi.fn(),
+        config: {
+          topics: {
+            "/cloud": { visible: true, colorCameraTopic: topic },
+            [topic]: { visible: false },
+          },
+        },
+        settings: {
+          errors: { clearPath: vi.fn(), remove: vi.fn(), removeFromTopic: vi.fn() },
+          setNodesForKey: vi.fn(),
+        },
+      } as unknown as Renderer;
+      const images = new Images(renderer);
+      const subscriptions = images.getSubscriptions();
+      const calibration = subscriptions.find(
+        (sub) => sub.type === "schema" && sub.schemaNames.has("sensor_msgs/CameraInfo"),
+      )!;
+      const video = subscriptions.find(
+        (sub) => sub.type === "schema" && sub.schemaNames.has("foxglove.CompressedVideo"),
+      )!;
+      expect(video.subscription.shouldSubscribe?.(topic)).toBe(true);
+      expect(calibration.subscription.shouldSubscribe?.("/camera/color/camera_info")).toBe(true);
+
+      const hidden = hiddenRenderable();
+      hidden.userData.topic = topic;
+      hidden.userData.pose = makePose();
+      const setCameraModel = vi.fn();
+      const update = vi.fn(() => {
+        expect(setCameraModel).toHaveBeenCalledOnce();
+      });
+      Object.assign(hidden, { setSettings: vi.fn(), setCameraModel, update });
+      images.renderables.set(topic, hidden);
+      images.add(hidden);
+      images.startFrame(0n, "frame", "frame");
+
+      expect(hidden.dispose).not.toHaveBeenCalled();
+      expect(hidden.flushPendingDecodes).toHaveBeenCalledTimes(1);
+      expect(hidden.visible).toBe(false);
+
+      calibration.subscription.handler({
+        topic: "/camera/color/camera_info",
+        receiveTime: { sec: 0, nsec: 0 },
+        message: {
+          width: 1,
+          height: 1,
+          K: [1, 0, 0, 0, 1, 0, 0, 0, 1],
+          P: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0],
+        },
+      } as never);
+      expect(setCameraModel).not.toHaveBeenCalled();
+      hidden.userData.settings.visible = true;
+      images.startFrame(0n, "frame", "frame");
+
+      expect(hidden.userData.settings.cameraInfoTopic).toBe("/camera/color/camera_info");
+      expect(update).toHaveBeenCalledOnce();
+      expect(hidden.visible).toBe(true);
+    },
+  );
 
   describe("depth map RGB topic", () => {
     const config = {
