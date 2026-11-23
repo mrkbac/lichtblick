@@ -80,6 +80,9 @@ const useStyles = makeStyles<{ debugDragRegion?: boolean }, "avatar">()(
           opacity: theme.palette.action.disabledOpacity,
         },
       },
+      flipped: {
+        transform: "scaleX(-1)",
+      },
       dropDownIcon: {
         fontSize: "12px !important",
       },
@@ -281,7 +284,11 @@ export function AppBar(props: AppBarProps): React.JSX.Element {
                   data-tourid="left-sidebar-button"
                   data-testid="left-sidebar-button"
                 >
-                  {leftSidebarOpen ? <ViewSidebarIcon /> : <ViewSidebarOutlinedIcon />}
+                  {leftSidebarOpen ? (
+                    <ViewSidebarIcon className={classes.flipped} />
+                  ) : (
+                    <ViewSidebarOutlinedIcon className={classes.flipped} />
+                  )}
                 </AppBarIconButton>
                 <AppBarIconButton
                   title={
