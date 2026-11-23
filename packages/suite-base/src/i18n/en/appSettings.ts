@@ -20,7 +20,6 @@ export const appSettings = {
   extensions: "Extensions",
   followSystem: "Follow system",
   general: "General",
-  language: "Language",
   light: "Light",
   messageRate: "Message rate",
   stepSize: "Step size",

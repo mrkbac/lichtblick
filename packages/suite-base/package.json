@@ -136,7 +136,6 @@
     "gl-matrix": "3.4.4",
     "heap-js": "2.7.1",
     "i18next": "27.2.4",
-    "i18next-browser-languagedetector": "8.3.1",
     "idb": "8.0.4",
     "immer": "11.2.10",
     "intervals-fn": "3.0.3",

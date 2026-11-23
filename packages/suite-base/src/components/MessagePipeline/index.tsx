@@ -213,13 +213,13 @@ export function MessagePipelineProvider({ children, player }: ProviderProps): Re
       currentLayoutContext?.actions.getCurrentLayoutState().selectedLayout?.data?.globalVariables ??
       EMPTY_GLOBAL_VARIABLES;
 
-    player?.setGlobalVariables(lastGlobalVariablesInstance);
+    player?.setGlobalVariables?.(lastGlobalVariablesInstance);
 
     const onLayoutStateUpdate = (state: LayoutState) => {
       const globalVariables = state.selectedLayout?.data?.globalVariables ?? EMPTY_GLOBAL_VARIABLES;
       if (globalVariables !== lastGlobalVariablesInstance) {
         lastGlobalVariablesInstance = globalVariables;
-        player?.setGlobalVariables(globalVariables);
+        player?.setGlobalVariables?.(globalVariables);
       }
     };
 

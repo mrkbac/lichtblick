@@ -20,10 +20,8 @@ type SessionStorageValue = [
  * @returns [value, setValue] tuple for that key.
  */
 export function useSessionStorageValue(key: string): SessionStorageValue {
-  const prefix: string = process.env.DEV_WORKSPACE ? `${process.env.DEV_WORKSPACE}.` : "";
-  const prefixedKey = `${prefix}${key}`;
   const [value, updateValue] = useState<string | undefined>(
-    sessionStorage.getItem(prefixedKey) ?? undefined,
+    sessionStorage.getItem(key) ?? undefined,
   );
 
   const setValue = useCallback(
@@ -31,28 +29,28 @@ export function useSessionStorageValue(key: string): SessionStorageValue {
       // Hack a manual event for now. Unfortunately the browser only fires "storage"
       // events when triggered outside our current tab.
       if (newValue) {
-        sessionStorage.setItem(prefixedKey, newValue);
+        sessionStorage.setItem(key, newValue);
       } else {
-        sessionStorage.removeItem(prefixedKey);
+        sessionStorage.removeItem(key);
       }
       window.dispatchEvent(
         new StorageEvent("storage", {
-          key: prefixedKey,
+          key,
           newValue: newValue === "" ? undefined : newValue,
           storageArea: sessionStorage,
         }),
       );
     },
-    [prefixedKey],
+    [key],
   );
 
   const changeListener = useCallback(
     (event: StorageEvent) => {
-      if (event.key === prefixedKey) {
+      if (event.key === key) {
         updateValue(event.newValue ?? undefined);
       }
     },
-    [prefixedKey],
+    [key],
   );
 
   useEffect(() => {

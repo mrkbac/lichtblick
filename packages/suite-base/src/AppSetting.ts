@@ -12,7 +12,6 @@ export enum AppSetting {
   TIME_FORMAT = "time.format",
   MESSAGE_RATE = "messageRate",
   UPDATES_ENABLED = "updates.enabled",
-  LANGUAGE = "language",
   DEFAULT_STEP_SIZE = "stepSize",
   PLAYBACK_PREVIEW_TOPIC = "playback.previewTopic",
   COMPACT_PANELS = "ui.compactPanels",

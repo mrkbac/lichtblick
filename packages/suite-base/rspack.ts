@@ -148,12 +148,6 @@ type Options = {
   packageDir?: string;
 };
 
-function buildEnvVars(): Record<string, string | undefined> {
-  return {
-    "process.env.DEV_WORKSPACE": JSON.stringify(process.env.DEV_WORKSPACE),
-  };
-}
-
 // Create a partial webpack configuration required to build app using webpack.
 // Returns a webpack configuration containing resolve, module, plugins, and node fields.
 export function makeConfig(
@@ -297,9 +291,7 @@ export function makeConfig(
         LICHTBLICK_REPOSITORY_URL: JSON.stringify(product.repositoryUrl),
         // licht deploys talk to its organization server unless API_URL says otherwise.
         API_URL: JSON.stringify(process.env.API_URL ?? "https://licht-server.marko.im"),
-        DEV_WORKSPACE: JSON.stringify(process.env.DEV_WORKSPACE),
         OTLP_ENDPOINT: JSON.stringify(process.env.OTLP_ENDPOINT),
-        ...buildEnvVars(),
       }),
     ],
     optimization: {
