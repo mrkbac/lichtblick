@@ -6,7 +6,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { fromSec, toSec } from "@foxglove/rostime";
+import { compare, fromSec, toSec } from "@foxglove/rostime";
 import * as _ from "lodash-es";
 import type { Mock, MockInstance } from "vitest";
 
@@ -19,6 +19,7 @@ import {
 } from "@lichtblick/suite-base/players/types";
 import { mockTopicSelection } from "@lichtblick/suite-base/test/mocks/mockTopicSelection";
 import MessageEventBuilder from "@lichtblick/suite-base/testing/builders/MessageEventBuilder";
+import delay from "@lichtblick/suite-base/util/delay";
 import { BasicBuilder } from "@lichtblick/test-builders";
 
 import {
@@ -1223,6 +1224,100 @@ describe("IterablePlayer", () => {
     await player.isClosed;
   });
 
+  describe("pausing while the playback iterator is reading", () => {
+    // The first read waits at the gate after 1050 ms: past the buffer's 1 s minimum read-ahead,
+    // so playback gets that far first
+    const TIMES_MS = [50, 200, 1050, 1300, 1400];
+    function gatedSource(topic: string) {
+      const source = new TestSource();
+      const initialize = source.initialize.bind(source);
+      source.initialize = async () => ({ ...(await initialize()), end: { sec: 2, nsec: 0 } });
+      const gate = Promise.withResolvers<void>();
+      const atGate = Promise.withResolvers<void>();
+      let first = true;
+      source.messageIterator = async function* (args: MessageIteratorArgs) {
+        const gated = first;
+        first = false;
+        for (const ms of TIMES_MS) {
+          const receiveTime = fromSec(ms / 1000);
+          if (args.start && compare(receiveTime, args.start) < 0) {
+            continue;
+          }
+          if (gated && ms === 1300) {
+            atGate.resolve();
+            await gate.promise;
+          }
+          yield { type: "message-event", msgEvent: messageEvent({ topic, receiveTime }) };
+        }
+      };
+      return { source, openGate: gate.resolve, atGate: atGate.promise };
+    }
+
+    async function startPlayingToGate(topic: string) {
+      const { source, openGate, atGate } = gatedSource(topic);
+      const player = new IterablePlayer({ source, enablePreload: false, sourceId: "test" });
+      player.setSubscriptions([{ topic }]);
+      const states: PlayerState[] = [];
+      player.setListener(async (state) => {
+        states.push(state);
+      });
+      await vi.waitFor(() => {
+        expect(states.at(-1)?.activeData?.currentTime).toBeDefined();
+      });
+      player.startPlayback();
+      await atGate;
+      // Let playback reach the last message before the gate, so the tick waits on the gate
+      await vi.waitFor(
+        () => {
+          expect(toSec(states.at(-1)!.activeData!.currentTime)).toBeGreaterThan(1.03);
+        },
+        { timeout: 5000 },
+      );
+      await delay(50);
+      return { player, states, openGate };
+    }
+
+    it("keeps the messages a paused tick read", async () => {
+      const topic = BasicBuilder.string();
+      const { player, states, openGate } = await startPlayingToGate(topic);
+
+      player.pausePlayback();
+      openGate();
+      await delay(50);
+      player.startPlayback();
+      await vi.waitFor(
+        () => {
+          expect(states.at(-1)?.activeData?.currentTime).toEqual({ sec: 2, nsec: 0 });
+        },
+        { timeout: 5000 },
+      );
+
+      const emitted = states.flatMap(
+        (state) =>
+          state.activeData?.messages.map((msg) => Math.round(toSec(msg.receiveTime) * 1000)) ?? [],
+      );
+      expect(_.uniq(emitted)).toEqual(TIMES_MS);
+      player.close();
+      await player.isClosed;
+    });
+
+    it("keeps a pending seek when paused", async () => {
+      const topic = BasicBuilder.string();
+      const { player, states, openGate } = await startPlayingToGate(topic);
+
+      player.seekPlayback({ sec: 0, nsec: 500e6 });
+      player.pausePlayback();
+      openGate();
+
+      await vi.waitFor(() => {
+        expect(states.at(-1)?.activeData?.currentTime).toEqual({ sec: 0, nsec: 500e6 });
+      });
+      expect(states.at(-1)?.activeData?.isPlaying).toBe(false);
+      player.close();
+      await player.isClosed;
+    });
+  });
+
   it("should not override seek-backfill state when setPlayback speed is called", async () => {
     const source = new TestSource();
     const player = new IterablePlayer({
@@ -1302,6 +1397,7 @@ describe("IterablePlayer", () => {
           start: { sec: 0, nsec: 0 },
           end: { sec: 1, nsec: 0 },
           topics: mockTopicSelection(topic),
+          abort: expect.any(AbortSignal),
           consumptionType: "partial",
         },
       ],
@@ -1311,6 +1407,7 @@ describe("IterablePlayer", () => {
           end: { sec: 1, nsec: 0 },
           // The first topic is cached already: only the new one is read
           topics: mockTopicSelection(secondTopic),
+          abort: expect.any(AbortSignal),
           consumptionType: "partial",
         },
       ],
@@ -1492,6 +1589,7 @@ describe("IterablePlayer", () => {
           start: { sec: 0, nsec: 99000001 },
           end: { sec: 1, nsec: 0 },
           topics: mockTopicSelection(topic),
+          abort: expect.any(AbortSignal),
           consumptionType: "partial",
         },
       ],

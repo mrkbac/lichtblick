@@ -19,6 +19,8 @@ type Entry = {
   pins: number;
   // Estimated resident bytes for this entry. 0 until the value resolves (for acquire()).
   weight: number;
+  // Values replaced by refresh() while pinned: closed once the pins drop to 0
+  retired: unknown[];
 };
 
 /**
@@ -83,6 +85,7 @@ export class HydratedSourcePool {
       value: Promise.resolve(value),
       pins: 0,
       weight,
+      retired: [],
     });
     this.#totalWeight += weight;
     await this.#evictBeyondCapacity();
@@ -118,8 +121,13 @@ export class HydratedSourcePool {
     entry.weight = weight;
     entry.value = Promise.resolve(value);
     // The same value again only has a new weight
-    if (entry.pins === 0 && old !== value) {
-      await entry.hydrator.close(old);
+    if (old !== value) {
+      if (entry.pins === 0) {
+        await entry.hydrator.close(old);
+      } else {
+        // ponytail: pins don't say which value they hold, so wait for all of them
+        entry.retired.push(old);
+      }
     }
     await this.#evictBeyondCapacity();
     return true;
@@ -154,6 +162,7 @@ export class HydratedSourcePool {
       value: hydrator.open(),
       pins: 1,
       weight: 0,
+      retired: [],
     };
     this.#entries.set(token, entry);
     try {
@@ -186,6 +195,9 @@ export class HydratedSourcePool {
     if (entry.pins > 0) {
       entry.pins -= 1;
     }
+    if (entry.pins === 0) {
+      void this.#closeRetired(entry);
+    }
     // Opportunistically reclaim memory if we are over budget and this entry is now evictable.
     void this.#evictBeyondCapacity().catch((err: unknown) => {
       log.error("HydratedSourcePool eviction failed", err);
@@ -201,6 +213,7 @@ export class HydratedSourcePool {
     this.#totalWeight = 0;
     await Promise.all(
       entries.map(async ([, entry]) => {
+        await this.#closeRetired(entry);
         try {
           await entry.hydrator.close(await entry.value);
         } catch (err) {
@@ -208,6 +221,17 @@ export class HydratedSourcePool {
         }
       }),
     );
+  }
+
+  async #closeRetired(entry: Entry): Promise<void> {
+    const retired = entry.retired.splice(0);
+    for (const value of retired) {
+      try {
+        await entry.hydrator.close(value);
+      } catch (err) {
+        log.error("HydratedSourcePool close of a replaced value failed", err);
+      }
+    }
   }
 
   // True when the pool exceeds either bound and may shed a least-recently-used unpinned entry.

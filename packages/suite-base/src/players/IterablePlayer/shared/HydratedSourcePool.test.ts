@@ -92,6 +92,26 @@ describe("HydratedSourcePool", () => {
     pool.release(token);
   });
 
+  it("closes a value replaced while pinned once its pins are released", async () => {
+    // GIVEN: a resident entry in use
+    const pool = new HydratedSourcePool({ maxCount: 4 });
+    const token = {};
+    const hydrator = makeHydrator("old");
+    await pool.admit(token, hydrator, "old");
+    expect(await pool.acquire(token, hydrator)).toBe("old");
+
+    // WHEN: it is refreshed while pinned, then released
+    await pool.refresh(token, "new");
+    expect(hydrator.close).not.toHaveBeenCalled();
+    pool.release(token);
+    await Promise.resolve();
+
+    // THEN: the replaced value is closed, the current one is kept
+    expect(hydrator.close.mock.calls).toEqual([["old"]]);
+    expect(await pool.acquire(token, hydrator)).toBe("new");
+    pool.release(token);
+  });
+
   it("hydrates via open() when not resident and allows eviction after release", async () => {
     // GIVEN: an empty pool and a token that has not been hydrated.
     const pool = new HydratedSourcePool({ maxCount: 1 });

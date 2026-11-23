@@ -369,32 +369,33 @@ export class MultiIterableSource<T extends ISerializedIterableSource, P>
     // Only consider sources that could contain messages at or before the backfill time.
     const relevantSources = filterSourcesForBackfill(this.sourceImpl, args.time);
 
-    // Iterate newest-first so we start near the seek target and stop once every topic has a value,
-    // avoiding redundant reads from earlier sources.
-    const backfillMessages: MessageEvent<Uint8Array>[] = [];
-    const missingTopics = new Map(args.topics);
+    // Iterate newest-first so we start near the seek target. Sources may overlap, so a topic found
+    // in a later source is still asked of earlier ones that end after that message, and the newest
+    // message wins; for back-to-back sources this stops as soon as every topic has a value.
+    const newest = new Map<string, MessageEvent<Uint8Array>>();
 
     for (let index = relevantSources.length - 1; index >= 0; index--) {
-      if (missingTopics.size === 0) {
-        break;
-      }
-
       const source = relevantSources[index]!;
-      // Pass a snapshot of the still-missing topics so later mutation of `missingTopics` cannot
-      // alias the map handed to the source.
-      const topicsForSource = new Map(missingTopics);
-      const messages = await source.getBackfillMessages({ ...args, topics: topicsForSource });
-      if (messages.length === 0) {
+      const sourceEnd = source.getEnd?.();
+      const topicsForSource = new Map(
+        [...args.topics].filter(([topic]) => {
+          const found = newest.get(topic);
+          return !found || !sourceEnd || compare(sourceEnd, found.receiveTime) > 0;
+        }),
+      );
+      if (topicsForSource.size === 0) {
         continue;
       }
-
-      backfillMessages.push(...messages);
+      const messages = await source.getBackfillMessages({ ...args, topics: topicsForSource });
       for (const message of messages) {
-        missingTopics.delete(message.topic);
+        const found = newest.get(message.topic);
+        if (!found || compare(message.receiveTime, found.receiveTime) > 0) {
+          newest.set(message.topic, message);
+        }
       }
     }
 
-    return backfillMessages;
+    return [...newest.values()];
   }
 
   public async terminate(): Promise<void> {

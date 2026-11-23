@@ -465,6 +465,7 @@ class CachingIterableSource<MessageType = unknown>
       }
 
       const sourceMessageIterator = this.#source.messageIterator({
+        abort: args.abort,
         topics: args.topics,
         start: sourceReadStart,
         end: sourceReadEnd,
@@ -531,6 +532,11 @@ class CachingIterableSource<MessageType = unknown>
           pendingIterResults.push([lastTime, iterResult]);
 
           yield iterResult;
+        }
+
+        // An aborted source may end early: the range past the last message read is not loaded
+        if (args.abort?.aborted === true) {
+          return;
         }
 
         // We've finished reading our source to the end, close out the block
@@ -1047,6 +1053,7 @@ class CachingIterableSource<MessageType = unknown>
       }
       let lastNs = toNanoSec(readHead);
       for await (const result of this.#source.messageIterator({
+        abort: args.abort,
         topics: args.topics,
         start: readHead,
         end,
@@ -1129,6 +1136,7 @@ class CachingIterableSource<MessageType = unknown>
     try {
       this.#startWriting(block);
       source = this.#source.messageIterator({
+        abort: args.abort,
         topics: missing,
         start: readHead,
         end,
@@ -1137,6 +1145,10 @@ class CachingIterableSource<MessageType = unknown>
       });
       for (;;) {
         const next = await source.next();
+        // An aborted source may end early: commit only what it read
+        if (next.done === true && args.abort?.aborted === true) {
+          return;
+        }
         // undefined: the source is done, merge the rest of block up to end
         let result = next.done === true ? undefined : next.value;
         let resultNs =
