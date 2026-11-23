@@ -93,6 +93,28 @@ async function extractTargetArchitecture(executablePath: string, context: AfterP
   }
 }
 
+/** Fetches `url`, trying up to 3 times on a network error or a 5xx response. */
+export async function download(url: string, retryDelayMs = 2000): Promise<Uint8Array> {
+  for (let attempt = 1; ; attempt++) {
+    let status: number | undefined;
+    try {
+      const response = await fetch(url);
+      if (response.ok) {
+        return new Uint8Array(await response.arrayBuffer());
+      }
+      status = response.status;
+    } catch (error) {
+      if (attempt === 3) {
+        throw error;
+      }
+    }
+    if (status != undefined && (status < 500 || attempt === 3)) {
+      throw new Error(`Downloading ${url} failed: ${status}`);
+    }
+    await new Promise((resolve) => setTimeout(resolve, retryDelayMs * attempt));
+  }
+}
+
 /**
  * Download the Spotlight importer for MCAP files and include it in the app bundle.
  */
@@ -111,11 +133,7 @@ async function copySpotlightImporter(context: AfterPackContext) {
   const zipURL =
     "https://github.com/foxglove/MCAPSpotlightImporter/releases/download/v1.0.2/MCAPSpotlightImporter.mdimporter.zip";
   const zipSHA = "26cafa3e3069fcbd294864ceeee1bc9899e94456e0d28079f966787b6f05c7a2";
-  const response = await fetch(zipURL);
-  if (!response.ok) {
-    throw new Error(`Downloading ${zipURL} failed: ${response.status}`);
-  }
-  const zip = new Uint8Array(await response.arrayBuffer());
+  const zip = await download(zipURL);
   await fs.writeFile(zipPath, zip);
   const actualSHA = crypto.createHash("sha256").update(zip).digest("hex");
   if (actualSHA !== zipSHA) {
