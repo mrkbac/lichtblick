@@ -4,6 +4,18 @@ import i18next from "i18next";
 
 import { SettingsTreeAction, SettingsTreeChildren, SettingsTreeNode } from "@lichtblick/suite";
 
+export type TopicQuickFilter = {
+  id: string;
+  label: string;
+  topics: readonly string[];
+};
+
+/** Built-in settings metadata for lists keyed by topic name. */
+export type TopicListSettings = {
+  enableTopicNameTree?: boolean;
+  topicQuickFilters?: readonly TopicQuickFilter[];
+};
+
 /**
  * The one way a panel lets users choose which of several topics it shows.
  *
@@ -17,7 +29,7 @@ import { SettingsTreeAction, SettingsTreeChildren, SettingsTreeNode } from "@lic
  */
 export function topicListNode<T extends SettingsTreeNode>(
   node: T & { children: SettingsTreeChildren },
-): T {
+): T & TopicListSettings {
   return {
     enableVisibilityFilter: true,
     enableTopicNameTree: true,

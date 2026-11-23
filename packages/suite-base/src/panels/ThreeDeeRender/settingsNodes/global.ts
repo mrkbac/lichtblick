@@ -6,13 +6,13 @@
 
 import { t } from "i18next";
 
-import type { SettingsTreeNode, SettingsTreeNodeAction, Topic } from "@lichtblick/suite";
+import type { SettingsTreeNodeAction, Topic } from "@lichtblick/suite";
 import type {
   DocumentedFields,
   DocumentedNode,
   DocumentedNodes,
 } from "@lichtblick/suite-base/panels/shared/documentedSettings";
-import { topicListNode } from "@lichtblick/suite-base/panels/shared/topicList";
+import { topicListNode, TopicQuickFilter } from "@lichtblick/suite-base/panels/shared/topicList";
 
 import type { RendererConfig } from "../IRenderer";
 import { isTransformPreloadEnabled } from "../constants";
@@ -347,9 +347,7 @@ const TOPIC_FILTERS = [
   },
 ] as const;
 
-export function buildTopicQuickFilters(
-  topics: readonly Topic[],
-): SettingsTreeNode["topicQuickFilters"] {
+export function buildTopicQuickFilters(topics: readonly Topic[]): TopicQuickFilter[] {
   return TOPIC_FILTERS.map(({ id, label, schemas }) => ({
     id,
     label: t(label),

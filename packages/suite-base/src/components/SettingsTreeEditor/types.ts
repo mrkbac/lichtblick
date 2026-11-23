@@ -14,6 +14,7 @@ import {
   SettingsTreeNode,
   SettingsTreeNodeActionDivider,
 } from "@lichtblick/suite";
+import type { TopicListSettings } from "@lichtblick/suite-base/panels/shared/topicList";
 
 import { TopicVisibility } from "./topicNameTree";
 
@@ -59,6 +60,7 @@ export type EditorSettingsTreeNode = Omit<
   SettingsTreeNode,
   "actions" | "children" | "fields" | "icon"
 > &
+  TopicListSettings &
   Pick<Foxglove.SettingsTreeNode, "warning" | "color" | "help" | "drag" | "childrenReorderable"> & {
     actions?: EditorSettingsTreeNodeAction[];
     children?: EditorSettingsTreeNodes;
