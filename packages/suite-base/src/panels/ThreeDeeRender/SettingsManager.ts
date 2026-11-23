@@ -88,14 +88,6 @@ export class SettingsManager extends EventEmitter<SettingsManagerEvents> {
     this.emit("update");
   }
 
-  public clearChildren(path: Path): void {
-    this.#root = produce(this.#root, (draft) => {
-      clearChildren(draft, path);
-    });
-
-    this.emit("update");
-  }
-
   public tree(): DocumentedNodes {
     return this.#root.children ?? {};
   }
@@ -166,21 +158,6 @@ function removeNodeAtPath(root: DocumentedNode, path: Path): boolean {
   }
 
   return removeNodeAtPath(nextNode, path.slice(1));
-}
-
-function clearChildren(root: DocumentedNode, path: Path): void {
-  const segment = path[0];
-  const nextNode = segment == undefined ? undefined : root.children?.[segment];
-  if (!nextNode) {
-    return;
-  }
-
-  if (path.length === 1) {
-    nextNode.children = undefined;
-    return;
-  }
-
-  clearChildren(nextNode, path.slice(1));
 }
 
 function addNodeAtPath(root: DocumentedNode, path: Path, node: DocumentedNode): void {

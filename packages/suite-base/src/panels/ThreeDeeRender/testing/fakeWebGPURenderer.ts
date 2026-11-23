@@ -36,7 +36,6 @@ class FakeWebGPURenderer {
     render: { calls: 0, triangles: 0 },
     memory: { textures: 0, geometries: 0 },
   };
-  public shadowMap = {};
   public autoClear = true;
   public sortObjects = true;
   public onDeviceLost = (): void => {};
