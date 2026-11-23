@@ -31,7 +31,6 @@ import SignInPrompt from "@lichtblick/suite-base/components/LayoutBrowser/SignIn
 import { LayoutTemplateMenu } from "@lichtblick/suite-base/components/LayoutTemplates";
 import { SidebarContent } from "@lichtblick/suite-base/components/SidebarContent";
 import Stack from "@lichtblick/suite-base/components/Stack";
-import { useAnalytics } from "@lichtblick/suite-base/context/AnalyticsContext";
 import {
   LayoutID,
   LayoutState,
@@ -54,7 +53,6 @@ import { useLayoutNavigation } from "@lichtblick/suite-base/hooks/useLayoutNavig
 import { useLayoutTransfer } from "@lichtblick/suite-base/hooks/useLayoutTransfer";
 import { usePrompt } from "@lichtblick/suite-base/hooks/usePrompt";
 import { defaultPlaybackConfig } from "@lichtblick/suite-base/providers/CurrentLayoutProvider/reducers";
-import { AppEvent } from "@lichtblick/suite-base/services/IAnalytics";
 import { layoutIsFavorite } from "@lichtblick/suite-base/services/ILayoutManager";
 import {
   Layout,
@@ -89,7 +87,6 @@ export default function LayoutBrowser({
       ? organization.session.organizations.filter((org) => org.permissions.includes("layouts:read"))
       : undefined;
   const [shareDialog, openShareDialog] = useShareLayoutDialog();
-  const analytics = useAnalytics();
   const favorites = useLayoutFavorites();
   const isFavorite = useCallback(
     (layout: Layout) => layoutIsFavorite(favorites, layout),
@@ -259,15 +256,7 @@ export default function LayoutBrowser({
     });
     await onSelectLayout(newLayout);
     setPersonalSectionExpanded(true);
-
-    analytics.logEvent(AppEvent.LAYOUT_CREATE);
-  }, [
-    currentDateForStorybook,
-    layoutManager,
-    onSelectLayout,
-    setPersonalSectionExpanded,
-    analytics,
-  ]);
+  }, [currentDateForStorybook, layoutManager, onSelectLayout, setPersonalSectionExpanded]);
 
   const askShareTarget = useCallback(
     async (item: Layout): Promise<{ name: string; organizationId?: string } | undefined> => {
@@ -296,7 +285,6 @@ export default function LayoutBrowser({
           organizationId: target.organizationId,
           ...(item.untrusted && { untrusted: true }),
         });
-        analytics.logEvent(AppEvent.LAYOUT_SHARE, { permission: item.permission });
         if (isFavorite(item)) {
           // The shared copy is a new layout: keep it as a favorite, like the original.
           await layoutManager.setFavorite(newLayout, { favorite: true }).catch((error: unknown) => {
@@ -307,14 +295,7 @@ export default function LayoutBrowser({
         await onSelectLayout(newLayout);
       }
     },
-    [
-      analytics,
-      askShareTarget,
-      isFavorite,
-      layoutManager,
-      onSelectLayout,
-      setSharedSectionExpanded,
-    ],
+    [askShareTarget, isFavorite, layoutManager, onSelectLayout, setSharedSectionExpanded],
   );
 
   const onMakePersonalCopy = useCallbackWithToast(
@@ -325,12 +306,8 @@ export default function LayoutBrowser({
       });
       setPersonalSectionExpanded(true);
       await onSelectLayout(newLayout);
-      analytics.logEvent(AppEvent.LAYOUT_MAKE_PERSONAL_COPY, {
-        permission: item.permission,
-        syncStatus: item.syncInfo?.status,
-      });
     },
-    [analytics, layoutManager, onSelectLayout, setPersonalSectionExpanded],
+    [layoutManager, onSelectLayout, setPersonalSectionExpanded],
   );
 
   const showSignInPrompt =

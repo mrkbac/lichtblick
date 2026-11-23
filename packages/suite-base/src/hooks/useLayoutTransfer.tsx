@@ -19,9 +19,7 @@ import { basename, extname } from "@lichtblick/suite-base/util/path";
 import showOpenFilePicker from "@lichtblick/suite-base/util/showOpenFilePicker";
 import { toError } from "@lichtblick/suite-base/util/toError";
 
-import { useAnalytics } from "../context/AnalyticsContext";
 import { useLayoutManager } from "../context/LayoutManagerContext";
-import { AppEvent } from "../services/IAnalytics";
 
 type UseLayoutTransfer = {
   importLayout: () => Promise<void>;
@@ -42,7 +40,6 @@ type UseLayoutTransfer = {
 export function useLayoutTransfer(): UseLayoutTransfer {
   const isMounted = useMountedState();
   const layoutManager = useLayoutManager();
-  const analytics = useAnalytics();
   const { onSelectLayout } = useLayoutNavigation();
   const { getCurrentLayoutState } = useCurrentLayoutActions();
 
@@ -130,13 +127,7 @@ export function useLayoutTransfer(): UseLayoutTransfer {
         return await parseAndInstallLayout(file);
       }),
     );
-
-    if (!isMounted()) {
-      return;
-    }
-
-    analytics.logEvent(AppEvent.LAYOUT_IMPORT, { numLayouts: fileHandles.length });
-  }, [analytics, isMounted, parseAndInstallLayout]);
+  }, [parseAndInstallLayout]);
 
   const exportLayout = useCallbackWithToast(async () => {
     const item = getCurrentLayoutState().selectedLayout?.data;
@@ -148,8 +139,7 @@ export function useLayoutTransfer(): UseLayoutTransfer {
     const layoutName = name.length > 0 ? name : "lichtblick-layout";
     const content = JSON.stringify(item, undefined, 2) ?? "";
     downloadTextFile(content, `${layoutName}.json`);
-    analytics.logEvent(AppEvent.LAYOUT_EXPORT);
-  }, [analytics, getCurrentLayoutState]);
+  }, [getCurrentLayoutState]);
 
   return { importLayout, exportLayout, parseAndInstallLayout };
 }

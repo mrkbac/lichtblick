@@ -15,5 +15,3 @@ declare const LICHTBLICK_PRODUCT_NAME: string | undefined;
 declare const LICHTBLICK_REPOSITORY_URL: string | undefined;
 
 declare const DEV_WORKSPACE: string | undefined;
-
-declare const OTLP_ENDPOINT: string | undefined;

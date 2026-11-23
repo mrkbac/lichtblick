@@ -44,7 +44,7 @@ export default function LayoutSection({
   multiSelectedIds: readonly string[];
   selectedId?: string;
   onToggleExpanded?: () => void;
-  onSelect: (item: Layout, params?: { selectedViaClick?: boolean; event?: MouseEvent }) => void;
+  onSelect: (item: Layout, params?: { event?: MouseEvent }) => void;
   onRename: (item: Layout, newName: string) => void;
   onDuplicate: (item: Layout) => void;
   onDelete: (item: Layout) => void;

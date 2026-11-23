@@ -12,7 +12,6 @@ declare const LICHTBLICK_SUITE_VERSION: string | undefined;
 declare const LICHTBLICK_PRODUCT_NAME: string | undefined;
 declare const LICHTBLICK_REPOSITORY_URL: string | undefined;
 declare const DEV_WORKSPACE: string | undefined;
-declare const OTLP_ENDPOINT: string | undefined;
 
 export const APP_CONFIG = {
   /**
@@ -39,10 +38,4 @@ export const APP_CONFIG = {
    * Development workspace prefix (for local storage keys)
    */
   devWorkspace: DEV_WORKSPACE ?? "",
-
-  /**
-   * Base URL of the OTLP/HTTP collector for OpenTelemetry logs, e.g. http://localhost:4318.
-   * Undefined disables telemetry
-   */
-  otlpEndpoint: OTLP_ENDPOINT,
 } as const;

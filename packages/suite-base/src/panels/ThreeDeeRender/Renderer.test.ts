@@ -28,7 +28,6 @@ import { CameraStateSettings } from "@lichtblick/suite-base/panels/ThreeDeeRende
 import { DEFAULT_PUBLISH_SETTINGS } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/PublishSettings";
 import { TFMessage, TransformStamped } from "@lichtblick/suite-base/panels/ThreeDeeRender/ros";
 import { makePose, Transform } from "@lichtblick/suite-base/panels/ThreeDeeRender/transforms";
-import IAnalytics from "@lichtblick/suite-base/services/IAnalytics";
 import { BasicBuilder } from "@lichtblick/test-builders";
 
 import { DynamicBufferGeometry } from "./DynamicBufferGeometry";
@@ -876,22 +875,6 @@ describe("3D Renderer", () => {
     // Then: Should update color scheme and backdrop
     expect(renderer.colorScheme).toBe("light");
     expect(setClearColorSpy).toHaveBeenCalled();
-
-    renderer.dispose();
-  });
-
-  it("sets analytics instance", () => {
-    // Given: A renderer instance and mock analytics
-    const renderer = new Renderer({ ...defaultRendererProps, canvas });
-    const mockAnalytics = {
-      logEvent: vi.fn(),
-    } as unknown as IAnalytics;
-
-    // When: Setting analytics
-    renderer.setAnalytics(mockAnalytics);
-
-    // Then: Analytics should be set
-    expect(renderer.analytics).toBe(mockAnalytics);
 
     renderer.dispose();
   });

@@ -25,9 +25,6 @@ const storedRecents = vi.hoisted(() => ({
 vi.mock("notistack", () => ({
   useSnackbar: () => ({ enqueueSnackbar: vi.fn(), closeSnackbar: vi.fn() }),
 }));
-vi.mock("@lichtblick/suite-base/context/AnalyticsContext", () => ({
-  useAnalytics: () => ({ logEvent: vi.fn() }),
-}));
 vi.mock("@lichtblick/suite-base/context/CurrentLayoutContext", () => ({
   useCurrentLayoutSelector: () => undefined,
   useCurrentLayoutActions: () => ({ setSelectedLayoutId: vi.fn() }),

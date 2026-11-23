@@ -11,12 +11,9 @@ import type { Mock } from "vitest";
 import { AppMenuProps } from "@lichtblick/suite-base/components/AppBar/types";
 import { useCommandPaletteStore } from "@lichtblick/suite-base/components/CommandPalette/CommandPalette";
 import { usePanelGuideStore } from "@lichtblick/suite-base/components/PanelDocs/PanelGuide";
-import AnalyticsContext from "@lichtblick/suite-base/context/AnalyticsContext";
 import { usePlayerSelection } from "@lichtblick/suite-base/context/PlayerSelectionContext";
 import { useWorkspaceActions } from "@lichtblick/suite-base/context/Workspace/useWorkspaceActions";
 import { useLayoutTransfer } from "@lichtblick/suite-base/hooks/useLayoutTransfer";
-import { AppEvent } from "@lichtblick/suite-base/services/IAnalytics";
-import type IAnalytics from "@lichtblick/suite-base/services/IAnalytics";
 
 import { AppMenu } from "./AppMenu";
 
@@ -55,8 +52,6 @@ describe("AppMenu", () => {
   const mockImportLayout = vi.fn();
   const mockExportLayout = vi.fn();
   const mockSelectRecent = vi.fn();
-  const logEvent = vi.fn();
-  const mockAnalytics: IAnalytics = { logEvent };
 
   beforeEach(() => {
     (useTranslation as Mock).mockReturnValue({
@@ -85,11 +80,7 @@ describe("AppMenu", () => {
   });
 
   const renderAppMenu = (props: Partial<AppMenuProps> = {}) =>
-    render(
-      <AnalyticsContext.Provider value={mockAnalytics}>
-        <AppMenu open={true} handleClose={mockHandleClose} disablePortal={false} {...props} />
-      </AnalyticsContext.Provider>,
-    );
+    render(<AppMenu open={true} handleClose={mockHandleClose} disablePortal={false} {...props} />);
 
   it("shows every action in one flat list", () => {
     renderAppMenu();
@@ -107,19 +98,6 @@ describe("AppMenu", () => {
 
     expect(mockDialogActions.dataSource.open).toHaveBeenCalledWith("start");
     expect(mockHandleClose).toHaveBeenCalled();
-  });
-
-  it("logs app menu interactions for clicked menu items", () => {
-    // Given
-    renderAppMenu();
-
-    // When
-    fireEvent.click(screen.getByText("open"));
-
-    // Then
-    expect(logEvent).toHaveBeenCalledWith(AppEvent.APP_MENU_CLICK, {
-      id: "menu-item-open",
-    });
   });
 
   it("opens settings, extensions and about", () => {

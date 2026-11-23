@@ -9,7 +9,6 @@ import { useSnackbar } from "notistack";
 import type { Mock } from "vitest";
 
 import { LayoutSelectionState } from "@lichtblick/suite-base/components/LayoutBrowser/types";
-import { useAnalytics } from "@lichtblick/suite-base/context/AnalyticsContext";
 import {
   LayoutID,
   useCurrentLayoutSelector,
@@ -38,10 +37,6 @@ vi.mock("notistack", () => ({
 
 vi.mock("@lichtblick/suite-base/context/LayoutManagerContext", () => ({
   useLayoutManager: vi.fn(),
-}));
-
-vi.mock("@lichtblick/suite-base/context/AnalyticsContext", () => ({
-  useAnalytics: vi.fn(),
 }));
 
 vi.mock("@lichtblick/suite-base/context/CurrentLayoutContext", () => ({
@@ -126,7 +121,6 @@ describe("LayoutBrowser", () => {
   beforeEach(() => {
     dispatchMock = vi.fn();
     (useLayoutManager as Mock).mockReturnValue(mockLayoutManager);
-    (useAnalytics as Mock).mockReturnValue({ logEvent: vi.fn() });
     (useCurrentLayoutSelector as Mock).mockReturnValue(undefined);
     (useCurrentLayoutActions as Mock).mockReturnValue({ setSelectedLayoutId: vi.fn() });
     (useCurrentUser as Mock).mockReturnValue({ signIn: undefined });
@@ -301,15 +295,12 @@ describe("LayoutBrowser", () => {
     let setPersonalExpandedMock: Mock;
     let setSharedExpandedMock: Mock;
     let onSelectLayoutMock: Mock;
-    let logEventMock: Mock;
 
     beforeEach(() => {
       setPersonalExpandedMock = vi.fn();
       setSharedExpandedMock = vi.fn();
       onSelectLayoutMock = vi.fn().mockResolvedValue(undefined);
-      logEventMock = vi.fn().mockResolvedValue(undefined);
 
-      (useAnalytics as Mock).mockReturnValue({ logEvent: logEventMock });
       (useWorkspaceStore as Mock).mockReturnValue({ personal: true, shared: true });
       (useWorkspaceActions as Mock).mockReturnValue({
         layoutBrowserActions: {
