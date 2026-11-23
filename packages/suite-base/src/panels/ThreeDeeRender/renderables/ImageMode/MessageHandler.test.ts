@@ -18,10 +18,10 @@ import { DeepPartial } from "ts-essentials";
 
 import { MessageEvent } from "@lichtblick/suite";
 import { HUDItemManager } from "@lichtblick/suite-base/panels/ThreeDeeRender/HUDItemManager";
+import { SYNC_BYTES_PER_TOPIC } from "@lichtblick/suite-base/panels/ThreeDeeRender/TimestampSynchronizer";
 import {
   MessageHandler,
   MessageRenderState,
-  SYNC_BYTES,
   WAITING_FOR_BOTH_HUD_ITEM,
   WAITING_FOR_CALIBRATION_HUD_ITEM,
   WAITING_FOR_IMAGE_EMPTY_HUD_ITEM,
@@ -326,7 +326,7 @@ describe("MessageHandler: synchronized = true", () => {
   it("drops the oldest buffered images past the byte budget", () => {
     const messageHandler = syncedHandler();
     // One buffer shared by every image: only byteLength matters
-    const third = new Uint8Array(SYNC_BYTES / 3);
+    const third = new Uint8Array(SYNC_BYTES_PER_TOPIC / 3);
     for (let time = 1n; time <= 4n; time++) {
       messageHandler.handleRawImage(imageAt(time, third));
     }
@@ -419,7 +419,7 @@ describe("MessageHandler: synchronized = true", () => {
           4n,
           createCircleAnnotations([1n, 4n]),
         ) as MessageEvent<ImageAnnotations>,
-        Math.floor(SYNC_BYTES * 0.6),
+        Math.floor(SYNC_BYTES_PER_TOPIC * 0.6),
       ),
     );
     messageHandler.handleRawImage(imageAt(1n));
@@ -427,7 +427,9 @@ describe("MessageHandler: synchronized = true", () => {
     messageHandler.handleRawImage(imageAt(2n));
     expect(renderedStamp(messageHandler)).toEqual(fromNanoSec(2n));
     // Stamp 1 is released, but stamp 4 still holds the whole message: an image of 45% doesn't fit
-    messageHandler.handleRawImage(imageAt(3n, new Uint8Array(Math.floor(SYNC_BYTES * 0.45))));
+    messageHandler.handleRawImage(
+      imageAt(3n, new Uint8Array(Math.floor(SYNC_BYTES_PER_TOPIC * 0.45))),
+    );
     messageHandler.handleAnnotations(annotationsAt(3n));
     expect(renderedStamp(messageHandler)).toBeUndefined();
   });
@@ -445,7 +447,7 @@ describe("MessageHandler: synchronized = true", () => {
     for (let time = 1n; time <= 4n; time++) {
       messageHandler.handleAnnotations({
         ...annotationsAt(time),
-        sizeInBytes: Math.floor(SYNC_BYTES / 3),
+        sizeInBytes: Math.floor(SYNC_BYTES_PER_TOPIC / 3),
       });
     }
     messageHandler.handleRawImage(imageAt(1n));

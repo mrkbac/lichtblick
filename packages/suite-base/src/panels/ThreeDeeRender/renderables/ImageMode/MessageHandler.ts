@@ -55,7 +55,7 @@ import {
   WAITING_FOR_SYNC_EMPTY_HUD_ID,
 } from "./constants";
 import { PartialMessageEvent } from "../../SceneExtension";
-import { SYNC_WINDOW_NS } from "../../TimestampSynchronizer";
+import { SYNC_BYTES_PER_TOPIC, SYNC_WINDOW_NS } from "../../TimestampSynchronizer";
 import { CompressedImage as RosCompressedImage, Image as RosImage, CameraInfo } from "../../ros";
 import { t3D } from "../../t3D";
 
@@ -145,13 +145,6 @@ export const WAITING_FOR_SYNC_EMPTY_HUD_ITEM: HUDItem = {
  * is managing state in synchronized mode and ensuring that the a synchronized set of image and
  * annotations are handed off to the SceneExtension for rendering.
  */
-/**
- * Image and annotation bytes buffered while waiting for a synchronized set; the oldest stamps go
- * first past it. Together with {@link SYNC_WINDOW_NS} (annotations later than that are treated
- * as never arriving) it bounds memory when an annotation topic stalls.
- */
-export const SYNC_BYTES = 256 * 1024 * 1024;
-
 export class MessageHandler {
   /** settings that should reflect image mode config */
   #config: Immutable<Config>;
@@ -266,8 +259,8 @@ export class MessageHandler {
   /**
    * Drops stamps more than SYNC_WINDOW_NS behind `latest` (the newest stamp received just now, not
    * the tree's max, so one future-stamped message can't evict everything after it) and the oldest
-   * ones past SYNC_BYTES, so sets that never complete cannot pile up. The newest stays, and so does
-   * `keep` (the oldest entry once older ones are pruned): a set completed by the same message that
+   * ones past SYNC_BYTES_PER_TOPIC (counting image and annotation bytes together), so sets that
+   * never complete cannot pile up. The newest stays, and so does `keep` (the oldest entry once older ones are pruned): a set completed by the same message that
    * would evict it is still shown, and goes on the next eviction.
    */
   /** Returns whether anything was evicted */
@@ -278,7 +271,7 @@ export class MessageHandler {
       this.#tree.size > 1 &&
       (keep == undefined || compareTime(this.#tree.minKey()!, keep) !== 0) &&
       ((cutoff != undefined && toNanoSec(this.#tree.minKey()!) < cutoff) ||
-        this.#treeBytes > SYNC_BYTES)
+        this.#treeBytes > SYNC_BYTES_PER_TOPIC)
     ) {
       this.#shiftSyncItem();
       evicted = true;

@@ -9,13 +9,11 @@ import type { Mock } from "vitest";
 
 import { useLayoutBrowserReducer } from "@lichtblick/suite-base/components/LayoutBrowser/reducer";
 import { LayoutSelectionState } from "@lichtblick/suite-base/components/LayoutBrowser/types";
-import { useAnalytics } from "@lichtblick/suite-base/context/AnalyticsContext";
 import {
   useCurrentLayoutActions,
   useCurrentLayoutSelector,
 } from "@lichtblick/suite-base/context/CurrentLayoutContext";
 import { useLayoutManager } from "@lichtblick/suite-base/context/LayoutManagerContext";
-import { AppEvent } from "@lichtblick/suite-base/services/IAnalytics";
 import { Layout } from "@lichtblick/suite-base/services/ILayoutStorage";
 import LayoutBuilder from "@lichtblick/suite-base/testing/builders/LayoutBuilder";
 
@@ -33,10 +31,6 @@ vi.mock("@lichtblick/suite-base/hooks/useCallbackWithToast", () => ({
 
 vi.mock("@lichtblick/suite-base/context/LayoutManagerContext", () => ({
   useLayoutManager: vi.fn(),
-}));
-
-vi.mock("@lichtblick/suite-base/context/AnalyticsContext", () => ({
-  useAnalytics: vi.fn(),
 }));
 
 vi.mock("@lichtblick/suite-base/context/CurrentLayoutContext", () => ({
@@ -61,7 +55,6 @@ describe("useLayoutNavigation", () => {
     selectedIds: [],
   };
 
-  let analyticsMock: { logEvent: Mock };
   let setSelectedLayoutIdMock: Mock;
   let dispatchMock: Mock;
   let mockLayoutManager: {
@@ -86,7 +79,6 @@ describe("useLayoutNavigation", () => {
   }
 
   beforeEach(() => {
-    analyticsMock = { logEvent: vi.fn() };
     setSelectedLayoutIdMock = vi.fn();
     dispatchMock = vi.fn();
     mockLayoutManager = {
@@ -97,7 +89,6 @@ describe("useLayoutNavigation", () => {
       supportsSharing: false,
     };
 
-    (useAnalytics as Mock).mockReturnValue(analyticsMock);
     (useCurrentLayoutActions as Mock).mockReturnValue({
       setSelectedLayoutId: setSelectedLayoutIdMock,
     });
@@ -131,30 +122,6 @@ describe("useLayoutNavigation", () => {
       });
 
       expect(menuClose).toHaveBeenCalledTimes(1);
-    });
-  });
-
-  describe("analytics logging", () => {
-    it("logs LAYOUT_SELECT event when selectedViaClick is true", async () => {
-      const { result, layout } = setup({ layoutProps: { permission: "CREATOR_WRITE" } });
-
-      await act(async () => {
-        await result.current.onSelectLayout(layout, { selectedViaClick: true });
-      });
-
-      expect(analyticsMock.logEvent).toHaveBeenCalledWith(AppEvent.LAYOUT_SELECT, {
-        permission: layout.permission,
-      });
-    });
-
-    it("does not log event when selectedViaClick is false", async () => {
-      const { result, layout } = setup();
-
-      await act(async () => {
-        await result.current.onSelectLayout(layout, { selectedViaClick: false });
-      });
-
-      expect(analyticsMock.logEvent).not.toHaveBeenCalled();
     });
   });
 

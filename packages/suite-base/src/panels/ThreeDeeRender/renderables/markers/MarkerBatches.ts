@@ -170,14 +170,14 @@ const BATCH_CELL_SIZE = 5_000;
 // Merging saves draws for many small markers. Keep long paths in their existing GPU buffers.
 const MAX_BATCH_LINE_SEGMENTS = 8_192;
 
-function cellKey(position: THREE.Vector3): string {
+export function cellKey(position: THREE.Vector3): string {
   const x = Math.floor(position.x / BATCH_CELL_SIZE);
   const y = Math.floor(position.y / BATCH_CELL_SIZE);
   const z = Math.floor(position.z / BATCH_CELL_SIZE);
   return `${x}:${y}:${z}`;
 }
 
-function isFinitePosition(position: THREE.Vector3): boolean {
+export function isFinitePosition(position: THREE.Vector3): boolean {
   return Number.isFinite(position.x) && Number.isFinite(position.y) && Number.isFinite(position.z);
 }
 

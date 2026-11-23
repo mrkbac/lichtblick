@@ -11,6 +11,9 @@ import {
   Chip,
   IconButton,
   LinearProgress,
+  List,
+  ListItemButton,
+  ListItemText,
   MenuItem,
   Select,
   TableSortLabel,
@@ -31,6 +34,7 @@ import { formatDurationCompact } from "@lichtblick/suite-base/util/formatTime";
 import { formatTimeAgo } from "@lichtblick/suite-base/util/recentSources";
 
 import { AnimatedThumbnail } from "./AnimatedThumbnail";
+import { CatalogEvents, formatCatalogTime } from "./CatalogEvents";
 import { QuickFilters } from "./QuickFilters";
 import { RecordingDetails } from "./RecordingDetails";
 import {
@@ -39,10 +43,17 @@ import {
   formatStart,
   recordingCaption,
 } from "./RecordingThumbnail";
+import {
+  CatalogSection,
+  GROUP_SECTIONS,
+  groupName,
+  timelineBar,
+  timelineRange,
+  TimelineClock,
+} from "./catalogViews";
 import { filterRecordings } from "./search";
 import { Bounds, boundsIntersect, pickTrack, trackBounds } from "./track";
-import { CatalogRecording } from "./types";
-import { CatalogFolder } from "./useCatalogFolder";
+import { CatalogBackend, CatalogRecording } from "./types";
 
 // MapLibre is large; load it only when the map is shown.
 const CatalogMap = lazy(async () => await import("./CatalogMap"));
@@ -146,6 +157,21 @@ const useStyles = makeStyles()((theme) => ({
     overflow: "auto",
     minHeight: 0,
   },
+  timelineRow: {
+    gridTemplateColumns: "minmax(100px, 1fr) minmax(0, 3fr)",
+  },
+  timelineTrack: {
+    position: "relative",
+    height: theme.spacing(1.5),
+    backgroundColor: theme.palette.action.hover,
+  },
+  timelineBar: {
+    position: "absolute",
+    height: "100%",
+    minWidth: 2,
+    borderRadius: theme.shape.borderRadius,
+    backgroundColor: theme.palette.primary.main,
+  },
   numeric: {
     textAlign: "right",
     fontFeatureSettings: `"tnum"`,
@@ -213,7 +239,7 @@ const useStyles = makeStyles()((theme) => ({
 }));
 
 type Props = {
-  folder: CatalogFolder;
+  folder: CatalogBackend;
   /** Search query, see `filterRecordings`. */
   query: string;
   /** When each file name was last opened, from the recent sources. */
@@ -224,6 +250,7 @@ type Props = {
   view?: "list" | "grid" | "map";
   /** The first view of the catalog's own switch. */
   initialView?: "list" | "grid" | "map";
+  sections?: boolean;
 };
 
 /** Every recording of a catalog: a local folder, live recordings or a catalog URL. */
@@ -234,6 +261,7 @@ export default function Catalog({
   onQueryChange,
   view: viewProp,
   initialView = "list",
+  sections = true,
 }: Props): React.JSX.Element {
   const { classes, cx } = useStyles();
   const { t, i18n } = useTranslation("catalog");
@@ -242,7 +270,13 @@ export default function Catalog({
   const [selectedId, setSelectedId] = useState<string>();
   const [dragging, setDragging] = useState(false);
   const [localView, setView] = useState<"list" | "grid" | "map">(initialView);
-  const view = viewProp ?? localView;
+  const [section, setSection] = useState<CatalogSection>("recordings");
+  const [group, setGroup] = useState<string>();
+  const [clock, setClock] = useState<TimelineClock>("wall");
+  const view = section === "recordings" ? (viewProp ?? localView) : "list";
+  const groupSection = GROUP_SECTIONS.find((value) => value === section);
+  const browsingGroups = groupSection != undefined && group == undefined;
+  const showList = view === "list" && !browsingGroups && section !== "events";
   const [gpsTopic, setGpsTopic] = useState<string>();
   const [area, setArea] = useState<Bounds>();
   const [sort, setSort] = useState<{ key: SortKey; desc: boolean }>({
@@ -252,15 +286,47 @@ export default function Catalog({
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const shown = useMemo(() => {
-    const matching = filterRecordings(recordings, query).filter((r) => {
-      if (!area) {
+    const matching = filterRecordings(recordings, browsingGroups ? "" : query).filter((r) => {
+      if (groupSection && group != undefined && groupName(r, groupSection) !== group) {
+        return false;
+      }
+      if (!area || section !== "recordings") {
         return true;
       }
       const bounds = trackBounds(pickTrack(r.tracks, gpsTopic)?.points ?? []);
       return bounds != undefined && boundsIntersect(bounds, area);
     });
     return sortRecordings(matching, sort);
-  }, [recordings, query, sort, area, gpsTopic]);
+  }, [recordings, query, sort, area, gpsTopic, group, groupSection, section, browsingGroups]);
+
+  const groups = useMemo(() => {
+    const counts = new Map<string, number>();
+    if (groupSection) {
+      for (const recording of shown) {
+        const name = groupName(recording, groupSection);
+        if (name?.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()) === true) {
+          counts.set(name, (counts.get(name) ?? 0) + 1);
+        }
+      }
+    }
+    return [...counts].sort(([a], [b]) => a.localeCompare(b, i18n.language));
+  }, [shown, groupSection, query, i18n.language]);
+
+  const absoluteRange = useMemo(
+    () => (section === "timeline" ? timelineRange(shown, "wall") : undefined),
+    [section, shown],
+  );
+  const relativeRange = useMemo(
+    () => (section === "timeline" ? timelineRange(shown, "relative") : undefined),
+    [section, shown],
+  );
+  const range =
+    clock === "relative" ? (relativeRange ?? absoluteRange) : (absoluteRange ?? relativeRange);
+  const timelineRows = useMemo(
+    () =>
+      section === "timeline" ? shown.filter((r) => timelineBar(r, range) != undefined) : shown,
+    [section, shown, range],
+  );
 
   const gpsTopics = useMemo(
     () =>
@@ -290,12 +356,12 @@ export default function Catalog({
     return () => {
       observer.disconnect();
     };
-  }, [view, folder.name]);
+  }, [showList, folder.name]);
   const compact = selected != undefined || narrow;
   const topicTerm = /(?:^|\s)topic:(\S+)/i.exec(query)?.[1];
 
   const virtualizer = useVirtualizer({
-    count: shown.length,
+    count: timelineRows.length,
     getScrollElement: () => scrollRef.current,
     estimateSize: () => ROW_HEIGHT,
     overscan: 10,
@@ -321,18 +387,18 @@ export default function Catalog({
   // upload picker, which reads the files directly.
   const errorAlert = error && (
     <Alert
-      severity={folder.pickerClosed ? "info" : "error"}
+      severity={folder.pickerClosed === true ? "info" : "error"}
       action={
-        folder.accessDenied || folder.pickerClosed ? (
+        folder.accessDenied === true || folder.pickerClosed === true ? (
           <Button color="inherit" size="small" onClick={folder.pickFolderWithInput}>
             {t("useUploadPicker")}
           </Button>
         ) : undefined
       }
     >
-      {folder.accessDenied
+      {folder.accessDenied === true
         ? t("folderAccessDenied")
-        : folder.pickerClosed
+        : folder.pickerClosed === true
           ? t("folderPickerClosed")
           : error}
     </Alert>
@@ -341,6 +407,9 @@ export default function Catalog({
   // Dropping a folder opens it, also where the browser can't show a folder picker.
   const dropProps = {
     onDragOver: (event: React.DragEvent) => {
+      if (!folder.dropFolder) {
+        return;
+      }
       if ([...event.dataTransfer.items].some((item) => item.kind === "file")) {
         event.preventDefault();
         event.stopPropagation();
@@ -355,7 +424,7 @@ export default function Catalog({
     onDrop: (event: React.DragEvent) => {
       setDragging(false);
       // Only a folder is ours; dropped files go on to open as a data source.
-      if (folder.dropFolder(event.dataTransfer)) {
+      if (folder.dropFolder?.(event.dataTransfer) === true) {
         event.preventDefault();
         event.stopPropagation();
       }
@@ -376,7 +445,7 @@ export default function Catalog({
               {t("openFolder")}
             </Button>
             {folder.lastFolder && (
-              <Button variant="outlined" onClick={() => void folder.reopenLastFolder()}>
+              <Button variant="outlined" onClick={() => void folder.reopenLastFolder?.()}>
                 {t("reopenFolder", { name: folder.lastFolder.name })}
               </Button>
             )}
@@ -431,10 +500,10 @@ export default function Catalog({
             />
           </>
         )}
-        {onQueryChange && (
+        {onQueryChange && (section === "recordings" || section === "timeline") && (
           <QuickFilters recordings={recordings} query={query} onQueryChange={onQueryChange} />
         )}
-        {area && (
+        {area && section === "recordings" && (
           <Chip
             size="small"
             color="primary"
@@ -462,7 +531,7 @@ export default function Catalog({
             ))}
           </Select>
         )}
-        {viewProp == undefined && (
+        {viewProp == undefined && section === "recordings" && (
           <ToggleButtonGroup
             size="small"
             exclusive
@@ -491,9 +560,87 @@ export default function Catalog({
           </span>
         </Tooltip>
       </div>
+      {sections && (
+        <div className={classes.header}>
+          <ToggleButtonGroup
+            size="small"
+            exclusive
+            value={section}
+            aria-label={t("catalogSections")}
+            onChange={(_event, value: CatalogSection | null) => {
+              if (value) {
+                setSection(value);
+                setGroup(undefined);
+                setSelectedId(undefined);
+              }
+            }}
+          >
+            <ToggleButton value="recordings">{t("recordings")}</ToggleButton>
+            <ToggleButton value="timeline">{t("timeline")}</ToggleButton>
+            <ToggleButton value="devices">{t("devices")}</ToggleButton>
+            <ToggleButton value="events">{t("events")}</ToggleButton>
+            <ToggleButton value="datasets">{t("datasets")}</ToggleButton>
+            {recordings.some((r) => r.session) && (
+              <ToggleButton value="sessions">{t("sessions")}</ToggleButton>
+            )}
+            {recordings.some((r) => r.episode) && (
+              <ToggleButton value="episodes">{t("episodes")}</ToggleButton>
+            )}
+          </ToggleButtonGroup>
+          {group != undefined && (
+            <Chip
+              label={group}
+              onDelete={() => {
+                setGroup(undefined);
+                setSelectedId(undefined);
+              }}
+            />
+          )}
+          {section === "timeline" && absoluteRange && relativeRange && (
+            <ToggleButtonGroup
+              size="small"
+              exclusive
+              value={clock}
+              aria-label={t("timelineClock")}
+              onChange={(_event, value: TimelineClock | null) => {
+                if (value != undefined) {
+                  setClock(value);
+                }
+              }}
+            >
+              <ToggleButton value="wall">{t("wallClockTime")}</ToggleButton>
+              <ToggleButton value="relative">{t("relativeTime")}</ToggleButton>
+            </ToggleButtonGroup>
+          )}
+        </div>
+      )}
       {errorAlert}
       <Stack direction="row" className={classes.body}>
-        {view === "map" ? (
+        {section === "events" ? (
+          <CatalogEvents
+            recordings={recordings}
+            query={query}
+            selectedId={selectedId}
+            onSelect={setSelectedId}
+          />
+        ) : browsingGroups ? (
+          <List dense disablePadding className={classes.scroller}>
+            {groups.length === 0 && !progress && (
+              <Typography color="textSecondary">{t("noGroups")}</Typography>
+            )}
+            {groups.map(([name, count]) => (
+              <ListItemButton
+                key={name}
+                onClick={() => {
+                  setGroup(name);
+                  onQueryChange?.("");
+                }}
+              >
+                <ListItemText primary={name} secondary={t("recordingCount", { count })} />
+              </ListItemButton>
+            ))}
+          </List>
+        ) : view === "map" ? (
           <Suspense fallback={<div className={classes.list} />}>
             <CatalogMap
               recordings={shown}
@@ -543,19 +690,35 @@ export default function Catalog({
           </div>
         ) : (
           <Stack className={classes.list}>
-            <div className={cx(classes.row, classes.headRow, { [classes.compactRow]: compact })}>
-              <span />
-              {sortLabel("name", t("name"))}
-              {sortLabel("start", t("start"))}
-              {sortLabel("duration", t("duration"))}
-              {sortLabel("size", t("size"))}
-              {!compact && sortLabel("messages", t("messages"))}
-              {!compact && sortLabel("topics", t("topics"))}
-            </div>
+            {section === "timeline" ? (
+              <div className={cx(classes.row, classes.headRow, classes.timelineRow)}>
+                {sortLabel("start", t("start"))}
+                {range && (
+                  <Stack direction="row" justifyContent="space-between" gap={1}>
+                    <Typography variant="caption">{formatCatalogTime(range.start)}</Typography>
+                    <Typography variant="caption">{formatCatalogTime(range.end)}</Typography>
+                  </Stack>
+                )}
+              </div>
+            ) : (
+              <div className={cx(classes.row, classes.headRow, { [classes.compactRow]: compact })}>
+                <span />
+                {sortLabel("name", t("name"))}
+                {sortLabel("start", t("start"))}
+                {sortLabel("duration", t("duration"))}
+                {sortLabel("size", t("size"))}
+                {!compact && sortLabel("messages", t("messages"))}
+                {!compact && sortLabel("topics", t("topics"))}
+              </div>
+            )}
             <div ref={scrollRef} className={classes.scroller}>
-              {shown.length === 0 && progress == undefined && error == undefined && (
+              {timelineRows.length === 0 && progress == undefined && error == undefined && (
                 <Typography className={classes.message} color="textSecondary">
-                  {recordings.length === 0 ? t("noRecordings") : t("noMatches")}
+                  {section === "timeline"
+                    ? t("noRecordingTimes")
+                    : recordings.length === 0
+                      ? t("noRecordings")
+                      : t("noMatches")}
                 </Typography>
               )}
               <div
@@ -565,7 +728,31 @@ export default function Catalog({
                 }}
               >
                 {virtualizer.getVirtualItems().map((item) => {
-                  const r = shown[item.index]!;
+                  const r = timelineRows[item.index]!;
+                  if (section === "timeline") {
+                    return (
+                      <ButtonBase
+                        key={r.id}
+                        className={cx(classes.row, classes.bodyRow, classes.timelineRow, {
+                          [classes.selectedRow]: r.id === selectedId,
+                        })}
+                        style={{ transform: `translateY(${item.start}px)` }}
+                        onClick={() => {
+                          setSelectedId(r.id);
+                        }}
+                        onDoubleClick={() => void open(r)}
+                      >
+                        <Typography noWrap variant="body2" title={r.name}>
+                          {r.name}
+                        </Typography>
+                        <Tooltip title={recordingCaption(r)}>
+                          <div className={classes.timelineTrack}>
+                            <div className={classes.timelineBar} style={timelineBar(r, range)} />
+                          </div>
+                        </Tooltip>
+                      </ButtonBase>
+                    );
+                  }
                   const path = r.source.type === "local-file" ? r.source.path : r.source.url;
                   // Recents know files by their file name; a live recording's title is its machine.
                   const lastOpened = lastOpenedByName.get(

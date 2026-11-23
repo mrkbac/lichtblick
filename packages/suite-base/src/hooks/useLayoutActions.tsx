@@ -1,7 +1,6 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import { useAnalytics } from "@lichtblick/suite-base/context/AnalyticsContext";
 import {
   LayoutState,
   useCurrentLayoutActions,
@@ -12,7 +11,6 @@ import { LayoutSetupOptions } from "@lichtblick/suite-base/hooks/types";
 import useCallbackWithToast from "@lichtblick/suite-base/hooks/useCallbackWithToast";
 import { useConfirm } from "@lichtblick/suite-base/hooks/useConfirm";
 import { useLayoutNavigation } from "@lichtblick/suite-base/hooks/useLayoutNavigation";
-import { AppEvent } from "@lichtblick/suite-base/services/IAnalytics";
 import {
   Layout,
   layoutIsShared,
@@ -32,7 +30,6 @@ const selectedLayoutIdSelector = (state: LayoutState) => state.selectedLayout?.i
 
 export function useLayoutActions({ state, dispatch }: LayoutSetupOptions): UseLayoutActions {
   const layoutManager = useLayoutManager();
-  const analytics = useAnalytics();
   const currentLayoutId = useCurrentLayoutSelector(selectedLayoutIdSelector);
   const { setSelectedLayoutId } = useCurrentLayoutActions();
   const { onSelectLayout } = useLayoutNavigation();
@@ -42,9 +39,8 @@ export function useLayoutActions({ state, dispatch }: LayoutSetupOptions): UseLa
     async (item: Layout, newName: string) => {
       await layoutManager.updateLayout({ id: item.id, name: newName });
       setSelectedLayoutId(item.id);
-      analytics.logEvent(AppEvent.LAYOUT_RENAME, { permission: item.permission });
     },
-    [analytics, layoutManager, setSelectedLayoutId],
+    [layoutManager, setSelectedLayoutId],
   );
 
   const onDuplicateLayout = useCallbackWithToast(
@@ -58,9 +54,8 @@ export function useLayoutActions({ state, dispatch }: LayoutSetupOptions): UseLa
         personalLayoutCopy(item, `${item.name} copy`),
       );
       await onSelectLayout(newLayout);
-      analytics.logEvent(AppEvent.LAYOUT_DUPLICATE, { permission: item.permission });
     },
-    [analytics, dispatch, layoutManager, onSelectLayout, state.selectedIds.length],
+    [dispatch, layoutManager, onSelectLayout, state.selectedIds.length],
   );
 
   const onDeleteLayout = useCallbackWithToast(
@@ -69,8 +64,6 @@ export function useLayoutActions({ state, dispatch }: LayoutSetupOptions): UseLa
         dispatch({ type: "queue-multi-action", action: "delete" });
         return;
       }
-
-      analytics.logEvent(AppEvent.LAYOUT_DELETE, { permission: item.permission });
 
       // If the layout was selected, select a different available layout.
       //
@@ -85,14 +78,7 @@ export function useLayoutActions({ state, dispatch }: LayoutSetupOptions): UseLa
       }
       await layoutManager.deleteLayout({ id: item.id });
     },
-    [
-      analytics,
-      currentLayoutId,
-      dispatch,
-      layoutManager,
-      setSelectedLayoutId,
-      state.selectedIds.length,
-    ],
+    [currentLayoutId, dispatch, layoutManager, setSelectedLayoutId, state.selectedIds.length],
   );
 
   const onOverwriteLayout = useCallbackWithToast(
@@ -119,9 +105,8 @@ export function useLayoutActions({ state, dispatch }: LayoutSetupOptions): UseLa
         }
       }
       await layoutManager.overwriteLayout({ id: item.id });
-      analytics.logEvent(AppEvent.LAYOUT_OVERWRITE, { permission: item.permission });
     },
-    [analytics, confirm, dispatch, layoutManager, state.selectedIds.length],
+    [confirm, dispatch, layoutManager, state.selectedIds.length],
   );
 
   const onRevertLayout = useCallbackWithToast(
@@ -132,9 +117,8 @@ export function useLayoutActions({ state, dispatch }: LayoutSetupOptions): UseLa
       }
 
       await layoutManager.revertLayout({ id: item.id });
-      analytics.logEvent(AppEvent.LAYOUT_REVERT, { permission: item.permission });
     },
-    [analytics, dispatch, layoutManager, state.selectedIds.length],
+    [dispatch, layoutManager, state.selectedIds.length],
   );
 
   return {

@@ -43,7 +43,6 @@ import { DEFAULT_MESH_UP_AXIS } from "@lichtblick/suite-base/panels/ThreeDeeRend
 import { ICameraHandler } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/ICameraHandler";
 import type { DocumentedNodes } from "@lichtblick/suite-base/panels/shared/documentedSettings";
 import { showHideAllValue } from "@lichtblick/suite-base/panels/shared/topicList";
-import IAnalytics from "@lichtblick/suite-base/services/IAnalytics";
 import { randomUUID } from "@lichtblick/suite-base/util/randomUUID";
 import { toError } from "@lichtblick/suite-base/util/toError";
 import { palette, fontMonospace } from "@lichtblick/theme";
@@ -343,7 +342,6 @@ export class Renderer extends EventEmitter<RendererEvents> {
   public readonly displayTemporaryError?: (str: string) => void;
   /** Options passed for local testing and storybook. */
   public readonly testOptions: TestOptions;
-  public analytics?: IAnalytics;
 
   public constructor(args: {
     canvas: HTMLCanvasElement;
@@ -2399,10 +2397,6 @@ export class Renderer extends EventEmitter<RendererEvents> {
       ...(this.topicsByName?.get(path.topicName)?.convertibleTo ?? []),
     ];
     return schemas.some((schema) => this.schemaSubscriptions.has(schema));
-  }
-
-  public setAnalytics(analytics: IAnalytics): void {
-    this.analytics = analytics;
   }
 
   public setCustomCameraModels(newCameraModels: CameraModelsMap): void {
