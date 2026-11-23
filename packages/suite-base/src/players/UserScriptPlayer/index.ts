@@ -464,7 +464,10 @@ export default class UserScriptPlayer implements Player {
       // Prune the script registration cache so it doesn't grow forever.
       // We add one to the count so we don't have to recompile scripts if users undo/redo script changes.
       const maxScriptRegistrationCacheCount = Object.keys(userScripts).length + 1;
-      state.scriptRegistrationCache.splice(maxScriptRegistrationCacheCount);
+      // Entries are pushed (or moved) to the end when used, so the most recent are at the end.
+      state.scriptRegistrationCache = state.scriptRegistrationCache.slice(
+        -maxScriptRegistrationCacheCount,
+      );
       // This code causes us to reset workers twice because the seeking resets the workers too
       this.#invalidateBatchIteratorCache();
       // Create new Topic objects so downstream consumers (e.g. PlotCoordinator) can detect
@@ -530,10 +533,15 @@ export default class UserScriptPlayer implements Player {
     rosLib: string,
     typesLib: string,
   ): Promise<ScriptRegistration> {
-    for (const cacheEntry of state.scriptRegistrationCache) {
-      if (scriptId === cacheEntry.scriptId && _.isEqual(userScript, cacheEntry.userScript)) {
-        return cacheEntry.result;
-      }
+    const cache = state.scriptRegistrationCache;
+    const hit = cache.findIndex(
+      (entry) => entry.scriptId === scriptId && _.isEqual(userScript, entry.userScript),
+    );
+    if (hit !== -1) {
+      // Move it to the end so pruning (which keeps the tail) keeps recently used entries
+      const [entry] = cache.splice(hit, 1);
+      cache.push(entry!);
+      return entry!.result;
     }
     // Pass all the scripts a set of basic datatypes that we know how to render.
     // These could be overwritten later by bag datatypes, but these datatype definitions should be very stable.

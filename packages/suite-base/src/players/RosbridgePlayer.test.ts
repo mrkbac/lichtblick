@@ -101,8 +101,13 @@ class MockRosClient {
   public on(op: string, callback: () => void) {
     if (op === "connection") {
       this.#connectCallback = callback;
+    } else if (op === "close") {
+      this.emitClose = callback;
     }
   }
+
+  /** Simulates the server dropping the connection. */
+  public emitClose?: () => void;
 
   public closed = false;
 
@@ -135,8 +140,15 @@ class MockRosClient {
     return this.#messages.filter(({ topic }) => topic === topicName);
   }
 
+  /** While set, node requests never answer, like a connection that drops mid-refresh. */
+  public holdNodes = false;
+  public nodeRequests = 0;
+
   public getNodes(callback: (nodes: string[]) => void, _errCb: (error: Error) => void) {
-    callback([]);
+    this.nodeRequests++;
+    if (!this.holdNodes) {
+      callback([]);
+    }
   }
 
   public getNodeDetails(
@@ -234,6 +246,27 @@ describe("RosbridgePlayer", () => {
     expect(addListener).not.toHaveBeenCalledWith("visibilitychange", expect.anything(), {
       once: true,
     });
+  });
+
+  it("refreshes the node graph again after the connection drops mid-refresh", async () => {
+    vi.useFakeTimers();
+    onTestFinished(() => {
+      vi.useRealTimers();
+    });
+    const first = workerInstance;
+    first.holdNodes = true;
+    first.setup({ types: ["rosgraph_msgs/Log"] });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(first.nodeRequests).toBe(1);
+
+    first.emitClose?.();
+    (console.error as ReturnType<typeof vi.fn>).mockClear(); // the expected "Connection failed" alert
+    await vi.advanceTimersByTimeAsync(3_000); // reconnect delay
+    const second = workerInstance;
+    expect(second).not.toBe(first);
+    second.setup({ types: ["rosgraph_msgs/Log"] });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(second.nodeRequests).toBe(1);
   });
 
   it("polls again while hidden once a panel requests a topic that isn't advertised yet", async () => {
