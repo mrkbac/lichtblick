@@ -5,8 +5,6 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import ReplayIcon from "@mui/icons-material/Replay";
-import UndoIcon from "@mui/icons-material/Undo";
 import {
   Button,
   MenuItem,
@@ -320,16 +318,12 @@ export function CallService({ config, saveConfig }: Props): React.JSX.Element {
                   requestPayload: selected.request,
                 });
               }}
-            >
-              <UndoIcon fontSize="small" />
-            </PanelIconButton>
+            />
             <PanelIconButton
               button={CALL_SERVICE_BUTTONS.rerun}
               disabled={!canCall}
               onClick={() => void runCall(selected.serviceName, selected.request)}
-            >
-              <ReplayIcon fontSize="small" />
-            </PanelIconButton>
+            />
           </>
         )}
       </Stack>

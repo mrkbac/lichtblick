@@ -4,7 +4,7 @@
 import { lineColors } from "@lichtblick/suite-base/util/plotColors";
 import { BasicBuilder } from "@lichtblick/test-builders";
 
-import { assignDefaultColorsToSeries, handleReorderSeriesAction } from "./utils";
+import { assignDefaultColorsToSeries, moveItem } from "./utils";
 
 describe("assignDefaultColorsToSeries", () => {
   it("should assign default colors to paths without colors", () => {
@@ -25,7 +25,7 @@ describe("assignDefaultColorsToSeries", () => {
   });
 });
 
-describe("handleReorderSeriesAction", () => {
+describe("moveItem", () => {
   describe("successful reordering", () => {
     it("should reorder item from lower index to higher index", () => {
       // Given: A draft object with paths array and indices to reorder forward
@@ -36,8 +36,8 @@ describe("handleReorderSeriesAction", () => {
       const sourceIndex = 1;
       const targetIndex = 3;
 
-      // When: handleReorderSeriesAction is called
-      handleReorderSeriesAction(draft, sourceIndex, targetIndex);
+      // When: moveItem is called
+      moveItem(draft.paths, sourceIndex, targetIndex);
 
       // Then: The item at sourceIndex should be moved to targetIndex
       expect(draft.paths).toEqual([paths[0], paths[2], paths[3], paths[1]]);
@@ -52,8 +52,8 @@ describe("handleReorderSeriesAction", () => {
       const sourceIndex = 3;
       const targetIndex = 1;
 
-      // When: handleReorderSeriesAction is called
-      handleReorderSeriesAction(draft, sourceIndex, targetIndex);
+      // When: moveItem is called
+      moveItem(draft.paths, sourceIndex, targetIndex);
 
       // Then: The item at sourceIndex should be moved to targetIndex
       expect(draft.paths).toEqual([paths[0], paths[3], paths[1], paths[2]]);
@@ -67,8 +67,8 @@ describe("handleReorderSeriesAction", () => {
       const sourceIndex = 0;
       const targetIndex = 3;
 
-      // When: handleReorderSeriesAction is called
-      handleReorderSeriesAction(draft, sourceIndex, targetIndex);
+      // When: moveItem is called
+      moveItem(draft.paths, sourceIndex, targetIndex);
 
       // Then: First item should be at the end
       expect(draft.paths).toEqual(["second", "third", "fourth", "first"]);
@@ -82,8 +82,8 @@ describe("handleReorderSeriesAction", () => {
       const sourceIndex = 3;
       const targetIndex = 0;
 
-      // When: handleReorderSeriesAction is called
-      handleReorderSeriesAction(draft, sourceIndex, targetIndex);
+      // When: moveItem is called
+      moveItem(draft.paths, sourceIndex, targetIndex);
 
       // Then: Last item should be at the beginning
       expect(draft.paths).toEqual(["fourth", "first", "second", "third"]);
@@ -98,8 +98,8 @@ describe("handleReorderSeriesAction", () => {
       const sourceIndex = 1;
       const targetIndex = 2;
 
-      // When: handleReorderSeriesAction is called
-      handleReorderSeriesAction(draft, sourceIndex, targetIndex);
+      // When: moveItem is called
+      moveItem(draft.paths, sourceIndex, targetIndex);
 
       // Then: Items should swap positions
       expect(draft.paths).toEqual([paths[0], paths[2], paths[1], paths[3]]);
@@ -114,8 +114,8 @@ describe("handleReorderSeriesAction", () => {
       const sourceIndex = 2;
       const targetIndex = 1;
 
-      // When: handleReorderSeriesAction is called
-      handleReorderSeriesAction(draft, sourceIndex, targetIndex);
+      // When: moveItem is called
+      moveItem(draft.paths, sourceIndex, targetIndex);
 
       // Then: Items should swap positions
       expect(draft.paths).toEqual([paths[0], paths[2], paths[1], paths[3]]);
@@ -132,8 +132,8 @@ describe("handleReorderSeriesAction", () => {
       const sourceIndex = 0;
       const targetIndex = 2;
 
-      // When: handleReorderSeriesAction is called
-      handleReorderSeriesAction(draft, sourceIndex, targetIndex);
+      // When: moveItem is called
+      moveItem(draft.paths, sourceIndex, targetIndex);
 
       // Then: Object references should be reordered correctly
       expect(draft.paths).toEqual([obj2, obj3, obj1]);
@@ -152,8 +152,8 @@ describe("handleReorderSeriesAction", () => {
       const sourceIndex = 1;
       const targetIndex = 3;
 
-      // When: handleReorderSeriesAction is called
-      handleReorderSeriesAction(draft, sourceIndex, targetIndex);
+      // When: moveItem is called
+      moveItem(draft.paths, sourceIndex, targetIndex);
 
       // Then: Mixed types should be reordered correctly
       expect(draft.paths).toEqual([num, obj, arr, str, bool]);
@@ -171,8 +171,8 @@ describe("handleReorderSeriesAction", () => {
       const sourceIndex = 1;
       const targetIndex = 1;
 
-      // When: handleReorderSeriesAction is called with equal indices
-      handleReorderSeriesAction(draft, sourceIndex, targetIndex);
+      // When: moveItem is called with equal indices
+      moveItem(draft.paths, sourceIndex, targetIndex);
 
       // Then: The array should remain unchanged
       expect(draft.paths).toEqual(originalPaths);
@@ -188,8 +188,8 @@ describe("handleReorderSeriesAction", () => {
       const sourceIndex = -1;
       const targetIndex = 1;
 
-      // When: handleReorderSeriesAction is called with negative sourceIndex
-      handleReorderSeriesAction(draft, sourceIndex, targetIndex);
+      // When: moveItem is called with negative sourceIndex
+      moveItem(draft.paths, sourceIndex, targetIndex);
 
       // Then: The array should remain unchanged
       expect(draft.paths).toEqual(originalPaths);
@@ -205,8 +205,8 @@ describe("handleReorderSeriesAction", () => {
       const sourceIndex = 1;
       const targetIndex = -1;
 
-      // When: handleReorderSeriesAction is called with negative targetIndex
-      handleReorderSeriesAction(draft, sourceIndex, targetIndex);
+      // When: moveItem is called with negative targetIndex
+      moveItem(draft.paths, sourceIndex, targetIndex);
 
       // Then: The array should remain unchanged
       expect(draft.paths).toEqual(originalPaths);
@@ -222,8 +222,8 @@ describe("handleReorderSeriesAction", () => {
       const sourceIndex = -2;
       const targetIndex = -1;
 
-      // When: handleReorderSeriesAction is called with both negative indices
-      handleReorderSeriesAction(draft, sourceIndex, targetIndex);
+      // When: moveItem is called with both negative indices
+      moveItem(draft.paths, sourceIndex, targetIndex);
 
       // Then: The array should remain unchanged
       expect(draft.paths).toEqual(originalPaths);
@@ -239,8 +239,8 @@ describe("handleReorderSeriesAction", () => {
       const sourceIndex = 5;
       const targetIndex = 1;
 
-      // When: handleReorderSeriesAction is called with out-of-bounds sourceIndex
-      handleReorderSeriesAction(draft, sourceIndex, targetIndex);
+      // When: moveItem is called with out-of-bounds sourceIndex
+      moveItem(draft.paths, sourceIndex, targetIndex);
 
       // Then: The array should remain unchanged
       expect(draft.paths).toEqual(originalPaths);
@@ -256,8 +256,8 @@ describe("handleReorderSeriesAction", () => {
       const sourceIndex = 1;
       const targetIndex = 5;
 
-      // When: handleReorderSeriesAction is called with out-of-bounds targetIndex
-      handleReorderSeriesAction(draft, sourceIndex, targetIndex);
+      // When: moveItem is called with out-of-bounds targetIndex
+      moveItem(draft.paths, sourceIndex, targetIndex);
 
       // Then: The array should remain unchanged
       expect(draft.paths).toEqual(originalPaths);
@@ -273,8 +273,8 @@ describe("handleReorderSeriesAction", () => {
       const sourceIndex = 10;
       const targetIndex = 20;
 
-      // When: handleReorderSeriesAction is called with both out-of-bounds indices
-      handleReorderSeriesAction(draft, sourceIndex, targetIndex);
+      // When: moveItem is called with both out-of-bounds indices
+      moveItem(draft.paths, sourceIndex, targetIndex);
 
       // Then: The array should remain unchanged
       expect(draft.paths).toEqual(originalPaths);
@@ -288,8 +288,8 @@ describe("handleReorderSeriesAction", () => {
       const sourceIndex = 0;
       const targetIndex = 0;
 
-      // When: handleReorderSeriesAction is called on empty array
-      handleReorderSeriesAction(draft, sourceIndex, targetIndex);
+      // When: moveItem is called on empty array
+      moveItem(draft.paths, sourceIndex, targetIndex);
 
       // Then: The array should remain empty
       expect(draft.paths).toEqual([]);
@@ -304,8 +304,8 @@ describe("handleReorderSeriesAction", () => {
       const sourceIndex = 0;
       const targetIndex = 0;
 
-      // When: handleReorderSeriesAction is called on single-item array
-      handleReorderSeriesAction(draft, sourceIndex, targetIndex);
+      // When: moveItem is called on single-item array
+      moveItem(draft.paths, sourceIndex, targetIndex);
 
       // Then: The array should remain unchanged
       expect(draft.paths).toEqual([singleItem]);
@@ -332,8 +332,8 @@ describe("handleReorderSeriesAction", () => {
       const sourceIndex = 0;
       const targetIndex = 2;
 
-      // When: handleReorderSeriesAction is called
-      handleReorderSeriesAction(draft, sourceIndex, targetIndex);
+      // When: moveItem is called
+      moveItem(draft.paths, sourceIndex, targetIndex);
 
       // Then: The colors should be preserved with their respective paths
       expect(draft.paths[2]?.color).toBe(existingColor1); // path1 moved to index 2
@@ -351,8 +351,8 @@ describe("handleReorderSeriesAction", () => {
       const sourceIndex = 0;
       const targetIndex = 2;
 
-      // When: handleReorderSeriesAction is called with boundary indices
-      handleReorderSeriesAction(draft, sourceIndex, targetIndex);
+      // When: moveItem is called with boundary indices
+      moveItem(draft.paths, sourceIndex, targetIndex);
 
       // Then: Reordering should work correctly at boundaries
       expect(draft.paths).toEqual(["middle", "end", "start"]);
@@ -367,8 +367,8 @@ describe("handleReorderSeriesAction", () => {
       const sourceIndex = 1;
       const targetIndex = 3;
 
-      // When: handleReorderSeriesAction is called
-      handleReorderSeriesAction(draft, sourceIndex, targetIndex);
+      // When: moveItem is called
+      moveItem(draft.paths, sourceIndex, targetIndex);
 
       // Then: Array length should remain the same
       expect(draft.paths.length).toBe(originalLength);
@@ -385,8 +385,8 @@ describe("handleReorderSeriesAction", () => {
       const sourceIndex = 0;
       const targetIndex = 2;
 
-      // When: handleReorderSeriesAction is called
-      handleReorderSeriesAction(draft, sourceIndex, targetIndex);
+      // When: moveItem is called
+      moveItem(draft.paths, sourceIndex, targetIndex);
 
       // Then: Object references should be preserved (same instances)
       expect(draft.paths[2]).toBe(obj1);
@@ -407,8 +407,8 @@ describe("handleReorderSeriesAction", () => {
       const sourceIndex = 0;
       const targetIndex = 2;
 
-      // When: handleReorderSeriesAction is called
-      handleReorderSeriesAction(draft, sourceIndex, targetIndex);
+      // When: moveItem is called
+      moveItem(draft.paths, sourceIndex, targetIndex);
 
       // Then: Only paths should be modified, other properties unchanged
       expect(draft.paths).toEqual([paths[1], paths[2], paths[0]]);
@@ -427,8 +427,8 @@ describe("handleReorderSeriesAction", () => {
       const sourceIndex = 0;
       const targetIndex = 999;
 
-      // When: handleReorderSeriesAction is called on large array
-      handleReorderSeriesAction(draft, sourceIndex, targetIndex);
+      // When: moveItem is called on large array
+      moveItem(draft.paths, sourceIndex, targetIndex);
 
       // Then: Reordering should work correctly
       expect(draft.paths[999]).toBe(firstItem);
@@ -448,8 +448,8 @@ describe("handleReorderSeriesAction", () => {
       const sourceIndex = 0;
       const targetIndex = 2;
 
-      // When: handleReorderSeriesAction is called with typed draft
-      handleReorderSeriesAction(draft, sourceIndex, targetIndex);
+      // When: moveItem is called with typed draft
+      moveItem(draft.paths, sourceIndex, targetIndex);
 
       // Then: Type system should work correctly
       expect(draft.paths).toEqual([paths[1], paths[2], paths[0]]);
@@ -468,8 +468,8 @@ describe("handleReorderSeriesAction", () => {
       const sourceIndex = 1;
       const targetIndex = 3;
 
-      // When: handleReorderSeriesAction is called with typed draft
-      handleReorderSeriesAction(draft, sourceIndex, targetIndex);
+      // When: moveItem is called with typed draft
+      moveItem(draft.paths, sourceIndex, targetIndex);
 
       // Then: Type system should work correctly with numbers
       expect(draft.paths).toEqual([num1, num3, num4, num2]);
@@ -504,8 +504,8 @@ describe("handleReorderSeriesAction", () => {
       const sourceIndex = 0;
       const targetIndex = 2;
 
-      // When: handleReorderSeriesAction is called with complex types
-      handleReorderSeriesAction(draft, sourceIndex, targetIndex);
+      // When: moveItem is called with complex types
+      moveItem(draft.paths, sourceIndex, targetIndex);
 
       // Then: Complex objects should be reordered correctly
       expect(draft.paths[0]?.id).toBe(obj2.id);

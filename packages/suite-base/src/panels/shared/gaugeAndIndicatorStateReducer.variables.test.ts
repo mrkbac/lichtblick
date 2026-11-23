@@ -21,7 +21,6 @@ describe("stateReducer with $variables", () => {
       parsedPath: undefined,
       latestMessage: undefined,
       latestMatchingQueriedData: undefined,
-      pathParseError: undefined,
       error: undefined,
     };
     // Path is set at mount, before any variables arrive

@@ -49,7 +49,8 @@ import { findShortcut, shortcutLabel } from "@lichtblick/suite-base/util/keyboar
 import { ros2CommonDatatypes } from "@lichtblick/suite-base/util/ros2CommonDatatypes";
 
 import { PUBLISH_BUTTONS } from "./buttons";
-import { defaultConfig, usePublishPanelSettings } from "./settings";
+import { usePublishPanelSettings } from "./settings";
+import { defaultConfig } from "./settingsTree";
 import { PUBLISH_SHORTCUTS } from "./shortcuts";
 import { PublishConfig } from "./types";
 

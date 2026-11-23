@@ -8,7 +8,6 @@ import ViewModuleOutlinedIcon from "@mui/icons-material/ViewModuleOutlined";
 import WebAssetIcon from "@mui/icons-material/WebAsset";
 import WebAssetOffIcon from "@mui/icons-material/WebAssetOff";
 import { Button, Popover, Typography } from "@mui/material";
-import { getPanelData } from "dockview-react";
 import {
   CSSProperties,
   DragEvent,
@@ -28,7 +27,7 @@ import { PanelVisibleContext } from "@lichtblick/suite-base/components/DockPanel
 import Panel from "@lichtblick/suite-base/components/Panel";
 import { PanelIconButton } from "@lichtblick/suite-base/components/PanelButton";
 import { PanelCatalog, PanelSelection } from "@lichtblick/suite-base/components/PanelCatalog";
-import { getPanelDragData } from "@lichtblick/suite-base/components/PanelCatalog/panelDrag";
+import { getDroppedPanel } from "@lichtblick/suite-base/components/PanelCatalog/panelDrag";
 import { usePanelContext } from "@lichtblick/suite-base/components/PanelContext";
 import { UnconnectedPanelLayout } from "@lichtblick/suite-base/components/PanelLayout";
 import { isPanelBeingDragged } from "@lichtblick/suite-base/components/PanelTab";
@@ -384,13 +383,12 @@ function StackPanel({ config, saveConfig }: Props): React.JSX.Element {
   const onDrop = (event: DragEvent<HTMLElement>) => {
     setIsOver(false);
     setDragging(false);
-    const selection = getPanelDragData(event.dataTransfer);
-    const id = selection ? getPanelIdForType(selection.type) : getPanelData()?.panelId;
-    if (id == undefined) {
+    const dropped = getDroppedPanel(event.dataTransfer);
+    if (!dropped) {
       return;
     }
     event.preventDefault();
-    append(id, selection?.config);
+    append(dropped.id, dropped.config);
   };
 
   const dropTarget = {

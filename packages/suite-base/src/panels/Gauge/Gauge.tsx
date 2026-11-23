@@ -61,7 +61,6 @@ export function Gauge({ context }: GaugeProps): React.JSX.Element {
 
   const settingsTree = useSettingsTree({
     config,
-    pathParseError: state.pathParseError,
     error: state.error?.message,
   });
 

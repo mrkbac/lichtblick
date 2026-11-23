@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
+import * as _ from "lodash-es";
+
 import { DiagnosticId } from "@lichtblick/suite-base/panels/DiagnosticStatus/types";
 import { LEVELS } from "@lichtblick/suite-base/panels/DiagnosticSummary/constants";
 
@@ -46,30 +48,14 @@ export function changesFor(
   return out;
 }
 
-/** Index of the last change at or before `t`, or -1. */
-function lastChangeIndex(changes: readonly LevelChange[], t: number): number {
-  let lo = 0;
-  let hi = changes.length - 1;
-  let found = -1;
-  while (lo <= hi) {
-    const mid = (lo + hi) >> 1;
-    if (changes[mid]!.t <= t) {
-      found = mid;
-      lo = mid + 1;
-    } else {
-      hi = mid - 1;
-    }
-  }
-  return found;
-}
-
 /** The level a check was in at time `t` and since when, or undefined before its first message. */
 export function levelAt(
   history: CheckHistory,
   t: number,
   staleSec: number,
 ): LevelChange | undefined {
-  const change = history.changes[lastChangeIndex(history.changes, t)];
+  // The last change at or before `t`.
+  const change = history.changes[_.sortedLastIndexBy(history.changes, { t, level: 0 }, "t") - 1];
   if (!change) {
     return undefined;
   }

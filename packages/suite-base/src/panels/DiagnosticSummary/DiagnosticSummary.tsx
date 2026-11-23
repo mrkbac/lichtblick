@@ -16,13 +16,10 @@
 
 import { InputBase, MenuItem, Select, Typography } from "@mui/material";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { produce } from "immer";
-import * as _ from "lodash-es";
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
 
 import { filterMap } from "@lichtblick/den/collection";
-import { SettingsTreeAction } from "@lichtblick/suite";
 import EmptyState from "@lichtblick/suite-base/components/EmptyState";
 import { usePanelContext } from "@lichtblick/suite-base/components/PanelContext";
 import PanelToolbar from "@lichtblick/suite-base/components/PanelToolbar";
@@ -35,17 +32,12 @@ import {
   LEVEL_NAMES,
   MESSAGE_COLORS,
 } from "@lichtblick/suite-base/panels/DiagnosticSummary/constants";
+import { getConfiguredTopics } from "@lichtblick/suite-base/panels/DiagnosticSummary/hooks/useDiagnosticTopics";
 import {
-  getConfiguredTopics,
-  handleTopicToggle,
-  useDiagnosticTopicsDrop,
-} from "@lichtblick/suite-base/panels/DiagnosticSummary/hooks/useDiagnosticTopics";
-import { useDiagnosticsPanelData } from "@lichtblick/suite-base/panels/DiagnosticSummary/hooks/useDiagnosticsPanelData";
-import {
-  DiagnosticSummaryConfig,
-  DiagnosticSummaryProps,
-} from "@lichtblick/suite-base/panels/DiagnosticSummary/types";
-import { usePanelSettingsTreeUpdate } from "@lichtblick/suite-base/providers/PanelStateContextProvider";
+  useDiagnosticsPanelData,
+  useDiagnosticsPanelSettings,
+} from "@lichtblick/suite-base/panels/DiagnosticSummary/hooks/useDiagnosticsPanelData";
+import { DiagnosticSummaryProps } from "@lichtblick/suite-base/panels/DiagnosticSummary/types";
 import toggle from "@lichtblick/suite-base/util/toggle";
 
 import { buildSettingsTree } from "./utils/buildSettingsTree";
@@ -59,7 +51,6 @@ const DiagnosticSummary = (props: DiagnosticSummaryProps): React.JSX.Element => 
   const { t } = useTranslation("diagnostics");
   const { minLevel, pinnedIds, hardwareIdFilter, sortByLevel = true, showHistory = true } = config;
   const { openSiblingPanel } = usePanelContext();
-  const updatePanelSettingsTree = usePanelSettingsTreeUpdate();
   const { topics, diagnostics, history, staleSec, range, seek } = useDiagnosticsPanelData(config);
 
   const togglePinned = useCallback(
@@ -81,7 +72,6 @@ const DiagnosticSummary = (props: DiagnosticSummaryProps): React.JSX.Element => 
           selectedHardwareId: info.status.hardware_id,
           selectedName: info.status.name,
           topics: configuredTopics,
-          collapsedSections: [],
         }),
         updateIfExists: true,
       });
@@ -157,29 +147,11 @@ const DiagnosticSummary = (props: DiagnosticSummaryProps): React.JSX.Element => 
     );
   }
 
-  const actionHandler = useCallback(
-    (action: SettingsTreeAction) => {
-      if (action.action !== "update") {
-        return;
-      }
-      const { path, value } = action.payload;
-      const topicPatch = handleTopicToggle(path, value, topics);
-      if (topicPatch) {
-        saveConfig(topicPatch);
-        return;
-      }
-      saveConfig(produce<DiagnosticSummaryConfig>((draft) => _.set(draft, path.slice(1), value)));
-    },
-    [saveConfig, topics],
+  useDiagnosticsPanelSettings(
+    topics,
+    saveConfig,
+    useMemo(() => buildSettingsTree(config, topics, t), [config, topics, t]),
   );
-  useDiagnosticTopicsDrop(topics, saveConfig);
-
-  useEffect(() => {
-    updatePanelSettingsTree({
-      actionHandler,
-      nodes: buildSettingsTree(config, topics, t),
-    });
-  }, [actionHandler, config, topics, t, updatePanelSettingsTree]);
 
   return (
     <Stack flex="auto" overflow="hidden">

@@ -21,10 +21,8 @@ import { usePanelSettingsTreeUpdate } from "@lichtblick/suite-base/providers/Pan
 import { RosDatatypes } from "@lichtblick/suite-base/types/RosDatatypes";
 import { SaveConfig } from "@lichtblick/suite-base/types/panels";
 
-import { buildSettingsTree, defaultConfig } from "./settingsTree";
+import { buildSettingsTree } from "./settingsTree";
 import { PublishConfig } from "./types";
-
-export { defaultConfig };
 
 /** Asks the user whether an edited message may be replaced by a new template. */
 type ConfirmReplace = (schemaName: string) => Promise<boolean>;

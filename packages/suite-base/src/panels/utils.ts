@@ -23,18 +23,6 @@ export function moveItem(arr: unknown[], from: number, to: number): void {
   arr.splice(to, 0, item);
 }
 
-/**
- * Reorders an item in a paths array from sourceIndex to targetIndex.
- * Used by panels that support reordering of series/paths.
- */
-export function handleReorderSeriesAction<T extends { paths: unknown[] }>(
-  draft: T,
-  sourceIndex: number,
-  targetIndex: number,
-): void {
-  moveItem(draft.paths, sourceIndex, targetIndex);
-}
-
 /** "move-up"/"move-down" settings-tree actions for the item at `index` of a `count`-long list. */
 export function moveUpDownActions(
   index: number,

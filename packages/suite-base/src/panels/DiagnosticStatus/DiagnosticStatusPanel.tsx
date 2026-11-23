@@ -15,12 +15,10 @@
 //   You may not use this file except in compliance with the License.
 
 import { Autocomplete, TextField } from "@mui/material";
-import { produce } from "immer";
 import * as _ from "lodash-es";
-import { useCallback, useEffect, useMemo } from "react";
+import { useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 
-import { SettingsTreeAction } from "@lichtblick/suite";
 import EmptyState from "@lichtblick/suite-base/components/EmptyState";
 import { usePanelContext } from "@lichtblick/suite-base/components/PanelContext";
 import PanelToolbar from "@lichtblick/suite-base/components/PanelToolbar";
@@ -29,11 +27,9 @@ import { useStyles } from "@lichtblick/suite-base/panels/DiagnosticStatus/Diagno
 import { DiagnosticStatusPanelProps } from "@lichtblick/suite-base/panels/DiagnosticStatus/types";
 import { getDisplayName } from "@lichtblick/suite-base/panels/DiagnosticStatus/utils/getDisplayName";
 import {
-  handleTopicToggle,
-  useDiagnosticTopicsDrop,
-} from "@lichtblick/suite-base/panels/DiagnosticSummary/hooks/useDiagnosticTopics";
-import { useDiagnosticsPanelData } from "@lichtblick/suite-base/panels/DiagnosticSummary/hooks/useDiagnosticsPanelData";
-import { usePanelSettingsTreeUpdate } from "@lichtblick/suite-base/providers/PanelStateContextProvider";
+  useDiagnosticsPanelData,
+  useDiagnosticsPanelSettings,
+} from "@lichtblick/suite-base/panels/DiagnosticSummary/hooks/useDiagnosticsPanelData";
 
 import DiagnosticTable from "./DiagnosticTable";
 import { buildStatusPanelSettingsTree } from "./utils/buildStatusPanelSettingsTree";
@@ -47,7 +43,6 @@ const DiagnosticStatusPanel = (props: DiagnosticStatusPanelProps): React.JSX.Ele
   const { selectedHardwareId, selectedName, splitFraction, numericPrecision } = config;
   const { classes } = useStyles();
   const { t } = useTranslation("diagnostics");
-  const updatePanelSettingsTree = usePanelSettingsTreeUpdate();
   const { topics, diagnostics, history, staleSec, range, seek } = useDiagnosticsPanelData(config);
 
   // Autocomplete entries: each hardware id (all its checks) and each single check.
@@ -103,29 +98,11 @@ const DiagnosticStatusPanel = (props: DiagnosticStatusPanelProps): React.JSX.Ele
   const noOptionsText =
     autocompleteOptions.length > 0 ? t("noMatches") : t("waitingForDiagnostics");
 
-  const actionHandler = useCallback(
-    (action: SettingsTreeAction) => {
-      if (action.action !== "update") {
-        return;
-      }
-      const { path, value } = action.payload;
-      const topicPatch = handleTopicToggle(path, value, topics);
-      if (topicPatch) {
-        saveConfig(topicPatch);
-        return;
-      }
-      saveConfig(produce((draft) => _.set(draft, path.slice(1), value)));
-    },
-    [saveConfig, topics],
+  useDiagnosticsPanelSettings(
+    topics,
+    saveConfig,
+    useMemo(() => buildStatusPanelSettingsTree(config, topics, t), [config, topics, t]),
   );
-  useDiagnosticTopicsDrop(topics, saveConfig);
-
-  useEffect(() => {
-    updatePanelSettingsTree({
-      actionHandler,
-      nodes: buildStatusPanelSettingsTree(config, topics, t),
-    });
-  }, [actionHandler, config, topics, t, updatePanelSettingsTree]);
 
   const onChangeSplitFraction = useCallback(
     (newSplitFraction: number) => {

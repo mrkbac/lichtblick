@@ -62,16 +62,7 @@ export function computeDiagnosticInfo(
 }
 
 export function getDiagnosticsByLevel(diagnostics: DiagnosticsById): Map<number, DiagnosticInfo[]> {
-  const ret = new Map<number, DiagnosticInfo[]>();
-  for (const diagnostic of diagnostics.values()) {
-    const statuses = ret.get(diagnostic.status.level);
-    if (statuses) {
-      statuses.push(diagnostic);
-    } else {
-      ret.set(diagnostic.status.level, [diagnostic]);
-    }
-  }
-  return ret;
+  return Map.groupBy(diagnostics.values(), (diagnostic) => diagnostic.status.level);
 }
 
 export const filterAndSortDiagnostics = (

@@ -51,6 +51,5 @@ export type BuildConicGradientProps = {
 
 export type SettingsTreeNodesProps = {
   config: GaugeConfig;
-  pathParseError: string | undefined;
   error: string | undefined;
 };

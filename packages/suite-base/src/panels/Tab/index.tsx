@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import { ButtonBase } from "@mui/material";
-import { getPanelData } from "dockview-react";
 import { DragEvent, useCallback, useContext, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { makeStyles } from "tss-react/mui";
@@ -13,7 +12,7 @@ import {
   PanelIconButton,
   usePanelButtonTitle,
 } from "@lichtblick/suite-base/components/PanelButton";
-import { getPanelDragData } from "@lichtblick/suite-base/components/PanelCatalog/panelDrag";
+import { getDroppedPanel } from "@lichtblick/suite-base/components/PanelCatalog/panelDrag";
 import { usePanelContext } from "@lichtblick/suite-base/components/PanelContext";
 import { UnconnectedPanelLayout } from "@lichtblick/suite-base/components/PanelLayout";
 import {
@@ -32,11 +31,7 @@ import { usePanelCatalog } from "@lichtblick/suite-base/context/PanelCatalogCont
 import { LayoutNode } from "@lichtblick/suite-base/types/layouts";
 import { SaveConfig } from "@lichtblick/suite-base/types/panels";
 import { findShortcut } from "@lichtblick/suite-base/util/keyboardShortcuts";
-import {
-  PANEL_TITLE_CONFIG_KEY,
-  getPanelIdForType,
-  getPanelTypeFromId,
-} from "@lichtblick/suite-base/util/layout";
+import { PANEL_TITLE_CONFIG_KEY, getPanelTypeFromId } from "@lichtblick/suite-base/util/layout";
 import { getPanelIds } from "@lichtblick/suite-base/util/layoutTree";
 import {
   DEFAULT_TAB_PANEL_CONFIG,
@@ -176,7 +171,6 @@ type TabButtonProps = {
   /** Id of the tab panel content the tab controls. */
   contentId: string;
   isActive: boolean;
-  closable: boolean;
   onSelect: () => void;
   onRename: (title: string) => void;
   onClose: () => void;
@@ -188,7 +182,7 @@ type TabButtonProps = {
  * shows it, so the panel can be dropped into its layout; dropping on the tab itself adds the panel.
  */
 function TabButton(props: TabButtonProps): React.JSX.Element {
-  const { title, contentId, isActive, closable, onSelect, onRename, onClose, onDropPanel } = props;
+  const { title, contentId, isActive, onSelect, onRename, onClose, onDropPanel } = props;
   const { classes, cx } = useStyles();
   const { t } = useTranslation("panelToolbar");
   const [editing, setEditing] = useState(false);
@@ -259,19 +253,17 @@ function TabButton(props: TabButtonProps): React.JSX.Element {
       }}
     >
       <span className={classes.title}>{title}</span>
-      {closable && (
-        <ButtonBase
-          className={cx(classes.close, "close")}
-          title={closeTitle}
-          aria-label={t("closeTab", { title })}
-          onClick={(event) => {
-            event.stopPropagation();
-            onClose();
-          }}
-        >
-          <CloseIcon fontSize="inherit" />
-        </ButtonBase>
-      )}
+      <ButtonBase
+        className={cx(classes.close, "close")}
+        title={closeTitle}
+        aria-label={t("closeTab", { title })}
+        onClick={(event) => {
+          event.stopPropagation();
+          onClose();
+        }}
+      >
+        <CloseIcon fontSize="inherit" />
+      </ButtonBase>
     </div>
   );
 }
@@ -363,15 +355,14 @@ function TabPanel({ config, saveConfig }: Props): React.JSX.Element {
     if (event.defaultPrevented) {
       return;
     }
-    const selection = getPanelDragData(event.dataTransfer);
-    const id = selection ? getPanelIdForType(selection.type) : getPanelData()?.panelId;
-    if (id == undefined) {
+    const dropped = getDroppedPanel(event.dataTransfer);
+    if (!dropped) {
       return;
     }
     event.preventDefault();
     addPanel({
-      id,
-      config: selection?.config,
+      id: dropped.id,
+      config: dropped.config,
       position: "center",
       targetPanelId: panelId,
     });
@@ -387,17 +378,16 @@ function TabPanel({ config, saveConfig }: Props): React.JSX.Element {
   };
 
   const dropPanel = (index: number, event: DragEvent<HTMLElement>) => {
-    const selection = getPanelDragData(event.dataTransfer);
-    const id = selection ? getPanelIdForType(selection.type) : getPanelData()?.panelId;
-    if (id == undefined) {
+    const dropped = getDroppedPanel(event.dataTransfer);
+    if (!dropped) {
       return;
     }
     event.preventDefault();
     // Show the tab first: panels without a target go into the shown tab.
     select(index);
     addPanel({
-      id,
-      config: selection?.config,
+      id: dropped.id,
+      config: dropped.config,
       position: "right",
       tabId: panelId,
     });
@@ -431,7 +421,6 @@ function TabPanel({ config, saveConfig }: Props): React.JSX.Element {
               title={tabTitle(tab.title, contentTitles[index])}
               contentId={contentId}
               isActive={index === activeIdx}
-              closable
               onSelect={() => {
                 select(index);
               }}
