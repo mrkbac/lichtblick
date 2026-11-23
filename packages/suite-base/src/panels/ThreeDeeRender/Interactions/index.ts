@@ -6,5 +6,5 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 export { default as Interactions } from "./Interactions";
-export type { SelectionObject, TabType } from "./Interactions";
+export type { SelectionObject } from "./Interactions";
 export * from "./InteractionContextMenu";

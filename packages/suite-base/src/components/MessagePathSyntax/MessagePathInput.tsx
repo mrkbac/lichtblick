@@ -239,7 +239,6 @@ export default React.memo<MessagePathInputBaseProps>(function MessagePathInput(
     validTopics,
     placeholder,
     noMultiSlices,
-    inputStyle,
     disableAutocomplete = false,
     variant = "standard",
   } = props;
@@ -587,9 +586,6 @@ export default React.memo<MessagePathInputBaseProps>(function MessagePathInput(
       placeholder={
         placeholder != undefined && placeholder !== "" ? placeholder : "/some/topic.msgs[0].field"
       }
-      inputStyle={inputStyle} // Disable autoselect since people often construct complex queries, and it's very annoying
-      // to have the entire input selected whenever you want to make a change to a part it.
-      disableAutoSelect
     />
   );
 });

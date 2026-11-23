@@ -22,7 +22,7 @@ import Stack from "@lichtblick/suite-base/components/Stack";
 import PanelSetup from "@lichtblick/suite-base/stories/PanelSetup";
 import { PointCloud2 } from "@lichtblick/suite-base/types/Messages";
 
-import Interactions, { OBJECT_TAB_TYPE } from "./Interactions";
+import Interactions from "./Interactions";
 
 const markerObject = {
   id: "12345",
@@ -193,8 +193,8 @@ const selectedObject = { object: interactiveMarkerObject, instanceIndex: undefin
 
 const sharedProps = {
   selectedObject,
-  interactionsTabType: OBJECT_TAB_TYPE,
-  setInteractionsTabType: () => {
+  inspecting: true,
+  onToggleInspecting: () => {
     // no-op
   },
 };
@@ -255,11 +255,7 @@ export const Default: StoryObj = {
   render: () => (
     <>
       <PanelSetupWithData title="Default without clicked object">
-        <Interactions
-          {...(sharedProps as any)}
-          selectedObject={undefined}
-          interactionsTabType={OBJECT_TAB_TYPE}
-        />
+        <Interactions {...(sharedProps as any)} selectedObject={undefined} inspecting />
       </PanelSetupWithData>
       <PanelSetupWithData title="With interactionData">
         <Interactions {...(sharedProps as any)} />

@@ -5,7 +5,6 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { PopoverPosition, PopoverReference } from "@mui/material";
 import { Meta, StoryObj } from "storybook-react-rsbuild";
 
 import PlayerSelectionContext, {
@@ -15,24 +14,15 @@ import MockCurrentLayoutProvider from "@lichtblick/suite-base/providers/CurrentL
 import WorkspaceContextProvider from "@lichtblick/suite-base/providers/WorkspaceContextProvider";
 
 import { AppMenu } from "./AppMenu";
+import { AppMenuProps } from "./types";
 
-type StoryArgs = {
-  handleClose: () => void;
-  anchorEl?: HTMLElement;
-  anchorReference?: PopoverReference;
-  anchorPosition?: PopoverPosition;
-  disablePortal?: boolean;
-  open: boolean;
-};
+type StoryArgs = AppMenuProps;
 
 export default {
   title: "components/AppBar/AppMenu",
   component: AppMenu,
   args: {
     open: true,
-    anchorPosition: { top: 0, left: 0 },
-    anchorReference: "anchorPosition",
-    disablePortal: true,
     handleClose: () => {},
   },
   decorators: [

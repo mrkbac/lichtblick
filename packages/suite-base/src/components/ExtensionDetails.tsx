@@ -13,13 +13,8 @@ import { useState } from "react";
 import { formatByteSize } from "@lichtblick/den/format";
 import { useAsync } from "@lichtblick/hooks";
 import { useStylesExtensionDetails } from "@lichtblick/suite-base/components/ExtensionDetails.style";
-import { InstallButton } from "@lichtblick/suite-base/components/ExtensionsSettings/components/ExtensionActionButton/InstallButton";
-import { UninstallButton } from "@lichtblick/suite-base/components/ExtensionsSettings/components/ExtensionActionButton/UninstallButton";
+import { ExtensionActionButton } from "@lichtblick/suite-base/components/ExtensionsSettings/components/ExtensionActionButton/ExtensionActionButton";
 import { useExtensionOperations } from "@lichtblick/suite-base/components/ExtensionsSettings/hooks/useExtensionOperations";
-import {
-  ExtensionActionsLabel,
-  ExtensionOperationStatusLabel,
-} from "@lichtblick/suite-base/components/ExtensionsSettings/types";
 import Stack from "@lichtblick/suite-base/components/Stack";
 import TextContent from "@lichtblick/suite-base/components/TextContent";
 import { ExtensionDetailsProps, OperationStatus } from "@lichtblick/suite-base/components/types";
@@ -122,27 +117,13 @@ export function ExtensionDetails({
             {extension.description}
           </Typography>
         </Stack>
-        {isInstalled ? (
-          <UninstallButton
-            extension={extension}
-            onAction={handleUninstall}
-            isOperating={operationStatus !== OperationStatus.IDLE}
-            operationStatus={operationStatus}
-            stopPropagation
-            label={ExtensionActionsLabel.UNINSTALL}
-            loadingLabel={ExtensionOperationStatusLabel.UNINSTALLING}
-          />
-        ) : (
-          <InstallButton
-            extension={extension}
-            onAction={handleInstall}
-            isOperating={operationStatus !== OperationStatus.IDLE}
-            operationStatus={operationStatus}
-            stopPropagation
-            label={ExtensionActionsLabel.INSTALL}
-            loadingLabel={ExtensionOperationStatusLabel.INSTALLING}
-          />
-        )}
+        <ExtensionActionButton
+          extension={extension}
+          installed={isInstalled}
+          onAction={isInstalled ? handleUninstall : handleInstall}
+          isOperating={operationStatus !== OperationStatus.IDLE}
+          operationStatus={operationStatus}
+        />
       </Stack>
 
       <Stack paddingTop={2} style={{ marginLeft: -16, marginRight: -16 }}>

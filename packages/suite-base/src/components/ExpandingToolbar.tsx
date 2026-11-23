@@ -6,17 +6,8 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import CloseFullscreenIcon from "@mui/icons-material/CloseFullscreen";
-import {
-  Divider,
-  Paper,
-  IconButton,
-  Tabs,
-  Tab,
-  tabClasses,
-  tabsClasses,
-  Tooltip,
-} from "@mui/material";
-import React, { ReactElement, ReactNode } from "react";
+import { Divider, Paper, IconButton, Tooltip, Typography } from "@mui/material";
+import React, { ReactNode } from "react";
 import { makeStyles } from "tss-react/mui";
 
 import OverlayToolbar from "@lichtblick/suite-base/components/OverlayToolbar";
@@ -33,22 +24,21 @@ const useStyles = makeStyles()((theme) => ({
   content: {
     position: "relative",
   },
-  tabs: {
-    minHeight: "auto",
+  // Looks like the selected MUI Tab this header used to be.
+  title: {
+    lineHeight: 1.25,
+    position: "relative",
+    padding: theme.spacing(0.875, 1.5, 1),
+    color: theme.palette.text.primary,
 
-    [`.${tabsClasses.indicator}`]: {
-      transform: "scaleX(0.75)",
+    "&::after": {
+      content: '""',
+      position: "absolute",
+      left: "12.5%",
+      right: "12.5%",
+      bottom: 0,
       height: 2,
-    },
-    [`.${tabClasses.root}`]: {
-      minWidth: "auto",
-      minHeight: "auto",
-      padding: theme.spacing(0.875, 1.5, 1),
-      color: theme.palette.text.secondary,
-
-      "&.Mui-selected": {
-        color: theme.palette.text.primary,
-      },
+      backgroundColor: theme.palette.primary.main,
     },
   },
   minimizeButton: {
@@ -56,15 +46,6 @@ const useStyles = makeStyles()((theme) => ({
     borderTopRightRadius: theme.shape.borderRadius,
   },
 }));
-
-export function ToolGroup<T>({
-  children,
-}: {
-  name: T;
-  children: React.ReactElement;
-}): React.JSX.Element {
-  return children;
-}
 
 export function ToolGroupFixedSizePane({ children }: { children: ReactNode }): React.JSX.Element {
   return (
@@ -74,31 +55,33 @@ export function ToolGroupFixedSizePane({ children }: { children: ReactNode }): R
   );
 }
 
-type Props<T extends string> = {
+type Props = {
   checked?: boolean;
-  children: React.ReactElement<typeof ToolGroup>[] | React.ReactElement<typeof ToolGroup>;
+  children: ReactNode;
   icon: ReactNode;
-  onSelectTab: (name: T | undefined) => void;
-  selectedTab?: T; // collapse the toolbar if selectedTab is undefined
+  /** Header of the expanded pane. */
+  title: string;
+  expanded: boolean;
+  onToggle: () => void;
   tooltip: string;
   dataTest?: string;
   /** The panel's other floating controls, joined below the toggle into one toolbar. */
   toolbarItems?: ReactNode;
 };
 
-/** Expands a floating control into a tabbed pane while leaving the surrounding canvas interactive. */
-export default function ExpandingToolbar<T extends string>({
+/** Expands a floating control into a pane while leaving the surrounding canvas interactive. */
+export default function ExpandingToolbar({
   children,
   checked,
   icon,
-  onSelectTab,
-  selectedTab,
+  expanded,
+  onToggle,
+  title,
   tooltip,
   dataTest,
   toolbarItems,
-}: Props<T>): React.JSX.Element {
+}: Props): React.JSX.Element {
   const { classes } = useStyles();
-  const expanded = selectedTab != undefined;
 
   const toolbar = (
     <OverlayToolbar>
@@ -108,13 +91,7 @@ export default function ExpandingToolbar<T extends string>({
           aria-pressed={expanded || checked === true}
           aria-label={tooltip}
           data-testid={`ExpandingToolbar-${tooltip}`}
-          onClick={() => {
-            // Toggle; open on the first tab
-            const firstTab = React.Children.toArray(children)[0] as
-              | React.ReactElement<{ name: T }>
-              | undefined;
-            onSelectTab(expanded ? undefined : firstTab?.props.name);
-          }}
+          onClick={onToggle}
         >
           {icon}
         </IconButton>
@@ -131,47 +108,20 @@ export default function ExpandingToolbar<T extends string>({
   if (!expanded) {
     return toolbar;
   }
-  let selectedChild: ReactElement | undefined;
-
-  React.Children.forEach(children, (child) => {
-    if (!selectedChild || child.props.name === selectedTab) {
-      selectedChild = child;
-    }
-  });
-
-  const handleChange = (_event: React.SyntheticEvent, value: T | undefined) => {
-    if (value != undefined) {
-      onSelectTab(value);
-    }
-  };
-
   return (
     <>
       <Paper className={classes.root} data-testid={dataTest} square={false} elevation={4}>
         <Paper>
           <Stack direction="row" justifyContent="space-between" alignItems="center">
-            <Tabs
-              className={classes.tabs}
-              textColor="inherit"
-              value={selectedTab}
-              onChange={handleChange}
-            >
-              {React.Children.map(children, (child) => (
-                <Tab label={child.props.name} value={child.props.name} />
-              ))}
-            </Tabs>
-            <IconButton
-              size="small"
-              className={classes.minimizeButton}
-              onClick={() => {
-                onSelectTab(undefined);
-              }}
-            >
+            <Typography variant="button" component="div" className={classes.title}>
+              {title}
+            </Typography>
+            <IconButton size="small" className={classes.minimizeButton} onClick={onToggle}>
               <CloseFullscreenIcon fontSize="small" />
             </IconButton>
           </Stack>
         </Paper>
-        <div className={classes.content}>{selectedChild}</div>
+        <div className={classes.content}>{children}</div>
       </Paper>
       {toolbar}
     </>

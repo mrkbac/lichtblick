@@ -100,7 +100,6 @@ function ToolbarComponent(props: PropsToolbar): React.JSX.Element {
             supportsMathModifiers
             path={topicPath}
             onChange={onTopicPathChange}
-            inputStyle={{ height: 20 }}
           />
         </Stack>
       </PanelToolbar>
