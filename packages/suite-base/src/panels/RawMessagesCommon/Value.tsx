@@ -5,6 +5,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+import CheckIcon from "@mui/icons-material/Check";
 import { Tooltip, useTheme } from "@mui/material";
 import React, { useCallback, useMemo, useState, useRef, useEffect } from "react";
 import { withStyles } from "tss-react/mui";
@@ -15,15 +16,9 @@ import Stack from "@lichtblick/suite-base/components/Stack";
 import { openSiblingPlotPanel } from "@lichtblick/suite-base/panels/Plot/utils/openSiblingPlotPanel";
 import HighlightedValue from "@lichtblick/suite-base/panels/RawMessagesCommon/HighlightedValue";
 import { RAW_MESSAGES_BUTTONS } from "@lichtblick/suite-base/panels/RawMessagesCommon/buttons";
+import { copyMessageReplacer } from "@lichtblick/suite-base/panels/RawMessagesCommon/copyMessageReplacer";
 import { useStylesValue } from "@lichtblick/suite-base/panels/RawMessagesCommon/index.style";
 import { PropsValue, ValueActionItem } from "@lichtblick/suite-base/panels/RawMessagesCommon/types";
-import {
-  getCopyAction,
-  getFilterAction,
-  getLineChartAction,
-  getScatterPlotAction,
-  getStateTransitionsAction,
-} from "@lichtblick/suite-base/panels/RawMessagesCommon/utils";
 import { TRANSITIONABLE_ROS_TYPES } from "@lichtblick/suite-base/panels/StateTransitions/constants";
 import { openSiblingStateTransitionsPanel } from "@lichtblick/suite-base/panels/StateTransitions/openSiblingStateTransitionsPanel";
 import { PLOTABLE_ROS_TYPES } from "@lichtblick/suite-base/panels/shared/constants";
@@ -128,7 +123,17 @@ function Value(props: PropsValue): React.JSX.Element {
     const actions: ValueActionItem[] = [];
 
     if (arrLabel.length > 0) {
-      actions.push(getCopyAction({ copied }, itemValue, handleCopy));
+      actions.push({
+        key: "Copy",
+        activeColor: copied ? "success" : "primary",
+        button: RAW_MESSAGES_BUTTONS.copyValue,
+        feedback: copied
+          ? { tooltip: "Copied", icon: <CheckIcon fontSize="inherit" /> }
+          : undefined,
+        onClick: () => {
+          handleCopy(JSON.stringify(itemValue, copyMessageReplacer, 2) ?? "");
+        },
+      });
     }
 
     if (valueAction == undefined) {
@@ -140,21 +145,31 @@ function Value(props: PropsValue): React.JSX.Element {
     const isMultiSlicePath = valueAction.multiSlicePath === valueAction.singleSlicePath;
 
     if (valueAction.filterPath.length > 0) {
-      actions.push(getFilterAction(onFilter));
+      actions.push({ key: "Filter", button: RAW_MESSAGES_BUTTONS.filter, onClick: onFilter });
     }
 
     if (isPlotableType) {
-      actions.push(getLineChartAction(valueAction.singleSlicePath, openPlotPanel));
+      actions.push({
+        key: "line",
+        button: RAW_MESSAGES_BUTTONS.plotLine,
+        onClick: openPlotPanel(valueAction.singleSlicePath),
+      });
 
       if (!isMultiSlicePath) {
-        actions.push(getScatterPlotAction(valueAction.multiSlicePath, openPlotPanel));
+        actions.push({
+          key: "scatter",
+          button: RAW_MESSAGES_BUTTONS.plotScatter,
+          onClick: openPlotPanel(valueAction.multiSlicePath),
+        });
       }
     }
 
     if (isTransitionalType && isMultiSlicePath) {
-      actions.push(
-        getStateTransitionsAction(valueAction.singleSlicePath, openStateTransitionsPanel),
-      );
+      actions.push({
+        key: "stateTransitions",
+        button: RAW_MESSAGES_BUTTONS.stateTransitions,
+        onClick: openStateTransitionsPanel(valueAction.singleSlicePath),
+      });
     }
 
     return actions;

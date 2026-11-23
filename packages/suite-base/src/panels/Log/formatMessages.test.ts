@@ -15,11 +15,11 @@
 //   You may not use this file except in compliance with the License.
 
 import { Time } from "@lichtblick/suite";
-import formatMessages from "@lichtblick/suite-base/panels/Log/formatMessages";
+import formatMessage from "@lichtblick/suite-base/panels/Log/formatMessages";
 import { NormalizedLogMessage } from "@lichtblick/suite-base/panels/Log/types";
 import { formatTime } from "@lichtblick/suite-base/util/formatTime";
 
-describe("formatMessages", () => {
+describe("formatMessage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
@@ -39,8 +39,8 @@ describe("formatMessages", () => {
       message: "This is a test message",
     };
     const formattedTime = formatTime(stamp);
-    const formatted = formatMessages([item]);
-    expect(formatted).toEqual([`[INFO] [${formattedTime}] [${item.name}] ${item.message}`]);
+    const formatted = formatMessage(item);
+    expect(formatted).toBe(`[INFO] [${formattedTime}] [${item.name}] ${item.message}`);
   });
 
   it("should format a log message without name attribute", () => {
@@ -58,7 +58,7 @@ describe("formatMessages", () => {
       message: "This is a test message with no name",
     };
     const formattedTime = formatTime(stamp);
-    const formatted = formatMessages([item]);
-    expect(formatted).toEqual([`[ERROR] [${formattedTime}] [] ${item.message}`]);
+    const formatted = formatMessage(item);
+    expect(formatted).toBe(`[ERROR] [${formattedTime}] [] ${item.message}`);
   });
 });

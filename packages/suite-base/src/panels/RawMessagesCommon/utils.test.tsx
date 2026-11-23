@@ -6,18 +6,12 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { MessagePathDataItem } from "@lichtblick/suite-base/components/MessagePathSyntax/useCachedGetMessagePathDataItems";
-import { RAW_MESSAGES_BUTTONS } from "@lichtblick/suite-base/panels/RawMessagesCommon/buttons";
 import { NodeState } from "@lichtblick/suite-base/panels/RawMessagesCommon/types";
 import {
   dataWithoutWrappingArray,
   getConstantNameByKeyPath,
-  getCopyAction,
-  getFilterAction,
-  getLineChartAction,
   getMessageDocumentationLink,
-  getScatterPlotAction,
   getSingleValue,
-  getStateTransitionsAction,
   getValueLabels,
   getValueString,
   isSingleElemArray,
@@ -942,149 +936,6 @@ describe("typedArrayToArray", () => {
 
       // Then
       expect(result).toBe(dv);
-    });
-  });
-});
-
-describe("getCopyAction", () => {
-  describe("given a value and copy handler", () => {
-    const itemValue = { foo: BasicBuilder.string(), num: BasicBuilder.number() };
-    const handleCopy = vi.fn();
-    describe("when copied is false", () => {
-      const resultFalse = getCopyAction({ copied: false }, itemValue, handleCopy);
-      it("then should return copy action with CopyAllIcon", () => {
-        // Then
-        expect(resultFalse.key).toBe("Copy");
-        expect(resultFalse.activeColor).toBe("primary");
-        expect(resultFalse.button).toBe(RAW_MESSAGES_BUTTONS.copyValue);
-        expect(resultFalse.feedback).toBeUndefined();
-      });
-
-      it("then should call handleCopy with stringified JSON when clicked", () => {
-        // When
-        resultFalse.onClick?.({} as React.MouseEvent<HTMLButtonElement>);
-
-        // Then
-        expect(handleCopy).toHaveBeenCalledWith(
-          JSON.stringify(
-            itemValue,
-            expect.any(Function) as (key: string, value: unknown) => unknown,
-            2,
-          ),
-        );
-      });
-    });
-
-    describe("when copied is true", () => {
-      const resultTrue = getCopyAction({ copied: true }, itemValue, handleCopy);
-      it("then should return success action with CheckIcon", () => {
-        // Then
-        expect(resultTrue.key).toBe("Copy");
-        expect(resultTrue.activeColor).toBe("success");
-        expect(resultTrue.feedback?.tooltip).toBe("Copied");
-        expect(resultTrue.feedback?.icon).toBeDefined();
-      });
-    });
-  });
-});
-
-describe("getFilterAction", () => {
-  describe("given a filter handler", () => {
-    const onFilter = vi.fn();
-    describe("when creating filter action", () => {
-      const result = getFilterAction(onFilter);
-      it("then should return filter action with correct properties", () => {
-        // Then
-        expect(result.key).toBe("Filter");
-        expect(result.button).toBe(RAW_MESSAGES_BUTTONS.filter);
-      });
-
-      it("then should call onFilter when clicked", () => {
-        // When
-        result.onClick?.({} as React.MouseEvent<HTMLButtonElement>);
-
-        // Then
-        expect(onFilter).toHaveBeenCalledTimes(1);
-      });
-    });
-  });
-});
-
-describe("getLineChartAction", () => {
-  describe("given a single slice path and plot panel opener", () => {
-    const singleSlicePath = BasicBuilder.string("/topic.field");
-    const mockHandler = vi.fn();
-    const openPlotPanel = vi.fn(() => mockHandler);
-    describe("when creating line chart action", () => {
-      const result = getLineChartAction(singleSlicePath, openPlotPanel);
-      it("then should return line chart action with correct properties", () => {
-        // Then
-        expect(result.key).toBe("line");
-        expect(result.button).toBe(RAW_MESSAGES_BUTTONS.plotLine);
-      });
-
-      it("then should call openPlotPanel with path when clicked", () => {
-        // When
-        // Build the action inside the test: mock call history is reset before each test
-        const action = getLineChartAction(singleSlicePath, openPlotPanel);
-        action.onClick?.({} as React.MouseEvent<HTMLButtonElement>);
-
-        // Then
-        expect(openPlotPanel).toHaveBeenCalledWith(singleSlicePath);
-        expect(mockHandler).toHaveBeenCalledTimes(1);
-      });
-    });
-  });
-});
-
-describe("getScatterPlotAction", () => {
-  describe("given a multi slice path and plot panel opener", () => {
-    const multiSlicePath = BasicBuilder.string("/topic.array[:]");
-    const mockHandler = vi.fn();
-    const openPlotPanel = vi.fn(() => mockHandler);
-    describe("when creating scatter plot action", () => {
-      const result = getScatterPlotAction(multiSlicePath, openPlotPanel);
-      it("then should return scatter plot action with correct properties", () => {
-        // Then
-        expect(result.key).toBe("scatter");
-        expect(result.button).toBe(RAW_MESSAGES_BUTTONS.plotScatter);
-      });
-
-      it("then should call openPlotPanel with path when clicked", () => {
-        // When
-        // Build the action inside the test: mock call history is reset before each test
-        const action = getScatterPlotAction(multiSlicePath, openPlotPanel);
-        action.onClick?.({} as React.MouseEvent<HTMLButtonElement>);
-
-        // Then
-        expect(openPlotPanel).toHaveBeenCalledWith(multiSlicePath);
-        expect(mockHandler).toHaveBeenCalledTimes(1);
-      });
-    });
-  });
-});
-
-describe("getStateTransitionsAction", () => {
-  describe("given a single slice path and state transitions panel opener", () => {
-    const singleSlicePath = BasicBuilder.string("/topic.state");
-    const mockHandler = vi.fn();
-    const openStateTransitionsPanel = vi.fn(() => mockHandler);
-    describe("when creating state transitions action", () => {
-      const result = getStateTransitionsAction(singleSlicePath, openStateTransitionsPanel);
-      it("then should return state transitions action with correct properties", () => {
-        // Then
-        expect(result.key).toBe("stateTransitions");
-        expect(result.button).toBe(RAW_MESSAGES_BUTTONS.stateTransitions);
-      });
-
-      it("then should call openStateTransitionsPanel with path when clicked", () => {
-        const action = getStateTransitionsAction(singleSlicePath, openStateTransitionsPanel);
-        action.onClick?.({} as React.MouseEvent<HTMLButtonElement>);
-
-        // Then
-        expect(openStateTransitionsPanel).toHaveBeenCalledWith(singleSlicePath);
-        expect(mockHandler).toHaveBeenCalledTimes(1);
-      });
     });
   });
 });

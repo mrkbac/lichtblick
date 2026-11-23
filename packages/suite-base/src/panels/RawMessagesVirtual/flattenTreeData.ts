@@ -28,10 +28,6 @@ export type FlattenOptions = {
   /** Below these nodes, `include` no longer applies (e.g. the contents of a search match). */
   includeSubtreeOf?: Set<string>;
   cache?: WeakMap<object, unknown[]>;
-  parentPath?: string;
-  depth?: number;
-  keyPath?: (string | number)[];
-  diffStatus?: DiffStatus;
 };
 
 function entriesOf(
@@ -111,10 +107,6 @@ export function flattenTreeData(
     include,
     includeSubtreeOf,
     cache = new WeakMap<object, unknown[]>(),
-    parentPath = "",
-    depth = 0,
-    keyPath = [],
-    diffStatus,
   } = options;
 
   const nodes: TreeNode[] = [];
@@ -221,7 +213,7 @@ export function flattenTreeData(
     }
   };
 
-  walk(data, parentPath, depth, keyPath, diffStatus, include);
+  walk(data, "", 0, [], undefined, include);
   return nodes;
 }
 

@@ -35,13 +35,11 @@ function createMockSharedLogic(
   overrides: Partial<UseSharedRawMessagesLogicResult> = {},
 ): UseSharedRawMessagesLogicResult {
   return {
-    topicRosPath: undefined,
     topic: overrides.topic,
     rootStructureItem: overrides.rootStructureItem,
     baseItem: overrides.baseItem,
     diffItem: overrides.diffItem,
     expansion: overrides.expansion ?? "none",
-    setExpansion: vi.fn(),
     canExpandAll: overrides.canExpandAll ?? false,
     onTopicPathChange: vi.fn(),
     onDiffTopicPathChange: vi.fn(),

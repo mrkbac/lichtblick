@@ -19,14 +19,6 @@ import { formatTime } from "@lichtblick/suite-base/util/formatTime";
 
 import LevelToString from "./LevelToString";
 
-const formattedMessage = (item: NormalizedLogMessage, timezone?: string): string => {
+export default function formatMessage(item: NormalizedLogMessage, timezone?: string): string {
   return `[${LevelToString(item.level)}] [${formatTime(item.stamp, timezone)}] [${item.name}] ${item.message}`;
-};
-
-export default function formatMessages(
-  items: readonly NormalizedLogMessage[],
-  timezone?: string,
-): string[] {
-  const messages = items.map((item) => formattedMessage(item, timezone));
-  return messages;
 }

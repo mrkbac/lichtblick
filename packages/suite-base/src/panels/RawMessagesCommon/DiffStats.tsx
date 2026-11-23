@@ -6,19 +6,12 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { Typography } from "@mui/material";
-import { ReactNode } from "react";
 
 import { useStylesDiffStats } from "@lichtblick/suite-base/panels/RawMessagesCommon/index.style";
 import { diffLabels, DiffObject } from "@lichtblick/suite-base/panels/RawMessagesCommon/types";
 import { getChangeCounts } from "@lichtblick/suite-base/panels/RawMessagesCommon/utils";
 
-export default function DiffStats({
-  data,
-  itemType,
-}: {
-  data: DiffObject;
-  itemType: ReactNode;
-}): React.JSX.Element {
+export default function DiffStats({ data }: { data: DiffObject }): React.JSX.Element {
   const { classes } = useStylesDiffStats();
   const { ADDED, DELETED, CHANGED, ID } = diffLabels;
   const id = data[ID.labelText] as DiffObject | undefined;
@@ -36,11 +29,7 @@ export default function DiffStats({
 
   return (
     <>
-      {id && (
-        <>
-          {itemType} {idLabel}
-        </>
-      )}
+      {id && ` ${idLabel}`}
       <div className={classes.diff}>
         {(counts[ADDED.labelText] !== 0 || counts[DELETED.labelText] !== 0) && (
           <div className={classes.badge}>

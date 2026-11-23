@@ -26,7 +26,6 @@ import { NormalizedLogMessage } from "@lichtblick/suite-base/panels/Log/types";
 import { useStyles } from "./LogList.style";
 import LogMessage from "./LogMessage";
 import { LOG_BUTTONS } from "./buttons";
-import { DEFAULT_ROW_HEIGHT } from "./constants";
 import { lastIndexAtOrBefore } from "./timeIndex";
 
 export type LogListApi = {
@@ -81,7 +80,7 @@ function LogList({ items, currentTime, onSeek, onCopy, apiRef }: LogListProps): 
   const virtualizer = useVirtualizer({
     count: items.length,
     getScrollElement: () => scrollRef.current,
-    estimateSize: () => DEFAULT_ROW_HEIGHT,
+    estimateSize: () => 14,
     overscan: 3,
     getItemKey,
     measureElement: (element) => element.getBoundingClientRect().height,

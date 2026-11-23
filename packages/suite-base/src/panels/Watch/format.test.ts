@@ -7,7 +7,6 @@ import {
   formatExpanded,
   formatValue,
   isExpandable,
-  isStale,
   toPlottable,
 } from "./format";
 
@@ -107,13 +106,5 @@ describe("formatAge", () => {
 
   it("shows values from just after the playhead as fresh", () => {
     expect(formatAge(-0.3)).toBe("0.0 s");
-  });
-});
-
-describe("isStale", () => {
-  it("is stale only past the threshold", () => {
-    expect(isStale(1.9, 2)).toBe(false);
-    expect(isStale(2, 2)).toBe(false);
-    expect(isStale(2.1, 2)).toBe(true);
   });
 });

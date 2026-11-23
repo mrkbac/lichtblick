@@ -201,8 +201,3 @@ export function formatAge(seconds: number): string {
   }
   return `${Math.floor(sec / 3600)} h`;
 }
-
-/** Whether a value received `ageSec` ago counts as frozen. */
-export function isStale(ageSec: number, staleAfterSec: number): boolean {
-  return ageSec > staleAfterSec;
-}

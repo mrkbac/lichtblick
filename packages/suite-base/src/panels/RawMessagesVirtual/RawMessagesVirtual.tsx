@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MPL-2.0
 import { InputBase, Typography } from "@mui/material";
 import * as _ from "lodash-es";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useDataSourceInfo } from "@lichtblick/suite-base/PanelAPI";
 import EmptyState from "@lichtblick/suite-base/components/EmptyState";
@@ -16,33 +16,33 @@ import Metadata from "@lichtblick/suite-base/panels/RawMessagesCommon/Metadata";
 import ObjectSummary from "@lichtblick/suite-base/panels/RawMessagesCommon/ObjectSummary";
 import { StepButtons } from "@lichtblick/suite-base/panels/RawMessagesCommon/StepButtons";
 import { Toolbar } from "@lichtblick/suite-base/panels/RawMessagesCommon/Toolbar";
+import Value from "@lichtblick/suite-base/panels/RawMessagesCommon/Value";
 import { CUSTOM_METHOD } from "@lichtblick/suite-base/panels/RawMessagesCommon/constants";
 import getDiff from "@lichtblick/suite-base/panels/RawMessagesCommon/getDiff";
 import {
   useStylesRawMessagesVirtual,
   useStylesToolbar,
 } from "@lichtblick/suite-base/panels/RawMessagesCommon/index.style";
+import { buildSettingsTree } from "@lichtblick/suite-base/panels/RawMessagesCommon/settings";
 import {
   diffLabels,
   DiffObject,
   PropsRawMessagesVirtual,
   TreeNode,
 } from "@lichtblick/suite-base/panels/RawMessagesCommon/types";
-import { useRawMessagesPanelSettings } from "@lichtblick/suite-base/panels/RawMessagesCommon/useRawMessagesPanelSettings";
-import {
-  useRenderDiffLabel,
-  useValueRenderer,
-} from "@lichtblick/suite-base/panels/RawMessagesCommon/useRenderers";
+import { useValueRenderer } from "@lichtblick/suite-base/panels/RawMessagesCommon/useRenderers";
 import { useSharedRawMessagesLogic } from "@lichtblick/suite-base/panels/RawMessagesCommon/useSharedRawMessagesLogic";
 import {
   dataWithoutWrappingArray,
   getSingleValue,
+  getValueLabels,
   getValueString,
   isSingleElemArray,
   handleStepKeyDown,
 } from "@lichtblick/suite-base/panels/RawMessagesCommon/utils";
 import { VirtualizedTree } from "@lichtblick/suite-base/panels/RawMessagesVirtual/VirtualizedTree";
 import { RAW_MESSAGES_SHORTCUTS } from "@lichtblick/suite-base/panels/RawMessagesVirtual/shortcuts";
+import { usePanelSettingsTreeUpdate } from "@lichtblick/suite-base/providers/PanelStateContextProvider";
 import { findShortcut } from "@lichtblick/suite-base/util/keyboardShortcuts";
 
 const RawMessagesVirtual = (props: PropsRawMessagesVirtual): React.JSX.Element => {
@@ -87,11 +87,6 @@ const RawMessagesVirtual = (props: PropsRawMessagesVirtual): React.JSX.Element =
     openSiblingPanel,
   });
 
-  const renderDiffLabel = useRenderDiffLabel({
-    onTopicPathChange,
-    openSiblingPanel,
-  });
-
   // Remember the previously shown message so changed values can be highlighted while stepping.
   const data = useMemo(
     () => baseItem && dataWithoutWrappingArray(baseItem.queriedData.map(({ value }) => value)),
@@ -129,14 +124,30 @@ const RawMessagesVirtual = (props: PropsRawMessagesVirtual): React.JSX.Element =
           return (
             <>
               {!hasId && <ObjectSummary value={node.value} />}
-              <DiffStats data={node.value as DiffObject} itemType={undefined} />
+              <DiffStats data={node.value as DiffObject} />
             </>
           );
         }
         // Changed leaves already hold a formatted "before -> after" string.
         const label =
           node.diffStatus === "changed" ? String(node.value) : getValueString(node.value);
-        return renderDiffLabel(label, node.value);
+        const { arrLabel, itemLabel } = getValueLabels({
+          constantName: undefined,
+          label,
+          itemValue: node.value,
+          keyPath: [],
+        });
+        return (
+          <Value
+            arrLabel={arrLabel}
+            basePath=""
+            itemLabel={itemLabel}
+            itemValue={node.value}
+            valueAction={undefined}
+            onTopicPathChange={onTopicPathChange}
+            openSiblingPanel={openSiblingPanel}
+          />
+        );
       }
 
       return valueRenderer(
@@ -154,7 +165,8 @@ const RawMessagesVirtual = (props: PropsRawMessagesVirtual): React.JSX.Element =
       data,
       diffEnabled,
       hideWrappingArray,
-      renderDiffLabel,
+      onTopicPathChange,
+      openSiblingPanel,
       rootStructureItem,
       valueRenderer,
     ],
@@ -247,11 +259,21 @@ const RawMessagesVirtual = (props: PropsRawMessagesVirtual): React.JSX.Element =
     );
   };
 
-  // Setup settings in panel settings tree
-  useRawMessagesPanelSettings({
-    fontSize,
-    saveConfig,
-  });
+  const updatePanelSettingsTree = usePanelSettingsTreeUpdate();
+  useEffect(() => {
+    updatePanelSettingsTree({
+      actionHandler: (action) => {
+        if (action.action !== "update") {
+          return;
+        }
+        const { path, value } = action.payload;
+        if (path[0] === "general" && path[1] === "fontSize") {
+          saveConfig({ fontSize: typeof value === "number" ? value : undefined });
+        }
+      },
+      nodes: buildSettingsTree(fontSize),
+    });
+  }, [fontSize, saveConfig, updatePanelSettingsTree]);
 
   return (
     // A focusable div (Stack has no event props) so the shortcuts work while the panel has focus.

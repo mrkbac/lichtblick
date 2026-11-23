@@ -50,7 +50,7 @@ describe("DiffStats", () => {
       });
 
       // WHEN
-      render(<DiffStats data={data} itemType="Item" />);
+      render(<DiffStats data={data} />);
 
       // THEN
       expect(screen.getByText("+1")).toBeInTheDocument();
@@ -68,7 +68,7 @@ describe("DiffStats", () => {
       });
 
       // WHEN
-      render(<DiffStats data={data} itemType="Item" />);
+      render(<DiffStats data={data} />);
 
       // THEN
       expect(screen.getByText("-1")).toBeInTheDocument();
@@ -87,7 +87,7 @@ describe("DiffStats", () => {
       });
 
       // WHEN
-      render(<DiffStats data={data} itemType="Item" />);
+      render(<DiffStats data={data} />);
 
       // THEN
       expect(screen.getByText("+2")).toBeInTheDocument();
@@ -108,7 +108,7 @@ describe("DiffStats", () => {
       });
 
       // WHEN
-      const { container } = render(<DiffStats data={data} itemType="Item" />);
+      const { container } = render(<DiffStats data={data} />);
 
       // THEN
       const changeIndicator = container.querySelector(".mock-change-indicator-class");
@@ -125,7 +125,7 @@ describe("DiffStats", () => {
       });
 
       // WHEN
-      const { container } = render(<DiffStats data={data} itemType="Item" />);
+      const { container } = render(<DiffStats data={data} />);
 
       // THEN
       const badge = container.querySelector(".mock-badge-class");
@@ -142,7 +142,7 @@ describe("DiffStats", () => {
       });
 
       // WHEN
-      const { container } = render(<DiffStats data={data} itemType="Item" />);
+      const { container } = render(<DiffStats data={data} />);
 
       // THEN
       const changeIndicator = container.querySelector(".mock-change-indicator-class");
@@ -153,7 +153,7 @@ describe("DiffStats", () => {
   describe("with ID label", () => {
     const idValue = BasicBuilder.number();
     const nameValue = BasicBuilder.string();
-    it("renders item type and id label when ID is present", () => {
+    it("renders id label when ID is present", () => {
       // GIVEN
 
       const data: DiffObject = {
@@ -166,10 +166,9 @@ describe("DiffStats", () => {
       });
 
       // WHEN
-      const { container } = render(<DiffStats data={data} itemType="Message" />);
+      const { container } = render(<DiffStats data={data} />);
 
       // THEN
-      expect(container.textContent).toContain("Message");
       expect(container.textContent).toContain(`id: ${idValue}`);
     });
 
@@ -185,28 +184,11 @@ describe("DiffStats", () => {
       });
 
       // WHEN
-      const { container } = render(<DiffStats data={data} itemType="Record" />);
+      const { container } = render(<DiffStats data={data} />);
 
       // THEN
-      expect(container.textContent).toContain("Record");
       expect(container.textContent).toContain(`id: ${idValue}`);
       expect(container.textContent).toContain(`name: ${nameValue}`);
-    });
-
-    it("does not render item type when ID is not present", () => {
-      // GIVEN
-      const data: DiffObject = {};
-      mockGetChangeCounts.mockReturnValue({
-        [diffLabels.ADDED.labelText]: 0,
-        [diffLabels.DELETED.labelText]: 0,
-        [diffLabels.CHANGED.labelText]: 0,
-      });
-
-      // WHEN
-      render(<DiffStats data={data} itemType="Message" />);
-
-      // THEN
-      expect(screen.queryByText("Message")).not.toBeInTheDocument();
     });
   });
 
@@ -229,35 +211,14 @@ describe("DiffStats", () => {
       });
 
       // WHEN
-      const { container } = render(<DiffStats data={data} itemType="Object" />);
+      const { container } = render(<DiffStats data={data} />);
 
       // THEN
-      expect(container.textContent).toContain("Object");
       expect(container.textContent).toContain(`uuid: ${uuidValue}`);
       expect(screen.getByText("+5")).toBeInTheDocument();
       expect(screen.getByText("-3")).toBeInTheDocument();
       const changeIndicator = container.querySelector(".mock-change-indicator-class");
       expect(changeIndicator).toBeInTheDocument();
-    });
-
-    it("handles itemType as ReactNode", () => {
-      // GIVEN
-      const data: DiffObject = {
-        [diffLabels.ID.labelText]: { id: uuidValue },
-      };
-      mockGetChangeCounts.mockReturnValue({
-        [diffLabels.ADDED.labelText]: 0,
-        [diffLabels.DELETED.labelText]: 0,
-        [diffLabels.CHANGED.labelText]: 0,
-      });
-      const CustomItemType = <span data-testid="custom-item">Custom Type</span>;
-
-      // WHEN
-      render(<DiffStats data={data} itemType={CustomItemType} />);
-
-      // THEN
-      expect(screen.getByTestId("custom-item")).toBeInTheDocument();
-      expect(screen.getByText("Custom Type")).toBeInTheDocument();
     });
 
     it("only renders added count when deletions are zero", () => {
@@ -272,7 +233,7 @@ describe("DiffStats", () => {
       });
 
       // WHEN
-      render(<DiffStats data={data} itemType="Item" />);
+      render(<DiffStats data={data} />);
 
       // THEN
       expect(screen.getByText("+4")).toBeInTheDocument();
@@ -291,7 +252,7 @@ describe("DiffStats", () => {
       });
 
       // WHEN
-      render(<DiffStats data={data} itemType="Item" />);
+      render(<DiffStats data={data} />);
 
       // THEN
       expect(screen.getByText("-7")).toBeInTheDocument();
@@ -310,7 +271,7 @@ describe("DiffStats", () => {
       });
 
       // WHEN
-      const { container } = render(<DiffStats data={data} itemType="Empty" />);
+      const { container } = render(<DiffStats data={data} />);
 
       // THEN
       const diffDiv = container.querySelector(".mock-diff-class");
@@ -337,10 +298,9 @@ describe("DiffStats", () => {
       });
 
       // WHEN
-      const { container } = render(<DiffStats data={data} itemType="Event" />);
+      const { container } = render(<DiffStats data={data} />);
 
       // THEN
-      expect(container.textContent).toContain("Event");
       expect(container.textContent).toContain(`timestamp: ${timestampValue}`);
       expect(container.textContent).toContain(`source: ${sourceValue}`);
       expect(container.textContent).toContain(`sequence: ${sequenceValue}`);

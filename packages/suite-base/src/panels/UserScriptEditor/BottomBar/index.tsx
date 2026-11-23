@@ -100,101 +100,91 @@ const BottomBar = ({
     setBottomBarDisplay(value);
   };
 
-  const handleClick = () => {
-    onChangeTab();
-  };
-
   return (
-    <>
-      <Paper elevation={0} className={classes.root}>
-        <Divider />
-        <Stack
-          direction="row"
-          alignItems="center"
-          justifyContent="space-between"
-          gap={1}
-          paddingRight={1}
+    <Paper elevation={0} className={classes.root}>
+      <Divider />
+      <Stack
+        direction="row"
+        alignItems="center"
+        justifyContent="space-between"
+        gap={1}
+        paddingRight={1}
+      >
+        <Tabs
+          className={classes.tabs}
+          textColor="inherit"
+          value={bottomBarDisplay}
+          onChange={handleChange}
         >
-          <Tabs
-            className={classes.tabs}
-            textColor="inherit"
-            value={bottomBarDisplay}
-            onChange={handleChange}
-          >
-            <Tab
-              label={
-                <Badge
-                  color="error"
-                  badgeContent={diagnostics.length}
-                  invisible={diagnostics.length === 0}
-                  className={classes.badge}
-                >
-                  Alerts
-                </Badge>
-              }
-              value="diagnostics"
-              data-testid="np-errors"
-              onClick={() => {
-                handleClick();
-              }}
-            />
-            <Tab
-              label={
-                <Badge
-                  color="error"
-                  className={classes.badge}
-                  badgeContent={logs.length}
-                  invisible={logs.length === 0}
-                >
-                  Logs
-                </Badge>
-              }
-              value="logs"
-              data-testid="np-logs"
-              onClick={() => {
-                handleClick();
-              }}
-            />
-          </Tabs>
-          <Stack direction="row" alignItems="center" gap={0.5} fullHeight>
-            {bottomBarDisplay === "logs" && (
-              <Button
-                size="small"
-                color="primary"
-                variant="contained"
-                data-testid="np-logs-clear"
-                disabled={logs.length === 0}
-                onClick={() => {
-                  if (scriptId != undefined) {
-                    clearUserScriptLogs(scriptId);
-                  }
-                }}
+          <Tab
+            label={
+              <Badge
+                color="error"
+                badgeContent={diagnostics.length}
+                invisible={diagnostics.length === 0}
+                className={classes.badge}
               >
-                Clear logs
-              </Button>
-            )}
+                Alerts
+              </Badge>
+            }
+            value="diagnostics"
+            data-testid="np-errors"
+            onClick={onChangeTab}
+          />
+          <Tab
+            label={
+              <Badge
+                color="error"
+                className={classes.badge}
+                badgeContent={logs.length}
+                invisible={logs.length === 0}
+              >
+                Logs
+              </Badge>
+            }
+            value="logs"
+            data-testid="np-logs"
+            onClick={onChangeTab}
+          />
+        </Tabs>
+        <Stack direction="row" alignItems="center" gap={0.5} fullHeight>
+          {bottomBarDisplay === "logs" && (
             <Button
               size="small"
               color="primary"
               variant="contained"
-              disabled={isSaved}
-              title={shortcutLabel(USER_SCRIPTS_SHORTCUTS, "userScripts.save")}
+              data-testid="np-logs-clear"
+              disabled={logs.length === 0}
               onClick={() => {
                 if (scriptId != undefined) {
-                  save();
                   clearUserScriptLogs(scriptId);
                 }
               }}
             >
-              {isSaved ? "Saved" : "Save"}
+              Clear logs
             </Button>
-          </Stack>
+          )}
+          <Button
+            size="small"
+            color="primary"
+            variant="contained"
+            disabled={isSaved}
+            title={shortcutLabel(USER_SCRIPTS_SHORTCUTS, "userScripts.save")}
+            onClick={() => {
+              if (scriptId != undefined) {
+                save();
+                clearUserScriptLogs(scriptId);
+              }
+            }}
+          >
+            {isSaved ? "Saved" : "Save"}
+          </Button>
         </Stack>
-        <Divider />
-        {bottomBarDisplay === "diagnostics" && <DiagnosticsSection diagnostics={diagnostics} />}
-        {bottomBarDisplay === "logs" && <LogsSection logs={logs} />}
-      </Paper>
-    </>
+      </Stack>
+      <Divider />
+      {bottomBarDisplay === "diagnostics" && <DiagnosticsSection diagnostics={diagnostics} />}
+      {bottomBarDisplay === "logs" && <LogsSection logs={logs} />}
+    </Paper>
   );
 };
 

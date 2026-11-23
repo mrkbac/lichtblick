@@ -396,16 +396,18 @@ export function RecordingInspector(): React.JSX.Element {
     : filtered.map((topic) => ({ kind: "topic" as const, topic, depth: 0 }));
 
   const sortHeading = (key: SortKey, label: string) => (
-    <TableSortLabel
-      active={sort === key}
-      direction={ascending ? "asc" : "desc"}
-      onClick={() => {
-        setAscending(sort === key ? !ascending : key === "topic");
-        setSort(key);
-      }}
-    >
-      {label}
-    </TableSortLabel>
+    <th aria-sort={sort === key ? (ascending ? "ascending" : "descending") : "none"}>
+      <TableSortLabel
+        active={sort === key}
+        direction={ascending ? "asc" : "desc"}
+        onClick={() => {
+          setAscending(sort === key ? !ascending : key === "topic");
+          setSort(key);
+        }}
+      >
+        {label}
+      </TableSortLabel>
+    </th>
   );
 
   useEffect(() => () => controller.current?.abort(), []);
@@ -707,41 +709,15 @@ export function RecordingInspector(): React.JSX.Element {
               <table className={classes.table}>
                 <thead>
                   <tr>
-                    <th
-                      aria-sort={
-                        sort === "topic" ? (ascending ? "ascending" : "descending") : "none"
-                      }
-                    >
-                      {sortHeading("topic", "Topic / schema")}
-                    </th>
-                    <th
-                      aria-sort={
-                        sort === "messages" ? (ascending ? "ascending" : "descending") : "none"
-                      }
-                    >
-                      {sortHeading("messages", "Messages")}
-                    </th>
-                    <th
-                      aria-sort={
-                        sort === "rate" ? (ascending ? "ascending" : "descending") : "none"
-                      }
-                    >
-                      {sortHeading("rate", "Hz")}
-                    </th>
+                    {sortHeading("topic", "Topic / schema")}
+                    {sortHeading("messages", "Messages")}
+                    {sortHeading("rate", "Hz")}
                     <th>Activity across recording</th>
-                    <th>
-                      {sortHeading(
-                        "size",
-                        estimatedSizes || inspections.size === 0 ? "Size" : "Payload",
-                      )}
-                    </th>
-                    <th
-                      aria-sort={
-                        sort === "interval" ? (ascending ? "ascending" : "descending") : "none"
-                      }
-                    >
-                      {sortHeading("interval", "Largest interval")}
-                    </th>
+                    {sortHeading(
+                      "size",
+                      estimatedSizes || inspections.size === 0 ? "Size" : "Payload",
+                    )}
+                    {sortHeading("interval", "Largest interval")}
                   </tr>
                 </thead>
                 <tbody>

@@ -18,18 +18,8 @@ import { LogLevel } from "./types";
 
 // map a numeric level to a string
 export default function LevelToString(level: LogLevel): string {
-  switch (level) {
-    case LogLevel.DEBUG:
-      return "DEBUG";
-    case LogLevel.INFO:
-      return "INFO";
-    case LogLevel.WARN:
-      return "WARN";
-    case LogLevel.ERROR:
-      return "ERROR";
-    case LogLevel.FATAL:
-      return "FATAL";
-    default:
-      return "?????";
-  }
+  // Messages can carry anything at runtime, so only known numeric levels get a name.
+  return Number.isInteger(level) && level > LogLevel.UNKNOWN && level <= LogLevel.FATAL
+    ? LogLevel[level]
+    : "?????";
 }

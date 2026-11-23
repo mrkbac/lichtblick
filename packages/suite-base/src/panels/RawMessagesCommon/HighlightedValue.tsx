@@ -24,8 +24,6 @@ import {
   PropsHighlightedValue,
 } from "@lichtblick/suite-base/panels/RawMessagesCommon/types";
 
-import { DiffSpan } from "./DiffSpan";
-
 /** Splits a number at its decimal point so stacked numbers line up on it; undefined otherwise. */
 function splitAtDecimal(text: string): [string, string] | undefined {
   if (text === "" || Number.isNaN(Number(text))) {
@@ -49,7 +47,7 @@ export default function HighlightedValue({ itemLabel }: PropsHighlightedValue): 
     const aligned = numbers.every((parts) => parts != undefined);
 
     return (
-      <DiffSpan style={{ color: diffLabels.CHANGED.color }}>
+      <span className={classes.root} style={{ color: diffLabels.CHANGED.color }}>
         <span className={classes.stacked}>
           {lines.map((text, index) => {
             const lineClass = index === 0 ? classes.before : undefined;
@@ -66,13 +64,13 @@ export default function HighlightedValue({ itemLabel }: PropsHighlightedValue): 
             );
           })}
         </span>
-      </DiffSpan>
+      </span>
     );
   }
 
   return (
-    <DiffSpan>
+    <span className={classes.root}>
       <MaybeCollapsedValue itemLabel={itemLabel} />
-    </DiffSpan>
+    </span>
   );
 }

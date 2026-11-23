@@ -38,7 +38,7 @@ import PanelToolbar from "@lichtblick/suite-base/components/PanelToolbar";
 import Stack from "@lichtblick/suite-base/components/Stack";
 import { useAppTimeFormat } from "@lichtblick/suite-base/hooks/useAppTimeFormat";
 import { FilterTagInput } from "@lichtblick/suite-base/panels/Log/FilterTagInput";
-import formatMessages from "@lichtblick/suite-base/panels/Log/formatMessages";
+import formatMessage from "@lichtblick/suite-base/panels/Log/formatMessages";
 import { usePanelSettingsTreeUpdate } from "@lichtblick/suite-base/providers/PanelStateContextProvider";
 import { SaveConfig } from "@lichtblick/suite-base/types/panels";
 import clipboard from "@lichtblick/suite-base/util/clipboard";
@@ -233,7 +233,7 @@ const LogPanel = React.memo(({ config, saveConfig }: Props) => {
 
   const copyRow = useCallback(
     (item: NormalizedLogMessage) => {
-      void copy(formatMessages([item], timeZone));
+      void copy([formatMessage(item, timeZone)]);
     },
     [copy, timeZone],
   );
@@ -292,7 +292,7 @@ const LogPanel = React.memo(({ config, saveConfig }: Props) => {
         additionalIcons={
           <PanelIconButton
             button={LOG_BUTTONS.copy}
-            onClick={() => void copy(formatMessages(filteredItems, timeZone))}
+            onClick={() => void copy(filteredItems.map((item) => formatMessage(item, timeZone)))}
           />
         }
       />

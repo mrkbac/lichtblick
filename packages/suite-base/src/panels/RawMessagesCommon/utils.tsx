@@ -2,25 +2,21 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import { foxgloveMessageSchemas } from "@foxglove/schemas/internal";
-import CheckIcon from "@mui/icons-material/Check";
 import * as _ from "lodash-es";
 
 import { MessagePathStructureItem, PrimitiveType } from "@lichtblick/message-path";
 import { MessagePathDataItem } from "@lichtblick/suite-base/components/MessagePathSyntax/useCachedGetMessagePathDataItems";
-import { RAW_MESSAGES_BUTTONS } from "@lichtblick/suite-base/panels/RawMessagesCommon/buttons";
 import {
   DATA_ARRAY_PREVIEW_LIMIT,
   PATH_NAME_AGGREGATOR,
   ROS1_COMMON_MSG_PACKAGES,
 } from "@lichtblick/suite-base/panels/RawMessagesCommon/constants";
-import { copyMessageReplacer } from "@lichtblick/suite-base/panels/RawMessagesCommon/copyMessageReplacer";
 import {
   diffLabels,
   DiffObject,
   NodeExpansion,
   NodeState,
   MessageStepping,
-  ValueActionItem,
   ValueLabels,
   ValueLabelsProps,
 } from "@lichtblick/suite-base/panels/RawMessagesCommon/types";
@@ -337,65 +333,6 @@ export const getValueString = (value: unknown): string => {
     return String(value);
   }
   return "";
-};
-
-/** Value.tsx */
-
-export const getCopyAction = (
-  { copied }: { copied: boolean },
-  itemValue: unknown,
-  handleCopy: (value: string) => void,
-): ValueActionItem => {
-  return {
-    key: "Copy",
-    activeColor: copied ? "success" : "primary",
-    button: RAW_MESSAGES_BUTTONS.copyValue,
-    feedback: copied ? { tooltip: "Copied", icon: <CheckIcon fontSize="inherit" /> } : undefined,
-    onClick: () => {
-      handleCopy(JSON.stringify(itemValue, copyMessageReplacer, 2) ?? "");
-    },
-  };
-};
-
-export const getFilterAction = (onFilter: () => void): ValueActionItem => {
-  return {
-    key: "Filter",
-    button: RAW_MESSAGES_BUTTONS.filter,
-    onClick: onFilter,
-  };
-};
-
-export const getLineChartAction = (
-  singleSlicePath: string,
-  openPlotPanel: (pathSuffix: string) => () => void,
-): ValueActionItem => {
-  return {
-    key: "line",
-    button: RAW_MESSAGES_BUTTONS.plotLine,
-    onClick: openPlotPanel(singleSlicePath),
-  };
-};
-
-export const getScatterPlotAction = (
-  multiSlicePath: string,
-  openPlotPanel: (pathSuffix: string) => () => void,
-): ValueActionItem => {
-  return {
-    key: "scatter",
-    button: RAW_MESSAGES_BUTTONS.plotScatter,
-    onClick: openPlotPanel(multiSlicePath),
-  };
-};
-
-export const getStateTransitionsAction = (
-  singleSlicePath: string,
-  openStateTransitionsPanel: (pathSuffix: string) => () => void,
-): ValueActionItem => {
-  return {
-    key: "stateTransitions",
-    button: RAW_MESSAGES_BUTTONS.stateTransitions,
-    onClick: openStateTransitionsPanel(singleSlicePath),
-  };
 };
 
 /** getValueActionsForValue */

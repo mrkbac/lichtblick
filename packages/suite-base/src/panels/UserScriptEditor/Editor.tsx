@@ -24,7 +24,7 @@ import * as monacoApi from "monaco-editor/editor/editor.api.js";
 // @ts-expect-error StandaloneService does not have type information in the monaco-editor package
 import { StandaloneServices } from "monaco-editor/editor/standalone/browser/standaloneServices";
 import * as typescript from "monaco-editor/languages/features/typescript/register.js";
-import React, { Suspense, ReactElement, useCallback, useEffect, useRef } from "react";
+import React, { ReactElement, useCallback, useEffect, useRef } from "react";
 
 import { useLatest } from "@lichtblick/hooks";
 import ErrorBoundary from "@lichtblick/suite-base/components/ErrorBoundary";
@@ -84,6 +84,17 @@ const gotoSelection = (editor: monacoApi.editor.IEditor, selection?: monacoApi.I
 };
 
 const projectConfig = getUserScriptProjectConfig();
+
+/** The typescript model at `path`, created with `code` if there is none yet. */
+function getOrCreateModel(path: string, code: string): monacoApi.editor.ITextModel {
+  const uri = monacoApi.Uri.parse(`file://${path}`);
+  return monacoApi.editor.getModel(uri) ?? monacoApi.editor.createModel(code, "typescript", uri);
+}
+
+// For the editor to resolve relative imports of the utilities (i.e. ./types), the user's code
+// must be in a file next to the utility files, so only the basename of the script name is used.
+const scriptModelPath = (script: Script) =>
+  `${DEFAULT_STUDIO_SCRIPT_PREFIX}${basename(script.filePath)}`;
 const Editor = ({
   autoFormatOnSave,
   script,
@@ -110,11 +121,7 @@ const Editor = ({
   }, [rosLib]);
 
   React.useEffect(() => {
-    const filePath = monacoApi.Uri.parse(`file://${DEFAULT_STUDIO_SCRIPT_PREFIX}generatedTypes.ts`);
-    const model =
-      monacoApi.editor.getModel(filePath) ??
-      monacoApi.editor.createModel(typesLib, "typescript", filePath);
-
+    const model = getOrCreateModel(`${DEFAULT_STUDIO_SCRIPT_PREFIX}generatedTypes.ts`, typesLib);
     model.setValue(typesLib);
     model.updateOptions({ tabSize: 2 });
   }, [typesLib]);
@@ -142,11 +149,7 @@ const Editor = ({
 
         // If we are jumping to a definition within the user node, don't push
         // to script override.
-        if (
-          editor &&
-          script &&
-          requestedModel.uri.path === `${DEFAULT_STUDIO_SCRIPT_PREFIX}${basename(script.filePath)}`
-        ) {
+        if (editor && script && requestedModel.uri.path === scriptModelPath(script)) {
           // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
           gotoSelection(editor, input.options.selection);
 
@@ -171,15 +174,7 @@ const Editor = ({
       return;
     }
 
-    // For nodes, the name becomes the filePath.
-    // For the editor to resolve relative imports of the utilities (i.e. ./types), we need the
-    // user's code to be in a file next to the utility files. For this we grab the basename
-    // of the user's entered node name to remove any path-like sections.
-    const fileName = basename(script.filePath);
-    const filePath = monacoApi.Uri.parse(`file://${DEFAULT_STUDIO_SCRIPT_PREFIX}${fileName}`);
-    const model =
-      monacoApi.editor.getModel(filePath) ??
-      monacoApi.editor.createModel(script.code, "typescript", filePath);
+    const model = getOrCreateModel(scriptModelPath(script), script.code);
 
     // Update the model's code if it was updated outside the Editor.
     // Without this, monaco can continue to show old code if the userScripts are changed outside of the Editor
@@ -249,17 +244,11 @@ const Editor = ({
       // is a hack to overwrite the default type defs since the
       // typescript language service does not expose such a method.
       projectConfig.declarations.forEach((lib) => {
-        if (lib.fileName.startsWith("@foxglove/schemas")) {
-          typescript.typescriptDefaults.addExtraLib(
-            lib.sourceCode,
-            `file:///node_modules/${lib.fileName}`,
-          );
-        } else {
-          typescript.typescriptDefaults.addExtraLib(
-            lib.sourceCode,
-            `file:///node_modules/@types/${lib.fileName}`,
-          );
-        }
+        const prefix = lib.fileName.startsWith("@foxglove/schemas") ? "" : "@types/";
+        typescript.typescriptDefaults.addExtraLib(
+          lib.sourceCode,
+          `file:///node_modules/${prefix}${lib.fileName}`,
+        );
       });
       typescript.typescriptDefaults.setCompilerOptions({
         ...typescript.typescriptDefaults.getCompilerOptions(),
@@ -274,22 +263,10 @@ const Editor = ({
         noLib: true,
       });
       projectConfig.utilityFiles.forEach((sourceFile) => {
-        const filePath = monacoApi.Uri.parse(`file://${sourceFile.filePath}`);
-        const model =
-          monaco.editor.getModel(filePath) ??
-          monaco.editor.createModel(sourceFile.sourceCode, "typescript", filePath);
-        model.updateOptions({ tabSize: 2 });
+        getOrCreateModel(sourceFile.filePath, sourceFile.sourceCode).updateOptions({ tabSize: 2 });
       });
 
-      // For nodes, the name becomes the filePath.
-      // For the editor to resolve relative imports of the utilities (i.e. ./types), we need the
-      // user's code to be in a file next to the utility files. For this we grab the basename
-      // of the user's entered node name to remove any path-like sections.
-      const fileName = basename(script.filePath);
-      const filePath = monacoApi.Uri.parse(`file://${DEFAULT_STUDIO_SCRIPT_PREFIX}${fileName}`);
-      const model =
-        monaco.editor.getModel(filePath) ??
-        monaco.editor.createModel(script.code, "typescript", filePath);
+      const model = getOrCreateModel(scriptModelPath(script), script.code);
 
       // Because anything else is blasphemy.
       model.updateOptions({ tabSize: 2 });
@@ -350,16 +327,14 @@ const Editor = ({
   return (
     <div style={{ width: "100%", height: "100%" }}>
       <ErrorBoundary>
-        <Suspense fallback={<p>Loading user script editor</p>}>
-          <MonacoEditor
-            language="typescript"
-            theme={editorTheme}
-            editorWillMount={willMount}
-            editorDidMount={didMount}
-            options={options}
-            onChange={onChange}
-          />
-        </Suspense>
+        <MonacoEditor
+          language="typescript"
+          theme={editorTheme}
+          editorWillMount={willMount}
+          editorDidMount={didMount}
+          options={options}
+          onChange={onChange}
+        />
       </ErrorBoundary>
     </div>
   );

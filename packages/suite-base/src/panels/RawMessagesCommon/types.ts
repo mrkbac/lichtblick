@@ -3,10 +3,9 @@
 
 import type { SvgIconComponent } from "@mui/icons-material";
 import { IconButtonProps } from "@mui/material";
-import { CSSProperties, ReactNode } from "react";
 
-import { MessagePath, MessagePathStructureItem } from "@lichtblick/message-path";
-import { Immutable, Topic } from "@lichtblick/suite";
+import { MessagePathStructureItem } from "@lichtblick/message-path";
+import { Immutable } from "@lichtblick/suite";
 import { MessagePathDataItem } from "@lichtblick/suite-base/components/MessagePathSyntax/useCachedGetMessagePathDataItems";
 import { useMessageDataItem } from "@lichtblick/suite-base/components/MessagePathSyntax/useMessageDataItem";
 import type { PanelButton } from "@lichtblick/suite-base/components/PanelButton";
@@ -58,11 +57,6 @@ export type ValueAction = {
 
 // Props
 
-export type PropsDiffSpan = {
-  children?: ReactNode;
-  style?: CSSProperties;
-};
-
 export type PropsHighlightedValue = {
   itemLabel: string;
 };
@@ -100,10 +94,9 @@ export type PropsToolbar = {
   onTopicPathChange: (path: string) => void;
   saveConfig: SaveConfig<RawMessagesVirtualPanelConfig>;
   showFullMessageForDiff: boolean;
-  topic?: Topic;
   topicPath: string;
-  searchOpen?: boolean;
-  onToggleSearch?: () => void;
+  searchOpen: boolean;
+  onToggleSearch: () => void;
 };
 
 export type PropsValue = {
@@ -163,16 +156,12 @@ export type PathState = {
 
 /** useSharedRawMessagesLogic */
 export type UseSharedRawMessagesLogicResult = {
-  topicRosPath: MessagePath | undefined;
   topic: PlayerTopic | undefined;
   rootStructureItem: MessagePathStructureItem | undefined;
   baseItem: ReturnType<typeof useMessageDataItem>[number] | undefined;
   diffItem: ReturnType<typeof useMessageDataItem>[number] | undefined;
 
   expansion: NodeExpansion | undefined;
-  setExpansion: (
-    expansion: NodeExpansion | ((old: NodeExpansion | undefined) => NodeExpansion),
-  ) => void;
   canExpandAll: boolean;
 
   onTopicPathChange: (newTopicPath: string) => void;
@@ -192,21 +181,13 @@ export type UseSharedRawMessagesLogicResult = {
 
 /** useRenderers */
 export type UseValueRendererProps = {
-  datatypes:
-    | ReadonlyMap<
-        string,
-        {
-          readonly name?: string | undefined;
-          readonly definitions: readonly { readonly type: string; readonly name: string }[];
-        }
-      >
-    | Map<
-        string,
-        {
-          name?: string | undefined;
-          definitions: readonly { readonly type: string; readonly name: string }[];
-        }
-      >;
+  datatypes: ReadonlyMap<
+    string,
+    {
+      readonly name?: string | undefined;
+      readonly definitions: readonly { readonly type: string; readonly name: string }[];
+    }
+  >;
   hoverObserverClassName: string;
   onTopicPathChange: (path: string) => void;
   openSiblingPanel: OpenSiblingPanel;
@@ -221,19 +202,15 @@ export type ValueRendererFunction = (
   ...keyPath: (number | string)[]
 ) => React.ReactNode;
 
-export type RenderDiffLabelFunction = (label: string, itemValue: unknown) => React.ReactNode;
-
 export const diffLabels = {
   ADDED: {
     labelText: "STUDIO_DIFF___ADDED",
-    color: "#404047",
     backgroundColor: "#daffe7",
     invertedBackgroundColor: "#182924",
     indicator: "+",
   },
   DELETED: {
     labelText: "STUDIO_DIFF___DELETED",
-    color: "#404047",
     backgroundColor: "#ffdee3",
     invertedBackgroundColor: "#3d2327",
     indicator: "-",
