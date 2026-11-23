@@ -12,7 +12,12 @@
 export class Bitstream {
   #ptr: number = 0;
   #bytePtr: number = 0;
-  #lastTwoBytes: number = 0;
+  // Last two raw bytes before #historyEnd, for emulation prevention. Starts non-zero so a leading
+  // 0x03 is data, not an escape.
+  #lastTwoBytes: number = 0xffff;
+  // Raw bytes before this index are already in #lastTwoBytes. Bit reads re-read the current byte,
+  // so history only advances on the first read of each byte.
+  #historyEnd: number = 0;
   readonly #buffer: Uint8Array;
   readonly #max: number;
 
@@ -28,7 +33,8 @@ export class Bitstream {
   public reset(): void {
     this.#ptr = 0;
     this.#bytePtr = 0;
-    this.#lastTwoBytes = 0;
+    this.#lastTwoBytes = 0xffff;
+    this.#historyEnd = 0;
   }
 
   /**
@@ -157,34 +163,40 @@ export class Bitstream {
     if (n === 8) {
       return this.u_8();
     }
-    if (this.#ptr + n >= this.#max) {
+    if (this.#ptr + n > this.#max) {
       throw new Error("NALUStream error: bitstream exhausted");
     }
     let val = 0;
     for (let i = 0; i < n; i++) {
-      val = (val << 1) | this.u_1();
+      // Not `(val << 1) | bit`: that overflows int32 for n = 32.
+      val = val * 2 + this.u_1();
     }
     return val;
   }
 
   #readByte(): number {
-    if (this.#bytePtr >= this.#buffer.length) {
-      throw new Error("Attempted to read past end of buffer");
+    if (this.#bytePtr !== this.#historyEnd) {
+      // Re-reading a byte already seen: escapes before it were skipped when it was first read.
+      const byte = this.#buffer[this.#bytePtr++];
+      if (byte == undefined) {
+        throw new Error("Attempted to read past end of buffer");
+      }
+      return byte;
     }
 
     // If the current byte is 0x03 and the last two bytes were zeros, skip over it
     if (this.#buffer[this.#bytePtr] === 0x03 && this.#lastTwoBytes === 0) {
       this.#bytePtr++;
       this.#ptr += 8; // Skip 8 bits in the bitstream
-      this.#lastTwoBytes = (this.#lastTwoBytes << 8) & 0xffff; // Shift in a zero to the last two bytes
+      this.#lastTwoBytes = 0x03;
     }
 
     const byte = this.#buffer[this.#bytePtr++];
     if (byte == undefined) {
       throw new Error("Attempted to read past end of buffer");
     }
-    // Update the last two bytes and return the current byte
     this.#lastTwoBytes = ((this.#lastTwoBytes << 8) | byte) & 0xffff;
+    this.#historyEnd = this.#bytePtr;
     return byte;
   }
 }

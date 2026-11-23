@@ -119,6 +119,14 @@ describe("SPS", () => {
     expect(sps.MIME()).toBe("avc1.42000A");
   });
 
+  it("Places constraint_set4/5 flags at bits 3 and 2 of the codec string", () => {
+    const NALU = createValidNALU();
+    NALU[2] = 0x0c; // constraint_set4_flag = constraint_set5_flag = 1
+    const sps = new SPS(new Uint8Array(NALU));
+    expect(sps.profileCompatibility()).toBe(0x0c);
+    expect(sps.MIME()).toBe("avc1.640C1E");
+  });
+
   it("Parses a real-world example SPS", () => {
     const NALU = createValidNALU();
     const sps = new SPS(new Uint8Array(NALU));

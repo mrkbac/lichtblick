@@ -353,7 +353,7 @@ export class SPS {
     v |= this.constraint_set2_flag << 5;
     v |= this.constraint_set3_flag << 4;
     v |= this.constraint_set4_flag << 3;
-    v |= this.constraint_set5_flag << 1;
+    v |= this.constraint_set5_flag << 2; // bits 1-0 are reserved_zero_2bits
     return v;
   }
 
