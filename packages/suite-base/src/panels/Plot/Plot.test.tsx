@@ -56,7 +56,8 @@ vi.mock("@lichtblick/suite-base/components/PanelToolbar", () => ({
 }));
 
 let mockLatestLegendProps: any;
-vi.mock("@lichtblick/suite-base/panels/Plot/PlotLegend", () => ({
+vi.mock("@lichtblick/suite-base/panels/Plot/PlotLegend", async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   PlotLegend: vi.fn(function (props) {
     mockLatestLegendProps = props;
     return <div data-testid="plot-legend" />;

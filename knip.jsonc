@@ -38,7 +38,6 @@
     },
     "benchmark": {
       "entry": [
-        "rspack.config.ts",
         // The web benchmark app, bundled by rspack.config.ts
         "src/index.tsx",
         // Bundled and run by ci/perf-budget.ts
@@ -50,11 +49,11 @@
       "rspack": false
     },
     "desktop": {
-      "entry": ["rspack.config.ts", "*/index.{ts,tsx}", "electronBuilderConfig.js"],
+      "entry": ["*/index.{ts,tsx}"],
       "rspack": false
     },
     "web": {
-      "entry": ["rspack.config.ts", "src/entrypoint.tsx"],
+      "entry": ["src/entrypoint.tsx"],
       "rspack": false
     },
     "packages/suite-base": {
@@ -79,7 +78,7 @@
       ]
     },
     "packages/suite-desktop": {
-      "entry": ["src/electronBuilderConfig.js", "src/afterPack.ts", "src/test/setup.ts"]
+      "entry": ["src/electronBuilderConfig.js", "src/test/setup.ts"]
     },
     "packages/suite-web": {
       // Loaded into the generated service worker by workbox importScripts (rspackConfigs.ts)

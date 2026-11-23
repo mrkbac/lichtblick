@@ -14,7 +14,6 @@ import {
 } from "@lichtblick/suite-base/components/MessagePipeline";
 import Sidebars from "@lichtblick/suite-base/components/Sidebars";
 import { SidebarItem } from "@lichtblick/suite-base/components/Sidebars/types";
-import { useCurrentUserType } from "@lichtblick/suite-base/context/CurrentUserContext";
 import { useEvents } from "@lichtblick/suite-base/context/EventsContext";
 import { useLayoutManager } from "@lichtblick/suite-base/context/LayoutManagerContext";
 import { usePlayerSelection } from "@lichtblick/suite-base/context/PlayerSelectionContext";
@@ -158,9 +157,6 @@ vi.mock("@lichtblick/suite-base/context/CurrentLayoutContext", () => ({
     setSelectedLayoutId: vi.fn(),
   }),
 }));
-vi.mock("@lichtblick/suite-base/context/CurrentUserContext", () => ({
-  useCurrentUserType: vi.fn(),
-}));
 vi.mock("@lichtblick/suite-base/context/EventsContext", () => ({
   useEvents: vi.fn(),
 }));
@@ -257,7 +253,6 @@ const mockWorkspaceActions = {
     left: { setOpen: vi.fn(), selectItem: vi.fn(), setSize: vi.fn() },
     right: { setOpen: vi.fn(), selectItem: vi.fn(), setSize: vi.fn() },
   },
-  openLayoutBrowser: vi.fn(),
 };
 
 describe("Workspace - alerts badge in leftSidebarItems", () => {
@@ -281,7 +276,6 @@ describe("Workspace - alerts badge in leftSidebarItems", () => {
     });
     (useHandleFiles as Mock).mockReturnValue({ handleFiles: vi.fn() });
     (useAppConfigurationValue as Mock).mockReturnValue([false]);
-    (useCurrentUserType as Mock).mockReturnValue("unauthenticated");
     (useEvents as Mock).mockImplementation(
       (selector: (store: { eventsSupported: boolean; selectEvent: Mock }) => unknown) =>
         selector({ eventsSupported: false, selectEvent: vi.fn() }),
@@ -396,7 +390,6 @@ describe("Workspace - session-based MCAP resolution", () => {
     });
     (useHandleFiles as Mock).mockReturnValue({ handleFiles: vi.fn() });
     (useAppConfigurationValue as Mock).mockReturnValue([false]);
-    (useCurrentUserType as Mock).mockReturnValue("unauthenticated");
     (useEvents as Mock).mockImplementation(
       (selector: (store: { eventsSupported: boolean; selectEvent: Mock }) => unknown) =>
         selector({ eventsSupported: false, selectEvent: vi.fn() }),
@@ -768,7 +761,6 @@ describe("Workspace - fetchLayoutFromUrl", () => {
     });
     (useHandleFiles as Mock).mockReturnValue({ handleFiles: vi.fn() });
     (useAppConfigurationValue as Mock).mockReturnValue([false]);
-    (useCurrentUserType as Mock).mockReturnValue("unauthenticated");
     (useEvents as Mock).mockImplementation(
       (selector: (store: { eventsSupported: boolean; selectEvent: Mock }) => unknown) =>
         selector({ eventsSupported: false, selectEvent: vi.fn() }),
@@ -996,6 +988,17 @@ describe("Workspace - fetchLayoutFromUrl", () => {
         "sample-demo",
         expect.objectContaining({ keepLayout: true }),
       );
+    });
+  });
+
+  it("replaces the layout from an earlier share link", async () => {
+    mockGetLayouts.mockResolvedValue([{ id: "old-id", name: "Shared layout" }]);
+    const encoded = await encodeSharedLayout({ configById: {} });
+
+    render(<Workspace deepLinks={[`lichtblick://open#layout=${encoded}`]} />);
+
+    await waitFor(() => {
+      expect(mockDeleteLayout).toHaveBeenCalledWith({ id: "old-id" });
     });
   });
 

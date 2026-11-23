@@ -15,7 +15,7 @@
     "name": "Lichtblick",
     "email": "lichtblick@bmwgroup.com"
   },
-  "homepage": "https://lichtblick-suite.github.io/docs/",
+  "homepage": "https://digitalis.marko.im/",
   "engines": {
     "node": ">=26"
   },
@@ -57,7 +57,6 @@
     "package:linux": "pnpm package --linux",
     "package": "electron-builder build --config desktop/electronBuilderConfig.js --publish never",
     "package:e2e": "pnpm install && pnpm clean && pnpm desktop:build:prod && pnpm package",
-    "release:bump-nightly-version": "node ./ci/bump-nightly-version.ts",
     "storybook": "storybook dev --port 9009 --config-dir .storybook",
     "storybook:build": "storybook build --config-dir .storybook --stats-json",
     "typecheck": "node ./node_modules/typescript7/bin/tsc --build --builders 1 tsconfig.json web/src/tsconfig.json desktop/tsconfig.json desktop/*/tsconfig.json benchmark/tsconfig.json benchmark/src/tsconfig.json"
@@ -69,7 +68,6 @@
     ]
   },
   "devDependencies": {
-    "@actions/exec": "3.0.0",
     "@biomejs/biome": "2.6.8",
     "@lichtblick/den": "workspace:*",
     "@lichtblick/tsconfig": "1.1.2",
@@ -93,7 +91,7 @@
     "eslint-plugin-tss-unused-classes": "1.0.4",
     "husky": "9.1.7",
     "jsdom": "31.0.1",
-    "knip": "6.47.0",
+    "knip": "6.48.0",
     "lint-staged": "17.6.2",
     "nearley": "2.20.1",
     "oxlint": "1.94.0",

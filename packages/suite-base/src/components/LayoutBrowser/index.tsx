@@ -26,8 +26,6 @@ import { useTranslation } from "react-i18next";
 
 import { useAsyncFn } from "@lichtblick/hooks";
 import Logger from "@lichtblick/log";
-import { AppSetting } from "@lichtblick/suite-base/AppSetting";
-import SignInPrompt from "@lichtblick/suite-base/components/LayoutBrowser/SignInPrompt";
 import { LayoutTemplateMenu } from "@lichtblick/suite-base/components/LayoutTemplates";
 import { SidebarContent } from "@lichtblick/suite-base/components/SidebarContent";
 import Stack from "@lichtblick/suite-base/components/Stack";
@@ -38,7 +36,6 @@ import {
   useCurrentLayoutSelector,
 } from "@lichtblick/suite-base/context/CurrentLayoutContext";
 import { LayoutData } from "@lichtblick/suite-base/context/CurrentLayoutContext/actions";
-import { useCurrentUser } from "@lichtblick/suite-base/context/CurrentUserContext";
 import { useLayoutManager } from "@lichtblick/suite-base/context/LayoutManagerContext";
 import { useOrganization } from "@lichtblick/suite-base/context/OrganizationContext";
 import {
@@ -46,7 +43,6 @@ import {
   useWorkspaceStore,
 } from "@lichtblick/suite-base/context/Workspace/WorkspaceContext";
 import { useWorkspaceActions } from "@lichtblick/suite-base/context/Workspace/useWorkspaceActions";
-import { useAppConfigurationValue } from "@lichtblick/suite-base/hooks/useAppConfigurationValue";
 import useCallbackWithToast from "@lichtblick/suite-base/hooks/useCallbackWithToast";
 import { useLayoutActions } from "@lichtblick/suite-base/hooks/useLayoutActions";
 import { useLayoutFavorites } from "@lichtblick/suite-base/hooks/useLayoutFavorites";
@@ -79,7 +75,6 @@ export default function LayoutBrowser({
 }>): React.JSX.Element {
   const { classes } = useStyles();
   const { t } = useTranslation("layoutTemplates");
-  const { signIn } = useCurrentUser();
   const { enqueueSnackbar } = useSnackbar();
   const layoutManager = useLayoutManager();
   const [prompt, promptModal] = usePrompt();
@@ -221,10 +216,6 @@ export default function LayoutBrowser({
     });
   }, [reloadLayouts]);
 
-  const [hideSignInPrompt = false, setHideSignInPrompt] = useAppConfigurationValue<boolean>(
-    AppSetting.HIDE_SIGN_IN_PROMPT,
-  );
-
   const { personal: personalExpanded, shared: sharedExpanded } = useWorkspaceStore(
     WorkspaceStoreSelectors.selectLayoutSectionExpanded,
   );
@@ -332,9 +323,6 @@ export default function LayoutBrowser({
     },
     [analytics, layoutManager, onSelectLayout, setPersonalSectionExpanded],
   );
-
-  const showSignInPrompt =
-    signIn != undefined && !layoutManager.supportsSharing && !hideSignInPrompt;
 
   const pendingMultiAction = state.multiAction?.ids != undefined;
 
@@ -495,7 +483,6 @@ export default function LayoutBrowser({
             items={sortedLayouts?.shared}
           />
         )}
-        {showSignInPrompt && <SignInPrompt onDismiss={() => void setHideSignInPrompt(true)} />}
       </Stack>
     </SidebarContent>
   );

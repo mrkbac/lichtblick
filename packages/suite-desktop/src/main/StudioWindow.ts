@@ -62,7 +62,7 @@ function getTitleBarOverlayOptions(): TitleBarOverlayOptions {
   return {};
 }
 
-function newStudioWindow(deepLinks: string[] = [], reloadMainWindow: () => void): BrowserWindow {
+function newStudioWindow(deepLinks: string[] = []): BrowserWindow {
   const preloadPath = path.join(app.getAppPath(), "main", "preload.js");
 
   const macTrafficLightInset =
@@ -122,13 +122,6 @@ function newStudioWindow(deepLinks: string[] = [], reloadMainWindow: () => void)
   browserWindow.addListener("leave-full-screen", () => {
     browserWindow.webContents.send("leave-full-screen");
   });
-  browserWindow.addListener("maximize", () => {
-    browserWindow.webContents.send("maximize");
-  });
-
-  browserWindow.addListener("unmaximize", () => {
-    browserWindow.webContents.send("unmaximize");
-  });
 
   browserWindow.webContents.once("dom-ready", () => {
     // Skip when a debugger already drives the app (Playwright): docked DevTools halve the page
@@ -136,7 +129,6 @@ function newStudioWindow(deepLinks: string[] = [], reloadMainWindow: () => void)
     if (!isProduction && !app.commandLine.hasSwitch("remote-debugging-port")) {
       browserWindow.webContents.openDevTools();
     }
-    browserWindow.webContents.send(browserWindow.isMaximized() ? "maximize" : "unmaximize");
   });
 
   // Open all new windows in an external browser
@@ -177,22 +169,6 @@ function newStudioWindow(deepLinks: string[] = [], reloadMainWindow: () => void)
         }
         break;
       }
-      case "minimizeWindow":
-        browserWindow.minimize();
-        break;
-      case "maximizeWindow":
-        browserWindow.maximize();
-        break;
-      case "unmaximizeWindow":
-        browserWindow.unmaximize();
-        break;
-      case "closeWindow":
-        browserWindow.close();
-        break;
-      case "reloadMainWindow":
-        log.info("reloading main window");
-        reloadMainWindow();
-        break;
       default:
         break;
     }
@@ -422,25 +398,8 @@ class StudioWindow {
     return StudioWindow.#windowsByContentId.get(id);
   }
 
-  #reloadMainWindow(): void {
-    const windowWasMaximized = this.#browserWindow.isMaximized();
-    this.#browserWindow.close();
-    this.#browserWindow.destroy();
-
-    const [newWindow, newMenu] = this.#buildBrowserWindow();
-    this.#browserWindow = newWindow;
-    this.#menu = newMenu;
-    this.load();
-
-    if (windowWasMaximized) {
-      this.#browserWindow.maximize();
-    }
-  }
-
   #buildBrowserWindow(): [BrowserWindow, Menu] {
-    const browserWindow = newStudioWindow(this.#deepLinks, () => {
-      this.#reloadMainWindow();
-    });
+    const browserWindow = newStudioWindow(this.#deepLinks);
     const newMenu = buildMenu(browserWindow);
     const id = browserWindow.webContents.id;
 

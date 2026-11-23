@@ -458,7 +458,7 @@ export default class UserScriptPlayer implements Player {
 
   public setGlobalVariables(globalVariables: GlobalVariables): void {
     this.#globalVariables = globalVariables;
-    this.#player.setGlobalVariables(globalVariables);
+    this.#player.setGlobalVariables?.(globalVariables);
   }
 
   // Called when userScript state is updated (i.e. scripts are saved)
@@ -1875,7 +1875,7 @@ export default class UserScriptPlayer implements Player {
   }
 
   public setPublishers(publishers: AdvertiseOptions[]): void {
-    this.#player.setPublishers(publishers);
+    this.#player.setPublishers?.(publishers);
   }
 
   public setParameter(key: string, value: ParameterValue): void {

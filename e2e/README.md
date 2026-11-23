@@ -108,35 +108,9 @@ install-multiple-extensions.web.spec.ts;
   └── global-teardown.ts             # Cleanup after testing (clear DB, stored files, etc.)
 ```
 
-## AI-Assisted Test Authoring with Playwright MCP
+## Selector discovery with Playwright MCP
 
-The project integrates the [Playwright MCP server](https://github.com/microsoft/playwright-mcp) to enable AI agents (GitHub Copilot, Claude) to assist with E2E test development.
-
-### How It Works
-
-The Playwright MCP server exposes browser automation as MCP tools that AI agents can invoke. Instead of screenshots, the server captures structured **accessibility snapshots** (ARIA roles, names, test IDs) that LLMs reason about deterministically. This produces reliable, maintainable selectors.
-
-### Prerequisites
-
-- VS Code with [GitHub Copilot](https://marketplace.visualstudio.com/items?itemName=GitHub.copilot) extension
-- Copilot agent mode enabled (VS Code 1.99+)
-- The `.mcp.json` file at the repo root configures the Playwright MCP server. It is recognized by VS Code Copilot, Claude Code, Cursor, and other MCP-compatible tools.
-
-### Workflow
-
-1. Start the web app: `pnpm web:serve`
-2. Open VS Code agent mode (Copilot Chat) and invoke `@lb-e2e-test`
-3. The MCP server starts automatically and opens a Chromium browser
-4. Ask the agent to navigate to `http://localhost:8080` and explore the UI
-5. The agent captures accessibility snapshots to identify selectors
-6. Ask the agent to generate test scaffolds following the project conventions
-7. Review the generated test, add meaningful assertions, and refine
-
-### Limitations
-
-- Use the MCP server for selector discovery and test scaffolding.
-- AI-generated tests require human review for correctness and meaningful assertions.
-- MCP server is a development-time tool only — it does not affect CI/CD.
+`.mcp.json` at the repo root configures the [Playwright MCP server](https://github.com/microsoft/playwright-mcp) for MCP-capable agents. With `pnpm web:serve` running, an agent can open `http://localhost:8080`, read accessibility snapshots to find stable selectors, and scaffold tests that follow the conventions above. Review generated tests and add meaningful assertions.
 
 ## Page Object Models (POMs)
 

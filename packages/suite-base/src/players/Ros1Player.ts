@@ -593,11 +593,6 @@ export default class Ros1Player implements Player {
     throw new Error("Service calls are not supported by this data source");
   }
 
-  // Bunch of unsupported stuff. Just don't do anything for these.
-  public setGlobalVariables(): void {
-    // no-op
-  }
-
   public getBatchIterator(): undefined {
     // Ros1Player does not support batch iteration
     return undefined;

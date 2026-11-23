@@ -182,7 +182,7 @@ function PlotLegendComponent(props: Props): React.JSX.Element {
       // Emitted on every downsample, usually with the same (empty) list; keep the old array so
       // the legend and all its rows don't re-render.
       setPathsWithMismatchedDataLengths((prev) =>
-        prev.length === newPaths.length && sameValues(prev, newPaths) ? prev : newPaths.slice(),
+        sameValues(prev, newPaths) ? prev : newPaths.slice(),
       );
     };
     coordinator.on("pathsWithMismatchedDataLengthsChanged", handler);
@@ -203,7 +203,7 @@ function PlotLegendComponent(props: Props): React.JSX.Element {
       // Emitted every frame; keep the old array when no value changed, so the legend doesn't re-render.
       setCurrentValuesBySeriesIndex((prev) =>
         // An index loop, not every(): every() skips holes, which mark series without a value.
-        prev?.length === values.length && sameValues(prev, values) ? prev : values.slice(),
+        prev && sameValues(prev, values) ? prev : values.slice(),
       );
     };
     coordinator.on("currentValuesChanged", handler);
@@ -304,7 +304,11 @@ function PlotLegendComponent(props: Props): React.JSX.Element {
 
 export const PlotLegend = React.memo(PlotLegendComponent);
 
-function sameValues(a: readonly unknown[], b: readonly unknown[]): boolean {
+/** Same length and the same values (`Object.is`), holes included. */
+export function sameValues(a: readonly unknown[], b: readonly unknown[]): boolean {
+  if (a.length !== b.length) {
+    return false;
+  }
   for (let i = 0; i < b.length; i++) {
     if (!Object.is(a[i], b[i])) {
       return false;

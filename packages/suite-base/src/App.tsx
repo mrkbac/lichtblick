@@ -22,7 +22,6 @@ import UserProfileLocalStorageProvider from "@lichtblick/suite-base/providers/Us
 import { LayoutLoader } from "@lichtblick/suite-base/services/ILayoutLoader";
 
 import Workspace from "./Workspace";
-import { CustomWindowControlsProps } from "./components/AppBar/CustomWindowControls";
 import { ColorSchemeThemeProvider } from "./components/ColorSchemeThemeProvider";
 import CssBaseline from "./components/CssBaseline";
 import DocumentTitleAdapter from "./components/DocumentTitleAdapter";
@@ -42,7 +41,7 @@ import PanelCatalogProvider from "./providers/PanelCatalogProvider";
 import { LaunchPreference } from "./screens/LaunchPreference";
 import { IExtensionLoader } from "./services/extension/IExtensionLoader";
 
-export type AppProps = CustomWindowControlsProps & {
+export type AppProps = {
   appConfiguration: IAppConfiguration;
   appParameters: AppParametersInput;
   dataSources: IDataSourceFactory[];
@@ -148,12 +147,6 @@ export function App(props: AppProps): React.JSX.Element {
                         deepLinks={deepLinks}
                         appBarLeftInset={props.appBarLeftInset}
                         onAppBarDoubleClick={props.onAppBarDoubleClick}
-                        showCustomWindowControls={props.showCustomWindowControls}
-                        isMaximized={props.isMaximized}
-                        onMinimizeWindow={props.onMinimizeWindow}
-                        onMaximizeWindow={props.onMaximizeWindow}
-                        onUnmaximizeWindow={props.onUnmaximizeWindow}
-                        onCloseWindow={props.onCloseWindow}
                       />
                     </PanelCatalogProvider>
                   </Suspense>
