@@ -22,6 +22,15 @@ export function connectionRecentArgs(
   return { type: "connection", params, urls };
 }
 
+/** The URLs a connection reads: its list, or else its typed `url` param */
+export function urlsOf(args: {
+  urls?: readonly string[];
+  params?: Record<string, string | undefined>;
+}): readonly string[] {
+  const url = args.params?.url;
+  return args.urls ?? (url == undefined ? [] : [url]);
+}
+
 /** Reopens a file recent as it was opened: compared side by side when it was */
 export function recentArgs(recent: FileRecent): Extract<DataSourceArgs, { type: "file" }> {
   return { type: "file", handles: recent.handles, compare: recent.compare };

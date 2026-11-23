@@ -10,7 +10,7 @@ import {
   IDataSourceFactory,
   DataSourceFactoryInitializeArgs,
 } from "@lichtblick/suite-base/context/PlayerSelectionContext";
-import { loadIterablePlayer, prefetch } from "@lichtblick/suite-base/dataSources/playerModules";
+import { loadIterablePlayer } from "@lichtblick/suite-base/dataSources/playerModules";
 import { Player } from "@lichtblick/suite-base/players/types";
 
 class Ros2LocalBagDataSourceFactory implements IDataSourceFactory {
@@ -21,9 +21,7 @@ class Ros2LocalBagDataSourceFactory implements IDataSourceFactory {
   public supportedFileTypes = [AllowedFileExtensions.DB3];
   public supportsMultiFile = true;
 
-  public prefetch = (): void => {
-    prefetch(loadIterablePlayer);
-  };
+  public prefetch = loadIterablePlayer;
 
   public async initialize(args: DataSourceFactoryInitializeArgs): Promise<Player | undefined> {
     const { IterablePlayer, WorkerSerializedIterableSource } = await loadIterablePlayer();
