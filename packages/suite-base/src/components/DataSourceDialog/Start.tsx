@@ -30,6 +30,11 @@ import { CatalogRecording } from "@lichtblick/suite-base/components/Catalog/type
 import { useCatalogFolder } from "@lichtblick/suite-base/components/Catalog/useCatalogFolder";
 import DontShowThisAgainCheckbox from "@lichtblick/suite-base/components/DataSourceDialog/DontShowThisAgainCheckbox";
 import { OpenUrlInput } from "@lichtblick/suite-base/components/DataSourceDialog/OpenUrlInput";
+import {
+  DEFAULT_CATALOG,
+  SavedCatalogs,
+  useSavedCatalogs,
+} from "@lichtblick/suite-base/components/DataSourceDialog/SavedCatalogs";
 import { useStyles } from "@lichtblick/suite-base/components/DataSourceDialog/index.style";
 import { LiveRecordingsList } from "@lichtblick/suite-base/components/LiveRecordingsList";
 import { usePanelGuideStore } from "@lichtblick/suite-base/components/PanelDocs/PanelGuide";
@@ -50,7 +55,6 @@ const RECENTS_PREVIEW_COUNT = 5;
 
 type View = "all" | "catalog" | "recent" | "recordings";
 type Kind = "all" | "file" | "remote" | "live";
-type CatalogView = "list" | "grid" | "map";
 
 function recentKind(recent: RecentSource): Exclude<Kind, "all"> {
   if (recent.type === "file") {
@@ -85,7 +89,27 @@ export default function Start(): React.JSX.Element {
   const [kindFilter, setKind] = useState<Kind>("all");
   // The kind filter belongs to the Recent tab; All shows every kind.
   const kind = view === "recent" ? kindFilter : "all";
-  const [catalogView, setCatalogView] = useState<CatalogView>("list");
+  const [sources, setSources] = useSavedCatalogs();
+  const [selectedCatalog, setSelectedCatalog] = useState(
+    () => sources.find((source) => source.hidden !== true)?.id ?? "",
+  );
+  const [visitedCatalogs, setVisitedCatalogs] = useState<ReadonlySet<string>>(() => new Set());
+  const selectCatalog = (id: string) => {
+    setSelectedCatalog(id);
+    setVisitedCatalogs((previous) => new Set([...previous, id]));
+    setQuery("");
+  };
+  const openCatalog = (url: string) => {
+    const existing = sources.find((source) => source.kind === "remote" && source.url === url);
+    const id = existing?.id ?? crypto.randomUUID();
+    setSources((previous) =>
+      existing
+        ? previous.map((source) => (source.id === id ? { ...source, hidden: false } : source))
+        : [...previous, { id, kind: "remote", url }],
+    );
+    selectCatalog(id);
+    setView("catalog");
+  };
 
   const catalogByName = useMemo(
     // ponytail: matches by file name only; the first recording wins when names repeat
@@ -132,13 +156,14 @@ export default function Start(): React.JSX.Element {
   const showRecents =
     (view === "all" || view === "recent") &&
     (filteredRecents.length > 0 || (searching && recentSources.length > 0));
-  const showCatalog = view === "catalog" || (view === "all" && (kind === "all" || kind === "file"));
+  const showOverview =
+    view === "all" && sources.find((source) => source.id === DEFAULT_CATALOG)?.hidden !== true;
 
   // Enter in the search box opens the first recent listed, else the first catalog match.
   // ponytail: the catalog's first match is in folder order, not the catalog's current sort
   const topRecent = showRecents && query.trim() !== "" ? visibleRecents[0] : undefined;
   const topRecording =
-    !topRecent && showCatalog && query.trim() !== ""
+    !topRecent && showOverview && query.trim() !== ""
       ? filterRecordings(folder.recordings, query)[0]
       : undefined;
   const topMatch = topRecent
@@ -159,6 +184,7 @@ export default function Start(): React.JSX.Element {
         onChange={setQuery}
         topMatch={topMatch}
         onOpenTopMatch={openTopMatch}
+        onOpenCatalog={openCatalog}
       />
 
       {/* What to show on the left; the controls for that view on the right. */}
@@ -180,23 +206,6 @@ export default function Start(): React.JSX.Element {
           <ToggleButton value="recordings">{t("tabRecordings")}</ToggleButton>
         </ToggleButtonGroup>
         <div className={classes.spacer} />
-        {((view === "catalog" && folder.name != undefined) || view === "recordings") && (
-          <ToggleButtonGroup
-            exclusive
-            size="small"
-            value={catalogView}
-            onChange={(_event, value: CatalogView | null) => {
-              if (value) {
-                setCatalogView(value);
-              }
-            }}
-            aria-label={t("catalogView")}
-          >
-            <ToggleButton value="list">{t("catalogList")}</ToggleButton>
-            <ToggleButton value="grid">{t("catalogGrid")}</ToggleButton>
-            <ToggleButton value="map">{t("catalogMap")}</ToggleButton>
-          </ToggleButtonGroup>
-        )}
         {view === "recent" && (
           <ToggleButtonGroup
             exclusive
@@ -322,18 +331,32 @@ export default function Start(): React.JSX.Element {
         <LiveRecordingsList
           query={query}
           onQueryChange={setQuery}
-          view={catalogView}
           lastOpenedByName={lastOpenedByName}
         />
       )}
 
-      {showCatalog && (
+      <Stack flex="1" style={{ minHeight: 0, display: view === "catalog" ? "flex" : "none" }}>
+        <SavedCatalogs
+          sources={sources}
+          selected={selectedCatalog}
+          select={selectCatalog}
+          setSources={setSources}
+          visited={visitedCatalogs}
+          folder={folder}
+          visible={view === "catalog"}
+          query={query}
+          lastOpenedByName={lastOpenedByName}
+          onQueryChange={setQuery}
+        />
+      </Stack>
+      {showOverview && (
         <Catalog
           folder={folder}
           query={query}
           lastOpenedByName={lastOpenedByName}
           onQueryChange={setQuery}
-          view={view === "catalog" ? catalogView : "list"}
+          view="list"
+          sections={false}
         />
       )}
 

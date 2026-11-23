@@ -21,6 +21,14 @@ describe("parseCatalog", () => {
             thumbnail: "a.jpg",
             layout: "/layouts/a.json",
             description: "CC BY 4.0",
+            dataset: "Outdoor",
+            device: "Unit 1",
+            session: "Run 1",
+            episode: "Approach",
+            events: [
+              { name: "Stop", start: "2026-10-01T10:00:00.587056791Z" },
+              { name: "Invalid", start: 1 },
+            ],
           },
           {
             id: "b",
@@ -44,6 +52,11 @@ describe("parseCatalog", () => {
       thumbnail: "https://example.com/samples/a.jpg",
       layoutUrl: "https://example.com/layouts/a.json",
       description: "CC BY 4.0",
+      dataset: "Outdoor",
+      machine: "Unit 1",
+      session: "Run 1",
+      episode: "Approach",
+      events: [{ name: "Stop", start: { sec: 1790848800, nsec: 587056791 } }],
     });
     expect(catalog.recordings[1]).toMatchObject({
       name: "Live",

@@ -27,7 +27,7 @@ const LAST_FOLDER_KEY = "last";
 
 const CONCURRENCY = 4;
 // Bump when CatalogSummary gains fields, so cached summaries are read again.
-const CACHE_VERSION = 6;
+const CACHE_VERSION = 7;
 
 function isMcap(name: string): boolean {
   return name.toLowerCase().endsWith(".mcap");
@@ -97,12 +97,21 @@ export function listInputFiles(fileList: Iterable<File>): FolderFile[] {
     }));
 }
 
-export async function saveLastFolder(dir: FileSystemDirectoryHandle): Promise<void> {
-  await folderStore.set(LAST_FOLDER_KEY, dir);
+export async function saveLastFolder(
+  dir: FileSystemDirectoryHandle,
+  slot = LAST_FOLDER_KEY,
+): Promise<void> {
+  await folderStore.set(slot, dir);
 }
 
-export async function loadLastFolder(): Promise<FileSystemDirectoryHandle | undefined> {
-  return await folderStore.get<FileSystemDirectoryHandle>(LAST_FOLDER_KEY);
+export async function loadLastFolder(
+  slot = LAST_FOLDER_KEY,
+): Promise<FileSystemDirectoryHandle | undefined> {
+  return await folderStore.get<FileSystemDirectoryHandle>(slot);
+}
+
+export async function forgetCatalogFolder(slot: string): Promise<void> {
+  await folderStore.delete(slot);
 }
 
 async function indexFile(

@@ -7,8 +7,7 @@ import { useAppLaunch } from "@lichtblick/suite-base/util/appLaunch";
 import { toError } from "@lichtblick/suite-base/util/toError";
 
 import { CatalogError, ServedCatalog, parseCatalog } from "./catalogUrl";
-import { CatalogRecording } from "./types";
-import { CatalogFolder } from "./useCatalogFolder";
+import { CatalogBackend, CatalogRecording } from "./types";
 
 /** A name for the catalog until it loads; a URL that doesn't parse fails in the fetch instead. */
 function hostOf(url: string): string {
@@ -20,10 +19,11 @@ function hostOf(url: string): string {
 }
 
 /** The recordings a catalog URL lists, opened from their URLs with their layouts. */
-export function useCatalogUrl(url: string): CatalogFolder {
+export function useCatalogUrl(url: string): CatalogBackend {
   const { t } = useTranslation("catalog");
   const [catalog, setCatalog] = useState<ServedCatalog>();
   const [error, setError] = useState<string>();
+  const [revision, setRevision] = useState(0);
   const launch = useAppLaunch((state) => state.launch);
 
   useEffect(() => {
@@ -33,11 +33,14 @@ export function useCatalogUrl(url: string): CatalogFolder {
     void (async () => {
       try {
         const response = await fetch(url, { signal: controller.signal });
+        controller.signal.throwIfAborted();
         if (!response.ok) {
           setError(t("catalogHttpError", { status: response.status }));
           return;
         }
-        setCatalog(parseCatalog(await response.json(), response.url || url));
+        const json: unknown = await response.json();
+        controller.signal.throwIfAborted();
+        setCatalog(parseCatalog(json, response.url || url));
       } catch (err) {
         if (controller.signal.aborted) {
           return;
@@ -53,14 +56,17 @@ export function useCatalogUrl(url: string): CatalogFolder {
     return () => {
       controller.abort();
     };
-  }, [url, t]);
+  }, [url, t, revision]);
 
   return useMemo(
-    (): CatalogFolder => ({
+    (): CatalogBackend => ({
       name: catalog?.name ?? hostOf(url),
       recordings: catalog?.recordings ?? [],
       progress: catalog == undefined && error == undefined ? { done: 0, total: 1 } : undefined,
       error,
+      rescan: async () => {
+        setRevision((previous) => previous + 1);
+      },
       open: async ({ source, layoutUrl, name }: CatalogRecording) => {
         if (source.type !== "local-file") {
           // The name titles the window and recents instead of the URL
@@ -70,11 +76,6 @@ export function useCatalogUrl(url: string): CatalogFolder {
       loadPreview: async () => {
         throw new Error("Catalog URL recordings have no preview clips");
       },
-      reopenLastFolder: async () => {},
-      dropFolder: () => false,
-      accessDenied: false,
-      pickerClosed: false,
-      pickFolderWithInput: () => {},
     }),
     [catalog, error, url, launch],
   );
