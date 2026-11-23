@@ -171,7 +171,8 @@ describe("MarkerBatches", () => {
     topic.startFrame(0n, "map", "map");
 
     const meshes = instanced().filter(
-      (object): object is THREE.InstancedMesh => object instanceof THREE.InstancedMesh,
+      (object): object is THREE.InstancedMesh<THREE.BufferGeometry, THREE.MeshStandardMaterial> =>
+        object instanceof THREE.InstancedMesh,
     );
     expect(meshes.map((mesh) => [mesh.count, mesh.material.opacity]).sort()).toEqual([
       [1, 0.25],
