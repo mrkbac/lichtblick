@@ -100,7 +100,11 @@ export async function buildContributionPoints(
         log.debug(
           `Extension ${extension.qualifiedName} registering topic converter to: ${converter.outputTopic}`,
         );
-        topicConverters.push({ extensionId: extension.id, converter });
+        topicConverters.push({
+          extensionId: extension.id,
+          extensionNamespace: extension.namespace,
+          converter,
+        });
         return;
       }
       // Foxglove's schema converters are Lichtblick converters plus `type: "schema"`.
@@ -124,13 +128,21 @@ export async function buildContributionPoints(
     },
 
     registerTopicAliases: (aliasFunction: TopicAliasFunction) => {
-      topicAliasFunctions.push({ aliasFunction, extensionId: extension.id });
+      topicAliasFunctions.push({
+        aliasFunction,
+        extensionId: extension.id,
+        extensionNamespace: extension.namespace,
+      });
     },
 
     registerCameraModel({ name, modelBuilder }: RegisterCameraModelArgs) {
       log.debug(`Extension ${extension.qualifiedName} registering camera model: ${name}`);
 
-      cameraModels.set(name, { extensionId: extension.id, modelBuilder });
+      cameraModels.set(name, {
+        extensionId: extension.id,
+        extensionNamespace: extension.namespace,
+        modelBuilder,
+      });
     },
   };
 

@@ -5,5 +5,5 @@ import { CameraModelBuilder } from "@lichtblick/suite";
 
 export type CameraModelsMap = Map<
   string,
-  { extensionId: string; modelBuilder: CameraModelBuilder }
+  { extensionId: string; extensionNamespace?: string; modelBuilder: CameraModelBuilder }
 >;

@@ -21,7 +21,6 @@ import {
   LoadExtensionsResult,
 } from "@lichtblick/suite-base/context/ExtensionCatalogContext";
 import {
-  extensionUniqueKey,
   tryInstallSingleLoader,
   removeExtensionData,
 } from "@lichtblick/suite-base/providers/ExtensionCatalogProvider/utils";
@@ -181,33 +180,26 @@ function createExtensionRegistryStore(
         cameraModels,
       }: ContributionPoints,
     ) => {
-      // A reinstall (e.g. an update) replaces everything the old version contributed; appending
-      // would keep the old converters and aliases running ahead of the new ones
-      const notOld = ({ extensionId }: { extensionId?: string }) => extensionId !== info.id;
-      set((state) => ({
-        installedExtensions: _.uniqBy(
-          [info, ...(state.installedExtensions ?? [])],
-          extensionUniqueKey,
-        ),
-        installedPanels: { ..._.pickBy(state.installedPanels, notOld), ...panels },
-        installedMessageConverters: withBuiltinConverters([
-          ...state.installedMessageConverters!.filter(notOld),
-          ...messageConverters,
-        ]),
-        installedTopicAliasFunctions: [
-          ...state.installedTopicAliasFunctions!.filter(notOld),
-          ...topicAliasFunctions,
-        ],
-        installedTopicConverters: [
-          ...state.installedTopicConverters.filter(notOld),
-          ...topicConverters,
-        ],
-        panelSettings: { ...state.panelSettings, ...panelSettings },
-        installedCameraModels: new Map([
-          ...[...state.installedCameraModels].filter(([, model]) => notOld(model)),
-          ...Array.from(cameraModels.entries()),
-        ]),
-      }));
+      // A reinstall (e.g. an update) replaces everything that namespace's old version contributed;
+      // appending would keep the old converters and aliases running ahead of the new ones
+      set((state) => {
+        const rest = removeExtensionData({ id: info.id, namespace: info.namespace, state });
+        return {
+          installedExtensions: [info, ...(rest.installedExtensions ?? [])],
+          installedPanels: { ...rest.installedPanels, ...panels },
+          installedMessageConverters: withBuiltinConverters([
+            ...rest.installedMessageConverters!,
+            ...messageConverters,
+          ]),
+          installedTopicAliasFunctions: [
+            ...rest.installedTopicAliasFunctions!,
+            ...topicAliasFunctions,
+          ],
+          installedTopicConverters: [...rest.installedTopicConverters, ...topicConverters],
+          panelSettings: { ...state.panelSettings, ...panelSettings },
+          installedCameraModels: new Map([...rest.installedCameraModels, ...cameraModels]),
+        };
+      });
     };
 
     // Loads and registers a single extension from one loader into the shared
@@ -369,7 +361,7 @@ function createExtensionRegistryStore(
       set((state) => {
         const remaining = removeExtensionData({
           id: extension.id,
-          namespace: extension.namespace!,
+          namespace: extension.namespace,
           state,
         });
         // a built-in converter the removed extension overrode takes over again

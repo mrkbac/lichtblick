@@ -479,7 +479,11 @@ describe("ExtensionCatalogProvider", () => {
     });
     expect(result.current.installedTopicAliasFunctions?.length).toBe(1);
     expect(result.current.installedTopicAliasFunctions).toEqual([
-      { extensionId: extension.id, aliasFunction: expect.any(Function) },
+      {
+        extensionId: extension.id,
+        extensionNamespace: extension.namespace,
+        aliasFunction: expect.any(Function),
+      },
     ]);
   });
 
@@ -521,8 +525,16 @@ describe("ExtensionCatalogProvider", () => {
     });
     expect(result.current.installedTopicAliasFunctions?.length).toBe(2);
     expect(result.current.installedTopicAliasFunctions).toEqual([
-      { extensionId: extension.id, aliasFunction: expect.any(Function) },
-      { extensionId: extension.id, aliasFunction: expect.any(Function) },
+      {
+        extensionId: extension.id,
+        extensionNamespace: extension.namespace,
+        aliasFunction: expect.any(Function),
+      },
+      {
+        extensionId: extension.id,
+        extensionNamespace: extension.namespace,
+        aliasFunction: expect.any(Function),
+      },
     ]);
   });
 
@@ -570,10 +582,12 @@ describe("ExtensionCatalogProvider", () => {
     expect(result.current.installedCameraModels.size).toEqual(2);
     expect(result.current.installedCameraModels.get(cameraModel1)).toEqual({
       extensionId: extension.id,
+      extensionNamespace: extension.namespace,
       modelBuilder: expect.any(Function),
     });
     expect(result.current.installedCameraModels.get(cameraModel2)).toEqual({
       extensionId: extension.id,
+      extensionNamespace: extension.namespace,
       modelBuilder: expect.any(Function),
     });
   });
@@ -939,36 +953,47 @@ describe("ExtensionCatalogProvider", () => {
       });
     });
 
-    it("replaces the old version's converters and aliases on reinstall", async () => {
+    it("replaces only the reinstalled namespace's converters and aliases", async () => {
       const { result, extensionInfo } = await setup();
-      const contributions = (): ContributionPoints => ({
+      const orgInfo = { ...extensionInfo, namespace: "org" as const };
+      const contributions = (info: ExtensionInfo): ContributionPoints => ({
         messageConverters: [
           {
             fromSchemaName: "a",
             toSchemaName: "b",
             converter: vi.fn(),
-            extensionId: extensionInfo.id,
-            extensionNamespace: extensionInfo.namespace,
+            extensionId: info.id,
+            extensionNamespace: info.namespace,
           },
         ],
         cameraModels: new Map(),
-        topicAliasFunctions: [{ extensionId: extensionInfo.id, aliasFunction: vi.fn() }],
+        topicAliasFunctions: [
+          { extensionId: info.id, extensionNamespace: info.namespace, aliasFunction: vi.fn() },
+        ],
         topicConverters: [],
         panelSettings: {},
         panels: {},
       });
-      const v1 = contributions();
-      const v2 = contributions();
+      const org = contributions(orgInfo);
+      const v1 = contributions(extensionInfo);
+      const v2 = contributions(extensionInfo);
 
       act(() => {
+        result.current.mergeState(orgInfo, org);
         result.current.mergeState(extensionInfo, v1);
       });
       act(() => {
         result.current.mergeState({ ...extensionInfo, version: "2.0.0" }, v2);
       });
 
-      expect(extensionConverters(result.current)).toEqual([v2.messageConverters[0]]);
-      expect(result.current.installedTopicAliasFunctions).toEqual(v2.topicAliasFunctions);
+      expect(extensionConverters(result.current)).toEqual([
+        org.messageConverters[0],
+        v2.messageConverters[0],
+      ]);
+      expect(result.current.installedTopicAliasFunctions).toEqual([
+        ...org.topicAliasFunctions,
+        ...v2.topicAliasFunctions,
+      ]);
     });
 
     it("should add an entry for the same extension id installed in a different namespace", async () => {

@@ -11,32 +11,16 @@ import { SingleLoaderInstallResult } from "@lichtblick/suite-base/providers/Exte
 import { buildContributionPoints } from "@lichtblick/suite-base/providers/helpers/buildContributionPoints";
 import { IExtensionLoader } from "@lichtblick/suite-base/services/extension/IExtensionLoader";
 import { Namespace } from "@lichtblick/suite-base/types";
-import { ExtensionInfo } from "@lichtblick/suite-base/types/Extensions";
 import { toError } from "@lichtblick/suite-base/util/toError";
 
-// Unique key combining id and namespace to allow the same extension to exist
-// in multiple scopes simultaneously.
-export function extensionUniqueKey(ext: ExtensionInfo): string {
-  return `${ext.id}-${ext.namespace}`;
+/** Matches what one installed extension contributed: the same id can be installed in several
+ * namespaces, and each namespace's copy owns its own contributions. */
+export function contributedBy(id: string, namespace: Namespace | undefined) {
+  return (entry: { extensionId?: string; extensionNamespace?: string }): boolean =>
+    entry.extensionId === id && entry.extensionNamespace === namespace;
 }
 
-export function removeExtensionData({
-  id, // deleted extension id
-  namespace, // deleted extension namespace
-  state,
-}: {
-  id: string;
-  namespace: Namespace;
-  state: Pick<
-    ExtensionCatalog,
-    | "installedExtensions"
-    | "installedPanels"
-    | "installedMessageConverters"
-    | "installedTopicAliasFunctions"
-    | "installedTopicConverters"
-    | "installedCameraModels"
-  >;
-}): Pick<
+type ContributionState = Pick<
   ExtensionCatalog,
   | "installedExtensions"
   | "installedPanels"
@@ -44,39 +28,29 @@ export function removeExtensionData({
   | "installedTopicAliasFunctions"
   | "installedTopicConverters"
   | "installedCameraModels"
-> {
-  const {
-    installedExtensions,
-    installedPanels,
-    installedMessageConverters,
-    installedTopicAliasFunctions,
-    installedTopicConverters,
-    installedCameraModels,
-  } = state;
+>;
 
-  const remainingExtensions = installedExtensions?.filter(
-    (ext) => !(ext.id === id && ext.namespace === namespace),
-  );
-
-  const stillInstalledElsewhere = remainingExtensions?.some((ext) => ext.id === id) ?? false;
-
+export function removeExtensionData({
+  id, // deleted extension id
+  namespace, // deleted extension namespace
+  state,
+}: {
+  id: string;
+  namespace: Namespace | undefined;
+  state: ContributionState;
+}): ContributionState {
+  const keep = _.negate(contributedBy(id, namespace));
   return {
-    installedExtensions: remainingExtensions,
-    installedPanels: stillInstalledElsewhere
-      ? installedPanels
-      : _.pickBy(installedPanels, ({ extensionId }) => extensionId !== id),
-    installedMessageConverters: stillInstalledElsewhere
-      ? installedMessageConverters
-      : installedMessageConverters?.filter(({ extensionId }) => extensionId !== id),
-    installedTopicAliasFunctions: stillInstalledElsewhere
-      ? installedTopicAliasFunctions
-      : installedTopicAliasFunctions?.filter(({ extensionId }) => extensionId !== id),
-    installedTopicConverters: stillInstalledElsewhere
-      ? installedTopicConverters
-      : installedTopicConverters.filter(({ extensionId }) => extensionId !== id),
-    installedCameraModels: stillInstalledElsewhere
-      ? installedCameraModels
-      : new Map([...installedCameraModels].filter(([, { extensionId }]) => extensionId !== id)),
+    installedExtensions: state.installedExtensions?.filter(
+      (ext) => !(ext.id === id && ext.namespace === namespace),
+    ),
+    installedPanels: _.pickBy(state.installedPanels, keep),
+    installedMessageConverters: state.installedMessageConverters?.filter(keep),
+    installedTopicAliasFunctions: state.installedTopicAliasFunctions?.filter(keep),
+    installedTopicConverters: state.installedTopicConverters.filter(keep),
+    installedCameraModels: new Map(
+      [...state.installedCameraModels].filter(([, model]) => keep(model)),
+    ),
   };
 }
 export async function tryInstallSingleLoader(

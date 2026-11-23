@@ -244,6 +244,9 @@ export default function Table({
   const rowCount = Array.isArray(value) || isTypedArray(value) ? value.length : 1;
   // Stay on the last page when the rows shrink below the current one
   const pageIndex = Math.min(requestedPageIndex, Math.max(0, Math.ceil(rowCount / pageSize) - 1));
+  if (pageIndex !== requestedPageIndex) {
+    setPagination((previous) => ({ ...previous, pageIndex }));
+  }
 
   const pagination = React.useMemo(
     () => ({

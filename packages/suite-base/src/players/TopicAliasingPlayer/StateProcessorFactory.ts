@@ -10,10 +10,15 @@ import * as _ from "lodash-es";
 import { TopicAliasFunction, Immutable as Im } from "@lichtblick/suite";
 import { GlobalVariables } from "@lichtblick/suite-base/hooks/useGlobalVariables";
 import { PlayerAlert, Topic } from "@lichtblick/suite-base/players/types";
+import { Namespace } from "@lichtblick/suite-base/types";
 
 import { AliasingStateProcessor, TopicAliasMap } from "./AliasingStateProcessor";
 
-export type TopicAliasFunctions = Array<{ extensionId: string; aliasFunction: TopicAliasFunction }>;
+export type TopicAliasFunctions = Array<{
+  extensionId: string;
+  extensionNamespace?: Namespace;
+  aliasFunction: TopicAliasFunction;
+}>;
 
 export type StateFactoryInput = {
   aliasFunctions: TopicAliasFunctions;

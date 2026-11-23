@@ -6,6 +6,7 @@ import * as _ from "lodash-es";
 
 import { Immutable } from "@lichtblick/suite";
 import { MessageEvent } from "@lichtblick/suite-base/players/types";
+import { Namespace } from "@lichtblick/suite-base/types";
 import { RosDatatypes } from "@lichtblick/suite-base/types/RosDatatypes";
 
 import { ProcessMessages, ScriptRegistration } from "./types";
@@ -16,6 +17,7 @@ import { ProcessMessages, ScriptRegistration } from "./types";
  */
 export type InstalledTopicConverter = {
   extensionId: string;
+  extensionNamespace?: Namespace;
   converter: Foxglove.RegisterMessageConverterArgsTopic;
 };
 

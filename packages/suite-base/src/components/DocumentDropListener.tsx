@@ -135,10 +135,10 @@ export default function DocumentDropListener(props: DocumentDropListenerProps): 
       }
 
       const filteredFiles = allFiles.filter((file) =>
-        allowedExtensions.includes(extname(file.name)),
+        allowedExtensions.includes(extname(file.name).toLowerCase()),
       );
       const filteredHandles = handles?.filter((handle) =>
-        allowedExtensions.includes(extname(handle.name)),
+        allowedExtensions.includes(extname(handle.name).toLowerCase()),
       );
 
       // Check for no supported files
