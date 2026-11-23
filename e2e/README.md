@@ -94,7 +94,6 @@ install-multiple-extensions.web.spec.ts;
   │       │   └── ...web.spec.ts
   │       ├── utils/                 # Shared functions
   │       ├── web-setup.ts           # Pre-script to setup web tests
-  │       ├── web-teardown.ts        # Pre-script to cleanup web tests
   │       └── playwright.config.ts   # Web Playwright configuration
   ├── page-objects/                   # Page Object Models for UI abstraction
   │   ├── sidebar.ts                 # Left/right sidebar navigation
@@ -115,9 +114,9 @@ Reusable UI abstractions live in `e2e/page-objects/`. They encapsulate common in
 
 | POM                | Purpose                         | Key Methods                                                                                                            |
 | ------------------ | ------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| `Sidebar`          | Left/right sidebar tabs         | `openLayoutsTab()`, `openTopicsTab()`, `toggleLeftSidebar()`, `getLeftSidebar()`, `getPanelSettingsTab()`              |
-| `PlayerControls`   | Playback controls               | `play()`, `pause()`, `seekForward()`, `setSpeed()`, `getTimestampValue()`, `getPlayButton()`, `getSlider()`            |
-| `LayoutManager`    | Layout CRUD                     | `openDefaultLayout()`, `createNewLayout()`, `selectPanel()`, `revertLayout()`, `getLayoutListItem()`                   |
+| `Sidebar`          | Left/right sidebar tabs         | `openLayoutsTab()`                                                                                                     |
+| `PlayerControls`   | Playback controls               | `play()`, `getTimestampText()`, `getPlayButton()`, `getSlider()`, `getTimestampInput()`                                |
+| `LayoutManager`    | Layout CRUD                     | `getCreateNewLayoutButton()`, `selectPanel()`                                                                          |
 
 ### Usage Example
 
@@ -135,8 +134,7 @@ test("create a new layout", async ({ page }) => {
   await sidebar.openLayoutsTab();
 
   // When
-  await layout.openDefaultLayout();
-  await layout.createNewLayout();
+  await layout.getCreateNewLayoutButton().click();
 
   // Then
   await expect(page.getByText("Unnamed layout").nth(0)).toBeVisible();

@@ -31,14 +31,7 @@ function datastoreDir({ overrideUserDataDir }: Options): string {
 }
 
 export function getAppSetting<T>(key: AppSetting, options: Options = {}): T | undefined {
-  const dir = datastoreDir(options);
-  const settingsPath = path.join(dir, SETTINGS_JSON_DATASTORE_KEY);
-
-  try {
-    fs.mkdirSync(dir, { recursive: true });
-  } catch {
-    // Ignore directory creation errors, including dir already exists
-  }
+  const settingsPath = path.join(datastoreDir(options), SETTINGS_JSON_DATASTORE_KEY);
 
   try {
     const settings = JSON.parse(fs.readFileSync(settingsPath, { encoding: "utf8" }));

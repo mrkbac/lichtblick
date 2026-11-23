@@ -96,8 +96,6 @@ interface Desktop {
 
   /** Handle a double-click on the custom title bar */
   handleTitleBarDoubleClick(): void;
-
-  /** Notify the app that the language setting has been changed */
 }
 
 export type { Desktop, DesktopExtension, DesktopLayout, NativeMenuBridge, Storage };

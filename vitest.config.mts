@@ -127,7 +127,6 @@ export default defineConfig({
       project("benchmark", {
         root: "benchmark",
         include: ["**/*.test.{ts,tsx}"],
-        exclude: ["e2e/**", "node_modules/**"],
         setupFiles: [suiteBaseSetup],
         restoreMocks: true,
       }),
