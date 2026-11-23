@@ -11,8 +11,7 @@ import { useScenarioBootstrap } from "./useScenarioBootstrap";
 
 /**
  * Renders the default `AppBar` unchanged. Its only purpose is to sit inside `Workspace`'s render
- * tree (unlike `SharedRoot`'s `extraProviders`, which render *outside* `PlayerManager` and
- * `CurrentLayoutProvider`) so `useScenarioBootstrap` can reach `PlayerSelectionContext`,
+ * tree so `useScenarioBootstrap` can reach `PlayerSelectionContext`,
  * `CurrentLayoutContext`, and `MessagePipelineContext`.
  */
 export function BenchmarkAppBar(props: AppBarProps): React.JSX.Element {

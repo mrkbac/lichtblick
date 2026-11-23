@@ -5,17 +5,13 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 
 import {
-  App,
   AppSetting,
   CsvLocalDataSourceFactory,
   FoxgloveWebSocketDataSourceFactory,
   IAppConfiguration,
-  IDataSourceFactory,
-  INativeAppMenu,
-  INativeWindow,
   McapLocalDataSourceFactory,
   OsContext,
   RemoteDataSourceFactory,
@@ -24,31 +20,30 @@ import {
   Ros2LocalBagDataSourceFactory,
   RosbridgeDataSourceFactory,
   SampleBoreasDataSourceFactory,
+  SharedRoot,
+  StudioApp,
   UlogLocalDataSourceFactory,
   VelodyneDataSourceFactory,
 } from "@lichtblick/suite-base";
 
 import { DesktopExtensionLoader } from "./services/DesktopExtensionLoader";
 import { DesktopLayoutLoader } from "./services/DesktopLayoutLoader";
-import { CLIFlags, Desktop, NativeMenuBridge, Storage } from "../common/types";
+import { CLIFlags, Desktop, Storage } from "../common/types";
 
 const desktopBridge = (global as unknown as { desktopBridge: Desktop }).desktopBridge;
 const storageBridge = (global as unknown as { storageBridge?: Storage }).storageBridge;
-const menuBridge = (global as { menuBridge?: NativeMenuBridge }).menuBridge;
 const ctxbridge = (global as { ctxbridge?: OsContext }).ctxbridge;
 
 type RootProps = {
   appParameters: CLIFlags;
   appConfiguration: IAppConfiguration;
-  extraProviders: React.JSX.Element[] | undefined;
-  dataSources: IDataSourceFactory[] | undefined;
 };
 
 export default function Root(props: RootProps): React.JSX.Element {
   if (!storageBridge) {
     throw new Error("storageBridge is missing");
   }
-  const { appConfiguration, appParameters, extraProviders } = props;
+  const { appConfiguration, appParameters } = props;
 
   useEffect(() => {
     const handler = () => {
@@ -65,39 +60,19 @@ export default function Root(props: RootProps): React.JSX.Element {
 
   const [layoutLoaders] = useState(() => [new DesktopLayoutLoader(desktopBridge)]);
 
-  const [nativeAppMenu] = useState<INativeAppMenu>(() => ({
-    on: (name, listener) => menuBridge?.addIpcEventListener(name, listener),
-  }));
-  const [nativeWindow] = useState<INativeWindow>(() => ({
-    setRepresentedFilename: async (path) => {
-      await desktopBridge.setRepresentedFilename(path);
-    },
-    on: (name, listener) => {
-      desktopBridge.addIpcEventListener(name, listener);
-    },
-  }));
-
-  const dataSources: IDataSourceFactory[] = useMemo(() => {
-    if (props.dataSources) {
-      return props.dataSources;
-    }
-
-    const sources = [
-      new FoxgloveWebSocketDataSourceFactory(),
-      new RosbridgeDataSourceFactory(),
-      new Ros1SocketDataSourceFactory(),
-      new Ros1LocalBagDataSourceFactory(),
-      new Ros2LocalBagDataSourceFactory(),
-      new UlogLocalDataSourceFactory(),
-      new CsvLocalDataSourceFactory(),
-      new VelodyneDataSourceFactory(),
-      new SampleBoreasDataSourceFactory(),
-      new McapLocalDataSourceFactory(),
-      new RemoteDataSourceFactory(),
-    ];
-
-    return sources;
-  }, [props.dataSources]);
+  const [dataSources] = useState(() => [
+    new FoxgloveWebSocketDataSourceFactory(),
+    new RosbridgeDataSourceFactory(),
+    new Ros1SocketDataSourceFactory(),
+    new Ros1LocalBagDataSourceFactory(),
+    new Ros2LocalBagDataSourceFactory(),
+    new UlogLocalDataSourceFactory(),
+    new CsvLocalDataSourceFactory(),
+    new VelodyneDataSourceFactory(),
+    new SampleBoreasDataSourceFactory(),
+    new McapLocalDataSourceFactory(),
+    new RemoteDataSourceFactory(),
+  ]);
 
   // App url state in window.location will represent the user's current session state
   // better than the initial deep link so we prioritize the current window.location
@@ -126,21 +101,22 @@ export default function Root(props: RootProps): React.JSX.Element {
   }, []);
 
   return (
-    <App
+    <SharedRoot
       appParameters={appParameters}
       deepLinks={deepLinks}
       dataSources={dataSources}
       appConfiguration={appConfiguration}
       extensionLoaders={extensionLoaders}
       layoutLoaders={layoutLoaders}
-      nativeAppMenu={nativeAppMenu}
-      nativeWindow={nativeWindow}
       enableGlobalCss
       appBarLeftInset={ctxbridge?.platform === "darwin" && !isFullScreen ? 72 : undefined}
-      onAppBarDoubleClick={() => {
-        desktopBridge.handleTitleBarDoubleClick();
-      }}
-      extraProviders={extraProviders}
-    />
+      onAppBarDoubleClick={onAppBarDoubleClick}
+    >
+      <StudioApp />
+    </SharedRoot>
   );
+}
+
+function onAppBarDoubleClick(): void {
+  desktopBridge.handleTitleBarDoubleClick();
 }

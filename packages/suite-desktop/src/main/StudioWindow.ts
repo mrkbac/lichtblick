@@ -23,11 +23,11 @@ import path from "path";
 
 import Logger from "@lichtblick/log";
 import { APP_BAR_HEIGHT } from "@lichtblick/suite-base/src/components/AppBar/constants";
-import { NativeAppMenuEvent } from "@lichtblick/suite-base/src/context/NativeAppMenuContext";
 import { sharedI18nObject as i18n } from "@lichtblick/suite-base/src/i18n";
 import { palette } from "@lichtblick/theme";
 
 import StudioAppUpdater from "./StudioAppUpdater";
+import { ForwardedMenuEvent } from "../common/types";
 import getDevModeIcon from "./getDevModeIcon";
 import { simulateUserClick } from "./simulateUserClick";
 import { encodeRendererArg } from "../common/rendererArgs";
@@ -177,7 +177,7 @@ function newStudioWindow(deepLinks: string[] = []): BrowserWindow {
   return browserWindow;
 }
 
-function sendNativeAppMenuEvent(event: NativeAppMenuEvent, browserWindow: BrowserWindow) {
+function sendNativeAppMenuEvent(event: ForwardedMenuEvent, browserWindow: BrowserWindow) {
   browserWindow.webContents.send(event);
 }
 

@@ -9,7 +9,6 @@ import { useEffect } from "react";
 import { createRoot } from "react-dom/client";
 
 import Logger from "@lichtblick/log";
-import type { IDataSourceFactory } from "@lichtblick/suite-base";
 import CssBaseline from "@lichtblick/suite-base/components/CssBaseline";
 import {
   recoverFromMissingAssets,
@@ -133,13 +132,7 @@ async function cacheAllAssets(): Promise<void> {
   }
 }
 
-export type MainParams = {
-  dataSources?: IDataSourceFactory[];
-  extraProviders?: React.JSX.Element[];
-  rootElement?: React.JSX.Element;
-};
-
-export async function main(getParams: () => Promise<MainParams> = async () => ({})): Promise<void> {
+export async function main(): Promise<void> {
   log.debug("initializing");
 
   window.onerror = (...args) => {
@@ -223,18 +216,15 @@ export async function main(getParams: () => Promise<MainParams> = async () => ({
   // consider moving waitForFonts into App to display an app loading screen
   await Promise.all([fontsPromise, initI18n()]);
 
-  const [{ WebRoot }, params] = await Promise.all([webRootPromise, getParams()]);
-  const rootElement = params.rootElement ?? (
-    <WebRoot extraProviders={params.extraProviders} dataSources={params.dataSources}>
-      <StudioApp />
-    </WebRoot>
-  );
+  const { WebRoot } = await webRootPromise;
 
   const root = createRoot(rootEl);
   root.render(
     <LogAfterRender>
       {banner}
-      {rootElement}
+      <WebRoot>
+        <StudioApp />
+      </WebRoot>
     </LogAfterRender>,
   );
 }

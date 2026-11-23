@@ -8,12 +8,10 @@
 import { useMemo, useState } from "react";
 
 import {
-  AppBarProps,
   AppSetting,
   CsvLocalDataSourceFactory,
   IExtensionLoader,
   FoxgloveWebSocketDataSourceFactory,
-  IDataSourceFactory,
   WebExtensionLoader,
   McapLocalDataSourceFactory,
   RemoteDataSourceFactory,
@@ -24,6 +22,7 @@ import {
   SharedRoot,
   UlogLocalDataSourceFactory,
 } from "@lichtblick/suite-base";
+import { APP_CONFIG } from "@lichtblick/suite-base/constants/config";
 import { AppParametersInput } from "@lichtblick/suite-base/context/AppParametersContext";
 
 import LocalStorageAppConfiguration from "./services/LocalStorageAppConfiguration";
@@ -31,12 +30,7 @@ import LocalStorageAppConfiguration from "./services/LocalStorageAppConfiguratio
 const isDevelopment = process.env.NODE_ENV === "development";
 
 /** Configures browser services and keeps protocol callbacks inside the installed web app. */
-export function WebRoot(props: {
-  extraProviders: React.JSX.Element[] | undefined;
-  dataSources: IDataSourceFactory[] | undefined;
-  AppBarComponent?: (props: AppBarProps) => React.JSX.Element;
-  children: React.JSX.Element;
-}): React.JSX.Element {
+export function WebRoot(props: { children: React.JSX.Element }): React.JSX.Element {
   const appConfiguration = useMemo(
     () =>
       new LocalStorageAppConfiguration({
@@ -60,21 +54,17 @@ export function WebRoot(props: {
     return params;
   });
 
-  const dataSources = useMemo(() => {
-    const sources = [
-      new Ros1LocalBagDataSourceFactory(),
-      new Ros2LocalBagDataSourceFactory(),
-      new FoxgloveWebSocketDataSourceFactory(),
-      new RosbridgeDataSourceFactory(),
-      new UlogLocalDataSourceFactory(),
-      new CsvLocalDataSourceFactory(),
-      new SampleBoreasDataSourceFactory(),
-      new McapLocalDataSourceFactory(),
-      new RemoteDataSourceFactory(),
-    ];
-
-    return props.dataSources ?? sources;
-  }, [props.dataSources]);
+  const [dataSources] = useState(() => [
+    new Ros1LocalBagDataSourceFactory(),
+    new Ros2LocalBagDataSourceFactory(),
+    new FoxgloveWebSocketDataSourceFactory(),
+    new RosbridgeDataSourceFactory(),
+    new UlogLocalDataSourceFactory(),
+    new CsvLocalDataSourceFactory(),
+    new SampleBoreasDataSourceFactory(),
+    new McapLocalDataSourceFactory(),
+    new RemoteDataSourceFactory(),
+  ]);
 
   return (
     <SharedRoot
@@ -84,9 +74,8 @@ export function WebRoot(props: {
       appConfiguration={appConfiguration}
       appParameters={appParameters}
       extensionLoaders={extensionLoaders}
+      organizationApiUrl={APP_CONFIG.apiUrl}
       enableGlobalCss
-      extraProviders={props.extraProviders}
-      AppBarComponent={props.AppBarComponent}
     >
       {props.children}
     </SharedRoot>

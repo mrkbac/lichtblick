@@ -8,7 +8,6 @@
 import { Fragment, Suspense, useEffect, useMemo } from "react";
 
 import { IdbLayoutStorage } from "@lichtblick/suite-base/IdbLayoutStorage";
-import { APP_CONFIG } from "@lichtblick/suite-base/constants/config";
 import LayoutStorageContext from "@lichtblick/suite-base/context/LayoutStorageContext";
 import {
   OrganizationProvider,
@@ -51,14 +50,31 @@ export function StudioApp(): React.JSX.Element {
   const {
     dataSources,
     extensionLoaders,
+    layoutLoaders,
     deepLinks,
     enableLaunchPreferenceScreen,
-    extraProviders,
+    organizationApiUrl,
     AppBarComponent,
+    appBarLeftInset,
+    onAppBarDoubleClick,
   } = useSharedRootContext();
+
+  const layoutStorage = useMemo(() => new IdbLayoutStorage(), []);
+  const organization = useOrganizationSession(organizationApiUrl);
 
   const providers = [
     /* eslint-disable react/jsx-key */
+    // The logs and toast providers come first so they are available to all downstream providers
+    <StudioLogsSettingsProvider />,
+    <StudioToastProvider />,
+    <OrganizationProvider value={organization} />,
+    <LayoutStorageContext.Provider value={layoutStorage} />,
+    // The layout manager stores favorites in the user profile, so it is nested inside it.
+    <UserProfileLocalStorageProvider />,
+    <LayoutManagerProvider />,
+    <CurrentLayoutProvider loaders={layoutLoaders} />,
+    // Alerts provider also must come before other, dependent contexts.
+    <AlertsContextProvider />,
     <TimelineInteractionStateProvider />,
     <ExtensionMarketplaceProvider />,
     <ExtensionCatalogProvider loaders={extensionLoaders} />,
@@ -68,37 +84,14 @@ export function StudioApp(): React.JSX.Element {
     /* eslint-enable react/jsx-key */
   ];
 
-  // The toast and logs provider comes first so they are available to all downstream providers
-  providers.unshift(<StudioToastProvider />);
-  providers.unshift(<StudioLogsSettingsProvider />);
-
-  // Alerts provider also must come before other, dependent contexts.
-  providers.unshift(<AlertsContextProvider />);
-  providers.unshift(<CurrentLayoutProvider />);
-  providers.unshift(<LayoutManagerProvider />);
-  // The layout manager stores favorites in the user profile, so it is nested inside it.
-  providers.unshift(<UserProfileLocalStorageProvider />);
-
-  const layoutStorage = useMemo(() => new IdbLayoutStorage(), []);
-
-  providers.unshift(<LayoutStorageContext.Provider value={layoutStorage} />);
-  const MaybeLaunchPreference = enableLaunchPreferenceScreen === true ? LaunchPreference : Fragment;
-
-  const organization = useOrganizationSession(APP_CONFIG.apiUrl);
-  providers.unshift(<OrganizationProvider value={organization} />);
-
   if (organization.status === "authenticated") {
-    providers.unshift(<RemoteLayoutStorageContext.Provider value={organization.storage} />);
     providers.unshift(
       <RemoteLayoutFavoritesStorageContext.Provider value={organization.storage} />,
+      <RemoteLayoutStorageContext.Provider value={organization.storage} />,
     );
   }
 
-  if (extraProviders) {
-    // Providers supplying context consumed by providers above them in this list must stay outermost,
-    // otherwise those consumers silently fall back to the context default.
-    providers.unshift(...extraProviders);
-  }
+  const MaybeLaunchPreference = enableLaunchPreferenceScreen === true ? LaunchPreference : Fragment;
 
   useEffect(() => {
     document.addEventListener("contextmenu", contextMenuHandler);
@@ -114,7 +107,12 @@ export function StudioApp(): React.JSX.Element {
         <SendNotificationToastAdapter />
         <Suspense fallback={<></>}>
           <PanelCatalogProvider>
-            <Workspace deepLinks={deepLinks} AppBarComponent={AppBarComponent} />
+            <Workspace
+              deepLinks={deepLinks}
+              AppBarComponent={AppBarComponent}
+              appBarLeftInset={appBarLeftInset}
+              onAppBarDoubleClick={onAppBarDoubleClick}
+            />
           </PanelCatalogProvider>
         </Suspense>
       </MultiProvider>

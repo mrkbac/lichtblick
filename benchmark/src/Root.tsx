@@ -14,6 +14,7 @@ import {
   LaunchPreferenceValue,
   StudioApp,
 } from "@lichtblick/suite-base";
+import { APP_CONFIG } from "@lichtblick/suite-base/constants/config";
 import { AppParametersInput } from "@lichtblick/suite-base/context/AppParametersContext";
 
 import {
@@ -86,6 +87,7 @@ export function Root(): React.JSX.Element {
       appConfiguration={appConfiguration}
       extensionLoaders={extensionLoaders}
       AppBarComponent={BenchmarkAppBar}
+      organizationApiUrl={APP_CONFIG.apiUrl}
       enableGlobalCss
     >
       <StudioApp />
