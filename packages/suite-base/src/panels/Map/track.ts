@@ -101,21 +101,6 @@ export class ColumnStore<K extends string> {
   }
 }
 
-/** Index of the last row with `time[i] <= t`, or -1. Times must be sorted. */
-export function lastIndexAtOrBefore(time: ArrayLike<number>, length: number, t: number): number {
-  let lo = 0;
-  let hi = length;
-  while (lo < hi) {
-    const mid = (lo + hi) >>> 1;
-    if (time[mid]! <= t) {
-      lo = mid + 1;
-    } else {
-      hi = mid;
-    }
-  }
-  return lo - 1;
-}
-
 /** Fixes kept per topic before the track is thinned (~40 bytes each). */
 export const TRACK_LIMIT = 1_000_000;
 const NO_STATUS = -128;

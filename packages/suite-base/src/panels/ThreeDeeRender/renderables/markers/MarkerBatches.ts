@@ -135,6 +135,10 @@ type Batch = {
    * instance coordinates at map scale (e.g. 1e6 m) would flatten small markers
    */
   origin: THREE.Vector3;
+  /** Set when the instances changed since they were last sorted (transparent batches only) */
+  unsorted: boolean;
+  /** The view direction in the mesh's frame the instances were last sorted for */
+  sortedFor: [number, number, number];
 };
 
 type LineBatchEntry = {
@@ -178,6 +182,50 @@ function isFinitePosition(position: THREE.Vector3): boolean {
 }
 
 const markerMatrix = new THREE.Matrix4();
+const viewMatrix = new THREE.Matrix4();
+
+/**
+ * Orders a transparent batch's instances back to front for `camera`, as three orders transparent
+ * objects (by view-space depth). The order only depends on the view direction, so the instances
+ * are sorted again only when it or the instances change.
+ */
+function sortBackToFront(batch: Batch, camera: THREE.Camera): void {
+  const { mesh } = batch;
+  viewMatrix.multiplyMatrices(camera.matrixWorldInverse, mesh.matrixWorld);
+  const e = viewMatrix.elements;
+  const [dx, dy, dz] = batch.sortedFor;
+  if (!batch.unsorted && e[2] === dx && e[6] === dy && e[10] === dz) {
+    return;
+  }
+  batch.unsorted = false;
+  batch.sortedFor = [e[2], e[6], e[10]];
+  const count = mesh.count;
+  const matrices = mesh.instanceMatrix.array;
+  const colors = mesh.instanceColor?.array;
+  const depths = new Float64Array(count);
+  for (let i = 0; i < count; i++) {
+    depths[i] =
+      e[2] * matrices[i * 16 + 12]! +
+      e[6] * matrices[i * 16 + 13]! +
+      e[10] * matrices[i * 16 + 14]!;
+  }
+  // The camera looks down -z: the farthest instance has the lowest depth and draws first
+  const order = Uint32Array.from({ length: count }, (_, i) => i).sort(
+    (a, b) => depths[a]! - depths[b]!,
+  );
+  const sortedMatrices = matrices.slice(0, count * 16);
+  const sortedColors = colors?.slice(0, count * 3);
+  order.forEach((from, to) => {
+    sortedMatrices.set(matrices.subarray(from * 16, from * 16 + 16), to * 16);
+    sortedColors?.set(colors!.subarray(from * 3, from * 3 + 3), to * 3);
+  });
+  matrices.set(sortedMatrices);
+  markUsed(mesh.instanceMatrix, count);
+  if (mesh.instanceColor && sortedColors) {
+    mesh.instanceColor.array.set(sortedColors);
+    markUsed(mesh.instanceColor, count);
+  }
+}
 const tempMatrix = new THREE.Matrix4();
 const tempPosition = new THREE.Vector3();
 const tempColor = new THREE.Color();
@@ -187,7 +235,8 @@ const tempColor = new THREE.Color();
  * draw per shape and cell instead of one or two draws per marker. Per-object costs in the renderer dominate
  * frames with thousands of markers, more so while they move. The markers keep their own meshes on
  * LAYER_PICK_ONLY, so picking, selection and the inspector see each marker as before.
- * Transparent markers draw on their own: instances could not be sorted back to front.
+ * Transparent shapes batch by opacity, and their instances are sorted back to front before each
+ * draw. Like separate transparent objects, batches are ordered by their own position.
  */
 export class MarkerBatches extends THREE.Object3D {
   #batches = new Map<string, Batch>();
@@ -218,7 +267,7 @@ export class MarkerBatches extends THREE.Object3D {
       return;
     }
     const { color } = marker.userData.marker;
-    if (!(color.a >= 1)) {
+    if (!(color.a > 0)) {
       unbatch(marker);
       return;
     }
@@ -242,7 +291,7 @@ export class MarkerBatches extends THREE.Object3D {
     const determinant = tempMatrix.determinant();
     const batch =
       isFinitePosition(position) && Number.isFinite(determinant) && determinant > 0
-        ? this.#batchFor(mesh, outline, position)
+        ? this.#batchFor(mesh, outline, position, Math.min(color.a, 1))
         : undefined;
     setPickOnly(mesh, { pickOnly: batch != undefined });
     if (outline) {
@@ -428,6 +477,7 @@ export class MarkerBatches extends THREE.Object3D {
       }
       batch.mesh.count = batch.meshCount;
       batch.mesh.position.copy(batch.origin);
+      batch.unsorted = true;
       markUsed(batch.mesh.instanceMatrix, batch.meshCount);
       batch.mesh.computeBoundingSphere();
       if (batch.mesh.instanceColor) {
@@ -469,14 +519,19 @@ export class MarkerBatches extends THREE.Object3D {
     mesh: MarkerMesh,
     outline: THREE.LineSegments | undefined,
     position: THREE.Vector3,
+    opacity: number,
   ): Batch {
-    const key = `${mesh.geometry.id}:${cellKey(position)}`;
+    const key = `${mesh.geometry.id}:${cellKey(position)}:${opacity}`;
     let batch = this.#batches.get(key);
     if (!batch) {
+      const transparent = opacity < 1;
       const material = new THREE.MeshStandardMaterial({
         metalness: 0,
         roughness: 1,
         dithering: true,
+        opacity,
+        transparent,
+        depthWrite: !transparent,
       });
       const instanced = new THREE.InstancedMesh(mesh.geometry, material, 0);
       instanced.castShadow = true;
@@ -495,7 +550,15 @@ export class MarkerBatches extends THREE.Object3D {
         meshCount: 0,
         outlineCount: 0,
         origin: new THREE.Vector3(),
+        unsorted: true,
+        sortedFor: [0, 0, 0],
       };
+      if (transparent) {
+        const sorted = batch;
+        instanced.onBeforeRender = (_renderer, _scene, camera) => {
+          sortBackToFront(sorted, camera);
+        };
+      }
       this.#batches.set(key, batch);
     }
     return batch;

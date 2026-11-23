@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import { pushAll } from "@lichtblick/den/collection";
-import { KEY_WORKSPACE_PREFIX } from "@lichtblick/suite-base/constants/browserStorageKeys";
 import { createKeyValueStore } from "@lichtblick/suite-base/util/idbKeyValueStore";
 
 import { PreviewFrame, Previews, previewMcap } from "./preview";
@@ -18,7 +17,7 @@ export type FolderFile = {
   handle?: FileSystemFileHandle;
 };
 
-const DB_NAME = `${KEY_WORKSPACE_PREFIX}lichtblick-catalog`;
+const DB_NAME = "lichtblick-catalog";
 const summaryStore = createKeyValueStore(DB_NAME, "summaries");
 const folderStore = createKeyValueStore(`${DB_NAME}-folders`, "folders");
 // Kept apart from the summaries, which are all read on every scan; previews are read one at a time.

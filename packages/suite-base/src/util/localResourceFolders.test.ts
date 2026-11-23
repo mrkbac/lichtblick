@@ -2,6 +2,8 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
+import { KeyValueStore } from "@lichtblick/suite-base/util/idbKeyValueStore";
+
 import { LocalResourceFolders } from "./localResourceFolders";
 
 type Tree = { [name: string]: string | Tree };
@@ -231,4 +233,93 @@ it("skips marked colcon outputs while allowing an explicitly selected install tr
   expect(Array.from((await direct.fetchAsset("package://robot/a.stl"))!.data)).toEqual(
     Array.from(new TextEncoder().encode("installed")),
   );
+});
+
+describe("LocalResourceFolders persistence", () => {
+  function memoryStore(): KeyValueStore {
+    const values = new Map<IDBValidKey, unknown>();
+    return {
+      get: async <T>(key: IDBValidKey) => values.get(key) as T | undefined,
+      set: async (key, value) => {
+        values.set(key, value);
+      },
+      setMany: async (entries) => {
+        entries.forEach(([key, value]) => values.set(key, value));
+      },
+      delete: async (key) => {
+        values.delete(key);
+      },
+    };
+  }
+  function withPermission(
+    handle: FileSystemDirectoryHandle,
+    permission: PermissionState,
+  ): FileSystemDirectoryHandle {
+    return Object.assign(handle, {
+      queryPermission: vi.fn(async () => permission),
+      requestPermission: vi.fn(async () => "granted" as const),
+    });
+  }
+
+  it("rescans granted folders on the next visit and keeps their ids", async () => {
+    const store = memoryStore();
+    const handle = withPermission(
+      directory("ws", { "package.xml": manifest, "a.stl": "mesh" }),
+      "granted",
+    );
+    const first = new LocalResourceFolders(store);
+    await first.add(handle);
+    const id = first.getSnapshot().folders[0]!.id;
+    await vi.waitFor(async () => {
+      expect(await store.get("folders")).toHaveLength(1);
+    });
+
+    const next = new LocalResourceFolders(store);
+    const asset = await next.fetchAsset("package://robot/a.stl");
+    expect(asset?.uri).toBe(`local-asset://${id}/a.stl`);
+    expect(next.getSnapshot().folders[0]).toMatchObject({ id, needsPermission: false });
+  });
+
+  it("asks for access again before reading folders the browser no longer grants", async () => {
+    const store = memoryStore();
+    const handle = withPermission(
+      directory("ws", { "package.xml": manifest, "a.stl": "mesh" }),
+      "prompt",
+    );
+    await store.set("folders", [{ id: "kept", handle }]);
+
+    const resources = new LocalResourceFolders(store);
+    await expect(resources.fetchAsset("package://robot/a.stl")).rejects.toThrow("access again");
+    await expect(resources.fetchAsset("local-asset://kept/a.stl")).rejects.toThrow("access again");
+    expect(resources.getSnapshot().folders[0]).toMatchObject({ id: "kept", needsPermission: true });
+
+    await resources.reconnect("kept");
+    expect(resources.getSnapshot().folders[0]).toMatchObject({
+      id: "kept",
+      needsPermission: false,
+    });
+    expect((await resources.fetchAsset("package://robot/a.stl"))?.uri).toBe(
+      "local-asset://kept/a.stl",
+    );
+  });
+
+  it("does not overwrite stored folders when one is added before they load", async () => {
+    const store = memoryStore();
+    const old = withPermission(directory("old", { "a.stl": "a" }), "prompt");
+    await store.set("folders", [{ id: "old", handle: old }]);
+
+    const resources = new LocalResourceFolders(store);
+    await resources.add(directory("new", { "b.stl": "b" }));
+    await vi.waitFor(async () => {
+      expect((await store.get<{ id: string }[]>("folders"))?.map((folder) => folder.id)[0]).toBe(
+        "old",
+      );
+    });
+    expect(await store.get("folders")).toHaveLength(2);
+
+    resources.remove("old");
+    await vi.waitFor(async () => {
+      expect(await store.get("folders")).toHaveLength(1);
+    });
+  });
 });

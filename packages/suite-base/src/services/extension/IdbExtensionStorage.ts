@@ -8,12 +8,11 @@
 import * as IDB from "idb";
 
 import Log from "@lichtblick/log";
-import { KEY_WORKSPACE_PREFIX } from "@lichtblick/suite-base/constants/browserStorageKeys";
 import { ExtensionInfo, StoredExtension } from "@lichtblick/suite-base/types/Extensions";
 
 const log = Log.getLogger(__filename);
 
-const DATABASE_BASE_NAME = `${KEY_WORKSPACE_PREFIX}lichtblick-extensions`;
+const DATABASE_BASE_NAME = "lichtblick-extensions";
 export const METADATA_STORE_NAME = `metadata`;
 export const EXTENSION_STORE_NAME = `extensions`;
 

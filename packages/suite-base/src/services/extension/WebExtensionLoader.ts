@@ -3,7 +3,6 @@
 
 import { DBSchema, openDB } from "idb";
 
-import { KEY_WORKSPACE_PREFIX } from "@lichtblick/suite-base/constants/browserStorageKeys";
 import { InstallExtensionProps } from "@lichtblick/suite-base/services/extension/IExtensionLoader";
 import { IdbExtensionLoader } from "@lichtblick/suite-base/services/extension/IdbExtensionLoader";
 import validatePackageInfo from "@lichtblick/suite-base/services/extension/utils/validatePackageInfo";
@@ -58,7 +57,7 @@ async function readInfo(directory: FileSystemDirectoryHandle): Promise<Extension
 }
 
 export class WebExtensionLoader extends IdbExtensionLoader {
-  readonly #db = openDB<DirectoryDB>(`${KEY_WORKSPACE_PREFIX}lichtblick-extension-folders`, 1, {
+  readonly #db = openDB<DirectoryDB>("lichtblick-extension-folders", 1, {
     upgrade(database) {
       database.createObjectStore("directories");
     },

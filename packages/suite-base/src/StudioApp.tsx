@@ -12,8 +12,6 @@ import { LayoutFavoritesAPI } from "@lichtblick/suite-base/api/layouts/LayoutFav
 import { LayoutsAPI } from "@lichtblick/suite-base/api/layouts/LayoutsAPI";
 import { APP_CONFIG } from "@lichtblick/suite-base/constants/config";
 import LayoutStorageContext from "@lichtblick/suite-base/context/LayoutStorageContext";
-import NativeAppMenuContext from "@lichtblick/suite-base/context/NativeAppMenuContext";
-import NativeWindowContext from "@lichtblick/suite-base/context/NativeWindowContext";
 import {
   OrganizationProvider,
   useOrganizationSession,
@@ -55,14 +53,9 @@ export function StudioApp(): React.JSX.Element {
   const {
     dataSources,
     extensionLoaders,
-    nativeAppMenu,
-    nativeWindow,
     deepLinks,
     enableLaunchPreferenceScreen,
     extraProviders,
-    appBarLeftInset,
-    customWindowControlProps,
-    onAppBarDoubleClick,
     AppBarComponent,
   } = useSharedRootContext();
 
@@ -76,14 +69,6 @@ export function StudioApp(): React.JSX.Element {
     <EventsProvider />,
     /* eslint-enable react/jsx-key */
   ];
-
-  if (nativeAppMenu) {
-    providers.push(<NativeAppMenuContext.Provider value={nativeAppMenu} />);
-  }
-
-  if (nativeWindow) {
-    providers.push(<NativeWindowContext.Provider value={nativeWindow} />);
-  }
 
   // The toast and logs provider comes first so they are available to all downstream providers
   providers.unshift(<StudioToastProvider />);
@@ -154,19 +139,7 @@ export function StudioApp(): React.JSX.Element {
         <SendNotificationToastAdapter />
         <Suspense fallback={<></>}>
           <PanelCatalogProvider>
-            <Workspace
-              deepLinks={deepLinks}
-              appBarLeftInset={appBarLeftInset}
-              onAppBarDoubleClick={onAppBarDoubleClick}
-              showCustomWindowControls={customWindowControlProps?.showCustomWindowControls}
-              isMaximized={customWindowControlProps?.isMaximized}
-              initialZoomFactor={customWindowControlProps?.initialZoomFactor}
-              onMinimizeWindow={customWindowControlProps?.onMinimizeWindow}
-              onMaximizeWindow={customWindowControlProps?.onMaximizeWindow}
-              onUnmaximizeWindow={customWindowControlProps?.onUnmaximizeWindow}
-              onCloseWindow={customWindowControlProps?.onCloseWindow}
-              AppBarComponent={AppBarComponent}
-            />
+            <Workspace deepLinks={deepLinks} AppBarComponent={AppBarComponent} />
           </PanelCatalogProvider>
         </Suspense>
       </MultiProvider>

@@ -7,7 +7,9 @@ import {
   WorkspaceLayoutResponse,
 } from "@lichtblick/suite-base/api/layouts/types";
 import { LayoutID } from "@lichtblick/suite-base/context/CurrentLayoutContext";
+import { ISO8601Timestamp } from "@lichtblick/suite-base/services/ILayoutStorage";
 import HttpService from "@lichtblick/suite-base/services/http/HttpService";
+import LayoutBuilder from "@lichtblick/suite-base/testing/builders/LayoutBuilder";
 import { BasicBuilder } from "@lichtblick/test-builders";
 
 import { LayoutsAPI } from "./LayoutsAPI";
@@ -75,6 +77,62 @@ describe("LayoutsAPI", () => {
 
       expect(result).toEqual([]);
     });
+  });
+
+  it("round-trips the script approval marker when creating, updating and syncing a personal layout", async () => {
+    const id = "layout-id" as LayoutID;
+    const savedAt = "2023-01-01T00:00:00.000Z" as ISO8601Timestamp;
+    const data = LayoutBuilder.data();
+    const encoded = { ...data, untrusted: true as const };
+    const serverLayout: LayoutApiData = {
+      id: "external",
+      layoutId: id,
+      name: "Recording layout",
+      data: encoded,
+      permission: "CREATOR_WRITE",
+      workspace: mockWorkspace,
+      from: "",
+      createdAt: savedAt,
+      updatedAt: savedAt,
+    };
+    const service = vi.mocked(HttpService);
+    const post = vi.fn().mockResolvedValue(createMockHttpResponse({ layout: serverLayout }));
+    const put = vi.fn().mockResolvedValue(createMockHttpResponse(serverLayout));
+    service.post = post;
+    service.put = put;
+    service.get.mockResolvedValue(createMockHttpResponse([serverLayout]));
+
+    const expected = { id, data, untrusted: true };
+    const saved = await layoutsAPI.saveNewLayout({
+      id,
+      name: serverLayout.name,
+      permission: "CREATOR_WRITE",
+      untrusted: true,
+      data,
+    });
+    expect(saved).toMatchObject(expected);
+    expect(saved.data).toStrictEqual(data);
+    expect(post).toHaveBeenCalledWith(
+      "workspaces/test-workspace/layout",
+      expect.objectContaining({ data: encoded }),
+    );
+
+    const updated = await layoutsAPI.updateLayout({
+      id,
+      externalId: serverLayout.id,
+      data,
+      savedAt,
+      untrusted: true,
+    });
+    expect(updated).toMatchObject({ status: "success", newLayout: expected });
+    expect(put).toHaveBeenCalledWith(
+      "layouts/external",
+      expect.objectContaining({ data: encoded }),
+    );
+
+    const [synced] = await new LayoutsAPI(mockWorkspace).getLayouts();
+    expect(synced).toMatchObject(expected);
+    expect(synced?.data).toStrictEqual(data);
   });
 
   describe("getLayout", () => {

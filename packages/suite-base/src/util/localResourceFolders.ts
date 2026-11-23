@@ -2,7 +2,12 @@
 
 import i18next from "i18next";
 
+import Logger from "@lichtblick/log";
 import { Asset } from "@lichtblick/suite-base/components/PanelExtensionAdapter/types";
+import { createKeyValueStore, KeyValueStore } from "@lichtblick/suite-base/util/idbKeyValueStore";
+
+const log = Logger.getLogger(__filename);
+const FOLDERS_KEY = "folders";
 
 type PackageDirectory = { name: string; path: string[] };
 type ResourceFolder = {
@@ -10,13 +15,29 @@ type ResourceFolder = {
   name: string;
   handle: FileSystemDirectoryHandle;
   packages: PackageDirectory[];
+  /** Restored from a previous visit; the browser needs a click to grant read access again. */
+  needsPermission: boolean;
 };
+type StoredFolder = { id: string; handle: FileSystemDirectoryHandle };
 type Snapshot = { revision: number; folders: readonly ResourceFolder[] };
 
-/** Grants live only in this tab. Handles are never inferred from paths or environment variables. */
+/**
+ * Folders the user picked, remembered across visits when a store is given. Handles are never
+ * inferred from paths or environment variables.
+ */
 export class LocalResourceFolders {
   #snapshot: Snapshot = { revision: 0, folders: [] };
   #listeners = new Set<() => void>();
+  #store?: KeyValueStore;
+  #restoring?: Promise<void>;
+  /** Saving before the stored list is read would overwrite it. */
+  #loaded = false;
+  #saving = Promise.resolve();
+
+  public constructor(store?: KeyValueStore) {
+    this.#store = store;
+    this.#loaded = store == undefined;
+  }
 
   public getSnapshot = (): Snapshot => this.#snapshot;
   public subscribe = (listener: () => void): (() => void) => {
@@ -29,9 +50,78 @@ export class LocalResourceFolders {
     this.#listeners.forEach((listener) => {
       listener();
     });
+    const store = this.#store;
+    if (store && this.#loaded) {
+      const stored: StoredFolder[] = folders.map(({ id, handle }) => ({ id, handle }));
+      this.#saving = this.#saving
+        .then(async () => {
+          await store.set(FOLDERS_KEY, stored);
+        })
+        .catch((error: unknown) => {
+          log.warn("Could not save local resource folders", error);
+        });
+    }
+  }
+
+  /** Loads folders from previous visits once; ones still granted are rescanned without a click. */
+  public async restore(): Promise<void> {
+    this.#restoring ??= this.#restore();
+    await this.#restoring;
+  }
+
+  async #restore(): Promise<void> {
+    const store = this.#store;
+    if (!store) {
+      return;
+    }
+    let stored: StoredFolder[] = [];
+    try {
+      stored = (await store.get<StoredFolder[]>(FOLDERS_KEY)) ?? [];
+    } catch (error) {
+      log.warn("Could not load local resource folders", error);
+    }
+    this.#loaded = true;
+    if (stored.length === 0) {
+      return;
+    }
+    this.#update(
+      stored.map(({ id, handle }) => ({
+        id,
+        name: handle.name,
+        handle,
+        packages: [],
+        needsPermission: true,
+      })),
+    );
+    for (const { handle } of stored) {
+      const permission = await handle.queryPermission({ mode: "read" }).catch(() => "denied");
+      if (permission !== "granted") {
+        continue;
+      }
+      // A folder that moved or vanished stays listed so the user can see and remove it.
+      await this.#add(handle).catch((error: unknown) => {
+        log.warn(`Could not rescan local resource folder ${handle.name}`, error);
+      });
+    }
+  }
+
+  /** Must be called from a user gesture: the browser may show a permission prompt. */
+  public async reconnect(id: string): Promise<void> {
+    const folder = this.#snapshot.folders.find((item) => item.id === id);
+    if (folder && (await folder.handle.requestPermission({ mode: "read" })) === "granted") {
+      await this.#add(folder.handle);
+    }
   }
 
   public async add(handle: FileSystemDirectoryHandle): Promise<void> {
+    // Waiting only when needed keeps a rescan in step with a remove() issued right after it.
+    if (!this.#loaded) {
+      await this.restore();
+    }
+    await this.#add(handle);
+  }
+
+  async #add(handle: FileSystemDirectoryHandle): Promise<void> {
     const folders = this.#snapshot.folders;
     const packages: PackageDirectory[] = [];
     const scan = async (directory: FileSystemDirectoryHandle, path: string[]): Promise<void> => {
@@ -96,8 +186,19 @@ export class LocalResourceFolders {
     if (existing && !this.#snapshot.folders.includes(existing)) {
       return;
     }
-    const folder = { id: existing?.id ?? crypto.randomUUID(), name: handle.name, handle, packages };
-    this.#update([...this.#snapshot.folders.filter((item) => item !== existing), folder]);
+    const folder: ResourceFolder = {
+      id: existing?.id ?? crypto.randomUUID(),
+      name: handle.name,
+      handle,
+      packages,
+      needsPermission: false,
+    };
+    // Replace in place so restored folders keep their order.
+    this.#update(
+      existing
+        ? this.#snapshot.folders.map((item) => (item === existing ? folder : item))
+        : [...this.#snapshot.folders, folder],
+    );
   }
 
   public remove(id: string): void {
@@ -108,6 +209,7 @@ export class LocalResourceFolders {
     uri: string,
     options?: { signal?: AbortSignal },
   ): Promise<Asset | undefined> {
+    await this.restore();
     const match = /^(package|local-asset):\/\/([^/?#]+)\/([^?#]*)(?:[?#].*)?$/.exec(uri);
     if (!match) {
       if (uri.startsWith("package:") || uri.startsWith("local-asset:")) {
@@ -138,6 +240,10 @@ export class LocalResourceFolders {
       }
       folder = candidates[0]?.root;
       packagePath = candidates[0]?.pkg.path ?? [];
+      // The package may be inside a folder that is not scanned until access is granted again.
+      if (!folder && this.#snapshot.folders.some((root) => root.needsPermission)) {
+        throw new Error(i18next.t("appSettings:localResourceFolderNeedsPermission"));
+      }
     } else {
       folder = this.#snapshot.folders.find((root) => root.id === authority);
       if (!folder) {
@@ -146,6 +252,9 @@ export class LocalResourceFolders {
     }
     if (!folder) {
       return undefined;
+    }
+    if (folder.needsPermission) {
+      throw new Error(i18next.t("appSettings:localResourceFolderNeedsPermission"));
     }
     options?.signal?.throwIfAborted();
     let file: File;
@@ -176,4 +285,6 @@ export class LocalResourceFolders {
   }
 }
 
-export const localResourceFolders = new LocalResourceFolders();
+export const localResourceFolders = new LocalResourceFolders(
+  createKeyValueStore("lichtblick-local-resource-folders", "folders"),
+);

@@ -14,11 +14,7 @@ export type ForwardedMenuEvent =
   | "open-help-docs"
   | "open-help-general";
 
-export type ForwardedWindowEvent =
-  | "enter-full-screen"
-  | "leave-full-screen"
-  | "maximize"
-  | "unmaximize";
+export type ForwardedWindowEvent = "enter-full-screen" | "leave-full-screen";
 
 /** Registering an event listener returns a function that will un-register the listener */
 export type UnregisterFn = () => void;
@@ -123,15 +119,7 @@ interface Desktop {
   /** Handle a double-click on the custom title bar */
   handleTitleBarDoubleClick(): void;
 
-  isMaximized(): boolean;
-  minimizeWindow(): void;
-  maximizeWindow(): void;
-  unmaximizeWindow(): void;
-  closeWindow(): void;
-  reloadWindow(): void;
-
   /** Notify the app that the language setting has been changed */
-  updateLanguage(): void;
 }
 
 export type { Desktop, DesktopExtension, DesktopLayout, NativeMenuBridge, Storage, StorageContent };

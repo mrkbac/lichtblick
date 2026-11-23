@@ -14,6 +14,7 @@ const datatypes: RosDatatypes = new Map([
         { name: "linear_acceleration", type: "example/Vector3", isComplex: true },
         { name: "covariance", type: "float64", isArray: true },
         { name: "frame", type: "string" },
+        { name: "stamp", type: "builtin_interfaces/Time", isComplex: true },
       ],
     },
   ],
@@ -23,6 +24,15 @@ const datatypes: RosDatatypes = new Map([
       definitions: [
         { name: "seq", type: "uint32" },
         { name: "frame_id", type: "string" },
+      ],
+    },
+  ],
+  [
+    "builtin_interfaces/Time",
+    {
+      definitions: [
+        { name: "sec", type: "int32" },
+        { name: "nanosec", type: "uint32" },
       ],
     },
   ],
@@ -46,10 +56,15 @@ describe("plottableFields", () => {
       "/imu.linear_acceleration",
       ["/imu.linear_acceleration.x", "/imu.linear_acceleration.y", "/imu.linear_acceleration.z"],
     ],
-    // A whole message skips its header, arrays and strings
+    // A whole message skips its header, arrays and strings; a ROS 2 stamp is one series
     [
       "/imu",
-      ["/imu.linear_acceleration.x", "/imu.linear_acceleration.y", "/imu.linear_acceleration.z"],
+      [
+        "/imu.linear_acceleration.x",
+        "/imu.linear_acceleration.y",
+        "/imu.linear_acceleration.z",
+        "/imu.stamp",
+      ],
     ],
     ["/imu.linear_acceleration.x", undefined],
     ["/imu.nope", undefined],

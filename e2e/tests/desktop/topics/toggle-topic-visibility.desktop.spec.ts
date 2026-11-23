@@ -22,7 +22,17 @@ test("toggle topics visibility", { tag: "@smoke" }, async ({ mainWindow }) => {
   // When
   await sidebar.openPanelSettingsTab();
   await new Panels(mainWindow).select("3D");
-  const visibilityButtons = mainWindow.getByTitle("Toggle visibility", { exact: true });
+  const transforms = mainWindow.getByTestId("settings__nodeHeaderToggle__transforms");
+  await transforms.hover();
+  const transformEye = transforms.locator("..").getByRole("checkbox");
+  await expect(transformEye).toBeChecked();
+  await transformEye.click();
+  await expect(transformEye).not.toBeChecked();
+
+  const visibilityButtons = mainWindow
+    .getByTestId(/^settings__nodeHeaderToggle__topics-/)
+    .locator("..")
+    .getByTitle("Toggle visibility", { exact: true });
   await expect(visibilityButtons.first()).toBeVisible();
   // Every topic the 3D panel can show is listed, all hidden; clicking the first shows it.
   const total = await visibilityButtons.count();

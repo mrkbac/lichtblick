@@ -13,6 +13,8 @@ import { RemoteLayout } from "@lichtblick/suite-base/services/IRemoteLayoutStora
 // API Data Transfer Objects (DTOs)
 // =============================================================================
 
+type LayoutPayload = LayoutData & { untrusted?: true };
+
 /**
  * Layout data returned from the server API
  */
@@ -24,7 +26,7 @@ export interface LayoutApiData {
   /** Human-readable layout name */
   name: string;
   /** Layout configuration data */
-  data: LayoutData;
+  data: LayoutPayload;
   /** User workspace */
   workspace: string;
   /** Permission level for the layout */
@@ -50,7 +52,7 @@ export interface CreateLayoutRequest {
   /** Human-readable layout name */
   name: string;
   /** Layout configuration data */
-  data: LayoutData;
+  data: LayoutPayload;
   /** Permission level for the layout */
   permission: LayoutPermission;
 }
@@ -81,7 +83,7 @@ export interface UpdateLayoutRequestBody {
   /** Updated layout name */
   name?: string;
   /** Updated layout data */
-  data?: LayoutData;
+  data?: LayoutPayload;
   /** Updated permission level */
   permission?: LayoutPermission;
 }

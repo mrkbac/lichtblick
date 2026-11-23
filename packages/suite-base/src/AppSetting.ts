@@ -12,7 +12,6 @@ export enum AppSetting {
   TIME_FORMAT = "time.format",
   MESSAGE_RATE = "messageRate",
   UPDATES_ENABLED = "updates.enabled",
-  LANGUAGE = "language",
   DEFAULT_STEP_SIZE = "stepSize",
   PLAYBACK_PREVIEW_TOPIC = "playback.previewTopic",
   COMPACT_PANELS = "ui.compactPanels",
@@ -25,7 +24,6 @@ export enum AppSetting {
   ENABLE_MEMORY_USE_INDICATOR = "dev.memory-use-indicator",
 
   // Miscellaneous
-  HIDE_SIGN_IN_PROMPT = "hideSignInPrompt",
   LAUNCH_PREFERENCE = "launchPreference",
   SHOW_OPEN_DIALOG_ON_STARTUP = "ui.open-dialog-startup",
   OPEN_FOXGLOVE_LINKS = "desktop.openFoxgloveLinks",

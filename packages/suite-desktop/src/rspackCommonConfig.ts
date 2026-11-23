@@ -34,9 +34,6 @@ export function createCommonWebpackConfig(
         LICHTBLICK_REPOSITORY_URL: JSON.stringify(productInfo(params.packageJson).repositoryUrl),
         LICHTBLICK_SUITE_VERSION: JSON.stringify(params.packageJson.version),
         API_URL: process.env.API_URL ? JSON.stringify(process.env.API_URL) : undefined,
-        DEV_WORKSPACE: process.env.DEV_WORKSPACE
-          ? JSON.stringify(process.env.DEV_WORKSPACE)
-          : undefined,
       }),
     ],
 

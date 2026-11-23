@@ -4,7 +4,9 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import { MenuItem, MenuList, Slider } from "@mui/material";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
+import { useState } from "react";
+import { flushSync } from "react-dom";
 import type { Mock } from "vitest";
 
 import KeyListener, { KeyListenerProps } from "./KeyListener";
@@ -39,6 +41,39 @@ describe("KeyListener", () => {
 
       // Then
       expect(mockHandler).toHaveBeenCalledTimes(1);
+    });
+
+    it("should still run when an earlier listener re-renders it during the same keypress", () => {
+      // Given: like a parent panel exiting fullscreen, the first listener's handler re-renders the
+      // second listener synchronously, giving it new handlers mid-dispatch
+      const second = vi.fn();
+      function Listeners() {
+        const [count, setCount] = useState(0);
+        return (
+          <>
+            <KeyListener
+              global
+              keyDownHandlers={{
+                escape: () => {
+                  flushSync(() => {
+                    setCount((c) => c + 1);
+                  });
+                },
+              }}
+            />
+            <KeyListener global keyDownHandlers={{ escape: () => second(count) }} />
+          </>
+        );
+      }
+      render(<Listeners />);
+
+      // When
+      act(() => {
+        document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+      });
+
+      // Then
+      expect(second).toHaveBeenCalledTimes(1);
     });
 
     it("should skip keys the focused element already handled", () => {

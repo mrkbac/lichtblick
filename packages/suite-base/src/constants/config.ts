@@ -11,7 +11,6 @@ declare const API_URL: string | undefined;
 declare const LICHTBLICK_SUITE_VERSION: string | undefined;
 declare const LICHTBLICK_PRODUCT_NAME: string | undefined;
 declare const LICHTBLICK_REPOSITORY_URL: string | undefined;
-declare const DEV_WORKSPACE: string | undefined;
 
 export const APP_CONFIG = {
   /**
@@ -33,9 +32,4 @@ export const APP_CONFIG = {
    * Source repository web URL (root package.json `repository.url`), for source, license and releases
    */
   repositoryUrl: LICHTBLICK_REPOSITORY_URL ?? "https://github.com/mrkbac/lichtblick",
-
-  /**
-   * Development workspace prefix (for local storage keys)
-   */
-  devWorkspace: DEV_WORKSPACE ?? "",
 } as const;

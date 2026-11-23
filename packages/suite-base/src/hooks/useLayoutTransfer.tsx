@@ -14,7 +14,11 @@ import { useLayoutNavigation } from "@lichtblick/suite-base/hooks/useLayoutNavig
 import { Layout } from "@lichtblick/suite-base/services/ILayoutStorage";
 import { Namespace } from "@lichtblick/suite-base/types";
 import { downloadTextFile } from "@lichtblick/suite-base/util/download";
-import { decodeLayoutTrust, validateLayoutData } from "@lichtblick/suite-base/util/layout";
+import {
+  decodeLayoutTrust,
+  encodeLayoutTrust,
+  validateLayoutData,
+} from "@lichtblick/suite-base/util/layout";
 import { basename, extname } from "@lichtblick/suite-base/util/path";
 import showOpenFilePicker from "@lichtblick/suite-base/util/showOpenFilePicker";
 import { toError } from "@lichtblick/suite-base/util/toError";
@@ -130,16 +134,18 @@ export function useLayoutTransfer(): UseLayoutTransfer {
   }, [parseAndInstallLayout]);
 
   const exportLayout = useCallbackWithToast(async () => {
-    const item = getCurrentLayoutState().selectedLayout?.data;
-    if (!item) {
+    const selectedLayout = getCurrentLayoutState().selectedLayout;
+    if (!selectedLayout?.data) {
       return;
     }
 
-    const name = getCurrentLayoutState().selectedLayout?.name?.trim() ?? "";
+    const layout = await layoutManager.getLayout(selectedLayout.id);
+    const name = selectedLayout.name?.trim() ?? "";
     const layoutName = name.length > 0 ? name : "lichtblick-layout";
-    const content = JSON.stringify(item, undefined, 2) ?? "";
+    const content =
+      JSON.stringify(encodeLayoutTrust(selectedLayout.data, layout ?? {}), undefined, 2) ?? "";
     downloadTextFile(content, `${layoutName}.json`);
-  }, [getCurrentLayoutState]);
+  }, [getCurrentLayoutState, layoutManager]);
 
   return { importLayout, exportLayout, parseAndInstallLayout };
 }

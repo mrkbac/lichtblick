@@ -5,10 +5,10 @@ import type { Chart, ChartType } from "chart.js";
 type AxisMode = "x" | "y" | "xy";
 type AxisOptions = { enabled?: boolean; mode?: AxisMode };
 
-type ViewportOptions = {
-  zoom?: AxisOptions & { speed?: number };
-  pan?: AxisOptions & { threshold?: number };
-};
+type ViewportOptions = { zoom?: AxisOptions; pan?: AxisOptions };
+
+/** Share of the span one wheel step zooms by. */
+const ZOOM_SPEED = 0.1;
 
 declare module "chart.js" {
   interface PluginOptionsByType<TType extends ChartType> {
@@ -66,7 +66,7 @@ export class ChartViewport {
         ? scales.find((scale) => contains(scale, point))
         : undefined;
     const mode = event.zoomMode ?? zoom.mode ?? "xy";
-    const span = 1 + Math.sign(event.deltaY) * (zoom.speed ?? 0.1);
+    const span = 1 + Math.sign(event.deltaY) * ZOOM_SPEED;
     this.#transform(hoveredScale?.id, (axis, pixel) => {
       const anchor = point[axis];
       return hoveredScale || mode.includes(axis) ? anchor + (pixel - anchor) * span : pixel;
