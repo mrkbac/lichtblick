@@ -13,7 +13,6 @@ import { makeStandardMaterial } from "./materials";
 import type { Renderer } from "../../Renderer";
 import { rgbToThreeColor } from "../../color";
 import { GEOMETRY_SEGMENTS } from "../../constants";
-import { getRotationTo } from "../../math";
 import { Marker } from "../../ros";
 
 const SHAFT_LENGTH = 0.77;
@@ -24,10 +23,12 @@ const HEAD_DIAMETER = 2.0;
 const HEAD_LENGTH_PROPORTION = 0.23;
 
 const UNIT_X = new THREE.Vector3(1, 0, 0);
+const NEG_Z = new THREE.Vector3(0, 0, -1);
 
 const tempStart = new THREE.Vector3();
 const tempEnd = new THREE.Vector3();
 const tempDirection = new THREE.Vector3();
+const tempRotation = new THREE.Quaternion();
 
 export class RenderableArrow extends RenderableMarker {
   public shaftMesh: THREE.Mesh<THREE.CylinderGeometry, THREE.MeshStandardMaterial>;
@@ -140,8 +141,14 @@ export class RenderableArrow extends RenderableMarker {
       this.headMesh.position.set(pointB.x, pointB.y, pointB.z);
       this.headMesh.position.addScaledVector(tempDirection, -0.5 * (headLength / distance));
 
-      const rotation = getRotationTo(UNIT_X, tempDirection);
-      this.shaftMesh.setRotationFromQuaternion(rotation);
+      // Antiparallel: half a turn about -Z (setFromUnitVectors would pick another, equivalent axis)
+      tempDirection.normalize();
+      if (tempDirection.x < 1e-6 - 1) {
+        tempRotation.setFromAxisAngle(NEG_Z, Math.PI);
+      } else {
+        tempRotation.setFromUnitVectors(UNIT_X, tempDirection);
+      }
+      this.shaftMesh.setRotationFromQuaternion(tempRotation);
       this.headMesh.rotation.copy(this.shaftMesh.rotation);
     } else {
       this.shaftMesh.scale.set(SHAFT_LENGTH, SHAFT_DIAMETER, SHAFT_DIAMETER);
