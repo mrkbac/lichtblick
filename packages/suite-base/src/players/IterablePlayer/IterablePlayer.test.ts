@@ -1283,6 +1283,11 @@ describe("IterablePlayer", () => {
       const { player, states, openGate } = await startPlayingToGate(topic);
 
       player.pausePlayback();
+      // The pause lands while the read still waits (e.g. on a remote file)
+      await vi.waitFor(() => {
+        expect(states.at(-1)?.activeData?.isPlaying).toBe(false);
+      });
+      expect(states.at(-1)?.presence).toBe(PlayerPresence.PRESENT);
       openGate();
       await delay(50);
       player.startPlayback();
