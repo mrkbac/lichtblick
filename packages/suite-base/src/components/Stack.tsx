@@ -13,15 +13,12 @@ const useStyles = makeStyles<StackProps>({ name: "FoxgloveStack" })((theme, prop
     display: props.inline === true ? "inline-flex" : "flex",
     flexDirection: props.direction,
     flex: props.flex,
-    flexBasis: props.flexBasis,
     flexShrink: props.flexShrink,
     flexGrow: props.flexGrow,
     flexWrap: props.flexWrap,
     justifyContent: props.justifyContent,
     alignItems: props.alignItems,
-    alignContent: props.alignContent,
     alignSelf: props.alignSelf,
-    order: props.order,
     overflow: props.overflow,
     overflowX: props.overflowX,
     overflowY: props.overflowY,
@@ -38,12 +35,6 @@ const useStyles = makeStyles<StackProps>({ name: "FoxgloveStack" })((theme, prop
     }),
     ...(props.gap != undefined && {
       gap: theme.spacing(props.gap),
-    }),
-    ...(props.gapX != undefined && {
-      rowGap: theme.spacing(props.gapX),
-    }),
-    ...(props.gapY != undefined && {
-      columnGap: theme.spacing(props.gapY),
     }),
     ...(props.padding != undefined && {
       padding: theme.spacing(props.padding),
@@ -74,17 +65,11 @@ const useStyles = makeStyles<StackProps>({ name: "FoxgloveStack" })((theme, prop
     ...(props.paddingBlockStart != undefined && {
       paddingBlockStart: theme.spacing(props.paddingBlockStart),
     }),
-    ...(props.paddingBlockEnd != undefined && {
-      paddingBlockEnd: theme.spacing(props.paddingBlockEnd),
-    }),
     ...(props.paddingInline != undefined && {
       paddingInline: theme.spacing(props.paddingInline),
     }),
     ...(props.paddingInlineStart != undefined && {
       paddingInlineStart: theme.spacing(props.paddingInlineStart),
-    }),
-    ...(props.paddingInlineEnd != undefined && {
-      paddingInlineEnd: theme.spacing(props.paddingInlineEnd),
     }),
   },
 }));
@@ -99,18 +84,14 @@ export default function Stack(
     className,
     direction = "column",
     flex,
-    flexBasis,
     flexGrow,
     flexShrink,
     flexWrap,
     fullHeight = false,
     fullWidth = false,
     gap,
-    gapX,
-    gapY,
     inline = false,
     justifyContent,
-    order,
     overflow,
     overflowX,
     overflowY,
@@ -123,10 +104,8 @@ export default function Stack(
     paddingY,
     paddingBlock,
     paddingBlockStart,
-    paddingBlockEnd,
     paddingInline,
     paddingInlineStart,
-    paddingInlineEnd,
     position,
     testId,
     style,
@@ -140,28 +119,22 @@ export default function Stack(
     alignSelf,
     direction,
     flex,
-    flexBasis,
     flexGrow,
     flexShrink,
     flexWrap,
     fullHeight,
     fullWidth,
     gap,
-    gapX,
-    gapY,
     inline,
     justifyContent,
-    order,
     overflow,
     overflowX,
     overflowY,
     padding,
     paddingBlock,
-    paddingBlockEnd,
     paddingBlockStart,
     paddingBottom,
     paddingInline,
-    paddingInlineEnd,
     paddingInlineStart,
     paddingLeft,
     paddingRight,
@@ -211,20 +184,11 @@ export type StackProps = {
   /** Defines the `align-items` style property. */
   alignItems?: CSSProperties["alignItems"];
 
-  /** Defines the `align-content` style property. */
-  alignContent?: CSSProperties["alignContent"];
-
   /** Defines the `align-self` style property. */
   alignSelf?: CSSProperties["alignSelf"];
 
   /** Defines the `gap` style property using `theme.spacing` increments. */
   gap?: number;
-
-  /** Defines the `rowGap` style property using `theme.spacing` increments. */
-  gapX?: number;
-
-  /** Defines the `columnGap` style property using `theme.spacing` increments. */
-  gapY?: number;
 
   /** Defines the `overflow` style property. */
   overflow?: CSSProperties["overflow"];
@@ -263,17 +227,11 @@ export type StackProps = {
   /** Defines the vertical `padding-block-start` style property using `theme.spacing` increments. */
   paddingBlockStart?: number;
 
-  /** Defines the vertical `padding-block-end` style property using `theme.spacing` increments. */
-  paddingBlockEnd?: number;
-
   /** Defines the vertical `padding-inline` style property using `theme.spacing` increments. */
   paddingInline?: number;
 
   /** Defines the vertical `padding-inline-start` style property using `theme.spacing` increments. */
   paddingInlineStart?: number;
-
-  /** Defines the vertical `padding-inline-end` style property using `theme.spacing` increments. */
-  paddingInlineEnd?: number;
 
   /** Defines the `position` style property. */
   position?: CSSProperties["position"];
@@ -290,14 +248,8 @@ export type StackProps = {
   /** Defines the `flex-shrink` style property. */
   flexShrink?: CSSProperties["flexShrink"];
 
-  /** Defines the `flex-basis` style property. */
-  flexBasis?: CSSProperties["flexBasis"];
-
   /** Defines the `flex-wrap` style property. */
   flexWrap?: CSSProperties["flexWrap"];
-
-  /** Defines the `order` property. */
-  order?: CSSProperties["order"];
 
   /** Sets the minWidth to zero */
   zeroMinWidth?: boolean;
@@ -309,10 +261,6 @@ export type StackProps = {
   title?: string;
 
   /** Standard pointer events. */
-  onPointerDown?: React.DOMAttributes<HTMLDivElement>["onPointerDown"];
   onPointerEnter?: React.DOMAttributes<HTMLDivElement>["onPointerEnter"];
   onPointerLeave?: React.DOMAttributes<HTMLDivElement>["onPointerLeave"];
-  onPointerMove?: React.DOMAttributes<HTMLDivElement>["onPointerMove"];
-  onPointerOver?: React.DOMAttributes<HTMLDivElement>["onPointerOver"];
-  onPointerUp?: React.DOMAttributes<HTMLDivElement>["onPointerUp"];
 };
