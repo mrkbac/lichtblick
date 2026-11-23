@@ -199,6 +199,23 @@ describe("IndexDatasetsBuilder", () => {
     });
   });
 
+  it("keeps the range when a frame only carries messages for other topics", async () => {
+    const builder = new IndexDatasetsBuilder();
+    builder.setSeries(buildSeriesItems([{ value: "/bar.val[:]" }]));
+    const message = (topic: string) => ({
+      topic,
+      schemaName: "foo",
+      receiveTime: { sec: 0, nsec: 0 },
+      sizeInBytes: 0,
+      message: { val: [1, 2, 3] },
+    });
+
+    builder.handlePlayerState(buildPlayerState({ messages: [message("/bar")] }));
+    const result = builder.handlePlayerState(buildPlayerState({ messages: [message("/other")] }));
+
+    expect(result).toEqual({ range: { min: 0, max: 2 }, datasetsChanged: false });
+  });
+
   it("should apply a math function", async () => {
     const builder = new IndexDatasetsBuilder();
 

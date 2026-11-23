@@ -1,6 +1,6 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
-import { parseMessagePath } from "@lichtblick/message-path";
+import { MessagePath, parseMessagePath } from "@lichtblick/message-path";
 import { MessageEvent } from "@lichtblick/suite";
 import { simpleGetMessagePathDataItems } from "@lichtblick/suite-base/components/MessagePathSyntax/simpleGetMessagePathDataItems";
 import { fillInGlobalVariablesInPath } from "@lichtblick/suite-base/components/MessagePathSyntax/useCachedGetMessagePathDataItems";
@@ -67,26 +67,35 @@ function handlePathActionStateWithGlobalVars({
       pathParseError: undefined,
     };
   }
-  let latestMatchingQueriedData: unknown;
-  let error: Error | undefined;
-  const filledInPath = fillInGlobalVariablesInPath(newPath, state.globalVariables ?? {});
-  try {
-    if (state.latestMessage) {
-      latestMatchingQueriedData = getSingleDataItem(
-        simpleGetMessagePathDataItems(state.latestMessage, filledInPath),
-      );
-    }
-  } catch (err: unknown) {
-    error = toError(err);
-  }
+  // Keep the raw path: `$variables` are filled in per evaluation so later variable changes apply.
   return {
     ...state,
-    error,
-    latestMatchingQueriedData,
-    parsedPath: filledInPath,
+    ...evaluateLatestMessage(state, newPath),
+    parsedPath: newPath,
     path,
     pathParseError: undefined,
   };
+}
+
+/** Re-reads the value from the last received message with the current variables. */
+function evaluateLatestMessage(
+  state: GaugeAndIndicatorState,
+  parsedPath: MessagePath | undefined,
+): Pick<GaugeAndIndicatorState, "error" | "latestMatchingQueriedData"> {
+  if (!state.latestMessage || !parsedPath) {
+    return { error: undefined, latestMatchingQueriedData: undefined };
+  }
+  try {
+    const filledInPath = fillInGlobalVariablesInPath(parsedPath, state.globalVariables ?? {});
+    return {
+      error: undefined,
+      latestMatchingQueriedData: getSingleDataItem(
+        simpleGetMessagePathDataItems(state.latestMessage, filledInPath),
+      ),
+    };
+  } catch (err: unknown) {
+    return { error: toError(err), latestMatchingQueriedData: undefined };
+  }
 }
 
 export function stateReducer(
@@ -109,7 +118,8 @@ export function stateReducer(
           error: undefined,
         };
       case "updateGlobalVariables": {
-        return { ...state, globalVariables: action.globalVariables };
+        const next = { ...state, globalVariables: action.globalVariables };
+        return { ...next, ...evaluateLatestMessage(next, state.parsedPath) };
       }
     }
   } catch (error) {

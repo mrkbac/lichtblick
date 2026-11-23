@@ -9,6 +9,7 @@ import { useCallback, useEffect, useLayoutEffect, useReducer, useState } from "r
 
 import { parseMessagePath } from "@lichtblick/message-path";
 import { SettingsTreeAction } from "@lichtblick/suite";
+import { GlobalVariables } from "@lichtblick/suite-base/hooks/useGlobalVariables";
 import { DEFAULT_CONFIG } from "@lichtblick/suite-base/panels/Gauge/constants";
 import { stateReducer } from "@lichtblick/suite-base/panels/shared/gaugeAndIndicatorStateReducer";
 import { useReplacePathDrop } from "@lichtblick/suite-base/panels/shared/pathDrop";
@@ -65,6 +66,13 @@ export function Gauge({ context }: GaugeProps): React.JSX.Element {
     context.onRender = (renderState, done) => {
       setRenderDone(() => done);
 
+      if (renderState.variables) {
+        dispatch({
+          type: "updateGlobalVariables",
+          globalVariables: Object.fromEntries(renderState.variables) as GlobalVariables,
+        });
+      }
+
       if (renderState.didSeek === true) {
         dispatch({ type: "seek" });
       }
@@ -79,6 +87,7 @@ export function Gauge({ context }: GaugeProps): React.JSX.Element {
     };
     context.watch("currentFrame");
     context.watch("didSeek");
+    context.watch("variables");
     context.watch("colorScheme");
 
     return () => {
