@@ -12,6 +12,7 @@ import { layoutIsFavorite } from "@lichtblick/suite-base/services/ILayoutManager
 import {
   ILayoutStorage,
   ISO8601Timestamp,
+  Layout,
   LayoutPermission,
 } from "@lichtblick/suite-base/services/ILayoutStorage";
 import { IRemoteLayoutFavoritesStorage } from "@lichtblick/suite-base/services/IRemoteLayoutFavoritesStorage";
@@ -1784,6 +1785,82 @@ describe("LayoutManager", () => {
         await expect(layoutManager.setFavorite(sharedLayout(), { favorite: true })).rejects.toThrow(
           "cannot be marked as favorite",
         );
+      });
+    });
+  });
+
+  describe("concurrent writes", () => {
+    /** Local storage backed by a map, so reads see earlier writes. */
+    function useInMemoryLocalStorage(...layouts: Layout[]) {
+      const store = new Map(layouts.map((layout) => [layout.id, layout]));
+      mockLocalStorage.list.mockImplementation(async () => [...store.values()]);
+      mockLocalStorage.put.mockImplementation(async (_namespace, layout) => {
+        store.set(layout.id, layout);
+        return layout;
+      });
+      return store;
+    }
+
+    it("keeps both a rename and a data save made at the same time", async () => {
+      const layout = LayoutBuilder.layout({ permission: "CREATOR_WRITE", working: undefined });
+      const store = useInMemoryLocalStorage(layout);
+      const manager = new LayoutManager({ local: mockLocalStorage, remote: undefined });
+      const data = LayoutBuilder.data();
+
+      await Promise.all([
+        manager.updateLayout({ id: layout.id, name: "Renamed", data: undefined }),
+        manager.updateLayout({ id: layout.id, name: undefined, data }),
+      ]);
+
+      expect(store.get(layout.id)?.name).toBe("Renamed");
+      expect(store.get(layout.id)?.working?.data).toEqual(data);
+    });
+
+    it("keeps an edit made while a sync uploads the layout", async () => {
+      const layout = LayoutBuilder.layout({
+        permission: "ORG_WRITE",
+        working: undefined,
+        syncInfo: { status: "updated", lastRemoteSavedAt: undefined },
+      });
+      const store = useInMemoryLocalStorage(layout);
+      const manager = new LayoutManager({ local: mockLocalStorage, remote: mockRemoteStorage });
+      manager.setOnline({ online: true });
+      mockRemoteStorage.getLayouts.mockResolvedValue([
+        LayoutBuilder.remoteLayout({ id: layout.id, externalId: layout.externalId }),
+      ]);
+      let finishUpload!: () => void;
+      const savedAt = new Date(20).toISOString() as ISO8601Timestamp;
+      mockRemoteStorage.updateLayout.mockImplementation(
+        async (params) =>
+          await new Promise((resolve) => {
+            finishUpload = () => {
+              resolve({
+                status: "success",
+                newLayout: LayoutBuilder.remoteLayout({
+                  id: params.id,
+                  name: layout.name,
+                  data: layout.baseline.data,
+                  savedAt,
+                }),
+              });
+            };
+          }),
+      );
+
+      // An edit lands while the upload is in flight
+      const sync = manager.syncWithRemote(new AbortController().signal);
+      await vi.waitFor(() => {
+        expect(mockRemoteStorage.updateLayout).toHaveBeenCalled();
+      });
+      const data = LayoutBuilder.data();
+      await manager.updateLayout({ id: layout.id, name: undefined, data });
+      finishUpload();
+      await sync;
+
+      expect(store.get(layout.id)?.working?.data).toEqual(data);
+      expect(store.get(layout.id)?.syncInfo).toEqual({
+        status: "tracked",
+        lastRemoteSavedAt: savedAt,
       });
     });
   });
