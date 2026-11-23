@@ -1253,8 +1253,9 @@ describe("IterablePlayer", () => {
       return { source, openGate: gate.resolve, atGate: atGate.promise };
     }
 
-    async function startPlayingToGate(topic: string) {
+    async function startPlayingToGate(topic: string, setup?: (source: TestSource) => void) {
       const { source, openGate, atGate } = gatedSource(topic);
+      setup?.(source);
       const player = new IterablePlayer({ source, enablePreload: false, sourceId: "test" });
       player.setSubscriptions([{ topic }]);
       const states: PlayerState[] = [];
@@ -1297,6 +1298,39 @@ describe("IterablePlayer", () => {
           state.activeData?.messages.map((msg) => Math.round(toSec(msg.receiveTime) * 1000)) ?? [],
       );
       expect(_.uniq(emitted)).toEqual(TIMES_MS);
+      player.close();
+      await player.isClosed;
+    });
+
+    it("emits a message read ahead by a tick only once when the iterator is reset", async () => {
+      const topic = BasicBuilder.string();
+      const update = Promise.withResolvers<Initialization | undefined>();
+      const { player, states, openGate } = await startPlayingToGate(topic, (source) => {
+        const updates = [update.promise];
+        source.waitForUpdate = async () => await (updates.shift() ?? new Promise(() => {}));
+      });
+
+      // The source grows while the tick waits: the player resets the playback iterator
+      const initial = await new TestSource().initialize();
+      update.resolve({ ...initial, end: { sec: 2, nsec: 0 }, updatedRanges: [] });
+      await delay(10);
+      openGate();
+      await vi.waitFor(
+        () => {
+          expect(states.at(-1)?.activeData?.currentTime).toEqual({ sec: 2, nsec: 0 });
+        },
+        { timeout: 5000 },
+      );
+
+      // Each message reaches the panels once, in a single tick
+      const emitted = _.uniqBy(
+        states.filter((state) => (state.activeData?.messages.length ?? 0) > 0),
+        (state) => state.activeData?.messages,
+      ).flatMap(
+        (state) =>
+          state.activeData?.messages.map((msg) => Math.round(toSec(msg.receiveTime) * 1000)) ?? [],
+      );
+      expect(emitted).toEqual(TIMES_MS);
       player.close();
       await player.isClosed;
     });

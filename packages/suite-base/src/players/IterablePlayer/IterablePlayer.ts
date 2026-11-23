@@ -909,6 +909,9 @@ export class IterablePlayer implements Player {
 
   async #resetPlaybackIterator() {
     this.#playbackIteratorStale = false;
+    // The new iterator reads again from just after the current time: a message the old one read
+    // ahead (e.g. by a tick interrupted for this reset) would be emitted twice
+    this.#lastMessageEvent = undefined;
     if (!this.#currentTime) {
       throw new Error("Invariant: Tried to reset playback iterator with no current time.");
     }
