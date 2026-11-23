@@ -190,13 +190,3 @@ export const CameraInfoRender: StoryObj = {
     await userEvent.click(label);
   },
 };
-
-export const CameraInfoRenderChinese = {
-  ...CameraInfoRender,
-  parameters: { colorScheme: "dark", forceLanguage: "zh" },
-};
-
-export const CameraInfoRenderJapanese = {
-  ...CameraInfoRender,
-  parameters: { colorScheme: "dark", forceLanguage: "ja" },
-};

@@ -76,14 +76,6 @@ export const Default: Story = {};
 export const Empty: Story = {
   args: { topics: [] },
 };
-export const EmptyChinese: Story = {
-  args: { topics: [] },
-  parameters: { forceLanguage: "zh" },
-};
-export const EmptyJapanese: Story = {
-  args: { topics: [] },
-  parameters: { forceLanguage: "ja" },
-};
 
 export const ContextMenuSingleTopic: Story = {
   play: async ({ canvasElement }) => {
@@ -233,13 +225,4 @@ export const NoResults: Story = {
       await user.type(input, "asdfasdf");
     }
   },
-};
-
-export const NoResultsChinese: Story = {
-  ...NoResults,
-  parameters: { forceLanguage: "zh" },
-};
-export const NoResultsJapanese: Story = {
-  ...NoResults,
-  parameters: { forceLanguage: "ja" },
 };

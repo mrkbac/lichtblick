@@ -3,7 +3,7 @@
 // Imported by the generated service worker (rspackConfigs.ts). Foxglove-style view links
 // (<scope>/<org>/view?…) use our query parameters, but the precached index.html loads its script
 // by a relative path, which breaks under /<org>/. Redirect them to the app root with the same
-// query before workbox serves the app shell. web/.cloudflare/_redirects does the same on the
+// query before workbox serves the app shell. packages/suite-web/.cloudflare/_redirects does the same on the
 // server for visits without an installed service worker.
 self.addEventListener("fetch", (event) => {
   if (event.request.mode !== "navigate") {

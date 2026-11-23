@@ -132,11 +132,6 @@ export default defineConfig({
         restoreMocks: true,
       }),
       project("ci", { root: "ci", include: ["**/*.test.{ts,tsx}"] }),
-      project("desktop", {
-        root: "desktop",
-        include: ["**/*.test.{ts,tsx}"],
-        exclude: ["**/integration-test/**", "node_modules/**"],
-      }),
     ],
   },
 });

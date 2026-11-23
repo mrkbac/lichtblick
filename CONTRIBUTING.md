@@ -6,7 +6,6 @@ Lichtblick is an integrated visualization and diagnosis tool for robotics, built
 
 ## Table of Contents
 
-- [Code of Conduct](#code-of-conduct)
 - [Prerequisites](#prerequisites)
 - [Getting Started](#getting-started)
 - [Project Structure](#project-structure)
@@ -20,12 +19,6 @@ Lichtblick is an integrated visualization and diagnosis tool for robotics, built
 - [Localization](#localization)
 - [License](#license)
 - [Credits](#credits)
-
----
-
-## Code of Conduct
-
-This project adheres to the [Contributor Covenant Code of Conduct](CODE_OF_CONDUCT.md). By participating, you are expected to uphold this code. Please report unacceptable behavior to [lichtblick@bmwgroup.com](mailto:lichtblick@bmwgroup.com).
 
 ---
 
@@ -131,16 +124,11 @@ Lichtblick is organized as a **monorepo** managed with pnpm workspaces:
 
 ```
 lichtblick/
-├── desktop/               # Electron desktop app entry points
-│   ├── main/              # Main process
-│   ├── preload/           # Preload scripts
-│   ├── renderer/          # Renderer process
-├── web/                   # Web app entry point
 ├── packages/
 │   ├── suite/             # Core application logic
 │   ├── suite-base/        # Shared base components, panels, and players
-│   ├── suite-desktop/     # Desktop-specific functionality
-│   ├── suite-web/         # Web-specific functionality
+│   ├── suite-desktop/     # Electron app: build config, main/preload/renderer
+│   ├── suite-web/         # Web app (PWA): build config, entry point
 │   ├── theme/             # Theming and styling
 │   ├── hooks/             # Shared React hooks
 │   ├── log/               # Logging utilities
@@ -302,20 +290,6 @@ Code quality is enforced through automated tooling. All checks run in CI and mus
 
 - **oxlint** (type-aware, see `.oxlintrc.json`) with our custom rules in `packages/oxlint-plugin` enforces consistent code patterns.
 - Run `pnpm lint` to auto-fix issues locally.
-
-### Git Hooks
-
-Git hooks are managed by [Husky](https://typicode.github.io/husky/) and are **installed automatically** the first time you run `pnpm install` (via the `prepare` script). No manual setup is required.
-
-| Hook | When it runs | What it does |
-| ------------ | ------------ | ------------------------------------------------------------------------------------------------------- |
-| `pre-commit` | `git commit` | Runs [lint-staged](https://github.com/lint-staged/lint-staged) on **staged** `*.{js,jsx,mjs,cjs,ts,tsx, json}` files: `oxlint --fix` then `biome format --write`. Auto-fixes are re-staged; non-fixable lint errors block the commit. |
-
-Notes:
-
-- Only staged JavaScript/TypeScript files are formatted and linted on commit, so hooks stay fast.
-- Type checking runs on `pre-push` rather than `pre-commit` because TypeScript needs the whole project (it cannot be reliably scoped to individual files).
-- If hooks are not running, re-run `pnpm install` (or `pnpm prepare`) to reinstall them.
 
 ### TypeScript Conventions
 
@@ -496,14 +470,7 @@ Open an [issue](https://github.com/mrkbac/lichtblick/issues/new) with:
 
 ## Localization
 
-First-class support is provided in **English only**. Translations into other languages are community-driven and available on a best-effort basis.
-
-Translation support is implemented using [`react-i18next`](https://react.i18next.com).
-
-### Translation guidelines
-
-- We value **high-quality** translations over complete coverage. Every PR must have up-to-date **English** translations, but updating other languages is optional.
-- If you update an English translation and cannot provide accurate non-English translations, **delete the outdated non-English versions** in your PR. Optionally, open follow-up PRs with accurate translations.
+UI strings use [`react-i18next`](https://react.i18next.com) with English as the only language.
 
 ### Translation files
 
@@ -564,20 +531,6 @@ export const myComponent = {
 // i18n/en/index.ts
 export * from "./myComponent";
 ```
-
-```ts
-// i18n/zh/myComponent.ts
-export const myComponent: Partial<TypeOptions["resources"]["myComponent"]> = {
-  hello: "你好！",
-};
-
-// i18n/zh/index.ts
-export * from "./myComponent";
-```
-
-| English         | Chinese         |
-| --------------- | --------------- |
-| `<p>Hello!</p>` | `<p>你好！</p>` |
 
 ---
 

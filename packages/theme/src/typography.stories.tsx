@@ -142,13 +142,3 @@ export const FontFeatureSettings: StoryObj = {
   ),
   parameters: { colorScheme: "light" },
 };
-
-export const FontFeatureSettingsChinese: StoryObj = {
-  ...FontFeatureSettings,
-  parameters: { forceLanguage: "zh", colorScheme: "light" },
-};
-
-export const FontFeatureSettingsJapanese: StoryObj = {
-  ...FontFeatureSettings,
-  parameters: { forceLanguage: "ja", colorScheme: "light" },
-};

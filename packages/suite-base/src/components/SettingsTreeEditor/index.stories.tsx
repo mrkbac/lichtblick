@@ -867,15 +867,6 @@ export const Basics: StoryObj = {
   },
 };
 
-export const BasicsChinese: StoryObj = {
-  ...Basics,
-  parameters: { forceLanguage: "zh" },
-};
-export const BasicsJapanese: StoryObj = {
-  ...Basics,
-  parameters: { forceLanguage: "ja" },
-};
-
 export const DisabledFields: StoryObj = {
   render: () => {
     return <Wrapper nodes={DisabledSettings} />;

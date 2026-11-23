@@ -157,21 +157,3 @@ export const CaseInsensitiveFilter: Story = {
   args: { inputValue: "pA" },
   name: "Case-insensitive filtering and highlight submenu",
 };
-
-export const PanelListChinese: Story = {
-  parameters: { forceLanguage: "zh" },
-};
-
-export const PanelListJapanese: Story = {
-  parameters: { forceLanguage: "ja" },
-};
-
-export const NoResultsChinese: Story = {
-  ...NoResultsAnyGrid,
-  parameters: { forceLanguage: "zh" },
-};
-
-export const NoResultsJapanese: Story = {
-  ...NoResultsAnyGrid,
-  parameters: { forceLanguage: "ja" },
-};

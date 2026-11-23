@@ -147,16 +147,6 @@ export const Settings: StoryObj<typeof PublishClickToolTemplate> = {
   },
 };
 
-export const SettingsChinese: StoryObj<typeof PublishClickToolTemplate> = {
-  ...Settings,
-  parameters: { forceLanguage: "zh" },
-};
-
-export const SettingsJapanese: StoryObj<typeof PublishClickToolTemplate> = {
-  ...Settings,
-  parameters: { forceLanguage: "ja" },
-};
-
 function PublishClickToolTemplate({
   type,
   includeSettings,

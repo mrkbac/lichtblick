@@ -200,23 +200,6 @@ export const LineGraphWithSettings: StoryObj = {
   },
 };
 
-export const LineGraphWithSettingsChinese: StoryObj = {
-  ...LineGraphWithSettings,
-  parameters: {
-    colorScheme: "light",
-    ...LineGraphWithSettings.parameters,
-    forceLanguage: "zh",
-  },
-};
-export const LineGraphWithSettingsJapanese: StoryObj = {
-  ...LineGraphWithSettings,
-  parameters: {
-    colorScheme: "light",
-    ...LineGraphWithSettings.parameters,
-    forceLanguage: "ja",
-  },
-};
-
 export const LineGraphWithLegendsHidden: StoryObj = {
   render: function Story() {
     return <PlotWrapper config={{ ...exampleConfig, showLegend: false }} />;

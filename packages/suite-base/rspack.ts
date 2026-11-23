@@ -174,8 +174,8 @@ export function makeConfig(
       alias: {
         ...decoderSrcAliases(),
         "@lichtblick/suite-base": _nodeFileURLToPath(new URL("src", dirHref)),
-        // Apps outside suite-base (web/src, desktop/renderer) don't depend on react themselves, and
-        // pnpm doesn't hoist it, so JSX there resolves the runtime from suite-base.
+        // Code without its own react dependency (pnpm doesn't hoist it) resolves the JSX runtime
+        // from suite-base.
         "react/jsx-runtime": localRequire.resolve("react/jsx-runtime"),
         "react/jsx-dev-runtime": localRequire.resolve("react/jsx-dev-runtime"),
         // Run Monaco's TS worker on our `typescript` instead of the copy Monaco bundles.

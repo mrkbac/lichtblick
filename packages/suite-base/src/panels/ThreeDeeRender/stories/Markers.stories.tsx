@@ -577,16 +577,6 @@ export const MarkersSettings: StoryObj = {
   },
 };
 
-export const MarkersSettingsChinese: StoryObj = {
-  ...MarkersSettings,
-  parameters: { forceLanguage: "zh" },
-};
-
-export const MarkersSettingsJapanese: StoryObj = {
-  ...MarkersSettings,
-  parameters: { forceLanguage: "ja" },
-};
-
 export const MarkersNoOutlines: StoryObj = {
   render: function Story() {
     return <AllMarkers showOutlines={false} />;

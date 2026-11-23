@@ -107,10 +107,6 @@ install-multiple-extensions.web.spec.ts;
   └── global-teardown.ts             # Cleanup after testing (clear DB, stored files, etc.)
 ```
 
-## Selector discovery with Playwright MCP
-
-`.mcp.json` at the repo root configures the [Playwright MCP server](https://github.com/microsoft/playwright-mcp) for MCP-capable agents. With `pnpm web:serve` running, an agent can open `http://localhost:8080`, read accessibility snapshots to find stable selectors, and scaffold tests that follow the conventions above. Review generated tests and add meaningful assertions.
-
 ## Page Object Models (POMs)
 
 Reusable UI abstractions live in `e2e/page-objects/`. They encapsulate common interactions so tests focus on behavior, not selectors.
