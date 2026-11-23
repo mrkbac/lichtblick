@@ -8,7 +8,7 @@
 import CheckIcon from "@mui/icons-material/Check";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import { Button, ButtonProps, IconButton, IconButtonProps, Tooltip, useTheme } from "@mui/material";
-import React, { useCallback, useState, PropsWithChildren, useMemo } from "react";
+import React, { useCallback, useState, PropsWithChildren } from "react";
 
 import clipboard from "@lichtblick/suite-base/util/clipboard";
 
@@ -16,7 +16,7 @@ function CopyButtonComponent(
   props: PropsWithChildren<{
     getText: () => string;
     size?: "small" | "medium" | "large";
-    iconSize?: "small" | "medium" | "large";
+    iconSize?: "small" | "medium";
     color?: ButtonProps["color"];
     className?: string;
     edge?: IconButtonProps["edge"];
@@ -39,27 +39,13 @@ function CopyButtonComponent(
   const theme = useTheme();
   const [copied, setCopied] = useState(false);
 
-  const checkIcon = useMemo(() => {
-    switch (iconSize) {
-      case "small":
-        return <CheckIcon style={{ fontSize: 16 }} htmlColor={theme.palette.success.main} />;
-      case "medium":
-        return <CheckIcon fontSize="small" htmlColor={theme.palette.success.main} />;
-      case "large":
-        return <CheckIcon htmlColor={theme.palette.success.main} />;
-    }
-  }, [iconSize, theme.palette.success.main]);
-
-  const copyIcon = useMemo(() => {
-    switch (iconSize) {
-      case "small":
-        return <ContentCopyIcon style={{ fontSize: 16 }} />;
-      case "medium":
-        return <ContentCopyIcon fontSize="small" />;
-      case "large":
-        return <ContentCopyIcon />;
-    }
-  }, [iconSize]);
+  const iconProps =
+    iconSize === "small" ? { style: { fontSize: 16 } } : { fontSize: "small" as const };
+  const icon = copied ? (
+    <CheckIcon {...iconProps} htmlColor={theme.palette.success.main} />
+  ) : (
+    <ContentCopyIcon {...iconProps} />
+  );
 
   const handleCopy = useCallback(() => {
     clipboard
@@ -86,7 +72,7 @@ function CopyButtonComponent(
           color={copied ? "success" : color}
           aria-label={ariaLabel ?? title}
         >
-          {copied ? checkIcon : copyIcon}
+          {icon}
         </IconButton>
       </Tooltip>
     );
@@ -98,7 +84,7 @@ function CopyButtonComponent(
       className={className}
       onClick={handleCopy}
       color={copied ? "success" : color}
-      startIcon={copied ? checkIcon : copyIcon}
+      startIcon={icon}
     >
       {children}
     </Button>

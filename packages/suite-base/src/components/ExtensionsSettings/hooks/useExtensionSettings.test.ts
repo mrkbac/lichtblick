@@ -6,11 +6,25 @@
 import { act, renderHook } from "@testing-library/react";
 import type { Mock } from "vitest";
 
-import { InstalledExtension } from "@lichtblick/suite-base/components/ExtensionsSettings/types";
 import { useExtensionCatalog } from "@lichtblick/suite-base/context/ExtensionCatalogContext";
 import { useExtensionMarketplace } from "@lichtblick/suite-base/context/ExtensionMarketplaceContext";
 
 import useExtensionSettings from "./useExtensionSettings";
+
+type InstalledExtension = {
+  id: string;
+  installed: boolean;
+  name: string;
+  displayName: string;
+  description: string;
+  publisher: string;
+  homepage?: string;
+  license?: string;
+  version: string;
+  keywords?: string[];
+  namespace: string;
+  qualifiedName: string;
+};
 
 vi.mock("@lichtblick/suite-base/context/ExtensionCatalogContext");
 vi.mock("@lichtblick/suite-base/context/ExtensionMarketplaceContext");

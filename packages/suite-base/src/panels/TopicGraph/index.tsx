@@ -20,7 +20,7 @@ import { useCallback, useMemo, useRef, useState } from "react";
 import { makeStyles } from "tss-react/mui";
 
 import EmptyState from "@lichtblick/suite-base/components/EmptyState";
-import ExpandingToolbar, { ToolGroup } from "@lichtblick/suite-base/components/ExpandingToolbar";
+import ExpandingToolbar from "@lichtblick/suite-base/components/ExpandingToolbar";
 import { useMessagePipeline } from "@lichtblick/suite-base/components/MessagePipeline";
 import Panel from "@lichtblick/suite-base/components/Panel";
 import { usePanelButtonTitle } from "@lichtblick/suite-base/components/PanelButton";
@@ -375,26 +375,25 @@ function TopicGraph() {
               </Tooltip>
             </>
           }
+          title="Topics"
           selectedTab={selectedTab}
           onSelectTab={(newSelectedTab) => {
             setSelectedTab(newSelectedTab);
           }}
         >
-          <ToolGroup name="Topics">
-            <div className={classes.toolbarContent}>
-              <RadioGroup
-                defaultValue={topicVisibility}
-                onChange={(_event, value) => {
-                  graph.current?.resetUserPanZoom();
-                  setTopicVisibility(value as TopicVisibility);
-                }}
-              >
-                {Object.entries(topicVisibilityToLabelMap).map(([id, label]) => (
-                  <FormControlLabel key={id} value={id} control={<Radio />} label={label} />
-                ))}
-              </RadioGroup>
-            </div>
-          </ToolGroup>
+          <div className={classes.toolbarContent}>
+            <RadioGroup
+              defaultValue={topicVisibility}
+              onChange={(_event, value) => {
+                graph.current?.resetUserPanZoom();
+                setTopicVisibility(value as TopicVisibility);
+              }}
+            >
+              {Object.entries(topicVisibilityToLabelMap).map(([id, label]) => (
+                <FormControlLabel key={id} value={id} control={<Radio />} label={label} />
+              ))}
+            </RadioGroup>
+          </div>
         </ExpandingToolbar>
       </div>
       <Graph

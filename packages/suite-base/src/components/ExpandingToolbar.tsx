@@ -6,17 +6,8 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import CloseFullscreenIcon from "@mui/icons-material/CloseFullscreen";
-import {
-  Divider,
-  Paper,
-  IconButton,
-  Tabs,
-  Tab,
-  tabClasses,
-  tabsClasses,
-  Tooltip,
-} from "@mui/material";
-import React, { ReactElement, ReactNode } from "react";
+import { Divider, Paper, IconButton, Tooltip, Typography } from "@mui/material";
+import React, { ReactNode } from "react";
 import { makeStyles } from "tss-react/mui";
 
 import OverlayToolbar from "@lichtblick/suite-base/components/OverlayToolbar";
@@ -33,22 +24,21 @@ const useStyles = makeStyles()((theme) => ({
   content: {
     position: "relative",
   },
-  tabs: {
-    minHeight: "auto",
+  // Looks like the selected MUI Tab this header used to be.
+  title: {
+    lineHeight: 1.25,
+    position: "relative",
+    padding: theme.spacing(0.875, 1.5, 1),
+    color: theme.palette.text.primary,
 
-    [`.${tabsClasses.indicator}`]: {
-      transform: "scaleX(0.75)",
+    "&::after": {
+      content: '""',
+      position: "absolute",
+      left: "12.5%",
+      right: "12.5%",
+      bottom: 0,
       height: 2,
-    },
-    [`.${tabClasses.root}`]: {
-      minWidth: "auto",
-      minHeight: "auto",
-      padding: theme.spacing(0.875, 1.5, 1),
-      color: theme.palette.text.secondary,
-
-      "&.Mui-selected": {
-        color: theme.palette.text.primary,
-      },
+      backgroundColor: theme.palette.primary.main,
     },
   },
   minimizeButton: {
@@ -56,15 +46,6 @@ const useStyles = makeStyles()((theme) => ({
     borderTopRightRadius: theme.shape.borderRadius,
   },
 }));
-
-export function ToolGroup<T>({
-  children,
-}: {
-  name: T;
-  children: React.ReactElement;
-}): React.JSX.Element {
-  return children;
-}
 
 export function ToolGroupFixedSizePane({ children }: { children: ReactNode }): React.JSX.Element {
   return (
@@ -76,8 +57,10 @@ export function ToolGroupFixedSizePane({ children }: { children: ReactNode }): R
 
 type Props<T extends string> = {
   checked?: boolean;
-  children: React.ReactElement<typeof ToolGroup>[] | React.ReactElement<typeof ToolGroup>;
+  children: ReactNode;
   icon: ReactNode;
+  /** Header of the expanded pane; also the value passed to onSelectTab when opening. */
+  title: T;
   onSelectTab: (name: T | undefined) => void;
   selectedTab?: T; // collapse the toolbar if selectedTab is undefined
   tooltip: string;
@@ -86,13 +69,14 @@ type Props<T extends string> = {
   toolbarItems?: ReactNode;
 };
 
-/** Expands a floating control into a tabbed pane while leaving the surrounding canvas interactive. */
+/** Expands a floating control into a pane while leaving the surrounding canvas interactive. */
 export default function ExpandingToolbar<T extends string>({
   children,
   checked,
   icon,
   onSelectTab,
   selectedTab,
+  title,
   tooltip,
   dataTest,
   toolbarItems,
@@ -109,11 +93,7 @@ export default function ExpandingToolbar<T extends string>({
           aria-label={tooltip}
           data-testid={`ExpandingToolbar-${tooltip}`}
           onClick={() => {
-            // Toggle; open on the first tab
-            const firstTab = React.Children.toArray(children)[0] as
-              | React.ReactElement<{ name: T }>
-              | undefined;
-            onSelectTab(expanded ? undefined : firstTab?.props.name);
+            onSelectTab(expanded ? undefined : title);
           }}
         >
           {icon}
@@ -131,35 +111,14 @@ export default function ExpandingToolbar<T extends string>({
   if (!expanded) {
     return toolbar;
   }
-  let selectedChild: ReactElement | undefined;
-
-  React.Children.forEach(children, (child) => {
-    if (!selectedChild || child.props.name === selectedTab) {
-      selectedChild = child;
-    }
-  });
-
-  const handleChange = (_event: React.SyntheticEvent, value: T | undefined) => {
-    if (value != undefined) {
-      onSelectTab(value);
-    }
-  };
-
   return (
     <>
       <Paper className={classes.root} data-testid={dataTest} square={false} elevation={4}>
         <Paper>
           <Stack direction="row" justifyContent="space-between" alignItems="center">
-            <Tabs
-              className={classes.tabs}
-              textColor="inherit"
-              value={selectedTab}
-              onChange={handleChange}
-            >
-              {React.Children.map(children, (child) => (
-                <Tab label={child.props.name} value={child.props.name} />
-              ))}
-            </Tabs>
+            <Typography variant="button" component="div" className={classes.title}>
+              {title}
+            </Typography>
             <IconButton
               size="small"
               className={classes.minimizeButton}
@@ -171,7 +130,7 @@ export default function ExpandingToolbar<T extends string>({
             </IconButton>
           </Stack>
         </Paper>
-        <div className={classes.content}>{selectedChild}</div>
+        <div className={classes.content}>{children}</div>
       </Paper>
       {toolbar}
     </>

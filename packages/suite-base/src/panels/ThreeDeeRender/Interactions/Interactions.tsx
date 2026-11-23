@@ -19,7 +19,6 @@ import React from "react";
 
 import type { LayoutActions } from "@lichtblick/suite";
 import ExpandingToolbar, {
-  ToolGroup,
   ToolGroupFixedSizePane,
 } from "@lichtblick/suite-base/components/ExpandingToolbar";
 import { usePanelButtonTitle } from "@lichtblick/suite-base/components/PanelButton";
@@ -116,19 +115,18 @@ function InteractionsBaseComponent({
       tooltip={title}
       icon={<Icon fontSize="small" />}
       toolbarItems={toolbarItems}
+      title={OBJECT_TAB_TYPE}
       selectedTab={interactionsTabType}
       onSelectTab={(newSelectedTab) => {
         setInteractionsTabType(newSelectedTab);
       }}
     >
-      <ToolGroup name={OBJECT_TAB_TYPE}>
-        <SelectedObjectPane
-          addPanel={addPanel}
-          onShowTopicSettings={onShowTopicSettings}
-          selectedObject={selectedObject}
-          timezone={timezone}
-        />
-      </ToolGroup>
+      <SelectedObjectPane
+        addPanel={addPanel}
+        onShowTopicSettings={onShowTopicSettings}
+        selectedObject={selectedObject}
+        timezone={timezone}
+      />
     </ExpandingToolbar>
   );
 }

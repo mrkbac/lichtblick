@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import { TextFieldProps } from "@mui/material";
-import { CSSProperties } from "react";
 
 import {
   MessagePathPart,
@@ -53,7 +52,6 @@ export type MessagePathInputBaseProps = {
   validTypes?: readonly string[]; // Valid types, like "message", "array", or "primitive", or a ROS primitive like "float64"
   noMultiSlices?: boolean; // Don't suggest slices with multiple values `[:]`, only single values like `[0]`.
   placeholder?: string;
-  inputStyle?: CSSProperties;
   disabled?: boolean;
   disableAutocomplete?: boolean; // Treat this as a normal input, with no autocomplete.
   readOnly?: boolean;

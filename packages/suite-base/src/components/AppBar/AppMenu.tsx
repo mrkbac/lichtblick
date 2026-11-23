@@ -36,7 +36,7 @@ const MENU_RECENTS_COUNT = 5;
 
 /** The app menu: one flat list, grouped by headings, so every action is one click away. */
 export function AppMenu(props: AppMenuProps): React.JSX.Element {
-  const { open, handleClose, anchorEl, anchorReference, anchorPosition, disablePortal } = props;
+  const { open, handleClose, anchorEl } = props;
   const { classes } = useStyles();
   const { t } = useTranslation("appBar");
   const { enqueueSnackbar } = useSnackbar();
@@ -112,9 +112,6 @@ export function AppMenu(props: AppMenuProps): React.JSX.Element {
   return (
     <Menu
       anchorEl={anchorEl}
-      anchorReference={anchorReference}
-      anchorPosition={anchorPosition}
-      disablePortal={disablePortal}
       id="app-menu"
       open={open}
       disableAutoFocusItem

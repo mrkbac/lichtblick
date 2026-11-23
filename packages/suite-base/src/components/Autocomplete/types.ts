@@ -2,17 +2,13 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import { TextFieldProps } from "@mui/material";
-import { CSSProperties } from "react";
 
 export type AutocompleteProps = {
   className?: string;
-  disableAutoSelect?: boolean;
   disabled?: boolean;
   filterText?: string;
   hasError?: boolean;
-  inputStyle?: CSSProperties;
   items: readonly string[];
-  minWidth?: number;
   onChange?: (event: React.SyntheticEvent, text: string) => void;
   onSelect: (value: string, autocomplete: IAutocomplete) => void;
   placeholder?: string;

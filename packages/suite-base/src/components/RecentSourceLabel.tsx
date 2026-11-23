@@ -5,12 +5,12 @@ import PushPinIcon from "@mui/icons-material/PushPin";
 import { Tooltip, Typography } from "@mui/material";
 import { useTranslation } from "react-i18next";
 
-import { BuiltinIcon } from "@lichtblick/suite-base/components/BuiltinIcon";
 import { useStyles } from "@lichtblick/suite-base/components/RecentSourceLabel.style";
 import {
   RecentSource,
   usePlayerSelection,
 } from "@lichtblick/suite-base/context/PlayerSelectionContext";
+import ICONS from "@lichtblick/suite-base/theme/icons";
 import { formatTimeAgo, splitRecentTitle } from "@lichtblick/suite-base/util/recentSources";
 
 type Props = {
@@ -43,7 +43,7 @@ export function RecentSourceLabel({ recent, hidePinIndicator = false }: Props): 
     <Tooltip title={recent.title} placement="top-start" enterDelay={500} disableInteractive>
       <div className={classes.root}>
         <span className={classes.icon}>
-          <BuiltinIcon name={source?.iconName ?? (recent.type === "file" ? "OpenFile" : "Flow")} />
+          {ICONS[source?.iconName ?? (recent.type === "file" ? "OpenFile" : "Flow")]}
         </span>
         <div className={classes.text}>
           <Typography variant="body2" noWrap>

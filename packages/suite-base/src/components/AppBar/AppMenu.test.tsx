@@ -80,7 +80,7 @@ describe("AppMenu", () => {
   });
 
   const renderAppMenu = (props: Partial<AppMenuProps> = {}) =>
-    render(<AppMenu open={true} handleClose={mockHandleClose} disablePortal={false} {...props} />);
+    render(<AppMenu open={true} handleClose={mockHandleClose} {...props} />);
 
   it("shows every action in one flat list", () => {
     renderAppMenu();

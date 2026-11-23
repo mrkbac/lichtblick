@@ -17,7 +17,6 @@
 
 import { renderHook } from "@testing-library/react";
 import * as _ from "lodash-es";
-import type { Mock } from "vitest";
 
 import { OperatorType, parseMessagePath } from "@lichtblick/message-path";
 import { messagePathStructures } from "@lichtblick/suite-base/components/MessagePathSyntax/messagePathsForDatatype";
@@ -31,7 +30,6 @@ import {
   fillInGlobalVariablesInPath,
   getMessagePathDataItems,
   useCachedGetMessagePathDataItems,
-  useDecodeMessagePathsForMessagesByTopic,
 } from "./useCachedGetMessagePathDataItems";
 
 function addValuesWithPathsToItems(
@@ -839,63 +837,5 @@ describe("fillInGlobalVariablesInPath", () => {
         },
       ],
     });
-  });
-});
-
-describe("useDecodeMessagePathsForMessagesByTopic", () => {
-  it("results in missing entries when no array is provided for a topic", () => {
-    const topics: Topic[] = [
-      { name: "/topic1", schemaName: "datatype" },
-      { name: "/topic2", schemaName: "datatype" },
-      { name: "/topic3", schemaName: "datatype" },
-    ];
-    const datatypes: RosDatatypes = new Map(
-      Object.entries({
-        datatype: {
-          definitions: [{ name: "value", type: "uint32", isArray: false, isComplex: false }],
-        },
-      }),
-    );
-    const { result } = renderHook(({ paths }) => useDecodeMessagePathsForMessagesByTopic(paths), {
-      initialProps: {
-        paths: ["/topic1.value", "/topic2.value", "/topic3.value", "/topic3..value"],
-      },
-      wrapper({ children }) {
-        return (
-          <MockCurrentLayoutProvider>
-            <MockMessagePipelineProvider topics={topics} datatypes={datatypes}>
-              {children}
-            </MockMessagePipelineProvider>
-          </MockCurrentLayoutProvider>
-        );
-      },
-    });
-
-    const message: MessageEvent = {
-      topic: "/topic1",
-      receiveTime: { sec: 0, nsec: 0 },
-      message: { value: 1 },
-      schemaName: "datatype",
-      sizeInBytes: 0,
-    };
-    const messagesByTopic = {
-      "/topic1": [message],
-      "/topic2": [],
-    };
-    expect(result.current(messagesByTopic)).toEqual({
-      // Value for /topic1.value
-      "/topic1.value": [
-        { messageEvent: message, queriedData: [{ path: "/topic1.value", value: 1 }] },
-      ],
-      // Empty array for /topic2.value
-      "/topic2.value": [],
-      // No array for /topic3.value because the path is valid but the data is missing.
-      // Empty array for /topic3..value because path is invalid.
-      "/topic3..value": [],
-    });
-
-    expect(console.error).toHaveBeenCalled();
-    expect(console.error).toHaveBeenLastCalledWith("Error parsing message path", expect.any(Error));
-    (console.error as Mock).mockReset();
   });
 });

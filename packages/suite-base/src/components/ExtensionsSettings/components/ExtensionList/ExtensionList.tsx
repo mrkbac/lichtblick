@@ -32,8 +32,7 @@ import { useTranslation } from "react-i18next";
 import { makeStyles } from "tss-react/mui";
 
 import { Immutable } from "@lichtblick/suite";
-import { InstallButton } from "@lichtblick/suite-base/components/ExtensionsSettings/components/ExtensionActionButton/InstallButton";
-import { UninstallButton } from "@lichtblick/suite-base/components/ExtensionsSettings/components/ExtensionActionButton/UninstallButton";
+import { ExtensionActionButton } from "@lichtblick/suite-base/components/ExtensionsSettings/components/ExtensionActionButton/ExtensionActionButton";
 import {
   ExtensionListProps,
   initialPagination,
@@ -156,26 +155,14 @@ export default function ExtensionList({
   // closure (on every catalog or operation change) would remount the button and drop a click
   // that lands mid-update.
   const renderActions = (extension: ExtensionMarketplaceDetail) => {
-    const isExtensionOperating = isOperating(extension.id);
-    return isExtensionInstalled(extension.id) ? (
-      <UninstallButton
+    const installed = isExtensionInstalled(extension.id);
+    return (
+      <ExtensionActionButton
         extension={extension}
-        onAction={handleUninstall}
-        isOperating={isExtensionOperating}
+        installed={installed}
+        onAction={installed ? handleUninstall : handleInstall}
+        isOperating={isOperating(extension.id)}
         operationStatus={operationStatus}
-        stopPropagation
-        label={ExtensionActionsLabel.UNINSTALL}
-        loadingLabel={ExtensionOperationStatusLabel.UNINSTALLING}
-      />
-    ) : (
-      <InstallButton
-        extension={extension}
-        onAction={handleInstall}
-        isOperating={isExtensionOperating}
-        operationStatus={operationStatus}
-        stopPropagation
-        label={ExtensionActionsLabel.INSTALL}
-        loadingLabel={ExtensionOperationStatusLabel.INSTALLING}
       />
     );
   };
