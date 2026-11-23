@@ -13,7 +13,7 @@ export type ElectronFixtures = {
   preInstalledExtensions?: string[];
 };
 
-const WEBPACK_PATH = path.resolve(__dirname, "../../desktop/.webpack");
+const WEBPACK_PATH = path.resolve(__dirname, "../../packages/suite-desktop/.webpack");
 
 export const test = base.extend<ElectronFixtures & { electronArgs: string[] }>({
   electronArgs: [],

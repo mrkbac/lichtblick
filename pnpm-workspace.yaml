@@ -1,8 +1,6 @@
 packages:
-  - desktop
   - packages/*
   - packages/@types/*
-  - web
   - benchmark
 
 auditConfig:

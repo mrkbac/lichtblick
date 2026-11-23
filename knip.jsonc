@@ -53,14 +53,6 @@
       // Rspack configs build on suite-base's makeConfig, which owns the loaders
       "rspack": false
     },
-    "desktop": {
-      "entry": ["rspack.config.ts", "*/index.{ts,tsx}", "electronBuilderConfig.js"],
-      "rspack": false
-    },
-    "web": {
-      "entry": ["rspack.config.ts", "src/entrypoint.tsx"],
-      "rspack": false
-    },
     "packages/suite-base": {
       "entry": [
         "src/test/{globals,setup,setupTestFramework}.ts",
@@ -83,11 +75,25 @@
       ]
     },
     "packages/suite-desktop": {
-      "entry": ["src/electronBuilderConfig.js", "src/afterPack.ts", "src/test/setup.ts"]
+      "entry": [
+        // Bundled by rspack.config.ts
+        "src/entry/*.{ts,tsx}",
+        "src/electronBuilderConfig.js",
+        "src/afterPack.ts",
+        "src/test/setup.ts"
+      ],
+      // Rspack configs build on suite-base's makeConfig, which owns the loaders
+      "rspack": false
     },
     "packages/suite-web": {
-      // Loaded into the generated service worker by workbox importScripts (rspackConfigs.ts)
-      "entry": ["public/view-link-redirect.js"]
+      "entry": [
+        // Bundled by rspack.config.ts
+        "src/entrypoint.tsx",
+        // Loaded into the generated service worker by workbox importScripts (rspackConfigs.ts)
+        "public/view-link-redirect.js"
+      ],
+      // Rspack configs build on suite-base's makeConfig, which owns the loaders
+      "rspack": false
     },
     "packages/oxlint-plugin": {
       // JSDoc-only `import("estree")` types, provided by oxlint

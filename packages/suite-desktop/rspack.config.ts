@@ -9,25 +9,25 @@ import type { Configuration } from "@rspack/core";
 import path from "node:path";
 
 import { resolveConfigs, type RspackArgv } from "@lichtblick/suite-base/RspackArgv.ts";
-import type { RspackConfigParams } from "@lichtblick/suite-desktop/src/RspackConfigParams.ts";
-import { rspackMainConfig } from "@lichtblick/suite-desktop/src/rspackMainConfig.ts";
-import { rspackPreloadConfig } from "@lichtblick/suite-desktop/src/rspackPreloadConfig.ts";
-import { rspackRendererConfig } from "@lichtblick/suite-desktop/src/rspackRendererConfig.ts";
-import { rspackRootConfig } from "@lichtblick/suite-desktop/src/rspackRootConfig.ts";
 
-import packageJson from "../package.json" with { type: "json" };
+import packageJson from "../../package.json" with { type: "json" };
+import type { RspackConfigParams } from "./src/RspackConfigParams.ts";
+import { rspackMainConfig } from "./src/rspackMainConfig.ts";
+import { rspackPreloadConfig } from "./src/rspackPreloadConfig.ts";
+import { rspackRendererConfig } from "./src/rspackRendererConfig.ts";
+import { rspackRootConfig } from "./src/rspackRootConfig.ts";
 
 const params: RspackConfigParams = {
   packageJson,
   outputPath: path.resolve(import.meta.dirname, ".webpack"),
   // Maps stay next to the build for debugging; electronBuilderConfig.js keeps them out of the app
   prodSourceMap: "hidden-source-map",
-  rendererContext: path.resolve(import.meta.dirname, "renderer"),
-  rendererEntrypoint: "./index.tsx",
-  mainContext: path.resolve(import.meta.dirname, "main"),
-  mainEntrypoint: "./index.ts",
-  preloadContext: path.resolve(import.meta.dirname, "preload"),
-  preloadEntrypoint: "./index.ts",
+  rendererContext: path.resolve(import.meta.dirname, "src/entry"),
+  rendererEntrypoint: "./renderer.tsx",
+  mainContext: path.resolve(import.meta.dirname, "src/entry"),
+  mainEntrypoint: "./main.ts",
+  preloadContext: path.resolve(import.meta.dirname, "src/entry"),
+  preloadEntrypoint: "./preload.ts",
 };
 
 export default (env: unknown, argv: RspackArgv): Configuration[] =>

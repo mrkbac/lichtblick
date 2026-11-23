@@ -7,9 +7,7 @@
 
 const path = require("path");
 
-const {
-  makeElectronBuilderConfig,
-} = require("@lichtblick/suite-desktop/src/electronBuilderConfig");
+const { makeElectronBuilderConfig } = require("./src/electronBuilderConfig");
 
 module.exports = makeElectronBuilderConfig({
   appPath: path.resolve(__dirname, ".webpack"),

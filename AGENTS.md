@@ -43,11 +43,9 @@ E2E tests:
 
 ## Monorepo Map
 
-- `desktop/`: Electron app entry points (`main/`, `preload/`, `renderer/`)
-- `web/`: Web app bundling and entry point
 - `packages/suite-base/`: Shared core UI and logic
-- `packages/suite-desktop/`: Desktop-specific internal package
-- `packages/suite-web/`: Web-specific internal package
+- `packages/suite-desktop/`: Electron app (`rspack.config.ts`, `electronBuilderConfig.js`, entry points in `src/entry/`)
+- `packages/suite-web/`: Web app / PWA (`rspack.config.ts`, `src/entrypoint.tsx`, Cloudflare Pages `_headers`/`_redirects` in `.cloudflare/`); builds to `web/.webpack`
 - `packages/suite/`: Extension API types
 - `e2e/`: Playwright end-to-end tests
 - `ci/`: CI and repository maintenance scripts

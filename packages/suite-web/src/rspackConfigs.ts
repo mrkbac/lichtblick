@@ -38,7 +38,7 @@ const STARTUP_JS_BUDGET_BYTES = 3_800_000;
 /**
  * Unhashed scripts in public/ that the service worker imports, in this order, before workbox's own
  * fetch listener: view-link-redirect.js redirects /<org>/view links before the app-shell fallback,
- * sw-worker-owners.js remembers which window created each worker. web/.cloudflare/_headers keeps
+ * sw-worker-owners.js remembers which window created each worker. packages/suite-web/.cloudflare/_headers keeps
  * them uncached so new deploys reach them.
  */
 const SW_IMPORT_SCRIPTS = ["view-link-redirect.js", "sw-worker-owners.js"];
@@ -161,7 +161,7 @@ export const mainConfig =
         apply: (compiler) => {
           compiler.hooks.afterEmit.tapPromise("GenerateSW", async (compilation) => {
             const names = compilation.getAssets().map((asset) => asset.name);
-            // web/.cloudflare/_headers caches these types for a year without revalidating
+            // packages/suite-web/.cloudflare/_headers caches these types for a year without revalidating
             const frozen = names.filter(
               (name) =>
                 /\.(js|mjs|wasm|woff2|ttf)$/.test(name) &&
@@ -170,7 +170,7 @@ export const mainConfig =
             );
             if (frozen.length > 0) {
               throw new Error(
-                `Unhashed build files would be cached for a year (see web/.cloudflare/_headers): ${frozen.join(", ")}`,
+                `Unhashed build files would be cached for a year (see packages/suite-web/.cloudflare/_headers): ${frozen.join(", ")}`,
               );
             }
             const assetList: AssetList = {
