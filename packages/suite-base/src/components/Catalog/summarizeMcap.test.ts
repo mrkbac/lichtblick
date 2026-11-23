@@ -77,6 +77,42 @@ describe("summarizeMcap", () => {
     });
   });
 
+  it("indexes event messages by schema with their recording timestamp", async () => {
+    const buffer = new TempBuffer();
+    const writer = new McapWriter({ writable: buffer });
+    await writer.start({ library: "", profile: "" });
+    const encoder = new TextEncoder();
+    const schemaId = await writer.registerSchema({
+      name: "foxglove.Event",
+      encoding: "jsonschema",
+      data: encoder.encode('{"type":"object"}'),
+    });
+    const channelId = await writer.registerChannel({
+      topic: "/annotations",
+      schemaId,
+      messageEncoding: "json",
+      metadata: new Map(),
+    });
+    const start = { sec: 1_780_000_000, nsec: 50 };
+    const end = { sec: 1_780_000_001, nsec: 50 };
+    await writer.addMessage({
+      channelId,
+      sequence: 1,
+      logTime: t0,
+      publishTime: t0,
+      data: encoder.encode(
+        JSON.stringify({
+          start_time: start,
+          end_time: end,
+          metadata: [{ key: "name", value: "Reached waypoint" }],
+        }),
+      ),
+    });
+    await writer.end();
+    const summary = await summarizeMcap(new Blob([new Uint8Array(buffer.get())]), NOW_MS);
+    expect(summary.events).toEqual([{ name: "Reached waypoint", start, end }]);
+  });
+
   it("ignores chunks with outlier stamps", async () => {
     // One message per chunk, so the 1970 stamp lands in its own chunk.
     const file = await writeMcap([5n * SEC, t0, t0 + 10n * SEC], {

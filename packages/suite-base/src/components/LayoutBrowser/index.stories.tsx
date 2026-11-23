@@ -12,13 +12,11 @@ import { StoryObj, StoryContext } from "storybook-react-rsbuild";
 import AppConfigurationContext from "@lichtblick/suite-base/context/AppConfigurationContext";
 import { LayoutID } from "@lichtblick/suite-base/context/CurrentLayoutContext";
 import { LayoutData } from "@lichtblick/suite-base/context/CurrentLayoutContext/actions";
-import CurrentUserContext from "@lichtblick/suite-base/context/CurrentUserContext";
 import LayoutStorageContext from "@lichtblick/suite-base/context/LayoutStorageContext";
 import { UserProfileStorageContext } from "@lichtblick/suite-base/context/UserProfileStorageContext";
 import CurrentLayoutProvider from "@lichtblick/suite-base/providers/CurrentLayoutProvider";
 import { defaultPlaybackConfig } from "@lichtblick/suite-base/providers/CurrentLayoutProvider/reducers";
 import LayoutManagerProvider from "@lichtblick/suite-base/providers/LayoutManagerProvider";
-import WorkspaceContextProvider from "@lichtblick/suite-base/providers/WorkspaceContextProvider";
 import { ISO8601Timestamp, Layout } from "@lichtblick/suite-base/services/ILayoutStorage";
 import LayoutManager from "@lichtblick/suite-base/services/LayoutManager/LayoutManager";
 import MockLayoutStorage from "@lichtblick/suite-base/services/MockLayoutStorage";
@@ -448,27 +446,5 @@ export const DeleteLastLayout: StoryObj = {
 
   play: async () => {
     await deleteLayoutInteraction(0);
-  },
-};
-
-export const SignInPrompt: StoryObj = {
-  render: function Story() {
-    return (
-      <CurrentUserContext.Provider
-        value={{
-          currentUser: undefined,
-          signIn: () => undefined,
-          signOut: async () => undefined,
-        }}
-      >
-        <WorkspaceContextProvider>
-          <LayoutBrowser />
-        </WorkspaceContextProvider>
-      </CurrentUserContext.Provider>
-    );
-  },
-
-  parameters: {
-    colorScheme: "light",
   },
 };

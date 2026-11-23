@@ -14,8 +14,11 @@ import type {
 } from "@lichtblick/suite-base/components/Chart/types";
 
 // alias types for convenience
-export type ChartDatasets = ChartData["datasets"];
-export type ChartDataset = ChartDatasets[0];
+export type ChartDataset = ChartData["datasets"][0] & {
+  /** Set when every point's x is >= the previous one's, so the chart can skip off-screen points. */
+  xSorted?: boolean;
+};
+export type ChartDatasets = ChartDataset[];
 export type ChartDatum = ChartDataset["data"][0];
 
 export type Bounds1D = { min: number; max: number };

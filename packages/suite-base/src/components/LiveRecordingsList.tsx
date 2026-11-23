@@ -35,8 +35,6 @@ type Props = {
   /** Search query and its quick filters, see `filterRecordings`; kept locally when not given. */
   query?: string;
   onQueryChange?: (query: string) => void;
-  /** Set by a page that shows the view switch itself. */
-  view?: "list" | "grid" | "map";
   lastOpenedByName?: ReadonlyMap<string, number>;
   /** Runs after a recording was opened as the data source. */
   onOpened?: () => void;
@@ -49,7 +47,6 @@ type Props = {
 export function LiveRecordingsList({
   query: queryProp,
   onQueryChange: onQueryChangeProp,
-  view,
   lastOpenedByName = NO_LAST_OPENED,
   onOpened,
 }: Props): React.JSX.Element {
@@ -245,7 +242,6 @@ export function LiveRecordingsList({
         query={query}
         lastOpenedByName={lastOpenedByName}
         onQueryChange={onQueryChange}
-        view={view}
       />
     </Stack>
   );

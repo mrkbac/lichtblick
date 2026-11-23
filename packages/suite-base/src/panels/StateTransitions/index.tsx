@@ -47,7 +47,7 @@ import { useStateTransitionsStyles } from "@lichtblick/suite-base/panels/StateTr
 import { parseCondition } from "@lichtblick/suite-base/panels/StateTransitions/condition";
 import {
   EMPTY_ITEMS_BY_PATH,
-  MAX_LIVE_SAMPLES_PER_PATH,
+  MAX_SAMPLES_PER_PATH,
   LIVE_REDRAW_MS,
   EMPTY_PATHS,
   EMPTY_TOPICS,
@@ -146,7 +146,7 @@ function StateTransitions(props: StateTransitionPanelProps) {
 
   const itemsByPath = usePathSampleHistory(
     hasRangeData ? EMPTY_PATHS : pathStrings,
-    MAX_LIVE_SAMPLES_PER_PATH,
+    MAX_SAMPLES_PER_PATH,
     changesPaths,
   );
 

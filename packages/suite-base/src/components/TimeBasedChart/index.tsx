@@ -452,12 +452,10 @@ export default function TimeBasedChart(props: Props): React.JSX.Element {
         zoom: {
           enabled: props.zoom,
           mode: zoomMode,
-          speed: 0.1,
         },
         pan: {
           mode: "xy",
           enabled: true,
-          threshold: 10,
         },
       },
       ...props.plugins,

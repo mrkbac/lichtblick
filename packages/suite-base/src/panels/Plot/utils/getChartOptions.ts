@@ -88,12 +88,10 @@ export const getChartOptions = ({
       zoom: {
         enabled: true,
         mode: "x",
-        speed: 0.1,
       },
       pan: {
         mode: "xy",
         enabled: true,
-        threshold: 10,
       },
     },
   },

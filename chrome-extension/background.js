@@ -11,7 +11,12 @@
 //
 // An open WebSocket keeps the service worker alive (Chrome 116+).
 
-const ALLOWED_ORIGINS = new Set(["https://digitalis.marko.im", "https://licht.marko.im"]);
+// The origins the content script runs on (manifest.json content_scripts matches)
+const ALLOWED_ORIGINS = new Set(
+  chrome.runtime
+    .getManifest()
+    .content_scripts.flatMap(({ matches }) => matches.map((match) => new URL(match).origin)),
+);
 
 chrome.runtime.onConnect.addListener((port) => {
   if (port.name !== "ws" || !ALLOWED_ORIGINS.has(port.sender?.origin)) {

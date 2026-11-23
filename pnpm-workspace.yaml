@@ -30,7 +30,7 @@ overrides:
   "@foxglove/omgidl-serialization>@foxglove/cdr": 3.5.1
   "@foxglove/rosbag2>@foxglove/schemas": 2.3.1
   # Keep Monaco on the same patched DOMPurify as the application.
-  "dompurify@<3.4.18": 3.4.18
+  "dompurify@<3.5.0": 3.5.0
   # These parents use the named minimatch API retained in v11 (GHSA-g3hv-75wg-m249).
   "@electron/universal@2.0.3>minimatch": 11.0.9
   "app-builder-lib@26.18.0>minimatch": 11.0.9
@@ -39,7 +39,6 @@ overrides:
   "utif>pako": ^2.2.0
 
 patchedDependencies:
-  "@foxglove/rosbag2@6.0.0": patches/@foxglove__rosbag2@6.0.0.patch
   "@foxglove/ulog@2.3.2": patches/@foxglove__ulog@2.3.2.patch
 
 # TypeScript looks for @types packages in parent node_modules folders. Hoist them to the root so

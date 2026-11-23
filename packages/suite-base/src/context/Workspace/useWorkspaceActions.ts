@@ -6,7 +6,6 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { Draft, produce } from "immer";
-import * as _ from "lodash-es";
 import { Dispatch, SetStateAction, useCallback, useMemo } from "react";
 
 import { useGuaranteedContext } from "@lichtblick/hooks";
@@ -46,19 +45,12 @@ export type WorkspaceActions = {
     };
   };
 
-  featureTourActions: {
-    startTour: (tour: string) => void;
-    finishTour: (tour: string) => void;
-  };
-
   layoutBrowserActions: {
     setPersonalSectionExpanded: Dispatch<SetStateAction<boolean>>;
     setSharedSectionExpanded: Dispatch<SetStateAction<boolean>>;
   };
 
-  openAccountSettings: () => void;
   openPanelSettings: () => void;
-  openLayoutBrowser: () => void;
 
   playbackControlActions: {
     setRepeat: Dispatch<SetStateAction<boolean>>;
@@ -151,20 +143,6 @@ export function useWorkspaceActions(): WorkspaceActions {
         },
       },
 
-      featureTourActions: {
-        startTour: (tour: string) => {
-          set((draft) => {
-            draft.featureTours.active = tour;
-          });
-        },
-        finishTour: (tour: string) => {
-          set((draft) => {
-            draft.featureTours.active = undefined;
-            draft.featureTours.shown = _.union(draft.featureTours.shown, [tour]);
-          });
-        },
-      },
-
       layoutBrowserActions: {
         setPersonalSectionExpanded: (setter: SetStateAction<boolean>) => {
           set((draft) => {
@@ -184,16 +162,10 @@ export function useWorkspaceActions(): WorkspaceActions {
         },
       },
 
-      openAccountSettings: () => {},
       openPanelSettings: () => {
         set((draft) => {
           draft.sidebars.left.item = "panel-settings";
           draft.sidebars.left.open = true;
-        });
-      },
-      openLayoutBrowser: () => {
-        set((draft) => {
-          draft.sidebars.left.item = "layouts";
         });
       },
 

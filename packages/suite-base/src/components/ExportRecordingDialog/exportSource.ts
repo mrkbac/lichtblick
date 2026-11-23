@@ -12,6 +12,7 @@ import {
   useMessagePipeline,
 } from "@lichtblick/suite-base/components/MessagePipeline";
 import { usePlayerSelection } from "@lichtblick/suite-base/context/PlayerSelectionContext";
+import { recordingName } from "@lichtblick/suite-base/util/compareSides";
 
 /** The opened file, if it can be exported: currently a single local MCAP file. */
 export function useExportableFile(): File | undefined {
@@ -38,17 +39,6 @@ const selectFooterIndexed = (ctx: MessagePipelineContext) => {
   return files?.length === 1 && files[0]!.footerIndexed === true;
 };
 
-/** The last path segment, decoded when it is valid percent-encoding */
-export function remoteFileName(url: string): string {
-  const pathname = new URL(url).pathname;
-  const raw = pathname.slice(pathname.lastIndexOf("/") + 1);
-  try {
-    return decodeURIComponent(raw);
-  } catch {
-    return raw;
-  }
-}
-
 /** The opened recording, if it can be exported: a single local or remote MCAP file. */
 export function useExportSource(): ExportSource | undefined {
   const file = useExportableFile();
@@ -69,7 +59,7 @@ export function useExportSource(): ExportSource | undefined {
       return undefined;
     }
     return {
-      name: remoteFileName(url),
+      name: recordingName(url),
       // Message indexes sit between chunks: reading them all would fetch much of the payload.
       exactCounts: false,
       open: async (signal) => {

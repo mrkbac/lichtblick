@@ -45,7 +45,6 @@ import {
   AutoUpdate,
   ColorSchemeSettings,
   CompactPanelsSettings,
-  LanguageSettings,
   LaunchDefault,
   MessageFramerate,
   StepSize,
@@ -128,7 +127,6 @@ export function AppSettingsDialog(
               <MessageFramerate />
               <StepSize />
               <LiveHistorySettings />
-              <LanguageSettings />
               {supportsAppUpdates && <AutoUpdate />}
               {!isDesktopApp() && <LaunchDefault />}
               {/* macOS can't register foxglove:// without declaring it for everyone, see main/settings.ts */}

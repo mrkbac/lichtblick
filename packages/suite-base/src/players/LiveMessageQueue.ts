@@ -2,7 +2,10 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import PlayerAlertManager from "@lichtblick/suite-base/players/PlayerAlertManager";
-import { transformEntries } from "@lichtblick/suite-base/players/liveHistory/LiveHistoryBuffer";
+import {
+  seedKeys,
+  transformEntries,
+} from "@lichtblick/suite-base/players/liveHistory/LiveHistoryBuffer";
 import { MessageEvent } from "@lichtblick/suite-base/players/types";
 
 /**
@@ -180,7 +183,7 @@ export class LiveMessageQueue {
       if (!topicKeys) {
         continue;
       }
-      for (const key of transformEntries(msg.message)?.map((tf) => tf.child_frame_id) ?? [""]) {
+      for (const key of seedKeys(msg)) {
         topicKeys.delete(key);
       }
       if (topicKeys.size === 0) {
@@ -239,7 +242,7 @@ function replacedWithin(messages: readonly MessageEvent[], bytes: number): Set<M
       seen.set(msg.topic, topicKeys);
     }
     let isReplaced = true;
-    for (const key of transformEntries(msg.message)?.map((tf) => tf.child_frame_id) ?? [""]) {
+    for (const key of seedKeys(msg)) {
       if (!topicKeys.has(key)) {
         topicKeys.add(key);
         isReplaced = false;

@@ -44,6 +44,7 @@ type Props = {
   /** Label of the result Enter opens when the input is a search, not a URL. */
   topMatch?: string;
   onOpenTopMatch: () => void;
+  onOpenCatalog: (url: string) => void;
 };
 
 /**
@@ -57,6 +58,7 @@ export function OpenUrlInput({
   onChange,
   topMatch,
   onOpenTopMatch,
+  onOpenCatalog,
 }: Props): React.JSX.Element {
   const { classes } = useStyles();
   const { t } = useTranslation("openDialog");
@@ -115,9 +117,13 @@ export function OpenUrlInput({
     picked ??
     (isUrl ? connectionSources.find((s) => s.id === sourceId && hasUrlField(s)) : undefined);
   const connects = picked != undefined || isUrl;
-  // A .json URL lists recordings: a catalog (see Catalog/catalogUrl.ts)
+  // Known recording and connection URLs keep their existing handlers.
+  const catalogUrl = URL.parse(trimmed);
   const isCatalog =
-    picked == undefined && explicitUrl && /^https?:\/\/[^?#]+\.json([?#]|$)/i.test(trimmed);
+    picked == undefined &&
+    detected == undefined &&
+    catalogUrl != undefined &&
+    (catalogUrl.protocol === "https:" || catalogUrl.protocol === "http:");
   // Extra fields only show for a picked source, so a detected one opens with their defaults
   const extraFields = fields.filter((field) => field.id !== "url");
   const hasFieldErrors = Object.values(fieldErrors).some((err) => err != undefined);
@@ -139,7 +145,7 @@ export function OpenUrlInput({
 
   const connect = () => {
     if (isCatalog) {
-      dialogActions.dataSource.open("demo", undefined, trimmed);
+      onOpenCatalog(catalogUrl.href);
       return;
     }
     if (!source || hasFieldErrors) {

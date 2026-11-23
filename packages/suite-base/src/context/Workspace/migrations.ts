@@ -59,10 +59,6 @@ export function migrateV0WorkspaceState(
         open: false,
       },
     },
-    featureTours: {
-      active: undefined,
-      shown: v0State.featureTours.shown,
-    },
     layoutBrowser: { expandedSections: { personal: true, shared: true } },
     sidebars: {
       left: {

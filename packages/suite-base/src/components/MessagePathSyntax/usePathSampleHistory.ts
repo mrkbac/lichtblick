@@ -72,10 +72,7 @@ export function usePathSampleHistory(
         const key = path.includes("$") ? variablesKey : "";
         const prevBuffer = keys.get(path) === key ? prev?.[path] : undefined;
         keys.set(path, key);
-        next[path] =
-          prevBuffer?.maxSamples === maxSamples
-            ? prevBuffer
-            : PathSampleColumns.from(prevBuffer?.toArray() ?? [], maxSamples);
+        next[path] = prevBuffer ?? new PathSampleColumns(maxSamples);
       }
       return next;
     },

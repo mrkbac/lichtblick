@@ -1,26 +1,14 @@
-# @lichtblick/suite-base &nbsp;
+# @lichtblick/suite-base
 
-[![npm version](https://img.shields.io/npm/v/%40lichtblick%2Fsuite)](https://www.npmjs.com/package/@lichtblick/suite)
-![GitHub License](https://img.shields.io/github/license/lichtblick-suite/lichtblick)
-
-This package contains core components used in [Lichtblick](https://github.com/foxglove/suite).
+Core components and logic shared by the web and desktop apps.
 
 ## Quick start
 
-When contributing to the [Lichtblick](https://github.com/lichtblick-suite/lichtblick) codebase, you can import from `@lichtblick/suite-base` at its top-level or from lower in its directory:
+You can import from `@lichtblick/suite-base` at its top-level or from lower in its directory:
 
 ```plain
 import { ExtensionInfo, ExtensionLoaderContext, IExtensionLoader } from "@lichtblick/suite-base";
 import { toError } from "@lichtblick/suite-base/util/toError";
 ```
 
-For a full list of the package's exports, reference its [`index.ts` file](https://github.com/lichtblick-suite/lichtblick/suite/blob/main/packages/suite-base/src/index.ts).
-
-## Telemetry
-
-`@lichtblick/suite-base` includes an OpenTelemetry-backed implementation of the app's
-`IAnalytics` abstraction (see [`services/telemetry/`](src/services/telemetry)), wired in via
-[`AnalyticsProvider`](src/providers/AnalyticsProvider.tsx), and a generic
-[`useInteractionCapture`](src/hooks/useInteractionCapture.ts) hook for wiring new UI click
-sources into it without hand-writing a `logEvent()` call at every handler. See the root
-repository README's Telemetry section for the user-facing opt-in model and privacy details.
+For a full list of the package's exports, see [`src/index.ts`](src/index.ts).

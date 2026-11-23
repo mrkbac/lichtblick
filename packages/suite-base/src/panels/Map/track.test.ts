@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import {
-  lastIndexAtOrBefore,
   nearestFix,
   SampleStore,
   thinTrack,
@@ -66,17 +65,6 @@ describe("TrackStore", () => {
       sizeInBytes: 0,
       message: { longitude: 19, latitude: -19, altitude: 19, status: { status: 0, service: 1 } },
     });
-  });
-});
-
-describe("lastIndexAtOrBefore", () => {
-  it("binary searches sorted times", () => {
-    const times = [1, 2, 2, 3];
-    expect(lastIndexAtOrBefore(times, 4, 0)).toBe(-1);
-    expect(lastIndexAtOrBefore(times, 4, 2)).toBe(2);
-    expect(lastIndexAtOrBefore(times, 4, 2.5)).toBe(2);
-    expect(lastIndexAtOrBefore(times, 4, 9)).toBe(3);
-    expect(lastIndexAtOrBefore(times, 2, 9)).toBe(1);
   });
 });
 

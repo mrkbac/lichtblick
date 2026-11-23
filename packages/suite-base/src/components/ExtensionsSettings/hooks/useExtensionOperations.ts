@@ -11,10 +11,8 @@ import {
   UseExtensionOperationsReturnHook,
 } from "@lichtblick/suite-base/components/ExtensionsSettings/types";
 import { OperationStatus } from "@lichtblick/suite-base/components/types";
-import { useAnalytics } from "@lichtblick/suite-base/context/AnalyticsContext";
 import { useExtensionCatalog } from "@lichtblick/suite-base/context/ExtensionCatalogContext";
 import { ExtensionMarketplaceDetail } from "@lichtblick/suite-base/context/ExtensionMarketplaceContext";
-import { AppEvent } from "@lichtblick/suite-base/services/IAnalytics";
 import isDesktopApp from "@lichtblick/suite-base/util/isDesktopApp";
 
 /**
@@ -32,7 +30,6 @@ export function useExtensionOperations(
   const installExtensions = useExtensionCatalog((state) => state.installExtensions);
   const uninstallExtension = useExtensionCatalog((state) => state.uninstallExtension);
   const { enqueueSnackbar } = useSnackbar();
-  const analytics = useAnalytics();
   const isMounted = useMountedState();
   const [operatingExtensionId, setOperatingExtensionId] = useState<string | undefined>();
   const [operationStatus, setOperationStatus] = useState<OperationStatus>(OperationStatus.IDLE);
@@ -64,7 +61,6 @@ export function useExtensionOperations(
           return;
         }
         enqueueSnackbar(`${extension.name} installed successfully`, { variant: "success" });
-        analytics.logEvent(AppEvent.EXTENSION_INSTALL, { type: extension.id });
         onInstallSuccess?.(extension.id);
       } catch (error) {
         enqueueSnackbar(error instanceof Error ? error.message : "Failed to install extension", {
@@ -77,7 +73,7 @@ export function useExtensionOperations(
         }
       }
     },
-    [analytics, downloadExtension, enqueueSnackbar, installExtensions, isMounted, onInstallSuccess],
+    [downloadExtension, enqueueSnackbar, installExtensions, isMounted, onInstallSuccess],
   );
 
   const handleUninstall = useCallback(
@@ -91,7 +87,6 @@ export function useExtensionOperations(
           return;
         }
         enqueueSnackbar(`${extension.name} uninstalled successfully`, { variant: "success" });
-        analytics.logEvent(AppEvent.EXTENSION_UNINSTALL, { type: extension.id });
         onUninstallSuccess?.(extension.id);
       } catch (error) {
         enqueueSnackbar(error instanceof Error ? error.message : "Failed to uninstall extension", {
@@ -104,7 +99,7 @@ export function useExtensionOperations(
         }
       }
     },
-    [analytics, enqueueSnackbar, isMounted, onUninstallSuccess, uninstallExtension],
+    [enqueueSnackbar, isMounted, onUninstallSuccess, uninstallExtension],
   );
 
   const isOperating = useCallback(

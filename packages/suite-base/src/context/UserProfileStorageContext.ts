@@ -13,23 +13,8 @@ export type UserProfile = {
   /** The id of the layout the user is currently working with. */
   currentLayoutId?: LayoutID;
 
-  /** Timestamp of the first time the user loaded the app. */
-  firstSeenTime?: string;
-
-  /**
-   * True if the at the time we assigned firstSeenTime it appeared to be the
-   * user's first load of the app.
-   */
-  firstSeenTimeIsFirstLoad?: boolean;
-
   /** Ids of the personal (local) layouts the user marked as favorite. */
   favoriteLayoutIds?: LayoutID[];
-
-  /** Onboarding flow status */
-  onboarding?: {
-    /** List of panel types for which the settings tooltip has been shown */
-    settingsTooltipShownForPanelTypes?: string[];
-  };
 };
 
 export type UserProfileStorage = {

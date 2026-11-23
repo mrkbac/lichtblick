@@ -12,22 +12,18 @@ export type Point = { index: number; x: number; y: number; label?: string | unde
 /**
  * iterateObjects iterates over ObjectData, yielding a `Point` for each entry.
  */
-export function* iterateObjects(dataset: ObjectData): Generator<Point> {
-  let index = 0;
-  for (const datum of dataset) {
+export function* iterateObjects(
+  dataset: ObjectData,
+  start = 0,
+  end = dataset.length,
+): Generator<Point> {
+  for (let index = start; index < end; index++) {
+    const datum = dataset[index];
     if (datum == undefined) {
-      index++;
       continue;
     }
-
     const { x, y, label } = datum;
-    yield {
-      index,
-      x,
-      y,
-      label,
-    };
-    index++;
+    yield { index, x, y, label };
   }
 }
 

@@ -34,6 +34,7 @@ import { makeStyles } from "tss-react/mui";
 import CopyButton from "@lichtblick/suite-base/components/CopyButton";
 import Stack from "@lichtblick/suite-base/components/Stack";
 import { IAppTimeFormat } from "@lichtblick/suite-base/hooks/useAppTimeFormat";
+import { ShareLinkAvailability } from "@lichtblick/suite-base/hooks/useShareLink";
 import { playbackTime } from "@lichtblick/suite-base/i18n/en/playbackTime";
 import { TimeDisplayMethod } from "@lichtblick/suite-base/types/panels";
 import clipboard from "@lichtblick/suite-base/util/clipboard";
@@ -56,7 +57,8 @@ type PlaybackTimeDisplayMethodProps = {
   onPause: () => void;
   isPlaying: boolean;
   /** "Copy link to this moment" in the menu; disabled with a reason for local files */
-  shareLink?: { local: boolean; copy: () => void };
+  shareLink?: ShareLinkAvailability;
+  copyLink?: () => Promise<void>;
 };
 
 const useStyles = makeStyles()((theme) => ({
@@ -163,13 +165,13 @@ function PlaybackTimeMethodMenu({
   timeFormat,
   rows,
   setTimeFormat,
-  shareLink,
+  shareLink = "none",
+  copyLink,
 }: {
   timeFormat: TimeDisplayMethod;
   rows: TimeFormatRow[];
   setTimeFormat: (format: TimeDisplayMethod) => Promise<void>;
-  shareLink?: PlaybackTimeDisplayMethodProps["shareLink"];
-}): React.JSX.Element {
+} & Pick<PlaybackTimeDisplayMethodProps, "shareLink" | "copyLink">): React.JSX.Element {
   const { classes } = useStyles();
   const { t } = useTranslation("playbackTime");
   const [anchorEl, setAnchorEl] = useState<undefined | HTMLElement>(undefined);
@@ -297,13 +299,13 @@ function PlaybackTimeMethodMenu({
           // Separate the selectable display formats from the copy-only ones.
           return row.key === "SEC" ? [item, <Divider key="divider" />] : [item];
         })}
-        {shareLink && <Divider />}
-        {shareLink && (
+        {shareLink !== "none" && <Divider />}
+        {shareLink !== "none" && (
           <MenuItem
             data-testid="playback-time-display-copy-link"
-            disabled={shareLink.local}
+            disabled={shareLink === "local"}
             onClick={() => {
-              shareLink.copy();
+              void copyLink?.();
               handleClose();
             }}
           >
@@ -312,7 +314,7 @@ function PlaybackTimeMethodMenu({
             </ListItemIcon>
             <ListItemText
               primary={t("copyLink")}
-              secondary={shareLink.local ? t("copyLinkLocal") : undefined}
+              secondary={shareLink === "local" ? t("copyLinkLocal") : undefined}
             />
           </MenuItem>
         )}
@@ -331,6 +333,7 @@ export function UnconnectedPlaybackTimeDisplay({
   onPause,
   isPlaying,
   shareLink,
+  copyLink,
 }: PlaybackTimeDisplayMethodProps): React.JSX.Element {
   const { classes, cx } = useStyles();
   const { t } = useTranslation("playbackTime");
@@ -439,6 +442,7 @@ export function UnconnectedPlaybackTimeDisplay({
                       timeFormat={appTimeFormat.timeFormat}
                       setTimeFormat={appTimeFormat.setTimeFormat}
                       shareLink={shareLink}
+                      copyLink={copyLink}
                       rows={timeFormatRows(
                         currentTime,
                         startTime,
