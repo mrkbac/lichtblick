@@ -7,15 +7,17 @@
 
 import * as THREE from "three";
 
+import { createGeometry as createCubeGeometry } from "./RenderableCube";
 import { RenderableMarker } from "./RenderableMarker";
 import { createGeometry as createSphereGeometry } from "./RenderableSphere";
 import { markerHasTransparency, makeStandardInstancedMaterial } from "./materials";
 import { DynamicInstancedMesh } from "../../DynamicInstancedMesh";
 import type { Renderer } from "../../Renderer";
-import { Marker } from "../../ros";
+import { Marker, MarkerType } from "../../ros";
 
-export class RenderableSphereList extends RenderableMarker {
-  #mesh: DynamicInstancedMesh<THREE.SphereGeometry, THREE.MeshStandardMaterial>;
+/** CUBE_LIST and SPHERE_LIST markers; the pool keys renderables by type, so the shape never changes */
+export class RenderableInstancedList extends RenderableMarker {
+  #mesh: DynamicInstancedMesh<THREE.BufferGeometry, THREE.MeshStandardMaterial>;
 
   public constructor(
     topic: string,
@@ -25,9 +27,11 @@ export class RenderableSphereList extends RenderableMarker {
   ) {
     super(topic, marker, receiveTime, renderer);
 
-    // Sphere instanced mesh
-    const geometry = renderer.sharedGeometry.getGeometry("RenderableSphere", createSphereGeometry);
     const material = makeStandardInstancedMaterial(marker);
+    const geometry =
+      marker.type === MarkerType.SPHERE_LIST
+        ? renderer.sharedGeometry.getGeometry("RenderableSphere", createSphereGeometry)
+        : renderer.sharedGeometry.getGeometry("RenderableCube", createCubeGeometry);
     this.#mesh = new DynamicInstancedMesh(geometry, material, marker.points.length);
     this.#mesh.castShadow = true;
     this.#mesh.receiveShadow = true;

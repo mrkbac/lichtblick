@@ -57,7 +57,6 @@ import {
   JointState,
   JOINTSTATE_DATATYPES,
   Marker,
-  MarkerAction,
   MarkerType,
   Quaternion,
   Vector3,
@@ -78,6 +77,7 @@ import {
   urdfSettingsNode,
 } from "../settingsNodes/layers";
 import { CoordinateFrame, Pose, makePose, TransformTree } from "../transforms";
+import { normalizeMarker } from "./Markers";
 
 const log = Logger.getLogger(__filename);
 
@@ -286,8 +286,8 @@ export class Urdfs extends SceneExtension<UrdfRenderable> {
   #textDecoder = new TextDecoder();
   #urdfsByTopic = new Map<string, string>();
 
-  public constructor(renderer: Renderer, name: string = Urdfs.extensionId) {
-    super(name, renderer);
+  public constructor(renderer: Renderer) {
+    super(Urdfs.extensionId, renderer);
 
     renderer.on("parametersChange", this.#handleParametersChange);
     renderer.addCustomLayerAction({
@@ -1353,23 +1353,14 @@ function createMarker(
   scale: Vector3,
   color: ColorRGBA,
 ): Marker {
-  return {
-    header: { frame_id: frameId, stamp: { sec: 0, nsec: 0 } },
-    ns: "",
-    id: 0,
+  return normalizeMarker({
+    header: { frame_id: frameId },
     type,
-    action: MarkerAction.ADD,
     pose,
     scale,
     color,
-    lifetime: { sec: 0, nsec: 0 },
     frame_locked: true,
-    points: [],
-    colors: [],
-    text: "",
-    mesh_resource: "",
-    mesh_use_embedded_materials: false,
-  };
+  });
 }
 
 function createMeshMarker(
@@ -1381,23 +1372,16 @@ function createMeshMarker(
   color: ColorRGBA,
 ): Marker {
   const scale = mesh.scale ?? VEC3_ONE;
-  return {
-    header: { frame_id: frameId, stamp: { sec: 0, nsec: 0 } },
-    ns: "",
-    id: 0,
+  return normalizeMarker({
+    header: { frame_id: frameId },
     type: MarkerType.MESH_RESOURCE,
-    action: MarkerAction.ADD,
     pose,
     scale,
     color,
-    lifetime: { sec: 0, nsec: 0 },
     frame_locked: true,
-    points: [],
-    colors: [],
-    text: "",
     mesh_resource: new URL(mesh.filename, baseUrl).toString(),
     mesh_use_embedded_materials: embeddedMaterialUsage === EmbeddedMaterialUsage.Use,
-  };
+  });
 }
 
 /** `jointStates`: latest joint positions from the robot's joint states topic, if any */

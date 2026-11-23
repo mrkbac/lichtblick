@@ -8,6 +8,7 @@ import {
   DEFAULT_POINT_SETTINGS,
   pointSettingsNode,
 } from "@lichtblick/suite-base/panels/ThreeDeeRender/settingsNodes/topics";
+import type { MessageEvent } from "@lichtblick/suite-base/players/types";
 import { BasicBuilder } from "@lichtblick/test-builders";
 
 import {
@@ -17,6 +18,7 @@ import {
   PointsRenderable,
   RenderObjectHistory,
   isSameRecord,
+  keepDecayingTopics,
   pointStyle,
 } from "./pointExtensionUtils";
 import type { BaseUserData } from "../Renderable";
@@ -313,5 +315,14 @@ describe("isSameRecord", () => {
     const bytes = Uint8Array.of(1, 2, 3);
     expect(isSameRecord({ ...a, payload: bytes }, { ...a, payload: bytes.slice() })).toBe(true);
     expect(isSameRecord({ ...a, payload: bytes }, { ...a, payload: Uint8Array.of(1) })).toBe(false);
+  });
+});
+
+describe("keepDecayingTopics", () => {
+  it("keeps every message of decaying topics and only the latest of others, in topic order", () => {
+    const renderer = { config: { topics: { "/a": { decayTime: 1 } } } } as unknown as Renderer;
+    const msg = (topic: string, n: number) => ({ topic, message: n }) as unknown as MessageEvent;
+    const msgs = [msg("/b", 1), msg("/a", 2), msg("/b", 3), msg("/a", 4)];
+    expect(keepDecayingTopics(renderer, msgs).map((m) => m.message)).toEqual([3, 2, 4]);
   });
 });

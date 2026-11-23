@@ -11,11 +11,10 @@ import { SceneEntity, SceneEntityDeletion, SceneEntityDeletionType } from "@foxg
 import { BaseUserData, Renderable } from "../Renderable";
 import { PrimitivePool } from "./primitives/PrimitivePool";
 import { RenderableArrows } from "./primitives/RenderableArrows";
-import { RenderableCubes } from "./primitives/RenderableCubes";
+import { RenderableCubes, RenderableSpheres } from "./primitives/RenderableCubes";
 import { RenderableCylinders } from "./primitives/RenderableCylinders";
 import { RenderableLines } from "./primitives/RenderableLines";
 import { RenderableModels } from "./primitives/RenderableModels";
-import { RenderableSpheres } from "./primitives/RenderableSpheres";
 import { RenderableTexts } from "./primitives/RenderableTexts";
 import { RenderableTriangles } from "./primitives/RenderableTriangles";
 import { ALL_PRIMITIVE_TYPES, PrimitiveType } from "./primitives/constants";

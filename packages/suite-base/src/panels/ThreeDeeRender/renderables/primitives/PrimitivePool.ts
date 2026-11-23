@@ -6,12 +6,11 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { RenderableArrows } from "./RenderableArrows";
-import { RenderableCubes } from "./RenderableCubes";
+import { RenderableCubes, RenderableSpheres } from "./RenderableCubes";
 import { RenderableCylinders } from "./RenderableCylinders";
 import { RenderableLines } from "./RenderableLines";
 import { RenderableModels } from "./RenderableModels";
 import { RenderablePrimitive } from "./RenderablePrimitive";
-import { RenderableSpheres } from "./RenderableSpheres";
 import { RenderableTexts } from "./RenderableTexts";
 import { RenderableTriangles } from "./RenderableTriangles";
 import { PrimitiveType } from "./constants";

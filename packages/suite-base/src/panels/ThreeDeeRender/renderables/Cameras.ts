@@ -29,15 +29,14 @@ import {
   CAMERA_INFO_DATATYPES as ROS_CAMERA_INFO_DATATYPES,
   IncomingCameraInfo,
   Marker,
-  MarkerAction,
   MarkerType,
-  TIME_ZERO,
   Vector3,
 } from "../ros";
 import { BaseSettings } from "../settings";
 import { CAMERA_INFO_DEFAULTS, cameraInfoSettingsNode } from "../settingsNodes/topics";
 import { topicIsConvertibleToSchema } from "../topicIsConvertibleToSchema";
 import { makePose } from "../transforms";
+import { normalizeMarker } from "./Markers";
 
 const log = Logger.getLogger(__filename);
 void log;
@@ -77,8 +76,8 @@ export class Cameras extends SceneExtension<CameraInfoRenderable> {
   public static extensionId = "foxglove.Cameras";
   public customCameraModels: CameraModelsMap;
 
-  public constructor(renderer: Renderer, name: string = Cameras.extensionId) {
-    super(name, renderer);
+  public constructor(renderer: Renderer) {
+    super(Cameras.extensionId, renderer);
 
     this.customCameraModels = renderer.customCameraModels;
   }
@@ -315,23 +314,14 @@ function createLineListMarker(
   verticalLine(points, cameraInfo.width, cameraInfo, cameraModel, steps, settings);
   points.push(br);
 
-  return {
+  return normalizeMarker({
     header: cameraInfo.header,
-    ns: "",
-    id: 0,
     type: MarkerType.LINE_LIST,
-    action: MarkerAction.ADD,
-    pose: makePose(),
     scale: { x: settings.width, y: settings.width, z: settings.width },
     color: stringToRgba(makeRgba(), settings.color),
-    lifetime: TIME_ZERO,
     frame_locked: true,
     points,
-    colors: [],
-    text: "",
-    mesh_resource: "",
-    mesh_use_embedded_materials: false,
-  };
+  });
 }
 
 function horizontalLine(

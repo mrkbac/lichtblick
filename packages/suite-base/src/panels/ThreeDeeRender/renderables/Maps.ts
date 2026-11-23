@@ -456,8 +456,8 @@ export class Maps extends SceneExtension<MapRenderable> {
   #fixes = new Map<string, MessageEvent<LocationMessage>>();
   #anchors = new Map<string, Anchor>();
 
-  public constructor(renderer: Renderer, name: string = Maps.extensionId) {
-    super(name, renderer);
+  public constructor(renderer: Renderer) {
+    super(Maps.extensionId, renderer);
     renderer.addCustomLayerAction({
       layerId: LAYER_ID,
       label: t("threeDee:addMap"),

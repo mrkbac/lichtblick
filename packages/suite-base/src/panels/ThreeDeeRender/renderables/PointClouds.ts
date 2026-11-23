@@ -19,6 +19,7 @@ import {
   RenderObjectHistory,
   PointsRenderable,
   DECAY_LIMITED,
+  keepDecayingTopics,
   pointDecayTime,
   updateDecayRing,
   isSameRecord,
@@ -1261,8 +1262,8 @@ export class PointClouds extends SceneExtension<PointCloudHistoryRenderable> {
   #waitingScans = new Map<string, WaitingScan[]>();
   #cameraTimeout: ReturnType<typeof setTimeout> | undefined;
 
-  public constructor(renderer: Renderer, name: string = PointClouds.extensionId) {
-    super(name, renderer);
+  public constructor(renderer: Renderer) {
+    super(PointClouds.extensionId, renderer);
   }
 
   public override removeAllRenderables(): void {
@@ -1288,7 +1289,7 @@ export class PointClouds extends SceneExtension<PointCloudHistoryRenderable> {
         schemaNames: ROS_POINTCLOUD_DATATYPES,
         subscription: {
           handler: this.#handleRosPointCloud,
-          filterQueue: this.#processMessageQueue.bind(this),
+          filterQueue: (msgs) => keepDecayingTopics(this.renderer, msgs),
         },
       },
       {
@@ -1296,33 +1297,10 @@ export class PointClouds extends SceneExtension<PointCloudHistoryRenderable> {
         schemaNames: FOXGLOVE_POINTCLOUD_DATATYPES,
         subscription: {
           handler: this.#handleFoxglovePointCloud,
-          filterQueue: this.#processMessageQueue.bind(this),
+          filterQueue: (msgs) => keepDecayingTopics(this.renderer, msgs),
         },
       },
     ];
-  }
-
-  #processMessageQueue<T>(msgs: MessageEvent<T>[]): MessageEvent<T>[] {
-    if (msgs.length === 0) {
-      return msgs;
-    }
-    const msgsByTopic = Map.groupBy(msgs, (msg) => msg.topic);
-    const finalQueue: MessageEvent<T>[] = [];
-    for (const [topic, topicMsgs] of msgsByTopic) {
-      const userSettings = (this.renderer.config.topics[topic] ??
-        {}) as Partial<LayerSettingsPointClouds>;
-      // if the topic has a decaytime add all messages to queue for topic
-      if ((userSettings.decayTime ?? DEFAULT_SETTINGS.decayTime) > 0) {
-        finalQueue.push(...topicMsgs);
-        continue;
-      }
-      const latestMsg = topicMsgs[topicMsgs.length - 1];
-      if (latestMsg) {
-        finalQueue.push(latestMsg);
-      }
-    }
-
-    return finalQueue;
   }
 
   public override settingsNodes(): SettingsTreeEntry[] {

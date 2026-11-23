@@ -17,8 +17,9 @@ import { SceneExtension } from "../SceneExtension";
 import { SettingsTreeEntry } from "../SettingsManager";
 import { stringToRgba } from "../color";
 import { vec3TupleApproxEquals } from "../math";
-import { Marker, MarkerAction, MarkerType, TIME_ZERO, Vector3 } from "../ros";
+import { Marker, MarkerType, Vector3 } from "../ros";
 import { CustomLayerSettings } from "../settings";
+import { normalizeMarker } from "./Markers";
 import { GRID_DEFAULTS, GRID_LAYER_ID, gridSettingsNode } from "../settingsNodes/layers";
 import { makePose, xyzrpyToPose } from "../transforms";
 import { RenderableLineList } from "./markers/RenderableLineList";
@@ -55,8 +56,8 @@ export class GridRenderable extends Renderable<GridUserData> {
 
 export class Grids extends SceneExtension<GridRenderable> {
   public static extensionId = "foxglove.Grids";
-  public constructor(renderer: Renderer, name: string = Grids.extensionId) {
-    super(name, renderer);
+  public constructor(renderer: Renderer) {
+    super(Grids.extensionId, renderer);
 
     renderer.addCustomLayerAction({
       layerId: LAYER_ID,
@@ -268,24 +269,12 @@ function createMarker(settings: LayerSettingsGrid): Marker {
   const color = { r: 1, g: 1, b: 1, a: 1 };
   stringToRgba(color, colorStr);
 
-  return {
-    header: {
-      frame_id: "", // unused, settings.frameId is used instead
-      stamp: TIME_ZERO,
-    },
-    ns: "",
-    id: 0,
+  // header.frame_id is unused, settings.frameId is used instead
+  return normalizeMarker({
     type: MarkerType.LINE_LIST,
-    action: MarkerAction.ADD,
-    pose: makePose(),
     scale: { x: settings.lineWidth, y: 1, z: 1 },
     color,
-    lifetime: TIME_ZERO,
     frame_locked: true,
     points,
-    colors: [],
-    text: "",
-    mesh_resource: "",
-    mesh_use_embedded_materials: false,
-  };
+  });
 }

@@ -6,7 +6,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { toNanoSec } from "@foxglove/rostime";
-import { CubePrimitive, SceneEntity } from "@foxglove/schemas";
+import { CubePrimitive, SceneEntity, SpherePrimitive } from "@foxglove/schemas";
 import * as THREE from "three";
 
 import { RenderablePrimitive } from "./RenderablePrimitive";
@@ -22,9 +22,10 @@ const tempMat4 = new THREE.Matrix4();
 const tempQuat = new THREE.Quaternion();
 const tempRgba = makeRgba();
 
-export class RenderableCubes extends RenderablePrimitive {
-  // Each RenderableCubes needs its own geometry because we attach additional custom attributes to it.
-  #mesh: THREE.InstancedMesh<THREE.BoxGeometry, MeshStandardMaterialWithInstanceOpacity>;
+/** Instanced cubes or spheres of a SceneEntity, optionally with instanced edge outlines */
+export class RenderableInstancedShapes extends RenderablePrimitive {
+  // Each instance needs its own geometry because we attach additional custom attributes to it.
+  #mesh: THREE.InstancedMesh<THREE.BufferGeometry, MeshStandardMaterialWithInstanceOpacity>;
   #instanceOpacity: THREE.InstancedBufferAttribute;
   #material = new MeshStandardMaterialWithInstanceOpacity({
     metalness: 0,
@@ -38,20 +39,25 @@ export class RenderableCubes extends RenderablePrimitive {
    */
   #maxInstances: number;
 
-  #outlineGeometry: THREE.InstancedBufferGeometry;
-  #outline: THREE.LineSegments;
-  #geometry: THREE.BoxGeometry;
+  #outlineGeometry: THREE.InstancedBufferGeometry | undefined;
+  #outline: THREE.LineSegments | undefined;
+  #geometry: THREE.BufferGeometry;
   // actual shared geometry across instances, only copy -- do not modify
   // stored for ease of use
-  #sharedEdgesGeometry: THREE.EdgesGeometry;
+  #sharedEdgesGeometry: THREE.EdgesGeometry | undefined;
+  #shapes: (entity: SceneEntity) => (CubePrimitive | SpherePrimitive)[];
 
-  public constructor(renderer: Renderer) {
+  protected constructor(
+    renderer: Renderer,
+    geometryKey: string,
+    createGeometry: () => THREE.BufferGeometry,
+    shapes: (entity: SceneEntity) => (CubePrimitive | SpherePrimitive)[],
+    { outline }: { outline: boolean },
+  ) {
     super("", renderer);
+    this.#shapes = shapes;
 
-    // Cube mesh
-    this.#geometry = renderer.sharedGeometry
-      .getGeometry(`${this.constructor.name}-cube`, createCubeGeometry)
-      .clone();
+    this.#geometry = renderer.sharedGeometry.getGeometry(geometryKey, createGeometry).clone();
 
     this.#maxInstances = 16;
     this.#mesh = new THREE.InstancedMesh(this.#geometry, this.#material, this.#maxInstances);
@@ -64,10 +70,11 @@ export class RenderableCubes extends RenderablePrimitive {
     this.#mesh.count = 0;
     this.add(this.#mesh);
 
-    // Cube outline
-    this.#sharedEdgesGeometry = renderer.sharedGeometry.getGeometry(
-      `${this.constructor.name}-edges`,
-      () => createEdgesGeometry(this.#geometry),
+    if (!outline) {
+      return;
+    }
+    this.#sharedEdgesGeometry = renderer.sharedGeometry.getGeometry(`${geometryKey}-edges`, () =>
+      createEdgesGeometry(this.#geometry),
     );
     this.#outlineGeometry = new THREE.InstancedBufferGeometry();
     (this.#outlineGeometry as THREE.BufferGeometry).copy(this.#sharedEdgesGeometry);
@@ -81,9 +88,9 @@ export class RenderableCubes extends RenderablePrimitive {
     this.add(this.#outline);
   }
 
-  #ensureCapacity(numCubes: number) {
-    if (numCubes > this.#maxInstances) {
-      const newCapacity = Math.trunc(numCubes * 1.5) + 16;
+  #ensureCapacity(numInstances: number) {
+    if (numInstances > this.#maxInstances) {
+      const newCapacity = Math.trunc(numInstances * 1.5) + 16;
       this.#maxInstances = newCapacity;
 
       this.#mesh.removeFromParent();
@@ -97,18 +104,21 @@ export class RenderableCubes extends RenderablePrimitive {
       this.#geometry.setAttribute("instanceOpacity", this.#instanceOpacity);
       this.add(this.#mesh);
 
+      if (!this.#outline) {
+        return;
+      }
       // THREE.js doesn't correctly recompute the new max instance count when dynamically
       // reassigning the attribute of InstancedBufferGeometry, so we just create a new geometry
-      this.#outlineGeometry.dispose();
+      this.#outlineGeometry?.dispose();
       this.#outlineGeometry = new THREE.InstancedBufferGeometry();
-      (this.#outlineGeometry as THREE.BufferGeometry).copy(this.#sharedEdgesGeometry);
+      (this.#outlineGeometry as THREE.BufferGeometry).copy(this.#sharedEdgesGeometry!);
       this.#outlineGeometry.instanceCount = newCapacity;
       this.#outlineGeometry.setAttribute("instanceMatrix", this.#mesh.instanceMatrix);
       this.#outline.geometry = this.#outlineGeometry;
     }
   }
 
-  #updateMesh(cubes: CubePrimitive[]) {
+  #updateMesh(cubes: (CubePrimitive | SpherePrimitive)[]) {
     let isTransparent = false;
 
     this.#ensureCapacity(cubes.length);
@@ -152,7 +162,9 @@ export class RenderableCubes extends RenderablePrimitive {
       this.#material.needsUpdate = true;
     }
     this.#mesh.count = cubes.length;
-    this.#outlineGeometry.instanceCount = cubes.length;
+    if (this.#outlineGeometry) {
+      this.#outlineGeometry.instanceCount = cubes.length;
+    }
     this.#mesh.instanceMatrix.needsUpdate = true;
     this.#instanceOpacity.needsUpdate = true;
 
@@ -163,11 +175,13 @@ export class RenderableCubes extends RenderablePrimitive {
   }
 
   public override dispose(): void {
-    this.clear();
+    if (this.#outline) {
+      this.clear();
+    }
     this.#mesh.dispose();
     this.#geometry.dispose();
     this.#material.dispose();
-    this.#outlineGeometry.dispose();
+    this.#outlineGeometry?.dispose();
   }
 
   public override update(
@@ -180,8 +194,10 @@ export class RenderableCubes extends RenderablePrimitive {
     if (entity) {
       const lifetimeNs = toNanoSec(entity.lifetime);
       this.userData.expiresAt = lifetimeNs === 0n ? undefined : receiveTime + lifetimeNs;
-      this.#updateMesh(entity.cubes);
-      this.#outline.visible = settings.showOutlines ?? true;
+      this.#updateMesh(this.#shapes(entity));
+      if (this.#outline) {
+        this.#outline.visible = settings.showOutlines ?? true;
+      }
     }
   }
 
@@ -190,13 +206,35 @@ export class RenderableCubes extends RenderablePrimitive {
   }
 }
 
+export class RenderableCubes extends RenderableInstancedShapes {
+  public constructor(renderer: Renderer) {
+    super(renderer, "RenderableCubes-cube", createCubeGeometry, (entity) => entity.cubes, {
+      outline: true,
+    });
+  }
+}
+
+export class RenderableSpheres extends RenderableInstancedShapes {
+  public constructor(renderer: Renderer) {
+    super(renderer, "RenderableSpheres", createSphereGeometry, (entity) => entity.spheres, {
+      outline: false,
+    });
+  }
+}
+
+function createSphereGeometry(): THREE.SphereGeometry {
+  const sphereGeometry = new THREE.SphereGeometry(0.5, 16, 16);
+  sphereGeometry.computeBoundingSphere();
+  return sphereGeometry;
+}
+
 function createCubeGeometry(): THREE.BoxGeometry {
   const cubeGeometry = new THREE.BoxGeometry(1, 1, 1);
   cubeGeometry.computeBoundingSphere();
   return cubeGeometry;
 }
 
-function createEdgesGeometry(cubeGeometry: THREE.BoxGeometry): THREE.EdgesGeometry {
+function createEdgesGeometry(cubeGeometry: THREE.BufferGeometry): THREE.EdgesGeometry {
   const cubeEdgesGeometry = new THREE.EdgesGeometry(cubeGeometry, 40);
   cubeEdgesGeometry.computeBoundingSphere();
   return cubeEdgesGeometry;

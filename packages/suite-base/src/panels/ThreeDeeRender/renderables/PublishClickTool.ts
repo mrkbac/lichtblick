@@ -10,10 +10,11 @@ import * as THREE from "three";
 import { Renderable } from "../Renderable";
 import type { Renderer } from "../Renderer";
 import { SceneExtension } from "../SceneExtension";
-import { Marker, MarkerAction, MarkerType, TIME_ZERO } from "../ros";
+import { Marker, MarkerType } from "../ros";
+import { normalizeMarker } from "./Markers";
 import { RenderableArrow } from "./markers/RenderableArrow";
 import { RenderableSphere } from "./markers/RenderableSphere";
-import { makePose, Point, Pose } from "../transforms/geometry";
+import { Point, Pose } from "../transforms/geometry";
 
 const UNIT_X = new THREE.Vector3(1, 0, 0);
 const tempVec3 = new THREE.Vector3();
@@ -22,43 +23,21 @@ export type PublishClickType = "pose_estimate" | "pose" | "point";
 export type PublishClickState = "idle" | "place-first-point" | "place-second-point";
 
 function makeArrowMarker(type: PublishClickType): Marker {
-  return {
-    header: { frame_id: "", stamp: { sec: 0, nsec: 0 } },
-    ns: "",
-    id: 0,
+  return normalizeMarker({
     type: MarkerType.ARROW,
-    action: MarkerAction.ADD,
-    pose: makePose(),
     scale: { x: 2, y: 0.25, z: 0.25 },
     color: type === "pose_estimate" ? { r: 0, g: 1, b: 1, a: 1 } : { r: 1, g: 0, b: 1, a: 1 },
-    lifetime: TIME_ZERO,
     frame_locked: true,
-    points: [],
-    colors: [],
-    text: "",
-    mesh_resource: "",
-    mesh_use_embedded_materials: false,
-  };
+  });
 }
 
 function makeSphereMarker(): Marker {
-  return {
-    header: { frame_id: "", stamp: { sec: 0, nsec: 0 } },
-    ns: "",
-    id: 0,
+  return normalizeMarker({
     type: MarkerType.SPHERE,
-    action: MarkerAction.ADD,
-    pose: makePose(),
     scale: { x: 0.25, y: 0.25, z: 0.25 },
     color: { r: 1, g: 1, b: 0, a: 1 },
-    lifetime: TIME_ZERO,
     frame_locked: true,
-    points: [],
-    colors: [],
-    text: "",
-    mesh_resource: "",
-    mesh_use_embedded_materials: false,
-  };
+  });
 }
 
 export interface PublishClickEventMap extends THREE.Object3DEventMap {

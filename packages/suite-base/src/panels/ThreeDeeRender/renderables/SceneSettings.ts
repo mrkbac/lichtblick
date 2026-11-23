@@ -17,15 +17,11 @@ import { sceneSettingsNode } from "../settingsNodes/global";
 
 export class SceneSettings extends SceneExtension {
   public static extensionId = "foxglove.SceneSettings";
-  public constructor(renderer: Renderer, name: string = SceneSettings.extensionId) {
-    super(name, renderer);
+  public constructor(renderer: Renderer) {
+    super(SceneSettings.extensionId, renderer);
 
     renderer.labelPool.scaleFactor =
       renderer.config.scene.labelScaleFactor ?? DEFAULT_LABEL_SCALE_FACTOR;
-  }
-
-  public override dispose(): void {
-    super.dispose();
   }
 
   public override settingsNodes(): SettingsTreeEntry[] {
