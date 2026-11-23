@@ -10,7 +10,6 @@ import * as Comlink from "@foxglove/comlink";
 import { IterableSourceInitializeArgs } from "@lichtblick/suite-base/players/IterablePlayer/IIterableSource";
 import { WorkerIterableSourceWorker } from "@lichtblick/suite-base/players/IterablePlayer/WorkerIterableSourceWorker";
 import { MultiIterableSource } from "@lichtblick/suite-base/players/IterablePlayer/shared/MultiIterableSource";
-import { pickDefinedHydrationOverrides } from "@lichtblick/suite-base/players/IterablePlayer/shared/multiFileHydrationOptions";
 
 import { McapIterableSource } from "./McapIterableSource";
 
@@ -25,7 +24,6 @@ export function initialize(args: IterableSourceInitializeArgs): WorkerIterableSo
         type: "files",
         files: (args.files ?? args.recordings)!,
         compare: args.compare,
-        ...pickDefinedHydrationOverrides(args),
       },
       McapIterableSource,
     );
@@ -47,7 +45,6 @@ export function initialize(args: IterableSourceInitializeArgs): WorkerIterableSo
         credentials: args.credentials,
         compare: args.compare,
         compareOffsets: args.compareOffsets,
-        ...pickDefinedHydrationOverrides(args),
       },
       McapIterableSource,
     );

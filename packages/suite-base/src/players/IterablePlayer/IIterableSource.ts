@@ -274,12 +274,6 @@ export type IterableSourceInitializeArgs = {
   compareOffsets?: readonly number[];
   // Fetch credentials for `url`/`urls`, e.g. "include" to send cookies (`ds.includeCredentials`)
   credentials?: RequestCredentials;
-  // Optional overrides for multi-file hydration tuning (see MultiSourceHydrationOptions in
-  // players/IterablePlayer/shared/types.ts). Only meaningful when `files`/`urls` has more than
-  // one entry. When omitted, MultiIterableSource's internal defaults apply.
-  maxHydratedSources?: number;
-  maxHydratedBytes?: number;
-  initConcurrency?: number;
   params?: Record<string, string | undefined>;
 
   api?: {

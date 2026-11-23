@@ -12,16 +12,10 @@ import {
 } from "@lichtblick/suite-base/context/PlayerSelectionContext";
 import { loadIterablePlayer } from "@lichtblick/suite-base/dataSources/playerModules";
 import { createMcapSourceWorker } from "@lichtblick/suite-base/players/IterablePlayer/Mcap/createMcapSourceWorker";
-import {
-  MultiFileHydrationOverrides,
-  addMultiFileHydrationOverrides,
-} from "@lichtblick/suite-base/players/IterablePlayer/shared/multiFileHydrationOptions";
 import { Player } from "@lichtblick/suite-base/players/types";
 import { recordingName } from "@lichtblick/suite-base/util/compareSides";
 
 class McapLocalDataSourceFactory implements IDataSourceFactory {
-  private readonly multiFileHydrationOverrides?: MultiFileHydrationOverrides;
-
   public id = "mcap-local-file";
   public type: IDataSourceFactory["type"] = "file";
   public displayName = "MCAP";
@@ -29,12 +23,6 @@ class McapLocalDataSourceFactory implements IDataSourceFactory {
   public supportedFileTypes = [AllowedFileExtensions.MCAP];
   public supportsMultiFile = true;
   public supportsCompare = true;
-
-  // Optional pass-through for future multi-file hydration tuning experiments. Omitted by default
-  // so existing behavior remains unchanged until a caller explicitly opts in.
-  public constructor(multiFileHydrationOverrides?: MultiFileHydrationOverrides) {
-    this.multiFileHydrationOverrides = multiFileHydrationOverrides;
-  }
 
   public prefetch = loadIterablePlayer;
 
@@ -55,16 +43,10 @@ class McapLocalDataSourceFactory implements IDataSourceFactory {
       initWorker: createMcapSourceWorker,
       // A single file is opened on its own, so it can follow the file while it grows
       initArgs: recordings
-        ? addMultiFileHydrationOverrides(
-            { recordings, compare: args.compare },
-            this.multiFileHydrationOverrides,
-          )
+        ? { recordings, compare: args.compare }
         : files.length === 1
           ? { file: files[0], handle: args.handle }
-          : addMultiFileHydrationOverrides(
-              { files, compare: args.compare },
-              this.multiFileHydrationOverrides,
-            ),
+          : { files, compare: args.compare },
     });
 
     return new IterablePlayer({

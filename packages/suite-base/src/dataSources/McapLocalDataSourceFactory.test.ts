@@ -91,28 +91,6 @@ describe("McapLocalDataSourceFactory", () => {
     expect(player).toBeInstanceOf(IterablePlayer);
   });
 
-  it("should pass configured hydration overrides into initArgs", async () => {
-    const files = [buildMcapFile(), buildMcapFile()];
-    const { args } = setup({ files });
-    factory = new McapLocalDataSourceFactory({
-      maxHydratedSources: 3,
-      maxHydratedBytes: 1234,
-      initConcurrency: 2,
-    });
-
-    await factory.initialize(args);
-
-    expect(WorkerSerializedIterableSource).toHaveBeenCalledWith({
-      initWorker: expect.any(Function),
-      initArgs: {
-        files,
-        maxHydratedSources: 3,
-        maxHydratedBytes: 1234,
-        initConcurrency: 2,
-      },
-    });
-  });
-
   it("should return undefined when no files are provided", async () => {
     const { args } = setup({ files: undefined });
 
