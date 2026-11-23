@@ -22,7 +22,9 @@ test("open Raw Messages panel when clicking on Layouts > layout", {
 
   // When
   await sidebar.openPanelSettingsTab();
-  await mainWindow.getByText("No topic selected").nth(0).click();
+  // With no data source the panel shows the player state, so click the panel rather than its
+  // topic placeholder.
+  await mainWindow.locator('[data-panel-id^="RawMessages!"]').first().click();
 
   // Then
   await expect(mainWindow.getByText("Raw Messages panel", { exact: true }).count()).resolves.toBe(
