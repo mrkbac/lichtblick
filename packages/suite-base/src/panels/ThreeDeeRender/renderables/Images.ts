@@ -319,7 +319,7 @@ export class Images extends SceneExtension<ImageRenderable> {
         label: topicName,
         value: topicName,
       }));
-      cameraInfoOptions.sort();
+      cameraInfoOptions.sort((a, b) => a.value.localeCompare(b.value));
       sortPrefixMatchesToFront(cameraInfoOptions, imageTopic, (option) => option.value);
 
       const options =

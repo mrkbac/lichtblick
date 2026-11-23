@@ -247,10 +247,8 @@ function normalizeAnnotations(message: unknown, datatype: string): Annotation[] 
     case "visualization_msgs/ImageMarkerArray":
     case "visualization_msgs/msg/ImageMarkerArray":
     case "ros.visualization_msgs.ImageMarkerArray":
+    case "webviz_msgs/ImageMarkerArray": // backwards compat with webviz (same layout)
       return normalizeRosImageMarkerArray(message as ImageMarkerArray);
-    // backwards compat with webviz
-    case "webviz_msgs/ImageMarkerArray":
-      break;
     // foxglove
     case "foxglove_msgs/ImageAnnotations":
     case "foxglove_msgs/msg/ImageAnnotations":

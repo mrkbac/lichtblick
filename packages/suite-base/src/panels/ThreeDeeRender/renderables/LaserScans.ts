@@ -178,6 +178,7 @@ class LaserScanHistoryRenderable extends Renderable<LaserScanHistoryUserData> {
       invalidLaserScanError(this.renderer, this, invalid);
       return;
     }
+    this.renderer.settings.errors.removeFromTopic(this.userData.topic, INVALID_LASERSCAN);
 
     const pointsHistory = this.#pointsHistory;
     const latestEntry = pointsHistory.latest();

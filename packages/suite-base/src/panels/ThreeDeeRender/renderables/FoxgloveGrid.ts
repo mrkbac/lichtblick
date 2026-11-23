@@ -139,12 +139,6 @@ type RgbaFieldReaders = {
   blueReader: FieldReader;
   alphaReader: FieldReader;
 };
-const tempRgbaFieldReaders: RgbaFieldReaders = {
-  redReader: zeroReader,
-  greenReader: zeroReader,
-  blueReader: zeroReader,
-  alphaReader: zeroReader,
-};
 
 function numericTypeName(type: NumericType): string {
   // TypeScript types the enum reverse-mapping as `string`, but an out-of-range `type` from
@@ -181,7 +175,14 @@ export class FoxgloveGridRenderable extends Renderable<FoxgloveGridUserData> {
     return this.userData.foxgloveGrid;
   }
 
-  #getRgbaFieldReaders(out: RgbaFieldReaders, foxgloveGrid: Grid) {
+  #getRgbaFieldReaders(foxgloveGrid: Grid): RgbaFieldReaders {
+    // Fresh per call: a missing field must read as zero, not reuse the previous grid's reader.
+    const out: RgbaFieldReaders = {
+      redReader: zeroReader,
+      greenReader: zeroReader,
+      blueReader: zeroReader,
+      alphaReader: zeroReader,
+    };
     const { cell_stride } = foxgloveGrid;
     for (const field of foxgloveGrid.fields) {
       const { name } = field;
@@ -195,6 +196,7 @@ export class FoxgloveGridRenderable extends Renderable<FoxgloveGridUserData> {
         out.alphaReader = getReader(field, cell_stride, /*normalize*/ true) ?? zeroReader;
       }
     }
+    return out;
   }
 
   #getColorByFieldReader(
@@ -382,8 +384,8 @@ export class FoxgloveGridRenderable extends Renderable<FoxgloveGridUserData> {
       const rgba = texture.image.data!;
       let hasTransparency = false;
       if (settings.colorMode === "rgba-fields") {
-        this.#getRgbaFieldReaders(tempRgbaFieldReaders, foxgloveGrid);
-        const { redReader, greenReader, blueReader, alphaReader } = tempRgbaFieldReaders;
+        const { redReader, greenReader, blueReader, alphaReader } =
+          this.#getRgbaFieldReaders(foxgloveGrid);
         for (let y = 0; y < rows; y++) {
           for (let x = 0; x < cols; x++) {
             const offset = y * row_stride + x * cell_stride;

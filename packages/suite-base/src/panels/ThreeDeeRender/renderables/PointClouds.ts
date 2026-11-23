@@ -441,6 +441,11 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
     if (!this.#getPointCloudFieldReaders(tempFieldReaders, pointCloud, settings)) {
       return;
     }
+    // A clean cloud clears the previous message's error (only then, so a cloud that keeps
+    // failing or warning doesn't remove and re-add it on every message)
+    if (!this.#warned) {
+      this.renderer.settings.errors.removeFromTopic(this.userData.topic, INVALID_POINTCLOUD);
+    }
 
     if (this.userData.recordId != undefined) {
       this.#decayRing?.removeRecord(this.userData.recordId);
@@ -850,8 +855,17 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
     lastEntry.renderable.decoded = undefined;
   };
 
+  /** Whether the last validated cloud had a tolerated problem */
+  #warned = false;
+
+  #warn(message: string): void {
+    this.#warned = true;
+    this.renderer.settings.errors.addToTopic(this.userData.topic, INVALID_POINTCLOUD, message);
+  }
+
   /** `report` gets why a cloud can't be drawn (by default an error that blanks the latest scan) */
   #validatePointCloud(pointCloud: PointCloud | PointCloud2, report = this.#invalidError): boolean {
+    this.#warned = false;
     return "header" in pointCloud
       ? this.#validateRosPointCloud(pointCloud, report)
       : this.#validateFoxglovePointCloud(pointCloud, report);
@@ -898,13 +912,13 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
 
     if (data.length < pointCloud.height * pointCloud.row_step) {
       const message = `PointCloud2 data length ${data.length} is less than height ${pointCloud.height} * row_step ${pointCloud.row_step}`;
-      this.renderer.settings.errors.addToTopic(this.userData.topic, INVALID_POINTCLOUD, message);
+      this.#warn(message);
       // Allow this error for now since we currently ignore row_step
     }
 
     if (pointCloud.width * pointCloud.point_step > pointCloud.row_step) {
       const message = `PointCloud2 width ${pointCloud.width} * point_step ${pointCloud.point_step} is greater than row_step ${pointCloud.row_step}`;
-      this.renderer.settings.errors.addToTopic(this.userData.topic, INVALID_POINTCLOUD, message);
+      this.#warn(message);
       // Allow this error for now since we currently ignore row_step
     }
 

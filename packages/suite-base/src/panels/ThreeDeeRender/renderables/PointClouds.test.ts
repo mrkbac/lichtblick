@@ -224,6 +224,29 @@ describe("PointCloudHistoryRenderable missing transform error", () => {
   });
 });
 
+describe("PointCloudHistoryRenderable invalid cloud error", () => {
+  it("keeps a tolerated row_step warning without re-adding it, and clears it on a clean cloud", () => {
+    const errors = new LayerErrors();
+    const events: string[] = [];
+    errors.on("add", () => events.push("add"));
+    errors.on("remove", () => events.push("remove"));
+    const warning = makeCloud();
+    warning.row_step -= 1; // width * point_step > row_step: drawn, with a warning
+    const { renderable, settings } = decode(warning, {}, {
+      ...rendererMock,
+      settings: { errors },
+    } as unknown as Renderer);
+    renderable.updatePointCloud(warning, undefined, settings, 1n);
+    expect(events).toEqual(["add"]);
+    expect(console.warn).toHaveBeenCalledTimes(1);
+    vi.mocked(console.warn).mockClear();
+
+    renderable.updatePointCloud(makeCloud(), undefined, settings, 2n);
+    expect(events).toEqual(["add", "remove"]);
+    expect(errors.errors.errorAtPath(["topics", "/points"])).toBeUndefined();
+  });
+});
+
 describe("PointCloudHistoryRenderable decay", () => {
   it("moves the previous scan into the decay ring and keeps the newest one pickable", () => {
     const { renderable, settings } = decode(makeCloud(), { colorMode: "flat", decayTime: 10 });

@@ -208,6 +208,10 @@ export class OccupancyGrids extends SceneExtension<OccupancyGridRenderable> {
       invalidOccupancyGridError(this.renderer, renderable, message);
       return;
     }
+    this.renderer.settings.errors.removeFromTopic(
+      renderable.userData.topic,
+      INVALID_OCCUPANCY_GRID,
+    );
 
     let texture = renderable.userData.texture;
     const width = occupancyGrid.info.width;

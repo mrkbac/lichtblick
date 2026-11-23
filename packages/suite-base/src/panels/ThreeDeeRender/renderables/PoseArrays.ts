@@ -303,7 +303,7 @@ export class PoseArrays extends SceneExtension<PoseArrayRenderable> {
         tempColor3,
         colorStart,
         colorEnd,
-        i / (poseArray.poses.length - 1),
+        i / Math.max(1, poseArray.poses.length - 1),
       );
       return createArrowMarker(renderable.userData.settings.arrowScale, color);
     };
@@ -443,7 +443,9 @@ function createLineStripMarker(
   // Create a gradient of colors for the line strip
   const colors: ColorRGBA[] = [];
   for (let i = 0; i < message.poses.length; i++) {
-    colors.push(rgbaGradient(makeRgba(), colorStart, colorEnd, i / (message.poses.length - 1)));
+    colors.push(
+      rgbaGradient(makeRgba(), colorStart, colorEnd, i / Math.max(1, message.poses.length - 1)),
+    );
   }
 
   return {
