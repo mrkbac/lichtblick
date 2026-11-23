@@ -453,16 +453,24 @@ describe("MultiIterableSource", () => {
   });
 
   describe("getBackfillMessages", () => {
-    const makeSource = (startSec: number, backfill: Mock): IIterableSource<Uint8Array> => ({
+    const makeSource = (
+      startSec: number,
+      backfill: Mock,
+      endSec = startSec + 10,
+    ): IIterableSource<Uint8Array> => ({
       initialize: vi.fn(),
       messageIterator: vi.fn(),
       getBackfillMessages: backfill,
       getStart: vi.fn().mockReturnValue({ sec: startSec, nsec: 0 }),
-      getEnd: vi.fn().mockReturnValue({ sec: startSec + 10, nsec: 0 }),
+      getEnd: vi.fn().mockReturnValue({ sec: endSec, nsec: 0 }),
     });
 
-    const messageOnTopic = (topic: string): MessageEvent<Uint8Array> =>
-      MessageEventBuilder.messageEvent<Uint8Array>({ topic, message: new Uint8Array() });
+    const messageOnTopic = (topic: string, sec = 22): MessageEvent<Uint8Array> =>
+      MessageEventBuilder.messageEvent<Uint8Array>({
+        topic,
+        receiveTime: { sec, nsec: 0 },
+        message: new Uint8Array(),
+      });
 
     const topicSelection = (...topics: string[]): TopicSelection =>
       new Map(topics.map((topic) => [topic, { topic }]));
@@ -496,10 +504,29 @@ describe("MultiIterableSource", () => {
       ]);
     });
 
+    it("should keep the newest message when sources overlap", async () => {
+      // GIVEN: an earlier-starting source runs past the start of the later one and has a newer "a"
+      const longBackfill = vi.fn().mockResolvedValue([messageOnTopic("a", 24)]);
+      const nearBackfill = vi.fn().mockResolvedValue([messageOnTopic("a", 21)]);
+
+      const multiSource = new MultiIterableSource(dataSource, mockSourceConstructor);
+      multiSource["sourceImpl"] = [makeSource(10, longBackfill, 30), makeSource(20, nearBackfill)];
+
+      // WHEN
+      const result = await multiSource.getBackfillMessages({
+        topics: topicSelection("a"),
+        time: { sec: 25, nsec: 0 },
+      });
+
+      // THEN: both are asked and the newest "a" wins
+      expect(longBackfill).toHaveBeenCalledTimes(1);
+      expect(result.map((message) => message.receiveTime.sec)).toEqual([24]);
+    });
+
     it("should fall back to earlier sources only for topics missing from nearer ones", async () => {
       // GIVEN: the nearest source has only topic "a"; the middle source has "b".
       const farBackfill = vi.fn().mockResolvedValue([]);
-      const midBackfill = vi.fn().mockResolvedValue([messageOnTopic("b")]);
+      const midBackfill = vi.fn().mockResolvedValue([messageOnTopic("b", 15)]);
       const nearBackfill = vi.fn().mockResolvedValue([messageOnTopic("a")]);
 
       const multiSource = new MultiIterableSource(dataSource, mockSourceConstructor);

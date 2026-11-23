@@ -1981,4 +1981,41 @@ describe("CachingIterableSource", () => {
       expect(cache.getCacheSize()).toBe(1000);
     });
   });
+
+  it("does not mark the rest of an aborted read as loaded", async () => {
+    const source = new TestSource();
+    source.messageIterator = async function* (args: MessageIteratorArgs) {
+      // Like the real sources: an aborted read ends quietly
+      for (let sec = 0; sec < 10 && args.abort?.aborted !== true; sec++) {
+        yield {
+          type: "message-event",
+          msgEvent: {
+            topic: "a",
+            receiveTime: { sec, nsec: 0 },
+            message: sec,
+            sizeInBytes: 1,
+            schemaName: "foo",
+          },
+        };
+      }
+    };
+    const cache = new CachingIterableSource(source, { maxTotalSize: TEST_CACHE_BYTES });
+    await cache.initialize();
+
+    const abort = new AbortController();
+    const iterator = cache.messageIterator({
+      topics: mockTopicSelection("a"),
+      abort: abort.signal,
+    });
+    await iterator.next();
+    await iterator.next();
+    abort.abort();
+    let done = false;
+    while (!done) {
+      done = (await iterator.next()).done === true;
+    }
+
+    const ranges = cache.loadedRanges();
+    expect(ranges.at(-1)!.end).toBeLessThan(0.5);
+  });
 });

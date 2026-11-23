@@ -62,4 +62,6 @@ export type SourceWithTime = {
 export type SequentialIteratorMergeOptions<T extends IteratorResult> = {
   value: T;
   iterator: AsyncIterableIterator<Readonly<IteratorResult>>;
+  /** Sort key in ns: the value's time, or for an alert the last time its iterator reached */
+  time: bigint;
 };

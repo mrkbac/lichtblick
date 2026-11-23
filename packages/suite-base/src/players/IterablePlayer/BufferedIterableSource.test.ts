@@ -438,6 +438,7 @@ describe("BufferedIterableSource", () => {
         topics: mockTopicSelection("a"),
         start: { sec: 0, nsec: 0 },
         end: { sec: 10, nsec: 0 },
+        abort: expect.any(AbortSignal),
         consumptionType: "partial",
       });
       messageIteratorCount += 1;
@@ -544,6 +545,7 @@ describe("BufferedIterableSource", () => {
         topics: mockTopicSelection("a"),
         start: { sec: 0, nsec: 0 },
         end: { sec: 10, nsec: 0 },
+        abort: expect.any(AbortSignal),
         consumptionType: "partial",
       });
       messageIteratorCount += 1;
@@ -661,6 +663,7 @@ describe("BufferedIterableSource", () => {
         topics: mockTopicSelection("a"),
         start: { sec: 0, nsec: 0 },
         end: { sec: 10, nsec: 0 },
+        abort: expect.any(AbortSignal),
         consumptionType: "partial",
       });
       messageIteratorCount += 1;
@@ -719,6 +722,7 @@ describe("BufferedIterableSource", () => {
         topics: mockTopicSelection("a"),
         start: { sec: 0, nsec: 0 },
         end: { sec: 10, nsec: 0 },
+        abort: expect.any(AbortSignal),
         consumptionType: "partial",
       });
       messageIteratorCount += 1;
@@ -746,5 +750,71 @@ describe("BufferedIterableSource", () => {
     // Exit the message iterator which will request a stop to the producer thread for the buffered source
     await messageIterator.return?.();
     expect(messageIteratorCount).toEqual(1);
+  });
+
+  it("recovers after the source throws", async () => {
+    const source = new TestSource();
+    const bufferedSource = new BufferedIterableSource(source, {
+      maxCacheSizeBytes: TEST_CACHE_BYTES,
+    });
+    await bufferedSource.initialize();
+
+    source.messageIterator = async function* messageIterator() {
+      yield* [];
+      throw new Error("read failed");
+    };
+    const failing = bufferedSource.messageIterator({ topics: mockTopicSelection("a") });
+    await expect(failing.next()).rejects.toThrow("read failed");
+
+    // The failed producer doesn't break later stops and iterators (e.g. the next seek)
+    await expect(bufferedSource.stopProducer()).resolves.toBeUndefined();
+    source.messageIterator = async function* messageIterator() {
+      yield { type: "stamp", stamp: { sec: 1, nsec: 0 } };
+    };
+    const next = bufferedSource.messageIterator({ topics: mockTopicSelection("a") });
+    expect((await next.next()).value).toEqual({ type: "stamp", stamp: { sec: 1, nsec: 0 } });
+    await next.return?.();
+
+    await expect(bufferedSource.terminate()).resolves.toBeUndefined();
+  });
+
+  it("aborts the source read and reads nothing more on stop", async () => {
+    const source = new TestSource();
+    const bufferedSource = new BufferedIterableSource(source, {
+      maxCacheSizeBytes: TEST_CACHE_BYTES,
+      readAheadDuration: { sec: 1, nsec: 0 },
+      minReadAheadDuration: { sec: 0, nsec: 1 },
+    });
+    await bufferedSource.initialize();
+
+    let reads = 0;
+    let abort: AbortSignal | undefined;
+    source.messageIterator = async function* messageIterator(args: MessageIteratorArgs) {
+      abort = args.abort;
+      for (let sec = 0; sec < 10; ++sec) {
+        reads += 1;
+        yield {
+          type: "message-event",
+          msgEvent: {
+            topic: "a",
+            receiveTime: { sec, nsec: 0 },
+            message: undefined,
+            sizeInBytes: 0,
+            schemaName: "foo",
+          },
+        };
+      }
+    };
+
+    const iterator = bufferedSource.messageIterator({ topics: mockTopicSelection("a") });
+    await iterator.next();
+    // Let the producer fill the read-ahead and wait for the consumer
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    const readsBeforeStop = reads;
+
+    await bufferedSource.stopProducer();
+    expect(reads).toBe(readsBeforeStop);
+    expect(abort?.aborted).toBe(true);
+    await iterator.return?.();
   });
 });
