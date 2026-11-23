@@ -34,7 +34,7 @@ abstract class BenchmarkPlayerBase implements Player {
    * Set by `close()` so that subclasses with unbounded `run()` loops (e.g. synthetic players
    * that produce messages as fast as the message pipeline allows) can exit promptly. Without
    * this, `run()` keeps calling `listener()` forever, which keeps the renderer's event loop busy
-   * and significantly delays Electron's shutdown once the test/host tears down the player.
+   * and significantly delays shutdown once the host tears down the player.
    */
   protected closed = false;
 

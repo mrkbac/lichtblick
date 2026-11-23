@@ -39,17 +39,13 @@
     "benchmark": {
       "entry": [
         "rspack.config.ts",
-        "rspack.desktop.config.ts",
+        // The web benchmark app, bundled by rspack.config.ts
+        "src/index.tsx",
         // Bundled and run by ci/perf-budget.ts
         "rspack.perf.config.ts",
         "src/perf/{cases,wasmStub}.ts",
-        "desktop/*/index.{ts,tsx}",
-        "**/*.test.{ts,tsx}",
-        "e2e/**/*.spec.ts",
-        "e2e/playwright.config.ts"
+        "**/*.test.{ts,tsx}"
       ],
-      // A second @playwright/test copy can't be loaded in one process; the spec glob covers it
-      "playwright": false,
       // Rspack configs build on suite-base's makeConfig, which owns the loaders
       "rspack": false
     },

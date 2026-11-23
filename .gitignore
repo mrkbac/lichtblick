@@ -2,7 +2,6 @@
 *.tsbuildinfo
 .DS_Store
 .webpack/
-.webpack-desktop/
 benchmark/.artifacts/
 benchmark/.perf/
 ci/apt/packages
@@ -20,8 +19,6 @@ coverage/
 e2e/reports
 e2e/tests/reports/web/*
 e2e/tmp/*
-benchmark/e2e/reports/*
-benchmark/test-results/*
 test-results/*
 
 .pnp.*
