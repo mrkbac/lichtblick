@@ -364,79 +364,40 @@ export type JointState = {
 
 export const TIME_ZERO = { sec: 0, nsec: 0 };
 
-export const TRANSFORM_STAMPED_DATATYPES = new Set<string>();
-addRosDataType(TRANSFORM_STAMPED_DATATYPES, "geometry_msgs/TransformStamped");
+export const TRANSFORM_STAMPED_DATATYPES = rosDataTypes("geometry_msgs/TransformStamped");
+export const TF_DATATYPES = rosDataTypes("tf/tfMessage", "tf2_msgs/TFMessage");
 
-export const TF_DATATYPES = new Set<string>();
-addRosDataType(TF_DATATYPES, "tf/tfMessage");
-addRosDataType(TF_DATATYPES, "tf2_msgs/TFMessage");
+export const MARKER_DATATYPES = rosDataTypes("visualization_msgs/Marker");
+export const MARKER_ARRAY_DATATYPES = rosDataTypes(
+  "visualization_msgs/MarkerArray",
+  // Support the legacy "studio_msgs/MarkerArray" datatype name
+  "studio_msgs/MarkerArray",
+);
 
-export const MARKER_DATATYPES = new Set<string>();
-addRosDataType(MARKER_DATATYPES, "visualization_msgs/Marker");
+export const OCCUPANCY_GRID_DATATYPES = rosDataTypes("nav_msgs/OccupancyGrid");
+export const VOXEL_GRID_DATATYPES = rosDataTypes("costmap_2d/VoxelGrid", "nav2_msgs/VoxelGrid");
 
-export const MARKER_ARRAY_DATATYPES = new Set<string>();
-addRosDataType(MARKER_ARRAY_DATATYPES, "visualization_msgs/MarkerArray");
-// Support the legacy "studio_msgs/MarkerArray" datatype name
-addRosDataType(MARKER_ARRAY_DATATYPES, "studio_msgs/MarkerArray");
-
-export const OCCUPANCY_GRID_DATATYPES = new Set<string>();
-addRosDataType(OCCUPANCY_GRID_DATATYPES, "nav_msgs/OccupancyGrid");
-
-export const VOXEL_GRID_DATATYPES = new Set<string>();
-addRosDataType(VOXEL_GRID_DATATYPES, "costmap_2d/VoxelGrid");
-addRosDataType(VOXEL_GRID_DATATYPES, "nav2_msgs/VoxelGrid");
-
-export const GRID_MAP_DATATYPES = new Set<string>();
-addRosDataType(GRID_MAP_DATATYPES, "grid_map_msgs/GridMap");
-
-export const POINTCLOUD_DATATYPES = new Set<string>();
-addRosDataType(POINTCLOUD_DATATYPES, "sensor_msgs/PointCloud2");
-
-export const LASERSCAN_DATATYPES = new Set<string>();
-addRosDataType(LASERSCAN_DATATYPES, "sensor_msgs/LaserScan");
-
-export const VELODYNE_SCAN_DATATYPES = new Set<string>();
-addRosDataType(VELODYNE_SCAN_DATATYPES, "velodyne_msgs/VelodyneScan");
-
-export const POSE_STAMPED_DATATYPES = new Set<string>();
-addRosDataType(POSE_STAMPED_DATATYPES, "geometry_msgs/PoseStamped");
-
-export const POSE_WITH_COVARIANCE_STAMPED_DATATYPES = new Set<string>();
-addRosDataType(POSE_WITH_COVARIANCE_STAMPED_DATATYPES, "geometry_msgs/PoseWithCovarianceStamped");
-
-export const POSE_ARRAY_DATATYPES = new Set<string>();
-addRosDataType(POSE_ARRAY_DATATYPES, "geometry_msgs/PoseArray");
-
-export const NAV_PATH_DATATYPES = new Set<string>();
-addRosDataType(NAV_PATH_DATATYPES, "nav_msgs/Path");
-
-export const CAMERA_INFO_DATATYPES = new Set<string>();
-addRosDataType(CAMERA_INFO_DATATYPES, "sensor_msgs/CameraInfo");
-
-export const IMAGE_DATATYPES = new Set<string>();
-addRosDataType(IMAGE_DATATYPES, "sensor_msgs/Image");
-
-export const COMPRESSED_IMAGE_DATATYPES = new Set<string>();
-addRosDataType(COMPRESSED_IMAGE_DATATYPES, "sensor_msgs/CompressedImage");
-
-export const POLYGON_STAMPED_DATATYPES = new Set<string>();
-addRosDataType(POLYGON_STAMPED_DATATYPES, "geometry_msgs/PolygonStamped");
-
-export const ODOMETRY_DATATYPES = new Set<string>();
-addRosDataType(ODOMETRY_DATATYPES, "nav_msgs/Odometry");
-
-export const POINT_STAMPED_DATATYPES = new Set<string>();
-addRosDataType(POINT_STAMPED_DATATYPES, "geometry_msgs/PointStamped");
-
-export const JOINTSTATE_DATATYPES = new Set<string>();
-addRosDataType(JOINTSTATE_DATATYPES, "sensor_msgs/JointState");
-
-export const IMAGE_MARKER_DATATYPES = new Set<string>();
-addRosDataType(IMAGE_MARKER_DATATYPES, "visualization_msgs/ImageMarker");
+export const GRID_MAP_DATATYPES = rosDataTypes("grid_map_msgs/GridMap");
+export const POINTCLOUD_DATATYPES = rosDataTypes("sensor_msgs/PointCloud2");
+export const LASERSCAN_DATATYPES = rosDataTypes("sensor_msgs/LaserScan");
+export const VELODYNE_SCAN_DATATYPES = rosDataTypes("velodyne_msgs/VelodyneScan");
+export const POSE_STAMPED_DATATYPES = rosDataTypes("geometry_msgs/PoseStamped");
+export const POSE_WITH_COVARIANCE_STAMPED_DATATYPES = rosDataTypes(
+  "geometry_msgs/PoseWithCovarianceStamped",
+);
+export const POSE_ARRAY_DATATYPES = rosDataTypes("geometry_msgs/PoseArray");
+export const NAV_PATH_DATATYPES = rosDataTypes("nav_msgs/Path");
+export const CAMERA_INFO_DATATYPES = rosDataTypes("sensor_msgs/CameraInfo");
+export const IMAGE_DATATYPES = rosDataTypes("sensor_msgs/Image");
+export const COMPRESSED_IMAGE_DATATYPES = rosDataTypes("sensor_msgs/CompressedImage");
+export const POLYGON_STAMPED_DATATYPES = rosDataTypes("geometry_msgs/PolygonStamped");
+export const ODOMETRY_DATATYPES = rosDataTypes("nav_msgs/Odometry");
+export const POINT_STAMPED_DATATYPES = rosDataTypes("geometry_msgs/PointStamped");
+export const JOINTSTATE_DATATYPES = rosDataTypes("sensor_msgs/JointState");
+export const IMAGE_MARKER_DATATYPES = rosDataTypes("visualization_msgs/ImageMarker");
 
 /** Not a real type offered by ROS, but historically Studio has supported it */
-export const IMAGE_MARKER_ARRAY_DATATYPES = new Set<string>();
-addRosDataType(IMAGE_MARKER_ARRAY_DATATYPES, "visualization_msgs/ImageMarkerArray");
+export const IMAGE_MARKER_ARRAY_DATATYPES = rosDataTypes("visualization_msgs/ImageMarkerArray");
 
 /** Robot descriptions (URDF XML) published as a string. */
 export const URDF_TOPIC_SCHEMAS = new Set<string>(["std_msgs/String", "std_msgs/msg/String"]);
@@ -451,22 +412,23 @@ export const LOCATION_SCHEMAS = new Set([
   "foxglove.LocationFix",
 ]);
 
-// Expand a single ROS1 dataType into variations for ROS2 and protobufs,
-// then add them to the given output set
-function addRosDataType(output: Set<string>, dataType: string): Set<string> {
-  // Add the ROS1 variation: tf2_msgs/TFMessage
-  output.add(dataType);
+// Expand ROS1 dataTypes into their variations for ROS2 and protobufs
+function rosDataTypes(...dataTypes: string[]): Set<string> {
+  const output = new Set<string>();
+  for (const dataType of dataTypes) {
+    // Add the ROS1 variation: tf2_msgs/TFMessage
+    output.add(dataType);
 
-  // Add the ROS2 variation: tf2_msgs/msg/TFMessage
-  const parts = dataType.split("/");
-  if (parts.length > 1) {
-    const base = parts[0];
-    const leaf = parts.slice(1).join("/");
-    output.add(`${base}/msg/${leaf}`);
+    // Add the ROS2 variation: tf2_msgs/msg/TFMessage
+    const parts = dataType.split("/");
+    if (parts.length > 1) {
+      const base = parts[0];
+      const leaf = parts.slice(1).join("/");
+      output.add(`${base}/msg/${leaf}`);
+    }
+
+    // Add the protobuf variation: ros.tf2_msgs.TFMessage
+    output.add("ros." + dataType.replaceAll("/", "."));
   }
-
-  // Add the protobuf variation: ros.tf2_msgs.TFMessage
-  output.add("ros." + dataType.replaceAll("/", "."));
-
   return output;
 }

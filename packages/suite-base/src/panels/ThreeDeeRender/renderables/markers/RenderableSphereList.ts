@@ -26,10 +26,7 @@ export class RenderableSphereList extends RenderableMarker {
     super(topic, marker, receiveTime, renderer);
 
     // Sphere instanced mesh
-    const geometry = renderer.sharedGeometry.getGeometry(
-      `RenderableSphere-${renderer.maxLod}`,
-      () => createSphereGeometry(renderer.maxLod),
-    );
+    const geometry = renderer.sharedGeometry.getGeometry("RenderableSphere", createSphereGeometry);
     const material = makeStandardInstancedMaterial(marker);
     this.#mesh = new DynamicInstancedMesh(geometry, material, marker.points.length);
     this.#mesh.castShadow = true;

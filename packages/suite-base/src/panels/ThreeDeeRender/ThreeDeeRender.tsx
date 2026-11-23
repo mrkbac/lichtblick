@@ -37,7 +37,6 @@ import {
 } from "@lichtblick/suite";
 import { AppSetting } from "@lichtblick/suite-base/AppSetting";
 import { TopicSettingsUpdater } from "@lichtblick/suite-base/components/PanelExtensionAdapter/types";
-import { DEFAULT_SCENE_EXTENSION_CONFIG } from "@lichtblick/suite-base/panels/ThreeDeeRender/SceneExtensionConfig";
 import {
   DEFAULT_FOLLOW_MODE,
   PANEL_STYLE,
@@ -287,7 +286,6 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
             config: configRef.current,
             interfaceMode,
             fetchAsset,
-            sceneExtensionConfig: DEFAULT_SCENE_EXTENSION_CONFIG,
             displayTemporaryError,
             testOptions,
             customCameraModels,

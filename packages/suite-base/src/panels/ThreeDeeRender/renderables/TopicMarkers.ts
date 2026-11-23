@@ -41,6 +41,15 @@ const INVALID_MARKER_TYPE = "INVALID_MARKER_TYPE";
 const INVALID_POINTS_LIST = "INVALID_POINTS_LIST";
 const INVALID_SPHERE_LIST = "INVALID_SPHERE_LIST";
 
+/** Error id and minimum point count for the marker types drawn from `points` */
+const POINT_MARKERS: Partial<Record<number, readonly [errorId: string, minPoints: number]>> = {
+  [MarkerType.LINE_STRIP]: [INVALID_LINE_STRIP, 2],
+  [MarkerType.LINE_LIST]: [INVALID_LINE_LIST, 2],
+  [MarkerType.CUBE_LIST]: [INVALID_CUBE_LIST, 1],
+  [MarkerType.SPHERE_LIST]: [INVALID_SPHERE_LIST, 1],
+  [MarkerType.POINTS]: [INVALID_POINTS_LIST, 1],
+};
+
 const DEFAULT_NAMESPACE_SETTINGS: LayerSettingsMarkerNamespace = {
   visible: true,
 };
@@ -341,118 +350,46 @@ export class TopicMarkers extends Renderable<MarkerTopicUserData> {
   }
 
   #createMarkerRenderable(marker: Marker, receiveTime: bigint): RenderableMarker | undefined {
-    const pool = this.renderer.markerPool;
-    switch (marker.type) {
-      case MarkerType.ARROW:
-        return pool.acquire(MarkerType.ARROW, this.topic, marker, receiveTime);
-      case MarkerType.CUBE:
-        return pool.acquire(MarkerType.CUBE, this.topic, marker, receiveTime);
-      case MarkerType.SPHERE:
-        return pool.acquire(MarkerType.SPHERE, this.topic, marker, receiveTime);
-      case MarkerType.CYLINDER:
-        return pool.acquire(MarkerType.CYLINDER, this.topic, marker, receiveTime);
-      case MarkerType.LINE_STRIP:
-        if (marker.points.length === 0) {
-          const markerId = getMarkerId(this.topic, marker.ns, marker.id);
-          this.renderer.settings.errors.addToTopic(
-            this.topic,
-            INVALID_LINE_STRIP,
-            `LINE_STRIP marker ${markerId} has no points`,
-          );
-          return undefined;
-        } else if (marker.points.length === 1) {
-          const markerId = getMarkerId(this.topic, marker.ns, marker.id);
-          this.renderer.settings.errors.addToTopic(
-            this.topic,
-            INVALID_LINE_STRIP,
-            `LINE_STRIP marker ${markerId} only has one point`,
-          );
-          return undefined;
-        }
-        return pool.acquire(MarkerType.LINE_STRIP, this.topic, marker, receiveTime);
-      case MarkerType.LINE_LIST:
-        if (marker.points.length === 0) {
-          const markerId = getMarkerId(this.topic, marker.ns, marker.id);
-          this.renderer.settings.errors.addToTopic(
-            this.topic,
-            INVALID_LINE_LIST,
-            `LINE_LIST marker ${markerId} has no points`,
-          );
-          return undefined;
-        } else if (marker.points.length === 1) {
-          const markerId = getMarkerId(this.topic, marker.ns, marker.id);
-          this.renderer.settings.errors.addToTopic(
-            this.topic,
-            INVALID_LINE_LIST,
-            `LINE_LIST marker ${markerId} only has one point`,
-          );
-          return undefined;
-        } else if (marker.points.length % 2 !== 0) {
-          const markerId = getMarkerId(this.topic, marker.ns, marker.id);
-          this.renderer.settings.errors.addToTopic(
-            this.topic,
-            INVALID_LINE_LIST,
-            `LINE_LIST marker ${markerId} has an odd number of points (${marker.points.length})`,
-          );
-          if (marker.points.length === 1) {
-            return undefined;
-          }
-        }
-        return pool.acquire(MarkerType.LINE_LIST, this.topic, marker, receiveTime);
-      case MarkerType.CUBE_LIST:
-        if (marker.points.length === 0) {
-          const markerId = getMarkerId(this.topic, marker.ns, marker.id);
-          this.renderer.settings.errors.addToTopic(
-            this.topic,
-            INVALID_CUBE_LIST,
-            `CUBE_LIST marker ${markerId} has no points`,
-          );
-          return undefined;
-        }
-        return pool.acquire(MarkerType.CUBE_LIST, this.topic, marker, receiveTime);
-      case MarkerType.SPHERE_LIST:
-        if (marker.points.length === 0) {
-          const markerId = getMarkerId(this.topic, marker.ns, marker.id);
-          this.renderer.settings.errors.addToTopic(
-            this.topic,
-            INVALID_SPHERE_LIST,
-            `SPHERE_LIST marker ${markerId} has no points`,
-          );
-          return undefined;
-        }
-        return pool.acquire(MarkerType.SPHERE_LIST, this.topic, marker, receiveTime);
-      case MarkerType.POINTS:
-        if (marker.points.length === 0) {
-          const markerId = getMarkerId(this.topic, marker.ns, marker.id);
-          this.renderer.settings.errors.addToTopic(
-            this.topic,
-            INVALID_POINTS_LIST,
-            `POINTS marker ${markerId} has no points`,
-          );
-          return undefined;
-        }
-        return pool.acquire(MarkerType.POINTS, this.topic, marker, receiveTime);
-      case MarkerType.TEXT_VIEW_FACING:
-        return pool.acquire(MarkerType.TEXT_VIEW_FACING, this.topic, marker, receiveTime);
-      case MarkerType.MESH_RESOURCE: {
-        const renderable = pool.acquire(MarkerType.MESH_RESOURCE, this.topic, marker, receiveTime);
-        // Force reload the mesh
-        if (renderable instanceof RenderableMeshResource) {
-          renderable.update(marker, receiveTime, true);
-        }
-        return renderable;
-      }
-      case MarkerType.TRIANGLE_LIST:
-        return pool.acquire(MarkerType.TRIANGLE_LIST, this.topic, marker, receiveTime);
-      default: {
+    const errors = this.renderer.settings.errors;
+    const typeName = MarkerType[marker.type];
+    if (typeof typeName !== "string") {
+      const markerId = getMarkerId(this.topic, marker.ns, marker.id);
+      errors.addToTopic(
+        this.topic,
+        INVALID_MARKER_TYPE,
+        `Marker ${markerId} has invalid type ${marker.type}`,
+      );
+      return undefined;
+    }
+    const pointRule = POINT_MARKERS[marker.type];
+    if (pointRule) {
+      const [errorId, minPoints] = pointRule;
+      const count = marker.points.length;
+      if (count < minPoints) {
         const markerId = getMarkerId(this.topic, marker.ns, marker.id);
-        this.renderer.settings.errors.addToTopic(
-          this.topic,
-          INVALID_MARKER_TYPE,
-          `Marker ${markerId} has invalid type ${marker.type}`,
-        );
+        const problem = count === 0 ? "has no points" : "only has one point";
+        errors.addToTopic(this.topic, errorId, `${typeName} marker ${markerId} ${problem}`);
         return undefined;
       }
+      if (marker.type === MarkerType.LINE_LIST && count % 2 !== 0) {
+        const markerId = getMarkerId(this.topic, marker.ns, marker.id);
+        errors.addToTopic(
+          this.topic,
+          errorId,
+          `LINE_LIST marker ${markerId} has an odd number of points (${count})`,
+        );
+      }
     }
+    const renderable = this.renderer.markerPool.acquire(
+      marker.type,
+      this.topic,
+      marker,
+      receiveTime,
+    );
+    // Force reload the mesh
+    if (renderable instanceof RenderableMeshResource) {
+      renderable.update(marker, receiveTime, true);
+    }
+    return renderable;
   }
 }

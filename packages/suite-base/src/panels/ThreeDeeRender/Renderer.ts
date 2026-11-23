@@ -62,7 +62,7 @@ import { PickableLabelPool } from "./PickableLabelPool";
 import { PickedRenderable, PickResult, Picker } from "./Picker";
 import type { Renderable } from "./Renderable";
 import { SceneExtension } from "./SceneExtension";
-import { SceneExtensionConfig } from "./SceneExtensionConfig";
+import { SCENE_EXTENSIONS } from "./SceneExtensionConfig";
 import { ScreenOverlay } from "./ScreenOverlay";
 import { SettingsManager, SettingsTreeEntry } from "./SettingsManager";
 import { SharedGeometry } from "./SharedGeometry";
@@ -74,7 +74,6 @@ import { HOVER_PICK_THROTTLE_MS } from "./constants";
 import { FRAME_TRANSFORMS_DATATYPES, FRAME_TRANSFORM_DATATYPES } from "./foxglove";
 import { getGpuDevice } from "./gpuDevice";
 import { LAYER_DEFAULT, LAYER_PICK_ONLY, LAYER_SELECTED } from "./layers";
-import { DetailLevel } from "./lod";
 import {
   normalizeFrameTransform,
   normalizeFrameTransforms,
@@ -248,7 +247,6 @@ export class Renderer extends EventEmitter<RendererEvents> {
   /** Set once the device is lost (emitted as `gpuLost` unless it happened during startup) */
   public gpuLost = false;
   public readonly sharedMap?: SharedMap;
-  public maxLod = DetailLevel.High;
 
   public customCameraModels: CameraModelsMap = new Map();
 
@@ -352,7 +350,6 @@ export class Renderer extends EventEmitter<RendererEvents> {
     sharedMap?: SharedMap;
     config: Immutable<RendererConfig>;
     interfaceMode: InterfaceMode;
-    sceneExtensionConfig: SceneExtensionConfig;
     customCameraModels: CameraModelsMap;
     fetchAsset: BuiltinPanelExtensionContext["unstable_fetchAsset"];
     displayTemporaryError?: (message: string) => void;
@@ -499,18 +496,15 @@ export class Renderer extends EventEmitter<RendererEvents> {
 
     const renderSize = this.gl.getDrawingBufferSize(tempVec2);
 
-    const { reserved } = args.sceneExtensionConfig;
-
-    this.measurementTool = reserved.measurementTool.init(this);
-    this.publishClickTool = reserved.publishClickTool.init(this);
+    this.measurementTool = new MeasurementTool(this);
+    this.publishClickTool = new PublishClickTool(this);
     this.#addSceneExtension(this.measurementTool);
     this.#addSceneExtension(this.publishClickTool);
 
     const aspect = renderSize.width / renderSize.height;
     switch (interfaceMode) {
       case "image": {
-        const imageMode = reserved.imageMode.init(this);
-        this.#imageModeExtension = imageMode;
+        this.#imageModeExtension = new ImageMode(this);
         this.cameraHandler = this.#imageModeExtension;
         this.#imageModeExtension.addEventListener("hasModifiedViewChanged", () => {
           this.emit("resetViewChanged", this);
@@ -525,13 +519,9 @@ export class Renderer extends EventEmitter<RendererEvents> {
       }
     }
 
-    const { extensionsById } = args.sceneExtensionConfig;
-    for (const extensionItem of Object.values(extensionsById)) {
-      if (
-        extensionItem.supportedInterfaceModes == undefined ||
-        extensionItem.supportedInterfaceModes.includes(interfaceMode)
-      ) {
-        this.#addSceneExtension(extensionItem.init(this));
+    for (const [init, modes] of SCENE_EXTENSIONS) {
+      if (modes == undefined || modes.includes(interfaceMode)) {
+        this.#addSceneExtension(init(this));
       }
     }
 

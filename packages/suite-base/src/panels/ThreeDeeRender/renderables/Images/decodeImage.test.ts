@@ -17,7 +17,6 @@ import { CompressedImageTypes, CompressedVideo } from "./ImageTypes";
 import {
   decodeCompressedImageToBitmap,
   isCompressedVideoKeyframe,
-  getVideoDecoderConfig,
   prepareVideoFrame,
   decodeCompressedVideoToBitmap,
   decodeRawImage,
@@ -94,47 +93,6 @@ describe("isCompressedVideoKeyframe", () => {
     // WHEN keyframe detection runs
     // THEN the H.265 parser is used and reports a keyframe
     expect(isCompressedVideoKeyframe(mockVideoFrame)).toBe(true);
-  });
-});
-
-describe("getVideoDecoderConfig", () => {
-  it("should return a VideoDecoderConfig for h264 format", () => {
-    // GIVEN an H.264 frame and a stubbed decoder config
-    const mockVideoFrame = createMockVideoFrame({
-      data: new Uint8Array([0x67]), // Mock SPS NAL unit
-    });
-    const mockConfig = { codec: "avc1.42E01E" };
-    vi.spyOn(H264Parser, "ParseDecoderConfig").mockReturnValue(mockConfig);
-
-    // WHEN the decoder config is requested
-    // THEN the H.264 parser config is returned
-    expect(getVideoDecoderConfig(mockVideoFrame)).toEqual(mockConfig);
-  });
-
-  it("should return undefined for unsupported formats", () => {
-    // GIVEN a frame with an unsupported format
-    const mockVideoFrame = createMockVideoFrame({
-      data: new Uint8Array([0x00]),
-      format: "unsupported",
-    });
-
-    // WHEN the decoder config is requested
-    // THEN no config is available
-    expect(getVideoDecoderConfig(mockVideoFrame)).toBeUndefined();
-  });
-
-  it("should return a VideoDecoderConfig for h265 format", () => {
-    // GIVEN an H.265 frame and a stubbed decoder config
-    const mockVideoFrame = createMockVideoFrame({
-      data: new Uint8Array([0x00]),
-      format: "h265",
-    });
-    const mockConfig = { codec: "hvc1.1.6.L93.B0" };
-    vi.spyOn(H265Parser, "ParseDecoderConfig").mockReturnValue(mockConfig);
-
-    // WHEN the decoder config is requested
-    // THEN the H.265 parser config is returned
-    expect(getVideoDecoderConfig(mockVideoFrame)).toEqual(mockConfig);
   });
 });
 

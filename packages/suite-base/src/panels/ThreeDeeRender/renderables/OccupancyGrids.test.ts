@@ -7,7 +7,6 @@ import type { Mock } from "vitest";
 import { setupVitestCanvasMock } from "vitest-canvas-mock";
 
 import { Renderer } from "@lichtblick/suite-base/panels/ThreeDeeRender/Renderer";
-import { DEFAULT_SCENE_EXTENSION_CONFIG } from "@lichtblick/suite-base/panels/ThreeDeeRender/SceneExtensionConfig";
 import { DEFAULT_CAMERA_STATE } from "@lichtblick/suite-base/panels/ThreeDeeRender/camera";
 import { DEFAULT_PUBLISH_SETTINGS } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/PublishSettings";
 
@@ -69,7 +68,6 @@ describe("OccupancyGrids texture", () => {
       fetchAsset: async () => {
         throw new Error("unused");
       },
-      sceneExtensionConfig: DEFAULT_SCENE_EXTENSION_CONFIG,
       testOptions: {},
       customCameraModels: new Map(),
     });
