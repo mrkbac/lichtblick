@@ -39,7 +39,10 @@ async function verifyPlotNavigation(page: Page): Promise<void> {
   const soughtTime = await player.getTimestampText();
 
   await page.mouse.move(anchorX, y);
+  // A plain wheel pans the Plot; Ctrl + wheel zooms around the cursor.
+  await page.keyboard.down("Control");
   await page.mouse.wheel(0, -120);
+  await page.keyboard.up("Control");
   await expect(reset).toBeVisible();
   await expect.poll(markerX).toBeGreaterThan(seekX + 5);
   const zoomedX = await markerX();
