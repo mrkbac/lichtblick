@@ -30,7 +30,12 @@ import MockCurrentLayoutProvider from "@lichtblick/suite-base/providers/CurrentL
 import delay from "@lichtblick/suite-base/util/delay";
 import { makeMockAppConfiguration } from "@lichtblick/suite-base/util/makeMockAppConfiguration";
 
-import { MessagePipelineContext, MessagePipelineProvider, useMessagePipeline } from ".";
+import {
+  MessagePipelineContext,
+  MessagePipelineProvider,
+  useMessagePipeline,
+  waitForFrame,
+} from ".";
 import FakePlayer from "./FakePlayer";
 import { MAX_PROMISE_TIMEOUT_TIME_MS } from "./pauseFrameForPromise";
 
@@ -1212,5 +1217,55 @@ describe("MessagePipelineProvider/useMessagePipeline", () => {
         },
       ]);
     });
+  });
+});
+
+describe("waitForFrame", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  function setup() {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    const frames: FrameRequestCallback[] = [];
+    vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => frames.push(cb));
+    vi.stubGlobal("cancelAnimationFrame", vi.fn());
+    let resolved = false;
+    return {
+      frames,
+      wait: (ms: number, opts: { matchDisplay: boolean }) =>
+        void waitForFrame(ms, opts).then(() => (resolved = true)),
+      resolved: () => resolved,
+    };
+  }
+
+  it("resolves at the next display frame when it comes before the timeout (120 Hz)", async () => {
+    const { frames, wait, resolved } = setup();
+    wait(16, { matchDisplay: true });
+    await vi.advanceTimersByTimeAsync(8);
+    expect(resolved()).toBe(false);
+    frames[0]!(performance.now());
+    await vi.advanceTimersByTimeAsync(0);
+    expect(resolved()).toBe(true);
+  });
+
+  it("falls back to the timeout when frames don't run (background tab)", async () => {
+    const { frames, wait, resolved } = setup();
+    wait(16, { matchDisplay: true });
+    await vi.advanceTimersByTimeAsync(16);
+    expect(resolved()).toBe(true);
+    expect(frames).toHaveLength(1);
+    expect(cancelAnimationFrame).toHaveBeenCalled();
+  });
+
+  it("ignores display frames when a message rate is set", async () => {
+    const { frames, wait, resolved } = setup();
+    wait(100, { matchDisplay: false });
+    expect(frames).toHaveLength(0);
+    await vi.advanceTimersByTimeAsync(99);
+    expect(resolved()).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(resolved()).toBe(true);
   });
 });
