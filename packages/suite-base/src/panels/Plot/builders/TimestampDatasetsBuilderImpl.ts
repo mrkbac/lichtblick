@@ -769,7 +769,7 @@ export class TimestampDatasetsBuilderImpl {
 
         // Message times other than receive time can arrive out of order
         const needsSort = series.config.timestampMethod !== "receiveTime";
-        const items = (needsSort ? action.items.slice().sort(compareDatum) : action.items).filter(
+        const items = (needsSort ? action.items.toSorted(compareDatum) : action.items).filter(
           (item) => lastX == undefined || item.x > lastX,
         );
         // Items before the newest current row merge into place; the rest append (thinned)
@@ -803,7 +803,7 @@ export class TimestampDatasetsBuilderImpl {
 
         if (series.config.timestampMethod !== "receiveTime") {
           // Batches are mostly already in order: merge instead of re-sorting everything
-          const sorted = action.items.slice().sort(compareDatum);
+          const sorted = action.items.toSorted(compareDatum);
           this.#invalidate(series, points.insert(0, sorted, oldFullLength));
         } else {
           points.insert(oldFullLength, action.items);

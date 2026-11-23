@@ -94,7 +94,7 @@ export function buildRows(
   names: readonly string[],
   { tree, collapsed }: { tree: boolean; collapsed: ReadonlySet<string> },
 ): Row[] {
-  const sorted = [...names].sort(compareNames);
+  const sorted = names.toSorted(compareNames);
   if (!tree) {
     return sorted.map((name) => ({
       kind: "param",
