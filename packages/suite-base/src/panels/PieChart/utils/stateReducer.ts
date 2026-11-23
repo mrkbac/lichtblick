@@ -22,15 +22,19 @@ export function stateReducer(state: PieChartState, action: PieChartAction): PieC
       let error = state.error;
 
       if (state.parsedPath) {
+        const hasFilter = state.parsedPath.messagePath.some((part) => part.type === "filter");
         for (const message of action.messages) {
           if (message.topic !== state.parsedPath.topicName) {
             continue;
           }
 
+          const items = simpleGetMessagePathDataItems(message, state.parsedPath);
+          // A filter that doesn't match this message selects nothing: keep the last match
+          if (hasFilter && items.length === 0) {
+            continue;
+          }
           try {
-            latestMatchingQueriedData = toPieValues(
-              simpleGetMessagePathDataItems(message, state.parsedPath),
-            );
+            latestMatchingQueriedData = toPieValues(items);
             latestMessage = message;
             error = undefined;
           } catch (err) {
@@ -72,9 +76,10 @@ export function stateReducer(state: PieChartState, action: PieChartAction): PieC
       let latestMatchingQueriedData: Float32Array | undefined;
       if (newPath && pathParseError == undefined && state.latestMessage) {
         try {
-          latestMatchingQueriedData = toPieValues(
-            simpleGetMessagePathDataItems(state.latestMessage, newPath),
-          );
+          const items = simpleGetMessagePathDataItems(state.latestMessage, newPath);
+          const filteredOut =
+            items.length === 0 && newPath.messagePath.some((part) => part.type === "filter");
+          latestMatchingQueriedData = filteredOut ? undefined : toPieValues(items);
         } catch (err: unknown) {
           error = toError(err);
         }

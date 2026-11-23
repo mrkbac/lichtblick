@@ -14,6 +14,8 @@ import { Downsampler } from "./Downsampler";
 import { PlotDataProvider, ProviderStateSetter, PlotViewport, ChartDataset } from "./types";
 import { getBounds } from "./useProvider";
 
+const EMPTY_BOUNDS = { x: { min: 0, max: 0 }, y: { min: 0, max: 0 } };
+
 /**
  * useDownsampler downsamples the given datasets before providing them to the
  * TimeBasedChart. This is used primarily for downsampling data passed into the
@@ -39,13 +41,9 @@ export default function useDownsampler(datasets: ChartDataset[]): {
       return;
     }
 
-    const bounds = getBounds(downsampled);
-    if (bounds == undefined) {
-      return;
-    }
-
     setter({
-      bounds,
+      // No plottable points left: still hand over the (empty) datasets so stale data is cleared
+      bounds: getBounds(downsampled) ?? EMPTY_BOUNDS,
       data: {
         datasets: downsampled,
       },

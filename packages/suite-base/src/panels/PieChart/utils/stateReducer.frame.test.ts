@@ -67,6 +67,27 @@ describe("stateReducer frame", () => {
     expect(newState.error).toBeUndefined();
   });
 
+  it("skips messages the path's filter doesn't match", () => {
+    const initialState = PieChartBuilder.pieChartState({
+      parsedPath: parseMessagePath("/t{id==1}.counts"),
+      latestMatchingQueriedData: undefined,
+    });
+    const match = MessageEventBuilder.messageEvent({
+      topic: "/t",
+      message: { id: 1, counts: [1, 2] },
+    });
+    const other = MessageEventBuilder.messageEvent({
+      topic: "/t",
+      message: { id: 2, counts: [3, 4] },
+    });
+
+    const newState = stateReducer(initialState, { type: "frame", messages: [match, other] });
+
+    expect(newState.latestMatchingQueriedData).toEqual(new Float32Array([1, 2]));
+    expect(newState.latestMessage).toBe(match);
+    expect(newState.error).toBeUndefined();
+  });
+
   it("does not update if topics do not match parsedPath.topicName", () => {
     const [initialMessage] = MessageEventBuilder.messageEvents();
     const [unrelatedMessage] = MessageEventBuilder.messageEvents();

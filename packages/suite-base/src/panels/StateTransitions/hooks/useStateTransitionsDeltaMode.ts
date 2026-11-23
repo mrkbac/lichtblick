@@ -11,6 +11,8 @@ import useDeltaMarkerState from "@lichtblick/suite-base/panels/shared/useDeltaMa
 
 export type UseStateTransitionsDeltaModeProps = {
   datasets: ChartDatasets;
+  /** The path each dataset belongs to; live mode adds a second dataset per path. */
+  datasetPathIndexes: readonly number[];
   /** Markers are cleared (but the mode stays active) whenever this value changes. */
   resetKey?: string;
 };
@@ -27,6 +29,7 @@ export type UseStateTransitionsDeltaModeResult = {
 
 function useStateTransitionsDeltaMode({
   datasets,
+  datasetPathIndexes,
   resetKey,
 }: UseStateTransitionsDeltaModeProps): UseStateTransitionsDeltaModeResult {
   const {
@@ -47,7 +50,11 @@ function useStateTransitionsDeltaMode({
       }
 
       const seriesValues: DeltaMarkerSeriesValue[] = [];
-      datasets.forEach((dataset, configIndex) => {
+      datasets.forEach((dataset, datasetIndex) => {
+        const configIndex = datasetPathIndexes[datasetIndex];
+        if (configIndex == undefined || seriesValues.some((v) => v.configIndex === configIndex)) {
+          return;
+        }
         const valueAtTime = getValueAtTime(dataset.data, xValue);
         if (valueAtTime) {
           seriesValues.push({
@@ -63,7 +70,7 @@ function useStateTransitionsDeltaMode({
 
       setMarker(nextMarkerSlot(), { xValue, seriesValues });
     },
-    [active, datasets, nextMarkerSlot, setMarker],
+    [active, datasets, datasetPathIndexes, nextMarkerSlot, setMarker],
   );
 
   return {

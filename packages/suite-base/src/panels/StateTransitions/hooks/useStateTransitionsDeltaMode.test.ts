@@ -19,8 +19,12 @@ describe("useStateTransitionsDeltaMode", () => {
     }));
   }
 
-  const setup = (datasets: ChartDatasets = [], resetKey?: string) => {
-    const props: UseStateTransitionsDeltaModeProps = { datasets, resetKey };
+  const setup = (
+    datasets: ChartDatasets = [],
+    resetKey?: string,
+    datasetPathIndexes: readonly number[] = datasets.map((_, index) => index),
+  ) => {
+    const props: UseStateTransitionsDeltaModeProps = { datasets, datasetPathIndexes, resetKey };
     return {
       ...renderHook(
         (hookProps: UseStateTransitionsDeltaModeProps) => useStateTransitionsDeltaMode(hookProps),
@@ -124,6 +128,30 @@ describe("useStateTransitionsDeltaMode", () => {
       ],
     });
     expect(result.current.markerB).toBeUndefined();
+  });
+
+  it("uses the path index when a path has a block and a live dataset", () => {
+    // Given — path 0 has two datasets, path 1 has one
+    const datasets = buildDatasets([
+      [{ x: 1, value: "IDLE" }],
+      [{ x: 1, value: "IDLE" }],
+      [{ x: 1, value: "RUNNING" }],
+    ]);
+    const { result } = setup(datasets, undefined, [0, 0, 1]);
+
+    // When
+    act(() => {
+      result.current.toggleActive();
+    });
+    act(() => {
+      result.current.handleChartClick(1);
+    });
+
+    // Then
+    expect(result.current.markerA?.seriesValues).toEqual([
+      { configIndex: 0, value: "IDLE" },
+      { configIndex: 1, value: "RUNNING" },
+    ]);
   });
 
   it("should place marker B on the second click, keeping marker A", () => {
