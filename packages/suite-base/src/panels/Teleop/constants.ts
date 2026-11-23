@@ -54,7 +54,7 @@ export const BUTTON_LABELS: Record<ButtonName, string> = {
 };
 
 /** Button order of the W3C "standard" gamepad mapping (`Gamepad.buttons`) */
-export const STANDARD_BUTTONS: readonly ButtonName[] = [
+export const STANDARD_BUTTONS = [
   "a",
   "b",
   "x",
@@ -72,7 +72,7 @@ export const STANDARD_BUTTONS: readonly ButtonName[] = [
   "left",
   "right",
   "guide",
-];
+] as const;
 
 /**
  * `Joy.buttons` order of the ROS 2 `joy` package (game_controller_node, SDL game controller

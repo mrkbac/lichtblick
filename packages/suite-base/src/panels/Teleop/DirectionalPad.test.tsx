@@ -6,7 +6,6 @@
 import { render, fireEvent } from "@testing-library/react";
 
 import DirectionalPad from "@lichtblick/suite-base/panels/Teleop/DirectionalPad";
-import { DirectionalPadAction } from "@lichtblick/suite-base/panels/Teleop/types";
 
 describe("DirectionalPad", () => {
   it("should call onAction and update state when UP button is clicked", () => {
@@ -19,7 +18,7 @@ describe("DirectionalPad", () => {
     fireEvent.pointerDown(upButton!);
 
     // then
-    expect(onAction).toHaveBeenCalledWith(DirectionalPadAction.UP);
+    expect(onAction).toHaveBeenCalledWith({ x: 0, y: 1 });
 
     // when
     fireEvent.pointerUp(upButton!);
@@ -34,20 +33,6 @@ describe("DirectionalPad", () => {
     const active = [...buttons].map((button) => button.querySelector(".active") != undefined);
     // up, down, left, right
     expect(active).toEqual([true, false, true, false]);
-  });
-
-  it("should not call onAction when disabled", () => {
-    // given
-    const onAction = vi.fn();
-    const { container } = render(<DirectionalPad onAction={onAction} disabled={true} />);
-    const upButton = container.querySelector('g[role="button"]');
-
-    // when
-    fireEvent.pointerDown(upButton!);
-
-    // then
-    expect(onAction).not.toHaveBeenCalled();
-    expect(upButton?.parentElement?.querySelector(".active")).toBeFalsy();
   });
 
   it("should handle case when onAction is not provided", () => {
@@ -71,10 +56,10 @@ describe("DirectionalPad", () => {
 
     // when/then
     const actions = [
-      DirectionalPadAction.UP,
-      DirectionalPadAction.DOWN,
-      DirectionalPadAction.LEFT,
-      DirectionalPadAction.RIGHT,
+      { x: 0, y: 1 },
+      { x: 0, y: -1 },
+      { x: -1, y: 0 },
+      { x: 1, y: 0 },
     ];
 
     buttons.forEach((button, index) => {

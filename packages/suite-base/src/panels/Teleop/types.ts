@@ -2,31 +2,14 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import { BuiltinPanelExtensionContext } from "@lichtblick/suite-base/components/PanelExtensionAdapter";
-import { SaveConfig } from "@lichtblick/suite-base/types/panels";
+import type { STANDARD_BUTTONS } from "@lichtblick/suite-base/panels/Teleop/constants";
 
 export type TeleopPanelProps = {
   context: BuiltinPanelExtensionContext;
 };
 
 /** Gamepad buttons by role, independent of the index a browser or ROS driver gives them */
-export type ButtonName =
-  | "a"
-  | "b"
-  | "x"
-  | "y"
-  | "lb"
-  | "rb"
-  | "lt"
-  | "rt"
-  | "back"
-  | "start"
-  | "ls"
-  | "rs"
-  | "up"
-  | "down"
-  | "left"
-  | "right"
-  | "guide";
+export type ButtonName = (typeof STANDARD_BUTTONS)[number];
 
 /** A gamepad button, or "none" to turn the action off */
 export type ButtonSetting = ButtonName | "none";
@@ -99,27 +82,14 @@ export type Twist = {
   angular: { x: number; y: number; z: number };
 };
 
-export enum DirectionalPadAction {
-  UP,
-  DOWN,
-  LEFT,
-  RIGHT,
-}
-
 export type DirectionalPadProps = {
-  disabled?: boolean;
   /** Current command, used to highlight the matching buttons */
   vector?: TeleopVector;
-  onAction?: (action?: DirectionalPadAction) => void;
+  onAction?: (vector?: TeleopVector) => void;
 };
 
 export type JoystickProps = {
   vector: TeleopVector;
   onChange: (vector?: TeleopVector) => void;
   label?: string;
-};
-
-export type TeleopPanelAdapterProps = {
-  config: unknown;
-  saveConfig: SaveConfig<unknown>;
 };

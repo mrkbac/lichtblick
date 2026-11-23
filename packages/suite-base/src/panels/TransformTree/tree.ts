@@ -220,33 +220,3 @@ export function measureBetween(
   };
   return { pose: relativePose(poseInRoot(from), poseInRoot(to)) };
 }
-
-/** Whether two rows show the same thing; rows and their entries are rebuilt on every update. */
-export function sameRow(a: FrameRow, b: FrameRow): boolean {
-  return (
-    sameFields({ ...a, entry: undefined }, { ...b, entry: undefined }) &&
-    (a.entry === b.entry ||
-      (a.entry != undefined && b.entry != undefined && sameFields(a.entry, b.entry)))
-  );
-}
-
-/** Shallow equality that also compares array fields element by element. */
-export function sameFields(a: object, b: object): boolean {
-  const x = a as Record<string, unknown>;
-  const y = b as Record<string, unknown>;
-  const keys = Object.keys(x);
-  return (
-    keys.length === Object.keys(y).length &&
-    keys.every((key) => {
-      const u = x[key];
-      const v = y[key];
-      return (
-        Object.is(u, v) ||
-        (Array.isArray(u) &&
-          Array.isArray(v) &&
-          u.length === v.length &&
-          u.every((item, index) => Object.is(item, v[index])))
-      );
-    })
-  );
-}

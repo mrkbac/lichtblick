@@ -20,8 +20,6 @@ const FADE_SEC = 0.01;
  */
 export class AudioPlayer {
   public readonly analyser: AnalyserNode;
-  /** Called when the context starts or stops running, e.g. after a user gesture. */
-  public onStateChange?: () => void;
   public onError?: (message: string) => void;
 
   readonly #ctx: AudioContext;
@@ -50,7 +48,6 @@ export class AudioPlayer {
     // Analyse before the volume so the waveform stays visible while muted
     this.analyser.connect(this.#output).connect(this.#ctx.destination);
     this.#session = this.#newSession();
-    this.#ctx.onstatechange = () => this.onStateChange?.();
   }
 
   public isRunning(): boolean {

@@ -8,36 +8,12 @@ import type { DocumentedNodes } from "@lichtblick/suite-base/panels/shared/docum
 
 import {
   AUDIO_FORMATS,
-  AudioFormat,
+  FORMAT_LABELS,
   MAX_CHANNELS,
   MAX_SAMPLE_RATE,
   MIN_SAMPLE_RATE,
 } from "./decode";
 import { AudioConfig } from "./types";
-
-export const FORMAT_LABELS: Record<AudioFormat, string> = {
-  s16: "PCM 16-bit",
-  s16be: "PCM 16-bit big-endian",
-  s32: "PCM 32-bit",
-  f32: "PCM float32",
-  u8: "PCM 8-bit unsigned",
-  mulaw: "G.711 µ-law",
-  alaw: "G.711 A-law",
-  opus: "Opus",
-  mp3: "MP3",
-  aac: "AAC (ADTS)",
-  vorbis: "Ogg Vorbis (file per message)",
-  flac: "FLAC (file per message)",
-  wav: "WAV (file per message)",
-  "g726-16": "G.726 16 kbit/s",
-  "g726-24": "G.726 24 kbit/s",
-  "g726-32": "G.726 32 kbit/s",
-  "g726-40": "G.726 40 kbit/s",
-  "aal2-g726-16": "G.726 16 kbit/s (AAL2)",
-  "aal2-g726-24": "G.726 24 kbit/s (AAL2)",
-  "aal2-g726-32": "G.726 32 kbit/s (AAL2)",
-  "aal2-g726-40": "G.726 40 kbit/s (AAL2)",
-};
 
 export function buildSettingsTree(
   config: AudioConfig,

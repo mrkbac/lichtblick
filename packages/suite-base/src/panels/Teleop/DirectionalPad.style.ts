@@ -38,27 +38,10 @@ export const useStyles = makeStyles<void, "buttonIcon">()((theme, _params, class
         },
       },
     },
-    "&.disabled": {
-      cursor: "auto",
-      strokeWidth: 0,
-      fill: theme.palette.action.disabledBackground,
-
-      "&:hover": {
-        fill: theme.palette.action.disabledBackground,
-
-        [`& + .${classes.buttonIcon}`]: {
-          fill: theme.palette.background.default,
-        },
-      },
-    },
   },
   buttonIcon: {
     pointerEvents: "none",
     label: "DirectionalPad-buttonIcon",
     fill: theme.palette.text.primary,
-
-    "&.disabled": {
-      fill: theme.palette.background.default,
-    },
   },
 }));

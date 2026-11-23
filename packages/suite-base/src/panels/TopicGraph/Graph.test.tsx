@@ -104,18 +104,4 @@ describe("Graph", () => {
       expect(mockRun).toHaveBeenCalled();
     });
   });
-
-  describe("when style is provided", () => {
-    it("applies the style to the cytoscape instance", () => {
-      // Given
-      const style = GraphBuilder.stylesheetStyles();
-      const props = GraphBuilder.props({ style });
-
-      // When
-      render(<Graph {...props} />);
-
-      // Then
-      expect(mockSetStyle).toHaveBeenCalledWith(style);
-    });
-  });
 });

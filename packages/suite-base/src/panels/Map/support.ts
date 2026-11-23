@@ -82,6 +82,13 @@ export function expandLocationFixes(events: readonly MessageEvent[]): readonly M
   });
 }
 
+const GEOJSON_SCHEMAS: ReadonlySet<string> = new Set([
+  "foxglove_msgs/GeoJSON",
+  "foxglove_msgs/msg/GeoJSON",
+  "foxglove::GeoJSON",
+  "foxglove.GeoJSON",
+]);
+
 /** Schemas the Map panel reads. */
 export const MAP_SCHEMAS: ReadonlySet<string> = new Set([
   "sensor_msgs/NavSatFix",
@@ -92,10 +99,7 @@ export const MAP_SCHEMAS: ReadonlySet<string> = new Set([
   "foxglove.LocationFix",
   "foxglove::LocationFix",
   ...LOCATION_FIXES_SCHEMAS,
-  "foxglove_msgs/GeoJSON",
-  "foxglove_msgs/msg/GeoJSON",
-  "foxglove::GeoJSON",
-  "foxglove.GeoJSON",
+  ...GEOJSON_SCHEMAS,
 ]);
 
 export function isSupportedSchema(schemaName: string): boolean {
@@ -103,15 +107,7 @@ export function isSupportedSchema(schemaName: string): boolean {
 }
 
 export function isGeoJSONSchema(schemaName: string): boolean {
-  switch (schemaName) {
-    case "foxglove_msgs/GeoJSON":
-    case "foxglove_msgs/msg/GeoJSON":
-    case "foxglove::GeoJSON":
-    case "foxglove.GeoJSON":
-      return true;
-    default:
-      return false;
-  }
+  return GEOJSON_SCHEMAS.has(schemaName);
 }
 
 /**

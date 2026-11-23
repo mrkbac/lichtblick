@@ -7,19 +7,15 @@ import type { Mock } from "vitest";
 
 import KeyListener from "@lichtblick/suite-base/components/KeyListener";
 import { DEFAULT_CONFIG } from "@lichtblick/suite-base/panels/Teleop/constants";
-import {
-  DirectionalPadAction,
-  DirectionalPadProps,
-  TeleopConfig,
-} from "@lichtblick/suite-base/panels/Teleop/types";
+import { DirectionalPadProps, TeleopConfig } from "@lichtblick/suite-base/panels/Teleop/types";
 
 import TeleopPanel from "./TeleopPanel";
 
 function MockDirectionalPad({ onAction }: DirectionalPadProps): React.JSX.Element {
   return (
     <div data-testid="directional-pad">
-      <button onClick={() => onAction?.(DirectionalPadAction.UP)}>UP</button>
-      <button onClick={() => onAction?.(DirectionalPadAction.LEFT)}>LEFT</button>
+      <button onClick={() => onAction?.({ x: 0, y: 1 })}>UP</button>
+      <button onClick={() => onAction?.({ x: -1, y: 0 })}>LEFT</button>
       <button onClick={() => onAction?.()}>RELEASE</button>
     </div>
   );
