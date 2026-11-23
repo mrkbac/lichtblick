@@ -21,7 +21,7 @@ import {
   SeriesItem,
   Viewport,
 } from "./IDatasetsBuilder";
-import { DataItem, PointColumns, iteratePoints, lowerBound, upperBound } from "./columns";
+import { DataItem, PointColumns, lowerBound, upperBound } from "./columns";
 import { buildDatasetStyle, isDerivedSeries } from "./utils";
 import { Dataset } from "../types";
 import { AnalysisColumns, computeHistogram, computeSpectrum } from "../utils/analysis";
@@ -308,7 +308,7 @@ function downsampleInto(
     downsampledIndices =
       dataset.showLine === true
         ? downsampleTimeseriesColumns(xs, ys, startIdx, endIdx, downsampleViewport, maxPoints)
-        : downsampleScatter(iteratePoints(xs, ys, startIdx, endIdx), downsampleViewport);
+        : downsampleScatter(xs, ys, startIdx, endIdx, downsampleViewport);
   }
 
   if (dataset.showLine === true && hasNaN && downsampledIndices.length < numItems) {

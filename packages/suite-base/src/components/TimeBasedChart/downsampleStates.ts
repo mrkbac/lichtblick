@@ -61,7 +61,7 @@ type Interval = {
  * to the user that there is more detail.
  *
  * The `maxPoints` parameter works identically to the way it does in
- * `downsampleTimeseries`.
+ * `downsampleTimeseriesColumns`.
  */
 export function downsampleStates(
   points: Iterable<Point>,

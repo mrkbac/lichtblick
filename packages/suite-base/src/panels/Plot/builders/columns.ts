@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import { Immutable, Time } from "@lichtblick/suite";
-import { Point } from "@lichtblick/suite-base/components/Chart/datasets";
 
 import { Datum, OriginalValue } from "../utils/datum";
 
@@ -407,20 +406,4 @@ export function lowerBound(xs: Float64Array, from: number, to: number, value: nu
     }
   }
   return lo;
-}
-
-/** Point view over columns for the shared downsamplers; the yielded object is reused. */
-export function* iteratePoints(
-  xs: Float64Array,
-  ys: Float64Array,
-  start: number,
-  end: number,
-): Generator<Point> {
-  const point: Point = { index: 0, x: 0, y: 0 };
-  for (let i = start; i < end; i++) {
-    point.index = i;
-    point.x = xs[i]!;
-    point.y = ys[i]!;
-    yield point;
-  }
 }
