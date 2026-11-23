@@ -105,6 +105,7 @@ import { useStructureItemsStoreManager } from "@lichtblick/suite-base/panels/Plo
 import { PlayerPresence } from "@lichtblick/suite-base/players/types";
 import { PanelStateContextProvider } from "@lichtblick/suite-base/providers/PanelStateContextProvider";
 import WorkspaceContextProvider from "@lichtblick/suite-base/providers/WorkspaceContextProvider";
+import { layoutIsShared } from "@lichtblick/suite-base/services/ILayoutStorage";
 import { WorkspaceProps } from "@lichtblick/suite-base/types";
 import { useAppLaunch } from "@lichtblick/suite-base/util/appLaunch";
 import { parseAppURLState } from "@lichtblick/suite-base/util/appURLState";
@@ -119,6 +120,9 @@ import { useWorkspaceActions } from "./context/Workspace/useWorkspaceActions";
 import { severityToBadgeColor } from "./utils";
 
 const log = Logger.getLogger(__filename);
+
+/** Layout.from of layouts installed from a `?layoutUrl=` or `#layout=` link. */
+const LAYOUT_FROM_LINK = "link";
 
 // Loaded once a comparison is edited, so it costs nothing at startup
 const CompareDialog = lazy(async () => ({
@@ -490,13 +494,20 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
     async (text: string, filename: string, signal: AbortSignal) => {
       const layoutName = basename(filename, extname(filename));
 
-      // Find existing layouts with the same name before saving (safe deduplication)
+      // Only earlier copies this installed (marked from a link, personal). Imported, shared or
+      // other layouts that happen to share the name stay.
       const existingLayouts = await layoutManager.getLayouts();
-      const matchingLayouts = existingLayouts.filter((layout) => layout.name === layoutName);
+      const matchingLayouts = existingLayouts.filter(
+        (layout) =>
+          layout.name === layoutName && layout.from === LAYOUT_FROM_LINK && !layoutIsShared(layout),
+      );
 
       // Delegate JSON parsing, saving, and selection to parseAndInstallLayout
       const file = new File([text], filename, { type: "application/json" });
-      const newLayout = await parseAndInstallLayout(file, "local", signal, { untrusted: true });
+      const newLayout = await parseAndInstallLayout(file, "local", signal, {
+        untrusted: true,
+        from: LAYOUT_FROM_LINK,
+      });
 
       // Only delete old layouts after successful save to avoid data loss
       if (newLayout) {

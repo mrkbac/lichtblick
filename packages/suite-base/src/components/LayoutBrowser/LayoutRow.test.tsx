@@ -122,6 +122,12 @@ describe("LayoutRow rendering", () => {
     expect(screen.getByTestId("layout-list-item")).toHaveClass("Mui-selected");
   });
 
+  it("Given the current layout is toggled out of a multi-selection, then it is not marked as selected", () => {
+    renderComponent({ selected: true, multiSelectedIds: ["a", "b"] });
+
+    expect(screen.getByTestId("layout-list-item")).not.toHaveClass("Mui-selected");
+  });
+
   it("when menu button is clicked then menu opens and menu items are rendered", () => {
     // GIVEN
     renderComponent();

@@ -6,6 +6,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import * as IDB from "idb";
+import * as _ from "lodash-es";
 
 import Log from "@lichtblick/log";
 import { LayoutID } from "@lichtblick/suite-base/context/CurrentLayoutContext";
@@ -28,6 +29,10 @@ interface LayoutsDB extends IDB.DBSchema {
       namespace: string;
     };
   };
+}
+
+function layoutData(layout: Layout) {
+  return layout.working?.data ?? layout.baseline.data;
 }
 
 /**
@@ -97,10 +102,21 @@ export class IdbLayoutStorage implements ILayoutStorage {
       const sourceRecords = await namespaceIndex.getAll(fromNamespace);
 
       for (const { layout } of sourceRecords) {
-        // Skip layouts whose name already exists in the target namespace to avoid duplicates.
-        if (!existingNames.has(layout.name)) {
-          await store.put({ namespace: toNamespace, layout });
-          existingNames.add(layout.name);
+        // A same-named layout with identical data is a duplicate (e.g. the auto-created Default)
+        // and is dropped. Any other collision is imported under a suffixed name, so deleting the
+        // source never loses a layout.
+        const data = layoutData(layout);
+        const isDuplicate = targetRecords.some(
+          (record) =>
+            record.layout.name === layout.name && _.isEqual(layoutData(record.layout), data),
+        );
+        if (!isDuplicate) {
+          let name = layout.name;
+          for (let n = 1; existingNames.has(name); n++) {
+            name = n === 1 ? `${layout.name} (local)` : `${layout.name} (local ${n})`;
+          }
+          await store.put({ namespace: toNamespace, layout: { ...layout, name } });
+          existingNames.add(name);
         }
         await store.delete([fromNamespace, layout.id]);
       }

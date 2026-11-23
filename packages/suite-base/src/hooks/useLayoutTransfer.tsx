@@ -30,13 +30,14 @@ type UseLayoutTransfer = {
   exportLayout: () => Promise<void>;
   /**
    * Saves and selects a layout; rejects with AbortError if the optional signal is cancelled.
-   * `untrusted` also marks linked layouts that contain no user scripts yet.
+   * `untrusted` also marks linked layouts that contain no user scripts yet. `from` is stored as
+   * Layout.from (e.g. to recognize layouts installed from a link).
    */
   parseAndInstallLayout: (
     file: File,
     namespace: Namespace,
     signal?: AbortSignal,
-    options?: { untrusted?: boolean },
+    options?: { untrusted?: boolean; from?: string },
   ) => Promise<Layout | undefined>;
 };
 
@@ -52,7 +53,7 @@ export function useLayoutTransfer(): UseLayoutTransfer {
       file: File,
       namespace: Namespace = "local",
       signal?: AbortSignal,
-      options?: { untrusted?: boolean },
+      options?: { untrusted?: boolean; from?: string },
     ) => {
       const layoutName = basename(file.name, extname(file.name));
       const content = await file.text();
@@ -93,6 +94,7 @@ export function useLayoutTransfer(): UseLayoutTransfer {
         name: layoutName,
         data,
         permission: namespace === "org" ? "ORG_WRITE" : "CREATOR_WRITE",
+        from: options?.from,
         untrusted:
           options?.untrusted === true ||
           untrusted === true ||

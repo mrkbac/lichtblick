@@ -71,17 +71,18 @@ describe("CurrentLayoutLocalStorageSyncAdapter", () => {
   });
 
   function renderComponent() {
-    const component = (
+    // A fresh element each time, so React re-renders the adapter instead of bailing out.
+    const component = () => (
       <MockCurrentLayoutProvider>
-        <CurrentLayoutLocalStorageSyncAdapter />;
+        <CurrentLayoutLocalStorageSyncAdapter />
       </MockCurrentLayoutProvider>
     );
-    const renderObj = render(component);
+    const renderObj = render(component());
 
     return {
       ...renderObj,
       rerender: () => {
-        renderObj.rerender(component);
+        renderObj.rerender(component());
       },
     };
   }
@@ -163,6 +164,36 @@ describe("CurrentLayoutLocalStorageSyncAdapter", () => {
     expect(mockLayoutManager.updateLayout).toHaveBeenCalledWith({
       id: mockLayoutId,
       data: modifiedData,
+    });
+  });
+
+  it("saves an edit made just before switching layouts to the layout it was made in", async () => {
+    const { rerender } = renderComponent();
+    const select = (id: string, data: LayoutData) => {
+      (useCurrentLayoutSelector as Mock).mockImplementation((selector) =>
+        selector === selectLayoutData ? data : selector === selectLayoutId ? id : undefined,
+      );
+    };
+
+    // An edit, then a switch to another layout within the debounce
+    const editedData = { ...mockLayoutData, modified: true };
+    select(mockLayoutId, editedData);
+    await act(async () => {
+      rerender();
+    });
+    select("other-layout", { ...mockLayoutData, globalVariables: { other: true } });
+    await act(async () => {
+      rerender();
+    });
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 300));
+    });
+
+    // The edit lands on the first layout; loading the second is not an edit
+    expect(mockLayoutManager.updateLayout).toHaveBeenCalledTimes(1);
+    expect(mockLayoutManager.updateLayout).toHaveBeenCalledWith({
+      id: mockLayoutId,
+      data: editedData,
     });
   });
 });

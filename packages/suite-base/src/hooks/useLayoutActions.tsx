@@ -10,7 +10,7 @@ import { useLayoutManager } from "@lichtblick/suite-base/context/LayoutManagerCo
 import { LayoutSetupOptions } from "@lichtblick/suite-base/hooks/types";
 import useCallbackWithToast from "@lichtblick/suite-base/hooks/useCallbackWithToast";
 import { useConfirm } from "@lichtblick/suite-base/hooks/useConfirm";
-import { useLayoutNavigation } from "@lichtblick/suite-base/hooks/useLayoutNavigation";
+import { UseLayoutNavigation } from "@lichtblick/suite-base/hooks/useLayoutNavigation";
 import {
   Layout,
   layoutIsShared,
@@ -28,19 +28,26 @@ type UseLayoutActions = {
 
 const selectedLayoutIdSelector = (state: LayoutState) => state.selectedLayout?.id;
 
-export function useLayoutActions({ state, dispatch }: LayoutSetupOptions): UseLayoutActions {
+/** `state`, `dispatch` and `onSelectLayout` come from the caller's one useLayoutNavigation. */
+export function useLayoutActions({
+  state,
+  dispatch,
+  onSelectLayout,
+}: LayoutSetupOptions & Pick<UseLayoutNavigation, "onSelectLayout">): UseLayoutActions {
   const layoutManager = useLayoutManager();
   const currentLayoutId = useCurrentLayoutSelector(selectedLayoutIdSelector);
   const { setSelectedLayoutId } = useCurrentLayoutActions();
-  const { onSelectLayout } = useLayoutNavigation();
   const [confirm, confirmModal] = useConfirm();
 
   const onRenameLayout = useCallbackWithToast(
     async (item: Layout, newName: string) => {
       await layoutManager.updateLayout({ id: item.id, name: newName });
-      setSelectedLayoutId(item.id);
+      if (item.id === currentLayoutId) {
+        // Reload so the shown layout picks up its new name.
+        setSelectedLayoutId(item.id);
+      }
     },
-    [layoutManager, setSelectedLayoutId],
+    [currentLayoutId, layoutManager, setSelectedLayoutId],
   );
 
   const onDuplicateLayout = useCallbackWithToast(

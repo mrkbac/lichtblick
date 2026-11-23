@@ -6,12 +6,14 @@
 import { renderHook, act } from "@testing-library/react";
 import type { Mock } from "vitest";
 
-import { useCurrentLayoutActions } from "@lichtblick/suite-base/context/CurrentLayoutContext";
+import {
+  useCurrentLayoutActions,
+  useCurrentLayoutSelector,
+} from "@lichtblick/suite-base/context/CurrentLayoutContext";
 import { useLayoutManager } from "@lichtblick/suite-base/context/LayoutManagerContext";
 import { LayoutSetupOptions } from "@lichtblick/suite-base/hooks/types";
 import { useConfirm } from "@lichtblick/suite-base/hooks/useConfirm";
 import { useLayoutActions } from "@lichtblick/suite-base/hooks/useLayoutActions";
-import { useLayoutNavigation } from "@lichtblick/suite-base/hooks/useLayoutNavigation";
 import MockLayoutManager from "@lichtblick/suite-base/services/LayoutManager/MockLayoutManager";
 import LayoutBuilder from "@lichtblick/suite-base/testing/builders/LayoutBuilder";
 import { BasicBuilder } from "@lichtblick/test-builders";
@@ -25,15 +27,11 @@ vi.mock("@lichtblick/suite-base/context/CurrentLayoutContext", () => ({
   useCurrentLayoutSelector: vi.fn(),
 }));
 
-vi.mock("@lichtblick/suite-base/hooks/useLayoutNavigation", () => ({
-  useLayoutNavigation: vi.fn().mockReturnValue({
-    onSelectLayout: vi.fn(),
-  }),
-}));
-
 vi.mock("@lichtblick/suite-base/hooks/useConfirm", () => ({
   useConfirm: vi.fn().mockReturnValue([vi.fn().mockResolvedValue("ok"), undefined]),
 }));
+
+const onSelectLayoutMock = vi.fn();
 
 function setup(options: Partial<LayoutSetupOptions> = {}) {
   const {
@@ -48,13 +46,14 @@ function setup(options: Partial<LayoutSetupOptions> = {}) {
     dispatch = vi.fn(),
   } = options;
 
-  const { result } = renderHook(() => useLayoutActions({ state, dispatch }));
+  const { result } = renderHook(() =>
+    useLayoutActions({ state, dispatch, onSelectLayout: onSelectLayoutMock }),
+  );
   return { result, dispatch };
 }
 
 describe("useLayoutActions", () => {
   let setSelectedLayoutIdMock: Mock;
-  let onSelectLayoutMock: Mock;
   let confirmMock: Mock;
   const mockLayoutManager = new MockLayoutManager();
 
@@ -65,15 +64,13 @@ describe("useLayoutActions", () => {
     mockLayoutManager.revertLayout = vi.fn().mockResolvedValue(undefined);
     mockLayoutManager.getLayouts = vi.fn().mockResolvedValue([]);
     setSelectedLayoutIdMock = vi.fn();
-    onSelectLayoutMock = vi.fn();
+    onSelectLayoutMock.mockReset();
+    (useCurrentLayoutSelector as Mock).mockReturnValue(undefined);
     confirmMock = vi.fn().mockResolvedValue("ok");
 
     (useLayoutManager as Mock).mockReturnValue(mockLayoutManager);
     (useCurrentLayoutActions as Mock).mockReturnValue({
       setSelectedLayoutId: setSelectedLayoutIdMock,
-    });
-    (useLayoutNavigation as Mock).mockReturnValue({
-      onSelectLayout: onSelectLayoutMock,
     });
     (useConfirm as Mock).mockReturnValue([confirmMock, undefined]);
   });
@@ -83,9 +80,10 @@ describe("useLayoutActions", () => {
   });
 
   describe("onRenameLayout", () => {
-    it("calls updateLayout, setSelectedLayoutId, and logs event", async () => {
-      const { result } = setup();
+    it("renames the current layout and reloads it", async () => {
       const mockLayout = LayoutBuilder.layout({ permission: "CREATOR_WRITE" });
+      (useCurrentLayoutSelector as Mock).mockReturnValue(mockLayout.id);
+      const { result } = setup();
       const newName = BasicBuilder.string();
 
       await act(async () => {
@@ -97,6 +95,19 @@ describe("useLayoutActions", () => {
         name: newName,
       });
       expect(setSelectedLayoutIdMock).toHaveBeenCalledWith(mockLayout.id);
+    });
+
+    it("renames another layout without switching to it", async () => {
+      (useCurrentLayoutSelector as Mock).mockReturnValue(BasicBuilder.string());
+      const { result } = setup();
+      const mockLayout = LayoutBuilder.layout({ permission: "CREATOR_WRITE" });
+
+      await act(async () => {
+        await result.current.onRenameLayout(mockLayout, BasicBuilder.string());
+      });
+
+      expect(mockLayoutManager.updateLayout).toHaveBeenCalled();
+      expect(setSelectedLayoutIdMock).not.toHaveBeenCalled();
     });
   });
 

@@ -26,7 +26,12 @@ function reducer(draft: LayoutSelectionState, action: LayoutSelectionAction) {
 
     case "shift-multi-action":
       if (draft.multiAction) {
-        draft.multiAction.ids = draft.multiAction.ids.slice(1);
+        const [done, ...rest] = draft.multiAction.ids;
+        if (draft.multiAction.action === "delete") {
+          // A deleted layout can't stay selected: menus would act on it and a re-delete throws.
+          draft.selectedIds = draft.selectedIds.filter((id) => id !== done);
+        }
+        draft.multiAction.ids = rest;
         if (draft.multiAction.ids.length === 0) {
           draft.multiAction = undefined;
         }
