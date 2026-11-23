@@ -10,6 +10,7 @@ import Logger from "@lichtblick/log";
 import { MessagePathStructureItem } from "@lichtblick/message-path";
 import { useToggleColorScheme } from "@lichtblick/suite-base/components/ColorSchemeThemeProvider";
 import { useShowCompareDialog } from "@lichtblick/suite-base/components/Compare/compareDialogStore";
+import { useLayoutTemplateCommands } from "@lichtblick/suite-base/components/LayoutTemplates";
 import { useKeyboardShortcutsStore } from "@lichtblick/suite-base/components/KeyboardShortcuts/KeyboardShortcuts";
 import {
   APP_SHORTCUTS,
@@ -255,6 +256,7 @@ export function useAppCommands(): {
   // Read the current time lazily so the palette does not re-render on every frame.
   const getPipeline = useMessagePipelineGetter();
   const { availability: shareAvailability, copyLink: copyShareLink } = useShareLink();
+  const templateCommands = useLayoutTemplateCommands();
 
   const commands = useMemo(() => {
     const list: Command[] = [];
@@ -789,6 +791,7 @@ export function useAppCommands(): {
         run: showShortcuts,
       },
     );
+    pushAll(list, templateCommands);
     return list;
   }, [
     addPanel,
@@ -830,6 +833,7 @@ export function useAppCommands(): {
     sidebarActions,
     startTime,
     t,
+    templateCommands,
     topics,
   ]);
 

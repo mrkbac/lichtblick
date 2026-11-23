@@ -79,9 +79,6 @@ vi.mock("@lichtblick/suite-base/components/LayoutBrowser", () => ({
   __esModule: true,
   default: () => undefined,
 }));
-vi.mock("@lichtblick/suite-base/components/LayoutTemplates", () => ({
-  LayoutTemplateCommands: () => undefined,
-}));
 const { mockPanelLayoutMount } = vi.hoisted(() => ({ mockPanelLayoutMount: vi.fn() }));
 vi.mock("@lichtblick/suite-base/components/PanelLayout", async () => {
   const { useEffect } = await import("react");

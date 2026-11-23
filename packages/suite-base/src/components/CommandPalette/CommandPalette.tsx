@@ -33,7 +33,6 @@ import {
   paletteReducer,
   pushRecentCommandId,
   rankCommands,
-  useCommandRegistry,
 } from "./commands";
 import { useAppCommands } from "./useAppCommands";
 
@@ -131,7 +130,6 @@ function CommandPaletteDialog({ onClose }: { onClose: () => void }): React.JSX.E
   const { classes } = useStyles();
   const { t } = useTranslation("commandPalette");
   const { commands: appCommands, queryCommands } = useAppCommands();
-  const contributions = useCommandRegistry((state) => state.contributions);
   const [recentIds, setRecentIds] = useState(loadRecentCommandIds);
   const [state, dispatch] = useReducer(paletteReducer, initialPaletteState);
   const [loading, setLoading] = useState(false);
@@ -140,18 +138,13 @@ function CommandPaletteDialog({ onClose }: { onClose: () => void }): React.JSX.E
   const level = state.stack[state.stack.length - 1]!;
   const isRoot = state.stack.length === 1;
 
-  const rootCommands = useMemo(
-    () => [...appCommands, ...Array.from(contributions.values()).flat()],
-    [appCommands, contributions],
-  );
-
   const results: RankedCommand[] = useMemo(() => {
-    const ranked = rankCommands(level.items ?? rootCommands, level.query, recentIds);
+    const ranked = rankCommands(level.items ?? appCommands, level.query, recentIds);
     const fromQuery: RankedCommand[] = isRoot
       ? queryCommands(level.query).map((command) => ({ command, positions: new Set<number>() }))
       : (level.parent?.queryChildren?.(level.query) ?? []);
     return [...fromQuery, ...ranked];
-  }, [isRoot, level.items, level.parent, level.query, queryCommands, recentIds, rootCommands]);
+  }, [isRoot, level.items, level.parent, level.query, queryCommands, recentIds, appCommands]);
 
   const selectedIndex = Math.min(level.selectedIndex, results.length - 1);
 
@@ -291,7 +284,7 @@ function CommandPaletteDialog({ onClose }: { onClose: () => void }): React.JSX.E
             // A prefix typed (or pasted) into the empty root search opens its mode, e.g. "@".
             const mode =
               isRoot && level.query === ""
-                ? rootCommands.find(
+                ? appCommands.find(
                     (cmd) =>
                       cmd.children != undefined &&
                       cmd.prefix != undefined &&
