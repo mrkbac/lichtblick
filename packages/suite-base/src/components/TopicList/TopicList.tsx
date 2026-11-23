@@ -239,7 +239,6 @@ export function TopicList(): React.JSX.Element {
         <SearchBar
           id="topic-filter"
           placeholder={t("searchBarPlaceholder")}
-          disabled={playerPresence !== PlayerPresence.PRESENT}
           onChange={(event) => {
             setFilterText(event.target.value);
           }}

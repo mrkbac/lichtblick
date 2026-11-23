@@ -233,6 +233,14 @@ export class IterablePlayer implements Player {
 
   // The iterator for reading messages during playback
   #playbackIterator?: AsyncIterator<Readonly<IteratorResult>>;
+  // A playback read a state change interrupted (e.g. pausing while a remote file loads). Pausing
+  // keeps the iterator, so the next tick takes this result instead of reading past it.
+  #pendingNext?: {
+    iterator: AsyncIterator<Readonly<IteratorResult>>;
+    result: ReturnType<AsyncIterator<Readonly<IteratorResult>>["next"]>;
+  };
+  // Wakes a tick waiting on a slow read when a new state is requested
+  #wakeTick?: () => void;
 
   #blockLoader?: BlockLoader;
   #blockLoadingProcess?: Promise<void>;
@@ -612,6 +620,7 @@ export class IterablePlayer implements Player {
     }
     log.debug(`Set next state: ${newState}`);
     this.#nextState = newState;
+    this.#wakeTick?.();
     this.#abort?.abort();
     this.#abort = undefined;
     void this.#runState();
@@ -1345,14 +1354,32 @@ export class IterablePlayer implements Player {
       this.#queueEmitState();
     }, 500);
 
+    const woken = new Promise<"woken">((resolve) => {
+      this.#wakeTick = () => {
+        resolve("woken");
+      };
+    });
+
     try {
       // Read from the iterator through the end of the tick time
       for (;;) {
-        if (!this.#playbackIterator) {
+        const iterator = this.#playbackIterator;
+        if (!iterator) {
           throw new Error("Invariant. this._playbackIterator is undefined.");
         }
 
-        const result = await this.#playbackIterator.next();
+        if (this.#pendingNext?.iterator !== iterator) {
+          const result = iterator.next();
+          // An abandoned read of a replaced iterator must not become an unhandled rejection
+          result.catch(() => {});
+          this.#pendingNext = { iterator, result };
+        }
+        // A slow read (remote file still loading) must not hold off pause or seek
+        const result = await Promise.race([this.#pendingNext.result, woken]);
+        if (result === "woken") {
+          break;
+        }
+        this.#pendingNext = undefined;
         if (result.done === true) {
           break;
         }
@@ -1381,6 +1408,7 @@ export class IterablePlayer implements Player {
       }
     } finally {
       clearTimeout(tickTimeout);
+      this.#wakeTick = undefined;
     }
 
     // Set the presence back to PRESENT since we are no longer buffering
