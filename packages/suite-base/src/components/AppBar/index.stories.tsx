@@ -29,10 +29,6 @@ export const Default: Story = {};
 export const DefaultChinese: Story = { parameters: { forceLanguage: "zh" } };
 export const DefaultJapanese: Story = { parameters: { forceLanguage: "ja" } };
 
-export const DragRegion: Story = {
-  args: { debugDragRegion: true },
-};
-
 const Grid = (Story: React.ComponentType): React.JSX.Element => (
   <Stack overflowY="auto">
     <div style={{ display: "grid", gridTemplateColumns: "max-content auto", alignItems: "center" }}>

@@ -22,7 +22,6 @@ import { makeStyles } from "tss-react/mui";
 
 import Stack from "@lichtblick/suite-base/components/Stack";
 import { toError } from "@lichtblick/suite-base/util/toError";
-import { validationErrorToString, ValidationResult } from "@lichtblick/suite-base/util/validators";
 import { customTypography } from "@lichtblick/theme";
 
 const useStyles = makeStyles()((theme) => ({
@@ -44,7 +43,6 @@ type ParseAndStringifyFn = {
 };
 type BaseProps = {
   dataTestId?: string;
-  dataValidator?: (data: unknown) => ValidationResult | undefined;
   onChange?: OnChange;
   onError?: (err: string) => void;
   readOnly?: boolean;
@@ -59,7 +57,6 @@ type BaseProps = {
  */
 function ValidatedInputBase({
   dataTestId,
-  dataValidator = () => undefined,
   onChange,
   onError,
   parse,
@@ -96,16 +93,11 @@ function ValidatedInputBase({
         return;
       }
       setError(""); // clear the previous error
-      const validationResult = dataValidator(newVal);
-      if (validationResult != undefined) {
-        setError(validationErrorToString(validationResult));
-        return;
-      }
       if (onChangeFcn) {
         onChangeFcn(newVal);
       }
     },
-    [dataValidator, parse, value],
+    [parse, value],
   );
 
   /**
