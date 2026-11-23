@@ -136,19 +136,22 @@ describe("MarkerBatches", () => {
     topic.addMarkerMessage(marker(5, MarkerType.CUBE, 0.5), 0n);
     topic.startFrame(0n, "map", "map");
 
-    // cubes, cube outlines, spheres, cylinders, cylinder outlines
+    // cubes, cube outlines, spheres, cylinders, cylinder outlines, and the transparent cube with
+    // its outline in a batch of its own
     const counts = instanced().map((object) => (object as THREE.InstancedMesh).count);
-    expect(counts.sort()).toEqual([1, 1, 1, 2, 2]);
+    expect(counts.sort()).toEqual([1, 1, 1, 1, 1, 2, 2]);
 
     const cube = byId(2) as RenderableCube;
     expect(cube.mesh.layers.mask).toBe(1 << LAYER_PICK_ONLY);
     expect(cube.outline.layers.mask).toBe(1 << LAYER_PICK_ONLY);
-    // A transparent marker draws on its own, sorted with the other transparent objects
-    expect((byId(5) as RenderableCube).mesh.layers.mask).toBe(1 << LAYER_DEFAULT);
+    expect((byId(5) as RenderableCube).mesh.layers.mask).toBe(1 << LAYER_PICK_ONLY);
 
     // The instance carries the marker's pose and scale, relative to the batch origin (marker 1)
     const cubes = instanced().find(
-      (object) => (object as THREE.InstancedMesh).count === 2 && object instanceof THREE.Mesh,
+      (object) =>
+        (object as THREE.InstancedMesh).count === 2 &&
+        object instanceof THREE.Mesh &&
+        object.geometry === cube.mesh.geometry,
     ) as THREE.InstancedMesh;
     const matrix = new THREE.Matrix4();
     cubes.getMatrixAt(1, matrix);
@@ -158,6 +161,56 @@ describe("MarkerBatches", () => {
         .compose(new THREE.Vector3(1, 0, 0), new THREE.Quaternion(), new THREE.Vector3(1, 2, 3))
         .toArray(),
     );
+  });
+
+  it("batches transparent shapes by opacity and sorts them back to front for the camera", () => {
+    for (const id of [1, 2, 3]) {
+      topic.addMarkerMessage(marker(id, MarkerType.CUBE, 0.5), 0n);
+    }
+    topic.addMarkerMessage(marker(4, MarkerType.CUBE, 0.25), 0n);
+    topic.startFrame(0n, "map", "map");
+
+    const meshes = instanced().filter(
+      (object): object is THREE.InstancedMesh => object instanceof THREE.InstancedMesh,
+    );
+    expect(meshes.map((mesh) => [mesh.count, mesh.material.opacity]).sort()).toEqual([
+      [1, 0.25],
+      [3, 0.5],
+    ]);
+    const batch = meshes.find((mesh) => mesh.count === 3)!;
+    expect(batch.material.transparent).toBe(true);
+    expect(batch.material.depthWrite).toBe(false);
+
+    // Looking down -x from x = 10: marker 1 (x = 1) is farthest and draws first
+    const camera = new THREE.PerspectiveCamera();
+    camera.position.set(10, 0, 0);
+    camera.lookAt(0, 0, 0);
+    camera.updateMatrixWorld();
+    batch.updateMatrixWorld(true);
+    const xs = () =>
+      [0, 1, 2].map((i) => {
+        const matrix = new THREE.Matrix4();
+        batch.getMatrixAt(i, matrix);
+        return new THREE.Vector3().setFromMatrixPosition(matrix).x + batch.position.x;
+      });
+    const draw = () => {
+      batch.onBeforeRender(
+        {} as THREE.WebGLRenderer,
+        new THREE.Scene(),
+        camera,
+        batch.geometry,
+        batch.material,
+        null as unknown as THREE.Group,
+      );
+    };
+    draw();
+    expect(xs()).toEqual([1, 2, 3]);
+    // From the other side, the order flips
+    camera.position.set(-10, 0, 0);
+    camera.lookAt(0, 0, 0);
+    camera.updateMatrixWorld();
+    draw();
+    expect(xs()).toEqual([3, 2, 1]);
   });
 
   it("batches the head and shaft of both arrow forms with their own transforms", () => {
@@ -175,12 +228,13 @@ describe("MarkerBatches", () => {
     topic.addMarkerMessage(marker(3, MarkerType.ARROW, 0.5), 0n);
     topic.startFrame(0n, "map", "map");
 
+    // Opaque shafts, heads and their outlines; the transparent arrow's in batches of their own
     expect(instanced().map((object) => (object as THREE.InstancedMesh).count)).toEqual([
-      2, 2, 2, 2,
+      2, 2, 2, 2, 1, 1, 1, 1,
     ]);
     const arrow = byId(2) as RenderableArrow;
     const transparentArrow = byId(3) as RenderableArrow;
-    expect(transparentArrow.shaftMesh.layers.mask).toBe(1 << LAYER_DEFAULT);
+    expect(transparentArrow.shaftMesh.layers.mask).toBe(1 << LAYER_PICK_ONLY);
     arrow.updateMatrixWorld();
     for (const mesh of [arrow.shaftMesh, arrow.headMesh]) {
       expect(mesh.layers.mask).toBe(1 << LAYER_PICK_ONLY);
