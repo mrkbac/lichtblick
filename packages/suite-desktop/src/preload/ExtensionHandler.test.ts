@@ -599,6 +599,13 @@ describe("ExtensionsHandler", () => {
       expect(writeFile).toHaveBeenCalledWith(join(expectedDir, "file.txt"), expect.any(Uint8Array));
     });
 
+    it("skips a root directory entry", async () => {
+      mockArchive.files["./"] = { dir: true, async: vi.fn() };
+
+      await extensionsHandler.install(new Uint8Array());
+      expect(writeFile).toHaveBeenCalledTimes(4);
+    });
+
     it("writes nothing when an archive entry escapes the extension folder", async () => {
       mockArchive.files["../../escaped.txt"] = { async: vi.fn() };
 

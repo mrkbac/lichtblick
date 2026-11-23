@@ -46,6 +46,22 @@ const log = Logger.getLogger(__filename);
 // file:, smb: or custom-scheme URL that could launch a local program.
 const EXTERNAL_PROTOCOLS = new Set(["http:", "https:", "mailto:"]);
 
+/**
+ * Whether a navigation target is the app itself. The packaged renderer is a file:// page, and every
+ * file:// URL has the same (empty) host, so compare the path too: any other local page would get
+ * the preload's desktopBridge and storageBridge.
+ */
+export function isAppUrl(url: string, appUrl: string = rendererPath): boolean {
+  if (!URL.canParse(url)) {
+    return false;
+  }
+  const target = new URL(url);
+  const appPage = new URL(appUrl);
+  return target.protocol === "file:"
+    ? appPage.protocol === "file:" && target.pathname === appPage.pathname
+    : target.origin === appPage.origin;
+}
+
 /** Open `url` in the default browser or mail client if it is a web or mailto URL. */
 export function openExternalUrl(url: string): void {
   if (URL.canParse(url) && EXTERNAL_PROTOCOLS.has(new URL(url).protocol)) {
@@ -150,13 +166,9 @@ function newStudioWindow(deepLinks: string[] = []): BrowserWindow {
     return { action: "deny" };
   });
 
+  // Anything but the app itself opens in the browser (if it is a web URL) instead of in this window
   browserWindow.webContents.on("will-navigate", (event, reqUrl) => {
-    // if the target url is not the same as our host then force open in a browser
-    // URL.host includes the port - so this works for localhost servers vs webpack dev server
-    const targetHost = new URL(reqUrl).host;
-    const currentHost = new URL(browserWindow.webContents.getURL()).host;
-    const isExternal = targetHost !== currentHost;
-    if (isExternal) {
+    if (!isAppUrl(reqUrl)) {
       event.preventDefault();
       openExternalUrl(reqUrl);
     }
