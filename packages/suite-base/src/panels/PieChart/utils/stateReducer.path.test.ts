@@ -10,14 +10,14 @@ import { parseMessagePath } from "@lichtblick/message-path";
 import MessageEventBuilder from "@lichtblick/suite-base/testing/builders/MessageEventBuilder";
 import PieChartBuilder from "@lichtblick/suite-base/testing/builders/PieChartBuilder";
 
-import { handlePath } from "./handlePath";
+import { stateReducer } from "./stateReducer";
 import type { PieChartAction } from "../types";
 
 vi.mock("@lichtblick/message-path", () => ({
   parseMessagePath: vi.fn(),
 }));
 
-describe("handlePath", () => {
+describe("stateReducer path", () => {
   it("parses the new path and updates the state", () => {
     const parsedPath = { topicName: "test-topic", topicNameRepr: "test-topic", messagePath: [] };
     (parseMessagePath as Mock).mockReturnValue(parsedPath);
@@ -25,7 +25,7 @@ describe("handlePath", () => {
     const initialState = PieChartBuilder.pieChartState();
     const action: PieChartAction = { type: "path", path: "/new/path" };
 
-    const newState = handlePath({ state: initialState, action });
+    const newState = stateReducer(initialState, action);
 
     expect(newState.path).toBe("/new/path");
     expect(newState.parsedPath).toEqual(parsedPath);
@@ -41,7 +41,7 @@ describe("handlePath", () => {
     const initialState = PieChartBuilder.pieChartState();
     const action: PieChartAction = { type: "path", path: "/test/filter" };
 
-    const newState = handlePath({ state: initialState, action });
+    const newState = stateReducer(initialState, action);
 
     expect(newState.path).toBe("/test/filter");
     expect(newState.parsedPath).not.toBeNull();
@@ -58,7 +58,7 @@ describe("handlePath", () => {
     const initialState = PieChartBuilder.pieChartState();
     const action: PieChartAction = { type: "path", path: "/error/path" };
 
-    const newState = handlePath({ state: initialState, action });
+    const newState = stateReducer(initialState, action);
 
     expect(newState.path).toBe("/error/path");
     expect(newState.parsedPath).toBeUndefined();
@@ -77,7 +77,7 @@ describe("handlePath", () => {
     });
     const action: PieChartAction = { type: "path", path: "/new/path" };
 
-    const newState = handlePath({ state: initialState, action });
+    const newState = stateReducer(initialState, action);
 
     expect(newState.latestMessage).toEqual(initialState.latestMessage);
   });
@@ -93,10 +93,7 @@ describe("handlePath", () => {
     });
     const initialState = PieChartBuilder.pieChartState({ latestMessage: message });
 
-    const newState = handlePath({
-      state: initialState,
-      action: { type: "path", path: "/t.counts" },
-    });
+    const newState = stateReducer(initialState, { type: "path", path: "/t.counts" });
 
     expect(newState.latestMatchingQueriedData).toEqual(new Float32Array([2, 3]));
     expect(newState.error).toBeUndefined();
