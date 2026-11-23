@@ -20,29 +20,9 @@ declare module "*.svg" {
   export default IconComponent;
 }
 
-declare module "*.bag" {
-  const content: string;
-  export default content;
-}
-
-declare module "*.bin" {
-  const content: string;
-  export default content;
-}
-
-declare module "*.md" {
-  const content: string;
-  export default content;
-}
-
 declare module "*.png" {
   const Path: string;
   export default Path;
-}
-
-declare module "*.glb" {
-  const content: string;
-  export default content;
 }
 
 declare module "*.template" {

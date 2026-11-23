@@ -12,7 +12,6 @@ import {
   ISharedRootContext,
   SharedRootContext,
 } from "@lichtblick/suite-base/context/SharedRootContext";
-import AppParametersProvider from "@lichtblick/suite-base/providers/AppParametersProvider";
 
 import { ColorSchemeThemeProvider } from "./components/ColorSchemeThemeProvider";
 import CssBaseline from "./components/CssBaseline";
@@ -69,18 +68,14 @@ export function SharedRoot(
 
   return (
     <AppConfigurationContext.Provider value={appConfiguration}>
-      <AppParametersProvider appParameters={appParameters}>
-        <ColorSchemeThemeProvider>
-          {enableGlobalCss && <GlobalCss />}
-          <CssBaseline>
-            <ErrorBoundary>
-              <SharedRootContext.Provider value={contextValue}>
-                {children}
-              </SharedRootContext.Provider>
-            </ErrorBoundary>
-          </CssBaseline>
-        </ColorSchemeThemeProvider>
-      </AppParametersProvider>
+      <ColorSchemeThemeProvider>
+        {enableGlobalCss && <GlobalCss />}
+        <CssBaseline>
+          <ErrorBoundary>
+            <SharedRootContext.Provider value={contextValue}>{children}</SharedRootContext.Provider>
+          </ErrorBoundary>
+        </CssBaseline>
+      </ColorSchemeThemeProvider>
     </AppConfigurationContext.Provider>
   );
 }

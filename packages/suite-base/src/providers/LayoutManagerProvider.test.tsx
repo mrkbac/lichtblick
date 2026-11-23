@@ -10,24 +10,23 @@ import { render, waitFor } from "@testing-library/react";
 import type { Mock } from "vitest";
 
 import { useOnline, useVisibilityState } from "@lichtblick/hooks";
-import { useLayoutStorage } from "@lichtblick/suite-base/context/LayoutStorageContext";
-import { RemoteLayoutFavoritesStorageContext } from "@lichtblick/suite-base/context/RemoteLayoutFavoritesStorageContext";
-import { useRemoteLayoutStorage } from "@lichtblick/suite-base/context/RemoteLayoutStorageContext";
 import { UserProfileStorageContext } from "@lichtblick/suite-base/context/UserProfileStorageContext";
 import LayoutManagerProvider, {
   CHANGES_CHANNEL_NAME,
   nextSyncDelayMs,
   SYNC_LOCK_NAME,
 } from "@lichtblick/suite-base/providers/LayoutManagerProvider";
+import { ILayoutStorage } from "@lichtblick/suite-base/services/ILayoutStorage";
+import { IRemoteLayoutStorage } from "@lichtblick/suite-base/services/IRemoteLayoutStorage";
 import LayoutManager from "@lichtblick/suite-base/services/LayoutManager/LayoutManager";
 import MockLayoutManager from "@lichtblick/suite-base/services/LayoutManager/MockLayoutManager";
 
 // Mock dependencies
 vi.mock("@lichtblick/hooks");
-vi.mock("@lichtblick/suite-base/context/LayoutStorageContext");
-vi.mock("@lichtblick/suite-base/context/RemoteLayoutStorageContext");
 
 const mockLayoutManager = new MockLayoutManager();
+const layoutStorage = {} as ILayoutStorage;
+const remote = {} as IRemoteLayoutStorage;
 
 vi.mock("@lichtblick/suite-base/services/LayoutManager/LayoutManager", () => ({
   default: vi.fn(function () {
@@ -36,11 +35,9 @@ vi.mock("@lichtblick/suite-base/services/LayoutManager/LayoutManager", () => ({
 }));
 
 describe("LayoutManagerProvider", () => {
-  // Mock necessary hooks to render <LayoutManagerProvider /> component, otherwise it will fail
+  // Mock necessary hooks to render <LayoutManagerProvider local={layoutStorage} remote={remote} /> component, otherwise it will fail
   (useOnline as Mock).mockReturnValue(true);
   (useVisibilityState as Mock).mockReturnValue("visible");
-  (useLayoutStorage as Mock).mockReturnValue({});
-  (useRemoteLayoutStorage as Mock).mockReturnValue({});
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -50,8 +47,8 @@ describe("LayoutManagerProvider", () => {
     (useOnline as Mock).mockReturnValueOnce(false);
 
     // 1 render with true and another with false.
-    render(<LayoutManagerProvider />);
-    render(<LayoutManagerProvider />);
+    render(<LayoutManagerProvider local={layoutStorage} remote={remote} />);
+    render(<LayoutManagerProvider local={layoutStorage} remote={remote} />);
 
     await waitFor(() => {
       expect(mockLayoutManager.setOnline).toHaveBeenCalledTimes(2);
@@ -61,7 +58,7 @@ describe("LayoutManagerProvider", () => {
   });
 
   it("should call layoutManager.syncWithRemote", async () => {
-    render(<LayoutManagerProvider />);
+    render(<LayoutManagerProvider local={layoutStorage} remote={remote} />);
 
     await waitFor(() => {
       expect(mockLayoutManager.syncWithRemote).toHaveBeenCalledTimes(1);
@@ -71,7 +68,7 @@ describe("LayoutManagerProvider", () => {
   it("should not call layoutManager.syncWithRemote if offline", async () => {
     (useOnline as Mock).mockReturnValueOnce(false);
 
-    render(<LayoutManagerProvider />);
+    render(<LayoutManagerProvider local={layoutStorage} remote={remote} />);
 
     await waitFor(() => {
       expect(mockLayoutManager.syncWithRemote).toHaveBeenCalledTimes(0);
@@ -81,7 +78,7 @@ describe("LayoutManagerProvider", () => {
   it("should not call layoutManager.syncWithRemote if not visible", async () => {
     (useVisibilityState as Mock).mockReturnValueOnce("invisible");
 
-    render(<LayoutManagerProvider />);
+    render(<LayoutManagerProvider local={layoutStorage} remote={remote} />);
 
     await waitFor(() => {
       expect(mockLayoutManager.syncWithRemote).toHaveBeenCalledTimes(0);
@@ -89,9 +86,7 @@ describe("LayoutManagerProvider", () => {
   });
 
   it("should not call layoutManager.syncWithRemote if there is not remote storage", async () => {
-    (useRemoteLayoutStorage as Mock).mockReturnValueOnce(undefined);
-
-    render(<LayoutManagerProvider />);
+    render(<LayoutManagerProvider local={layoutStorage} />);
 
     await waitFor(() => {
       expect(mockLayoutManager.syncWithRemote).toHaveBeenCalledTimes(0);
@@ -110,9 +105,11 @@ describe("LayoutManagerProvider", () => {
     // When
     render(
       <UserProfileStorageContext.Provider value={userProfile}>
-        <RemoteLayoutFavoritesStorageContext.Provider value={remoteFavorites}>
-          <LayoutManagerProvider />
-        </RemoteLayoutFavoritesStorageContext.Provider>
+        <LayoutManagerProvider
+          local={layoutStorage}
+          remote={remote}
+          remoteFavorites={remoteFavorites}
+        />
       </UserProfileStorageContext.Provider>,
     );
 
@@ -148,7 +145,7 @@ describe("LayoutManagerProvider", () => {
       );
       Object.defineProperty(navigator, "locks", { value: { request }, configurable: true });
 
-      render(<LayoutManagerProvider />);
+      render(<LayoutManagerProvider local={layoutStorage} remote={remote} />);
 
       expect(request).toHaveBeenCalledWith(SYNC_LOCK_NAME, expect.anything(), expect.any(Function));
       await Promise.resolve();
@@ -187,7 +184,7 @@ describe("LayoutManagerProvider", () => {
         });
       });
 
-      render(<LayoutManagerProvider />);
+      render(<LayoutManagerProvider local={layoutStorage} remote={remote} />);
       const channel = channels.find((c) => c.name === CHANGES_CHANNEL_NAME)!;
 
       const local = { type: "change", updatedLayout: undefined };

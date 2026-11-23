@@ -23,11 +23,11 @@ import {
   useCurrentLayoutSelector,
 } from "@lichtblick/suite-base/context/CurrentLayoutContext";
 import LayoutManagerContext from "@lichtblick/suite-base/context/LayoutManagerContext";
+import { SharedRootContext } from "@lichtblick/suite-base/context/SharedRootContext";
 import {
   UserProfileStorage,
   UserProfileStorageContext,
 } from "@lichtblick/suite-base/context/UserProfileStorageContext";
-import AppParametersProvider from "@lichtblick/suite-base/providers/AppParametersProvider";
 import CurrentLayoutProvider from "@lichtblick/suite-base/providers/CurrentLayoutProvider";
 import {
   BUSY_POLLING_INTERVAL_MS,
@@ -143,7 +143,14 @@ function renderTest({
           childMounted.notifyAll();
         }, []);
         return (
-          <AppParametersProvider appParameters={mockAppParameters}>
+          <SharedRootContext.Provider
+            value={{
+              deepLinks: [],
+              dataSources: [],
+              extensionLoaders: [],
+              appParameters: mockAppParameters,
+            }}
+          >
             <SnackbarProvider>
               <LayoutManagerContext.Provider value={mockLayoutManager}>
                 <UserProfileStorageContext.Provider value={mockUserProfile}>
@@ -154,7 +161,7 @@ function renderTest({
                 </UserProfileStorageContext.Provider>
               </LayoutManagerContext.Provider>
             </SnackbarProvider>
-          </AppParametersProvider>
+          </SharedRootContext.Provider>
         );
       },
     },

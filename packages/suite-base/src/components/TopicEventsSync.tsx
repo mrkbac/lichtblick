@@ -46,15 +46,9 @@ export function toDataSourceEvent(
   }
   return {
     id,
-    createdAt: "",
-    updatedAt: "",
-    deviceId: "",
     startTime,
     endTime,
-    startTimeInSeconds: toSec(startTime),
-    endTimeInSeconds: toSec(endTime),
     durationNanos: String(toNanoSec(endTime) - toNanoSec(startTime)),
-    timestampNanos: String(toNanoSec(startTime)),
     metadata,
   };
 }

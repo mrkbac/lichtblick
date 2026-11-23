@@ -9,8 +9,6 @@ import { Link, Button, Typography } from "@mui/material";
 import { Component, ErrorInfo, PropsWithChildren, ReactNode } from "react";
 
 import Stack from "@lichtblick/suite-base/components/Stack";
-import { reportError } from "@lichtblick/suite-base/reportError";
-import { AppError } from "@lichtblick/suite-base/util/errors";
 
 import ErrorDisplay from "./ErrorDisplay";
 
@@ -30,7 +28,6 @@ export default class ErrorBoundary extends Component<PropsWithChildren<Props>, S
   };
 
   public override componentDidCatch(error: Error, errorInfo: ErrorInfo): void {
-    reportError(new AppError(error, errorInfo));
     this.setState({ currentError: { error, errorInfo } });
   }
 

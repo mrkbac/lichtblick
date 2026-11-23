@@ -19,16 +19,10 @@ const NO_EVENTS: TimelinePositionedEvent[] = [];
 
 function createEventsStore() {
   return createStore<EventsStore>((set) => ({
-    eventFetchCount: 0,
     events: { loading: false, value: NO_EVENTS },
     filter: "",
     selectedEventId: undefined,
     eventsSupported: false,
-    deviceId: undefined,
-
-    refreshEvents: () => {
-      set((old) => ({ eventFetchCount: old.eventFetchCount + 1 }));
-    },
     selectEvent: (id: undefined | string) => {
       set({ selectedEventId: id });
     },
@@ -41,9 +35,6 @@ function createEventsStore() {
     // eslint-disable-next-line @lichtblick/no-boolean-parameters
     setEventsSupported: (eventsSupported: boolean) => {
       set({ eventsSupported });
-    },
-    setDeviceId: (deviceId: string | undefined) => {
-      set({ deviceId });
     },
   }));
 }

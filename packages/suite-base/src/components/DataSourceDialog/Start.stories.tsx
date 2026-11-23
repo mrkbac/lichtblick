@@ -90,9 +90,7 @@ const playerSelection: PlayerSelection = {
       id: "foo",
       type: "connection",
       displayName: "My Data Source",
-      description: "Data source description",
       iconName: "ROS",
-      warning: "This is a warning",
 
       formConfig: {
         fields: [{ id: "key", label: "Some Label" }],

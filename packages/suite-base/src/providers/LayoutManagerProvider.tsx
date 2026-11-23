@@ -10,11 +10,11 @@ import { useContext, useEffect, useMemo } from "react";
 import { useOnline, useVisibilityState } from "@lichtblick/hooks";
 import Logger from "@lichtblick/log";
 import LayoutManagerContext from "@lichtblick/suite-base/context/LayoutManagerContext";
-import { useLayoutStorage } from "@lichtblick/suite-base/context/LayoutStorageContext";
-import { useRemoteLayoutFavoritesStorage } from "@lichtblick/suite-base/context/RemoteLayoutFavoritesStorageContext";
-import { useRemoteLayoutStorage } from "@lichtblick/suite-base/context/RemoteLayoutStorageContext";
 import { UserProfileStorageContext } from "@lichtblick/suite-base/context/UserProfileStorageContext";
 import { LayoutManagerChangeEvent } from "@lichtblick/suite-base/services/ILayoutManager";
+import { ILayoutStorage } from "@lichtblick/suite-base/services/ILayoutStorage";
+import { IRemoteLayoutFavoritesStorage } from "@lichtblick/suite-base/services/IRemoteLayoutFavoritesStorage";
+import { IRemoteLayoutStorage } from "@lichtblick/suite-base/services/IRemoteLayoutStorage";
 import LayoutManager from "@lichtblick/suite-base/services/LayoutManager/LayoutManager";
 
 const log = Logger.getLogger(__filename);
@@ -55,21 +55,19 @@ async function abortableDelay(ms: number, signal: AbortSignal): Promise<void> {
 
 export default function LayoutManagerProvider({
   children,
-}: React.PropsWithChildren): React.JSX.Element {
-  const layoutStorage = useLayoutStorage();
-  const remoteLayoutStorage = useRemoteLayoutStorage();
-  const userProfileStorage = useContext(UserProfileStorageContext);
-  const remoteLayoutFavoritesStorage = useRemoteLayoutFavoritesStorage();
+  local,
+  remote,
+  remoteFavorites,
+}: React.PropsWithChildren<{
+  local: ILayoutStorage;
+  remote?: IRemoteLayoutStorage;
+  remoteFavorites?: IRemoteLayoutFavoritesStorage;
+}>): React.JSX.Element {
+  const userProfile = useContext(UserProfileStorageContext);
 
   const layoutManager = useMemo(
-    () =>
-      new LayoutManager({
-        local: layoutStorage,
-        remote: remoteLayoutStorage,
-        userProfile: userProfileStorage,
-        remoteFavorites: remoteLayoutFavoritesStorage,
-      }),
-    [layoutStorage, remoteLayoutStorage, userProfileStorage, remoteLayoutFavoritesStorage],
+    () => new LayoutManager({ local, remote, userProfile, remoteFavorites }),
+    [local, remote, userProfile, remoteFavorites],
   );
 
   const online = useOnline();
@@ -112,7 +110,7 @@ export default function LayoutManagerProvider({
 
   // Sync periodically when logged in, online, and the app is not hidden. Only one visible tab of
   // this origin syncs at a time (it holds the lock); the others get its changes over the channel.
-  const enableSyncing = remoteLayoutStorage != undefined && online && visibilityState === "visible";
+  const enableSyncing = remote != undefined && online && visibilityState === "visible";
   useEffect(() => {
     if (!enableSyncing) {
       return;

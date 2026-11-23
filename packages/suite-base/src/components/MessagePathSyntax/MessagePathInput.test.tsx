@@ -24,7 +24,6 @@ import type { Mock } from "vitest";
 import { MessagePath, parseMessagePath } from "@lichtblick/message-path";
 import { useMessagePipeline } from "@lichtblick/suite-base/components/MessagePipeline";
 import MockPanelContextProvider from "@lichtblick/suite-base/components/MockPanelContextProvider";
-import { useUserProfileStorage } from "@lichtblick/suite-base/context/UserProfileStorageContext";
 import useGlobalVariables from "@lichtblick/suite-base/hooks/useGlobalVariables";
 import MockLayoutManager from "@lichtblick/suite-base/services/LayoutManager/MockLayoutManager";
 import { BasicBuilder } from "@lichtblick/test-builders";
@@ -44,7 +43,6 @@ let mockTopics: Array<{ name: string; schemaName?: string }> = [];
 
 vi.mock("@lichtblick/suite-base/hooks/useGlobalVariables");
 vi.mock("@lichtblick/suite-base/components/MessagePipeline");
-vi.mock("@lichtblick/suite-base/context/UserProfileStorageContext");
 vi.mock("@lichtblick/suite-base/context/CurrentLayoutContext");
 vi.mock("@lichtblick/suite-base/PanelAPI", () => ({
   useDataSourceInfo: () => ({
@@ -182,10 +180,6 @@ describe("MessagePathInput Component", () => {
     setGlobalVariables: vi.fn(),
   });
   (useMessagePipeline as Mock).mockReturnValue({});
-  (useUserProfileStorage as Mock).mockReturnValue({
-    getUserProfile: {},
-    setUserProfile: vi.fn(),
-  });
   (useDebounce as Mock).mockImplementation((value) => {
     return [value];
   });

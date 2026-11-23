@@ -22,8 +22,6 @@
 
 import { ReactNode } from "react";
 
-import { reportError } from "@lichtblick/suite-base/reportError";
-import { AppError } from "@lichtblick/suite-base/util/errors";
 import { inWebWorker } from "@lichtblick/suite-base/util/workers";
 
 export type NotificationType = "app" | "user";
@@ -101,13 +99,6 @@ export default function sendNotification(
   type: NotificationType,
   severity: NotificationSeverity,
 ): void {
-  // We only want to send non-user errors and warnings to Sentry
-  if (type === "app") {
-    if (severity === "warn" || severity === "error") {
-      reportError(new AppError(details, message));
-    }
-  }
-
   addNotification(message, details, type, severity);
 }
 

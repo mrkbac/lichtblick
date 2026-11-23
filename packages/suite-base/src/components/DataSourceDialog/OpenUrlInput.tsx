@@ -78,12 +78,7 @@ export function OpenUrlInput({
 
   const connectionSources = useMemo(
     () =>
-      availableSources.filter(
-        (source) =>
-          source.type === "connection" &&
-          source.hidden !== true &&
-          source.disabledReason == undefined,
-      ),
+      availableSources.filter((source) => source.type === "connection" && source.hidden !== true),
     [availableSources],
   );
 
@@ -116,11 +111,7 @@ export function OpenUrlInput({
   const previous =
     recentMatch &&
     availableSources.find(
-      (s) =>
-        s.id === recentMatch.sourceId &&
-        s.type === "connection" &&
-        s.disabledReason == undefined &&
-        hasUrlField(s),
+      (s) => s.id === recentMatch.sourceId && s.type === "connection" && hasUrlField(s),
     );
   const source =
     picked ??

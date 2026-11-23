@@ -18,16 +18,10 @@ import { Immutable } from "@lichtblick/suite";
  */
 export type DataSourceEvent = {
   id: string;
-  createdAt: string;
-  deviceId: string;
   durationNanos: string;
   endTime: Time;
-  endTimeInSeconds: number;
   metadata: Record<string, string>;
   startTime: Time;
-  startTimeInSeconds: number;
-  timestampNanos: string;
-  updatedAt: string;
 };
 
 /**
@@ -48,9 +42,6 @@ export type TimelinePositionedEvent = {
 };
 
 export type EventsStore = Immutable<{
-  /** Used to signal event refreshes. */
-  eventFetchCount: number;
-
   /** Whether events are supported for the currently loaded source. */
   eventsSupported: boolean;
 
@@ -62,12 +53,6 @@ export type EventsStore = Immutable<{
 
   /** The currently selected event, if any. */
   selectedEventId: undefined | string;
-
-  /** The active device under which new events should be created. */
-  deviceId: string | undefined;
-
-  /** Refreshes events from api. */
-  refreshEvents: () => void;
 
   /** Select an event by id or clear the selection. */
   selectEvent: (id: undefined | string) => void;
@@ -81,9 +66,6 @@ export type EventsStore = Immutable<{
 
   /** Update the current filter expression. */
   setFilter: (filter: string) => void;
-
-  /** Set the active device. */
-  setDeviceId: (deviceId: string | undefined) => void;
 }>;
 
 export const EventsContext = createContext<undefined | StoreApi<EventsStore>>(undefined);

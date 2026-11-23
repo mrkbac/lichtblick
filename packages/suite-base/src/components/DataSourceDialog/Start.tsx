@@ -206,10 +206,8 @@ export default function Start({ ref }: { ref?: React.Ref<StartHandle> }): React.
 
   const liveSections =
     view === "live"
-      ? availableSources.flatMap(({ id, LiveDevices, disabledReason }) =>
-          LiveDevices && disabledReason == undefined
-            ? [<LiveDevices key={id} query={query} />]
-            : [],
+      ? availableSources.flatMap(({ id, LiveDevices }) =>
+          LiveDevices ? [<LiveDevices key={id} query={query} />] : [],
         )
       : [];
 
