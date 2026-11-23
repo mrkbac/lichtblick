@@ -81,5 +81,28 @@ describe("IdbLayoutStorage", () => {
       expect(target.map((l) => l.id)).toEqual(["remote-default"]);
       expect(source).toHaveLength(0);
     });
+
+    it("imports a same-named layout with different data under a new name", async () => {
+      // Given a "Default" in both namespaces whose data differs
+      const storage = new IdbLayoutStorage();
+      const edited = makeLayout("local-default", "Default");
+      edited.baseline.data.globalVariables = { edited: true };
+      await storage.put("local", edited);
+      await storage.put("remote-default-layouts", makeLayout("remote-default", "Default"));
+
+      // When importing local layouts into the remote namespace
+      await storage.importLayouts({
+        fromNamespace: "local",
+        toNamespace: "remote-default-layouts",
+      });
+
+      // Then the local layout survives under a suffixed name
+      const target = await storage.list("remote-default-layouts");
+      expect(target.map((l) => l.name).sort()).toEqual(["Default", "Default (local)"]);
+      expect(target.find((l) => l.id === "local-default")?.baseline.data.globalVariables).toEqual({
+        edited: true,
+      });
+      expect(await storage.list("local")).toHaveLength(0);
+    });
   });
 });

@@ -706,9 +706,13 @@ describe("Workspace - fetchLayoutFromUrl", () => {
     });
   });
 
-  it("should delete existing layouts with same name after successful install", async () => {
-    // Given
-    mockGetLayouts.mockResolvedValue([{ id: "old-id", name: "my-layout" }]);
+  it("should delete only earlier link-installed copies after successful install", async () => {
+    // Given an earlier link copy plus a trusted and a shared layout with the same name
+    mockGetLayouts.mockResolvedValue([
+      { id: "old-id", name: "my-layout", permission: "CREATOR_WRITE", untrusted: true },
+      { id: "own-id", name: "my-layout", permission: "CREATOR_WRITE" },
+      { id: "shared-id", name: "my-layout", permission: "ORG_WRITE", untrusted: true },
+    ]);
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,
       text: vi.fn().mockResolvedValue("{}"),
@@ -728,11 +732,14 @@ describe("Workspace - fetchLayoutFromUrl", () => {
     await waitFor(() => {
       expect(mockDeleteLayout).toHaveBeenCalledWith({ id: "old-id" });
     });
+    expect(mockDeleteLayout).toHaveBeenCalledTimes(1);
   });
 
   it("should not delete existing layouts if parseAndInstallLayout returns undefined", async () => {
     // Given
-    mockGetLayouts.mockResolvedValue([{ id: "old-id", name: "my-layout" }]);
+    mockGetLayouts.mockResolvedValue([
+      { id: "old-id", name: "my-layout", permission: "CREATOR_WRITE", untrusted: true },
+    ]);
     mockParseAndInstallLayout.mockResolvedValue(undefined);
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,
@@ -848,7 +855,9 @@ describe("Workspace - fetchLayoutFromUrl", () => {
   });
 
   it("replaces the layout from an earlier share link", async () => {
-    mockGetLayouts.mockResolvedValue([{ id: "old-id", name: "Shared layout" }]);
+    mockGetLayouts.mockResolvedValue([
+      { id: "old-id", name: "Shared layout", permission: "CREATOR_WRITE", untrusted: true },
+    ]);
     const encoded = await encodeSharedLayout({ configById: {} });
 
     render(<Workspace deepLinks={[`lichtblick://open#layout=${encoded}`]} />);
@@ -856,6 +865,7 @@ describe("Workspace - fetchLayoutFromUrl", () => {
     await waitFor(() => {
       expect(mockDeleteLayout).toHaveBeenCalledWith({ id: "old-id" });
     });
+    expect(mockDeleteLayout).toHaveBeenCalledTimes(1);
   });
 
   it("only keeps the link's layout for the launch that installed it", async () => {

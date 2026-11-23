@@ -105,6 +105,7 @@ import { useStructureItemsStoreManager } from "@lichtblick/suite-base/panels/Plo
 import { PlayerPresence } from "@lichtblick/suite-base/players/types";
 import { PanelStateContextProvider } from "@lichtblick/suite-base/providers/PanelStateContextProvider";
 import WorkspaceContextProvider from "@lichtblick/suite-base/providers/WorkspaceContextProvider";
+import { layoutIsShared } from "@lichtblick/suite-base/services/ILayoutStorage";
 import { WorkspaceProps } from "@lichtblick/suite-base/types";
 import { useAppLaunch } from "@lichtblick/suite-base/util/appLaunch";
 import { parseAppURLState } from "@lichtblick/suite-base/util/appURLState";
@@ -490,9 +491,13 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
     async (text: string, filename: string, signal: AbortSignal) => {
       const layoutName = basename(filename, extname(filename));
 
-      // Find existing layouts with the same name before saving (safe deduplication)
+      // Earlier copies from links: same name, personal, untrusted. Never touch shared or trusted
+      // layouts that happen to share the name.
       const existingLayouts = await layoutManager.getLayouts();
-      const matchingLayouts = existingLayouts.filter((layout) => layout.name === layoutName);
+      const matchingLayouts = existingLayouts.filter(
+        (layout) =>
+          layout.name === layoutName && layout.untrusted === true && !layoutIsShared(layout),
+      );
 
       // Delegate JSON parsing, saving, and selection to parseAndInstallLayout
       const file = new File([text], filename, { type: "application/json" });
