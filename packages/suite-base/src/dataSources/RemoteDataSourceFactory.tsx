@@ -61,7 +61,6 @@ class RemoteDataSourceFactory implements IDataSourceFactory {
   public displayName = "Remote file";
   public iconName: IDataSourceFactory["iconName"] = "FileASPX";
   public supportedFileTypes = fileTypesAllowed;
-  public description = "Open pre-recorded .bag or .mcap files from a remote location.";
 
   public formConfig = {
     fields: [
@@ -75,8 +74,6 @@ class RemoteDataSourceFactory implements IDataSourceFactory {
       },
     ],
   };
-
-  public warning = "Loading large files over HTTP can be slow";
 
   public prefetch = loadIterablePlayer;
 

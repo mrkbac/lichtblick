@@ -56,7 +56,6 @@ import {
   SubscribePayload,
   Topic,
 } from "@lichtblick/suite-base/players/types";
-import { reportError } from "@lichtblick/suite-base/reportError";
 import { RosDatatypes } from "@lichtblick/suite-base/types/RosDatatypes";
 import { UserScript, UserScripts } from "@lichtblick/suite-base/types/panels";
 import { basicDatatypes } from "@lichtblick/suite-base/util/basicDatatypes";
@@ -1340,7 +1339,6 @@ export default class UserScriptPlayer implements Player {
       })
       .catch((err: unknown) => {
         log.error(err);
-        reportError(toError(err));
       });
   }
 

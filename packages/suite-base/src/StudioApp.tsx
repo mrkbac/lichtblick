@@ -8,13 +8,10 @@
 import { Fragment, Suspense, useEffect, useMemo } from "react";
 
 import { IdbLayoutStorage } from "@lichtblick/suite-base/IdbLayoutStorage";
-import LayoutStorageContext from "@lichtblick/suite-base/context/LayoutStorageContext";
 import {
   OrganizationProvider,
   useOrganizationSession,
 } from "@lichtblick/suite-base/context/OrganizationContext";
-import { RemoteLayoutFavoritesStorageContext } from "@lichtblick/suite-base/context/RemoteLayoutFavoritesStorageContext";
-import { RemoteLayoutStorageContext } from "@lichtblick/suite-base/context/RemoteLayoutStorageContext";
 import { useSharedRootContext } from "@lichtblick/suite-base/context/SharedRootContext";
 import AlertsContextProvider from "@lichtblick/suite-base/providers/AlertsContextProvider";
 import EventsProvider from "@lichtblick/suite-base/providers/EventsProvider";
@@ -61,6 +58,7 @@ export function StudioApp(): React.JSX.Element {
 
   const layoutStorage = useMemo(() => new IdbLayoutStorage(), []);
   const organization = useOrganizationSession(organizationApiUrl);
+  const remoteStorage = organization.status === "authenticated" ? organization.storage : undefined;
 
   const providers = [
     /* eslint-disable react/jsx-key */
@@ -68,10 +66,13 @@ export function StudioApp(): React.JSX.Element {
     <StudioLogsSettingsProvider />,
     <StudioToastProvider />,
     <OrganizationProvider value={organization} />,
-    <LayoutStorageContext.Provider value={layoutStorage} />,
     // The layout manager stores favorites in the user profile, so it is nested inside it.
     <UserProfileLocalStorageProvider />,
-    <LayoutManagerProvider />,
+    <LayoutManagerProvider
+      local={layoutStorage}
+      remote={remoteStorage}
+      remoteFavorites={remoteStorage}
+    />,
     <CurrentLayoutProvider loaders={layoutLoaders} />,
     // Alerts provider also must come before other, dependent contexts.
     <AlertsContextProvider />,
@@ -83,13 +84,6 @@ export function StudioApp(): React.JSX.Element {
     <EventsProvider />,
     /* eslint-enable react/jsx-key */
   ];
-
-  if (organization.status === "authenticated") {
-    providers.unshift(
-      <RemoteLayoutFavoritesStorageContext.Provider value={organization.storage} />,
-      <RemoteLayoutStorageContext.Provider value={organization.storage} />,
-    );
-  }
 
   const MaybeLaunchPreference = enableLaunchPreferenceScreen === true ? LaunchPreference : Fragment;
 

@@ -15,12 +15,10 @@ import { usePanelContext } from "@lichtblick/suite-base/components/PanelContext"
 import { DraggedMessagePath } from "@lichtblick/suite-base/components/PanelExtensionAdapter";
 import PanelToolbar from "@lichtblick/suite-base/components/PanelToolbar";
 import { LayoutData } from "@lichtblick/suite-base/context/CurrentLayoutContext";
-import LayoutStorageContext from "@lichtblick/suite-base/context/LayoutStorageContext";
 import PanelCatalogContext, {
   PanelCatalog,
   PanelInfo,
 } from "@lichtblick/suite-base/context/PanelCatalogContext";
-import AppParametersProvider from "@lichtblick/suite-base/providers/AppParametersProvider";
 import MockCurrentLayoutProvider from "@lichtblick/suite-base/providers/CurrentLayoutProvider/MockCurrentLayoutProvider";
 import EventsProvider from "@lichtblick/suite-base/providers/EventsProvider";
 import LayoutManagerProvider from "@lichtblick/suite-base/providers/LayoutManagerProvider";
@@ -129,9 +127,7 @@ export const Basic: StoryObj<{ initialLayoutState: Partial<LayoutData> }> = {
       <EventsProvider />,
       <PanelCatalogContext.Provider value={new MockPanelCatalog()} />,
       <MockCurrentLayoutProvider initialState={args.initialLayoutState} />,
-      <LayoutStorageContext.Provider value={layoutStorage} />,
-      <LayoutManagerProvider />,
-      <AppParametersProvider />,
+      <LayoutManagerProvider local={layoutStorage} />,
       /* eslint-enable react/jsx-key */
     ];
     return (

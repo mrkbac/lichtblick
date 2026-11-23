@@ -14,8 +14,6 @@ import {
   PanelErrorBoundaryProps,
   PanelErrorBoundaryState,
 } from "@lichtblick/suite-base/components/types";
-import { reportError } from "@lichtblick/suite-base/reportError";
-import { AppError } from "@lichtblick/suite-base/util/errors";
 
 export default class PanelErrorBoundary extends Component<
   PropsWithChildren<PanelErrorBoundaryProps>,
@@ -26,7 +24,6 @@ export default class PanelErrorBoundary extends Component<
   };
 
   public override componentDidCatch(error: Error, errorInfo: ErrorInfo): void {
-    reportError(new AppError(error, errorInfo));
     this.setState({ currentError: { error, errorInfo } });
 
     if (this.props.onLogError) {

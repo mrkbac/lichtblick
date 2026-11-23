@@ -15,8 +15,8 @@ describe("toDataSourceEvent", () => {
     );
     expect(event).toMatchObject({
       id: "/events#0",
-      startTimeInSeconds: 10,
-      endTimeInSeconds: 12.5,
+      startTime: { sec: 10, nsec: 0 },
+      endTime: { sec: 12, nsec: 500_000_000 },
       durationNanos: "2500000000",
       metadata: { topic: "/events", kind: "stop", note: "" },
     });

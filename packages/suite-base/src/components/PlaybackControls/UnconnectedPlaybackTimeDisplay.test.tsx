@@ -18,7 +18,6 @@ import {
 const appTimeFormat: IAppTimeFormat = {
   formatDate: () => "",
   formatTime: () => "",
-  formatDuration: () => "",
   timeFormat: "SEC",
   setTimeFormat: async () => {},
   timeZone: undefined,

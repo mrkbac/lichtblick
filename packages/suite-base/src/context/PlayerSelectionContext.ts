@@ -57,11 +57,7 @@ export interface IDataSourceFactory {
   type: DataSourceFactoryType;
   displayName: string;
   iconName?: RegisteredIconNames;
-  description?: string;
-  disabledReason?: string | React.JSX.Element;
-  badgeText?: string;
   hidden?: boolean;
-  warning?: string | React.JSX.Element;
 
   /** Device discovery section shown on the start page's Live tab. */
   LiveDevices?: React.ComponentType<{ query: string }>;

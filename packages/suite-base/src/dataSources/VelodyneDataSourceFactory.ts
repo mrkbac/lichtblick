@@ -17,8 +17,6 @@ class VelodyneDataSourceFactory implements IDataSourceFactory {
   public type: IDataSourceFactory["type"] = "connection";
   public displayName = "Velodyne Lidar";
   public iconName: IDataSourceFactory["iconName"] = "GenericScan";
-  public description =
-    "Connect directly to Velodyne Lidar hardware to inspect incoming sensor data.";
 
   public formConfig = {
     fields: [{ id: "port", label: "UDP Port", defaultValue: "2369" }],

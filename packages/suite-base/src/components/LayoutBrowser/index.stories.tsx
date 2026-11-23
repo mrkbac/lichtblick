@@ -12,7 +12,6 @@ import { StoryObj, StoryContext } from "storybook-react-rsbuild";
 import AppConfigurationContext from "@lichtblick/suite-base/context/AppConfigurationContext";
 import { LayoutID } from "@lichtblick/suite-base/context/CurrentLayoutContext";
 import { LayoutData } from "@lichtblick/suite-base/context/CurrentLayoutContext/actions";
-import LayoutStorageContext from "@lichtblick/suite-base/context/LayoutStorageContext";
 import { UserProfileStorageContext } from "@lichtblick/suite-base/context/UserProfileStorageContext";
 import CurrentLayoutProvider from "@lichtblick/suite-base/providers/CurrentLayoutProvider";
 import { defaultPlaybackConfig } from "@lichtblick/suite-base/providers/CurrentLayoutProvider/reducers";
@@ -138,13 +137,11 @@ function WithSetup(Child: React.ComponentType, ctx: StoryContext): React.JSX.Ele
     <div style={{ display: "flex", height: "100%", width: 320 }}>
       <AppConfigurationContext.Provider value={appConfig}>
         <UserProfileStorageContext.Provider value={userProfile}>
-          <LayoutStorageContext.Provider value={storage}>
-            <LayoutManagerProvider>
-              <CurrentLayoutProvider>
-                <Child />
-              </CurrentLayoutProvider>
-            </LayoutManagerProvider>
-          </LayoutStorageContext.Provider>
+          <LayoutManagerProvider local={storage}>
+            <CurrentLayoutProvider>
+              <Child />
+            </CurrentLayoutProvider>
+          </LayoutManagerProvider>
         </UserProfileStorageContext.Provider>
       </AppConfigurationContext.Provider>
     </div>

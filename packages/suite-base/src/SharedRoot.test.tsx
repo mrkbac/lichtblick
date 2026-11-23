@@ -65,7 +65,7 @@ const renderSharedRoot = (
 
 describe("SharedRoot", () => {
   const layout = BasicBuilder.string();
-  it("threads appParameters into the AppParametersProvider", () => {
+  it("exposes appParameters through useAppParameters", () => {
     renderSharedRoot({ appParameters: { defaultLayout: layout } });
     expect(screen.getByTestId("from-provider").textContent).toBe(layout);
   });

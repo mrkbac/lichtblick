@@ -11,9 +11,11 @@ import {
   useCurrentLayoutSelector,
 } from "@lichtblick/suite-base/context/CurrentLayoutContext";
 import { useLayoutManager } from "@lichtblick/suite-base/context/LayoutManagerContext";
-import { LayoutSetupOptions } from "@lichtblick/suite-base/hooks/types";
 import { useConfirm } from "@lichtblick/suite-base/hooks/useConfirm";
-import { useLayoutActions } from "@lichtblick/suite-base/hooks/useLayoutActions";
+import {
+  LayoutSetupOptions,
+  useLayoutActions,
+} from "@lichtblick/suite-base/hooks/useLayoutActions";
 import MockLayoutManager from "@lichtblick/suite-base/services/LayoutManager/MockLayoutManager";
 import LayoutBuilder from "@lichtblick/suite-base/testing/builders/LayoutBuilder";
 import { BasicBuilder } from "@lichtblick/test-builders";

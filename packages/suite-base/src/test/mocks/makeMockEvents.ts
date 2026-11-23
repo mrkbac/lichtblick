@@ -24,17 +24,11 @@ export function makeMockEvents(
       event: {
         id: `event_${idx + 1}`,
         endTime: RosTimeBuilder.time(add(startTime, duration)),
-        endTimeInSeconds: toSec(RosTimeBuilder.time(add(startTime, duration))),
         startTime,
-        startTimeInSeconds: toSec(startTime),
-        timestampNanos: toNanoSec(startTime).toString(),
         metadata: {
           type: BasicBuilder.strings()[idx % 3]!,
           state: BasicBuilder.strings()[idx % 3]!,
         },
-        createdAt: BasicBuilder.datetime(),
-        updatedAt: BasicBuilder.datetime(),
-        deviceId: `device_${idx + 1}`,
         durationNanos: toNanoSec(duration).toString(),
       },
       startPosition: idx / count,

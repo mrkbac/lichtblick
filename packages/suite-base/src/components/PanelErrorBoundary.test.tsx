@@ -10,10 +10,6 @@ import type { Mock } from "vitest";
 import PanelErrorBoundary from "@lichtblick/suite-base/components/PanelErrorBoundary";
 import ThemeProvider from "@lichtblick/suite-base/theme/ThemeProvider";
 
-vi.mock("@lichtblick/suite-base/reportError", () => ({
-  reportError: vi.fn(),
-}));
-
 interface ErrorThrowingComponentProps {
   triggerError?: boolean;
   errorMessage?: string;

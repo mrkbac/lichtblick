@@ -1,13 +1,18 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
+import { Dispatch } from "react";
+
+import {
+  LayoutSelectionAction,
+  LayoutSelectionState,
+} from "@lichtblick/suite-base/components/LayoutBrowser/types";
 import {
   LayoutState,
   useCurrentLayoutActions,
   useCurrentLayoutSelector,
 } from "@lichtblick/suite-base/context/CurrentLayoutContext";
 import { useLayoutManager } from "@lichtblick/suite-base/context/LayoutManagerContext";
-import { LayoutSetupOptions } from "@lichtblick/suite-base/hooks/types";
 import useCallbackWithToast from "@lichtblick/suite-base/hooks/useCallbackWithToast";
 import { useConfirm } from "@lichtblick/suite-base/hooks/useConfirm";
 import { UseLayoutNavigation } from "@lichtblick/suite-base/hooks/useLayoutNavigation";
@@ -16,6 +21,11 @@ import {
   layoutIsShared,
   personalLayoutCopy,
 } from "@lichtblick/suite-base/services/ILayoutStorage";
+
+export type LayoutSetupOptions = {
+  state: LayoutSelectionState;
+  dispatch: Dispatch<LayoutSelectionAction>;
+};
 
 type UseLayoutActions = {
   onRenameLayout: (item: Layout, newName: string) => Promise<void>;

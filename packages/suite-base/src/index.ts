@@ -14,11 +14,7 @@
 export { SharedRoot } from "./SharedRoot";
 export { StudioApp } from "./StudioApp";
 export type { NetworkInterface, OsContext } from "./OsContext";
-export type {
-  IAppConfiguration,
-  AppConfigurationValue,
-  ChangeHandler,
-} from "./context/AppConfigurationContext";
+export type { IAppConfiguration, AppConfigurationValue } from "./context/AppConfigurationContext";
 export { AppConfigurationListeners } from "./context/AppConfigurationContext";
 export { migratePanelsState } from "./services/migrateLayout";
 export type { IDataSourceFactory } from "./context/PlayerSelectionContext";
@@ -50,8 +46,6 @@ export { default as VelodyneDataSourceFactory } from "./dataSources/VelodyneData
 export { default as McapLocalDataSourceFactory } from "./dataSources/McapLocalDataSourceFactory";
 export { default as SampleBoreasDataSourceFactory } from "./dataSources/SampleBoreasDataSourceFactory";
 export { LaunchPreferenceValue } from "@lichtblick/suite-base/types/LaunchPreferenceValue";
-export { reportError, setReportErrorHandler } from "./reportError";
-export { makeWorkspaceContextInitialState } from "./providers/WorkspaceContextProvider";
 export { AppBar, type AppBarProps } from "./components/AppBar";
 export { useWorkspaceActions } from "./context/Workspace/useWorkspaceActions";
 export { WebExtensionLoader } from "./services/extension/WebExtensionLoader";
