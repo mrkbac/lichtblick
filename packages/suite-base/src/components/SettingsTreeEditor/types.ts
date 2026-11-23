@@ -118,7 +118,8 @@ export type NodeEditorProps = {
   topicNamespace?: {
     topics: readonly TopicVisibility[];
     children: ReactNode;
-    expand: boolean;
+    /** Opens the namespace whenever this key changes; undefined leaves it as the user set it. */
+    expandKey?: string;
   };
 };
 

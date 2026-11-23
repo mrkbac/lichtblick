@@ -557,6 +557,10 @@ function NodeEditorComponent(props: Readonly<NodeEditorProps>): React.JSX.Elemen
         state.textFilter.length > 0 ||
         state.visibilityFilter !== "all" ||
         quickFilterTopics != undefined;
+      // A new filter reopens matching namespaces; an unchanged one keeps manual collapses.
+      const filterKey = expandMatches
+        ? JSON.stringify([filter, state.textFilter, state.visibilityFilter, state.topicQuickFilter])
+        : undefined;
       const focusedTopic = focusedPath?.[props.path.length];
       const focusInList =
         focusedTopic != undefined &&
@@ -594,7 +598,11 @@ function NodeEditorComponent(props: Readonly<NodeEditorProps>): React.JSX.Elemen
             topicNamespace={{
               topics: entry.topics,
               children: entry.children.map((child) => renderEntry(child, depth + 1)),
-              expand: expandMatches || (focusInList && focusedTopic.startsWith(entry.key + "/")),
+              expandKey:
+                filterKey ??
+                (focusInList && focusedTopic.startsWith(entry.key + "/")
+                  ? `focus:${focusedTopic}`
+                  : undefined),
             }}
           />
         );
@@ -626,6 +634,7 @@ function NodeEditorComponent(props: Readonly<NodeEditorProps>): React.JSX.Elemen
     indent,
     state.textFilter,
     state.visibilityFilter,
+    state.topicQuickFilter,
     quickFilterTopics,
     unfilteredSettings?.children,
   ]);
@@ -659,12 +668,12 @@ function NodeEditorComponent(props: Readonly<NodeEditorProps>): React.JSX.Elemen
   }, [setState]);
 
   useEffect(() => {
-    if (topicNamespace?.expand === true) {
+    if (topicNamespace?.expandKey != undefined) {
       setState((draft) => {
         draft.open = true;
       });
     }
-  }, [setState, topicNamespace?.expand]);
+  }, [setState, topicNamespace?.expandKey]);
 
   const onLabelKeyDown = useCallback(
     (event: React.KeyboardEvent) => {
