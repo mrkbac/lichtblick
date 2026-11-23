@@ -196,17 +196,6 @@ export const ImageRenderSettings: typeof ImageRender = {
   },
 };
 
-export const ImageRenderSettingsChinese: typeof ImageRender = {
-  ...ImageRenderSettings,
-  args: { includeSettings: true },
-  parameters: { forceLanguage: "zh" },
-};
-export const ImageRenderSettingsJapanese: typeof ImageRender = {
-  ...ImageRenderSettings,
-  args: { includeSettings: true },
-  parameters: { forceLanguage: "ja" },
-};
-
 export const FoxgloveImage: StoryObj = {
   render: function Story() {
     const topics: Topic[] = [

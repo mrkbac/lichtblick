@@ -36,7 +36,6 @@
     "benchmark:desktop:start": "electron benchmark/.webpack-desktop",
     "gen:organization-api": "pnpm --filter @lichtblick/openapi-codegen generate && biome format --write packages/suite-base/src/api/organization/schema.gen.ts",
     "license-check": "vitest run --project ci && node ci/license-check.ts",
-    "prepare": "husky",
     "format": "biome format --write .",
     "format:ci": "biome format --max-diagnostics=none .",
     "lint": "oxlint --report-unused-disable-directives --fix",
@@ -75,19 +74,12 @@
     "storybook:build": "storybook build --config-dir .storybook --stats-json",
     "typecheck": "node ./node_modules/typescript7/bin/tsc --build --builders 1 tsconfig.json web/src/tsconfig.json desktop/tsconfig.json desktop/*/tsconfig.json benchmark/tsconfig.json benchmark/src/tsconfig.json benchmark/desktop/*/tsconfig.json"
   },
-  "lint-staged": {
-    "*.{js,jsx,mjs,cjs,ts,tsx,json}": [
-      "oxlint --report-unused-disable-directives --no-error-on-unmatched-pattern --fix",
-      "biome format --write --no-errors-on-unmatched"
-    ]
-  },
   "devDependencies": {
     "@biomejs/biome": "2.6.8",
     "@foxglove/ws-protocol": "0.8.0",
     "@lichtblick/den": "workspace:*",
     "@lichtblick/tsconfig": "1.1.2",
     "@mui/material": "9.5.0",
-    "@playwright/mcp": "0.0.86",
     "@playwright/test": "1.65.1",
     "@rsbuild/core": "2.3.3",
     "@rspack/cli": "2.3.3",
@@ -105,16 +97,13 @@
     "eslint-plugin-import": "2.32.0",
     "eslint-plugin-storybook": "10.6.8",
     "eslint-plugin-tss-unused-classes": "1.0.4",
-    "husky": "9.1.7",
     "jsdom": "31.0.1",
     "knip": "6.48.0",
-    "lint-staged": "17.6.2",
     "nearley": "2.20.1",
     "oxlint": "1.94.0",
     "oxlint-tsgolint": "7.0.2008",
     "playwright": "1.65.1",
     "react": "19.3.1",
-    "react-i18next": "18.0.3",
     "spdx-satisfies": "6.0.1",
     "storybook": "10.6.8",
     "storybook-react-rsbuild": "3.6.4",

@@ -129,15 +129,3 @@ export const UserNoAuth: StoryObj = {
   },
   name: "User not authenticated",
 };
-
-export const UserNoAuthChinese: StoryObj = {
-  ...UserNoAuth,
-  name: "User not authenticated Chinese",
-  parameters: { forceLanguage: "zh" },
-};
-
-export const UserNoAuthJapanese: StoryObj = {
-  ...UserNoAuth,
-  name: "User not authenticated Japanese",
-  parameters: { forceLanguage: "ja" },
-};

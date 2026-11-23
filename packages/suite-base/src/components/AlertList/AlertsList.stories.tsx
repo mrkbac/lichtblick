@@ -85,14 +85,6 @@ export const Default: StoryObj = {
     );
   },
 };
-export const DefaultChinese: StoryObj = {
-  ...Default,
-  parameters: { forceLanguage: "zh" },
-};
-export const DefaultJapanese: StoryObj = {
-  ...Default,
-  parameters: { forceLanguage: "ja" },
-};
 
 export const WithErrors: StoryObj = {
   render: function Story() {
@@ -108,14 +100,6 @@ export const WithErrors: StoryObj = {
       </MockMessagePipelineProvider>
     );
   },
-};
-export const WithErrorsChinese: StoryObj = {
-  ...WithErrors,
-  parameters: { forceLanguage: "zh" },
-};
-export const WithErrorsJapanese: StoryObj = {
-  ...WithErrors,
-  parameters: { forceLanguage: "ja" },
 };
 
 export const WithSessionAlerts: StoryObj = {

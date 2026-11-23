@@ -37,9 +37,6 @@ importers:
       '@mui/material':
         specifier: 9.5.0
         version: 9.5.0(@emotion/react@11.14.0(@types/react@19.3.0)(react@19.3.1))(@emotion/styled@11.14.1(@emotion/react@11.14.0(@types/react@19.3.0)(react@19.3.1))(@types/react@19.3.0)(react@19.3.1))(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
-      '@playwright/mcp':
-        specifier: 0.0.86
-        version: 0.0.86
       '@playwright/test':
         specifier: 1.65.1
         version: 1.65.1
@@ -91,18 +88,12 @@ importers:
       eslint-plugin-tss-unused-classes:
         specifier: 1.0.4
         version: 1.0.4(eslint@9.39.5(jiti@2.7.0))
-      husky:
-        specifier: 9.1.7
-        version: 9.1.7
       jsdom:
         specifier: 31.0.1
         version: 31.0.1(@noble/hashes@1.8.0)
       knip:
         specifier: 6.48.0
         version: 6.48.0
-      lint-staged:
-        specifier: 17.6.2
-        version: 17.6.2
       nearley:
         specifier: 2.20.1
         version: 2.20.1
@@ -118,9 +109,6 @@ importers:
       react:
         specifier: 19.3.1
         version: 19.3.1
-      react-i18next:
-        specifier: 18.0.3
-        version: 18.0.3(@types/react@19.3.0)(i18next@27.2.4(typescript@6.0.3))(react@19.3.1)(typescript@6.0.3)
       spdx-satisfies:
         specifier: 6.0.1
         version: 6.0.1
@@ -3140,11 +3128,6 @@ packages:
   '@petamoriken/float16@3.9.3':
     resolution: {integrity: sha512-8awtpHXCx/bNpFt4mt2xdkgtgVvKqty8VbjHI/WWWQuEw+KLzFot3f4+LkQY9YmOtq7A5GdOnqoIC8Pdygjk2g==}
 
-  '@playwright/mcp@0.0.86':
-    resolution: {integrity: sha512-4SL9OSINmik3+EObCYJIxH8BkhcqqGU6CM8XIgztW015iBVR9WR6Q0xF180Ery+xuEVyyK5r6nC2bOg3zjgCoA==}
-    engines: {node: '>=20'}
-    hasBin: true
-
   '@playwright/test@1.65.1':
     resolution: {integrity: sha512-y+NCIRm2LvY4slUVWvGh1nujJ8RF/hEisIsq2mtUPgdQC4L701bq5hZGMhrpeXjACvwvO9tj5dJqhvM6TP9lbw==}
     engines: {node: '>=20'}
@@ -5489,11 +5472,6 @@ packages:
     resolution: {integrity: sha512-vK9P5/iUfdl95AI+JVyUuIcVtd4ofvtrOr3HNtM2yxC9bnMbEdp3x01OhQNnjb8IJYi38VlTE3mBXwcfvywuSw==}
     engines: {node: '>= 14'}
 
-  husky@9.1.7:
-    resolution: {integrity: sha512-5gs5ytaNjBrh5Ow3zrvdUUY+0VxIuWVL4i9irt6friV+BqdCfmV11CQTWMiBYWHbXhco+J1kHfTOUkePhCDvMA==}
-    engines: {node: '>=18'}
-    hasBin: true
-
   hyperdyperid@1.2.0:
     resolution: {integrity: sha512-Y93lCzHYgGWdrJ66yIktxiaGULYc6oGiABxhcO5AufBeOyoIdZF7bIfLaOrbM0iGIOXQQgxxRrFEnb+Y6w1n4A==}
     engines: {node: '>=10.18'}
@@ -5944,11 +5922,6 @@ packages:
 
   lines-and-columns@1.2.4:
     resolution: {integrity: sha512-7ylylesZQ/PV29jhEDl3Ufjo6ZX7gCqJr5F7PKrqc93v7fzSymt1BpwEU8nAUXs8qzzvqhbjhK5QZg6Mt/HkBg==}
-
-  lint-staged@17.6.2:
-    resolution: {integrity: sha512-c/JaXaXmleubmKUwwp4OAcq55RV9Z3HTUNdqdqPh2srtmP9Of3bcR6o00GoWDUye+9JhMuoYkhYqAVPIOZKcsw==}
-    engines: {node: '>=22.22.1'}
-    hasBin: true
 
   locate-path@5.0.0:
     resolution: {integrity: sha512-t7hw9pI+WvuwNJXwk5zVHpyhIqzg2qTlklJOf0mVxGSbe3Fp2VieZcduNYjaLDoy6p9uGpQEGWG87WpMKlNq8g==}
@@ -6587,18 +6560,8 @@ packages:
     engines: {node: '>=20'}
     hasBin: true
 
-  playwright-core@1.66.0-alpha-2026-11-18:
-    resolution: {integrity: sha512-VQ60tKPjqhf/3tHJGKuQ8Qn6e28Ziorhpmh4DGBZThgQp5geZeyKmuoJF2o/OwQBs5K7LNkhxNbOclBoAicqPg==}
-    engines: {node: '>=20'}
-    hasBin: true
-
   playwright@1.65.1:
     resolution: {integrity: sha512-vJ1FuoOrNwOKHUIVEvSt3jT1L+wjjDpwhwIstKtfvTh8XIG4FG4bIFuvNdMxi81LGfAhUgUZleVFaOLY4RIUUw==}
-    engines: {node: '>=20'}
-    hasBin: true
-
-  playwright@1.66.0-alpha-2026-11-18:
-    resolution: {integrity: sha512-otQ+PFujQwUSpcLjoZ1zocwpEEF/5WhsBKaOuZeRhJ3ifjyRJJskKeosaw55WYdJzwlmfugK7OMX/tey1ExhWQ==}
     engines: {node: '>=20'}
     hasBin: true
 
@@ -7210,10 +7173,6 @@ packages:
         optional: true
       vite-plus:
         optional: true
-
-  string-argv@0.4.0:
-    resolution: {integrity: sha512-UOtaksJ3SK3KLHba2i9I27fvuZNfBlImDP5wKsCOxCDMRDNxlipCe8rmnUAaDpqlQ93upnA0SzF2pjWhttozSA==}
-    engines: {node: '>=16.20.0'}
 
   string-width@4.2.3:
     resolution: {integrity: sha512-wKyQRQpjJ0sIp62ErSZdGsjMJWsap5oRNihHhu6G7JVO/9jIB6UyevL+tXuOqrng8j/cxKTWyWUwvSTriiZz/g==}
@@ -10120,11 +10079,6 @@ snapshots:
 
   '@petamoriken/float16@3.9.3': {}
 
-  '@playwright/mcp@0.0.86':
-    dependencies:
-      playwright: 1.66.0-alpha-2026-11-18
-      playwright-core: 1.66.0-alpha-2026-11-18
-
   '@playwright/test@1.65.1':
     dependencies:
       playwright: 1.65.1
@@ -12571,8 +12525,6 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  husky@9.1.7: {}
-
   hyperdyperid@1.2.0: {}
 
   i18next@27.2.4(typescript@6.0.3):
@@ -12965,14 +12917,6 @@ snapshots:
       lightningcss-win32-x64-msvc: 1.33.0
 
   lines-and-columns@1.2.4: {}
-
-  lint-staged@17.6.2:
-    dependencies:
-      picomatch: 4.0.7
-      string-argv: 0.4.0
-      tinyexec: 1.3.1
-    optionalDependencies:
-      yaml: 2.9.1
 
   locate-path@5.0.0:
     dependencies:
@@ -13961,15 +13905,9 @@ snapshots:
 
   playwright-core@1.65.1: {}
 
-  playwright-core@1.66.0-alpha-2026-11-18: {}
-
   playwright@1.65.1:
     dependencies:
       playwright-core: 1.65.1
-
-  playwright@1.66.0-alpha-2026-11-18:
-    dependencies:
-      playwright-core: 1.66.0-alpha-2026-11-18
 
   plist@3.1.0:
     dependencies:
@@ -14713,8 +14651,6 @@ snapshots:
       - bufferutil
       - react
       - utf-8-validate
-
-  string-argv@0.4.0: {}
 
   string-width@4.2.3:
     dependencies:
