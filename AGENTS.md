@@ -36,10 +36,7 @@ Web app development:
 pnpm web:serve
 ```
 
-E2E tests:
-
-- Desktop: `pnpm test:e2e:desktop`
-- Web: `pnpm test:e2e:web`
+E2E tests: `pnpm test:e2e:web`
 
 ## Monorepo Map
 
@@ -84,7 +81,6 @@ E2E tests:
   - `.webpack/`
   - `test-results/`
   - `e2e/reports/`
-  - `e2e/tests/reports/desktop/`
   - `e2e/tests/reports/web/`
   - `e2e/tmp/`
 - Don't patch dependencies (`pnpm patch`, `patchedDependencies`, editing `node_modules`). Work around the issue in our code, upgrade the dependency, or fix it upstream. Patch only as a last resort, and only with the user's approval.

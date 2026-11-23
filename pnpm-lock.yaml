@@ -25,9 +25,6 @@ importers:
       '@biomejs/biome':
         specifier: 2.6.8
         version: 2.6.8
-      '@foxglove/ws-protocol':
-        specifier: 0.8.0
-        version: 0.8.0
       '@lichtblick/den':
         specifier: workspace:*
         version: link:packages/den
@@ -67,9 +64,6 @@ importers:
       '@types/spdx-satisfies':
         specifier: 6.0.0
         version: 6.0.0
-      '@types/ws':
-        specifier: 8.18.2
-        version: 8.18.2
       '@vitest/coverage-v8':
         specifier: 5.1.1
         version: 5.1.1(vitest@5.1.1)
@@ -145,9 +139,6 @@ importers:
       vitest:
         specifier: 5.1.1
         version: 5.1.1(@types/node@26.6.6)(@vitest/coverage-v8@5.1.1)(jsdom@31.0.1(@noble/hashes@1.8.0))(vite@8.3.8(@types/node@26.6.6)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.51.2)(yaml@2.9.1))
-      ws:
-        specifier: 8.23.0
-        version: 8.23.0
 
   benchmark:
     dependencies:
@@ -185,9 +176,6 @@ importers:
       '@lichtblick/suite':
         specifier: workspace:*
         version: link:../packages/suite
-      '@playwright/test':
-        specifier: 1.65.1
-        version: 1.65.1
       '@rspack/core':
         specifier: 2.3.3
         version: 2.3.3(@swc/helpers@0.5.24)
@@ -206,9 +194,6 @@ importers:
       cbor-x:
         specifier: 1.6.9
         version: 1.6.9
-      electron:
-        specifier: 45.4.1
-        version: 45.4.1
       protobufjs:
         specifier: 8.8.1
         version: 8.8.1
@@ -3978,9 +3963,6 @@ packages:
 
   '@types/wicg-file-system-access@2023.10.7':
     resolution: {integrity: sha512-g49ijasEJvCd7ifmAY2D0wdEtt1xRjBbA33PJTiv8mKBr7DoMsPeISoJ8oQOTopSRi+FBWPpPW5ouDj2QPKtGA==}
-
-  '@types/ws@8.18.2':
-    resolution: {integrity: sha512-67MQl+fpWKVTT1NYdnmo3U4sc/xPo/zQBncVnI74qmQa0z/b+1g6iYqNmGCPbxO+zz2aklb08a0oHfegiVd0/w==}
 
   '@typescript-eslint/project-service@8.73.0':
     resolution: {integrity: sha512-/pEf8Rc4Mjk+qJnY0uO1+Gadeal8uv50xpuic+srG2vIVatA0XxvWMUeMtFvs6OCHqftiQ7/+qH4aehG5stzIA==}
@@ -10835,10 +10817,6 @@ snapshots:
   '@types/webxr@0.5.24': {}
 
   '@types/wicg-file-system-access@2023.10.7': {}
-
-  '@types/ws@8.18.2':
-    dependencies:
-      '@types/node': 26.6.6
 
   '@typescript-eslint/project-service@8.73.0(typescript@6.0.3)':
     dependencies:

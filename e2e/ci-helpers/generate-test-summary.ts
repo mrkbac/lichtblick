@@ -152,11 +152,6 @@ function main(): void {
 
   process.stdout.write("# E2E Test Results Summary\n");
 
-  // Desktop tests
-  const desktopReportPath = path.join(reportsDir, "desktop", "results.json");
-  generateSummary(desktopReportPath, "Desktop E2E Tests");
-
-  // Web tests
   const webReportPath = path.join(reportsDir, "web", "results.json");
   generateSummary(webReportPath, "Web E2E Tests");
 }
