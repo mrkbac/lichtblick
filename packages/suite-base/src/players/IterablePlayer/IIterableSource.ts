@@ -274,12 +274,6 @@ export type IterableSourceInitializeArgs = {
   compareOffsets?: readonly number[];
   // Fetch credentials for `url`/`urls`, e.g. "include" to send cookies (`ds.includeCredentials`)
   credentials?: RequestCredentials;
-  params?: Record<string, string | undefined>;
-
-  api?: {
-    baseUrl: string;
-    auth?: string;
-  };
 };
 
 /**
