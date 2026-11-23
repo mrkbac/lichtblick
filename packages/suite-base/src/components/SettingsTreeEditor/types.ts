@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MPL-2.0
 import type * as Foxglove from "@foxglove/extension";
 import { Immutable } from "immer";
+import { ReactNode } from "react";
 
 import {
   SettingsIcon,
@@ -13,6 +14,9 @@ import {
   SettingsTreeNode,
   SettingsTreeNodeActionDivider,
 } from "@lichtblick/suite";
+import type { TopicListSettings } from "@lichtblick/suite-base/panels/shared/topicList";
+
+import { TopicVisibility } from "./topicNameTree";
 
 // The editor renders trees from both Lichtblick and Foxglove extensions. These "Editor" types are
 // the union of both settings tree APIs. They stay internal: `@lichtblick/suite` matches upstream.
@@ -56,6 +60,7 @@ export type EditorSettingsTreeNode = Omit<
   SettingsTreeNode,
   "actions" | "children" | "fields" | "icon"
 > &
+  TopicListSettings &
   Pick<Foxglove.SettingsTreeNode, "warning" | "color" | "help" | "drag" | "childrenReorderable"> & {
     actions?: EditorSettingsTreeNodeAction[];
     children?: EditorSettingsTreeNodes;
@@ -106,7 +111,16 @@ export type NodeEditorProps = {
   focusedPath?: readonly string[];
   path: readonly string[];
   settings?: Immutable<EditorSettingsTreeNode>;
+  unfilteredSettings?: Immutable<EditorSettingsTreeNode>;
   reorderContext?: ChildReorderContext;
+  displayLabel?: string;
+  indent?: number;
+  topicNamespace?: {
+    topics: readonly TopicVisibility[];
+    children: ReactNode;
+    /** Opens the namespace whenever this key changes; undefined leaves it as the user set it. */
+    expandKey?: string;
+  };
 };
 
 export type SelectVisibilityFilterValue = "all" | "visible" | "invisible";
@@ -115,6 +129,7 @@ export type FieldEditorProps = {
   actionHandler: (action: EditorSettingsTreeAction) => void;
   field: Immutable<EditorSettingsTreeField>;
   path: readonly string[];
+  indent?: number;
 };
 
 export type SettingsTreeEditorProps = {
@@ -132,4 +147,6 @@ export type NodeEditorState = {
   open: boolean;
   textFilter: string;
   visibilityFilter: SelectVisibilityFilterValue;
+  topicTree: boolean;
+  topicQuickFilter?: string;
 };

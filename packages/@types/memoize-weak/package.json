@@ -1,4 +1,5 @@
 {
   "name": "@types/memoize-weak",
+  "private": true,
   "types": "index.d.ts"
 }

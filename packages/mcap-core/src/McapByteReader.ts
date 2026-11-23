@@ -11,7 +11,7 @@ const textDecoder = new TextDecoder("utf-8", { ignoreBOM: true });
  * Cursor over a `DataView` that reads little-endian primitives, strings, and maps.
  *
  * This is a low-level binary parser used by {@link parseMagic} and {@link parseRecord}. It is not
- * an MCAP file reader; use {@link McapIndexedReader} or {@link McapStreamReader} to read MCAP
+ * an MCAP file reader; use {@link McapIndexedReader} or {@link McapRecoveryScanner} to read MCAP
  * files.
  */
 export default class McapByteReader {

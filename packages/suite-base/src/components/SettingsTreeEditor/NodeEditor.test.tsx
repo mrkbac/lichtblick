@@ -90,6 +90,113 @@ describe("handleDropNode", () => {
   });
 });
 
+describe("topic name tree", () => {
+  it("compacts single-child paths and keeps filters when switching between tree and list", async () => {
+    const user = userEvent.setup();
+    setupFn({
+      path: ["topics"],
+      settings: {
+        enableVisibilityFilter: true,
+        enableTopicNameTree: true,
+        topicQuickFilters: [
+          { id: "pointClouds", label: "Point clouds", topics: ["/camera/front/points"] },
+        ],
+        children: {
+          "/camera/front/image": { label: "/camera/front/image", visible: true },
+          "/camera/front/points": { label: "/camera/front/points", visible: false },
+          "/robot/state": { label: "/robot/state", visible: true },
+        },
+      },
+    });
+
+    const tree = screen.getByRole("button", { name: "Group topics by name" });
+    await user.click(tree);
+    expect(screen.getByText("/camera/front")).toBeInTheDocument();
+    expect(screen.getByText("/robot/state")).toBeInTheDocument();
+    expect(screen.queryByText("image")).not.toBeInTheDocument();
+
+    const branch = screen.getByRole("button", { name: "/camera/front" });
+    act(() => {
+      branch.focus();
+    });
+    await user.keyboard("{Enter}");
+    expect(screen.getByText("image")).toBeInTheDocument();
+
+    const pointClouds = screen.getByRole("button", { name: "Point clouds" });
+    await user.click(pointClouds);
+    expect(pointClouds).toHaveAttribute("aria-pressed", "true");
+    expect(screen.queryByText("image")).not.toBeInTheDocument();
+    expect(screen.getByText("points")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Hidden" }));
+    await user.type(screen.getByRole("searchbox"), "/camera/front");
+    expect(screen.queryByText("image")).not.toBeInTheDocument();
+    expect(screen.getByText("points")).toBeInTheDocument();
+    await user.click(tree);
+    expect(screen.queryByText("/camera/front/image")).not.toBeInTheDocument();
+    expect(screen.getByText("/camera/front/points")).toBeInTheDocument();
+    expect(screen.getByRole("searchbox")).toHaveValue("/camera/front");
+    expect(pointClouds).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("reports mixed, hidden and shown states and toggles the entire branch using topic paths", async () => {
+    const user = userEvent.setup();
+    const actionHandler = vi.fn();
+    const path = ["topics"];
+    const settings = ({ image, points }: { image: boolean; points: boolean }) => ({
+      enableVisibilityFilter: true,
+      enableTopicNameTree: true,
+      children: {
+        "/camera/image": { visible: image },
+        "/camera/points": { visible: points },
+        "/robot/state": { visible: true },
+      },
+    });
+    const { rerender } = setupFn({
+      path,
+      actionHandler,
+      settings: settings({ image: true, points: false }),
+    });
+    await user.click(screen.getByRole("button", { name: "Group topics by name" }));
+    expect(screen.queryByRole("group", { name: "Filter by topic type" })).not.toBeInTheDocument();
+    await user.type(screen.getByRole("searchbox"), "points");
+    const mixed = screen.getByRole("checkbox", { name: "Hide all topics in /camera" });
+    expect(mixed).toBePartiallyChecked();
+    await user.click(mixed);
+    expect(actionHandler).toHaveBeenCalledExactlyOnceWith({
+      action: "update",
+      payload: { input: "boolean", path: ["topics", "/camera/image", "visible"], value: false },
+    });
+
+    rerender(
+      <NodeEditor
+        path={path}
+        actionHandler={actionHandler}
+        settings={settings({ image: false, points: false })}
+      />,
+    );
+    const hidden = screen.getByRole("checkbox", { name: "Show all topics in /camera" });
+    expect(hidden).not.toBeChecked();
+    actionHandler.mockClear();
+    await user.click(hidden);
+    expect(actionHandler.mock.calls.map(([action]) => action.payload)).toEqual([
+      { input: "boolean", path: ["topics", "/camera/image", "visible"], value: true },
+      { input: "boolean", path: ["topics", "/camera/points", "visible"], value: true },
+    ]);
+
+    rerender(
+      <NodeEditor
+        path={path}
+        actionHandler={actionHandler}
+        settings={settings({ image: true, points: true })}
+      />,
+    );
+    const shown = screen.getByRole("checkbox", { name: "Hide all topics in /camera" });
+    expect(shown).toBeChecked();
+    expect(shown).not.toBePartiallyChecked();
+  });
+});
+
 describe("NodeEditor childNodes filtering", () => {
   const nodes = BasicBuilder.strings({ count: 3 }) as [string, string, string];
   const scrollIntoViewMock = vi.fn();

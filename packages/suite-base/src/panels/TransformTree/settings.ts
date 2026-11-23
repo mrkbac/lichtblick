@@ -71,6 +71,7 @@ export function buildSettingsTree(
       label: t("settings.topics"),
       help: t("settings.topicsHelp"),
       enableVisibilityFilter: true,
+      enableTopicNameTree: true,
       children: Object.fromEntries(
         topics.map((topic) => [
           topic.name,

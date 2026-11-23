@@ -99,7 +99,11 @@ import {
   Vector3,
 } from "./ros";
 import { SelectEntry } from "./settings";
-import { customLayersRootNode, topicsRootNode } from "./settingsNodes/global";
+import {
+  buildTopicQuickFilters,
+  customLayersRootNode,
+  topicsRootNode,
+} from "./settingsNodes/global";
 import { AddTransformResult, CoordinateFrame, TransformTree, Transform } from "./transforms";
 import { InterfaceMode } from "./types";
 
@@ -1099,6 +1103,8 @@ export class Renderer extends EventEmitter<RendererEvents> {
       path: ["topics"],
       node: {
         ...topicsRootNode(this.settings.tree()["topics"]?.children),
+        topicQuickFilters:
+          this.interfaceMode === "3d" ? buildTopicQuickFilters(this.topics ?? []) : undefined,
         handler: this.#handleTopicsAction,
       },
     };
@@ -1222,6 +1228,9 @@ export class Renderer extends EventEmitter<RendererEvents> {
     // Rebuild topicsByName
     this.topicsByName = topics ? new Map(topics.map((topic) => [topic.name, topic])) : undefined;
 
+    if (this.interfaceMode === "3d") {
+      this.#updateTopicsAndCustomLayerSettingsNodes();
+    }
     this.emit("topicsChanged", this);
 
     // Rebuild the settings nodes for all scene extensions
