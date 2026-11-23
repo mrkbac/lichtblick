@@ -253,7 +253,9 @@ function Parameters({ config, saveConfig }: Props): ReactElement {
 
   const onToggle = useCallback(
     (key: string) => {
-      saveConfig((old) => ({ collapsed: _.xor(old.collapsed ?? [], [key]) }));
+      saveConfig((old) => ({
+        collapsed: [...new Set(old.collapsed).symmetricDifference(new Set([key]))],
+      }));
     },
     [saveConfig],
   );

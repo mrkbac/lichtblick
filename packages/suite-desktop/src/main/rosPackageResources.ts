@@ -4,7 +4,6 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
-import { DOMParser } from "@xmldom/xmldom";
 import { protocol, net } from "electron";
 import { promises as fs } from "fs";
 import path from "path";
@@ -20,12 +19,10 @@ import { resolveInside } from "../common/resolveInside";
 const log = Logger.getLogger(__filename);
 
 /** Extract a package name from a ROS package.xml file. */
-function rosPackageName(packageXmlContents: string) {
-  const doc = new DOMParser().parseFromString(packageXmlContents, "text/xml");
-  const packageName = Array.from(
-    (doc as Partial<typeof doc>).documentElement?.childNodes ?? [],
-  ).find((n) => n.nodeName.toLowerCase() === "name")?.textContent;
-  return packageName ?? undefined;
+function rosPackageName(packageXmlContents: string): string | undefined {
+  // ponytail: first <name> element wins, XML comments and CDATA are not skipped; use a real XML
+  // parser if a package.xml ever comments out a <name> before the real one.
+  return /<name>\s*([^<]+?)\s*<\/name>/.exec(packageXmlContents)?.[1];
 }
 
 /**

@@ -6,7 +6,6 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { produce } from "immer";
-import * as _ from "lodash-es";
 
 import { parseMessagePath } from "@lichtblick/message-path";
 import { SettingsTreeAction, Topic } from "@lichtblick/suite";
@@ -356,8 +355,8 @@ function updateTopic(draft: Config, path: readonly string[], value: unknown) {
     case "visible":
       draft.disabledTopics =
         value === true
-          ? _.difference(draft.disabledTopics, [topic])
-          : _.union(draft.disabledTopics, [topic]);
+          ? draft.disabledTopics.filter((disabled) => disabled !== topic)
+          : [...new Set([...draft.disabledTopics, topic])];
       if (value !== true && draft.followTopic === topic) {
         draft.followTopic = "";
       }

@@ -13,10 +13,10 @@
 //   This source code is licensed under the Apache License, Version 2.0,
 //   found at http://www.apache.org/licenses/LICENSE-2.0
 //   You may not use this file except in compliance with the License.
+import { produce } from "immer";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { fireEvent } from "storybook/test";
 import { StoryObj } from "storybook-react-rsbuild";
-import { useImmer } from "use-immer";
 
 import { useAsync } from "@lichtblick/hooks";
 import MockMessagePipelineProvider from "@lichtblick/suite-base/components/MessagePipeline/MockMessagePipelineProvider";
@@ -105,7 +105,7 @@ export const SimpleLight: StoryObj = { ...Simple, parameters: { colorScheme: "li
 
 export const CanZoomAndUpdate: StoryObj = {
   render: function Story() {
-    const [chartProps, setChartProps] = useImmer(commonProps);
+    const [chartProps, setChartProps] = useState(commonProps);
     const hasScrolled = useRef(false);
 
     const readySignal = useReadySignal({ count: 3 });
@@ -124,12 +124,14 @@ export const CanZoomAndUpdate: StoryObj = {
 
       await delay(100);
 
-      setChartProps((draft) => {
-        draft.data!.datasets[0]!.data[1] = {
-          ...draft.data!.datasets[0]!.data[0]!,
-          x: 20,
-        };
-      });
+      setChartProps(
+        produce((draft) => {
+          draft.data!.datasets[0]!.data[1] = {
+            ...draft.data!.datasets[0]!.data[0]!,
+            x: 20,
+          };
+        }),
+      );
     }, [setChartProps]);
 
     const pauseFrame = useCallback(() => {

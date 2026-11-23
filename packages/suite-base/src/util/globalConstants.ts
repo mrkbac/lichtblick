@@ -14,7 +14,6 @@
 //   found at http://www.apache.org/licenses/LICENSE-2.0
 //   You may not use this file except in compliance with the License.
 import { useTheme } from "@mui/material";
-import type { Base16Theme } from "base16";
 
 import { JSON_TREE_THEME_COLORS } from "@lichtblick/suite-base/util/constants";
 
@@ -42,9 +41,9 @@ export function getValueColor(value: unknown, mode: "light" | "dark"): string | 
   return undefined;
 }
 
-export function useJsonTreeTheme(): Pick<
-  Base16Theme,
-  "base00" | "base07" | "base0B" | "base09" | "base08" | "base0D" | "base03"
+export function useJsonTreeTheme(): Record<
+  "base00" | "base07" | "base0B" | "base09" | "base08" | "base0D" | "base03",
+  string
 > {
   const {
     palette: { mode, text },
