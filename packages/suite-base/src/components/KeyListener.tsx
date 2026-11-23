@@ -14,7 +14,7 @@
 //   found at http://www.apache.org/licenses/LICENSE-2.0
 //   You may not use this file except in compliance with the License.
 
-import { ReactElement, useCallback, useEffect, useRef } from "react";
+import { ReactElement, useEffect, useLayoutEffect, useRef } from "react";
 
 // Invoke handler for matching key.
 // By default, preventDefault() is invoked on the event. Return false to allow the default.
@@ -53,8 +53,17 @@ function callHandlers(handlers: KeyHandlers | undefined, event: KeyboardEvent): 
 export default function KeyListener(props: KeyListenerProps): ReactElement {
   const element = useRef<HTMLDivElement>(null);
 
-  const handleEvent = useCallback(
-    (event: Event) => {
+  // Handlers live in a ref so the DOM listener stays attached when they change. Re-attaching it
+  // mid-dispatch would drop the event: a listener removed during dispatch never runs, so an earlier
+  // handler that synchronously re-renders this one (e.g. a parent panel exiting fullscreen) would
+  // swallow the key.
+  const handlers = useRef(props);
+  useLayoutEffect(() => {
+    handlers.current = props;
+  });
+
+  useEffect(() => {
+    const handleEvent = (event: Event) => {
       if (!(event instanceof KeyboardEvent)) {
         return;
       }
@@ -75,24 +84,21 @@ export default function KeyListener(props: KeyListenerProps): ReactElement {
         return;
       }
 
+      const { keyDownHandlers, keyPressHandlers, keyUpHandlers } = handlers.current;
       switch (type) {
         case "keydown":
-          callHandlers(props.keyDownHandlers, event);
+          callHandlers(keyDownHandlers, event);
           break;
         case "keypress":
-          callHandlers(props.keyPressHandlers, event);
+          callHandlers(keyPressHandlers, event);
           break;
         case "keyup":
-          callHandlers(props.keyUpHandlers, event);
+          callHandlers(keyUpHandlers, event);
           break;
         default:
           break;
       }
-    },
-    [props.keyDownHandlers, props.keyPressHandlers, props.keyUpHandlers],
-  );
-
-  useEffect(() => {
+    };
     const target = props.global === true ? document : element.current?.parentElement;
 
     target?.addEventListener("keydown", handleEvent);
@@ -104,7 +110,7 @@ export default function KeyListener(props: KeyListenerProps): ReactElement {
       target?.removeEventListener("keypress", handleEvent);
       target?.removeEventListener("keyup", handleEvent);
     };
-  }, [handleEvent, props.global]);
+  }, [props.global]);
 
   return <div style={{ display: "none" }} ref={element} />;
 }
