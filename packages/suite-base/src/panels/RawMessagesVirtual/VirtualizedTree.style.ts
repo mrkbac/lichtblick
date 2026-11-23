@@ -28,8 +28,12 @@ export const useStyles = makeStyles()((theme) => {
       outline: "none",
     },
     breadcrumb: {
-      // Always present (even when empty) so the list never shifts while scrolling.
-      flex: "none",
+      // Over the list instead of above it, so it never shifts the rows and is gone when empty.
+      position: "absolute",
+      top: 0,
+      left: 0,
+      right: 0,
+      zIndex: 1,
       minHeight: "1.6em",
       display: "flex",
       flexWrap: "nowrap",
@@ -63,7 +67,8 @@ export const useStyles = makeStyles()((theme) => {
       textDecoration: "line-through",
     },
     changedValue: {
-      "& > :last-child": {
+      // The value itself, not the rest of the row, so no empty bar trails it.
+      "& > :last-child > *": {
         backgroundColor: theme.palette.action.selected,
         borderRadius: theme.shape.borderRadius,
       },
@@ -81,7 +86,8 @@ export const useStyles = makeStyles()((theme) => {
     },
     row: {
       display: "flex",
-      flexWrap: "wrap",
+      // Values never wrap under their key, so a value that grows doesn't move the rows below.
+      flexWrap: "nowrap",
       alignItems: "flex-start",
       padding: "2px 0",
       fontFamily: theme.typography.body1.fontFamily,
@@ -115,6 +121,9 @@ export const useStyles = makeStyles()((theme) => {
     key: {
       color: colors.label,
       marginRight: theme.spacing(0.5),
+      flex: "none",
+      maxWidth: "50%",
+      overflowWrap: "anywhere",
     },
     valueContainer: {
       flex: "1 1 auto",
