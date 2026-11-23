@@ -85,6 +85,7 @@ export function buildSettingsTree(
                 label: t("annotations"),
                 help: t("annotationsHelp"),
                 enableVisibilityFilter: true,
+                enableTopicNameTree: true,
                 children: annotationNodes,
               },
             }

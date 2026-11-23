@@ -1824,6 +1824,28 @@ describe("3D Renderer", () => {
     renderer.dispose();
   });
 
+  it("offers quick filters for supported topic types and converted schemas", () => {
+    const renderer = new Renderer({ ...defaultRendererProps, canvas });
+    renderer.setTopics([
+      { name: "/points", schemaName: "sensor_msgs/msg/PointCloud2" },
+      { name: "/image", schemaName: "custom.Image", convertibleTo: ["foxglove.RawImage"] },
+      { name: "/markers", schemaName: "foxglove.SceneUpdate" },
+      { name: "/other", schemaName: "custom.Other" },
+    ]);
+
+    expect(
+      renderer.settings.tree().topics?.topicQuickFilters?.map(({ id, topics }) => [id, topics]),
+    ).toEqual([
+      ["pointClouds", ["/points"]],
+      ["images", ["/image"]],
+      ["markers", ["/markers"]],
+    ]);
+    renderer.setTopics([]);
+    expect(renderer.settings.tree().topics?.topicQuickFilters).toEqual([]);
+
+    renderer.dispose();
+  });
+
   it("turns on a dropped topic the scene can draw, like its visibility checkbox", () => {
     const renderer = new Renderer({
       ...defaultRendererProps,

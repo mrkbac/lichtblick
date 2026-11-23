@@ -42,6 +42,44 @@ export const useStyles = makeStyles()((theme) => ({
     alignItems: "center",
     justifyContent: "center",
   },
+  topicFilterRow: {
+    gridColumn: "span 2",
+    display: "flex",
+    flexWrap: "wrap",
+    alignItems: "center",
+    gap: theme.spacing(0.5),
+    padding: theme.spacing(0.5, 1, 0.5, 2),
+  },
+  topicFilterInput: {
+    flex: "1 1 116px",
+    minWidth: 0,
+    "& .MuiInputBase-input": {
+      padding: theme.spacing(0.5, 1),
+    },
+  },
+  topicFilterControls: {
+    display: "flex",
+    alignItems: "center",
+    gap: theme.spacing(0.5),
+  },
+  topicVisibilityFilter: {
+    "& .MuiToggleButton-root": {
+      padding: theme.spacing(0.375),
+    },
+  },
+  topicFilterIcon: {
+    fontSize: theme.spacing(2),
+  },
+  topicTreeToggle: {
+    padding: theme.spacing(0.375),
+  },
+  topicTypeFilters: {
+    gridColumn: "span 2",
+    display: "flex",
+    flexWrap: "wrap",
+    gap: theme.spacing(0.5),
+    padding: theme.spacing(0, 1, 0.5, 2),
+  },
 
   nodeHeader: {
     display: "flex",

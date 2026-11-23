@@ -160,6 +160,9 @@ export const threeDee = {
 
   // Topics
   topics: "Topics",
+  filterPointClouds: "Point clouds",
+  filterImages: "Images",
+  filterMarkers: "Markers",
 
   // Settings help (one sentence per field, shown on hover and in the panel guide)
   topicsHelp:

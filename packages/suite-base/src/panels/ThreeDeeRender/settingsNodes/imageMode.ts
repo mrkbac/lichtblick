@@ -154,6 +154,7 @@ export function imageAnnotationsRootNode(): DocumentedNode {
     label: t("threeDee:imageAnnotations"),
     help: t("threeDee:imageAnnotationsHelp"),
     enableVisibilityFilter: true,
+    enableTopicNameTree: true,
     defaultExpansionState: "expanded",
   };
 }
