@@ -1255,6 +1255,8 @@ export function RecordingInspector(): React.JSX.Element {
       </div>
       {topicMenu && (
         <ContextMenu
+          // A new right-click opens a fresh menu, not the old one with new props
+          key={`${topicMenu.position.left},${topicMenu.position.top}`}
           anchorPosition={topicMenu.position}
           messagePaths={[
             {

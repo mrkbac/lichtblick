@@ -123,6 +123,27 @@ export function ContextMenu(props: {
     <Menu
       open={openIn != undefined}
       onClose={onClose}
+      onContextMenu={(event) => {
+        event.preventDefault();
+        const root = event.currentTarget;
+        const paper = root.querySelector(".MuiPaper-root");
+        if (paper?.contains(event.target as Node) === true) {
+          return;
+        }
+        // The backdrop covers the page: close, then hand the right-click to what is under it
+        onClose();
+        const target = document
+          .elementsFromPoint(event.clientX, event.clientY)
+          .find((element) => !root.contains(element));
+        target?.dispatchEvent(
+          new MouseEvent("contextmenu", {
+            bubbles: true,
+            cancelable: true,
+            clientX: event.clientX,
+            clientY: event.clientY,
+          }),
+        );
+      }}
       anchorReference="anchorPosition"
       anchorPosition={anchorPosition}
       slotProps={{
