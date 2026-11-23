@@ -52,6 +52,7 @@ export { default as SampleBoreasDataSourceFactory } from "./dataSources/SampleBo
 export { LaunchPreferenceValue } from "@lichtblick/suite-base/types/LaunchPreferenceValue";
 export { reportError, setReportErrorHandler } from "./reportError";
 export { makeWorkspaceContextInitialState } from "./providers/WorkspaceContextProvider";
-export type { AppBarProps } from "./components/AppBar";
+export { AppBar, type AppBarProps } from "./components/AppBar";
+export { useWorkspaceActions } from "./context/Workspace/useWorkspaceActions";
 export { WebExtensionLoader } from "./services/extension/WebExtensionLoader";
 export { LOCAL_STORAGE_APP_CONFIGURATION } from "./constants/browserStorageKeys";

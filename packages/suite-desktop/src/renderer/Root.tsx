@@ -26,6 +26,7 @@ import {
   VelodyneDataSourceFactory,
 } from "@lichtblick/suite-base";
 
+import { DesktopAppBar } from "./DesktopAppBar";
 import { DesktopExtensionLoader } from "./services/DesktopExtensionLoader";
 import { DesktopLayoutLoader } from "./services/DesktopLayoutLoader";
 import { CLIFlags, Desktop, Storage } from "../common/types";
@@ -109,6 +110,7 @@ export default function Root(props: RootProps): React.JSX.Element {
       extensionLoaders={extensionLoaders}
       layoutLoaders={layoutLoaders}
       enableGlobalCss
+      AppBarComponent={DesktopAppBar}
       appBarLeftInset={ctxbridge?.platform === "darwin" && !isFullScreen ? 72 : undefined}
       onAppBarDoubleClick={onAppBarDoubleClick}
     >

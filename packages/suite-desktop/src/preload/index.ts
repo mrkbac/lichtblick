@@ -109,9 +109,6 @@ export function main(): void {
         ipcRenderer.off(eventName, handler);
       };
     },
-    async setRepresentedFilename(path: string | undefined) {
-      await ipcRenderer.invoke("setRepresentedFilename", path);
-    },
     async updateNativeColorScheme() {
       await ipcRenderer.invoke("updateNativeColorScheme");
     },

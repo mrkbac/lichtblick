@@ -11,7 +11,6 @@ export type ForwardedMenuEvent =
   | "open-file"
   | "open-demo"
   | "open-help-about"
-  | "open-help-docs"
   | "open-help-general";
 
 export type ForwardedWindowEvent = "enter-full-screen" | "leave-full-screen";
@@ -65,9 +64,6 @@ export type LoadedExtension = {
 };
 
 interface Desktop {
-  /** https://www.electronjs.org/docs/tutorial/represented-file */
-  setRepresentedFilename(path: string | undefined): Promise<void>;
-
   addIpcEventListener(eventName: ForwardedWindowEvent, handler: () => void): UnregisterFn;
 
   /**
