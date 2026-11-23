@@ -22,11 +22,14 @@ import {
   SeriesItem,
   Viewport,
 } from "./IDatasetsBuilder";
+import type { GetViewportDatasetsResult } from "./IDatasetsBuilder";
 import { DataItem, PointColumns } from "./columns";
 import { buildDatasetStyle, isDerivedSeries } from "./utils";
 import { Dataset } from "../types";
 import { AnalysisColumns, computeHistogram, computeSpectrum } from "../utils/analysis";
 import { Datum, OriginalValue } from "../utils/datum";
+
+const EMPTY_PATHS: ReadonlySet<string> = new Set();
 
 export type { DataItem } from "./columns";
 
@@ -359,7 +362,7 @@ export class TimestampDatasetsBuilderImpl {
   #dataVersion = 0;
   #analysisCache?: { key: string; results: Map<SeriesConfigKey, AnalysisResult | undefined> };
 
-  public getViewportDatasets(viewport: Immutable<Viewport>): Dataset[] {
+  #viewportDatasets(viewport: Immutable<Viewport>): Dataset[] {
     if (viewport.analysis) {
       return this.#getAnalysisDatasets(viewport, viewport.analysis);
     }
@@ -391,18 +394,19 @@ export class TimestampDatasetsBuilderImpl {
     return datasets;
   }
 
-  public getViewportResult(viewport: Immutable<Viewport>): {
-    datasetsByConfigIndex: Dataset[];
-    approximateSeries: number[];
-  } {
-    const datasetsByConfigIndex = this.getViewportDatasets(viewport);
+  public getViewportDatasets(viewport: Immutable<Viewport>): GetViewportDatasetsResult {
+    const datasetsByConfigIndex = this.#viewportDatasets(viewport);
     const approximateSeries: number[] = [];
     for (const series of this.#seriesByKey.values()) {
       if (series.config.enabled && series.currentApproximate && isDerivedSeries(series.config)) {
         approximateSeries.push(series.config.configIndex);
       }
     }
-    return { datasetsByConfigIndex, approximateSeries };
+    return {
+      datasetsByConfigIndex,
+      pathsWithMismatchedDataLengths: EMPTY_PATHS,
+      ...(approximateSeries.length > 0 && { approximateSeries }),
+    };
   }
 
   /** The first datum of a cross-message modifier has no previous datum, so it has no value */
