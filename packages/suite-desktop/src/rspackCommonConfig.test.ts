@@ -21,8 +21,6 @@ function createTestParams(overrides: Partial<RspackConfigParams> = {}): RspackCo
     mainEntrypoint: "./index.ts",
     rendererContext: "/test/renderer",
     rendererEntrypoint: "./index.tsx",
-    quicklookContext: "/test/quicklook",
-    quicklookEntrypoint: "./index.ts",
     preloadContext: "/test/preload",
     preloadEntrypoint: "./index.ts",
     outputPath: "/test/output",

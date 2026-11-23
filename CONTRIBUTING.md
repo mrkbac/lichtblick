@@ -138,7 +138,6 @@ lichtblick/
 │   ├── main/              # Main process
 │   ├── preload/           # Preload scripts
 │   ├── renderer/          # Renderer process
-│   └── quicklook/         # Quick Look support
 ├── web/                   # Web app entry point
 ├── packages/
 │   ├── suite/             # Core application logic

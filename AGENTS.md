@@ -43,7 +43,7 @@ E2E tests:
 
 ## Monorepo Map
 
-- `desktop/`: Electron app entry points (`main/`, `preload/`, `renderer/`, `quicklook/`)
+- `desktop/`: Electron app entry points (`main/`, `preload/`, `renderer/`)
 - `web/`: Web app bundling and entry point
 - `packages/suite-base/`: Shared core UI and logic
 - `packages/suite-desktop/`: Desktop-specific internal package
