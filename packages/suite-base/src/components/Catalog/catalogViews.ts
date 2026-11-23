@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MPL-2.0
 
-import { subtract, toSec, type Time } from "@foxglove/rostime";
+import { isGreaterThan, isLessThan, subtract, toSec, type Time } from "@foxglove/rostime";
 
 import { isAbsoluteTime } from "@lichtblick/suite-base/util/time";
 
@@ -11,17 +11,15 @@ export type GroupSection = (typeof GROUP_SECTIONS)[number];
 export type TimelineClock = "wall" | "relative";
 export type CatalogSection = "recordings" | "timeline" | "events" | GroupSection;
 
+const GROUP_FIELD = {
+  devices: "machine",
+  datasets: "dataset",
+  sessions: "session",
+  episodes: "episode",
+} as const satisfies Record<GroupSection, keyof CatalogRecording>;
+
 export function groupName(recording: CatalogRecording, section: GroupSection): string | undefined {
-  switch (section) {
-    case "devices":
-      return recording.machine;
-    case "datasets":
-      return recording.dataset;
-    case "sessions":
-      return recording.session;
-    case "episodes":
-      return recording.episode;
-  }
+  return recording[GROUP_FIELD[section]];
 }
 
 export function timelineRange(
@@ -36,12 +34,10 @@ export function timelineRange(
       continue;
     }
     const validEnd =
-      end != undefined && toSec(subtract(end, start)) >= 0 && isAbsoluteTime(end) === absolute
-        ? end
-        : start;
+      end != undefined && !isLessThan(end, start) && isAbsoluteTime(end) === absolute ? end : start;
     range = {
-      start: range == undefined || toSec(subtract(start, range.start)) < 0 ? start : range.start,
-      end: range == undefined || toSec(subtract(validEnd, range.end)) > 0 ? validEnd : range.end,
+      start: range == undefined || isLessThan(start, range.start) ? start : range.start,
+      end: range == undefined || isGreaterThan(validEnd, range.end) ? validEnd : range.end,
     };
   }
   return range;
