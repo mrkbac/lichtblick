@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import { Immutable, Time } from "@lichtblick/suite";
+import { upperBound } from "@lichtblick/suite-base/util/sortedSearch";
 
 import { Datum, OriginalValue } from "../utils/datum";
 
@@ -376,34 +377,4 @@ export class PointColumns {
       this.#stampNsec = grow(this.#stampNsec!, u32);
     }
   }
-}
-
-/** First index in [lo, hi) whose x is > value (or hi) */
-export function upperBound(xs: Float64Array, from: number, to: number, value: number): number {
-  let lo = from;
-  let hi = to;
-  while (lo < hi) {
-    const mid = (lo + hi) >>> 1;
-    if (xs[mid]! <= value) {
-      lo = mid + 1;
-    } else {
-      hi = mid;
-    }
-  }
-  return lo;
-}
-
-/** First index in [lo, hi) whose x is >= value (or hi) */
-export function lowerBound(xs: Float64Array, from: number, to: number, value: number): number {
-  let lo = from;
-  let hi = to;
-  while (lo < hi) {
-    const mid = (lo + hi) >>> 1;
-    if (xs[mid]! < value) {
-      lo = mid + 1;
-    } else {
-      hi = mid;
-    }
-  }
-  return lo;
 }

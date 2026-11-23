@@ -13,6 +13,7 @@ import {
   downsampleTimeseriesColumns,
 } from "@lichtblick/suite-base/components/TimeBasedChart/downsample";
 import type { Bounds1D } from "@lichtblick/suite-base/components/TimeBasedChart/types";
+import { lowerBound, upperBound } from "@lichtblick/suite-base/util/sortedSearch";
 
 import {
   CsvDataset,
@@ -21,7 +22,7 @@ import {
   SeriesItem,
   Viewport,
 } from "./IDatasetsBuilder";
-import { DataItem, PointColumns, lowerBound, upperBound } from "./columns";
+import { DataItem, PointColumns } from "./columns";
 import { buildDatasetStyle, isDerivedSeries } from "./utils";
 import { Dataset } from "../types";
 import { AnalysisColumns, computeHistogram, computeSpectrum } from "../utils/analysis";
