@@ -59,14 +59,6 @@ export type UseInstallingExtensionsStateProps = {
   };
 };
 
-export type ExtensionSnackbar = {
-  name: string;
-  namespace: Namespace;
-  error: string;
-  success: string;
-  warning: string;
-};
-
 export type ExtensionCatalog = Immutable<{
   downloadExtension: (url: string) => Promise<Uint8Array>;
   installExtensions: (

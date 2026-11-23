@@ -8,7 +8,6 @@
 // Generic global translation
 export const general = {
   foxglove: "Foxglove",
-  learnMore: "Learn more",
   moreTabs: "Tabs that don't fit",
   closeSidebar: "Close sidebar",
   noDefaultLayoutParameter:
