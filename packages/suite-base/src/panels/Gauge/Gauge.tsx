@@ -5,119 +5,75 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { useCallback, useEffect, useLayoutEffect, useReducer, useState } from "react";
+import { produce } from "immer";
+import * as _ from "lodash-es";
+import { useCallback, useEffect, useReducer, useState } from "react";
 
-import { parseMessagePath } from "@lichtblick/message-path";
-import { SettingsTreeAction } from "@lichtblick/suite";
+import { Immutable, RenderState, SettingsTreeAction } from "@lichtblick/suite";
+import { GlobalVariables } from "@lichtblick/suite-base/hooks/useGlobalVariables";
 import { DEFAULT_CONFIG } from "@lichtblick/suite-base/panels/Gauge/constants";
-import { stateReducer } from "@lichtblick/suite-base/panels/shared/gaugeAndIndicatorStateReducer";
+import {
+  initialState,
+  stateReducer,
+} from "@lichtblick/suite-base/panels/shared/gaugeAndIndicatorStateReducer";
 import { useReplacePathDrop } from "@lichtblick/suite-base/panels/shared/pathDrop";
-import { GaugeAndIndicatorState } from "@lichtblick/suite-base/panels/shared/types";
+import { usePathPanel } from "@lichtblick/suite-base/panels/shared/usePathPanel";
 import ThemeProvider from "@lichtblick/suite-base/theme/ThemeProvider";
 
 import { ArcGauge } from "./ArcGauge";
 import { Inclinometer } from "./Inclinometer";
 import { Slider } from "./Slider";
-import { settingsActionReducer } from "./settingsActionReducer";
 import { GaugeConfig, GaugeProps } from "./types";
 import { useSettingsTree } from "./useSettingsTree";
 
 /** Restores saved Gauge settings over defaults so older layouts retain their arc display. */
 export function Gauge({ context }: GaugeProps): React.JSX.Element {
-  // panel extensions must notify when they've completed rendering
-  // onRender will setRenderDone to a done callback which we can invoke after we've rendered
-  const [renderDone, setRenderDone] = useState<() => void>(() => () => {});
-  // Follow the app's light/dark theme.
-  const [colorScheme, setColorScheme] = useState<"dark" | "light">("dark");
-
   const [config, setConfig] = useState(() => ({
     ...DEFAULT_CONFIG,
     ...(context.initialState as Partial<GaugeConfig>),
   }));
 
-  const [state, dispatch] = useReducer(
-    stateReducer,
-    config,
-    ({ path }): GaugeAndIndicatorState => ({
-      globalVariables: undefined,
-      path,
-      parsedPath: parseMessagePath(path),
-      latestMessage: undefined,
-      latestMatchingQueriedData: undefined,
-      pathParseError: undefined,
-      error: undefined,
-    }),
-  );
-
-  useLayoutEffect(() => {
-    dispatch({ type: "path", path: config.path });
-  }, [config.path]);
-
-  useEffect(() => {
-    context.saveState(config);
-    context.setDefaultPanelTitle(config.path === "" ? undefined : config.path);
-  }, [config, context]);
+  const [state, dispatch] = useReducer(stateReducer, config, initialState);
 
   // Drop a field from the topic list to show it
   useReplacePathDrop(context, setConfig);
 
+  // The tree has no node actions; every field lives under "general"
+  const settingsActionHandler = useCallback((action: SettingsTreeAction) => {
+    if (action.action === "update") {
+      const { path, value } = action.payload;
+      setConfig(produce((draft) => _.set(draft, path.slice(1), value)));
+    }
+  }, []);
+
+  // Global variables can fill in the path
+  const onRender = useCallback((renderState: Immutable<RenderState>) => {
+    if (renderState.variables) {
+      dispatch({
+        type: "updateGlobalVariables",
+        globalVariables: Object.fromEntries(renderState.variables) as GlobalVariables,
+      });
+    }
+  }, []);
   useEffect(() => {
-    context.onRender = (renderState, done) => {
-      setRenderDone(() => done);
-
-      if (renderState.didSeek === true) {
-        dispatch({ type: "seek" });
-      }
-
-      if (renderState.currentFrame) {
-        dispatch({ type: "frame", messages: renderState.currentFrame });
-      }
-
-      if (renderState.colorScheme) {
-        setColorScheme(renderState.colorScheme);
-      }
-    };
-    context.watch("currentFrame");
-    context.watch("didSeek");
-    context.watch("colorScheme");
-
-    return () => {
-      context.onRender = undefined;
-    };
+    context.watch("variables");
   }, [context]);
-
-  const settingsActionHandler = useCallback(
-    (action: SettingsTreeAction) => {
-      setConfig((prevConfig) => settingsActionReducer({ prevConfig, action }));
-    },
-    [setConfig],
-  );
 
   const settingsTree = useSettingsTree({
     config,
     pathParseError: state.pathParseError,
     error: state.error?.message,
   });
-  useEffect(() => {
-    context.updatePanelSettingsEditor({
-      actionHandler: settingsActionHandler,
-      nodes: settingsTree,
-    });
-  }, [context, settingsActionHandler, settingsTree]);
 
-  useEffect(() => {
-    if (state.parsedPath?.topicName != undefined) {
-      context.subscribe([{ topic: state.parsedPath.topicName, preload: false }]);
-    }
-    return () => {
-      context.unsubscribeAll();
-    };
-  }, [context, state.parsedPath?.topicName]);
-
-  // Indicate render is complete - the effect runs after the dom is updated
-  useEffect(() => {
-    renderDone();
-  }, [renderDone]);
+  const colorScheme = usePathPanel({
+    context,
+    config,
+    dispatch,
+    topicName: state.parsedPath?.topicName,
+    actionHandler: settingsActionHandler,
+    nodes: settingsTree,
+    onRender,
+  });
 
   return (
     <ThemeProvider isDark={colorScheme === "dark"}>

@@ -19,6 +19,7 @@ import {
   RenderObjectHistory,
   PointsRenderable,
   DECAY_LIMITED,
+  keepDecayingTopics,
   pointDecayTime,
   updateDecayRing,
   isSameRecord,
@@ -441,6 +442,11 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
     if (!this.#getPointCloudFieldReaders(tempFieldReaders, pointCloud, settings)) {
       return;
     }
+    // A clean cloud clears the previous message's error (only then, so a cloud that keeps
+    // failing or warning doesn't remove and re-add it on every message)
+    if (!this.#warned) {
+      this.renderer.settings.errors.removeFromTopic(this.userData.topic, INVALID_POINTCLOUD);
+    }
 
     if (this.userData.recordId != undefined) {
       this.#decayRing?.removeRecord(this.userData.recordId);
@@ -850,8 +856,17 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
     lastEntry.renderable.decoded = undefined;
   };
 
+  /** Whether the last validated cloud had a tolerated problem */
+  #warned = false;
+
+  #warn(message: string): void {
+    this.#warned = true;
+    this.renderer.settings.errors.addToTopic(this.userData.topic, INVALID_POINTCLOUD, message);
+  }
+
   /** `report` gets why a cloud can't be drawn (by default an error that blanks the latest scan) */
   #validatePointCloud(pointCloud: PointCloud | PointCloud2, report = this.#invalidError): boolean {
+    this.#warned = false;
     return "header" in pointCloud
       ? this.#validateRosPointCloud(pointCloud, report)
       : this.#validateFoxglovePointCloud(pointCloud, report);
@@ -898,13 +913,13 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
 
     if (data.length < pointCloud.height * pointCloud.row_step) {
       const message = `PointCloud2 data length ${data.length} is less than height ${pointCloud.height} * row_step ${pointCloud.row_step}`;
-      this.renderer.settings.errors.addToTopic(this.userData.topic, INVALID_POINTCLOUD, message);
+      this.#warn(message);
       // Allow this error for now since we currently ignore row_step
     }
 
     if (pointCloud.width * pointCloud.point_step > pointCloud.row_step) {
       const message = `PointCloud2 width ${pointCloud.width} * point_step ${pointCloud.point_step} is greater than row_step ${pointCloud.row_step}`;
-      this.renderer.settings.errors.addToTopic(this.userData.topic, INVALID_POINTCLOUD, message);
+      this.#warn(message);
       // Allow this error for now since we currently ignore row_step
     }
 
@@ -1247,8 +1262,8 @@ export class PointClouds extends SceneExtension<PointCloudHistoryRenderable> {
   #waitingScans = new Map<string, WaitingScan[]>();
   #cameraTimeout: ReturnType<typeof setTimeout> | undefined;
 
-  public constructor(renderer: Renderer, name: string = PointClouds.extensionId) {
-    super(name, renderer);
+  public constructor(renderer: Renderer) {
+    super(PointClouds.extensionId, renderer);
   }
 
   public override removeAllRenderables(): void {
@@ -1274,7 +1289,7 @@ export class PointClouds extends SceneExtension<PointCloudHistoryRenderable> {
         schemaNames: ROS_POINTCLOUD_DATATYPES,
         subscription: {
           handler: this.#handleRosPointCloud,
-          filterQueue: this.#processMessageQueue.bind(this),
+          filterQueue: (msgs) => keepDecayingTopics(this.renderer, msgs),
         },
       },
       {
@@ -1282,33 +1297,10 @@ export class PointClouds extends SceneExtension<PointCloudHistoryRenderable> {
         schemaNames: FOXGLOVE_POINTCLOUD_DATATYPES,
         subscription: {
           handler: this.#handleFoxglovePointCloud,
-          filterQueue: this.#processMessageQueue.bind(this),
+          filterQueue: (msgs) => keepDecayingTopics(this.renderer, msgs),
         },
       },
     ];
-  }
-
-  #processMessageQueue<T>(msgs: MessageEvent<T>[]): MessageEvent<T>[] {
-    if (msgs.length === 0) {
-      return msgs;
-    }
-    const msgsByTopic = Map.groupBy(msgs, (msg) => msg.topic);
-    const finalQueue: MessageEvent<T>[] = [];
-    for (const [topic, topicMsgs] of msgsByTopic) {
-      const userSettings = (this.renderer.config.topics[topic] ??
-        {}) as Partial<LayerSettingsPointClouds>;
-      // if the topic has a decaytime add all messages to queue for topic
-      if ((userSettings.decayTime ?? DEFAULT_SETTINGS.decayTime) > 0) {
-        finalQueue.push(...topicMsgs);
-        continue;
-      }
-      const latestMsg = topicMsgs[topicMsgs.length - 1];
-      if (latestMsg) {
-        finalQueue.push(latestMsg);
-      }
-    }
-
-    return finalQueue;
   }
 
   public override settingsNodes(): SettingsTreeEntry[] {

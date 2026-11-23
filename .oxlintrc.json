@@ -259,12 +259,7 @@
       }
     ],
     "import-js/no-useless-path-segments": "error",
-    "@lichtblick/license-header": [
-      "error",
-      {
-        "licenseType": "MPL-2.0"
-      }
-    ],
+    "@lichtblick/license-header": "error",
     "@lichtblick/heavy-imports": "error",
     "@lichtblick/strict-equality": "error",
     "@lichtblick/no-return-promise-resolve": "error",
@@ -291,9 +286,7 @@
         "packages/suite-desktop/src/main/**",
         "packages/suite-desktop/src/preload/**",
         "packages/suite-desktop/src/common/resolveInside.ts",
-        "packages/suite-desktop/src/rspack*.ts",
         "packages/suite-desktop/src/afterPack.ts",
-        "packages/suite-desktop/src/electronBuilderConfig.js",
         "packages/suite-web/src/rspackConfigs.ts"
       ],
       "rules": {
@@ -563,38 +556,14 @@
         "**/*.spec.ts",
         "**/*.spec.tsx",
         "**/*.spec.js",
-        "**/*.stories.ts",
-        "**/*.stories.tsx",
-        "**/*.stories.js",
-        "**/*.stories.jsx",
-        "**/*.stories.mjs",
-        "**/*.stories.cjs",
-        "**/*.story.ts",
-        "**/*.story.tsx",
-        "**/*.story.js",
-        "**/*.story.jsx",
-        "**/*.story.mjs",
-        "**/*.story.cjs"
+        "**/*.stories.tsx"
       ],
       "rules": {
         "typescript/no-explicit-any": "off"
       }
     },
     {
-      "files": [
-        "**/*.stories.ts",
-        "**/*.stories.tsx",
-        "**/*.stories.js",
-        "**/*.stories.jsx",
-        "**/*.stories.mjs",
-        "**/*.stories.cjs",
-        "**/*.story.ts",
-        "**/*.story.tsx",
-        "**/*.story.js",
-        "**/*.story.jsx",
-        "**/*.story.mjs",
-        "**/*.story.cjs"
-      ],
+      "files": ["**/*.stories.tsx"],
       "rules": {
         "react/forbid-component-props": "off"
       }
@@ -606,20 +575,7 @@
       }
     },
     {
-      "files": [
-        "**/*.stories.ts",
-        "**/*.stories.tsx",
-        "**/*.stories.js",
-        "**/*.stories.jsx",
-        "**/*.stories.mjs",
-        "**/*.stories.cjs",
-        "**/*.story.ts",
-        "**/*.story.tsx",
-        "**/*.story.js",
-        "**/*.story.jsx",
-        "**/*.story.mjs",
-        "**/*.story.cjs"
-      ],
+      "files": ["**/*.stories.tsx"],
       "rules": {
         "import/no-anonymous-default-export": "off",
         "storybook/await-interactions": "error",

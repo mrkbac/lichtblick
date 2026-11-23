@@ -1,7 +1,7 @@
 /** @jest-environment jsdom */
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
-import { act, renderHook, RenderHookResult } from "@testing-library/react";
+import { act, renderHook } from "@testing-library/react";
 import { t, TFunction } from "i18next";
 import { produce } from "immer";
 import * as _ from "lodash-es";
@@ -19,7 +19,6 @@ import {
   setSeriesAction,
 } from "@lichtblick/suite-base/panels/StateTransitions/settings";
 import {
-  IUsePanelSettings,
   PathState,
   SeriesAction,
   SeriesActionId,
@@ -38,11 +37,11 @@ vi.mock("react-i18next", () => ({
   }),
 }));
 
-interface IUsePanelSettingsSetup<T> {
-  config: StateTransitionConfig;
-  focusedPath: string[];
-  render: RenderHookResult<T, unknown>;
-}
+const { updatePanelSettingsTree } = vi.hoisted(() => ({ updatePanelSettingsTree: vi.fn() }));
+vi.mock("@lichtblick/suite-base/providers/PanelStateContextProvider", async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  usePanelSettingsTreeUpdate: () => updatePanelSettingsTree,
+}));
 
 const buildPath = (): StateTransitionPath => ({
   color: BasicBuilder.string(),
@@ -354,7 +353,7 @@ describe("usePanelSettings", () => {
     config: Partial<StateTransitionConfig>;
     paths: PathState[] | undefined;
     focusedPath: string[] | undefined;
-  }> = {}): IUsePanelSettingsSetup<IUsePanelSettings> => {
+  }> = {}) => {
     const defaultPaths: PathState[] = paths ?? [
       { path: buildPath(), isArray: false },
       { path: buildPath(), isArray: false },
@@ -374,8 +373,10 @@ describe("usePanelSettings", () => {
 
     const defaultFocusedPath: string[] = focusedPath ?? BasicBuilder.strings();
 
-    const render = renderHook(
-      () => usePanelSettings(defaultConfig, saveConfig, defaultPaths, defaultFocusedPath),
+    renderHook(
+      () => {
+        usePanelSettings(defaultConfig, saveConfig, defaultPaths, defaultFocusedPath);
+      },
       {
         wrapper({ children }: PropsWithChildren) {
           return (
@@ -390,7 +391,11 @@ describe("usePanelSettings", () => {
     return {
       config: defaultConfig,
       focusedPath: defaultFocusedPath,
-      render,
+      actionHandler: (
+        updatePanelSettingsTree.mock.lastCall![0] as {
+          actionHandler: (a: SettingsTreeAction) => void;
+        }
+      ).actionHandler,
     };
   };
 
@@ -407,13 +412,12 @@ describe("usePanelSettings", () => {
   });
 
   it("should update config with updated config for action 'update' - isSynced", () => {
-    const { render } = setup({
+    const { actionHandler } = setup({
       config: {
         isSynced: false,
       },
       paths: [],
     });
-    const { actionHandler } = render.result.current;
 
     const action: SettingsTreeAction = {
       action: "update",
@@ -434,13 +438,12 @@ describe("usePanelSettings", () => {
   });
 
   it("should update config with updated config for action 'update' - showPoints", () => {
-    const { render } = setup({
+    const { actionHandler } = setup({
       config: {
         showPoints: false,
       },
       paths: [],
     });
-    const { actionHandler } = render.result.current;
 
     const action: SettingsTreeAction = {
       action: "update",
@@ -461,7 +464,7 @@ describe("usePanelSettings", () => {
   });
 
   it("should update config with xAxisRange reseted when xAxisMinValue is updated", () => {
-    const { render, config } = setup();
+    const { actionHandler, config } = setup();
     const settings: SettingsTreeAction = {
       action: "update",
       payload: {
@@ -470,7 +473,6 @@ describe("usePanelSettings", () => {
         value: BasicBuilder.number(),
       },
     };
-    const { actionHandler } = render.result.current;
 
     act(() => {
       actionHandler(settings);
@@ -493,7 +495,7 @@ describe("usePanelSettings", () => {
   });
 
   it("should update config with xAxisRange reseted when xAxisMaxValue is updated", () => {
-    const { render, config } = setup();
+    const { actionHandler, config } = setup();
     const settings: SettingsTreeAction = {
       action: "update",
       payload: {
@@ -502,7 +504,6 @@ describe("usePanelSettings", () => {
         value: BasicBuilder.number(),
       },
     };
-    const { actionHandler } = render.result.current;
 
     act(() => {
       actionHandler(settings);
@@ -525,7 +526,7 @@ describe("usePanelSettings", () => {
   });
 
   it("should update config with xAxisMinValue and xAxisMaxValue reseted when xAxisRange is updated", () => {
-    const { render, config } = setup();
+    const { actionHandler, config } = setup();
     const settings: SettingsTreeAction = {
       action: "update",
       payload: {
@@ -534,7 +535,6 @@ describe("usePanelSettings", () => {
         value: BasicBuilder.number(),
       },
     };
-    const { actionHandler } = render.result.current;
 
     act(() => {
       actionHandler(settings);
@@ -557,7 +557,7 @@ describe("usePanelSettings", () => {
   });
 
   it("should update config when there is no path", () => {
-    const { render, config } = setup({ paths: [] });
+    const { actionHandler, config } = setup({ paths: [] });
     const settings: SettingsTreeAction = {
       action: "update",
       payload: {
@@ -566,7 +566,6 @@ describe("usePanelSettings", () => {
         value: BasicBuilder.number(),
       },
     };
-    const { actionHandler } = render.result.current;
 
     act(() => {
       actionHandler(settings);
@@ -582,7 +581,7 @@ describe("usePanelSettings", () => {
   });
 
   it("should update config when there are paths", () => {
-    const { render, config } = setup();
+    const { actionHandler, config } = setup();
     const settings: SettingsTreeAction = {
       action: "update",
       payload: {
@@ -591,7 +590,6 @@ describe("usePanelSettings", () => {
         value: BasicBuilder.number(),
       },
     };
-    const { actionHandler } = render.result.current;
 
     act(() => {
       actionHandler(settings);
@@ -610,10 +608,8 @@ describe("usePanelSettings", () => {
     { paths: [] },
     { paths: [DEFAULT_STATE_TRANSITION_PATH] },
   ])("should add a serie", ({ paths }) => {
-    const { render, config } = setup();
+    const { actionHandler, config } = setup();
     config.paths = paths;
-
-    const { actionHandler } = render.result.current;
 
     const settings: SettingsTreeAction = {
       action: "perform-node-action",
@@ -636,9 +632,7 @@ describe("usePanelSettings", () => {
   });
 
   it("should delete a serie", () => {
-    const { render, config } = setup();
-
-    const { actionHandler } = render.result.current;
+    const { actionHandler, config } = setup();
 
     const settings: SettingsTreeAction = {
       action: "perform-node-action",
@@ -665,14 +659,13 @@ describe("usePanelSettings", () => {
       const path1 = buildPath();
       const path2 = buildPath();
       const path3 = buildPath();
-      const { render, config } = setup({
+      const { actionHandler, config } = setup({
         paths: [
           { path: path1, isArray: false },
           { path: path2, isArray: false },
           { path: path3, isArray: false },
         ],
       });
-      const { actionHandler } = render.result.current;
 
       // When: Reordering from index 0 to index 2
       const action: SettingsTreeAction = {
@@ -705,14 +698,13 @@ describe("usePanelSettings", () => {
       const path1 = buildPath();
       const path2 = buildPath();
       const path3 = buildPath();
-      const { render, config } = setup({
+      const { actionHandler, config } = setup({
         paths: [
           { path: path1, isArray: false },
           { path: path2, isArray: false },
           { path: path3, isArray: false },
         ],
       });
-      const { actionHandler } = render.result.current;
 
       // When: Reordering from index 2 to index 0
       const action: SettingsTreeAction = {
@@ -746,7 +738,7 @@ describe("usePanelSettings", () => {
       const path2 = buildPath();
       const path3 = buildPath();
       const path4 = buildPath();
-      const { render, config } = setup({
+      const { actionHandler, config } = setup({
         paths: [
           { path: path1, isArray: false },
           { path: path2, isArray: false },
@@ -754,7 +746,6 @@ describe("usePanelSettings", () => {
           { path: path4, isArray: false },
         ],
       });
-      const { actionHandler } = render.result.current;
 
       // When: Reordering from index 1 to index 2 (adjacent positions)
       const action: SettingsTreeAction = {
@@ -787,13 +778,12 @@ describe("usePanelSettings", () => {
       // Given: A configuration with exactly two series
       const path1 = buildPath();
       const path2 = buildPath();
-      const { render, config } = setup({
+      const { actionHandler, config } = setup({
         paths: [
           { path: path1, isArray: false },
           { path: path2, isArray: false },
         ],
       });
-      const { actionHandler } = render.result.current;
 
       // When: Reordering the two series
       const action: SettingsTreeAction = {

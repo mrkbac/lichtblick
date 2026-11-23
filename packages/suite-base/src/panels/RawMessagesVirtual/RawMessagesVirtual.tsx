@@ -1,6 +1,6 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
-import { Checkbox, FormControlLabel, InputBase, Typography } from "@mui/material";
+import { InputBase, Typography } from "@mui/material";
 import * as _ from "lodash-es";
 import { useCallback, useMemo, useRef, useState } from "react";
 
@@ -212,33 +212,16 @@ const RawMessagesVirtual = (props: PropsRawMessagesVirtual): React.JSX.Element =
       }
 
       return (
-        <>
-          {diffEnabled && (
-            <FormControlLabel
-              disableTypography
-              checked={showFullMessageForDiff}
-              control={
-                <Checkbox
-                  size="small"
-                  onChange={() => {
-                    saveConfig({ showFullMessageForDiff: !showFullMessageForDiff });
-                  }}
-                />
-              }
-              label="Show full message"
-            />
-          )}
-          <VirtualizedTree
-            data={diffEnabled ? diff : data}
-            diff={diffEnabled}
-            isExpanded={isExpanded}
-            onToggleExpand={onToggleExpand}
-            fontSize={fontSize}
-            renderValue={renderValue}
-            search={search}
-            previousData={isPlaying ? undefined : previousDataRef.current}
-          />
-        </>
+        <VirtualizedTree
+          data={diffEnabled ? diff : data}
+          diff={diffEnabled}
+          isExpanded={isExpanded}
+          onToggleExpand={onToggleExpand}
+          fontSize={fontSize}
+          renderValue={renderValue}
+          search={search}
+          previousData={isPlaying ? undefined : previousDataRef.current}
+        />
       );
     };
 
@@ -296,6 +279,7 @@ const RawMessagesVirtual = (props: PropsRawMessagesVirtual): React.JSX.Element =
         onToggleExpandAll={onToggleExpandAll}
         onTopicPathChange={onTopicPathChange}
         saveConfig={saveConfig}
+        showFullMessageForDiff={showFullMessageForDiff}
         topicPath={topicPath}
         searchOpen={search != undefined}
         onToggleSearch={() => {

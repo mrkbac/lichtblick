@@ -143,7 +143,7 @@ describe("PanelToolbarControls", () => {
 
       // Then
       expect(screen.getByTitle("Show logs")).toBeInTheDocument();
-      expect(screen.getByTitle("Settings")).toBeInTheDocument();
+      expect(screen.getByTitle("Panel settings")).toBeInTheDocument();
       expect(screen.getByTestId("panel-actions-dropdown")).toBeInTheDocument();
     });
 
@@ -314,7 +314,7 @@ describe("PanelToolbarControls", () => {
       renderPanelToolbarControls({ panelContextOverrides: panelContext });
 
       // When
-      const settingsButton = screen.getByTitle("Settings");
+      const settingsButton = screen.getByTitle("Panel settings");
       fireEvent.click(settingsButton);
 
       // Then
@@ -328,7 +328,7 @@ describe("PanelToolbarControls", () => {
         renderPanelToolbarControls({
           panelContextOverrides: { id: undefined },
         });
-        const settingsButton = screen.getByTitle("Settings");
+        const settingsButton = screen.getByTitle("Panel settings");
         fireEvent.click(settingsButton);
       }).not.toThrow();
     });
@@ -354,7 +354,7 @@ describe("PanelToolbarControls", () => {
       });
 
       // Then
-      expect(screen.queryByTitle("Settings")).not.toBeInTheDocument();
+      expect(screen.queryByTitle("Panel settings")).not.toBeInTheDocument();
     });
 
     it("When panel has custom toolbar but has settings Then shows settings button", () => {
@@ -376,7 +376,7 @@ describe("PanelToolbarControls", () => {
       });
 
       // Then
-      expect(screen.getByTitle("Settings")).toBeInTheDocument();
+      expect(screen.getByTitle("Panel settings")).toBeInTheDocument();
     });
   });
 
@@ -402,7 +402,7 @@ describe("PanelToolbarControls", () => {
       // Then
       expect(screen.queryByTestId("custom-icon")).not.toBeInTheDocument();
       expect(screen.getByTitle("Show logs")).toBeInTheDocument();
-      expect(screen.getByTitle("Settings")).toBeInTheDocument();
+      expect(screen.getByTitle("Panel settings")).toBeInTheDocument();
     });
   });
 
@@ -460,7 +460,7 @@ describe("PanelToolbarControls", () => {
 
       // Then
       expect(screen.getByTitle("Show logs")).toBeInTheDocument();
-      expect(screen.getByTitle("Settings")).toBeInTheDocument();
+      expect(screen.getByTitle("Panel settings")).toBeInTheDocument();
     });
 
     it("When panel type is not found in catalog Then shows settings button", () => {
@@ -475,7 +475,7 @@ describe("PanelToolbarControls", () => {
       });
 
       // Then
-      expect(screen.getByTitle("Settings")).toBeInTheDocument();
+      expect(screen.getByTitle("Panel settings")).toBeInTheDocument();
     });
   });
 
@@ -749,7 +749,7 @@ describe("PanelToolbarControls", () => {
       });
 
       // When
-      const settingsButton = screen.getByTitle("Settings");
+      const settingsButton = screen.getByTitle("Panel settings");
       fireEvent.click(settingsButton);
 
       // Then
@@ -785,7 +785,7 @@ describe("PanelToolbarControls", () => {
       },
     });
 
-    expect(screen.getByTitle("Settings")).toBeInTheDocument();
+    expect(screen.getByTitle("Panel settings")).toBeInTheDocument();
     expect(screen.queryByTitle("About this panel")).not.toBeInTheDocument();
   });
 });

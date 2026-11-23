@@ -86,6 +86,8 @@ const SKIM_MIN_ACHIEVED_SPEED = 0.8;
 // Amount to wait until panels have had the chance to subscribe to topics before
 // we start playback
 const START_DELAY_MS = 100;
+// Shortest pause between playback ticks (see #statePlay)
+const MIN_TICK_MS = 4;
 
 // Messages are laid out in blocks with a fixed number of milliseconds.
 const MIN_MEM_CACHE_BLOCK_SIZE_NS = 0.1e9;
@@ -599,6 +601,15 @@ export class IterablePlayer implements Player {
     if (this.#nextState === "close") {
       return;
     }
+    // A pending seek or iterator reset reads #isPlaying when done and goes on to play or idle
+    // itself; pausing or playing must not drop it
+    if (
+      (newState === "idle" || newState === "play") &&
+      (this.#nextState === "seek-backfill" || this.#nextState === "reset-playback-iterator")
+    ) {
+      this.#queueEmitState();
+      return;
+    }
     log.debug(`Set next state: ${newState}`);
     this.#nextState = newState;
     this.#abort?.abort();
@@ -668,6 +679,10 @@ export class IterablePlayer implements Player {
       this.#queueEmitState();
     } finally {
       this.#runningState = false;
+    }
+    // A state that threw stops the loop above; closing must still run to free the source
+    if (this.#nextState === "close") {
+      void this.#runState();
     }
   }
 
@@ -896,6 +911,9 @@ export class IterablePlayer implements Player {
 
   async #resetPlaybackIterator() {
     this.#playbackIteratorStale = false;
+    // The new iterator reads again from just after the current time: a message the old one read
+    // ahead (e.g. by a tick interrupted for this reset) would be emitted twice
+    this.#lastMessageEvent = undefined;
     if (!this.#currentTime) {
       throw new Error("Invariant: Tried to reset playback iterator with no current time.");
     }
@@ -1335,22 +1353,17 @@ export class IterablePlayer implements Player {
         }
 
         const result = await this.#playbackIterator.next();
-        if (result.done === true || this.#nextState) {
+        if (result.done === true) {
           break;
         }
         const iterResult = result.value;
 
         if (iterResult.type === "alert") {
           this.#alertManager.addAlert(`connid-${iterResult.connectionId}`, iterResult.alert);
-          continue;
-        }
-
-        if (iterResult.type === "stamp" && compare(iterResult.stamp, end) >= 0) {
+        } else if (iterResult.type === "stamp" && compare(iterResult.stamp, end) >= 0) {
           this.#lastStamp = iterResult.stamp;
           break;
-        }
-
-        if (iterResult.type === "message-event") {
+        } else if (iterResult.type === "message-event") {
           // The message is past the tick end time, we need to save it for next tick
           if (compare(iterResult.msgEvent.receiveTime, end) > 0) {
             this.#lastMessageEvent = iterResult.msgEvent;
@@ -1358,6 +1371,12 @@ export class IterablePlayer implements Player {
           }
 
           msgEvents.push(iterResult.msgEvent);
+        }
+
+        // Checked after keeping the result: a pause keeps this iterator, so nothing read from it
+        // may be dropped
+        if (this.#nextState) {
+          break;
         }
       }
     } finally {
@@ -1367,8 +1386,15 @@ export class IterablePlayer implements Player {
     // Set the presence back to PRESENT since we are no longer buffering
     this.#presence = PlayerPresence.PRESENT;
 
+    let tickEnd = end;
     if (this.#nextState) {
-      return;
+      const lastRead = msgEvents.at(-1);
+      // Other states replace the iterator. Idle/play resume it, so emit what was read and stop the
+      // playhead at it; the next tick continues from there.
+      if ((this.#nextState !== "idle" && this.#nextState !== "play") || !lastRead) {
+        return;
+      }
+      tickEnd = lastRead.receiveTime;
     }
 
     // Wait on any active emit state to finish as part of this tick
@@ -1376,7 +1402,7 @@ export class IterablePlayer implements Player {
     // might get debounced
     await this.#queueEmitState.currentPromise;
 
-    this.#currentTime = end;
+    this.#currentTime = tickEnd;
     this.#messages = msgEvents;
     this.#queueEmitState();
 
@@ -1483,10 +1509,11 @@ export class IterablePlayer implements Player {
         }
 
         const time = Date.now() - start;
-        // make sure we've slept at least 16 millis or so (aprox 1 frame)
-        // to give the UI some time to breathe and not burn in a tight loop
-        if (time < 16) {
-          await delay(16 - time);
+        // Sleep a little so we never burn in a tight loop. The frame pace itself comes from the
+        // listener, which resolves once per display frame (or message rate), so keep this below
+        // one frame even on 240 Hz displays.
+        if (time < MIN_TICK_MS) {
+          await delay(MIN_TICK_MS - time);
         }
       }
     } catch (e: unknown) {
@@ -1499,13 +1526,20 @@ export class IterablePlayer implements Player {
   async #stateClose() {
     this.#isPlaying = false;
 
-    await this.#blockLoader?.stopLoading();
-    await this.#blockLoadingProcess;
-    await this.#bufferImpl.terminate();
-    await this.#playbackIterator?.return?.();
-    this.#playbackIterator = undefined;
-    await this.#iterableSource.terminate?.();
-    this.#resolveIsClosed();
+    try {
+      await this.#blockLoader?.stopLoading();
+      await this.#blockLoadingProcess;
+      await this.#bufferImpl.terminate();
+      await this.#playbackIterator?.return?.();
+    } finally {
+      // Always free the source (e.g. its worker), even if stopping reading failed
+      this.#playbackIterator = undefined;
+      try {
+        await this.#iterableSource.terminate?.();
+      } finally {
+        this.#resolveIsClosed();
+      }
+    }
   }
 
   async #startBlockLoading() {

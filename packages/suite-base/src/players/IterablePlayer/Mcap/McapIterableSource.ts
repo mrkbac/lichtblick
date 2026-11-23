@@ -24,14 +24,8 @@ import { toError } from "@lichtblick/suite-base/util/toError";
 
 import { leaseDecompressPool } from "./DecompressPool";
 import { CheckChunk, McapIndexedIterableSource, RecoverReader } from "./McapIndexedIterableSource";
-import type {
-  HydratedInner,
-  IndexedReaderResult,
-  McapSource,
-  OpenedInner,
-} from "./McapIterableSource.types";
 import { McapUnindexedIterableSource } from "./McapUnindexedIterableSource";
-import { RemoteFileReadable } from "./RemoteFileReadable";
+import { RemoteFileReadable, type RemoteFileReadableOptions } from "./RemoteFileReadable";
 import { scanWithIndexCache } from "./mcapIndexCache";
 import {
   READER_BASE_BYTES,
@@ -47,6 +41,31 @@ import {
   ISerializedIterableSource,
 } from "../IIterableSource";
 import { HydratedSourcePool, SourceHydrator } from "../shared/HydratedSourcePool";
+
+export type McapSource =
+  // `handle`: follow the file while it is still being written (see McapIterableSource)
+  | { type: "file"; file: Blob; handle?: FileSystemFileHandle; pool?: HydratedSourcePool }
+  | ({ type: "url"; url: string; pool?: HydratedSourcePool } & RemoteFileReadableOptions);
+
+type HydratedInner = {
+  inner: ISerializedIterableSource;
+  readable?: RemoteFileReadable;
+  weightBytes: number;
+};
+
+type IndexedReaderResult =
+  | { status: "indexed"; reader: McapIndexedReader }
+  | { status: "unindexed" }
+  | { status: "recover"; error: Error };
+
+type OpenedInner = {
+  inner: ISerializedIterableSource;
+  readable?: RemoteFileReadable;
+  indexed: boolean;
+  weightBytes: number;
+  /** For a reader on a rebuilt index: adds what was indexed since (see openLiveReader) */
+  live?: LiveReader;
+};
 
 const log = Log.getLogger(__filename);
 

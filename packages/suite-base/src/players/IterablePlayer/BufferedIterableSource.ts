@@ -60,6 +60,8 @@ class BufferedIterableSource<MessageType = unknown>
 
   #readDone = false;
   #aborted = false;
+  // Stops the source's in-flight read when the producer stops
+  #abortController?: AbortController;
 
   // The producer uses this signal to notify a waiting consumer there is data to consume.
   #readSignal = new Condvar();
@@ -136,6 +138,7 @@ class BufferedIterableSource<MessageType = unknown>
 
     try {
       const sourceIterator = this.#source.messageIterator({
+        abort: this.#abortController?.signal,
         topics: args.topics,
         start: this.#readHead,
         consumptionType: "partial",
@@ -214,6 +217,16 @@ class BufferedIterableSource<MessageType = unknown>
 
         // Wait for consumer thread to read something before trying to load more data
         await this.#writeSignal.wait();
+        // Stopped while waiting: don't start another read
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+        if (this.#aborted) {
+          return;
+        }
+      }
+    } catch (err: unknown) {
+      // Stopping aborts the source read, which may throw: that is not an error
+      if (!this.#aborted) {
+        throw err;
       }
     } finally {
       // Indicate to the consumer that it can try reading again
@@ -225,18 +238,26 @@ class BufferedIterableSource<MessageType = unknown>
   }
   /** Calls stopProducer, clears cache, and terminates sources */
   public async terminate(): Promise<void> {
-    await this.stopProducer();
-    this.#cache.clear();
-    this.#source.removeAllListeners("loadedRangesChange");
-    await this.#source.terminate();
+    try {
+      await this.stopProducer();
+    } finally {
+      this.#cache.clear();
+      this.#source.removeAllListeners("loadedRangesChange");
+      await this.#source.terminate();
+    }
   }
 
+  /** Stops the producer. Rethrows its error, if any, once; later calls and iterators are not affected */
   public async stopProducer(): Promise<void> {
     log.debug("Stopping producer");
     this.#aborted = true;
+    this.#abortController?.abort();
     this.#writeSignal.notifyAll();
-    await this.#producer;
-    this.#producer = undefined;
+    try {
+      await this.#producer;
+    } finally {
+      this.#producer = undefined;
+    }
   }
 
   /**
@@ -286,6 +307,7 @@ class BufferedIterableSource<MessageType = unknown>
 
     this.#aborted = false;
     this.#readDone = false;
+    this.#abortController = new AbortController();
 
     // Create and start the producer when the messageIterator function is called.
     this.#producer = this.#startProducer(args);

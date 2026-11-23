@@ -3,13 +3,23 @@
 
 import Logger from "@lichtblick/log";
 
-import type { HydratedSourcePoolOptions, SourceHydrator } from "./types";
+// Contract a caller supplies to HydratedSourcePool for a hydrated (heavyweight) value.
+export type SourceHydrator<T> = {
+  // Create the heavyweight value (open readable, build reader, parse channels, ...).
+  open: () => Promise<T>;
+  // Release the heavyweight value (close readable/connection, drop references).
+  close: (value: T) => Promise<void>;
+  // Optional estimated resident memory (bytes) of the hydrated value, used by the byte budget.
+  // When omitted, every entry weighs 1 so the pool behaves as a pure count cap.
+  weigh?: (value: T) => number;
+};
 
-// Re-exported so the existing external import of this type from "./HydratedSourcePool" keeps
-// working; its canonical definition now lives in shared/types.ts. HydratedSourcePoolOptions is
-// only used internally here (constructor parameter type) — external consumers import it directly
-// from "./types".
-export type { SourceHydrator };
+type HydratedSourcePoolOptions = {
+  // Primary limiter: evict LRU unpinned entries while total estimated bytes exceeds this.
+  maxBytes?: number;
+  // Safety cap on resident entry count (bounds open connections/readers regardless of weight).
+  maxCount?: number;
+};
 
 const log = Logger.getLogger(__filename);
 
@@ -19,6 +29,8 @@ type Entry = {
   pins: number;
   // Estimated resident bytes for this entry. 0 until the value resolves (for acquire()).
   weight: number;
+  // Values replaced by refresh() while pinned: closed once the pins drop to 0
+  retired: unknown[];
 };
 
 /**
@@ -83,6 +95,7 @@ export class HydratedSourcePool {
       value: Promise.resolve(value),
       pins: 0,
       weight,
+      retired: [],
     });
     this.#totalWeight += weight;
     await this.#evictBeyondCapacity();
@@ -118,8 +131,13 @@ export class HydratedSourcePool {
     entry.weight = weight;
     entry.value = Promise.resolve(value);
     // The same value again only has a new weight
-    if (entry.pins === 0 && old !== value) {
-      await entry.hydrator.close(old);
+    if (old !== value) {
+      if (entry.pins === 0) {
+        await entry.hydrator.close(old);
+      } else {
+        // ponytail: pins don't say which value they hold, so wait for all of them
+        entry.retired.push(old);
+      }
     }
     await this.#evictBeyondCapacity();
     return true;
@@ -154,6 +172,7 @@ export class HydratedSourcePool {
       value: hydrator.open(),
       pins: 1,
       weight: 0,
+      retired: [],
     };
     this.#entries.set(token, entry);
     try {
@@ -186,6 +205,9 @@ export class HydratedSourcePool {
     if (entry.pins > 0) {
       entry.pins -= 1;
     }
+    if (entry.pins === 0) {
+      void this.#closeRetired(entry);
+    }
     // Opportunistically reclaim memory if we are over budget and this entry is now evictable.
     void this.#evictBeyondCapacity().catch((err: unknown) => {
       log.error("HydratedSourcePool eviction failed", err);
@@ -201,6 +223,7 @@ export class HydratedSourcePool {
     this.#totalWeight = 0;
     await Promise.all(
       entries.map(async ([, entry]) => {
+        await this.#closeRetired(entry);
         try {
           await entry.hydrator.close(await entry.value);
         } catch (err) {
@@ -208,6 +231,17 @@ export class HydratedSourcePool {
         }
       }),
     );
+  }
+
+  async #closeRetired(entry: Entry): Promise<void> {
+    const retired = entry.retired.splice(0);
+    for (const value of retired) {
+      try {
+        await entry.hydrator.close(value);
+      } catch (err) {
+        log.error("HydratedSourcePool close of a replaced value failed", err);
+      }
+    }
   }
 
   // True when the pool exceeds either bound and may shed a least-recently-used unpinned entry.

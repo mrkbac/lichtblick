@@ -6,39 +6,28 @@ import { useCallback } from "react";
 import { ChartDatasets } from "@lichtblick/suite-base/components/TimeBasedChart/types";
 import { createLabel } from "@lichtblick/suite-base/panels/StateTransitions/messagesToDataset";
 import { getValueAtTime } from "@lichtblick/suite-base/panels/shared/getValueAtTime";
-import { DeltaMarker, DeltaMarkerSeriesValue } from "@lichtblick/suite-base/panels/shared/types";
-import useDeltaMarkerState from "@lichtblick/suite-base/panels/shared/useDeltaMarkerState";
+import { DeltaMarkerSeriesValue } from "@lichtblick/suite-base/panels/shared/types";
+import useDeltaMarkerState, {
+  UseDeltaMarkerStateResult,
+} from "@lichtblick/suite-base/panels/shared/useDeltaMarkerState";
 
 export type UseStateTransitionsDeltaModeProps = {
   datasets: ChartDatasets;
+  /** The path each dataset belongs to; live mode adds a second dataset per path. */
+  datasetPathIndexes: readonly number[];
   /** Markers are cleared (but the mode stays active) whenever this value changes. */
   resetKey?: string;
 };
 
-export type UseStateTransitionsDeltaModeResult = {
-  active: boolean;
-  toggleActive: () => void;
-  markerA: DeltaMarker | undefined;
-  markerB: DeltaMarker | undefined;
-  removeMarkerA: () => void;
-  removeMarkerB: () => void;
-  handleChartClick: (xValue: number) => void;
-};
-
 function useStateTransitionsDeltaMode({
   datasets,
+  datasetPathIndexes,
   resetKey,
-}: UseStateTransitionsDeltaModeProps): UseStateTransitionsDeltaModeResult {
-  const {
-    active,
-    toggleActive,
-    markerA,
-    markerB,
-    removeMarkerA,
-    removeMarkerB,
-    nextMarkerSlot,
-    setMarker,
-  } = useDeltaMarkerState({ resetKey });
+}: UseStateTransitionsDeltaModeProps): UseDeltaMarkerStateResult & {
+  handleChartClick: (xValue: number) => void;
+} {
+  const state = useDeltaMarkerState({ resetKey });
+  const { active, nextMarkerSlot, setMarker } = state;
 
   const handleChartClick = useCallback(
     (xValue: number) => {
@@ -47,7 +36,11 @@ function useStateTransitionsDeltaMode({
       }
 
       const seriesValues: DeltaMarkerSeriesValue[] = [];
-      datasets.forEach((dataset, configIndex) => {
+      datasets.forEach((dataset, datasetIndex) => {
+        const configIndex = datasetPathIndexes[datasetIndex];
+        if (configIndex == undefined || seriesValues.some((v) => v.configIndex === configIndex)) {
+          return;
+        }
         const valueAtTime = getValueAtTime(dataset.data, xValue);
         if (valueAtTime) {
           seriesValues.push({
@@ -63,18 +56,10 @@ function useStateTransitionsDeltaMode({
 
       setMarker(nextMarkerSlot(), { xValue, seriesValues });
     },
-    [active, datasets, nextMarkerSlot, setMarker],
+    [active, datasets, datasetPathIndexes, nextMarkerSlot, setMarker],
   );
 
-  return {
-    active,
-    toggleActive,
-    markerA,
-    markerB,
-    removeMarkerA,
-    removeMarkerB,
-    handleChartClick,
-  };
+  return { ...state, handleChartClick };
 }
 
 export default useStateTransitionsDeltaMode;

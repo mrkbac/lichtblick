@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import { compare, toMillis } from "@foxglove/rostime";
+import { Time, compare, toNanoSec } from "@foxglove/rostime";
 import { Heap } from "heap-js";
 
 import {
@@ -9,10 +9,19 @@ import {
   IteratorResult,
   MessageIteratorArgs,
 } from "@lichtblick/suite-base/players/IterablePlayer/IIterableSource";
-import {
-  SequentialIteratorMergeOptions,
-  SourceWithTime,
-} from "@lichtblick/suite-base/players/IterablePlayer/shared/types";
+
+type SourceWithTime = {
+  source: IIterableSource;
+  startTime: Time;
+  endTime: Time;
+};
+
+type SequentialIteratorMergeOptions<T extends IteratorResult> = {
+  value: T;
+  iterator: AsyncIterableIterator<Readonly<IteratorResult>>;
+  /** Sort key in ns: the value's time, or for an alert the last time its iterator reached */
+  time: bigint;
+};
 
 /**
  * Lazily merges sources in start-time order, activating each iterator only when playback reaches
@@ -39,8 +48,8 @@ export async function* mergeSequentialIterators<T extends IteratorResult>(
 
   sourcesWithTime.sort((a, b) => compare(a.startTime, b.startTime));
 
-  const heap = new Heap<SequentialIteratorMergeOptions<T>>(
-    (a, b) => getTime(a.value) - getTime(b.value),
+  const heap = new Heap<SequentialIteratorMergeOptions<T>>((a, b) =>
+    a.time < b.time ? -1 : a.time > b.time ? 1 : 0,
   );
 
   // Tracks every iterator that has been activated (messageIterator() called and not yet
@@ -50,12 +59,13 @@ export async function* mergeSequentialIterators<T extends IteratorResult>(
   const activeIterators = new Set<AsyncIterableIterator<Readonly<IteratorResult>>>();
 
   /** Activate a source iterator and push its first value onto the heap if present. */
-  async function activateSource(source: IIterableSource): Promise<void> {
+  async function activateSource(source: IIterableSource, startTime?: bigint): Promise<void> {
     const iterator = source.messageIterator(args);
     activeIterators.add(iterator);
     const result = await iterator.next();
     if (!(result.done ?? false)) {
-      heap.push({ value: result.value as T, iterator });
+      const value = result.value as T;
+      heap.push({ value, iterator, time: getTime(value) ?? startTime ?? 0n });
     } else {
       // Exhausted immediately (empty source): nothing left to clean up.
       activeIterators.delete(iterator);
@@ -67,7 +77,8 @@ export async function* mergeSequentialIterators<T extends IteratorResult>(
 
   /** Activate the next pending timed source. */
   async function activateNextSource(): Promise<void> {
-    await activateSource(sourcesWithTime[nextSourceIndex]!.source);
+    const { source, startTime } = sourcesWithTime[nextSourceIndex]!;
+    await activateSource(source, toNanoSec(startTime));
     nextSourceIndex++;
   }
 
@@ -113,22 +124,29 @@ export async function* mergeSequentialIterators<T extends IteratorResult>(
 
     while (!heap.isEmpty()) {
       const node = heap.pop()!;
-      const currentTimeMs = getTime(node.value);
 
       // Activate any pending sources whose startTime is <= the current message time.
+      let activated = false;
       while (nextSourceIndex < sourcesWithTime.length) {
         const sourceInfo = sourcesWithTime[nextSourceIndex]!;
-        if (toMillis(sourceInfo.startTime) > currentTimeMs) {
+        if (toNanoSec(sourceInfo.startTime) > node.time) {
           break;
         }
         await activateNextSource();
+        activated = true;
+      }
+      if (activated) {
+        // A newly opened source may have a message before this one
+        heap.push(node);
+        continue;
       }
 
       yield node.value;
 
       const nextResult = await node.iterator.next();
       if (!(nextResult.done ?? false)) {
-        heap.push({ value: nextResult.value as T, iterator: node.iterator });
+        const value = nextResult.value as T;
+        heap.push({ value, iterator: node.iterator, time: getTime(value) ?? node.time });
       } else {
         activeIterators.delete(node.iterator);
         if (heap.isEmpty() && nextSourceIndex < sourcesWithTime.length) {
@@ -150,12 +168,13 @@ export async function* mergeSequentialIterators<T extends IteratorResult>(
   }
 }
 
-function getTime(event: IteratorResult): number {
+/** Undefined for an alert, which has no time of its own */
+function getTime(event: IteratorResult): bigint | undefined {
   if (event.type === "message-event") {
-    return toMillis(event.msgEvent.receiveTime);
+    return toNanoSec(event.msgEvent.receiveTime);
   }
   if (event.type === "stamp") {
-    return toMillis(event.stamp);
+    return toNanoSec(event.stamp);
   }
-  return Number.MAX_SAFE_INTEGER;
+  return undefined;
 }

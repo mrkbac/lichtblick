@@ -98,7 +98,8 @@ const MESSAGE_INDEX_ENTRY = 8 + 8; // log time + offset
  */
 export function rewriteChunk(job: ChunkJob, deps: RewriteChunkDeps): ChunkResult {
   let records = job.records;
-  if (job.compression !== "") {
+  // Empty chunks have no compressed frame; zstd throws on empty input.
+  if (job.compression !== "" && records.byteLength > 0) {
     const decompress = deps.decompressHandlers[job.compression];
     if (!decompress) {
       throw new Error(`Unsupported chunk compression: ${job.compression}`);

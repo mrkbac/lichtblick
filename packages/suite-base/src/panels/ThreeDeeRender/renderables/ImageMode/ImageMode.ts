@@ -125,8 +125,8 @@ export class ImageMode
 
   public customCameraModels: CameraModelsMap;
 
-  public constructor(renderer: Renderer, name: string = ImageMode.extensionId) {
-    super(name, renderer);
+  public constructor(renderer: Renderer) {
+    super(ImageMode.extensionId, renderer);
 
     this.customCameraModels = renderer.customCameraModels;
 

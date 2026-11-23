@@ -11,13 +11,7 @@ import { BlobReader } from "@foxglove/ulog/web";
 
 import Logger from "@lichtblick/log";
 import { MessageEvent, ParameterValue } from "@lichtblick/suite";
-import {
-  MessageDefinitionsByTopic,
-  ParsedMessageDefinitionsByTopic,
-  Topic,
-  TopicStats,
-  PlayerAlert,
-} from "@lichtblick/suite-base/players/types";
+import { Topic, TopicStats, PlayerAlert } from "@lichtblick/suite-base/players/types";
 import { RosDatatypes } from "@lichtblick/suite-base/types/RosDatatypes";
 
 import { messageDefinitionToRos, logLevelToRosout } from "./support";
@@ -70,8 +64,6 @@ export class UlogIterableSource implements IIterableSource {
     const topics: Topic[] = [];
     const topicStats = new Map<string, TopicStats>();
     const datatypes: RosDatatypes = new Map();
-    const messageDefinitionsByTopic: MessageDefinitionsByTopic = {};
-    const parsedMessageDefinitionsByTopic: ParsedMessageDefinitionsByTopic = {};
     const header = this.#ulog.header!;
 
     const dataNames = new Set(Array.from(this.#ulog.subscriptions.values(), (sub) => sub.name));
@@ -104,11 +96,6 @@ export class UlogIterableSource implements IIterableSource {
         ids = new Set();
         this.#idsByTopic.set(name, ids);
         topics.push({ name, schemaName: name });
-        messageDefinitionsByTopic[name] = msgDef.format;
-        const messageDefinition = datatypes.get(msgDef.name);
-        if (messageDefinition) {
-          parsedMessageDefinitionsByTopic[name] = [messageDefinition];
-        }
       }
       ids.add(msgId);
       topicStats.set(name, { numMessages: (topicStats.get(name)?.numMessages ?? 0) + count });

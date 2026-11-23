@@ -12,17 +12,11 @@ import { useTranslation } from "react-i18next";
 
 import { SettingsTreeAction } from "@lichtblick/suite";
 import { DEFAULT_PLOT_PATH } from "@lichtblick/suite-base/panels/Plot/constants";
-import {
-  HandleAction,
-  HandleDeleteSeriesAction,
-  HandleMoveSeriesAction,
-  HandleUpdateAction,
-} from "@lichtblick/suite-base/panels/Plot/types";
+import { HandleUpdateAction } from "@lichtblick/suite-base/panels/Plot/types";
 import { buildSettingsTree } from "@lichtblick/suite-base/panels/Plot/utils/buildSettingsTree";
 import {
   assignDefaultColorsToSeries,
   handleReorderSeriesAction,
-  moveItem,
 } from "@lichtblick/suite-base/panels/utils";
 import { usePanelSettingsTreeUpdate } from "@lichtblick/suite-base/providers/PanelStateContextProvider";
 import { SaveConfig } from "@lichtblick/suite-base/types/panels";
@@ -59,7 +53,7 @@ export function handleUpdateAction({ draft, path, value }: HandleUpdateAction): 
   }
 }
 
-export function handleAddSeriesAction({ draft }: HandleAction): void {
+export function handleAddSeriesAction(draft: PlotConfig): void {
   if (draft.paths.length === 0) {
     draft.paths.push({ ...DEFAULT_PLOT_PATH });
   }
@@ -71,7 +65,7 @@ export function handleAddSeriesAction({ draft }: HandleAction): void {
 }
 
 /** A horizontal line at 0; the value field takes any number */
-export function handleAddReferenceLineAction({ draft }: HandleAction): void {
+export function handleAddReferenceLineAction(draft: PlotConfig): void {
   draft.paths.push({
     ...DEFAULT_PLOT_PATH,
     value: "0",
@@ -79,12 +73,8 @@ export function handleAddReferenceLineAction({ draft }: HandleAction): void {
   });
 }
 
-export function handleDeleteSeriesAction({ draft, index }: HandleDeleteSeriesAction): void {
+export function handleDeleteSeriesAction(draft: PlotConfig, index: number): void {
   draft.paths.splice(index, 1);
-}
-
-export function handleMoveSeriesAction({ draft, index, direction }: HandleMoveSeriesAction): void {
-  moveItem(draft.paths, index, direction === "up" ? index - 1 : index + 1);
 }
 
 export default function usePlotPanelSettings(
@@ -116,31 +106,19 @@ export default function usePlotPanelSettings(
       } else if (payload.id === "add-series") {
         saveConfig(
           produce<PlotConfig>((draft: PlotConfig) => {
-            handleAddSeriesAction({ draft });
+            handleAddSeriesAction(draft);
           }),
         );
       } else if (payload.id === "add-reference-line") {
         saveConfig(
           produce<PlotConfig>((draft: PlotConfig) => {
-            handleAddReferenceLineAction({ draft });
+            handleAddReferenceLineAction(draft);
           }),
         );
       } else if (payload.id === "delete-series") {
         saveConfig(
           produce<PlotConfig>((draft) => {
-            handleDeleteSeriesAction({ draft, index: Number(payload.path[1]) });
-          }),
-        );
-      } else if (payload.id === "move-series-up") {
-        saveConfig(
-          produce<PlotConfig>((draft) => {
-            handleMoveSeriesAction({ draft, index: Number(payload.path[1]), direction: "up" });
-          }),
-        );
-      } else if (payload.id === "move-series-down") {
-        saveConfig(
-          produce<PlotConfig>((draft) => {
-            handleMoveSeriesAction({ draft, index: Number(payload.path[1]), direction: "down" });
+            handleDeleteSeriesAction(draft, Number(payload.path[1]));
           }),
         );
       }

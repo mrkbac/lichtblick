@@ -24,8 +24,8 @@ const DEVIATION_KEYS = [
 
 export class PublishSettings extends SceneExtension {
   public static extensionId = "foxglove.PublishSettings";
-  public constructor(renderer: Renderer, name: string = PublishSettings.extensionId) {
-    super(name, renderer);
+  public constructor(renderer: Renderer) {
+    super(PublishSettings.extensionId, renderer);
 
     renderer.publishClickTool.addEventListener(
       "foxglove.publish-type-change",

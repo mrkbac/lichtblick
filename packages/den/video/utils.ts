@@ -43,14 +43,7 @@ export function findNextStartCodeEnd(data: Uint8Array, start: number): number {
   if (startCodeStart === data.length) {
     return data.length;
   }
-  // 4-byte start code is 0x00000001; otherwise it must be the 3-byte 0x000001.
-  const is4Byte =
-    startCodeStart + 3 < data.length &&
-    data[startCodeStart] === 0 &&
-    data[startCodeStart + 1] === 0 &&
-    data[startCodeStart + 2] === 0 &&
-    data[startCodeStart + 3] === 1;
-  return startCodeStart + (is4Byte ? 4 : 3);
+  return startCodeStart + (annexBBoxSize(data.subarray(startCodeStart)) ?? 3);
 }
 
 /**

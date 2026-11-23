@@ -50,6 +50,8 @@ describe("Chart Value Utilities", () => {
       expect(getChartValue("42")).toBe(42);
       expect(getChartValue("3.14")).toBe(3.14);
       expect(getChartValue("not-a-number")).toBeNaN();
+      expect(getChartValue("")).toBeNaN();
+      expect(getChartValue("  ")).toBeNaN();
     });
 
     it("should return seconds for Time objects, ROS 2 ones too", () => {

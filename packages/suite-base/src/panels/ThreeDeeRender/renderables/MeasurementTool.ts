@@ -216,8 +216,8 @@ export class MeasurementTool extends SceneExtension<Renderable, MeasurementToolE
   #rightDown = new THREE.Vector2(NaN, NaN);
   #labelContainer?: HTMLDivElement;
 
-  public constructor(renderer: Renderer, name: string = MeasurementTool.extensionId) {
-    super(name, renderer);
+  public constructor(renderer: Renderer) {
+    super(MeasurementTool.extensionId, renderer);
     renderer.on("endFrame", this.#updateLabels);
   }
 

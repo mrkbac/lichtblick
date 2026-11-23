@@ -696,7 +696,7 @@ describe("mergeSequentialIterators", () => {
     expect(results[3]!.type).toBe("message-event");
   });
 
-  it("places alert results after timed results due to MAX_SAFE_INTEGER ordering", async () => {
+  it("keeps an alert at the time its iterator reached", async () => {
     const alertResult: IteratorResult<Uint8Array> = {
       type: "alert",
       connectionId: 1,
@@ -718,13 +718,56 @@ describe("mergeSequentialIterators", () => {
       results.push(msg);
     }
 
-    expect(results).toHaveLength(4);
-    // message-events (sec 2, 5) come before the alert (MAX_SAFE_INTEGER time)
-    expect(results[0]!.type).toBe("message-event");
-    expect(results[1]!.type).toBe("message-event");
-    // message-event at sec 15 comes before the alert
-    expect(results[2]!.type).toBe("message-event");
-    // alert is yielded last since it has no time and gets MAX_SAFE_INTEGER
-    expect(results[3]!.type).toBe("alert");
+    // The alert sorts at sec 2 (its iterator's last time), not after every message
+    expect(results.map((r) => r.type)).toEqual([
+      "message-event",
+      "alert",
+      "message-event",
+      "message-event",
+    ]);
+  });
+
+  it("does not open later sources because of an alert", async () => {
+    const alertResult: IteratorResult<Uint8Array> = {
+      type: "alert",
+      connectionId: 1,
+      alert: { severity: "warn", message: "test alert" },
+    };
+    const source1 = makeMockSource({ sec: 0, nsec: 0 }, { sec: 5, nsec: 0 }, [
+      makeMessageEvent("topic", 1),
+      alertResult,
+      makeMessageEvent("topic", 2),
+    ]);
+    const source2 = makeMockSource({ sec: 10, nsec: 0 }, { sec: 20, nsec: 0 }, [
+      makeMessageEvent("topic", 12),
+    ]);
+
+    const source2Iterator = vi.spyOn(source2, "messageIterator");
+    const iterator = mergeSequentialIterators([source1, source2], defaultArgs);
+    await iterator.next(); // sec 1
+    await iterator.next(); // alert
+    await iterator.next(); // sec 2
+    expect(source2Iterator).not.toHaveBeenCalled();
+    await iterator.return?.();
+  });
+
+  it("orders messages within the same millisecond by ns", async () => {
+    const at = (nsec: number): IteratorResult<Uint8Array> => {
+      const result = makeMessageEvent("topic", 1);
+      if (result.type === "message-event") {
+        result.msgEvent.receiveTime = { sec: 1, nsec };
+      }
+      return result;
+    };
+    const source1 = makeMockSource({ sec: 0, nsec: 0 }, { sec: 20, nsec: 0 }, [at(300)]);
+    const source2 = makeMockSource({ sec: 0, nsec: 0 }, { sec: 20, nsec: 0 }, [at(100), at(200)]);
+
+    const results: number[] = [];
+    for await (const msg of mergeSequentialIterators([source1, source2], defaultArgs)) {
+      if (msg.type === "message-event") {
+        results.push(msg.msgEvent.receiveTime.nsec);
+      }
+    }
+    expect(results).toEqual([100, 200, 300]);
   });
 });

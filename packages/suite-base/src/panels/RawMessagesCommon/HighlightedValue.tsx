@@ -14,8 +14,11 @@
 //   found at http://www.apache.org/licenses/LICENSE-2.0
 //   You may not use this file except in compliance with the License.
 
+import { Fragment } from "react";
+
 import MaybeCollapsedValue from "@lichtblick/suite-base/panels/RawMessagesCommon/MaybeCollapsedValue";
 import { diffArrow } from "@lichtblick/suite-base/panels/RawMessagesCommon/constants";
+import { useStylesDiffSpan } from "@lichtblick/suite-base/panels/RawMessagesCommon/index.style";
 import {
   diffLabels,
   PropsHighlightedValue,
@@ -23,21 +26,46 @@ import {
 
 import { DiffSpan } from "./DiffSpan";
 
+/** Splits a number at its decimal point so stacked numbers line up on it; undefined otherwise. */
+function splitAtDecimal(text: string): [string, string] | undefined {
+  if (text === "" || Number.isNaN(Number(text))) {
+    return undefined;
+  }
+  const dot = text.indexOf(".");
+  return dot < 0 ? [text, ""] : [text.slice(0, dot), text.slice(dot)];
+}
+
 export default function HighlightedValue({ itemLabel }: PropsHighlightedValue): React.JSX.Element {
+  const { classes, cx } = useStylesDiffSpan();
   // react-json-tree's valueRenderer only gets called for primitives, so diff before/after values must be at same level by the time it gets to the tree
   const splitItemLabel = itemLabel.length > 0 ? itemLabel.split(diffArrow) : [];
   const itemLabelContainsChange = splitItemLabel.length === 2;
 
   if (itemLabelContainsChange) {
-    const [before, after] = splitItemLabel;
-    const beforeText = before ?? "";
-    const afterText = after ?? "";
+    // Old value above the new one, so they compare digit by digit; numbers line up on the
+    // decimal point, and the column keeps its place while the digits change.
+    const lines = splitItemLabel.map((text) => text.trim());
+    const numbers = lines.map(splitAtDecimal);
+    const aligned = numbers.every((parts) => parts != undefined);
 
     return (
       <DiffSpan style={{ color: diffLabels.CHANGED.color }}>
-        <MaybeCollapsedValue itemLabel={beforeText} />
-        {diffArrow}
-        <MaybeCollapsedValue itemLabel={afterText} />
+        <span className={classes.stacked}>
+          {lines.map((text, index) => {
+            const lineClass = index === 0 ? classes.before : undefined;
+            const parts = numbers[index];
+            return aligned && parts ? (
+              <Fragment key={index}>
+                <span className={cx(classes.integer, lineClass)}>{parts[0]}</span>
+                <span className={lineClass}>{parts[1]}</span>
+              </Fragment>
+            ) : (
+              <span key={index} className={cx(classes.whole, lineClass)}>
+                <MaybeCollapsedValue itemLabel={text} />
+              </span>
+            );
+          })}
+        </span>
       </DiffSpan>
     );
   }

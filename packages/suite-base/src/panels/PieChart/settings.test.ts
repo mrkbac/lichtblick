@@ -1,20 +1,16 @@
-/** @jest-environment jsdom */
-
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
 // SPDX-FileCopyrightText: Copyright (C) 2025 Takayuki Honda <takayuki.honda@tier4.jp>
 // SPDX-License-Identifier: MPL-2.0
 
-import { renderHook } from "@testing-library/react";
-
 import PieChartBuilder from "@lichtblick/suite-base/testing/builders/PieChartBuilder";
 
 import { SUPPORTED_DATA_TYPES } from "./constants";
+import { buildSettingsTree } from "./settings";
 import type { PieChartConfig } from "./types";
-import { useSettingsTree } from "./useSettingsTree";
 
-describe("useSettingsTree", () => {
+describe("buildSettingsTree", () => {
   function setup(
     configOverride: Partial<PieChartConfig> = {},
     legendCount = 3,
@@ -22,21 +18,20 @@ describe("useSettingsTree", () => {
     pathParseError?: string,
   ) {
     const config = PieChartBuilder.pieChartConfig(configOverride);
-    return {
-      props: { config, legendCount, error, pathParseError },
-    };
+    return buildSettingsTree(config, legendCount, pathParseError, error);
   }
 
   it("should return general settings node with legends", () => {
-    const { props } = setup({ path: "/foo", title: "My Pie Chart", legend1: "1", legend2: "2" }, 2);
-    const { result } = renderHook(() => useSettingsTree(props));
-    const { general } = result.current;
+    const { general } = setup(
+      { path: "/foo", title: "My Pie Chart", legend1: "1", legend2: "2" },
+      2,
+    );
 
     expect(general?.fields?.path).toMatchObject({
       label: "Message path",
       input: "messagepath",
       supportsMathModifiers: true,
-      value: props.config.path,
+      value: "/foo",
       error: undefined,
       validTypes: SUPPORTED_DATA_TYPES,
     });
@@ -66,14 +61,12 @@ describe("useSettingsTree", () => {
   });
 
   it("should set pathParseError if provided", () => {
-    const { props } = setup({}, 1, undefined, "invalid path");
-    const { result } = renderHook(() => useSettingsTree(props));
-    expect(result.current.general?.fields!.path!.error).toBe("invalid path");
+    expect(setup({}, 1, undefined, "invalid path").general?.fields!.path!.error).toBe(
+      "invalid path",
+    );
   });
 
   it("should set error if provided", () => {
-    const { props } = setup({}, 1, "config error");
-    const { result } = renderHook(() => useSettingsTree(props));
-    expect(result.current.general?.error).toBe("config error");
+    expect(setup({}, 1, "config error").general?.error).toBe("config error");
   });
 });

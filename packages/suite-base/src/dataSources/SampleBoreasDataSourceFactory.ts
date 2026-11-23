@@ -6,28 +6,23 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { IDataSourceFactory } from "@lichtblick/suite-base/context/PlayerSelectionContext";
-import {
-  SAMPLE_BOREAS_DATA_SOURCE_DISPLAY_NAME,
-  SAMPLE_BOREAS_DATA_SOURCE_ICON_NAME,
-  SAMPLE_BOREAS_DATA_SOURCE_ID,
-  SAMPLE_BOREAS_DATA_SOURCE_NAME,
-  SAMPLE_BOREAS_DATA_SOURCE_READ_AHEAD_DURATION,
-  SAMPLE_BOREAS_DATA_SOURCE_TYPE,
-  SAMPLE_BOREAS_DATA_SOURCE_URL,
-} from "@lichtblick/suite-base/dataSources/constants";
 import { loadIterablePlayer } from "@lichtblick/suite-base/dataSources/playerModules";
 import { createMcapSourceWorker } from "@lichtblick/suite-base/players/IterablePlayer/Mcap/createMcapSourceWorker";
 import { Player } from "@lichtblick/suite-base/players/types";
 
 import SampleBoreasLayout from "./SampleBoreasLayout.json";
 
+// Streamed with HTTP range requests; the host must allow CORS GET/HEAD with a Range header.
+// Rebuild the file with `uv run ci/create-boreas-showcase.py`.
+const SAMPLE_URL = "https://pub-28ff7cafca60457aa0fb10e79c70ff4b.r2.dev/boreas-showcase-v2.mcap";
+
 class SampleBoreasDataSourceFactory implements IDataSourceFactory {
-  public id = SAMPLE_BOREAS_DATA_SOURCE_ID;
+  public id = "sample-boreas";
   // Links and recents saved for the nuScenes sample this replaced open this one.
   public legacyIds = ["sample-nuscenes"];
-  public type: IDataSourceFactory["type"] = SAMPLE_BOREAS_DATA_SOURCE_TYPE;
-  public displayName = SAMPLE_BOREAS_DATA_SOURCE_DISPLAY_NAME;
-  public iconName: IDataSourceFactory["iconName"] = SAMPLE_BOREAS_DATA_SOURCE_ICON_NAME;
+  public type: IDataSourceFactory["type"] = "sample";
+  public displayName = "Sample: Boreas";
+  public iconName: IDataSourceFactory["iconName"] = "FileASPX";
   public hidden = true;
   public sampleLayout = SampleBoreasLayout as IDataSourceFactory["sampleLayout"];
   // Bump when SampleBoreasLayout.json changes so saved copies are replaced. 2: acceleration slider.
@@ -38,20 +33,18 @@ class SampleBoreasDataSourceFactory implements IDataSourceFactory {
   public async initialize(): Promise<Player | undefined> {
     const { IterablePlayer, WorkerSerializedIterableSource, expandVideoSeekBackfill } =
       await loadIterablePlayer();
-    const bagUrl = SAMPLE_BOREAS_DATA_SOURCE_URL;
-
     const source = new WorkerSerializedIterableSource({
       initWorker: createMcapSourceWorker,
-      initArgs: { url: bagUrl },
+      initArgs: { url: SAMPLE_URL },
     });
 
     return new IterablePlayer({
       source,
-      name: SAMPLE_BOREAS_DATA_SOURCE_NAME,
+      name: "Adapted from the Boreas dataset, Keenan Burnett et al., University of Toronto. CC BY 4.0 https://creativecommons.org/licenses/by/4.0/ · https://www.boreas.utias.utoronto.ca/",
       // Use blank url params so the data source is set in the url
       urlParams: {},
       sourceId: this.id,
-      readAheadDuration: SAMPLE_BOREAS_DATA_SOURCE_READ_AHEAD_DURATION,
+      readAheadDuration: { sec: 10, nsec: 0 },
       // The sample's camera is H.265 foxglove.CompressedVideo, which
       // cannot decode a P/B-frame in isolation, so on a backward seek the backfill is expanded to
       // include the preceding GOP.

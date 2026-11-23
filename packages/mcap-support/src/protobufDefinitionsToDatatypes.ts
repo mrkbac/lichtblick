@@ -56,7 +56,7 @@ export function protobufDefinitionsToDatatypes(
         // https://github.com/foxglove/studio/issues/2214
         definitions.push({ name, type: "int32", isConstant: true, value });
       }
-      definitions.push({ type: "int32", name: field.name });
+      definitions.push({ type: "int32", name: field.name, isArray: field.repeated });
     } else if (field.resolvedType) {
       const fullName = stripLeadingDot(field.resolvedType.fullName);
       definitions.push({

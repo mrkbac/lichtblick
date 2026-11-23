@@ -420,7 +420,10 @@ for (const colorScheme of ["light", "dark"] as const) {
       await page.getByTestId("left-sidebar-button").evaluate(headerStyle),
     );
     // Then the panel's settings stay in its own left sidebar and leave the main settings alone.
-    await monitor.getByRole("button", { name: "Settings", exact: true }).click();
+    await monitor
+      .getByTestId(/^panel-mouseenter-container 3D!/)
+      .getByRole("button", { name: "Panel settings" })
+      .click();
     await expect(monitor.getByTestId("sidebar-left")).toBeVisible();
     await expect(monitor.getByTestId("sidebar-left").getByRole("heading")).toContainText("3D");
     expect(await page.getByTestId("sidebar-left").innerText()).toBe(mainSettings);

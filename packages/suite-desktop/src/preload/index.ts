@@ -86,9 +86,6 @@ export function main(): void {
       }
       return output;
     },
-    getAppVersion: (): string => {
-      return LICHTBLICK_PRODUCT_VERSION;
-    },
   };
 
   let extensionHandler: ExtensionsHandler | undefined;

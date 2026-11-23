@@ -19,7 +19,9 @@ vi.mock("./index.style", () => ({
   useStylesDiffSpan: () => ({
     classes: {
       root: "mock-root-class",
+      integer: "mock-integer",
     },
+    cx: (...names: unknown[]) => names.filter(Boolean).join(" "),
   }),
 }));
 
@@ -87,7 +89,18 @@ describe("HighlightedValue", () => {
       expect(maybeCollapsedElements).toHaveLength(2);
       expect(maybeCollapsedElements[0]).toHaveTextContent(oldValue);
       expect(maybeCollapsedElements[1]).toHaveTextContent(newValue);
-      expect(container.textContent).toContain(diffArrow);
+      // Stacked, so no arrow between them
+      expect(container.textContent).not.toContain(diffArrow);
+    });
+
+    it("stacks numbers split at the decimal point so they line up", () => {
+      // WHEN
+      const { container } = render(<HighlightedValue itemLabel={`-1.25 ${diffArrow} 10.5`} />);
+
+      // THEN
+      const integers = [...container.querySelectorAll(".mock-integer")].map((el) => el.textContent);
+      expect(integers).toEqual(["-1", "10"]);
+      expect(container.textContent).toBe("-1.2510.5");
     });
 
     it("applies change color style to DiffSpan", () => {

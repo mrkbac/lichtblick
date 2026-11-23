@@ -233,7 +233,3 @@ export class InstancedLineMaterial extends LineBasicNodeMaterial {
     this.positionNode = instanceMatrix.mul(vec4(positionLocal, 1)).xyz;
   }
 }
-
-export type AddMessageEventOptions = {
-  inBatch: boolean;
-};

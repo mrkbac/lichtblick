@@ -228,6 +228,26 @@ describe("FoxgloveGrid", () => {
     expect(renderable.userData.texture.image.width).toBe(9000);
   });
 
+  it("reads a missing rgba field as zero, not with the previous grid's reader", () => {
+    const rgbaGrid = (fields: string[], cells: number[][]): Grid => {
+      const stride = fields.length;
+      return {
+        ...makeGrid([]),
+        column_count: cells.length,
+        row_stride: cells.length * stride,
+        cell_stride: stride,
+        fields: fields.map((name, offset) => ({ name, offset, type: NumericType.UINT8 })),
+        data: new Uint8Array(cells.flat()),
+      };
+    };
+    update("colorMode", "rgba-fields");
+    receive(rgbaGrid(["red", "green", "blue", "alpha"], [[10, 20, 30, 40]]));
+    // No alpha field and a 1-byte stride: the previous alpha reader (offset 3) would overrun
+    receive(rgbaGrid(["red"], [[255], [255]]));
+    const rgba = extension.renderables.get(TOPIC)!.userData.texture.image.data!;
+    expect(Array.from(rgba.slice(0, 8))).toEqual([255, 0, 0, 0, 255, 0, 0, 0]);
+  });
+
   it("picks the shader's color source from the color mode and map", () => {
     receive(makeGrid([0, 1, 2, 3, 4, 5]));
     const { uniforms } = extension.renderables.get(TOPIC)!.userData;

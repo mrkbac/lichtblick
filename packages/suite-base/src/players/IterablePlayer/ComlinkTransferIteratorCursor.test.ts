@@ -20,47 +20,11 @@ describe("ComlinkTransferIteratorCursor", () => {
 
   beforeEach(() => {
     mockCursor = {
-      next: vi.fn(),
       nextBatch: vi.fn(),
       readUntil: vi.fn(),
       end: vi.fn(),
     };
     (Comlink.transfer as Mock).mockClear();
-  });
-
-  it("transfers buffer in next() if type is 'message-event' and message is Uint8Array", async () => {
-    const buffer = new Uint8Array([1, 2, 3]).buffer;
-    const input: IteratorResult<Uint8Array> = {
-      type: "message-event",
-      msgEvent: { message: new Uint8Array(buffer) } as MessageEvent<Uint8Array>,
-    };
-
-    mockCursor.next.mockResolvedValueOnce(input);
-
-    const cursor = new ComlinkTransferIteratorCursor(mockCursor);
-    const result = await cursor.next();
-
-    expect(Comlink.transfer).toHaveBeenCalledWith(input, [buffer]);
-    expect(result).toEqual({
-      value: input,
-      transferables: [buffer],
-    });
-  });
-
-  it("does not transfer if next() is 'alert'", async () => {
-    const input: IteratorResult<Uint8Array> = {
-      type: "alert",
-      connectionId: 1,
-      alert: { message: "Warning", severity: "warn" },
-    };
-
-    mockCursor.next.mockResolvedValueOnce(input);
-
-    const cursor = new ComlinkTransferIteratorCursor(mockCursor);
-    const result = await cursor.next();
-
-    expect(Comlink.transfer).not.toHaveBeenCalled();
-    expect(result).toBe(input);
   });
 
   it("packs nextBatch() and transfers the message buffers", async () => {

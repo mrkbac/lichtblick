@@ -362,8 +362,6 @@ export type JointState = {
   effort: number[];
 };
 
-export const TIME_ZERO = { sec: 0, nsec: 0 };
-
 export const TRANSFORM_STAMPED_DATATYPES = rosDataTypes("geometry_msgs/TransformStamped");
 export const TF_DATATYPES = rosDataTypes("tf/tfMessage", "tf2_msgs/TFMessage");
 

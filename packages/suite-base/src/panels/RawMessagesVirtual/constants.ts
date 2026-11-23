@@ -20,3 +20,6 @@ export const COLLAPSED_ICON = "▼";
 export const TREE_NODE_INDENTATION = 16;
 export const SCROLLL_OVERSCAN = 5;
 export const DEFAULT_FONT_SIZE = 12;
+
+/** Longest key, in characters, that widens the aligned value column; longer keys push their value. */
+export const MAX_KEY_COLUMN_CH = 32;

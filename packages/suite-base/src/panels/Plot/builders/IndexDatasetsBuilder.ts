@@ -49,6 +49,8 @@ export class IndexDatasetsBuilder implements IDatasetsBuilder {
     for (const series of this.#seriesByKey.values()) {
       const msgEvent = lastMatchingTopic(msgEvents, series.parsed.topicName);
       if (!msgEvent) {
+        // No new message: the series keeps its data, so it still counts toward the range
+        range.max = Math.max(range.max, series.dataset.data.length - 1);
         continue;
       }
 

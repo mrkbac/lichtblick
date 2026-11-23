@@ -46,6 +46,10 @@ describe("normalizeAnnotations", () => {
       "foxglove_msgs/msg/ImageAnnotations",
     );
     expect(fromFoxglove[0]?.stamp).toEqual({ sec: 2, nsec: 5 });
+
+    const fromWebviz = normalizeAnnotations({ markers: [marker] }, "webviz_msgs/ImageMarkerArray");
+    expect(fromWebviz).toHaveLength(1);
+    expect(fromWebviz[0]?.stamp).toEqual({ sec: 2, nsec: 5 });
   });
 
   it("handles circle", () => {

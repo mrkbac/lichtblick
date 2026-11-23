@@ -4,8 +4,6 @@
 import {
   InitMetadata,
   InitTopicStatsMap,
-} from "@lichtblick/suite-base/players/IterablePlayer/shared/types";
-import {
   accumulateMap,
   mergeMetadata,
   mergeTopicStats,

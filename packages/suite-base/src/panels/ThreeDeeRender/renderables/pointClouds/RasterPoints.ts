@@ -192,15 +192,6 @@ export class RasterPoints extends THREE.Object3D {
     markWhole(this.#colors);
   }
 
-  /** Queues an upload of all points */
-  public markAll(): void {
-    for (const attribute of [this.#positions, this.#colors, this.#slots]) {
-      if (attribute) {
-        markWhole(attribute);
-      }
-    }
-  }
-
   /** Queues an upload of the scan slots of points [start, start + count) */
   public markSlots(start: number, count: number): void {
     if (this.#slots) {

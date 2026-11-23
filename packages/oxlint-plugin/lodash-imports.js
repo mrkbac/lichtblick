@@ -18,13 +18,9 @@ function getImportedName(variable) {
   return variable.name;
 }
 
-const configs = [
-  {
-    convertFrom: "lodash",
-    package: "lodash-es",
-    preferNamespaceImport: "_",
-  },
-];
+const FROM = "lodash";
+const PACKAGE = "lodash-es";
+const NAMESPACE = "_";
 
 /**
  * Replace `import { x } from "lodash";` with `import * as _ from "lodash-es";` and usage sites with `_.x`.
@@ -42,56 +38,49 @@ module.exports = {
   create: (context) => {
     return {
       ImportDeclaration: (/** @type {import("estree").ImportDeclaration} */ node) => {
-        for (const config of configs) {
-          if (config.convertFrom == undefined || node.source.value !== config.convertFrom) {
-            continue;
-          }
-          context.report({
-            node,
-            messageId: "useDifferentPackage",
-            data: { package: config.package, convertFrom: config.convertFrom },
-            fix(fixer) {
-              return fixer.replaceText(node.source, `"${config.package}"`);
-            },
-          });
+        if (node.source.value !== FROM) {
+          return;
         }
+        context.report({
+          node,
+          messageId: "useDifferentPackage",
+          data: { package: PACKAGE, convertFrom: FROM },
+          fix(fixer) {
+            return fixer.replaceText(node.source, `"${PACKAGE}"`);
+          },
+        });
       },
 
       [`ImportDeclaration:has(ImportSpecifier, ImportDefaultSpecifier)`]: (
         /** @type {import("estree").ImportDeclaration} */ node,
       ) => {
-        for (const config of configs) {
-          if (node.source.value !== config.package) {
-            continue;
-          }
-          context.report({
-            node,
-            messageId: "useNamespaceImport",
-            data: { package: config.package, name: config.preferNamespaceImport },
-            *fix(fixer) {
-              const variables = context.sourceCode.getDeclaredVariables(node);
-              const defaultImportName = node.specifiers.find(
-                (specifier) => specifier.type === "ImportDefaultSpecifier",
-              )?.local.name;
-              for (const variable of variables) {
-                for (const reference of variable.references) {
-                  if (variable.name === defaultImportName) {
-                    yield fixer.replaceText(reference.identifier, config.preferNamespaceImport);
-                  } else {
-                    yield fixer.replaceText(
-                      reference.identifier,
-                      `${config.preferNamespaceImport}.${getImportedName(variable)}`,
-                    );
-                  }
+        if (node.source.value !== PACKAGE) {
+          return;
+        }
+        context.report({
+          node,
+          messageId: "useNamespaceImport",
+          data: { package: PACKAGE, name: NAMESPACE },
+          *fix(fixer) {
+            const variables = context.sourceCode.getDeclaredVariables(node);
+            const defaultImportName = node.specifiers.find(
+              (specifier) => specifier.type === "ImportDefaultSpecifier",
+            )?.local.name;
+            for (const variable of variables) {
+              for (const reference of variable.references) {
+                if (variable.name === defaultImportName) {
+                  yield fixer.replaceText(reference.identifier, NAMESPACE);
+                } else {
+                  yield fixer.replaceText(
+                    reference.identifier,
+                    `${NAMESPACE}.${getImportedName(variable)}`,
+                  );
                 }
               }
-              yield fixer.replaceText(
-                node,
-                `import * as ${config.preferNamespaceImport} from "${config.package}";`,
-              );
-            },
-          });
-        }
+            }
+            yield fixer.replaceText(node, `import * as ${NAMESPACE} from "${PACKAGE}";`);
+          },
+        });
       },
     };
   },

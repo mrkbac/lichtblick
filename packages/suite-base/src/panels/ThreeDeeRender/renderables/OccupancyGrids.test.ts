@@ -37,13 +37,13 @@ function makeConfig(settings: Record<string, unknown>): RendererConfig {
   };
 }
 
-function grid(values: number[]): OccupancyGrid {
+function grid(values: number[], width = values.length): OccupancyGrid {
   return {
     header: { frame_id: "map", stamp: { sec: 0, nsec: 0 } },
     info: {
       map_load_time: { sec: 0, nsec: 0 },
       resolution: 1,
-      width: values.length,
+      width,
       height: 1,
       origin: { position: { x: 0, y: 0, z: 0 }, orientation: { x: 0, y: 0, z: 0, w: 1 } },
     },
@@ -55,7 +55,7 @@ describe("OccupancyGrids texture", () => {
   let renderer: Renderer;
 
   function setup(settings: Record<string, unknown>): {
-    send: (values: number[]) => void;
+    send: (values: number[], width?: number) => void;
     renderable: () => OccupancyGridRenderable;
   } {
     const parent = document.createElement("div");
@@ -74,12 +74,12 @@ describe("OccupancyGrids texture", () => {
     const extension = renderer.sceneExtensions.get(OccupancyGrids.extensionId) as OccupancyGrids;
     const subscription = extension.getSubscriptions()[0]!.subscription;
     return {
-      send: (values) => {
+      send: (values, width) => {
         subscription.handler({
           topic: TOPIC,
           schemaName: "nav_msgs/OccupancyGrid",
           receiveTime: { sec: 0, nsec: 0 },
-          message: grid(values),
+          message: grid(values, width),
           sizeInBytes: 0,
         } as never);
       },
@@ -155,5 +155,14 @@ describe("OccupancyGrids texture", () => {
     send([0, 99, -1]);
     expect(texture.version).toBeGreaterThan(version);
     expect(texels(renderable())[1]).toEqual([2, 2, 2, 255]);
+  });
+
+  it("clears the invalid-grid error once a valid grid arrives", () => {
+    const { send } = setup({ colorMode: "map" });
+    const errorAt = () => renderer.settings.errors.errors.errorAtPath(["topics", TOPIC]);
+    send([0, 100], 3);
+    expect(errorAt()).toMatch(/data length/);
+    send([0, 100]);
+    expect(errorAt()).toBeUndefined();
   });
 });

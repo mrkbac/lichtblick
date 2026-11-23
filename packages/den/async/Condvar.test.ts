@@ -23,23 +23,4 @@ describe("Condvar", () => {
     await wait2;
     expect(Date.now() - start).toBeGreaterThan(480);
   });
-
-  it("should notifyOne waiting", async () => {
-    const condvar = new Condvar();
-
-    const wait1 = condvar.wait();
-    const wait2 = condvar.wait();
-
-    condvar.notifyOne();
-    await wait1;
-
-    // Notify another after 500 milliseconds and verify 500 milliseconds time passed
-    const start = Date.now();
-    setTimeout(() => {
-      condvar.notifyOne();
-    }, 500);
-
-    await wait2;
-    expect(Date.now() - start).toBeGreaterThan(480);
-  });
 });

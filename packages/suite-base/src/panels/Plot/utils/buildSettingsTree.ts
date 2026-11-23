@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import { TFunction } from "i18next";
-import memoizeWeak from "memoize-weak";
 
 import { parseMessagePath } from "@lichtblick/message-path";
 import { builtinMessagePathField } from "@lichtblick/suite-base/components/SettingsTreeEditor/types";
@@ -31,74 +30,72 @@ import type {
 } from "@lichtblick/suite-base/panels/shared/documentedSettings";
 import { lineColors } from "@lichtblick/suite-base/util/plotColors";
 
-const makeSeriesNode = memoizeWeak(
-  ({
-    canDelete,
-    canReorder,
-    index,
-    path,
-    supportsStreamModifiers,
-    t,
-    xAxisVal,
-    shadeSeriesOptions,
-  }: MakeSeriesNode): DocumentedNode => {
-    const actions = [];
-    const isReferenceLine = isReferenceLinePlotPathType(path);
+const makeSeriesNode = ({
+  canDelete,
+  canReorder,
+  index,
+  path,
+  supportsStreamModifiers,
+  t,
+  xAxisVal,
+  shadeSeriesOptions,
+}: MakeSeriesNode): DocumentedNode => {
+  const actions = [];
+  const isReferenceLine = isReferenceLinePlotPathType(path);
 
-    if (canDelete) {
-      actions.push({
-        type: "action" as const,
-        id: "delete-series",
-        label: t("deleteSeries"),
-        display: "inline" as const,
-        icon: "Clear" as const,
-      });
-    }
+  if (canDelete) {
+    actions.push({
+      type: "action" as const,
+      id: "delete-series",
+      label: t("deleteSeries"),
+      display: "inline" as const,
+      icon: "Clear" as const,
+    });
+  }
 
-    return {
-      actions,
-      label: plotPathDisplayName(path, index),
-      visible: path.enabled,
-      reorderable: canReorder,
-      icon: canReorder ? ("DragHandle" as const) : undefined,
-      fields: {
-        value: builtinMessagePathField({
-          input: "messagepath",
-          label: isReferenceLine ? t("value") : t("messagePath"),
-          help: isReferenceLine ? t("referenceValueHelp") : t("seriesPathHelp"),
-          supportsMathModifiers: true,
-          supportsTimeSeriesMessagePathFunctions: supportsStreamModifiers,
-          validTypes: PLOTABLE_ROS_TYPES,
-          value: path.value,
-        }),
-        label: {
-          input: "string",
-          label: t("label"),
-          help: t("seriesLabelHelp"),
-          value: path.label,
-        },
-        color: {
-          input: "rgb",
-          label: t("color"),
-          help: t("colorHelp"),
-          value: path.color ?? lineColors[index % lineColors.length],
-        },
-        lineSize: {
-          input: "number",
-          label: t("lineSize"),
-          help: t("lineSizeHelp"),
-          value: path.lineSize,
-          step: 0.2,
-          min: 0,
-          placeholder: "auto",
-        },
-        ...(isReferenceLine
-          ? referenceLineFields(path, t, shadeSeriesOptions)
-          : seriesFields(path, t, xAxisVal)),
+  return {
+    actions,
+    label: plotPathDisplayName(path, index),
+    visible: path.enabled,
+    reorderable: canReorder,
+    icon: canReorder ? ("DragHandle" as const) : undefined,
+    fields: {
+      value: builtinMessagePathField({
+        input: "messagepath",
+        label: isReferenceLine ? t("value") : t("messagePath"),
+        help: isReferenceLine ? t("referenceValueHelp") : t("seriesPathHelp"),
+        supportsMathModifiers: true,
+        supportsTimeSeriesMessagePathFunctions: supportsStreamModifiers,
+        validTypes: PLOTABLE_ROS_TYPES,
+        value: path.value,
+      }),
+      label: {
+        input: "string",
+        label: t("label"),
+        help: t("seriesLabelHelp"),
+        value: path.label,
       },
-    };
-  },
-);
+      color: {
+        input: "rgb",
+        label: t("color"),
+        help: t("colorHelp"),
+        value: path.color ?? lineColors[index % lineColors.length],
+      },
+      lineSize: {
+        input: "number",
+        label: t("lineSize"),
+        help: t("lineSizeHelp"),
+        value: path.lineSize,
+        step: 0.2,
+        min: 0,
+        placeholder: "auto",
+      },
+      ...(isReferenceLine
+        ? referenceLineFields(path, t, shadeSeriesOptions)
+        : seriesFields(path, t, xAxisVal)),
+    },
+  };
+};
 
 /** Settings of a series that are not shared with reference lines */
 function seriesFields(
@@ -297,68 +294,66 @@ function xValueError(path: PlotPath, t: MakeSeriesNode["t"]): string | undefined
     : undefined;
 }
 
-const makeRootSeriesNode = memoizeWeak(
-  ({
-    paths,
-    supportsStreamModifiers,
-    t,
-    xAxisVal,
-    canShade,
-  }: MakeRootSeriesNode): DocumentedNode => {
-    const shadeSeriesOptions = canShade === true ? makeShadeSeriesOptions(paths) : undefined;
-    const children = Object.fromEntries(
-      paths.length === 0
-        ? [
-            [
-              "0",
-              makeSeriesNode({
-                canDelete: false,
-                canReorder: false,
-                path: DEFAULT_PLOT_PATH,
-                index: 0,
-                supportsStreamModifiers,
-                t,
-                xAxisVal,
-                shadeSeriesOptions,
-              }),
-            ],
-          ]
-        : paths.map((path, index) => [
-            `${index}`,
+const makeRootSeriesNode = ({
+  paths,
+  supportsStreamModifiers,
+  t,
+  xAxisVal,
+  canShade,
+}: MakeRootSeriesNode): DocumentedNode => {
+  const shadeSeriesOptions = canShade === true ? makeShadeSeriesOptions(paths) : undefined;
+  const children = Object.fromEntries(
+    paths.length === 0
+      ? [
+          [
+            "0",
             makeSeriesNode({
-              canDelete: true,
-              canReorder: true,
-              index,
-              path,
+              canDelete: false,
+              canReorder: false,
+              path: DEFAULT_PLOT_PATH,
+              index: 0,
               supportsStreamModifiers,
               t,
               xAxisVal,
               shadeSeriesOptions,
             }),
-          ]),
-    );
-    return {
-      label: t("series"),
-      help: t("seriesHelp"),
-      children,
-      actions: [
-        {
-          type: "action",
-          id: "add-series",
-          display: "inline",
-          icon: "Addchart",
-          label: t("addSeries"),
-        },
-        {
-          type: "action",
-          id: "add-reference-line",
-          display: "menu",
-          label: t("addReferenceLine"),
-        },
-      ],
-    };
-  },
-);
+          ],
+        ]
+      : paths.map((path, index) => [
+          `${index}`,
+          makeSeriesNode({
+            canDelete: true,
+            canReorder: true,
+            index,
+            path,
+            supportsStreamModifiers,
+            t,
+            xAxisVal,
+            shadeSeriesOptions,
+          }),
+        ]),
+  );
+  return {
+    label: t("series"),
+    help: t("seriesHelp"),
+    children,
+    actions: [
+      {
+        type: "action",
+        id: "add-series",
+        display: "inline",
+        icon: "Addchart",
+        label: t("addSeries"),
+      },
+      {
+        type: "action",
+        id: "add-reference-line",
+        display: "menu",
+        label: t("addReferenceLine"),
+      },
+    ],
+  };
+};
 
 /** Series a threshold can shade, by message path (stable when series are reordered or removed) */
 function makeShadeSeriesOptions(paths: PlotPath[]): { label: string; value: string }[] {

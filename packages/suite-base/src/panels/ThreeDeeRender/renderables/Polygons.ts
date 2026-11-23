@@ -22,19 +22,12 @@ import {
 import { SettingsTreeEntry } from "../SettingsManager";
 import { makeRgba, stringToRgba } from "../color";
 import { normalizeHeader, normalizeVector3s } from "../normalizeMessages";
-import {
-  Marker,
-  MarkerAction,
-  MarkerType,
-  Polygon,
-  PolygonStamped,
-  POLYGON_STAMPED_DATATYPES,
-  TIME_ZERO,
-} from "../ros";
+import { Marker, MarkerType, Polygon, PolygonStamped, POLYGON_STAMPED_DATATYPES } from "../ros";
 import { BaseSettings } from "../settings";
 import { POLYGON_DEFAULTS, polygonSettingsNode } from "../settingsNodes/topics";
 import { topicIsConvertibleToSchema } from "../topicIsConvertibleToSchema";
 import { makePose } from "../transforms";
+import { normalizeMarker } from "./Markers";
 import { RenderableLineStrip } from "./markers/RenderableLineStrip";
 
 export type LayerSettingsPolygon = BaseSettings & {
@@ -64,8 +57,8 @@ export class PolygonRenderable extends Renderable<PolygonUserData> {
 
 export class Polygons extends SceneExtension<PolygonRenderable> {
   public static extensionId = "foxglove.Polygons";
-  public constructor(renderer: Renderer, name: string = Polygons.extensionId) {
-    super(name, renderer);
+  public constructor(renderer: Renderer) {
+    super(Polygons.extensionId, renderer);
   }
 
   public override getSubscriptions(): readonly AnyRendererSubscription[] {
@@ -187,24 +180,14 @@ function createLineStripMarker(
     points.push(first);
   }
 
-  const linesMarker: Marker = {
+  return normalizeMarker({
     header: polygonStamped.header,
-    ns: "",
-    id: 0,
     type: MarkerType.LINE_STRIP,
-    action: MarkerAction.ADD,
-    pose: makePose(),
     scale: { x: settings.lineWidth, y: 1, z: 1 },
     color: stringToRgba(makeRgba(), settings.color),
-    lifetime: TIME_ZERO,
     frame_locked: true,
     points,
-    colors: [],
-    text: "",
-    mesh_resource: "",
-    mesh_use_embedded_materials: false,
-  };
-  return linesMarker;
+  });
 }
 
 function normalizePolygon(polygon: PartialMessage<Polygon> | undefined): Polygon {

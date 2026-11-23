@@ -22,23 +22,17 @@ import { MessagePath, MessagePathModifier, MessagePathPart } from "./types";
 
 const grammarObj = Grammar.fromCompiled(grammar);
 
-/** Wrap topic name in double quotes if it contains special characters */
-export function quoteTopicNameIfNeeded(name: string): string {
-  // Pattern should match `slashID` in grammar.ne
-  if (name.match(/^[a-zA-Z0-9_/-]+$/)) {
-    return name;
-  }
-  return `"${name.replace(/[\\"]/g, (char) => `\\${char}`)}"`;
+function quoteIfNeeded(name: string, pattern: RegExp): string {
+  return pattern.test(name) ? name : `"${name.replace(/[\\"]/g, (char) => `\\${char}`)}"`;
 }
 
-/** Wrap field name in double quotes if it contains special characters */
-export function quoteFieldNameIfNeeded(name: string): string {
-  // Pattern should match `id` in grammar.ne
-  if (name.match(/^[a-zA-Z0-9_-]+$/)) {
-    return name;
-  }
-  return `"${name.replace(/[\\"]/g, (char) => `\\${char}`)}"`;
-}
+/** Wrap topic name in double quotes if it contains special characters. Pattern matches `slashID` in grammar.ne */
+export const quoteTopicNameIfNeeded = (name: string): string =>
+  quoteIfNeeded(name, /^[a-zA-Z0-9_/-]+$/);
+
+/** Wrap field name in double quotes if it contains special characters. Pattern matches `id` in grammar.ne */
+export const quoteFieldNameIfNeeded = (name: string): string =>
+  quoteIfNeeded(name, /^[a-zA-Z0-9_-]+$/);
 
 function isStreamModifier(part: MessagePathPart): boolean {
   return part.type === "modifier" && part.args.length === 0 && STREAM_MODIFIERS.includes(part.name);

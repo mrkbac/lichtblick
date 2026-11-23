@@ -55,7 +55,8 @@ export function getChartValue(value: unknown): number | undefined {
       return time ? toSec(time) : undefined;
     }
     case "string":
-      return +value;
+      // `+""` is 0; a blank string has no value, so it plots as a gap
+      return value.trim() === "" ? Number.NaN : +value;
     default:
       return undefined;
   }

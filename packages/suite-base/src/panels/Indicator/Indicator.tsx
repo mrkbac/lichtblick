@@ -7,19 +7,9 @@
 
 import VolumeOffIcon from "@mui/icons-material/VolumeOff";
 import { Typography } from "@mui/material";
-import {
-  memo,
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useReducer,
-  useRef,
-  useState,
-} from "react";
+import { memo, useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 
-import { parseMessagePath } from "@lichtblick/message-path";
-import { SettingsTreeAction } from "@lichtblick/suite";
+import { Immutable, RenderState, SettingsTreeAction } from "@lichtblick/suite";
 import { PanelIconButton } from "@lichtblick/suite-base/components/PanelButton";
 import Stack from "@lichtblick/suite-base/components/Stack";
 import { GlobalVariables } from "@lichtblick/suite-base/hooks/useGlobalVariables";
@@ -28,9 +18,12 @@ import {
   DEFAULT_CONFIG,
   DEFAULT_FALLBACK_COLOR,
 } from "@lichtblick/suite-base/panels/Indicator/constants";
-import { stateReducer } from "@lichtblick/suite-base/panels/shared/gaugeAndIndicatorStateReducer";
+import {
+  initialState,
+  stateReducer,
+} from "@lichtblick/suite-base/panels/shared/gaugeAndIndicatorStateReducer";
 import { useReplacePathDrop } from "@lichtblick/suite-base/panels/shared/pathDrop";
-import { GaugeAndIndicatorState } from "@lichtblick/suite-base/panels/shared/types";
+import { usePathPanel } from "@lichtblick/suite-base/panels/shared/usePathPanel";
 import ThemeProvider from "@lichtblick/suite-base/theme/ThemeProvider";
 import { randomUUID } from "@lichtblick/suite-base/util/randomUUID";
 
@@ -50,12 +43,6 @@ import { buildSettingsTree, settingsActionReducer } from "./settings";
 import { IndicatorAlertSound, IndicatorConfig, IndicatorProps, RawValueIndicator } from "./types";
 
 export function Indicator({ context }: IndicatorProps): React.JSX.Element {
-  // panel extensions must notify when they've completed rendering
-  // onRender will setRenderDone to a done callback which we can invoke after we've rendered
-  const [renderDone, setRenderDone] = useState<() => void>(() => () => {});
-  // Follow the app's light/dark theme.
-  const [colorScheme, setColorScheme] = useState<"dark" | "light">("dark");
-
   const [config, setConfig] = useState(() => ({
     ...DEFAULT_CONFIG,
     ...(context.initialState as Partial<IndicatorConfig>),
@@ -64,67 +51,28 @@ export function Indicator({ context }: IndicatorProps): React.JSX.Element {
   const { style, rules, fallbackColor, fallbackLabel, alertsMuted = false } = config;
   const [seekCount, setSeekCount] = useState(0);
 
-  const [state, dispatch] = useReducer(
-    stateReducer,
-    config,
-    ({ path: statePath }): GaugeAndIndicatorState => ({
-      globalVariables: undefined,
-      error: undefined,
-      latestMatchingQueriedData: undefined,
-      latestMessage: undefined,
-      parsedPath: parseMessagePath(statePath),
-      path: statePath,
-      pathParseError: undefined,
-    }),
-  );
+  const [state, dispatch] = useReducer(stateReducer, config, initialState);
 
   const { error, latestMatchingQueriedData, parsedPath, pathParseError } = state;
-
-  useLayoutEffect(() => {
-    dispatch({ type: "path", path: config.path });
-  }, [config.path]);
-
-  useEffect(() => {
-    context.saveState(config);
-    context.setDefaultPanelTitle(config.path === "" ? undefined : config.path);
-  }, [config, context]);
 
   // Drop a field from the topic list to show it
   useReplacePathDrop(context, setConfig);
 
+  // Global variables can fill in the path; seeks reset the alert baseline
+  const onRender = useCallback((renderState: Immutable<RenderState>) => {
+    if (renderState.variables) {
+      dispatch({
+        type: "updateGlobalVariables",
+        globalVariables: Object.fromEntries(renderState.variables) as GlobalVariables,
+      });
+    }
+    if (renderState.didSeek === true) {
+      setSeekCount((count) => count + 1);
+    }
+  }, []);
   useEffect(() => {
-    context.onRender = (renderState, done) => {
-      setRenderDone(() => done);
-
-      if (renderState.variables) {
-        dispatch({
-          type: "updateGlobalVariables",
-          globalVariables: Object.fromEntries(renderState.variables) as GlobalVariables,
-        });
-      }
-
-      if (renderState.didSeek === true) {
-        dispatch({ type: "seek" });
-        setSeekCount((count) => count + 1);
-      }
-
-      if (renderState.currentFrame) {
-        dispatch({ type: "frame", messages: renderState.currentFrame });
-      }
-
-      if (renderState.colorScheme) {
-        setColorScheme(renderState.colorScheme);
-      }
-    };
-    context.watch("currentFrame");
-    context.watch("didSeek");
     context.watch("variables");
-    context.watch("colorScheme");
-
-    return () => {
-      context.onRender = undefined;
-    };
-  }, [context, dispatch]);
+  }, [context]);
 
   // unique across tabs so panels in different tabs don't replace each other's notifications
   const [notificationTag] = useState(randomUUID);
@@ -193,26 +141,15 @@ export function Indicator({ context }: IndicatorProps): React.JSX.Element {
     () => buildSettingsTree(config, pathParseError, error?.message, notificationPermission),
     [config, pathParseError, error?.message, notificationPermission],
   );
-  useEffect(() => {
-    context.updatePanelSettingsEditor({
-      actionHandler: settingsActionHandler,
-      nodes: settingsTree,
-    });
-  }, [context, settingsActionHandler, settingsTree]);
-
-  useEffect(() => {
-    if (parsedPath?.topicName != undefined) {
-      context.subscribe([{ topic: parsedPath.topicName, preload: false }]);
-    }
-    return () => {
-      context.unsubscribeAll();
-    };
-  }, [context, parsedPath?.topicName]);
-
-  // Indicate render is complete - the effect runs after the dom is updated
-  useEffect(() => {
-    renderDone();
-  }, [renderDone]);
+  const colorScheme = usePathPanel({
+    context,
+    config,
+    dispatch,
+    topicName: parsedPath?.topicName,
+    actionHandler: settingsActionHandler,
+    nodes: settingsTree,
+    onRender,
+  });
 
   const rawValue = useMemo((): RawValueIndicator => {
     const value = latestMatchingQueriedData;

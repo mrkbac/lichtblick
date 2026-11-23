@@ -15,7 +15,17 @@ import type { ReadOptions } from "@lichtblick/suite-base/util/CachedFilelike.typ
 import { abortable } from "@lichtblick/suite-base/util/abortable";
 
 import { BatchingReadable } from "./BatchingReadable";
-import type { PrefetchOptions, RemoteFileReadableOptions } from "./RemoteFileReadable.types";
+
+export type RemoteFileReadableOptions = {
+  credentials?: RequestCredentials;
+  cacheSizeInBytes?: number;
+  readAheadEnabled?: boolean;
+  readAheadBufferBytes?: number;
+  /** Cancels the requests that open the file */
+  signal?: AbortSignal;
+};
+
+export type PrefetchOptions = { skim?: boolean };
 
 const DEFAULT_CACHE_SIZE_BYTES = 1024 * 1024 * 500; // 500MiB
 // Parallel range requests hide per-request latency; a few saturate most links

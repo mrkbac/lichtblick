@@ -37,7 +37,6 @@ import {
   Marker,
   NavPath,
   MarkerType,
-  MarkerAction,
 } from "../ros";
 import { BaseSettings } from "../settings";
 import {
@@ -47,6 +46,7 @@ import {
 } from "../settingsNodes/topics";
 import { topicIsConvertibleToSchema } from "../topicIsConvertibleToSchema";
 import { makePose, Pose } from "../transforms";
+import { normalizeMarker } from "./Markers";
 import { RenderableArrow } from "./markers/RenderableArrow";
 import { RenderableLineStrip } from "./markers/RenderableLineStrip";
 
@@ -63,7 +63,6 @@ export type LayerSettingsPoseArray = BaseSettings & {
 
 const MISMATCHED_FRAME_ID = "MISMATCHED_FRAME_ID";
 
-const TIME_ZERO = { sec: 0, nsec: 0 };
 const COLOR_WHITE = { r: 1, g: 1, b: 1, a: 1 };
 
 const DEFAULT_SETTINGS = POSE_ARRAY_DEFAULTS;
@@ -125,8 +124,8 @@ export class PoseArrayRenderable extends Renderable<PoseArrayUserData> {
 
 export class PoseArrays extends SceneExtension<PoseArrayRenderable> {
   public static extensionId = "foxglove.PoseArrays";
-  public constructor(renderer: Renderer, name: string = PoseArrays.extensionId) {
-    super(name, renderer);
+  public constructor(renderer: Renderer) {
+    super(PoseArrays.extensionId, renderer);
   }
 
   public override getSubscriptions(): readonly AnyRendererSubscription[] {
@@ -303,7 +302,7 @@ export class PoseArrays extends SceneExtension<PoseArrayRenderable> {
         tempColor3,
         colorStart,
         colorEnd,
-        i / (poseArray.poses.length - 1),
+        i / Math.max(1, poseArray.poses.length - 1),
       );
       return createArrowMarker(renderable.userData.settings.arrowScale, color);
     };
@@ -443,26 +442,20 @@ function createLineStripMarker(
   // Create a gradient of colors for the line strip
   const colors: ColorRGBA[] = [];
   for (let i = 0; i < message.poses.length; i++) {
-    colors.push(rgbaGradient(makeRgba(), colorStart, colorEnd, i / (message.poses.length - 1)));
+    colors.push(
+      rgbaGradient(makeRgba(), colorStart, colorEnd, i / Math.max(1, message.poses.length - 1)),
+    );
   }
 
-  return {
+  return normalizeMarker({
     header: message.header,
-    ns: "",
-    id: 0,
     type: MarkerType.LINE_STRIP,
-    action: MarkerAction.ADD,
-    pose: makePose(),
     scale: { x: lineWidth, y: 1, z: 1 },
     color: COLOR_WHITE,
-    lifetime: TIME_ZERO,
     frame_locked: true,
     points: message.poses.map((pose) => pose.position),
     colors,
-    text: "",
-    mesh_resource: "",
-    mesh_use_embedded_materials: false,
-  };
+  });
 }
 
 function normalizePoseArray(poseArray: PartialMessage<PoseArray>): PoseArray {

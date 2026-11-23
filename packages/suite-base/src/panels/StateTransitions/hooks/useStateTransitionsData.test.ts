@@ -34,6 +34,7 @@ describe("useStateTransitionsData", () => {
     const { result } = renderHook(() => useStateTransitionsData([], undefined, {}, [], false));
     expect(result.current).toEqual({
       data: { datasets: [] },
+      datasetPathIndexes: [],
       minY: undefined,
       pathState: [],
       matchStarts: [],

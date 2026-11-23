@@ -15,6 +15,7 @@ import {
   PointsRenderable,
   DECAY_HISTORY_LIMITS,
   DECAY_LIMITED,
+  keepDecayingTopics,
   pointDecayTime,
   updateDecayRing,
   isSameRecord,
@@ -178,6 +179,7 @@ class LaserScanHistoryRenderable extends Renderable<LaserScanHistoryUserData> {
       invalidLaserScanError(this.renderer, this, invalid);
       return;
     }
+    this.renderer.settings.errors.removeFromTopic(this.userData.topic, INVALID_LASERSCAN);
 
     const pointsHistory = this.#pointsHistory;
     const latestEntry = pointsHistory.latest();
@@ -313,8 +315,8 @@ class LaserScanHistoryRenderable extends Renderable<LaserScanHistoryUserData> {
 
 export class LaserScans extends SceneExtension<LaserScanHistoryRenderable> {
   public static extensionId = "foxglove.LaserScans";
-  public constructor(renderer: Renderer, name: string = LaserScans.extensionId) {
-    super(name, renderer);
+  public constructor(renderer: Renderer) {
+    super(LaserScans.extensionId, renderer);
   }
 
   public override getSubscriptions(): readonly AnyRendererSubscription[] {
@@ -324,7 +326,7 @@ export class LaserScans extends SceneExtension<LaserScanHistoryRenderable> {
         schemaNames: ROS_LASERSCAN_DATATYPES,
         subscription: {
           handler: this.#handleLaserScan,
-          filterQueue: this.#processMessageQueue.bind(this),
+          filterQueue: (msgs) => keepDecayingTopics(this.renderer, msgs),
         },
       },
       {
@@ -332,33 +334,12 @@ export class LaserScans extends SceneExtension<LaserScanHistoryRenderable> {
         schemaNames: FOXGLOVE_LASERSCAN_DATATYPES,
         subscription: {
           handler: this.#handleLaserScan,
-          filterQueue: this.#processMessageQueue.bind(this),
+          filterQueue: (msgs) => keepDecayingTopics(this.renderer, msgs),
         },
       },
     ];
   }
 
-  #processMessageQueue<T>(msgs: MessageEvent<T>[]): MessageEvent<T>[] {
-    if (msgs.length === 0) {
-      return msgs;
-    }
-    const msgsByTopic = Map.groupBy(msgs, (msg) => msg.topic);
-    const finalQueue: MessageEvent<T>[] = [];
-    for (const [topic, topicMsgs] of msgsByTopic) {
-      const userSettings = (this.renderer.config.topics[topic] ??
-        {}) as Partial<LayerSettingsLaserScan>;
-      // if the topic has a decaytime add all messages to queue for topic
-      if ((userSettings.decayTime ?? DEFAULT_SETTINGS.decayTime) > 0) {
-        finalQueue.push(...topicMsgs);
-        continue;
-      }
-      const latestMsg = topicMsgs[topicMsgs.length - 1];
-      if (latestMsg) {
-        finalQueue.push(latestMsg);
-      }
-    }
-    return finalQueue;
-  }
   public override settingsNodes(): SettingsTreeEntry[] {
     const configTopics = this.renderer.config.topics;
     const handler = this.handleSettingsAction;

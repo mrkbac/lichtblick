@@ -404,7 +404,10 @@ export class RenderableModels extends RenderablePrimitive {
         renderable.material.needsUpdate = true;
       }
     } else if (renderable.material) {
-      // We already discarded the original materials, need to re-clone them from the original model
+      // We already discarded the original materials, need to re-clone them from the original model.
+      // Drop the tinted copy first; the caller adds the new model.
+      renderable.model.removeFromParent();
+      renderable.material.dispose();
       renderable.model = cloneAndPrepareModel(renderable.cachedModel);
       renderable.material = undefined;
     }

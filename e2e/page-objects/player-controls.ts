@@ -1,74 +1,13 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import { expect, Locator, Page } from "@playwright/test";
+import { Locator, Page } from "@playwright/test";
 
 export class PlayerControls {
   public constructor(private readonly page: Page) {}
 
   public async play(): Promise<void> {
     await this.getPlayButton().click();
-  }
-
-  public async pause(): Promise<void> {
-    await this.getPlayButton().click();
-  }
-
-  public async togglePlayback(): Promise<void> {
-    await this.page.keyboard.press("Space");
-  }
-
-  public async seekForward(): Promise<void> {
-    await this.page.getByTestId("seek-forward-button").click();
-  }
-
-  public async seekBackward(): Promise<void> {
-    await this.page.getByTestId("seek-backward-button").click();
-  }
-
-  public async setSpeed(speed: string): Promise<void> {
-    await this.page.getByTestId("PlaybackSpeedControls-Dropdown").click();
-    const popover = this.page.getByRole("dialog", { name: "Playback speed" });
-    await popover.getByRole("button", { name: speed, exact: true }).click();
-    await this.page.keyboard.press("Escape");
-    await expect(popover).toBeHidden();
-  }
-
-  public async switchToEpochFormat(initialTimestamp: string): Promise<void> {
-    const playerStartingTime = this.getTimestampInput().and(
-      this.page.locator(`[value^="${initialTimestamp}"]`),
-    );
-    await playerStartingTime.hover();
-    const timestampDropdown = this.page.getByTestId("playback-time-display-toggle-button");
-    await timestampDropdown.click();
-    const newTimestampOption = this.page.getByTestId("playback-time-display-option-SEC");
-    await newTimestampOption.click();
-    await expect(newTimestampOption).toHaveCount(0);
-  }
-
-  public async getTimestampValue(): Promise<number> {
-    return Number(await this.getTimestampInput().inputValue());
-  }
-
-  /**
-   * Plays for `windowMs` and returns recording seconds per wall-clock second. Both samples are
-   * taken while playing, so play/pause latency does not skew the rate.
-   */
-  public async measurePlaybackRate(windowMs: number): Promise<number> {
-    const before = await this.getTimestampValue();
-    await this.togglePlayback();
-    await expect.poll(async () => await this.getTimestampValue()).not.toBe(before);
-    // Read the timestamp and the clock together in the page, so response latency doesn't skew it.
-    const sample = async () =>
-      await this.getTimestampInput().evaluate((input: HTMLInputElement) => ({
-        time: Number(input.value),
-        wallMs: performance.now(),
-      }));
-    const start = await sample();
-    await this.page.waitForTimeout(windowMs);
-    const end = await sample();
-    await this.togglePlayback();
-    return (end.time - start.time) / ((end.wallMs - start.wallMs) / 1000);
   }
 
   public async getTimestampText(): Promise<string> {

@@ -4,9 +4,9 @@
 import { FromWorkerMessage } from "@lichtblick/suite-base/players/FoxgloveWebSocketPlayer/types";
 import { BasicBuilder } from "@lichtblick/test-builders";
 
-import WorkerSocketAdapter from "./WorkerSocketAdapter";
+import WorkerMessageSocket from "./WorkerMessageSocket";
 
-describe("WorkerSocketAdapter", () => {
+describe("WorkerMessageSocket", () => {
   let workerMock: any;
   const wsUrl = "wss://example.com";
 
@@ -17,21 +17,17 @@ describe("WorkerSocketAdapter", () => {
       onmessage: undefined as ((event: MessageEvent) => void) | undefined,
     };
 
-    global.Worker = vi.fn(function () {
-      return workerMock;
-    });
-
-    new WorkerSocketAdapter(wsUrl);
+    new WorkerMessageSocket(workerMock as Worker, wsUrl);
   });
 
-  it("WorkerSocketAdapter should close a WebSocket connection", () => {
+  it("should close a WebSocket connection", () => {
     workerMock.onmessage?.({ data: { type: "close", data: {} } } as MessageEvent);
 
     expect(workerMock.terminate).toHaveBeenCalled();
   });
 
   it("ends a stream once when the backend loses its worker", () => {
-    const socket = new WorkerSocketAdapter(wsUrl);
+    const socket = new WorkerMessageSocket(workerMock as Worker, wsUrl);
     const closed = vi.fn();
     socket.onclose = closed;
     socket.fail("Connection lost");
@@ -45,8 +41,8 @@ describe("WorkerSocketAdapter", () => {
     expect(workerMock.terminate).toHaveBeenCalledOnce();
   });
 
-  it("WorkerSocketAdapter should send a message", () => {
-    const socket = new WorkerSocketAdapter(wsUrl);
+  it("should send a message", () => {
+    const socket = new WorkerMessageSocket(workerMock as Worker, wsUrl);
     const message = BasicBuilder.string();
 
     socket.send(message);
@@ -57,7 +53,7 @@ describe("WorkerSocketAdapter", () => {
     });
   });
 
-  it("WorkerSocketAdapter should handle an error", () => {
+  it("should handle an error", () => {
     workerMock.onmessage?.({
       data: { type: "error", error: "Something went wrong" },
     } as MessageEvent);
@@ -68,8 +64,8 @@ describe("WorkerSocketAdapter", () => {
     });
   });
 
-  it("WorkerSocketAdapter should hand each message of a batch to onmessage, in order", () => {
-    const socket = new WorkerSocketAdapter(wsUrl);
+  it("should hand each message of a batch to onmessage, in order", () => {
+    const socket = new WorkerMessageSocket(workerMock as Worker, wsUrl);
     const received: unknown[] = [];
     socket.onmessage = (event) => received.push(event);
     const first = new ArrayBuffer(4);
@@ -82,8 +78,8 @@ describe("WorkerSocketAdapter", () => {
     expect(received).toEqual([{ data: first }, { data: second }]);
   });
 
-  it("WorkerSocketAdapter should keep delivering a batch after a frame's handler throws", () => {
-    const socket = new WorkerSocketAdapter(wsUrl);
+  it("should keep delivering a batch after a frame's handler throws", () => {
+    const socket = new WorkerMessageSocket(workerMock as Worker, wsUrl);
     const reportError = vi.fn();
     vi.stubGlobal("reportError", reportError);
     const error = new Error("bad frame");
@@ -102,8 +98,8 @@ describe("WorkerSocketAdapter", () => {
     vi.unstubAllGlobals();
   });
 
-  it("WorkerSocketAdapter should stop delivering a batch once the socket closed", () => {
-    const socket = new WorkerSocketAdapter(wsUrl);
+  it("should stop delivering a batch once the socket closed", () => {
+    const socket = new WorkerMessageSocket(workerMock as Worker, wsUrl);
     const received: unknown[] = [];
     socket.onmessage = (event) => {
       received.push(event);
@@ -127,7 +123,7 @@ describe("WorkerSocketAdapter", () => {
       } as MessageEvent<FromWorkerMessage>,
     ],
     [{ data: { type: "close", data: undefined } } as MessageEvent<FromWorkerMessage>],
-  ])("WorkerSocketAdapter should handle '%s' event", (event) => {
+  ])("should handle '%s' event", (event) => {
     workerMock.onmessage?.(event);
     expect(workerMock.postMessage).toHaveBeenCalledWith({
       type: "open",
