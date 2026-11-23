@@ -5,7 +5,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { Alert24Filled } from "@fluentui/react-icons";
+import NotificationsIcon from "@mui/icons-material/Notifications";
 import { BadgeProps, Badge as MuiBadge, Stack } from "@mui/material";
 import { Meta, StoryObj } from "storybook-react-rsbuild";
 
@@ -24,7 +24,7 @@ export default {
   title: "Theme/Data Display/Badge",
   args: {
     badgeContent: 4,
-    children: <Alert24Filled />,
+    children: <NotificationsIcon />,
   },
   decorators: [
     (Story) => (

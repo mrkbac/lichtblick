@@ -5,12 +5,10 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import {
-  ErrorCircle20Regular,
-  Info20Regular,
-  CheckmarkCircle20Regular,
-  Warning20Regular,
-} from "@fluentui/react-icons";
+import CheckCircleOutlineOutlinedIcon from "@mui/icons-material/CheckCircleOutlineOutlined";
+import ErrorOutlineOutlinedIcon from "@mui/icons-material/ErrorOutlineOutlined";
+import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
+import WarningAmberIcon from "@mui/icons-material/WarningAmber";
 import { alertClasses } from "@mui/material";
 
 import { OverrideComponentReturn } from "../types";
@@ -18,10 +16,10 @@ import { OverrideComponentReturn } from "../types";
 export const MuiAlert: OverrideComponentReturn<"MuiAlert"> = {
   defaultProps: {
     iconMapping: {
-      error: <ErrorCircle20Regular />,
-      info: <Info20Regular />,
-      success: <CheckmarkCircle20Regular />,
-      warning: <Warning20Regular />,
+      error: <ErrorOutlineOutlinedIcon fontSize="small" />,
+      info: <InfoOutlinedIcon fontSize="small" />,
+      success: <CheckCircleOutlineOutlinedIcon fontSize="small" />,
+      warning: <WarningAmberIcon fontSize="small" />,
     },
   },
   styleOverrides: {

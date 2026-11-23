@@ -1,22 +1,20 @@
 // SPDX-License-Identifier: MPL-2.0
 
-import {
-  ArrowAutofitHeight20Regular,
-  Delete20Regular,
-  LocationAdd20Regular,
-  Ruler20Regular,
-  Triangle20Regular,
-  ZoomFit20Regular,
-} from "@fluentui/react-icons";
+import AddLocationAltOutlinedIcon from "@mui/icons-material/AddLocationAltOutlined";
+import ChangeHistoryIcon from "@mui/icons-material/ChangeHistory";
+import DeleteOutlinedIcon from "@mui/icons-material/DeleteOutlined";
+import FitScreenIcon from "@mui/icons-material/FitScreen";
+import HeightIcon from "@mui/icons-material/Height";
+import StraightenIcon from "@mui/icons-material/Straighten";
 
 import type { PanelButton } from "@lichtblick/suite-base/components/PanelButton";
 
 export const MAP_BUTTONS = {
-  zoomToData: { id: "mapZoomToData", icon: ZoomFit20Regular, placement: "overlay" },
-  measuringTools: { id: "mapMeasuringTools", icon: Ruler20Regular, placement: "overlay" },
-  distance: { id: "mapMeasureDistance", icon: Ruler20Regular, placement: "overlay" },
-  height: { id: "mapMeasureHeight", icon: ArrowAutofitHeight20Regular, placement: "overlay" },
-  angle: { id: "mapMeasureAngle", icon: Triangle20Regular, placement: "overlay" },
-  point: { id: "mapPinPoints", icon: LocationAdd20Regular, placement: "overlay" },
-  clearAll: { id: "mapClearMeasurements", icon: Delete20Regular, placement: "overlay" },
+  zoomToData: { id: "mapZoomToData", icon: FitScreenIcon, placement: "overlay" },
+  measuringTools: { id: "mapMeasuringTools", icon: StraightenIcon, placement: "overlay" },
+  distance: { id: "mapMeasureDistance", icon: StraightenIcon, placement: "overlay" },
+  height: { id: "mapMeasureHeight", icon: HeightIcon, placement: "overlay" },
+  angle: { id: "mapMeasureAngle", icon: ChangeHistoryIcon, placement: "overlay" },
+  point: { id: "mapPinPoints", icon: AddLocationAltOutlinedIcon, placement: "overlay" },
+  clearAll: { id: "mapClearMeasurements", icon: DeleteOutlinedIcon, placement: "overlay" },
 } as const satisfies Record<string, PanelButton>;

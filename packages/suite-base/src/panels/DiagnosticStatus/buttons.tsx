@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MPL-2.0
 
-import { Copy16Regular } from "@fluentui/react-icons";
+import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import PowerInputIcon from "@mui/icons-material/PowerInput";
 import ShowChartIcon from "@mui/icons-material/ShowChart";
 
@@ -15,8 +15,8 @@ function StateTransitionsIcon(): React.JSX.Element {
 }
 
 export const DIAGNOSTIC_STATUS_BUTTONS = {
-  copyStatus: { id: "diagnosticStatusCopyStatus", icon: Copy16Regular, placement: "inline" },
-  copyValue: { id: "diagnosticStatusCopyValue", icon: Copy16Regular, placement: "inline" },
+  copyStatus: { id: "diagnosticStatusCopyStatus", icon: ContentCopyIcon, placement: "inline" },
+  copyValue: { id: "diagnosticStatusCopyValue", icon: ContentCopyIcon, placement: "inline" },
   openInPlot: { id: "diagnosticStatusOpenInPlot", icon: PlotIcon, placement: "inline" },
   openInStateTransitions: {
     id: "diagnosticStatusOpenInStateTransitions",

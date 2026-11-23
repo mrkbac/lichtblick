@@ -5,14 +5,8 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import {
-  Copy16Regular,
-  Copy20Regular,
-  Copy24Regular,
-  Checkmark16Filled,
-  Checkmark20Filled,
-  Checkmark24Filled,
-} from "@fluentui/react-icons";
+import CheckIcon from "@mui/icons-material/Check";
+import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import {
   Button,
   ButtonProps,
@@ -56,22 +50,22 @@ function CopyButtonComponent(
   const checkIcon = useMemo(() => {
     switch (iconSize) {
       case "small":
-        return <Checkmark16Filled primaryFill={theme.palette.success.main} />;
+        return <CheckIcon style={{ fontSize: 16 }} htmlColor={theme.palette.success.main} />;
       case "medium":
-        return <Checkmark20Filled primaryFill={theme.palette.success.main} />;
+        return <CheckIcon fontSize="small" htmlColor={theme.palette.success.main} />;
       case "large":
-        return <Checkmark24Filled primaryFill={theme.palette.success.main} />;
+        return <CheckIcon htmlColor={theme.palette.success.main} />;
     }
   }, [iconSize, theme.palette.success.main]);
 
   const copyIcon = useMemo(() => {
     switch (iconSize) {
       case "small":
-        return <Copy16Regular />;
+        return <ContentCopyIcon style={{ fontSize: 16 }} />;
       case "medium":
-        return <Copy20Regular />;
+        return <ContentCopyIcon fontSize="small" />;
       case "large":
-        return <Copy24Regular />;
+        return <ContentCopyIcon />;
     }
   }, [iconSize]);
 

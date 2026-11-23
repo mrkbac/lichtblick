@@ -146,7 +146,7 @@ export function ContextMenu(props: {
             >
               {panel.icon && (
                 <ListItemIcon>
-                  <panel.icon />
+                  <panel.icon fontSize="small" />
                 </ListItemIcon>
               )}
               <ListItemText>{panel.title}</ListItemText>

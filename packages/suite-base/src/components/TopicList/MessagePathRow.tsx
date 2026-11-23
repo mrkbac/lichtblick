@@ -5,7 +5,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { ReOrderDotsVertical16Regular } from "@fluentui/react-icons";
+import DragIndicatorIcon from "@mui/icons-material/DragIndicator";
 import { Badge, Typography } from "@mui/material";
 import { FzfResultItem } from "fzf";
 import { useMemo } from "react";
@@ -85,7 +85,7 @@ export function MessagePathRow({
         </Typography>
       </Stack>
       <div data-testid="TopicListDragHandle" className={classes.dragHandle}>
-        <ReOrderDotsVertical16Regular />
+        <DragIndicatorIcon style={{ fontSize: 16 }} />
       </div>
     </div>
   );

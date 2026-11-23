@@ -5,8 +5,8 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { Dismiss16Regular } from "@fluentui/react-icons";
 import { toNanoSec } from "@foxglove/rostime";
+import CloseIcon from "@mui/icons-material/Close";
 import { Button, IconButton, Tooltip, Typography } from "@mui/material";
 import { useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
@@ -272,7 +272,7 @@ export function TrimBar(): React.JSX.Element | null {
         {t("exportEllipsis")}
       </Button>
       <IconButton size="small" aria-label={t("removeCut")} title={t("removeCut")} onClick={clear}>
-        <Dismiss16Regular />
+        <CloseIcon style={{ fontSize: 16 }} />
       </IconButton>
     </Stack>
   );

@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import { CloudOff20Regular } from "@fluentui/react-icons";
+import CloudOffOutlinedIcon from "@mui/icons-material/CloudOffOutlined";
 import { Tooltip, Typography } from "@mui/material";
 import React from "react";
 import { useTranslation } from "react-i18next";
@@ -52,7 +52,7 @@ export function NetworkStatusIndicator(): React.JSX.Element | undefined {
         aria-label={statusText}
         data-testid="network-status-indicator"
       >
-        <CloudOff20Regular className={classes.icon} />
+        <CloudOffOutlinedIcon fontSize="small" className={classes.icon} />
         <Typography variant="body2" component="span">
           {statusText}
         </Typography>

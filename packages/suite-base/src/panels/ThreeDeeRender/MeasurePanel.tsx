@@ -1,17 +1,15 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import {
-  ArrowAutofitHeight20Regular,
-  Copy16Regular,
-  DataLine20Regular,
-  Delete16Regular,
-  Flowchart20Regular,
-  Location20Regular,
-  Pentagon20Regular,
-  Ruler20Regular,
-  Triangle20Regular,
-} from "@fluentui/react-icons";
+import ChangeHistoryIcon from "@mui/icons-material/ChangeHistory";
+import ContentCopyIcon from "@mui/icons-material/ContentCopy";
+import DeleteOutlinedIcon from "@mui/icons-material/DeleteOutlined";
+import HeightIcon from "@mui/icons-material/Height";
+import PentagonOutlinedIcon from "@mui/icons-material/PentagonOutlined";
+import PlaceOutlinedIcon from "@mui/icons-material/PlaceOutlined";
+import PolylineIcon from "@mui/icons-material/Polyline";
+import ShowChartIcon from "@mui/icons-material/ShowChart";
+import StraightenIcon from "@mui/icons-material/Straighten";
 import {
   Button,
   IconButton,
@@ -35,13 +33,13 @@ import { measureKindLabel, MeasureKind, MeasurementInfo } from "./renderables/Me
 import type { ProfileSeries } from "./renderables/measure/geometry";
 
 const KIND_ICONS: Record<MeasureKind, React.JSX.Element> = {
-  point: <Location20Regular />,
-  distance: <Ruler20Regular />,
-  polyline: <Flowchart20Regular />,
-  angle: <Triangle20Regular />,
-  area: <Pentagon20Regular />,
-  height: <ArrowAutofitHeight20Regular />,
-  profile: <DataLine20Regular />,
+  point: <PlaceOutlinedIcon fontSize="small" />,
+  distance: <StraightenIcon fontSize="small" />,
+  polyline: <PolylineIcon fontSize="small" />,
+  angle: <ChangeHistoryIcon fontSize="small" />,
+  area: <PentagonOutlinedIcon fontSize="small" />,
+  height: <HeightIcon fontSize="small" />,
+  profile: <ShowChartIcon fontSize="small" />,
 };
 
 const DISPLAY_FRAME = "";
@@ -214,7 +212,7 @@ export function MeasurePanel({ renderer }: { renderer: Renderer }): React.JSX.El
                         copy(info.id);
                       }}
                     >
-                      <Copy16Regular />
+                      <ContentCopyIcon style={{ fontSize: 16 }} />
                     </IconButton>
                   </span>
                 </Tooltip>
@@ -226,7 +224,7 @@ export function MeasurePanel({ renderer }: { renderer: Renderer }): React.JSX.El
                       tool.removeMeasurement(info.id);
                     }}
                   >
-                    <Delete16Regular />
+                    <DeleteOutlinedIcon style={{ fontSize: 16 }} />
                   </IconButton>
                 </Tooltip>
               </div>
@@ -244,7 +242,7 @@ export function MeasurePanel({ renderer }: { renderer: Renderer }): React.JSX.El
         <div className={classes.row}>
           <Button
             size="small"
-            startIcon={<Copy16Regular />}
+            startIcon={<ContentCopyIcon style={{ fontSize: 16 }} />}
             disabled={tool.measurements.every((info) => info.unavailable)}
             onClick={() => {
               copy();
@@ -255,7 +253,7 @@ export function MeasurePanel({ renderer }: { renderer: Renderer }): React.JSX.El
           <Button
             size="small"
             color="error"
-            startIcon={<Delete16Regular />}
+            startIcon={<DeleteOutlinedIcon style={{ fontSize: 16 }} />}
             onClick={() => {
               tool.clearAll();
             }}

@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import { Info16Regular } from "@fluentui/react-icons";
+import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 import {
   Button,
   Checkbox,
@@ -57,7 +57,7 @@ export function RotationConventionInfo({ text }: { text: string }): React.JSX.El
   return (
     <Tooltip title={<span className={classes.multiline}>{text}</span>}>
       <span className={classes.infoIcon} role="img" aria-label={text}>
-        <Info16Regular />
+        <InfoOutlinedIcon style={{ fontSize: 16 }} />
       </span>
     </Tooltip>
   );

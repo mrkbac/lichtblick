@@ -1,7 +1,8 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import { ArrowClockwise16Regular, ArrowDownload16Regular } from "@fluentui/react-icons";
+import FileDownloadOutlinedIcon from "@mui/icons-material/FileDownloadOutlined";
+import RefreshIcon from "@mui/icons-material/Refresh";
 import { Button, Link, Typography } from "@mui/material";
 import { Trans, useTranslation } from "react-i18next";
 import { makeStyles } from "tss-react/mui";
@@ -110,7 +111,7 @@ export default function WsMixedContentHelp({ url }: { url: string }): React.JSX.
               <Button
                 size="small"
                 variant="outlined"
-                startIcon={<ArrowDownload16Regular />}
+                startIcon={<FileDownloadOutlinedIcon style={{ fontSize: 16 }} />}
                 href="/licht-ws-proxy.zip"
                 target="_self"
                 download
@@ -205,7 +206,7 @@ export default function WsMixedContentHelp({ url }: { url: string }): React.JSX.
         <Button
           size="small"
           variant="contained"
-          startIcon={<ArrowClockwise16Regular />}
+          startIcon={<RefreshIcon style={{ fontSize: 16 }} />}
           onClick={() => {
             window.location.reload();
           }}

@@ -5,7 +5,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import type { FluentIcon } from "@fluentui/react-icons";
+import type { SvgIconComponent } from "@mui/icons-material";
 import { ComponentType, createContext, useContext } from "react";
 
 import type { PanelDocs } from "@lichtblick/suite-base/components/PanelDocs/PanelDocs";
@@ -25,7 +25,7 @@ export type PanelInfo = {
   keywords?: readonly string[];
   thumbnail?: string;
   /** Small icon shown next to the title in panel pickers. */
-  icon?: FluentIcon;
+  icon?: SvgIconComponent;
   /** In-app docs behind the panel toolbar's info button; loaded lazily. */
   docs?: () => Promise<{ default: PanelDocs }>;
 

@@ -1,27 +1,29 @@
 // SPDX-License-Identifier: MPL-2.0
 
-import {
-  Delete20Regular,
-  Dismiss20Filled,
-  DocumentOnePageSparkle24Regular,
-  Edit20Regular,
-  Script24Regular,
-  Toolbox24Regular,
-} from "@fluentui/react-icons";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
+import AutoAwesomeOutlinedIcon from "@mui/icons-material/AutoAwesomeOutlined";
+import CloseIcon from "@mui/icons-material/Close";
+import DeleteOutlinedIcon from "@mui/icons-material/DeleteOutlined";
+import DescriptionOutlinedIcon from "@mui/icons-material/DescriptionOutlined";
+import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
+import HomeRepairServiceOutlinedIcon from "@mui/icons-material/HomeRepairServiceOutlined";
 
 import type { PanelButton } from "@lichtblick/suite-base/components/PanelButton";
 
 export const USER_SCRIPTS_BUTTONS = {
-  scripts: { id: "userScriptsScripts", icon: Script24Regular, placement: "inline" },
-  utilities: { id: "userScriptsUtilities", icon: Toolbox24Regular, placement: "inline" },
-  templates: {
-    id: "userScriptsTemplates",
-    icon: DocumentOnePageSparkle24Regular,
+  scripts: { id: "userScriptsScripts", icon: DescriptionOutlinedIcon, placement: "inline" },
+  utilities: {
+    id: "userScriptsUtilities",
+    icon: HomeRepairServiceOutlinedIcon,
     placement: "inline",
   },
-  collapseSidebar: { id: "userScriptsCollapseSidebar", icon: Dismiss20Filled, placement: "inline" },
-  rename: { id: "userScriptsRename", icon: Edit20Regular, placement: "inline" },
-  delete: { id: "userScriptsDelete", icon: Delete20Regular, placement: "inline" },
+  templates: {
+    id: "userScriptsTemplates",
+    icon: AutoAwesomeOutlinedIcon,
+    placement: "inline",
+  },
+  collapseSidebar: { id: "userScriptsCollapseSidebar", icon: CloseIcon, placement: "inline" },
+  rename: { id: "userScriptsRename", icon: EditOutlinedIcon, placement: "inline" },
+  delete: { id: "userScriptsDelete", icon: DeleteOutlinedIcon, placement: "inline" },
   goBack: { id: "userScriptsGoBack", icon: ArrowBackIcon, placement: "inline" },
 } as const satisfies Record<string, PanelButton>;

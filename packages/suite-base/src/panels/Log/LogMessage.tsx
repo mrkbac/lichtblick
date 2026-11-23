@@ -159,7 +159,7 @@ export default React.memo(function LogMessage(props: {
             onCopy(msg);
           }}
         >
-          <LOG_BUTTONS.copyMessage.icon />
+          <LOG_BUTTONS.copyMessage.icon style={{ fontSize: 16 }} />
         </button>
       )}
     </div>

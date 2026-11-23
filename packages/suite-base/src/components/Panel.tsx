@@ -5,12 +5,10 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import {
-  Delete20Regular,
-  TabDesktop20Regular,
-  SplitVertical20Regular,
-  SplitHorizontal20Regular,
-} from "@fluentui/react-icons";
+import DeleteOutlinedIcon from "@mui/icons-material/DeleteOutlined";
+import HorizontalSplitOutlinedIcon from "@mui/icons-material/HorizontalSplitOutlined";
+import TabOutlinedIcon from "@mui/icons-material/TabOutlined";
+import VerticalSplitOutlinedIcon from "@mui/icons-material/VerticalSplitOutlined";
 import React, {
   ComponentType,
   MouseEventHandler,
@@ -583,7 +581,7 @@ export default function Panel<
           {
             key: "group",
             text: "Group as tabs",
-            icon: <TabDesktop20Regular />,
+            icon: <TabOutlinedIcon fontSize="small" />,
             onClick: groupSelectedPanels,
           },
         ];
@@ -597,7 +595,7 @@ export default function Panel<
           {
             key: "splitDown",
             text: "Split down",
-            icon: <SplitHorizontal20Regular />,
+            icon: <HorizontalSplitOutlinedIcon fontSize="small" />,
             onClick: () => {
               split(childId, "column");
             },
@@ -605,7 +603,7 @@ export default function Panel<
           {
             key: "splitRight",
             text: "Split right",
-            icon: <SplitVertical20Regular />,
+            icon: <VerticalSplitOutlinedIcon fontSize="small" />,
             onClick: () => {
               split(childId, "row");
             },
@@ -613,7 +611,7 @@ export default function Panel<
           {
             key: "remove",
             text: "Remove",
-            icon: <Delete20Regular />,
+            icon: <DeleteOutlinedIcon fontSize="small" />,
             color: "error",
             onClick: removePanel,
           },
