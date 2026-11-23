@@ -51,9 +51,8 @@ function PlaybackPerformanceItem(props: PlaybackPerformanceItemProps): ReactElem
           {props.label}
         </Typography>
         <Typography variant="body2" color="textSecondary">
-          {(props.points.length > 0
-            ? props.points.reduce((sum, point) => sum + point.value, 0) / props.points.length
-            : 0
+          {(
+            props.points.reduce((sum, point) => sum + point.value, 0) / props.points.length
           ).toFixed(props.decimalPlaces)}{" "}
           avg
         </Typography>
@@ -96,9 +95,7 @@ function UnconnectedPlaybackPerformance({
     activeData &&
     playbackInfo.current &&
     lastPlaybackInfo &&
-    lastPlaybackInfo.activeData !== activeData &&
-    // two player states in the same millisecond would give infinite rates
-    timestamp > lastPlaybackInfo.timestamp
+    lastPlaybackInfo.activeData !== activeData
   ) {
     const renderTimeMs = timestamp - lastPlaybackInfo.timestamp;
     if (
