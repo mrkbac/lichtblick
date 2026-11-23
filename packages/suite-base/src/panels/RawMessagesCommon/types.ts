@@ -13,16 +13,6 @@ import type { PanelButton } from "@lichtblick/suite-base/components/PanelButton"
 import { Topic as PlayerTopic, MessageEvent } from "@lichtblick/suite-base/players/types";
 import { OpenSiblingPanel, SaveConfig } from "@lichtblick/suite-base/types/panels";
 
-export type RawMessagesPanelConfig = {
-  diffEnabled: boolean;
-  diffMethod: "custom" | "previous message";
-  diffTopicPath: string;
-  expansion?: NodeExpansion;
-  showFullMessageForDiff: boolean;
-  topicPath: string;
-  fontSize: number | undefined;
-};
-
 export type RawMessagesVirtualPanelConfig = {
   diffEnabled: boolean;
   diffMethod: "custom" | "previous message";
@@ -159,23 +149,6 @@ export type ValueLabelsProps = {
 export type ValueLabels = {
   arrLabel: string;
   itemLabel: string;
-};
-
-export type SharedConfig = {
-  topicPath: string;
-  diffMethod: "custom" | "previous message";
-  diffTopicPath: string;
-  diffEnabled: boolean;
-  expansion?: NodeExpansion;
-};
-
-type SharedConfigActions<T extends SharedConfig> = {
-  saveConfig: (config: Partial<T>) => void;
-};
-
-export type UseSharedRawMessagesLogicProps<T extends SharedConfig> = {
-  config: T;
-  saveConfig: SharedConfigActions<T>["saveConfig"];
 };
 
 /** getValueActionForValue */
