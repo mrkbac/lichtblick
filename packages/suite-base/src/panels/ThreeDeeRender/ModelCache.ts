@@ -71,16 +71,11 @@ export class ModelCache {
   #textDecoder = new TextDecoder();
   // Retain partial-load warnings for every consumer of a cached model.
   #models = new Map<string, Promise<{ model: LoadedModel | undefined; errors: Error[] }>>();
-  #edgeMaterial: THREE.Material;
-  #fetchAsset: BuiltinPanelExtensionContext["unstable_fetchAsset"];
   #objectUrls = new Map<string, string>();
   #disposed = false;
   #dracoLoader?: DRACOLoader;
 
-  public constructor(public readonly options: ModelCacheOptions) {
-    this.#edgeMaterial = options.edgeMaterial;
-    this.#fetchAsset = options.fetchAsset;
-  }
+  public constructor(public readonly options: ModelCacheOptions) {}
 
   public async load(
     url: string,
@@ -97,7 +92,7 @@ export class ModelCache {
       promise = this.#loadModel(url, opts, (error) => {
         errors.push(error);
       })
-        .then((model) => ({ model: addEdges(model, this.#edgeMaterial), errors }))
+        .then((model) => ({ model: addEdges(model, this.options.edgeMaterial), errors }))
         .catch((err: unknown) => {
           this.#models.delete(key);
           errors.push(toError(err));
@@ -119,7 +114,9 @@ export class ModelCache {
   ): Promise<LoadedModel> {
     const GLB_MAGIC = 0x676c5446; // "glTF"
 
-    const asset = await this.#fetchAsset(requestedUrl, { referenceUrl: options.referenceUrl });
+    const asset = await this.options.fetchAsset(requestedUrl, {
+      referenceUrl: options.referenceUrl,
+    });
 
     const url = asset.uri;
     const extension = new URL(url).pathname.toLowerCase();
@@ -129,6 +126,13 @@ export class ModelCache {
     }
     const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
     const contentType = options.overrideMediaType ?? asset.mediaType ?? "";
+    // Copy to respect `byteOffset` and `byteLength`: the three.js glTF and STL loaders only accept
+    // an ArrayBuffer instance
+    const copyBuffer = () =>
+      (buffer.buffer as ArrayBuffer).slice(
+        buffer.byteOffset,
+        buffer.byteOffset + buffer.byteLength,
+      );
 
     // Check if this is a glTF .glb or .gltf file
     if (
@@ -137,31 +141,12 @@ export class ModelCache {
       extension.endsWith(".glb") ||
       extension.endsWith(".gltf")
     ) {
-      // Create a copy of the array buffer to respect the `byteOffset` and `byteLength` value as
-      // the underlying three.js STLLoader only accepts an ArrayBuffer instance.
-      return await this.#loadGltf(
-        url,
-        (buffer.buffer as ArrayBuffer).slice(
-          buffer.byteOffset,
-          buffer.byteOffset + buffer.byteLength,
-        ),
-        this.options.meshUpAxis,
-        reportError,
-      );
+      return await this.#loadGltf(url, copyBuffer(), this.options.meshUpAxis, reportError);
     }
 
     // Check if this is a STL file based on content-type or file extension
     if (STL_MIME_TYPES.includes(contentType) || extension.endsWith(".stl")) {
-      // Create a copy of the array buffer to respect the `byteOffset` and `byteLength` value as
-      // the underlying three.js STLLoader only accepts an ArrayBuffer instance.
-      return this.#loadSTL(
-        url,
-        (buffer.buffer as ArrayBuffer).slice(
-          buffer.byteOffset,
-          buffer.byteOffset + buffer.byteLength,
-        ),
-        this.options.meshUpAxis,
-      );
+      return this.#loadSTL(url, copyBuffer(), this.options.meshUpAxis);
     }
 
     // Check if this is a COLLADA file based on content-type or file extension
@@ -185,11 +170,7 @@ export class ModelCache {
     meshUpAxis: MeshUpAxis,
     reportError: ErrorCallback,
   ): Promise<LoadedModel> {
-    const onError = (assetUrl: string) => {
-      const originalUrl = this.#objectUrls.get(assetUrl) ?? assetUrl;
-      log.error(`Failed to load GLTF asset "${originalUrl}" for "${url}"`);
-      reportError(new Error(`Failed to load GLTF asset "${originalUrl}"`));
-    };
+    const onError = this.#assetErrorHandler("GLTF", url, reportError);
 
     const manager = new THREE.LoadingManager(undefined, undefined, onError);
     const view = new DataView(buffer);
@@ -259,11 +240,7 @@ export class ModelCache {
     ignoreUpAxis: boolean,
     reportError: ErrorCallback,
   ): Promise<LoadedModel> {
-    const onError = (assetUrl: string) => {
-      const originalUrl = this.#objectUrls.get(assetUrl) ?? assetUrl;
-      log.error(`Failed to load COLLADA asset "${originalUrl}" for "${url}"`);
-      reportError(new Error(`Failed to load COLLADA asset "${originalUrl}"`));
-    };
+    const onError = this.#assetErrorHandler("COLLADA", url, reportError);
 
     // The three.js ColladaLoader handles <up_axis> by detecting Z_UP and simply
     // applying a scene rotation. Since Studio is already Z_UP, we do our own
@@ -276,11 +253,8 @@ export class ModelCache {
       node.remove();
     });
 
-    let texturesLoaded!: () => void;
-    const texturesReady = new Promise<void>((resolve) => {
-      texturesLoaded = resolve;
-    });
-    const manager = new THREE.LoadingManager(texturesLoaded, undefined, onError);
+    const texturesReady = Promise.withResolvers<void>();
+    const manager = new THREE.LoadingManager(texturesReady.resolve, undefined, onError);
     const images = [...xml.querySelectorAll("library_images image init_from")];
     const imageUris = images.map((node) =>
       (node.querySelector("ref")?.textContent ?? node.textContent).trim(),
@@ -297,7 +271,7 @@ export class ModelCache {
     manager.itemStart(url);
     const dae = daeLoader.parse(xmlText, "");
     manager.itemEnd(url);
-    await texturesReady;
+    await texturesReady.promise;
     if (dae == undefined) {
       throw new Error(`Failed to parse COLLADA model "${url}"`);
     }
@@ -317,11 +291,7 @@ export class ModelCache {
     meshUpAxis: MeshUpAxis,
     reportError: ErrorCallback,
   ): Promise<LoadedModel> {
-    const onError = (assetUrl: string) => {
-      const originalUrl = this.#objectUrls.get(assetUrl) ?? assetUrl;
-      log.error(`Failed to load OBJ asset "${originalUrl}" for "${url}"`);
-      reportError(new Error(`Failed to load OBJ asset "${originalUrl}"`));
-    };
+    const onError = this.#assetErrorHandler("OBJ", url, reportError);
 
     const manager = new THREE.LoadingManager(undefined, undefined, onError);
     const objLoader = new OBJLoader(manager);
@@ -330,7 +300,7 @@ export class ModelCache {
     for (const library of libraries) {
       const materialUrl = new URL(library, url).toString();
       try {
-        const asset = await this.#fetchAsset(materialUrl, { referenceUrl: url });
+        const asset = await this.options.fetchAsset(materialUrl, { referenceUrl: url });
         const creator = new MTLLoader(manager).parse(this.#textDecoder.decode(asset.data), "");
         const textures = Object.values(creator.materialsInfo).flatMap((info) =>
           MTL_TEXTURE_FIELDS.flatMap((key) =>
@@ -338,11 +308,8 @@ export class ModelCache {
           ),
         );
         // Each MTL has its own base directory and URL map.
-        let texturesLoaded!: () => void;
-        const texturesReady = new Promise<void>((resolve) => {
-          texturesLoaded = resolve;
-        });
-        const materialManager = new THREE.LoadingManager(texturesLoaded, undefined, onError);
+        const texturesReady = Promise.withResolvers<void>();
+        const materialManager = new THREE.LoadingManager(texturesReady.resolve, undefined, onError);
         const missing = await this.#prepareResources(asset.uri, textures, materialManager, onError);
         for (const info of Object.values(creator.materialsInfo)) {
           for (const key of MTL_TEXTURE_FIELDS) {
@@ -359,7 +326,7 @@ export class ModelCache {
         materialManager.itemStart(asset.uri);
         creator.preload();
         materialManager.itemEnd(asset.uri);
-        await texturesReady;
+        await texturesReady.promise;
         Object.assign(materials.materials, creator.materials);
       } catch (error) {
         if (this.#disposed) {
@@ -385,6 +352,18 @@ export class ModelCache {
     }
 
     return fixObjMaterials(group);
+  }
+
+  #assetErrorHandler(
+    kind: string,
+    url: string,
+    reportError: ErrorCallback,
+  ): (assetUrl: string) => void {
+    return (assetUrl: string): void => {
+      const originalUrl = this.#objectUrls.get(assetUrl) ?? assetUrl;
+      log.error(`Failed to load ${kind} asset "${originalUrl}" for "${url}"`);
+      reportError(new Error(`Failed to load ${kind} asset "${originalUrl}"`));
+    };
   }
 
   // singleton dracoloader
@@ -414,7 +393,7 @@ export class ModelCache {
         .map(async (resource) => {
           const resolved = new URL(resource, url).toString();
           try {
-            const asset = await this.#fetchAsset(resolved, { referenceUrl: url });
+            const asset = await this.options.fetchAsset(resolved, { referenceUrl: url });
             // Only textures are converted; binary buffers may start with TIFF-like bytes.
             const blob =
               !requiredResources.includes(resource) && isTiff(asset.data)
@@ -483,10 +462,6 @@ function addEdges(model: LoadedModel, edgeMaterial: THREE.Material): LoadedModel
     if (!(child instanceof THREE.Mesh)) {
       return;
     }
-
-    // Enable shadows for all meshes
-    child.castShadow = true;
-    child.receiveShadow = true;
 
     // Draw edges for all meshes
     const edgesGeometry = new THREE.EdgesGeometry(child.geometry, 40);

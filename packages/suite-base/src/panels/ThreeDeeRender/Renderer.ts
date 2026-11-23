@@ -5,7 +5,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { toNanoSec } from "@foxglove/rostime";
+import { Time, toNanoSec } from "@foxglove/rostime";
 import type { FrameTransform, FrameTransforms, SceneUpdate } from "@foxglove/schemas";
 import EventEmitter from "eventemitter3";
 import { quat, vec3 } from "gl-matrix";
@@ -54,7 +54,6 @@ import {
   RendererEvents,
   RendererSubscription,
   TestOptions,
-  AddMessageEventOptions,
 } from "./IRenderer";
 import { Input } from "./Input";
 import { ModelCache } from "./ModelCache";
@@ -395,7 +394,6 @@ export class Renderer extends EventEmitter<RendererEvents> {
     this.ready = this.#initGpu();
     this.gl.autoClear = false;
     this.gl.info.autoReset = false;
-    this.gl.shadowMap.type = THREE.VSMShadowMap;
     this.gl.sortObjects = true;
     this.gl.setPixelRatio(this.#ownerWindow.devicePixelRatio);
 
@@ -426,23 +424,10 @@ export class Renderer extends EventEmitter<RendererEvents> {
 
     this.#dirLight = new THREE.DirectionalLight(0xffffff, Math.PI);
     this.#dirLight.position.set(1, 1, 1);
-    this.#dirLight.castShadow = true;
     this.#dirLight.layers.enableAll();
-
-    this.#dirLight.shadow.mapSize.width = 2048;
-    this.#dirLight.shadow.mapSize.height = 2048;
-    this.#dirLight.shadow.camera.near = 0.5;
-    this.#dirLight.shadow.camera.far = 500;
-    this.#dirLight.shadow.bias = -0.00001;
 
     this.#headLight = new THREE.DirectionalLight(0xffffff, Math.PI);
     this.#headLight.layers.enableAll();
-    this.#headLight.castShadow = true;
-    this.#headLight.shadow.mapSize.width = 2048;
-    this.#headLight.shadow.mapSize.height = 2048;
-    this.#headLight.shadow.camera.near = 0.5;
-    this.#headLight.shadow.camera.far = 500;
-    this.#headLight.shadow.bias = -0.00001;
 
     this.#hemiLight = new THREE.HemisphereLight(0xffffff, 0xffffff, 0.5 * Math.PI);
     this.#hemiLight.layers.enableAll();
@@ -857,20 +842,15 @@ export class Renderer extends EventEmitter<RendererEvents> {
    * @param {boolean} params.clearImageModeExtension - whether to reset ImageMode renderables in clear.
    * @param {boolean} params.preserveStaticTransforms - whether to preserve the static transform cache during a transform tree clear.
    */
-  public clear(
-    {
-      clearTransforms,
-      clearImageModeExtension = true,
-      preserveStaticTransforms = false,
-    }: {
-      clearTransforms?: boolean;
-      clearImageModeExtension?: boolean;
-      preserveStaticTransforms?: boolean;
-    } = {
-      clearTransforms: false,
-      preserveStaticTransforms: false,
-    },
-  ): void {
+  public clear({
+    clearTransforms,
+    clearImageModeExtension = true,
+    preserveStaticTransforms = false,
+  }: {
+    clearTransforms?: boolean;
+    clearImageModeExtension?: boolean;
+    preserveStaticTransforms?: boolean;
+  } = {}): void {
     this.#clearSubscriptionQueues();
     if (clearTransforms === true) {
       this.#clearTransformTree(preserveStaticTransforms);
@@ -892,14 +872,11 @@ export class Renderer extends EventEmitter<RendererEvents> {
   }
 
   #clearSubscriptionQueues(): void {
-    for (const subscriptions of this.topicSubscriptions.values()) {
-      for (const subscription of subscriptions) {
-        subscription.queue = undefined;
-      }
-    }
-    for (const subscriptions of this.schemaSubscriptions.values()) {
-      for (const subscription of subscriptions) {
-        subscription.queue = undefined;
+    for (const subscriptionMap of [this.topicSubscriptions, this.schemaSubscriptions]) {
+      for (const subscriptions of subscriptionMap.values()) {
+        for (const subscription of subscriptions) {
+          subscription.queue = undefined;
+        }
       }
     }
   }
@@ -919,26 +896,17 @@ export class Renderer extends EventEmitter<RendererEvents> {
 
   #addTransformSubscriptions(): void {
     // Internal handlers for TF messages to update the transform tree
-    this.#addSchemaSubscriptions(FRAME_TRANSFORM_DATATYPES, {
-      handler: this.#handleFrameTransform,
-      shouldSubscribe: () => true,
-      preload: true,
-    });
-    this.#addSchemaSubscriptions(FRAME_TRANSFORMS_DATATYPES, {
-      handler: this.#handleFrameTransforms,
-      shouldSubscribe: () => true,
-      preload: true,
-    });
-    this.#addSchemaSubscriptions(TF_DATATYPES, {
-      handler: this.#handleTFMessage,
-      shouldSubscribe: () => true,
-      preload: true,
-    });
-    this.#addSchemaSubscriptions(TRANSFORM_STAMPED_DATATYPES, {
-      handler: this.#handleTransformStamped,
-      shouldSubscribe: () => true,
-      preload: true,
-    });
+    const add = <T>(schemaNames: Set<string>, handler: (event: MessageEvent<T>) => void) => {
+      this.#addSchemaSubscriptions(schemaNames, {
+        handler,
+        shouldSubscribe: () => true,
+        preload: true,
+      });
+    };
+    add(FRAME_TRANSFORM_DATATYPES, this.#handleFrameTransform);
+    add(FRAME_TRANSFORMS_DATATYPES, this.#handleFrameTransforms);
+    add(TF_DATATYPES, this.#handleTFMessage);
+    add(TRANSFORM_STAMPED_DATATYPES, this.#handleTransformStamped);
   }
 
   // eslint-disable-next-line @lichtblick/no-boolean-parameters
@@ -1146,21 +1114,14 @@ export class Renderer extends EventEmitter<RendererEvents> {
       extension.setColorScheme(colorScheme, bgColor);
     }
 
-    if (colorScheme === "dark") {
-      this.gl.setClearColor(bgColor ?? DARK_BACKDROP, this.#clearAlpha());
-      this.outlineMaterial.color.set(DARK_OUTLINE);
-      this.outlineMaterial.needsUpdate = true;
-      this.instancedOutlineMaterial.color.set(DARK_OUTLINE);
-      this.instancedOutlineMaterial.needsUpdate = true;
-      this.#selectionBackdrop.setColor(DARK_BACKDROP, 0.8);
-    } else {
-      this.gl.setClearColor(bgColor ?? LIGHT_BACKDROP, this.#clearAlpha());
-      this.outlineMaterial.color.set(LIGHT_OUTLINE);
-      this.outlineMaterial.needsUpdate = true;
-      this.instancedOutlineMaterial.color.set(LIGHT_OUTLINE);
-      this.instancedOutlineMaterial.needsUpdate = true;
-      this.#selectionBackdrop.setColor(LIGHT_BACKDROP, 0.8);
-    }
+    const backdrop = colorScheme === "dark" ? DARK_BACKDROP : LIGHT_BACKDROP;
+    const outline = colorScheme === "dark" ? DARK_OUTLINE : LIGHT_OUTLINE;
+    this.gl.setClearColor(bgColor ?? backdrop, this.#clearAlpha());
+    this.outlineMaterial.color.set(outline);
+    this.outlineMaterial.needsUpdate = true;
+    this.instancedOutlineMaterial.color.set(outline);
+    this.instancedOutlineMaterial.needsUpdate = true;
+    this.#selectionBackdrop.setColor(backdrop, 0.8);
   }
 
   public updateSceneRenderSettings(): void {
@@ -1171,22 +1132,17 @@ export class Renderer extends EventEmitter<RendererEvents> {
       if (this.#dirLight.parent != undefined) {
         this.#dirLight.removeFromParent();
       }
-      this.#dirLight.castShadow = false;
-
       this.#headLight.intensity = dirIntensity;
-      this.#headLight.castShadow = false;
     } else {
       if (this.#headLight.parent != undefined) {
         this.#headLight.removeFromParent();
         this.#headLight.target.removeFromParent();
       }
-      this.#headLight.castShadow = false;
 
       if (this.#dirLight.parent !== this.#scene) {
         this.#scene.add(this.#dirLight);
       }
       this.#dirLight.intensity = dirIntensity;
-      this.#dirLight.castShadow = false;
     }
 
     this.#hemiLight.intensity = this.config.scene.hemisphereLightIntensity ?? 0.5 * Math.PI;
@@ -1436,49 +1392,37 @@ export class Renderer extends EventEmitter<RendererEvents> {
    * by grouping them by topic/schema before queueing
    */
   public addMessageEventBatch(messageEvents: readonly MessageEvent[]): void {
-    // Extract coordinate frames from all messages
     for (const messageEvent of messageEvents) {
-      this.addMessageEvent(messageEvent, { inBatch: true });
+      this.#addCoordinateFrames(messageEvent.message);
     }
 
     // Group messages by topic and schema for efficient batching
-    const messagesByTopic = new Map<string, MessageEvent[]>();
-    const messagesBySchema = new Map<string, MessageEvent[]>();
-    for (const msg of this.#synchronize(messageEvents)) {
-      // Group by topic
-      let topicMessages = messagesByTopic.get(msg.topic);
-      if (topicMessages == undefined) {
-        topicMessages = [];
-        messagesByTopic.set(msg.topic, topicMessages);
-      }
-      topicMessages.push(msg);
-
-      // Group by schema
-      let schemaMessages = messagesBySchema.get(msg.schemaName);
-      if (schemaMessages == undefined) {
-        schemaMessages = [];
-        messagesBySchema.set(msg.schemaName, schemaMessages);
-      }
-      schemaMessages.push(msg);
-    }
-
-    // Queue messages in batches
-    this.queueByKey(messagesByTopic, this.topicSubscriptions);
-    this.queueByKey(messagesBySchema, this.schemaSubscriptions);
+    const synchronized = this.#synchronize(messageEvents);
+    this.queueByKey(
+      Map.groupBy(synchronized, (msg) => msg.topic),
+      this.topicSubscriptions,
+    );
+    this.queueByKey(
+      Map.groupBy(synchronized, (msg) => msg.schemaName),
+      this.schemaSubscriptions,
+    );
   }
 
-  public addMessageEvent(
-    messageEvent: Readonly<MessageEvent>,
-    options?: Partial<AddMessageEventOptions>,
-  ): void {
-    const { message } = messageEvent;
+  public addMessageEvent(messageEvent: Readonly<MessageEvent>): void {
+    this.#addCoordinateFrames(messageEvent.message);
+    for (const event of this.#synchronize([messageEvent])) {
+      queueMessage(event, this.topicSubscriptions.get(event.topic));
+      queueMessage(event, this.schemaSubscriptions.get(event.schemaName));
+    }
+  }
 
+  /** Extract coordinate frame IDs from an incoming message */
+  #addCoordinateFrames(message: unknown): void {
     const maybeHasHeader = message as DeepPartial<{ header: Header }>;
     const maybeHasMarkers = message as DeepPartial<MarkerArray>;
     const maybeHasEntities = message as DeepPartial<SceneUpdate>;
     const maybeHasFrameId = message as DeepPartial<Header>;
 
-    // Extract coordinate frame IDs from all incoming messages
     if (maybeHasHeader.header) {
       // If this message has a Header, scrape the frame_id from it
       const frameId = maybeHasHeader.header.frame_id ?? "";
@@ -1502,15 +1446,6 @@ export class Renderer extends EventEmitter<RendererEvents> {
     } else if (typeof maybeHasFrameId.frame_id === "string") {
       // If this message has a top-level frame_id, scrape it
       this.addCoordinateFrame(maybeHasFrameId.frame_id);
-    }
-
-    if (options?.inBatch === true) {
-      return;
-    }
-
-    for (const event of this.#synchronize([messageEvent])) {
-      queueMessage(event, this.topicSubscriptions.get(event.topic));
-      queueMessage(event, this.schemaSubscriptions.get(event.schemaName));
     }
   }
 
@@ -1636,14 +1571,16 @@ export class Renderer extends EventEmitter<RendererEvents> {
     }
   }
 
-  #addFrameTransform(
-    transform: FrameTransform,
-    options?: { isStatic?: boolean; receiveTime?: bigint; topic?: string },
+  /** Add one transform to the tree (frame ids already normalized), reporting failures in settings */
+  #addStampedTransform(
+    parentId: string,
+    childId: string,
+    timestamp: Time,
+    transform: { translation: Vector3; rotation: Quaternion },
+    options: { isStatic: boolean; receiveTime: bigint; topic: string },
   ): void {
-    const parentId = transform.parent_frame_id;
-    const childId = transform.child_frame_id;
     try {
-      const stamp = toNanoSec(transform.timestamp);
+      const stamp = toNanoSec(timestamp);
       const t = transform.translation;
       const q = transform.rotation;
 
@@ -1654,12 +1591,12 @@ export class Renderer extends EventEmitter<RendererEvents> {
         t,
         q,
         undefined,
-        options?.receiveTime,
+        options.receiveTime,
       );
 
-      if (options?.isStatic === true && result !== AddTransformResult.CYCLE_DETECTED) {
+      if (options.isStatic && result !== AddTransformResult.CYCLE_DETECTED) {
         this.#staticTransformCache.set(childId, {
-          topic: options.topic ?? "",
+          topic: options.topic,
           parentFrameId: parentId,
           childFrameId: childId,
           stamp,
@@ -1673,47 +1610,6 @@ export class Renderer extends EventEmitter<RendererEvents> {
         ["transforms"],
         ADD_TRANSFORM_ERROR,
         `Error adding transform for frame ${childId}: ${err.message}`,
-      );
-    }
-  }
-
-  #addTransformMessage(
-    tf: TransformStamped,
-    options?: { isStatic?: boolean; receiveTime?: bigint; topic?: string },
-  ): void {
-    const normalizedParentId = this.normalizeFrameId(tf.header.frame_id);
-    const normalizedChildId = this.normalizeFrameId(tf.child_frame_id);
-    try {
-      const stamp = toNanoSec(tf.header.stamp);
-      const t = tf.transform.translation;
-      const q = tf.transform.rotation;
-
-      const result = this.addTransform(
-        normalizedParentId,
-        normalizedChildId,
-        stamp,
-        t,
-        q,
-        undefined,
-        options?.receiveTime,
-      );
-
-      if (options?.isStatic === true && result !== AddTransformResult.CYCLE_DETECTED) {
-        this.#staticTransformCache.set(normalizedChildId, {
-          topic: options.topic ?? "",
-          parentFrameId: normalizedParentId,
-          childFrameId: normalizedChildId,
-          stamp,
-          translation: t,
-          rotation: q,
-        });
-      }
-    } catch (e: unknown) {
-      const err = toError(e);
-      this.settings.errors.add(
-        ["transforms"],
-        ADD_TRANSFORM_ERROR,
-        `Error adding transform for frame ${normalizedChildId}: ${err.message}`,
       );
     }
   }
@@ -1952,29 +1848,19 @@ export class Renderer extends EventEmitter<RendererEvents> {
 
   /** iterates through all subscription message queues, processes them, and calls their handler for each message in the frame */
   #handleSubscriptionQueues(): void {
-    for (const subscriptions of this.topicSubscriptions.values()) {
-      for (const subscription of subscriptions) {
-        if (!subscription.queue) {
-          continue;
-        }
-        const { queue, filterQueue } = subscription;
-        const processedQueue = filterQueue ? filterQueue(queue) : queue;
-        subscription.queue = undefined;
-        for (const messageEvent of processedQueue) {
-          subscription.handler(messageEvent);
-        }
-      }
-    }
-    for (const subscriptions of this.schemaSubscriptions.values()) {
-      for (const subscription of subscriptions) {
-        if (!subscription.queue) {
-          continue;
-        }
-        const { queue, filterQueue } = subscription;
-        const processedQueue = filterQueue ? filterQueue(queue) : queue;
-        subscription.queue = undefined;
-        for (const messageEvent of processedQueue) {
-          subscription.handler(messageEvent);
+    // Topics before schemas
+    for (const subscriptionMap of [this.topicSubscriptions, this.schemaSubscriptions]) {
+      for (const subscriptions of subscriptionMap.values()) {
+        for (const subscription of subscriptions) {
+          if (!subscription.queue) {
+            continue;
+          }
+          const { queue, filterQueue } = subscription;
+          const processedQueue = filterQueue ? filterQueue(queue) : queue;
+          subscription.queue = undefined;
+          for (const messageEvent of processedQueue) {
+            subscription.handler(messageEvent);
+          }
         }
       }
     }
@@ -2093,60 +1979,56 @@ export class Renderer extends EventEmitter<RendererEvents> {
     return selections;
   }
 
-  readonly #handleFrameTransform = ({
-    message,
-    topic,
-    receiveTime,
-  }: MessageEvent<DeepPartial<FrameTransform>>): void => {
+  #transformOptions({ topic, receiveTime }: MessageEvent): {
+    isStatic: boolean;
+    receiveTime: bigint;
+    topic: string;
+  } {
+    return { isStatic: isStaticTransformTopic(topic), receiveTime: toNanoSec(receiveTime), topic };
+  }
+
+  readonly #handleFrameTransform = (event: MessageEvent<DeepPartial<FrameTransform>>): void => {
     // foxglove.FrameTransform - Ingest this single transform into our TF tree
-    const transform = normalizeFrameTransform(message);
-    const isStatic = isStaticTransformTopic(topic);
-    this.#addFrameTransform(transform, { isStatic, receiveTime: toNanoSec(receiveTime), topic });
+    const tf = normalizeFrameTransform(event.message);
+    const options = this.#transformOptions(event);
+    this.#addStampedTransform(tf.parent_frame_id, tf.child_frame_id, tf.timestamp, tf, options);
   };
 
-  readonly #handleFrameTransforms = ({
-    message,
-    topic,
-    receiveTime,
-  }: MessageEvent<DeepPartial<FrameTransforms>>): void => {
+  readonly #handleFrameTransforms = (event: MessageEvent<DeepPartial<FrameTransforms>>): void => {
     // foxglove.FrameTransforms - Ingest the list of transforms into our TF tree
-    const frameTransforms = normalizeFrameTransforms(message);
-    const options = {
-      isStatic: isStaticTransformTopic(topic),
-      receiveTime: toNanoSec(receiveTime),
-      topic,
-    };
-    for (const transform of frameTransforms.transforms) {
-      this.#addFrameTransform(transform, options);
+    const frameTransforms = normalizeFrameTransforms(event.message);
+    const options = this.#transformOptions(event);
+    for (const tf of frameTransforms.transforms) {
+      this.#addStampedTransform(tf.parent_frame_id, tf.child_frame_id, tf.timestamp, tf, options);
     }
   };
 
-  readonly #handleTFMessage = ({
-    message,
-    topic,
-    receiveTime,
-  }: MessageEvent<DeepPartial<TFMessage>>): void => {
+  #addTransformMessage(
+    tf: TransformStamped,
+    options: { isStatic: boolean; receiveTime: bigint; topic: string },
+  ): void {
+    this.#addStampedTransform(
+      this.normalizeFrameId(tf.header.frame_id),
+      this.normalizeFrameId(tf.child_frame_id),
+      tf.header.stamp,
+      tf.transform,
+      options,
+    );
+  }
+
+  readonly #handleTFMessage = (event: MessageEvent<DeepPartial<TFMessage>>): void => {
     // tf2_msgs/TFMessage - Ingest the list of transforms into our TF tree
-    const tfMessage = normalizeTFMessage(message);
-    const options = {
-      isStatic: isStaticTransformTopic(topic),
-      receiveTime: toNanoSec(receiveTime),
-      topic,
-    };
+    const tfMessage = normalizeTFMessage(event.message);
+    const options = this.#transformOptions(event);
     for (const tf of tfMessage.transforms) {
       this.#addTransformMessage(tf, options);
     }
   };
 
-  readonly #handleTransformStamped = ({
-    message,
-    topic,
-    receiveTime,
-  }: MessageEvent<DeepPartial<TransformStamped>>): void => {
+  readonly #handleTransformStamped = (event: MessageEvent<DeepPartial<TransformStamped>>): void => {
     // geometry_msgs/TransformStamped - Ingest this single transform into our TF tree
-    const tf = normalizeTransformStamped(message);
-    const isStatic = isStaticTransformTopic(topic);
-    this.#addTransformMessage(tf, { isStatic, receiveTime: toNanoSec(receiveTime), topic });
+    const tf = normalizeTransformStamped(event.message);
+    this.#addTransformMessage(tf, this.#transformOptions(event));
   };
 
   #handleTopicsAction = (action: SettingsTreeAction): void => {
