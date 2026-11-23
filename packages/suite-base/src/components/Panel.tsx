@@ -64,6 +64,7 @@ import {
   useSelectedPanels,
 } from "@lichtblick/suite-base/context/CurrentLayoutContext";
 import { usePanelCatalog } from "@lichtblick/suite-base/context/PanelCatalogContext";
+import { TimelineInteractionStateContext } from "@lichtblick/suite-base/context/TimelineInteractionStateContext";
 import {
   useWorkspaceStore,
   WorkspaceStoreSelectors,
@@ -320,6 +321,23 @@ export default function Panel<
         swapPanel({ originalId: childId, type: newPanelType, config });
       },
       [childId, swapPanel],
+    );
+
+    const timelineInteraction = useContext(TimelineInteractionStateContext);
+    const focusPanel = useCallback(
+      (event: React.SyntheticEvent<HTMLDivElement>) => {
+        // Capture before chart gestures stop propagation, and only focus the innermost panel.
+        if ((event.target as Element).closest("[data-panel-id]") === event.currentTarget) {
+          timelineInteraction?.getState().setFocusedPanel(childId);
+        }
+      },
+      [childId, timelineInteraction],
+    );
+    useEffect(
+      () => () => {
+        timelineInteraction?.getState().clearFocusedPanel(childId);
+      },
+      [childId, timelineInteraction],
     );
 
     const panelSettingsOpen = useWorkspaceStore(WorkspaceStoreSelectors.selectPanelSettingsOpen);
@@ -698,6 +716,9 @@ export default function Panel<
             {(fullscreenState) => (
               <PanelRoot
                 onClick={onPanelRootClick}
+                onPointerDownCapture={focusPanel}
+                onWheelCapture={focusPanel}
+                onFocusCapture={focusPanel}
                 onClickCapture={capturePanelInteraction}
                 hasFullscreenDescendant={hasFullscreenDescendant}
                 fullscreenState={fullscreenState}

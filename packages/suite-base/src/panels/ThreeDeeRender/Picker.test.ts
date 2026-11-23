@@ -32,8 +32,18 @@ describe("decodePick", () => {
 });
 
 describe("Picker", () => {
-  it("keeps the pixel crop when a camera is first rendered with WebGPU", async () => {
+  it("refreshes matrices and keeps the crop when first picking with WebGPU", async () => {
     const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 10);
+    const scene = new THREE.Scene();
+    scene.matrixWorldAutoUpdate = false;
+    const object = new THREE.Object3D();
+    scene.add(object);
+    object.position.x = 5;
+    camera.position.z = 7;
+    const prepare = vi.fn(() => {
+      expect(object.matrixWorld.elements[12]).toBe(5);
+      expect(camera.matrixWorld.elements[14]).toBe(7);
+    });
     let drawnProjection: THREE.Matrix4 | undefined;
     const renderer = {
       coordinateSystem: THREE.WebGPUCoordinateSystem,
@@ -57,13 +67,14 @@ describe("Picker", () => {
       },
       readRenderTargetPixelsAsync: async () => new Uint32Array(4),
     };
-    const picker = new Picker(renderer as unknown as THREE.WebGPURenderer, new THREE.Scene());
+    const picker = new Picker(renderer as unknown as THREE.WebGPURenderer, scene, prepare);
 
     await picker.pick(1, 1, camera);
 
     const crop = new THREE.Matrix4().makeScale(4, 4, 1);
     crop.elements[12] = 1;
     crop.elements[13] = -1;
+    expect(prepare).toHaveBeenCalledOnce();
     expect(camera.coordinateSystem).toBe(THREE.WebGPUCoordinateSystem);
     expect(drawnProjection?.elements).toEqual(crop.multiply(camera.projectionMatrix).elements);
   });

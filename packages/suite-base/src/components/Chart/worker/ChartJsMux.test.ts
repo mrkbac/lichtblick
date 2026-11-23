@@ -24,11 +24,6 @@ vi.mock("@lichtblick/suite-base/panels/shared/loadFont", () => ({
   loadDefaultFont: async () => await font.loaded,
 }));
 
-// The plugin resolves to its UMD build, whose export is the plugin itself rather than `Zoom`.
-vi.mock("@foxglove/chartjs-plugin-zoom", async () => ({
-  Zoom: (await vi.importActual<{ default: unknown }>("@foxglove/chartjs-plugin-zoom")).default,
-}));
-
 function options(xMax: number): ChartOptions {
   return {
     animation: false,

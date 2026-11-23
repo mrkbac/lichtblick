@@ -14,7 +14,6 @@
 //   found at http://www.apache.org/licenses/LICENSE-2.0
 //   You may not use this file except in compliance with the License.
 
-import type { ZoomOptions } from "@foxglove/chartjs-plugin-zoom/types/options";
 import { Button, Fade, Tooltip, buttonClasses } from "@mui/material";
 import { ChartOptions, InteractionMode, ScaleOptions } from "chart.js";
 import { AnnotationOptions } from "chartjs-plugin-annotation";
@@ -33,6 +32,7 @@ import { makeStyles } from "tss-react/mui";
 import { filterMap } from "@lichtblick/den/collection";
 import { useMountedState } from "@lichtblick/hooks";
 import Logger from "@lichtblick/log";
+import { usePublishPanelTimeRange } from "@lichtblick/suite-base/PanelAPI";
 import ChartComponent from "@lichtblick/suite-base/components/Chart/index";
 import { RpcElement, RpcScales } from "@lichtblick/suite-base/components/Chart/types";
 import KeyListener from "@lichtblick/suite-base/components/KeyListener";
@@ -297,7 +297,7 @@ export default function TimeBasedChart(props: Props): React.JSX.Element {
   const [hasVerticalExclusiveZoom, setHasVerticalExclusiveZoom] = useState<boolean>(false);
   const [hasBothAxesZoom, setHasBothAxesZoom] = useState<boolean>(false);
 
-  const zoomMode = useMemo<ZoomOptions["mode"]>(() => {
+  const zoomMode = useMemo<"x" | "y" | "xy">(() => {
     if (hasVerticalExclusiveZoom) {
       return "y";
     } else if (hasBothAxesZoom) {
@@ -452,13 +452,11 @@ export default function TimeBasedChart(props: Props): React.JSX.Element {
         zoom: {
           enabled: props.zoom,
           mode: zoomMode,
-          sensitivity: 3,
           speed: 0.1,
         },
         pan: {
           mode: "xy",
           enabled: true,
-          speed: 20,
           threshold: 10,
         },
       },
@@ -609,6 +607,11 @@ export default function TimeBasedChart(props: Props): React.JSX.Element {
     [isMounted, updateTooltip],
   );
 
+  const publishTimeRange = usePublishPanelTimeRange();
+  useEffect(() => {
+    publishTimeRange(xAxisIsPlaybackTime ? currentScalesRef.current?.x : undefined);
+  }, [publishTimeRange, xAxisIsPlaybackTime]);
+
   const onScalesUpdate = useCallback(
     (scales: RpcScales, { userInteraction }: { userInteraction: boolean }) => {
       if (!isMounted()) {
@@ -633,6 +636,9 @@ export default function TimeBasedChart(props: Props): React.JSX.Element {
       }
 
       currentScalesRef.current = scales;
+      if (xAxisIsPlaybackTime) {
+        publishTimeRange(scales.x);
+      }
       if (scales.x != undefined && scales.y != undefined) {
         const { x, y } = scales;
         setViewportBounds({
@@ -705,7 +711,15 @@ export default function TimeBasedChart(props: Props): React.JSX.Element {
         };
       });
     },
-    [componentId, isMounted, isSynced, setGlobalBounds, setScales],
+    [
+      componentId,
+      isMounted,
+      isSynced,
+      publishTimeRange,
+      setGlobalBounds,
+      setScales,
+      xAxisIsPlaybackTime,
+    ],
   );
 
   useEffect(() => {

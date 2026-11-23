@@ -119,6 +119,62 @@ describe("McapUnindexedIterableSource", () => {
     expect(metadata).toEqual([{ name: "metadata1", metadata: { key: "value" } }]);
   });
 
+  it("lists unindexed attachments without reading their payload", async () => {
+    const builder = new McapRecordBuilder();
+    builder.writeMagic();
+    builder.writeHeader({ library: "test", profile: "" });
+    const offset = builder.buffer.byteLength;
+    const sizeBytes = 10 * 1024 * 1024;
+    builder.writeAttachment({
+      name: "notes-é.txt",
+      mediaType: "text/plain",
+      logTime: 1n,
+      createTime: 1n,
+      data: new Uint8Array(sizeBytes),
+    });
+    const bytes = builder.buffer.slice();
+    const readable = readableOf(bytes);
+    const readSpy = vi.spyOn(readable, "read");
+    const source = new McapUnindexedIterableSource({ readable });
+    const { recordingFiles } = await source.initialize();
+
+    expect(recordingFiles?.[0]).toMatchObject({
+      library: "test",
+      footerIndexed: false,
+      attachments: [{ name: "notes-é.txt", mediaType: "text/plain", offset, sizeBytes }],
+    });
+    expect(readSpy.mock.calls.every(([, size]) => size < BigInt(sizeBytes))).toBe(true);
+  });
+
+  it.each([0, 4 + 3])("skips an oversized attachment header at field %d", async (fieldOffset) => {
+    const builder = new McapRecordBuilder();
+    builder.writeMagic();
+    builder.writeHeader({ library: "test", profile: "" });
+    const offset = builder.buffer.byteLength;
+    const attachment = {
+      name: "bad",
+      mediaType: "",
+      logTime: 1n,
+      createTime: 1n,
+      data: new Uint8Array(10 * 1024 * 1024),
+    };
+    builder.writeAttachment(attachment);
+    builder.writeAttachment({ ...attachment, name: "valid", data: new Uint8Array([42]) });
+    const bytes = builder.buffer.slice();
+    const nameLengthAt = offset + 9 + 16;
+    new DataView(bytes.buffer).setUint32(nameLengthAt + fieldOffset, 9 * 1024 * 1024, true);
+
+    const readable = readableOf(bytes);
+    const readSpy = vi.spyOn(readable, "read");
+    const source = new McapUnindexedIterableSource({ readable });
+    const { recordingFiles, alerts } = await source.initialize();
+    expect(recordingFiles?.[0]?.attachments.map(({ name }) => name)).toEqual(["valid"]);
+    expect(alerts.map(({ message }) => message)).toContain(
+      "Some records in this file are corrupt and were skipped",
+    );
+    expect(readSpy.mock.calls.every(([, size]) => size <= 8n * 1024n * 1024n)).toBe(true);
+  });
+
   it("returns an empty array when no metadata is on the file", async () => {
     const tempBuffer = new TempBuffer();
     const writer = new McapWriter({ writable: tempBuffer });

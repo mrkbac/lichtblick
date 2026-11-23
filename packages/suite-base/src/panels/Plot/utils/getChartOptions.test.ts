@@ -97,13 +97,11 @@ describe("getChartOptions", () => {
           zoom: {
             enabled: true,
             mode: "x",
-            sensitivity: 3,
             speed: 0.1,
           },
           pan: {
             mode: "xy",
             enabled: true,
-            speed: 20,
             threshold: 10,
           },
         },

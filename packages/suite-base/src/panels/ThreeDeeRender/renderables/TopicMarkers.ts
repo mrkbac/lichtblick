@@ -10,6 +10,8 @@ import * as THREE from "three";
 import { MarkerBatches, isBatchable, unbatch } from "./markers/MarkerBatches";
 import { RenderableMarker, getMarkerId } from "./markers/RenderableMarker";
 import { RenderableMeshResource } from "./markers/RenderableMeshResource";
+import { RenderableTextViewFacing } from "./markers/RenderableTextViewFacing";
+import { TextMarkerBatches } from "./markers/TextMarkerBatches";
 import { missingTransformMessage, MISSING_TRANSFORM } from "./transforms";
 import { BaseUserData, Renderable } from "../Renderable";
 import type { Renderer } from "../Renderer";
@@ -70,6 +72,8 @@ type PoseInputs = {
   fixedFrameId: string;
   transformsVersion: number;
   topicsConfig: unknown;
+  labelAtlasVersion: number;
+  labelScaleFactor: number;
   ros: boolean;
 };
 
@@ -79,11 +83,13 @@ export class TopicMarkers extends Renderable<MarkerTopicUserData> {
   /** Inputs of the last pose update; cleared whenever a marker is added, changed or removed */
   #posedWith: PoseInputs | undefined;
   readonly #batches: MarkerBatches;
+  readonly #textBatches: TextMarkerBatches;
 
   public constructor(name: string, renderer: Renderer, userData: MarkerTopicUserData) {
     super(name, renderer, userData);
     this.#batches = new MarkerBatches(renderer.outlineMaterial);
-    this.add(this.#batches);
+    this.#textBatches = new TextMarkerBatches(renderer.labelPool);
+    this.add(this.#batches, this.#textBatches);
   }
 
   public override dispose(): void {
@@ -94,6 +100,7 @@ export class TopicMarkers extends Renderable<MarkerTopicUserData> {
       }
     }
     this.#batches.dispose();
+    this.#textBatches.dispose();
     this.children.length = 0;
     this.namespaces.clear();
   }
@@ -146,6 +153,8 @@ export class TopicMarkers extends Renderable<MarkerTopicUserData> {
     const transformsVersion = this.renderer.transformTree.version;
     // Not the whole config: a camera move replaces it
     const topicsConfig = this.renderer.config.topics;
+    const labelAtlasVersion = this.renderer.labelPool.atlasTexture.version;
+    const labelScaleFactor = this.renderer.labelPool.scaleFactor;
     const last = this.#posedWith;
     if (
       last?.currentTime === currentTime &&
@@ -153,6 +162,8 @@ export class TopicMarkers extends Renderable<MarkerTopicUserData> {
       last.fixedFrameId === fixedFrameId &&
       last.transformsVersion === transformsVersion &&
       last.topicsConfig === topicsConfig &&
+      last.labelAtlasVersion === labelAtlasVersion &&
+      last.labelScaleFactor === labelScaleFactor &&
       last.ros === this.renderer.ros
     ) {
       return;
@@ -237,10 +248,13 @@ export class TopicMarkers extends Renderable<MarkerTopicUserData> {
         renderable.quaternion.set(o.x, o.y, o.z, o.w).premultiply(tempQuaternion).normalize();
         if (isBatchable(renderable)) {
           this.#batches.addMarker(renderable);
+        } else if (renderable instanceof RenderableTextViewFacing) {
+          this.#textBatches.addMarker(renderable);
         }
       }
     }
     this.#batches.end();
+    this.#textBatches.end();
     if (missingTransform != undefined) {
       this.renderer.settings.errors.addToTopic(this.topic, MISSING_TRANSFORM, missingTransform);
     } else if (anyUpdated) {
@@ -252,6 +266,8 @@ export class TopicMarkers extends Renderable<MarkerTopicUserData> {
       fixedFrameId,
       transformsVersion,
       topicsConfig,
+      labelAtlasVersion,
+      labelScaleFactor,
       ros: this.renderer.ros,
     };
   }

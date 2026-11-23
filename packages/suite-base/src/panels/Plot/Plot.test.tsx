@@ -40,6 +40,7 @@ vi.mock("@lichtblick/suite-base/components/MessagePipeline", () => ({
 
 vi.mock("@lichtblick/suite-base/PanelAPI", () => ({
   useDataSourceInfo: () => ({ topics: [], datatypes: new Map() }),
+  usePublishPanelTimeRange: () => mockPublishPanelTimeRange,
 }));
 
 vi.mock("@lichtblick/suite-base/components/PanelContextMenu", () => ({
@@ -112,6 +113,7 @@ vi.mock("./hooks/usePlotInteractionHandlers", () => ({
 }));
 
 let mockCoordinatorInstance: any;
+const mockPublishPanelTimeRange = vi.fn();
 const mockPlotCoordinatorCtor = vi.fn();
 vi.mock("./PlotCoordinator", () => ({
   PlotCoordinator: vi.fn(function (renderer, builder, subscribeMessageRange) {
@@ -161,7 +163,9 @@ describe("Plot Component", () => {
       resetBounds: vi.fn(),
       setZoomMode: vi.fn(),
       getXValueAtPixel: vi.fn(),
+      getXScale: vi.fn(),
       on: vi.fn(),
+      off: vi.fn(),
     };
     mockPlotCoordinatorCtor.mockImplementation(function () {
       return mockCoordinatorInstance;
@@ -376,6 +380,32 @@ describe("Plot Component", () => {
       ...config.paths,
       { value: "/new", enabled: true, timestampMethod: "receiveTime" },
     ]);
+  });
+
+  it("publishes the rendered x range only for a playback-time axis", () => {
+    const config = { ...DEFAULT_PLOT_CONFIG, xAxisVal: "timestamp" } as const;
+    const scale = { min: 10, max: 20, left: 0, right: 640 };
+    mockCoordinatorInstance.getXScale.mockReturnValue(scale);
+
+    const { rerender } = renderPlot(config);
+
+    expect(mockPublishPanelTimeRange).toHaveBeenCalledWith(scale);
+    expect(mockCoordinatorInstance.on).toHaveBeenCalledWith(
+      "xScaleChanged",
+      mockPublishPanelTimeRange,
+    );
+
+    rerender(
+      <ThemeProvider isDark>
+        <Plot config={{ ...config, xAxisVal: "index" }} saveConfig={vi.fn()} />
+      </ThemeProvider>,
+    );
+
+    expect(mockCoordinatorInstance.off).toHaveBeenCalledWith(
+      "xScaleChanged",
+      mockPublishPanelTimeRange,
+    );
+    expect(mockPublishPanelTimeRange).toHaveBeenLastCalledWith(undefined);
   });
 
   it("Given renderer present When mounted Then coordinator lifecycle hooks are exercised", () => {

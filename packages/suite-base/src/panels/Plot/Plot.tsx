@@ -133,6 +133,20 @@ const Plot = (props: PlotProps): React.JSX.Element => {
   const [approximateSeries, setApproximateSeries] = useState(noApproximateSeries);
   const shouldSync = config.isSynced;
   const plotMode = getPlotMode(config);
+  const publishTimeRange = PanelAPI.usePublishPanelTimeRange();
+  const xAxisIsPlaybackTime = xAxisMode === "timestamp" && plotMode === "time";
+  useEffect(() => {
+    if (!coordinator || !xAxisIsPlaybackTime) {
+      return;
+    }
+
+    coordinator.on("xScaleChanged", publishTimeRange);
+    publishTimeRange(coordinator.getXScale());
+    return () => {
+      coordinator.off("xScaleChanged", publishTimeRange);
+      publishTimeRange(undefined);
+    };
+  }, [coordinator, publishTimeRange, xAxisIsPlaybackTime]);
   // A spectrum or histogram names its axes unless the user did
   const coordinatorConfig = useMemo(
     () =>
@@ -497,7 +511,7 @@ const Plot = (props: PlotProps): React.JSX.Element => {
             <VerticalBars
               coordinator={coordinator}
               hoverComponentId={subscriberId}
-              xAxisIsPlaybackTime={xAxisMode === "timestamp" && plotMode === "time"}
+              xAxisIsPlaybackTime={xAxisIsPlaybackTime}
             />
             <DeltaMarkerBars
               coordinator={coordinator}

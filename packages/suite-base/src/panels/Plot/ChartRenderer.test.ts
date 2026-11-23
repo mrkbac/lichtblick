@@ -1,6 +1,5 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
-import { Zoom as ZoomPlugin } from "@foxglove/chartjs-plugin-zoom";
 import { Chart, ChartOptions, Element, InteractionItem, Scale } from "chart.js";
 import type { Mock } from "vitest";
 
@@ -19,12 +18,8 @@ import {
   ChartRendererProps,
   ChartType,
   Dataset,
-  PanEndInteractionEvent,
-  PanMoveInteractionEvent,
-  PanStartInteractionEvent,
   ReferenceLine,
   UpdateAction,
-  WheelInteractionEvent,
 } from "./types";
 
 const OPTIONS_CHART: ChartOptionsPlot = vi.hoisted(() => ({
@@ -68,22 +63,11 @@ vi.mock("chart.js", () => {
         options,
         scales: SCALES_CHART,
         canvas,
-        $zoom: {
-          panStartHandler: vi.fn(),
-          panHandler: vi.fn(),
-          panEndHandler: vi.fn(),
-        },
         getElementsAtEventForMode: vi.fn().mockReturnValue([]),
       };
     }),
   };
 });
-
-vi.mock("@foxglove/chartjs-plugin-zoom", () => ({
-  Zoom: {
-    start: vi.fn(),
-  },
-}));
 
 vi.mock("@lichtblick/suite-base/panels/Plot/utils/getChartOptions", () => ({
   getChartOptions: vi.fn().mockReturnValue({}),
@@ -178,7 +162,6 @@ describe("ChartRenderer", () => {
       expect(Chart).toHaveBeenCalledWith(expect.anything(), {
         data: { datasets: [] },
         options: expect.any(Object),
-        plugins: [ZoomPlugin],
         type: "scatter",
       });
       expect(getChartOptions).toHaveBeenCalledWith({
@@ -359,95 +342,6 @@ describe("ChartRenderer", () => {
       const chartUpdated = chartRenderer.update(action);
 
       expect(chartUpdated).toBeUndefined();
-    });
-
-    it("should update when wheel event type", () => {
-      const wheelEvent = {
-        type: "wheel",
-        boundingClientRect: {},
-        deltaX: BasicBuilder.number(),
-        deltaY: BasicBuilder.number(),
-      } as WheelInteractionEvent;
-      const { action, chartRenderer } = setup({
-        actionOverride: {
-          type: "update",
-          interactionEvents: [wheelEvent],
-        },
-      });
-      const fakeNodeEventsEmitSpy = vi.spyOn((chartRenderer as any).getFakeNodeEvents(), "emit");
-
-      chartRenderer.update(action);
-
-      expect(fakeNodeEventsEmitSpy).toHaveBeenCalledWith("wheel", {
-        deltaX: wheelEvent.deltaX,
-        deltaY: wheelEvent.deltaY,
-        target: expect.objectContaining({
-          getBoundingClientRect: expect.any(Function),
-        }),
-      });
-    });
-
-    it("should update when panstart event type", () => {
-      const panStartEvent = {
-        type: "panstart",
-        boundingClientRect: {},
-        center: { x: BasicBuilder.number(), y: BasicBuilder.number() },
-      } as PanStartInteractionEvent;
-      const { action, chartRenderer } = setup({
-        actionOverride: {
-          type: "update",
-          interactionEvents: [panStartEvent],
-        },
-      });
-      const chartInstance = (chartRenderer as any).getChartInstance();
-      const panStartHandlerSpy = vi.spyOn(chartInstance.$zoom, "panStartHandler");
-
-      chartRenderer.update(action);
-
-      expect(panStartHandlerSpy).toHaveBeenCalledWith({
-        center: panStartEvent.center,
-        deltaX: undefined,
-        deltaY: undefined,
-        target: expect.objectContaining({
-          getBoundingClientRect: expect.any(Function),
-        }),
-      });
-    });
-
-    it("should update when panmove event type", () => {
-      const panMoveEvent = {
-        type: "panmove",
-      } as PanMoveInteractionEvent;
-      const { action, chartRenderer } = setup({
-        actionOverride: {
-          type: "update",
-          interactionEvents: [panMoveEvent],
-        },
-      });
-      const chartInstance = (chartRenderer as any).getChartInstance();
-      const panHandlerSpy = vi.spyOn(chartInstance.$zoom, "panHandler");
-
-      chartRenderer.update(action);
-
-      expect(panHandlerSpy).toHaveBeenCalledWith(panMoveEvent);
-    });
-
-    it("should update when panend event type", () => {
-      const panEndEvent = {
-        type: "panend",
-      } as PanEndInteractionEvent;
-      const { action, chartRenderer } = setup({
-        actionOverride: {
-          type: "update",
-          interactionEvents: [panEndEvent],
-        },
-      });
-      const chartInstance = (chartRenderer as any).getChartInstance();
-      const panHandlerSpy = vi.spyOn(chartInstance.$zoom, "panEndHandler");
-
-      chartRenderer.update(action);
-
-      expect(panHandlerSpy).toHaveBeenCalledTimes(1);
     });
 
     it("should handle reference lines in update action", () => {

@@ -66,7 +66,6 @@ const props: ComponentProps<typeof ChartComponent> = {
         zoom: {
           enabled: true,
           mode: "xy",
-          sensitivity: 3,
           speed: 0.1,
         },
         pan: {

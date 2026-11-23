@@ -28,10 +28,6 @@ export type RspackConfigParams = {
   mainContext: string;
   mainEntrypoint: string;
 
-  /** Directory to find `quicklookEntrypoint` and `tsconfig.json`. */
-  quicklookContext: string;
-  quicklookEntrypoint: string;
-
   /** Directory to find `preloadEntrypoint` and `tsconfig.json`. */
   preloadContext: string;
   preloadEntrypoint: string;

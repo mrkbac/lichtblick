@@ -9,32 +9,11 @@ import { exec } from "@actions/exec";
 import { downloadTool, extractZip } from "@actions/tool-cache";
 import { log, Arch } from "builder-util";
 import crypto from "crypto";
-import type { AfterPackContext, MacPackager } from "electron-builder";
+import type { AfterPackContext } from "electron-builder";
 import fs from "fs/promises";
 import path from "path";
-import * as plist from "plist";
-import { fileURLToPath } from "url";
-
-type PlistObject = Record<string, plist.PlistValue>;
-
-async function getKeychainFile(context: AfterPackContext): Promise<string | undefined> {
-  // Ensure it's a macOS packager
-  if (context.packager.platform.name !== "mac") {
-    log.error("Not a macOS packager.");
-    return;
-  }
-
-  // Access properties dynamically
-  const macPackager = context.packager as MacPackager;
-  if (!macPackager.codeSigningInfo.hasValue) {
-    log.error("No code signing info available.");
-    return;
-  }
-  return (await macPackager.codeSigningInfo.value).keychainFile ?? undefined;
-}
 
 export default async function afterPack(context: AfterPackContext): Promise<void> {
-  await configureQuickLookExtension(context);
   await copySpotlightImporter(context);
   await assertNoSourceMaps(context.appOutDir);
 }
@@ -154,93 +133,4 @@ async function copySpotlightImporter(context: AfterPackContext) {
     });
   }
   log.info({ path: spotlightDirPath }, "Copied mdimporter");
-}
-
-/**
- * Configure the .appex for Quick Look bag preview support. The appex itself is copied by
- * electron-builder as part of `extraFiles`.
- *
- * Here we perform the following steps:
- * - Update Info.plist to declare support for .bag file previews
- * - Copy the actual preview implementation (outputs from webpack.quicklook.config.ts)
- * - Re-codesign the app so it is properly sandboxed (macOS refuses to load an extension if it is
- *   not sandboxed)
- */
-async function configureQuickLookExtension(context: AfterPackContext) {
-  const { electronPlatformName, appOutDir } = context;
-  if (electronPlatformName !== "darwin") {
-    return;
-  }
-
-  const appName = context.packager.appInfo.productFilename;
-  const appPath = path.join(appOutDir, `${appName}.app`);
-  const appBundleId = context.packager.config.appId;
-
-  const appexPath = path.join(appPath, "Contents", "PlugIns", "PreviewExtension.appex");
-  const appexContents = path.join(appexPath, "Contents");
-  const appexResources = path.join(appexContents, "Resources");
-  const appexInfoPlist = path.join(appexContents, "Info.plist");
-  const appexExecutablePath = path.join(appexContents, "MacOS", "PreviewExtension");
-
-  const originalInfo = plist.parse(
-    await fs.readFile(appexInfoPlist, { encoding: "utf-8" }),
-  ) as PlistObject;
-  const newInfo = {
-    ...originalInfo,
-    CFBundleIdentifier: `${appBundleId}.quicklook`,
-    NSExtension: {
-      ...(originalInfo.NSExtension as PlistObject),
-      NSExtensionAttributes: {
-        QLSupportedContentTypes: ["org.ros.bag", "dev.mcap.mcap"],
-        QLSupportsSearchableItems: false,
-      },
-    },
-    QLJS: {
-      ...(originalInfo.QLJS as PlistObject),
-      pagePath: "index.html",
-    },
-  };
-  await fs.writeFile(appexInfoPlist, plist.build(newInfo));
-  log.info("Updated appex Info.plist for Quick Look");
-
-  const webpackOutputDir = path.join(context.packager.info.appDir, "quicklook");
-  for (const file of await fs.readdir(webpackOutputDir, { withFileTypes: true })) {
-    if (!file.isFile()) {
-      throw new Error(`Expected only files in Quick Look webpack output, found: ${file.name}`);
-    }
-    if (file.name.endsWith(".map")) {
-      continue;
-    }
-    await fs.copyFile(path.join(webpackOutputDir, file.name), path.join(appexResources, file.name));
-  }
-  log.info("Copied .webpack/quicklook into appex resources");
-
-  await extractTargetArchitecture(appexExecutablePath, context);
-
-  // The notarization step requires a valid signature from our "Developer ID Application"
-  // certificate. However this certificate is only available in CI, so for packaging to succeed in a
-  // local development workflow, we just use the "-" ad-hoc signing identity.
-  //
-  // electron-builder's MacPackager creates a temporary keychain to hold the signing info. The
-  // certificate is not in the regular system keychain so we have to use the temporary keychain for
-  // signing.
-  const keychainFile = await getKeychainFile(context);
-  if (keychainFile != undefined) {
-    await exec("security", ["find-identity", "-v", "-p", "codesigning", keychainFile]);
-  }
-  const signingArgs =
-    process.env.CI != undefined && keychainFile != undefined
-      ? ["--keychain", keychainFile, "--sign", "Developer ID Application"]
-      : ["--sign", "-"];
-
-  await exec("codesign", [
-    ...signingArgs,
-    "--force",
-    "--options",
-    "runtime", // notarization requires Hardened Runtime to be enabled
-    "--entitlements",
-    fileURLToPath(import.meta.resolve("quicklookjs/dist/PreviewExtension.entitlements")),
-    appexPath,
-  ]);
-  log.info("Re-sandboxed appex");
 }

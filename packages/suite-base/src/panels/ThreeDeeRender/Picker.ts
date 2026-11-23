@@ -56,6 +56,8 @@ export const pickPixel = uniform(new THREE.Vector2(), "vec2");
 /** The object being drawn, as a per-object uniform shared by all picking materials */
 export const pickObjectId = uniform(0, "uint").onObjectUpdate(({ object }) => object?.id ?? 0);
 
+type PickingCamera = THREE.PerspectiveCamera | THREE.OrthographicCamera;
+
 /**
  * GPU picking: draws the scene into a 1x1 uint target centered on the cursor, where every object's
  * material is swapped for a picking variant that writes (object id, instance index, view depth).
@@ -80,10 +82,18 @@ export class Picker {
   #sourceRefs = new WeakMap<THREE.Material, WeakRef<THREE.Material>>();
   #projectionBeforePick = new THREE.Matrix4();
   #clearColor = new THREE.Color();
+  readonly #prepare:
+    | ((camera: PickingCamera, hidden: ReadonlySet<THREE.Object3D>) => void)
+    | undefined;
 
-  public constructor(renderer: THREE.WebGPURenderer, scene: THREE.Scene) {
+  public constructor(
+    renderer: THREE.WebGPURenderer,
+    scene: THREE.Scene,
+    prepare?: (camera: PickingCamera, hidden: ReadonlySet<THREE.Object3D>) => void,
+  ) {
     this.#renderer = renderer;
     this.#scene = scene;
+    this.#prepare = prepare;
   }
 
   public dispose(): void {
@@ -104,7 +114,7 @@ export class Picker {
   public async pick(
     x: number,
     y: number,
-    camera: THREE.PerspectiveCamera | THREE.OrthographicCamera,
+    camera: PickingCamera,
     hidden: ReadonlySet<THREE.Object3D> = new Set(),
   ): Promise<PickResult | undefined> {
     const renderer = this.#renderer;
@@ -122,6 +132,13 @@ export class Picker {
       camera.coordinateSystem = renderer.coordinateSystem;
       camera.updateProjectionMatrix();
     }
+    this.#scene.updateMatrixWorld();
+    if (camera.parent == undefined) {
+      camera.updateMatrixWorld();
+    }
+    // The point raster reads the refreshed matrices and the full canvas projection.
+    this.#prepare?.(camera, hidden);
+
     // Crop the projection to the cursor's pixel. Works for any projection, including custom ones
     // (image mode, map cameras)
     this.#projectionBeforePick.copy(camera.projectionMatrix);

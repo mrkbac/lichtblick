@@ -67,7 +67,7 @@ const useStyles = makeStyles<{ debugDragRegion?: boolean }, "avatar">()(
         padding: theme.spacing(0.25, 0.25),
         margin: theme.spacing(0.5),
         fontSize: "2rem",
-        color: theme.palette.appBar.primary,
+        color: theme.palette.appBar.text,
         borderRadius: 8,
 
         "svg:not(.MuiSvgIcon-root)": {

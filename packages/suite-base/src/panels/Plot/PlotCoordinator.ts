@@ -721,6 +721,10 @@ export class PlotCoordinator extends EventEmitter<PlotCoordinatorEventTypes> {
     return await this.datasetsBuilder.getCsvData(xRange);
   }
 
+  public getXScale(): Scale | undefined {
+    return this.latestXScale;
+  }
+
   /** The data of all series within the visible x range */
   /** Undefined until the chart has drawn an x axis, since the visible range is unknown before. */
   public async getVisibleCsvData(): Promise<CsvDataset[] | undefined> {

@@ -29,7 +29,7 @@ function makeElectronBuilderConfig(params) {
     icon: path.join(__dirname, "../resources/icon/icon.icns"),
     protocols: [
       {
-        name: "lichtblick",
+        name: "Digitalis",
         schemes: ["lichtblick"],
       },
     ],
@@ -57,7 +57,7 @@ function makeElectronBuilderConfig(params) {
         },
         {
           ext: "foxe",
-          name: "Lichtblick Extension",
+          name: "Digitalis Extension",
           mimeType: "application/zip",
         },
       ],
@@ -83,7 +83,7 @@ function makeElectronBuilderConfig(params) {
         },
         {
           ext: "foxe",
-          name: "Lichtblick Extension",
+          name: "Digitalis Extension",
         },
       ],
     },
@@ -95,15 +95,6 @@ function makeElectronBuilderConfig(params) {
       category: "public.app-category.developer-tools",
       entitlements: path.join(__dirname, "../resources/mac/entitlements.plist"),
       entitlementsInherit: path.join(__dirname, "../resources/mac/entitlements.plist"),
-      extraFiles: [
-        {
-          from: path.join(
-            require.resolve("quicklookjs/index.d.ts"),
-            "../dist/PreviewExtension.appex",
-          ),
-          to: "PlugIns/PreviewExtension.appex",
-        },
-      ],
       extraResources: [
         { from: path.join(__dirname, "../resources/icon/BagIcon.png"), to: "BagIcon.png" },
         { from: path.join(__dirname, "../resources/icon/McapIcon.png"), to: "McapIcon.png" },
@@ -132,7 +123,7 @@ function makeElectronBuilderConfig(params) {
           {
             CFBundleTypeExtensions: ["foxe"],
             CFBundleTypeIconFile: "FoxeIcon",
-            CFBundleTypeName: "Lichtblick Extension File",
+            CFBundleTypeName: "Digitalis Extension File",
             CFBundleTypeRole: "Viewer",
             LSHandlerRank: "Owner",
             CFBundleTypeIconSystemGenerated: 1,
@@ -150,7 +141,7 @@ function makeElectronBuilderConfig(params) {
           },
           {
             UTTypeConformsTo: ["public.data", "public.archive", "public.zip-archive"],
-            UTTypeDescription: "Lichtblick Extension File",
+            UTTypeDescription: "Digitalis Extension File",
             UTTypeIcons: { UTTypeIconText: "foxe" },
             UTTypeIdentifier: "dev.foxglove.extension",
             UTTypeTagSpecification: { "public.filename-extension": "foxe" },

@@ -40,9 +40,11 @@ const SKIM_PREFETCH_AHEAD_CHUNKS = 24;
 export type ByteRange = { offset: bigint; length: bigint };
 
 /** Rebuilds a reader that skips corrupt chunks, after `error` was thrown while reading */
-export type RecoverReader = (
-  error: Error,
-) => Promise<{ reader: McapIndexedReader; alert: PlayerAlert | undefined }>;
+export type RecoverReader = (error: Error) => Promise<{
+  reader: McapIndexedReader;
+  alert: PlayerAlert | undefined;
+  conflicts: PlayerAlert[];
+}>;
 
 /**
  * Why a chunk can't be read as the index describes it, or undefined if it can. Throws if its bytes
@@ -93,7 +95,7 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
   // The corrupt-chunk search in progress, shared by the reads that fail meanwhile
   #checking?: Promise<boolean>;
   // Set once the reader was rebuilt mid-read; yielded by the next messageIterator result
-  #recoveryAlert?: PlayerAlert;
+  #recoveryAlerts = new Map<number, PlayerAlert>();
   // What initialize() has processed of the reader's index so far, and what it built from it
   #index = {
     chunks: 0,
@@ -187,12 +189,12 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
         this.#corruptChunks.add(chunk.chunkStartOffset);
         this.#reader.setChunkIndexes(this.#reader.chunkIndexes.filter((other) => other !== chunk));
         log.info(`Skipping corrupt MCAP chunk at offset ${chunk.chunkStartOffset}`, error);
-        this.#recoveryAlert = {
+        this.#recoveryAlerts.set(RECOVERY_CONNECTION_ID, {
           severity: "warn",
           message: "This file is damaged; skipping the parts that can't be read.",
           tip: `Skipped ${this.#corruptChunks.size} corrupt chunk(s) so far, the last one from ${toRFC3339String(fromNanoSec(chunk.messageStartTime))} to ${toRFC3339String(fromNanoSec(chunk.messageEndTime))}: ${error.message}`,
           error,
-        };
+        });
         return true;
       }
     }
@@ -257,14 +259,21 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
               if (!recover) {
                 throw err;
               }
-              this.#recovering ??= recover(toError(err)).then(({ reader: next, alert }) => {
-                this.#reader = next;
-                this.#recover = undefined;
-                // Its index comes from a scan that already skipped corrupt chunks, and its message
-                // indexes aren't in the file, so checking chunks against the file would fail
-                this.#checkChunk = undefined;
-                this.#recoveryAlert = alert;
-              });
+              this.#recovering ??= recover(toError(err)).then(
+                ({ reader: next, alert, conflicts }) => {
+                  this.#reader = next;
+                  this.#recover = undefined;
+                  // Its index comes from a scan that already skipped corrupt chunks, and its message
+                  // indexes aren't in the file, so checking chunks against the file would fail
+                  this.#checkChunk = undefined;
+                  if (alert) {
+                    this.#recoveryAlerts.set(RECOVERY_CONNECTION_ID, alert);
+                  }
+                  for (const [i, conflict] of conflicts.entries()) {
+                    this.#recoveryAlerts.set(RECOVERY_CONNECTION_ID - 1 - i, conflict);
+                  }
+                },
+              );
               await this.#recovering;
               retried = false;
             } else {
@@ -295,11 +304,23 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
     }
   }
 
-  /** The alert for a recovery that happened while reading, once */
-  #takeRecoveryAlert(): Readonly<IteratorResult<Uint8Array>> | undefined {
-    const alert = this.#recoveryAlert;
-    this.#recoveryAlert = undefined;
-    return alert ? { type: "alert", connectionId: RECOVERY_CONNECTION_ID, alert } : undefined;
+  /** Alerts for a recovery that happened while reading, once */
+  *#takeRecoveryAlerts(
+    consumptionType: MessageIteratorArgs["consumptionType"],
+  ): Iterable<Readonly<IteratorResult<Uint8Array>>> {
+    for (const [connectionId, alert] of this.#recoveryAlerts) {
+      if (consumptionType !== "full" || connectionId === RECOVERY_CONNECTION_ID) {
+        this.#recoveryAlerts.delete(connectionId);
+        yield { type: "alert", connectionId, alert };
+      }
+    }
+  }
+
+  #hasRecoveryAlerts(consumptionType: MessageIteratorArgs["consumptionType"]): boolean {
+    // Some whole-history consumers only handle messages. Keep conflict alerts for playback.
+    return consumptionType === "full"
+      ? this.#recoveryAlerts.has(RECOVERY_CONNECTION_ID)
+      : this.#recoveryAlerts.size > 0;
   }
 
   /**
@@ -481,10 +502,17 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
     }
 
     const topicNames = Array.from(topics.keys());
+    const { consumptionType } = args;
 
     const skimNs = args.skimInterval ? toNanoSec(args.skimInterval) : 0n;
     if (skimNs > SKIM_MIN_CHUNKS_PER_WINDOW * this.#avgChunkDurationNs) {
-      yield* this.#skimMessages(toNanoSec(start), toNanoSec(end), skimNs, topicNames);
+      yield* this.#skimMessages(
+        toNanoSec(start),
+        toNanoSec(end),
+        skimNs,
+        topicNames,
+        consumptionType,
+      );
       return;
     }
 
@@ -494,18 +522,14 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
       endingAt: toNanoSec(end),
       topics: topicNames,
       // Whole-range reads (preloading, panel history) yield remote bandwidth to playback
-      readOptions: args.consumptionType === "full" ? FULL_READ_OPTIONS : undefined,
+      readOptions: consumptionType === "full" ? FULL_READ_OPTIONS : undefined,
     })) {
-      const alert = this.#takeRecoveryAlert();
-      if (alert) {
-        yield alert;
+      if (this.#hasRecoveryAlerts(consumptionType)) {
+        yield* this.#takeRecoveryAlerts(consumptionType);
       }
       yield this.#toResult(message);
     }
-    const alert = this.#takeRecoveryAlert();
-    if (alert) {
-      yield alert;
-    }
+    yield* this.#takeRecoveryAlerts(consumptionType);
   }
 
   /**
@@ -517,6 +541,7 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
     endNs: bigint,
     skimNs: bigint,
     topicNames: string[],
+    consumptionType: MessageIteratorArgs["consumptionType"],
   ): AsyncIterableIterator<Readonly<IteratorResult<Uint8Array>>> {
     const windowBounds = (windowStart: bigint) => {
       const windowEnd = windowStart + skimNs - 1n < endNs ? windowStart + skimNs - 1n : endNs;
@@ -575,9 +600,8 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
       }
 
       messages.sort((a, b) => (a.logTime < b.logTime ? -1 : a.logTime > b.logTime ? 1 : 0));
-      const alert = this.#takeRecoveryAlert();
-      if (alert) {
-        yield alert;
+      if (this.#hasRecoveryAlerts(consumptionType)) {
+        yield* this.#takeRecoveryAlerts(consumptionType);
       }
       for (const message of messages) {
         yield this.#toResult(message);

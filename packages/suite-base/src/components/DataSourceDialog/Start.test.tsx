@@ -73,6 +73,14 @@ const rosbridgeSource = {
   initialize: () => undefined,
 } as unknown as IDataSourceFactory;
 
+const remoteFileSource = {
+  id: "remote-file",
+  type: "connection",
+  displayName: "Remote file",
+  formConfig: { fields: [{ id: "url", label: "URL" }] },
+  initialize: () => undefined,
+} as const satisfies IDataSourceFactory;
+
 const udpSource = {
   id: "udp",
   type: "connection",
@@ -124,6 +132,7 @@ describe("Start Component", () => {
         wsSource,
         rosbridgeSource,
         udpSource,
+        remoteFileSource,
         {
           ...wsSource,
           id: "custom",
@@ -316,6 +325,19 @@ describe("Start Component", () => {
     } finally {
       useSourcePick.setState({ pick: undefined });
     }
+  });
+
+  it("opens a pasted list as separate recording URLs", () => {
+    setup();
+    const urls = ["https://example.com/first.mcap", "https://example.com/second.mcap"];
+    typeUrl(urls.join(", "));
+    fireEvent.click(screen.getByText("open"));
+
+    expect(mockSelectSource).toHaveBeenCalledWith("remote-file", {
+      type: "connection",
+      params: { url: undefined },
+      urls,
+    });
   });
 
   it("disables open for URLs without a matching source", () => {

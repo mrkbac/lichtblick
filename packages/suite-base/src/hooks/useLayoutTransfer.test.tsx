@@ -8,6 +8,7 @@ import type { Mock } from "vitest";
 import { useCurrentLayoutActions } from "@lichtblick/suite-base/context/CurrentLayoutContext";
 import { useLayoutNavigation } from "@lichtblick/suite-base/hooks/useLayoutNavigation";
 import LayoutBuilder from "@lichtblick/suite-base/testing/builders/LayoutBuilder";
+import { downloadTextFile } from "@lichtblick/suite-base/util/download";
 import * as filePicker from "@lichtblick/suite-base/util/showOpenFilePicker";
 import { BasicBuilder } from "@lichtblick/test-builders";
 
@@ -38,6 +39,7 @@ vi.mock("../context/AnalyticsContext", () => ({
   useAnalytics: vi.fn(),
 }));
 
+vi.mock("@lichtblick/suite-base/util/download");
 vi.mock("@lichtblick/suite-base/util/showOpenFilePicker");
 
 vi.mock("@lichtblick/hooks", async () => ({
@@ -46,6 +48,7 @@ vi.mock("@lichtblick/hooks", async () => ({
 }));
 
 describe("useLayoutTransfer", () => {
+  const getLayoutMock = vi.fn();
   const saveNewLayoutMock = vi.fn();
   const getCurrentLayoutStateMock = vi.fn();
   const onSelectLayoutMock = vi.fn();
@@ -54,6 +57,7 @@ describe("useLayoutTransfer", () => {
 
   beforeEach(() => {
     (useLayoutManager as Mock).mockReturnValue({
+      getLayout: getLayoutMock,
       saveNewLayout: saveNewLayoutMock,
     });
 
@@ -71,6 +75,24 @@ describe("useLayoutTransfer", () => {
     });
 
     vi.clearAllMocks();
+  });
+
+  it("preserves the approval marker when exporting a layout with edited data", async () => {
+    const layout = LayoutBuilder.layout({ untrusted: true });
+    const data = LayoutBuilder.data({ globalVariables: { keep: "working data" } });
+    getCurrentLayoutStateMock.mockReturnValue({ selectedLayout: { id: layout.id, data } });
+    getLayoutMock.mockResolvedValue(layout);
+    const { result } = renderHook(() => useLayoutTransfer());
+
+    await act(async () => {
+      await result.current.exportLayout();
+    });
+
+    expect(getLayoutMock).toHaveBeenCalledWith(layout.id);
+    expect(downloadTextFile).toHaveBeenCalledWith(
+      JSON.stringify({ ...data, untrusted: true }, undefined, 2),
+      "lichtblick-layout.json",
+    );
   });
 
   it("does not save a cancelled layout import", async () => {

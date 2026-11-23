@@ -349,6 +349,53 @@ describe("FrameAxes", () => {
       }
     });
 
+    it.each(["3d", "image"] as const)(
+      "toggles all frame axes from the Transforms row in %s mode",
+      (interfaceMode) => {
+        renderer.dispose();
+        renderer = new Renderer({ ...defaultRendererProps, canvas, interfaceMode });
+        const frameAxes = renderer.sceneExtensions.get(FrameAxes.extensionId) as FrameAxes;
+        renderer.transformTree.getOrCreateFrame("settings");
+        renderer.transformTree.getOrCreateFrame("other");
+        renderer.coordinateFrameList = renderer.transformTree.frameList();
+        renderer.emit("transformTreeUpdated", renderer);
+        expect(renderer.settings.tree().transforms?.visible).toBe(interfaceMode === "3d");
+
+        renderer.settings.handleAction({
+          action: "update",
+          payload: {
+            input: "boolean",
+            path: ["transforms", "frame:settings", "visible"],
+            value: true,
+          },
+        });
+        renderer.settings.handleAction({
+          action: "update",
+          payload: {
+            input: "boolean",
+            path: ["transforms", "frame:other", "visible"],
+            value: false,
+          },
+        });
+        expect(renderer.settings.tree().transforms?.visible).toBe(true);
+
+        for (const visible of [false, true]) {
+          renderer.settings.handleAction({
+            action: "update",
+            payload: { input: "boolean", path: ["transforms", "visible"], value: visible },
+          });
+          const node = renderer.settings.tree().transforms;
+          expect(node?.visible).toBe(visible);
+          for (const frameId of ["settings", "other"]) {
+            const frameKey = `frame:${frameId}`;
+            expect(node?.children?.[frameKey]?.visible).toBe(visible);
+            expect(renderer.config.transforms[frameKey]?.visible).toBe(visible);
+            expect(frameAxes.renderables.get(frameId)?.userData.settings.visible).toBe(visible);
+          }
+        }
+      },
+    );
+
     it("updates label size when labelSize setting is changed", () => {
       // Given: FrameAxes extension with a frame
       renderer.transformTree.getOrCreateFrame("test_frame");

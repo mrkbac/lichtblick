@@ -36,8 +36,9 @@ import AnnotationPlugin from "chartjs-plugin-annotation";
 
 import { loadDefaultFont } from "@lichtblick/suite-base/panels/shared/loadFont";
 
-import ChartJSManager, { InitOpts, PanInput } from "./ChartJSManager";
 import { RpcElement, RpcScales, TypedChartData } from "../types";
+import ChartJSManager, { InitOpts } from "./ChartJSManager";
+import { PanInput, WheelInput } from "./ChartViewport";
 
 type RpcEvent<EventType> = { id: string; event: EventType };
 
@@ -120,28 +121,16 @@ export default class ChartJsMux {
     return manager.getScales();
   }
 
-  public wheel(args: RpcEvent<WheelEvent>): RpcScales {
+  public wheel(args: RpcEvent<WheelInput>): RpcScales {
     return this.#getChart(args.id).wheel(args.event);
-  }
-
-  public mousedown(args: RpcEvent<MouseEvent>): RpcScales {
-    return this.#getChart(args.id).mousedown(args.event);
-  }
-
-  public mousemove(args: RpcEvent<MouseEvent>): RpcScales {
-    return this.#getChart(args.id).mousemove(args.event);
-  }
-
-  public mouseup(args: RpcEvent<MouseEvent>): RpcScales {
-    return this.#getChart(args.id).mouseup(args.event);
   }
 
   public panstart(args: RpcEvent<PanInput>): RpcScales {
     return this.#getChart(args.id).panstart(args.event);
   }
 
-  public panend(args: RpcEvent<PanInput>): RpcScales {
-    return this.#getChart(args.id).panend(args.event);
+  public panend(args: { id: string }): RpcScales {
+    return this.#getChart(args.id).panend();
   }
 
   public panmove(args: RpcEvent<PanInput>): RpcScales {

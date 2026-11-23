@@ -14,7 +14,6 @@
 //   found at http://www.apache.org/licenses/LICENSE-2.0
 //   You may not use this file except in compliance with the License.
 
-import { Zoom as ZoomPlugin } from "@foxglove/chartjs-plugin-zoom";
 import {
   Chart,
   ChartData,
@@ -28,7 +27,6 @@ import { getRelativePosition } from "chart.js/helpers";
 import type { Context as DatalabelContext } from "chartjs-plugin-datalabels";
 import DatalabelPlugin from "chartjs-plugin-datalabels";
 import { type Options as DatalabelsPluginOptions } from "chartjs-plugin-datalabels/types/options";
-import EventEmitter from "eventemitter3";
 
 import Logger from "@lichtblick/log";
 import {
@@ -37,13 +35,10 @@ import {
   RpcScales,
   TypedChartData,
 } from "@lichtblick/suite-base/components/Chart/types";
-import {
-  addEventListener,
-  removeEventListener,
-} from "@lichtblick/suite-base/components/Chart/worker/eventHandler";
 // Not the package index: it pulls MUI component styles and icons, which crash in a worker
 import { fontMonospace } from "@lichtblick/theme/src/typography";
 
+import { ChartViewport, PanInput, WheelInput } from "./ChartViewport";
 import { lineSegmentLabelColor } from "./lineSegments";
 import { proxyTyped } from "./proxy";
 
@@ -57,25 +52,6 @@ export type InitOpts = {
   options: ChartOptions;
   devicePixelRatio: number;
   fontLoaded: Promise<FontFace>;
-};
-
-/** Pan event sent from the main thread (see listenForPan); `target` carries the bounding rect. */
-export type PanInput = {
-  deltaX: number;
-  deltaY: number;
-  center?: { x: number; y: number };
-  target: unknown;
-};
-
-// allows us to override the chart.ctx instance field which zoom plugin uses for adding event listeners
-type MutableContext<T> = Omit<Chart, "ctx"> & { ctx: T };
-
-type ZoomableChart = Chart & {
-  $zoom: {
-    panStartHandler(event: PanInput): void;
-    panHandler(event: PanInput): void;
-    panEndHandler(event: PanInput): void;
-  };
 };
 
 declare module "chart.js" {
@@ -115,8 +91,7 @@ Interaction.modes.lastX = lastX;
 
 export default class ChartJSManager {
   #chartInstance?: Chart;
-  #fakeNodeEvents = new EventEmitter();
-  #fakeDocumentEvents = new EventEmitter();
+  #viewport?: ChartViewport;
   #lastDatalabelClickContext?: DatalabelContext;
 
   /** Resolves once the chart exists; updates sent before then would be dropped. */
@@ -149,27 +124,6 @@ export default class ChartJSManager {
       }
     }
 
-    const fakeNode = {
-      addEventListener: addEventListener(this.#fakeNodeEvents),
-      removeEventListener: removeEventListener(this.#fakeNodeEvents),
-      ownerDocument: {
-        addEventListener: addEventListener(this.#fakeDocumentEvents),
-        removeEventListener: removeEventListener(this.#fakeDocumentEvents),
-      },
-    };
-
-    const origZoomStart = ZoomPlugin.start?.bind(ZoomPlugin);
-    ZoomPlugin.start = (chartInstance: MutableContext<unknown>, args, pluginOptions) => {
-      // swap the canvas with our fake dom node canvas to support zoom plugin addEventListener
-      const ctx = chartInstance.ctx;
-      chartInstance.ctx = {
-        canvas: fakeNode,
-      };
-      const res = origZoomStart?.(chartInstance as Chart, args, pluginOptions);
-      chartInstance.ctx = ctx;
-      return res;
-    };
-
     const fullOptions: ChartOptions = {
       ...this.#addFunctionsToConfig(options),
       devicePixelRatio,
@@ -187,59 +141,30 @@ export default class ChartJSManager {
       type,
       data,
       options: fullOptions,
-      plugins: [DatalabelPlugin, ZoomPlugin],
+      plugins: [DatalabelPlugin],
     });
 
-    ZoomPlugin.start = origZoomStart;
     this.#chartInstance = chartInstance;
+    this.#viewport = new ChartViewport(chartInstance);
   }
 
-  public wheel(event: WheelEvent): RpcScales {
-    const target = event.target as Element & { boundingClientRect: DOMRect };
-    target.getBoundingClientRect = () => target.boundingClientRect;
-    this.#fakeNodeEvents.emit("wheel", event);
-    return this.getScales();
-  }
-
-  public mousedown(event: MouseEvent): RpcScales {
-    const target = event.target as Element & { boundingClientRect: DOMRect };
-    target.getBoundingClientRect = () => target.boundingClientRect;
-    this.#fakeNodeEvents.emit("mousedown", event);
-    return this.getScales();
-  }
-
-  public mousemove(event: MouseEvent): RpcScales {
-    const target = event.target as Element & { boundingClientRect: DOMRect };
-    target.getBoundingClientRect = () => target.boundingClientRect;
-    this.#fakeNodeEvents.emit("mousemove", event);
-    return this.getScales();
-  }
-
-  public mouseup(event: MouseEvent): RpcScales {
-    const target = event.target as Element & { boundingClientRect: DOMRect };
-    target.getBoundingClientRect = () => target.boundingClientRect;
-    this.#fakeDocumentEvents.emit("mouseup", event);
+  public wheel(event: WheelInput): RpcScales {
+    this.#viewport?.wheel(event);
     return this.getScales();
   }
 
   public panstart(event: PanInput): RpcScales {
-    const target = event.target as HTMLElement & { boundingClientRect: DOMRect };
-    target.getBoundingClientRect = () => target.boundingClientRect;
-    (this.#chartInstance as ZoomableChart | undefined)?.$zoom.panStartHandler(event);
+    this.#viewport?.panstart(event);
     return this.getScales();
   }
 
   public panmove(event: PanInput): RpcScales {
-    const target = event.target as HTMLElement & { boundingClientRect: DOMRect };
-    target.getBoundingClientRect = () => target.boundingClientRect;
-    (this.#chartInstance as ZoomableChart | undefined)?.$zoom.panHandler(event);
+    this.#viewport?.panmove(event);
     return this.getScales();
   }
 
-  public panend(event: PanInput): RpcScales {
-    const target = event.target as HTMLElement & { boundingClientRect: DOMRect };
-    target.getBoundingClientRect = () => target.boundingClientRect;
-    (this.#chartInstance as ZoomableChart | undefined)?.$zoom.panEndHandler(event);
+  public panend(): RpcScales {
+    this.#viewport?.panend();
     return this.getScales();
   }
 

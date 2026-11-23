@@ -44,7 +44,7 @@ export const appSettings = {
   ros: "ROS",
   localResourceFolders: "Local resource folders",
   localResourceFoldersDescription:
-    "Select a folder containing ROS packages or model assets. Packages are discovered from package.xml. Use package:// URLs or the folder URL below. Access lasts until this tab closes or reloads; reselect a folder to refresh it.",
+    "Select a folder containing ROS packages or model assets. Packages are discovered from package.xml. Use package:// URLs or the folder URL below. Folders are remembered; reselect a folder to rescan it.",
   localResourceFoldersUnsupported:
     "This browser does not support folder access. Use a browser with the File System Access API to load local resources.",
   localResourceFolderSummary_one: "{{name}} — {{count}} ROS package",
@@ -52,6 +52,8 @@ export const appSettings = {
   selectResourceFolder: "Select resource folder",
   scanningResourceFolder: "Scanning folder…",
   removeResourceFolder: "Remove folder",
+  reconnectResourceFolder: "Allow access",
+  resourceFolderNeedsPermission: "{{name}} — access needed",
   rosPackageNotFound:
     'ROS package "{{pkgName}}" or the requested resource was not found. Select its resource folder in Settings and check the resource path.',
   localResourceInvalidManifest: "Invalid ROS package.xml: {{path}}",
@@ -59,6 +61,8 @@ export const appSettings = {
   localResourcePathOutsideFolder: "Local resource path must stay inside its folder",
   localResourceDuplicatePackage:
     'ROS package "{{name}}" exists in multiple selected locations; remove the duplicate package or selected folder',
+  localResourceFolderNeedsPermission:
+    "A local resource folder needs access again; click Allow access in Settings",
   localResourceFolderUnavailable:
     "Local resource folder is unavailable; select it again in Settings",
   settings: "Settings",

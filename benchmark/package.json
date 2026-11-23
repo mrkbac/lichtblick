@@ -15,17 +15,17 @@
     "@lichtblick/mcap-core": "workspace:*",
     "@lichtblick/mcap-support": "workspace:*",
     "@lichtblick/suite": "workspace:*",
-    "@playwright/test": "1.65.0",
-    "@rspack/core": "2.3.1",
-    "@rspack/plugin-react-refresh": "2.0.2",
+    "@playwright/test": "1.65.1",
+    "@rspack/core": "2.3.3",
+    "@rspack/plugin-react-refresh": "2.0.3",
     "@testing-library/react": "16.3.3",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
-    "cbor-x": "1.6.8",
-    "electron": "45.2.3",
+    "cbor-x": "1.6.9",
+    "electron": "45.4.1",
     "protobufjs": "8.8.1",
     "react": "19.3.1",
     "react-dom": "19.3.1",
-    "react-refresh": "0.18.0"
+    "react-refresh": "0.19.0"
   }
 }
