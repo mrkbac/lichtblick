@@ -5,13 +5,15 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { exec } from "@actions/exec";
-import { downloadTool, extractZip } from "@actions/tool-cache";
 import { log, Arch } from "builder-util";
+import { execFile } from "child_process";
 import crypto from "crypto";
 import type { AfterPackContext } from "electron-builder";
 import fs from "fs/promises";
 import path from "path";
+import { promisify } from "util";
+
+const run = promisify(execFile);
 
 export default async function afterPack(context: AfterPackContext): Promise<void> {
   await copySpotlightImporter(context);
@@ -86,7 +88,7 @@ async function extractTargetArchitecture(executablePath: string, context: AfterP
     throw new Error(`Unsupported arch ${context.arch}`);
   }
   if (arch !== "universal") {
-    await exec("lipo", ["-extract", arch, executablePath, "-output", executablePath]);
+    await run("lipo", ["-extract", arch, executablePath, "-output", executablePath]);
     log.info({ executablePath }, `Extracted ${arch} from universal executable`);
   }
 }
@@ -109,16 +111,18 @@ async function copySpotlightImporter(context: AfterPackContext) {
   const zipURL =
     "https://github.com/foxglove/MCAPSpotlightImporter/releases/download/v1.0.2/MCAPSpotlightImporter.mdimporter.zip";
   const zipSHA = "26cafa3e3069fcbd294864ceeee1bc9899e94456e0d28079f966787b6f05c7a2";
-  await downloadTool(zipURL, zipPath);
-  const actualSHA = crypto
-    .createHash("sha256")
-    .update(new Uint8Array(await fs.readFile(zipPath)))
-    .digest("hex");
+  const response = await fetch(zipURL);
+  if (!response.ok) {
+    throw new Error(`Downloading ${zipURL} failed: ${response.status}`);
+  }
+  const zip = new Uint8Array(await response.arrayBuffer());
+  await fs.writeFile(zipPath, zip);
+  const actualSHA = crypto.createHash("sha256").update(zip).digest("hex");
   if (actualSHA !== zipSHA) {
     throw new Error(`SHA mismatch for ${zipURL}: expected ${zipSHA}, got ${actualSHA}`);
   }
   try {
-    await extractZip(zipPath, spotlightDirPath);
+    await run("unzip", ["-o", "-q", zipPath, "-d", spotlightDirPath]);
     const executablePath = path.join(
       spotlightDirPath,
       "MCAPSpotlightImporter.mdimporter",

@@ -17,7 +17,6 @@
 import { Link } from "@mui/material";
 import { CSSProperties, PropsWithChildren } from "react";
 import Markdown, { type Options } from "react-markdown";
-import rehypeRaw from "rehype-raw";
 import remarkGfm from "remark-gfm";
 import { makeStyles } from "tss-react/mui";
 
@@ -184,13 +183,12 @@ function linkRenderer(linkProps: React.AnchorHTMLAttributes<HTMLAnchorElement>):
 
 type Props = {
   style?: CSSProperties;
-  allowMarkdownHtml?: boolean;
   /** Extra element renderers merged over the defaults (e.g. to make task-list checkboxes interactive). */
   components?: Options["components"];
 };
 
 export default function TextContent(props: PropsWithChildren<Props>): React.ReactElement | null {
-  const { children, style, allowMarkdownHtml, components } = props;
+  const { children, style, components } = props;
   const { classes } = useStyles();
 
   return (
@@ -198,9 +196,6 @@ export default function TextContent(props: PropsWithChildren<Props>): React.Reac
       {typeof children === "string" ? (
         <Markdown
           remarkPlugins={[remarkGfm]}
-          rehypePlugins={
-            allowMarkdownHtml === true ? ([rehypeRaw] as Options["rehypePlugins"]) : []
-          }
           components={{ a: linkRenderer, ...components }}
         >
           {children}
