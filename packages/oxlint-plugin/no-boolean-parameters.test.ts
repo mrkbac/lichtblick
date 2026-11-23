@@ -16,7 +16,6 @@ ruleTester.run("no-boolean-parameters", plugin.rules["no-boolean-parameters"], {
     "function f({ flag }: { flag: boolean }): void {}",
     "const f = (x = 1) => x;",
     "function f(x: boolean | number): void {}",
-    { code: "function f(x: boolean): void {}", options: [{ allowLoneParameter: true }] },
   ],
   invalid: [
     { code: "function f(x: boolean): void {}", errors: 1 },

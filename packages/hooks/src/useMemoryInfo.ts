@@ -24,12 +24,7 @@ export type MemoryInfo = {
 const readMemoryInfo = (): MemoryInfo | undefined =>
   (window.performance as { memory?: MemoryInfo }).memory;
 
-type UseMemoryInfoOptions = {
-  refreshIntervalMs: number;
-};
-
-export function useMemoryInfo(opt: UseMemoryInfoOptions): MemoryInfo | undefined {
-  const { refreshIntervalMs } = opt;
+export function useMemoryInfo(refreshIntervalMs: number): MemoryInfo | undefined {
   const [memoryInfo, setMemoryInfo] = useState<MemoryInfo | undefined>(readMemoryInfo);
 
   useEffect(() => {

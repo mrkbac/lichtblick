@@ -5,48 +5,26 @@
 // A custom eslint rule checking for the existence of an MPL license header,
 // while allowing certain prefixes that cannot be moved below the license header.
 
+const LICENSE_TYPE = "MPL-2.0";
 const ALLOWED_PREFIX_LINES = ["/** @jest-environment jsdom */", "/** @vitest-environment jsdom */"];
 
 module.exports = {
   meta: {
     type: "suggestion",
     fixable: "code",
-    schema: [
-      {
-        type: "object",
-        properties: {
-          licenseType: {
-            type: "string",
-            description: "Type of license that should be displayed on the header.",
-          },
-        },
-        additionalProperties: false,
-      },
-    ],
-    defaultOptions: [],
+    schema: [],
     messages: {
       wrongHeaderError:
         "There is an error with the file header. Please check if the header exists or if there is a mistake in it.",
-      missingTypeOfLicenseError:
-        "Please specify the license type in the .eslintrc configuration. For more information, refer to our documentation: https://github.com/Lichtblick-Suite/eslint-plugin?tab=readme-ov-file#lichtblickeslint-plugin",
       prefixLinesError:
         "There are lines before the header that are not allowed. Please move them below the header.",
     },
   },
 
   create: (context) => {
-    const options = context.options[0];
-    if (!options || !options.licenseType) {
-      context.report({
-        loc: { line: 0, column: 0 },
-        messageId: "missingTypeOfLicenseError",
-      });
-      return {};
-    }
-    const licenseType = options.licenseType;
     // New files get the SPDX license identifier alone. An optional copyright line directly above it
     // is accepted and kept as is, so existing upstream notices are never rewritten (MPL-2.0 §3.4).
-    const EXPECTED_HEADER = `// SPDX-License-Identifier: ${licenseType}`;
+    const EXPECTED_HEADER = `// SPDX-License-Identifier: ${LICENSE_TYPE}`;
 
     const HEADER_REGEX = /(?:\/\/ SPDX-FileCopyrightText: .+\n)?\/\/ SPDX-License-Identifier: (.+)/;
 
@@ -67,7 +45,7 @@ module.exports = {
           ALLOWED_PREFIX_LINES.includes(line.trim()),
         );
 
-        const isHeaderCorrect = match?.[1] === licenseType;
+        const isHeaderCorrect = match?.[1] === LICENSE_TYPE;
 
         if (!prefixLinesAreValid) {
           context.report({
@@ -103,7 +81,7 @@ module.exports = {
               // Fix only the license identifier; keep any copyright line.
               return fixer.replaceTextRange(
                 [headerEndIndex - match[1].length, headerEndIndex],
-                licenseType,
+                LICENSE_TYPE,
               );
             },
           });
