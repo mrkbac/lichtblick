@@ -42,7 +42,6 @@ function TimestampStory(props: PropsWithChildren<Props>): React.JSX.Element {
       >
         <Timestamp horizontal time={time} />
         <Timestamp time={time} />
-        <Timestamp disableDate time={time} />
       </Stack>
     </AppConfigurationContext.Provider>
   );

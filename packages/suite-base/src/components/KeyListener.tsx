@@ -23,7 +23,6 @@ type KeyHandlers = Record<string, (event: KeyboardEvent) => void | boolean | und
 export type KeyListenerProps = {
   global?: boolean;
   keyDownHandlers?: KeyHandlers;
-  keyPressHandlers?: KeyHandlers;
   keyUpHandlers?: KeyHandlers;
 };
 
@@ -84,13 +83,10 @@ export default function KeyListener(props: KeyListenerProps): ReactElement {
         return;
       }
 
-      const { keyDownHandlers, keyPressHandlers, keyUpHandlers } = handlers.current;
+      const { keyDownHandlers, keyUpHandlers } = handlers.current;
       switch (type) {
         case "keydown":
           callHandlers(keyDownHandlers, event);
-          break;
-        case "keypress":
-          callHandlers(keyPressHandlers, event);
           break;
         case "keyup":
           callHandlers(keyUpHandlers, event);
@@ -102,12 +98,10 @@ export default function KeyListener(props: KeyListenerProps): ReactElement {
     const target = props.global === true ? document : element.current?.parentElement;
 
     target?.addEventListener("keydown", handleEvent);
-    target?.addEventListener("keypress", handleEvent);
     target?.addEventListener("keyup", handleEvent);
 
     return () => {
       target?.removeEventListener("keydown", handleEvent);
-      target?.removeEventListener("keypress", handleEvent);
       target?.removeEventListener("keyup", handleEvent);
     };
   }, [props.global]);

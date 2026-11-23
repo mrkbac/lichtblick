@@ -29,9 +29,7 @@ import React, {
 } from "react";
 import { makeStyles } from "tss-react/mui";
 
-import { filterMap } from "@lichtblick/den/collection";
 import { useMountedState } from "@lichtblick/hooks";
-import Logger from "@lichtblick/log";
 import { usePublishPanelTimeRange } from "@lichtblick/suite-base/PanelAPI";
 import ChartComponent from "@lichtblick/suite-base/components/Chart/index";
 import { RpcElement, RpcScales } from "@lichtblick/suite-base/components/Chart/types";
@@ -53,11 +51,8 @@ import TimeBasedChartTooltipContent, {
   TimeBasedChartTooltipData,
 } from "./TimeBasedChartTooltipContent";
 import { VerticalBarWrapper } from "./VerticalBarWrapper";
-import { ObjectDataProvider, TypedDataProvider } from "./types";
 import useDownsample from "./useDownsampler";
-import useProvider, { getBounds, getTypedBounds, mergeTyped, mergeNormal } from "./useProvider";
-
-const log = Logger.getLogger(__filename);
+import useProvider from "./useProvider";
 
 const useStyles = makeStyles()((theme) => ({
   root: {
@@ -99,65 +94,37 @@ type ChartComponentProps = ComponentProps<typeof ChartComponent>;
 const selectGlobalBounds = (store: TimelineInteractionStateStore) => store.globalBounds;
 const selectSetGlobalBounds = (store: TimelineInteractionStateStore) => store.setGlobalBounds;
 
-// Calculation mode for the "reset view" view.
-type ChartDefaultView =
-  | { type: "fixed"; minXValue: number; maxXValue: number }
-  | { type: "following"; width: number };
-
 export type Props = {
-  type: "scatter";
   width: number;
   height: number;
-  zoom: boolean;
   data?: ChartComponentProps["data"];
-  provider?: ObjectDataProvider;
-  typedData?: ChartComponentProps["typedData"];
-  typedProvider?: TypedDataProvider;
   dataBounds?: Bounds;
-  tooltips?: Map<string, TimeBasedChartTooltipData>;
   xAxes?: ScaleOptions<"linear">;
   yAxes: ScaleOptions<"linear">;
   annotations?: AnnotationOptions[];
   resetButtonPaddingBottom?: number;
   isSynced?: boolean;
-  linesToHide?: {
-    [key: string]: boolean;
-  };
   interactionMode?: InteractionMode;
-  datasetId?: string;
   onClick?: ChartComponentProps["onClick"];
-  // If the x axis represents playback time ("timestamp"), the hover cursor will be synced.
-  // Note, this setting should not be used for other time values.
-  xAxisIsPlaybackTime: boolean;
-  showXAxisLabels: boolean;
   plugins?: ChartOptions["plugins"];
   currentTime?: number;
-  defaultView?: ChartDefaultView;
 };
 
-// Create a chart with any y-axis but with an x-axis that shows time since the
+// Create a chart with any y-axis but with an x-axis that shows playback time since the
 // start of the bag, and which is kept in sync with other instances of this
-// component. Uses chart.js internally, with a zoom/pan plugin, and with our
+// component (including the hover cursor). Uses chart.js internally, with a zoom/pan plugin, and with our
 // standard tooltips.
 export default function TimeBasedChart(props: Props): React.JSX.Element {
   const requestID = useRef<number>(0);
   const {
     currentTime,
     data,
-    provider,
-    typedData,
-    typedProvider,
     dataBounds,
-    datasetId,
-    defaultView,
     height,
     isSynced = false,
     resetButtonPaddingBottom = 4,
-    showXAxisLabels,
-    type,
     width,
     xAxes,
-    xAxisIsPlaybackTime,
     yAxes,
   } = props;
 
@@ -192,38 +159,23 @@ export default function TimeBasedChart(props: Props): React.JSX.Element {
     [width, height, viewportBounds],
   );
 
-  const linesToHide = useMemo(() => props.linesToHide ?? {}, [props.linesToHide]);
-
   const { downsampler, setScales } = useDownsample(
     React.useMemo(
-      () =>
-        filterMap(data?.datasets ?? [], (dataset) => {
-          const { label } = dataset;
-          if ((label == undefined || linesToHide[label]) ?? false) {
-            return;
-          }
-          return dataset;
-        }),
-      [data, linesToHide],
+      () => (data?.datasets ?? []).filter((dataset) => dataset.label != undefined),
+      [data],
     ),
   );
 
-  const provided = useProvider(view, getBounds, mergeNormal, data, provider ?? downsampler);
-  const typedProvided = useProvider(view, getTypedBounds, mergeTyped, typedData, typedProvider);
+  const provided = useProvider(view, downsampler);
 
   React.useEffect(() => {
     setDatasetBounds((oldBounds) => {
       if (provided != undefined && !_.isEqual(oldBounds, provided.bounds)) {
         return provided.bounds;
       }
-
-      if (typedProvided != undefined && !_.isEqual(oldBounds, typedProvided.bounds)) {
-        return typedProvided.bounds;
-      }
-
       return oldBounds;
     });
-  }, [provided, typedProvided]);
+  }, [provided]);
 
   const bounds = dataBounds ?? datasetBounds;
 
@@ -427,10 +379,10 @@ export default function TimeBasedChart(props: Props): React.JSX.Element {
       setHoverValue({
         componentId,
         value: xVal,
-        type: xAxisIsPlaybackTime ? "PLAYBACK_SECONDS" : "OTHER",
+        type: "PLAYBACK_SECONDS",
       });
     },
-    [setHoverValue, componentId, xAxisIsPlaybackTime, clearGlobalHoverTime],
+    [setHoverValue, componentId, clearGlobalHoverTime],
   );
 
   const plugins = useMemo<ChartOptions["plugins"]>(() => {
@@ -450,7 +402,7 @@ export default function TimeBasedChart(props: Props): React.JSX.Element {
       },
       zoom: {
         zoom: {
-          enabled: props.zoom,
+          enabled: true,
           mode: zoomMode,
         },
         pan: {
@@ -461,7 +413,7 @@ export default function TimeBasedChart(props: Props): React.JSX.Element {
       ...props.plugins,
       annotation: { annotations: props.annotations },
     };
-  }, [props.annotations, props.plugins, props.zoom, zoomMode]);
+  }, [props.annotations, props.plugins, zoomMode]);
 
   // To avoid making a new xScale identity on all updates that might change the min/max
   // we memo the min/max X values so only when the values change is the scales object re-made
@@ -477,20 +429,8 @@ export default function TimeBasedChart(props: Props): React.JSX.Element {
       return { min: undefined, max: undefined };
     }
 
-    let min: number | undefined;
-    let max: number | undefined;
-
-    // default view possibly gives us some initial bounds
-    if (defaultView?.type === "fixed") {
-      min = defaultView.minXValue;
-      max = defaultView.maxXValue;
-    } else if (defaultView?.type === "following") {
-      max = currentTime ?? 0;
-      min = max - defaultView.width;
-    } else {
-      min = bounds.x.min;
-      max = bounds.x.max;
-    }
+    let min = bounds.x.min;
+    let max = bounds.x.max;
 
     // If the global bounds are from user interaction, we use that unconditionally.
     if (syncedGlobalBounds?.userInteraction === true) {
@@ -505,15 +445,7 @@ export default function TimeBasedChart(props: Props): React.JSX.Element {
     }
 
     return { min, max };
-  }, [
-    componentId,
-    currentTime,
-    bounds.x.max,
-    bounds.x.min,
-    defaultView,
-    syncedGlobalBounds,
-    hasUserPannedOrZoomed,
-  ]);
+  }, [componentId, bounds.x.max, bounds.x.min, syncedGlobalBounds, hasUserPannedOrZoomed]);
 
   const xScale = useMemo<ScaleOptions>(() => {
     const defaultXTicksSettings: ScaleOptions["ticks"] = {
@@ -531,7 +463,7 @@ export default function TimeBasedChart(props: Props): React.JSX.Element {
       min: minX,
       max: maxX,
       ticks: {
-        display: showXAxisLabels,
+        display: true,
         ...defaultXTicksSettings,
         ...xAxes?.ticks,
       },
@@ -542,7 +474,7 @@ export default function TimeBasedChart(props: Props): React.JSX.Element {
     };
 
     return scale;
-  }, [theme.palette, showXAxisLabels, xAxes, minX, maxX]);
+  }, [theme.palette, xAxes, minX, maxX]);
 
   const yScale = useMemo<ScaleOptions>(() => {
     const defaultYTicksSettings: ScaleOptions["ticks"] = {
@@ -607,8 +539,8 @@ export default function TimeBasedChart(props: Props): React.JSX.Element {
 
   const publishTimeRange = usePublishPanelTimeRange();
   useEffect(() => {
-    publishTimeRange(xAxisIsPlaybackTime ? currentScalesRef.current?.x : undefined);
-  }, [publishTimeRange, xAxisIsPlaybackTime]);
+    publishTimeRange(currentScalesRef.current?.x);
+  }, [publishTimeRange]);
 
   const onScalesUpdate = useCallback(
     (scales: RpcScales, { userInteraction }: { userInteraction: boolean }) => {
@@ -634,9 +566,7 @@ export default function TimeBasedChart(props: Props): React.JSX.Element {
       }
 
       currentScalesRef.current = scales;
-      if (xAxisIsPlaybackTime) {
-        publishTimeRange(scales.x);
-      }
+      publishTimeRange(scales.x);
       if (scales.x != undefined && scales.y != undefined) {
         const { x, y } = scales;
         setViewportBounds({
@@ -709,22 +639,10 @@ export default function TimeBasedChart(props: Props): React.JSX.Element {
         };
       });
     },
-    [
-      componentId,
-      isMounted,
-      isSynced,
-      publishTimeRange,
-      setGlobalBounds,
-      setScales,
-      xAxisIsPlaybackTime,
-    ],
+    [componentId, isMounted, isSynced, publishTimeRange, setGlobalBounds, setScales],
   );
 
-  useEffect(() => {
-    log.debug(`<TimeBasedChart> (datasetId=${datasetId})`);
-  }, [datasetId]);
-
-  const datasets = provided?.data.datasets ?? typedProvided?.data.datasets;
+  const datasets = provided?.data.datasets;
   const datasetsLength = datasets?.length ?? 0;
 
   const colorsByDatasetIndex: Record<string, undefined | string> = useMemo(() => {
@@ -767,13 +685,12 @@ export default function TimeBasedChart(props: Props): React.JSX.Element {
   // We don't memo this since each option itself is memo'd and this is just convenience to pass to
   // the component.
   const chartProps: ChartComponentProps = {
-    type,
+    type: "scatter",
     width,
     height,
     isBoundsReset: globalBounds == undefined,
     options,
     data: provided?.data,
-    typedData: typedProvided?.data,
     onClick: props.onClick,
     onScalesUpdate,
     onStartRender,
@@ -802,25 +719,15 @@ export default function TimeBasedChart(props: Props): React.JSX.Element {
       >
         <Stack direction="row" style={{ width }}>
           <div className={classes.root} onDoubleClick={onResetZoom}>
-            <HoverBar
-              componentId={componentId}
-              isPlaybackSeconds={xAxisIsPlaybackTime}
-              scales={currentScalesRef.current}
-            >
+            <HoverBar componentId={componentId} isPlaybackSeconds scales={currentScalesRef.current}>
               <div
                 className={classes.bar}
-                style={{
-                  backgroundColor: xAxisIsPlaybackTime
-                    ? theme.palette.warning.main
-                    : theme.palette.info.main,
-                }}
+                style={{ backgroundColor: theme.palette.warning.main }}
               />
             </HoverBar>
-            {xAxisIsPlaybackTime && (
-              <VerticalBarWrapper scales={currentScalesRef.current} xValue={currentTime}>
-                <div className={cx(classes.bar, classes.playbackBar)} />
-              </VerticalBarWrapper>
-            )}
+            <VerticalBarWrapper scales={currentScalesRef.current} xValue={currentTime}>
+              <div className={cx(classes.bar, classes.playbackBar)} />
+            </VerticalBarWrapper>
 
             <div ref={canvasContainer} onMouseMove={onMouseMove} onMouseOut={onMouseOut}>
               <ChartComponent {...chartProps} />

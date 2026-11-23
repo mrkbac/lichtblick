@@ -17,7 +17,7 @@
 import { CSSProperties, ClipboardEvent, useCallback } from "react";
 import { makeStyles } from "tss-react/mui";
 
-const DEFAULT_END_TEXT_LENGTH = 16;
+const END_TEXT_LENGTH = 16;
 
 const useStyles = makeStyles()(() => ({
   root: {
@@ -45,23 +45,13 @@ const useStyles = makeStyles()(() => ({
 
 type Props = {
   text: string;
-  endTextLength?: number;
   className?: string;
   style?: CSSProperties;
 };
 
-export default function TextMiddleTruncate({
-  text,
-  endTextLength,
-  className,
-  style,
-}: Props): React.JSX.Element {
+export default function TextMiddleTruncate({ text, className, style }: Props): React.JSX.Element {
   const { classes, cx } = useStyles();
-  let startTextLen = Math.max(
-    0,
-    text.length -
-      (endTextLength == undefined || endTextLength === 0 ? DEFAULT_END_TEXT_LENGTH : endTextLength),
-  );
+  let startTextLen = Math.max(0, text.length - END_TEXT_LENGTH);
   // Don't split at or immediately after whitespace.
   while (startTextLen < text.length && text.charAt(startTextLen).match(/\s/)) {
     startTextLen += 2;

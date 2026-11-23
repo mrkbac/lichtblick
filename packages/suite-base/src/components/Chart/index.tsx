@@ -27,7 +27,7 @@ import { mightActuallyBePartial } from "@lichtblick/suite-base/util/mightActuall
 import { randomUUID } from "@lichtblick/suite-base/util/randomUUID";
 import { toError } from "@lichtblick/suite-base/util/toError";
 
-import { TypedChartData, ChartData, RpcElement, RpcScales } from "./types";
+import { ChartData, RpcElement, RpcScales } from "./types";
 
 type PartialUpdate = Partial<ChartUpdateMessage>;
 
@@ -47,7 +47,6 @@ export type OnClickArg = {
 
 type Props = {
   data?: ChartData;
-  typedData?: TypedChartData;
   options: ChartOptions;
   isBoundsReset: boolean;
   type: "scatter";
@@ -134,17 +133,8 @@ function Chart(props: Props): React.JSX.Element {
   const zoomEnabled = props.options.plugins?.zoom?.zoom?.enabled ?? false;
   const panEnabled = props.options.plugins?.zoom?.pan?.enabled ?? false;
 
-  const {
-    type,
-    data,
-    typedData,
-    isBoundsReset,
-    options,
-    width,
-    height,
-    onStartRender,
-    onFinishRender,
-  } = props;
+  const { type, data, isBoundsReset, options, width, height, onStartRender, onFinishRender } =
+    props;
 
   const sendWrapperRef = useRef<RpcSend | undefined>(undefined);
   const rpcSendRef = useRef<RpcSend | undefined>(undefined);
@@ -236,9 +226,6 @@ function Chart(props: Props): React.JSX.Element {
       // @ts-expect-error that's the original code, with nem eslint it is pointing out that data is not defined
       prev.data = out.data = data;
     }
-    if (prev.typedData !== typedData) {
-      prev.typedData = out.typedData = typedData;
-    }
     if (prev.options !== options) {
       prev.options = out.options = options;
     }
@@ -257,7 +244,7 @@ function Chart(props: Props): React.JSX.Element {
     }
 
     return out;
-  }, [data, typedData, height, options, isBoundsReset, width]);
+  }, [data, height, options, isBoundsReset, width]);
 
   // Flush all new updates to the worker, coalescing them together if there is
   // more than one.
@@ -346,7 +333,6 @@ function Chart(props: Props): React.JSX.Element {
             node: offscreenCanvas,
             type,
             data: update.data,
-            typedData: update.typedData,
             options: update.options,
             devicePixelRatio,
             width: update.width,

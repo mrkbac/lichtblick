@@ -32,10 +32,8 @@ const dataY = 5.544444561004639;
 
 const commonProps: Props = {
   isSynced: true,
-  zoom: true,
   width: 800,
   height: 600,
-  showXAxisLabels: true,
   data: {
     datasets: [
       {
@@ -69,7 +67,6 @@ const commonProps: Props = {
     ],
   },
   annotations: [],
-  type: "scatter",
   xAxes: {
     ticks: { precision: 3 },
     grid: { color: "rgba(187, 187, 187, 0.2)" },
@@ -78,7 +75,6 @@ const commonProps: Props = {
     ticks: { precision: 3 },
     grid: { color: "rgba(187, 187, 187, 0.2)" },
   },
-  xAxisIsPlaybackTime: true,
 };
 
 export default {
