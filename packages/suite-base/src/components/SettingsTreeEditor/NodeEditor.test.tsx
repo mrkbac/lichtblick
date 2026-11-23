@@ -98,6 +98,9 @@ describe("topic name tree", () => {
       settings: {
         enableVisibilityFilter: true,
         enableTopicNameTree: true,
+        topicQuickFilters: [
+          { id: "pointClouds", label: "Point clouds", topics: ["/camera/front/points"] },
+        ],
         children: {
           "/camera/front/image": { label: "/camera/front/image", visible: true },
           "/camera/front/points": { label: "/camera/front/points", visible: false },
@@ -119,6 +122,12 @@ describe("topic name tree", () => {
     await user.keyboard("{Enter}");
     expect(screen.getByText("image")).toBeInTheDocument();
 
+    const pointClouds = screen.getByRole("button", { name: "Point clouds" });
+    await user.click(pointClouds);
+    expect(pointClouds).toHaveAttribute("aria-pressed", "true");
+    expect(screen.queryByText("image")).not.toBeInTheDocument();
+    expect(screen.getByText("points")).toBeInTheDocument();
+
     await user.click(screen.getByRole("button", { name: "Hidden" }));
     await user.type(screen.getByRole("searchbox"), "/camera/front");
     expect(screen.queryByText("image")).not.toBeInTheDocument();
@@ -127,6 +136,7 @@ describe("topic name tree", () => {
     expect(screen.queryByText("/camera/front/image")).not.toBeInTheDocument();
     expect(screen.getByText("/camera/front/points")).toBeInTheDocument();
     expect(screen.getByRole("searchbox")).toHaveValue("/camera/front");
+    expect(pointClouds).toHaveAttribute("aria-pressed", "true");
   });
 
   it("reports mixed, hidden and shown states and toggles the entire branch using topic paths", async () => {
@@ -148,6 +158,7 @@ describe("topic name tree", () => {
       settings: settings({ image: true, points: false }),
     });
     await user.click(screen.getByRole("button", { name: "Group topics by name" }));
+    expect(screen.queryByRole("group", { name: "Filter by topic type" })).not.toBeInTheDocument();
     await user.type(screen.getByRole("searchbox"), "points");
     const mixed = screen.getByRole("checkbox", { name: "Hide all topics in /camera" });
     expect(mixed).toBePartiallyChecked();

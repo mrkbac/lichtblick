@@ -145,4 +145,5 @@ export type NodeEditorState = {
   textFilter: string;
   visibilityFilter: SelectVisibilityFilterValue;
   topicTree: boolean;
+  topicQuickFilter?: string;
 };

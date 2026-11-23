@@ -16,9 +16,13 @@ import ArrowRightIcon from "@mui/icons-material/ArrowRight";
 import CheckIcon from "@mui/icons-material/Check";
 import EditIcon from "@mui/icons-material/Edit";
 import ErrorIcon from "@mui/icons-material/Error";
+import ViewListIcon from "@mui/icons-material/ViewList";
+import VisibilityOffIcon from "@mui/icons-material/VisibilityOffOutlined";
+import VisibilityIcon from "@mui/icons-material/VisibilityOutlined";
 import WarningIcon from "@mui/icons-material/Warning";
 import {
   Button,
+  Chip,
   Divider,
   IconButton,
   TextField,
@@ -503,14 +507,21 @@ function NodeEditorComponent(props: Readonly<NodeEditorProps>): React.JSX.Elemen
     return preparedNodes.filter(([, child]) => filterFn(child));
   }, [preparedNodes, filterFn]);
 
+  const quickFilterTopics = useMemo(() => {
+    const quickFilter = settings.topicQuickFilters?.find(({ id }) => id === state.topicQuickFilter);
+    return quickFilter ? new Set(quickFilter.topics) : undefined;
+  }, [settings.topicQuickFilters, state.topicQuickFilter]);
+
   const filteredNodes = useMemo(() => {
+    const matchingNodes = quickFilterTopics
+      ? visibilityFilteredNodes.filter(([key]) => quickFilterTopics.has(key))
+      : visibilityFilteredNodes;
     if (state.textFilter.length === 0) {
-      return visibilityFilteredNodes;
+      return matchingNodes;
     }
-    const nodesRecord: Immutable<EditorSettingsTreeNodes> =
-      Object.fromEntries(visibilityFilteredNodes);
+    const nodesRecord: Immutable<EditorSettingsTreeNodes> = Object.fromEntries(matchingNodes);
     return prepareSettingsNodes(filterTreeNodes(nodesRecord, state.textFilter));
-  }, [visibilityFilteredNodes, state.textFilter]);
+  }, [quickFilterTopics, visibilityFilteredNodes, state.textFilter]);
 
   const topicTree = useMemo(() => {
     if (!topicTreeEnabled || !state.topicTree) {
@@ -544,7 +555,8 @@ function NodeEditorComponent(props: Readonly<NodeEditorProps>): React.JSX.Elemen
       const expandMatches =
         (filter ?? "").length > 0 ||
         state.textFilter.length > 0 ||
-        state.visibilityFilter !== "all";
+        state.visibilityFilter !== "all" ||
+        quickFilterTopics != undefined;
       const focusedTopic = focusedPath?.[props.path.length];
       const focusInList =
         focusedTopic != undefined &&
@@ -614,6 +626,7 @@ function NodeEditorComponent(props: Readonly<NodeEditorProps>): React.JSX.Elemen
     indent,
     state.textFilter,
     state.visibilityFilter,
+    quickFilterTopics,
     unfilteredSettings?.children,
   ]);
 
@@ -998,13 +1011,25 @@ function NodeEditorComponent(props: Readonly<NodeEditorProps>): React.JSX.Elemen
                 }
               }}
             >
-              <ToggleButton value="all">{t("topicVisibilityAll")}</ToggleButton>
-              <ToggleButton value="visible">{t("topicVisibilityShown")}</ToggleButton>
-              <ToggleButton value="invisible">{t("topicVisibilityHidden")}</ToggleButton>
+              <Tooltip title={t("topicVisibilityAll")}>
+                <ToggleButton value="all" aria-label={t("topicVisibilityAll")}>
+                  <ViewListIcon className={classes.topicFilterIcon} />
+                </ToggleButton>
+              </Tooltip>
+              <Tooltip title={t("topicVisibilityShown")}>
+                <ToggleButton value="visible" aria-label={t("topicVisibilityShown")}>
+                  <VisibilityIcon className={classes.topicFilterIcon} />
+                </ToggleButton>
+              </Tooltip>
+              <Tooltip title={t("topicVisibilityHidden")}>
+                <ToggleButton value="invisible" aria-label={t("topicVisibilityHidden")}>
+                  <VisibilityOffIcon className={classes.topicFilterIcon} />
+                </ToggleButton>
+              </Tooltip>
             </ToggleButtonGroup>
             <Tooltip title={t("groupTopicsByName")}>
               <ToggleButton
-                className={classes.actionButton}
+                className={classes.topicTreeToggle}
                 size="small"
                 value="tree"
                 selected={state.topicTree}
@@ -1015,12 +1040,37 @@ function NodeEditorComponent(props: Readonly<NodeEditorProps>): React.JSX.Elemen
                   });
                 }}
               >
-                <AccountTreeIcon fontSize="small" />
+                <AccountTreeIcon className={classes.topicFilterIcon} />
               </ToggleButton>
             </Tooltip>
           </div>
         </div>
       )}
+      {state.open &&
+        topicTreeEnabled &&
+        hasChildren &&
+        (settings.topicQuickFilters?.length ?? 0) > 0 && (
+          <div className={classes.topicTypeFilters} role="group" aria-label={t("topicTypeFilters")}>
+            {settings.topicQuickFilters?.map(({ id, label: filterLabel }) => {
+              const selected = state.topicQuickFilter === id;
+              return (
+                <Chip
+                  key={id}
+                  size="small"
+                  variant={selected ? "filled" : "outlined"}
+                  color={selected ? "primary" : "default"}
+                  label={filterLabel}
+                  aria-pressed={selected}
+                  onClick={() => {
+                    setState((draft) => {
+                      draft.topicQuickFilter = selected ? undefined : id;
+                    });
+                  }}
+                />
+              );
+            })}
+          </div>
+        )}
       {state.open && selectVisibilityFilterEnabled && !topicTreeEnabled && hasChildren && (
         <>
           <Stack paddingBottom={0.5} style={{ gridColumn: "span 2" }} />

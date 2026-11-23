@@ -1030,6 +1030,13 @@ export type SettingsTreeNode = {
   /** Offer a namespace tree for children keyed by topic name. */
   enableTopicNameTree?: boolean;
 
+  /** Optional named subsets of a topic list, keyed by the original topic names. */
+  topicQuickFilters?: readonly {
+    id: string;
+    label: string;
+    topics: readonly string[];
+  }[];
+
   /**
    * True if the node can be reordered via drag and drop.
    */

@@ -2,8 +2,9 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 
+import { usePanelGuideStore } from "@lichtblick/suite-base/components/PanelDocs/PanelGuide";
 import { PanelCatalog, PanelInfo } from "@lichtblick/suite-base/context/PanelCatalogContext";
 import PanelSetup, { Fixture } from "@lichtblick/suite-base/stories/PanelSetup";
 import { BasicBuilder } from "@lichtblick/test-builders";
@@ -27,6 +28,7 @@ const defaultPanels: readonly PanelInfo[] = [
     title: BasicBuilder.string(),
     type: panelType,
     module: async () => await new Promise(() => {}),
+    docs: async () => ({ default: { intro: "Displays example data." } }),
   },
 ];
 
@@ -98,5 +100,13 @@ describe("PanelSettings", () => {
     });
     // Then
     expect(screen.getByText("panelDoesNotHaveSettings")).toBeDefined();
+  });
+
+  it("opens the selected panel's guide from the settings header", () => {
+    setup([panelId], { ...baseFixture, savedProps: { [panelId]: {} } });
+
+    fireEvent.click(screen.getByRole("button", { name: "panelInfo" }));
+    expect(usePanelGuideStore.getState()).toMatchObject({ open: true, panelType });
+    usePanelGuideStore.getState().hide();
   });
 });

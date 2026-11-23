@@ -30,4 +30,5 @@ export const settingsEditor = {
   topicVisibilityAll: "All",
   topicVisibilityHidden: "Hidden",
   topicVisibilityShown: "Shown",
+  topicTypeFilters: "Filter by topic type",
 };

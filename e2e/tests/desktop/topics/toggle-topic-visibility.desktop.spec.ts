@@ -7,7 +7,7 @@ import { Panels, Sidebar } from "../../../page-objects";
 /**
  * GIVEN a file with multiple topics is loaded
  * WHEN the user toggles topic visibility
- * THEN the filters "List all", "List visible", and "List invisible" should work as expected
+ * THEN the filters "All", "Shown", and "Hidden" should work as expected
  */
 test("toggle topics visibility", { tag: "@smoke" }, async ({ mainWindow }) => {
   const sidebar = new Sidebar(mainWindow);
@@ -42,18 +42,16 @@ test("toggle topics visibility", { tag: "@smoke" }, async ({ mainWindow }) => {
   // Then
   await expect(visibilityButtons).toHaveCount(total);
 
+  const settings = mainWindow.getByTestId("settings-tree-editor");
   // Select only visibles
-  await mainWindow.getByText("List All").first().click();
-  await mainWindow.locator("#menu-").getByText("List visible").click();
+  await settings.getByRole("button", { name: "Shown", exact: true }).click();
   await expect(visibilityButtons).toHaveCount(1);
 
   // Select only invisibles
-  await mainWindow.getByText("List visible").first().click();
-  await mainWindow.locator("#menu-").getByText("List invisible").click();
+  await settings.getByRole("button", { name: "Hidden", exact: true }).click();
   await expect(visibilityButtons).toHaveCount(total - 1);
 
   // Select all
-  await mainWindow.getByText("List invisible").first().click();
-  await mainWindow.locator("#menu-").getByText("List all").click();
+  await settings.getByRole("button", { name: "All", exact: true }).click();
   await expect(visibilityButtons).toHaveCount(total);
 });

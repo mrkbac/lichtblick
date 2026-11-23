@@ -6,7 +6,7 @@
 
 import { t } from "i18next";
 
-import type { SettingsTreeNodeAction } from "@lichtblick/suite";
+import type { SettingsTreeNode, SettingsTreeNodeAction, Topic } from "@lichtblick/suite";
 import type {
   DocumentedFields,
   DocumentedNode,
@@ -21,7 +21,18 @@ import {
   DEFAULT_LABEL_SCALE_FACTOR,
   DEFAULT_MESH_UP_AXIS,
 } from "../defaults";
+import {
+  POINTCLOUD_DATATYPES as FOXGLOVE_POINTCLOUD_DATATYPES,
+  SCENE_UPDATE_DATATYPES,
+} from "../foxglove";
+import { ALL_SUPPORTED_IMAGE_SCHEMAS } from "../renderables/ImageMode/schemas";
+import {
+  MARKER_ARRAY_DATATYPES,
+  MARKER_DATATYPES,
+  POINTCLOUD_DATATYPES as ROS_POINTCLOUD_DATATYPES,
+} from "../ros";
 import { fieldSize, PRECISION_DEGREES, PRECISION_DISTANCE } from "../settings";
+import { topicIsConvertibleToSchema } from "../topicIsConvertibleToSchema";
 import type { AdjustStep, RotationConvention } from "../transforms/transformOffsets";
 
 type SelectOption = { label: string; value: string | undefined };
@@ -321,6 +332,32 @@ export function publishSettingsNode(publish: RendererConfig["publish"]): Documen
 }
 
 // ---- Topics and custom layers ----
+
+const TOPIC_FILTERS = [
+  {
+    id: "pointClouds",
+    label: "threeDee:filterPointClouds",
+    schemas: new Set([...FOXGLOVE_POINTCLOUD_DATATYPES, ...ROS_POINTCLOUD_DATATYPES]),
+  },
+  { id: "images", label: "threeDee:filterImages", schemas: ALL_SUPPORTED_IMAGE_SCHEMAS },
+  {
+    id: "markers",
+    label: "threeDee:filterMarkers",
+    schemas: new Set([...MARKER_DATATYPES, ...MARKER_ARRAY_DATATYPES, ...SCENE_UPDATE_DATATYPES]),
+  },
+] as const;
+
+export function buildTopicQuickFilters(
+  topics: readonly Topic[],
+): SettingsTreeNode["topicQuickFilters"] {
+  return TOPIC_FILTERS.map(({ id, label, schemas }) => ({
+    id,
+    label: t(label),
+    topics: topics
+      .filter((topic) => topicIsConvertibleToSchema(topic, schemas))
+      .map(({ name }) => name),
+  })).filter((filter) => filter.topics.length > 0);
+}
 
 export function topicsRootNode(children: DocumentedNodes = {}): DocumentedNode {
   return topicListNode<DocumentedNode>({
