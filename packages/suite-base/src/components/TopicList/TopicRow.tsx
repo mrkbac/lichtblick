@@ -33,6 +33,7 @@ const selectSubscriptions = (ctx: MessagePipelineContext) => ctx.subscriptions;
 
 export function TopicRow({
   topicResult,
+  label,
   style,
   selected,
   onClick,
@@ -41,6 +42,8 @@ export function TopicRow({
   onOpenInPanelClick,
 }: {
   topicResult: FzfResultItem<Topic>;
+  /** Shown instead of the full topic name; must be a suffix of it (tree mode). */
+  label?: string;
   style: React.CSSProperties;
   selected: boolean;
   onClick: React.MouseEventHandler<HTMLDivElement>;
@@ -142,7 +145,11 @@ export function TopicRow({
       {/* Extra Stack wrapper to enable growing without the  */}
       <Stack flex="auto" alignItems="flex-start" overflow="hidden">
         <Typography variant="body2" noWrap className={classes.textContent}>
-          <HighlightChars str={topic.name} indices={topicResult.positions} />
+          <HighlightChars
+            str={label ?? topic.name}
+            indices={topicResult.positions}
+            offset={topic.name.length - (label ?? topic.name).length}
+          />
           {topic.aliasedFromName != undefined && (
             <Typography variant="caption" className={classes.aliasedTopicName}>
               from {topic.aliasedFromName}

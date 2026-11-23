@@ -4,41 +4,42 @@ import { Immutable } from "@lichtblick/suite";
 
 import { EditorSettingsTreeNode } from "./types";
 
-type TopicEntry = readonly [string, Immutable<EditorSettingsTreeNode>];
+type NamedItem = { readonly label?: string; readonly visible?: boolean };
+type TopicEntry<T extends NamedItem> = readonly [string, T];
 export type TopicVisibility = readonly [topic: string, visible: boolean];
 
-export type TopicNameTreeEntry =
+export type TopicNameTreeEntry<T extends NamedItem = Immutable<EditorSettingsTreeNode>> =
   | {
       type: "topic";
       key: string;
       label: string;
-      settings: Immutable<EditorSettingsTreeNode>;
+      settings: T;
     }
   | {
       type: "namespace";
       key: string;
       label: string;
       topics: TopicVisibility[];
-      children: TopicNameTreeEntry[];
+      children: TopicNameTreeEntry<T>[];
     };
 
-type Namespace = {
-  topic: TopicEntry | undefined;
-  children: Map<string, Namespace>;
+type Namespace<T extends NamedItem> = {
+  topic: TopicEntry<T> | undefined;
+  children: Map<string, Namespace<T>>;
   topics: TopicVisibility[];
 };
 
-function makeNamespace(): Namespace {
+function makeNamespace<T extends NamedItem>(): Namespace<T> {
   return { topic: undefined, children: new Map(), topics: [] };
 }
 
 /** Project the flat topic list for display. Filtered topics still contribute to branch visibility. */
-export function buildTopicNameTree(
-  allTopics: readonly TopicEntry[],
-  matchingTopics: readonly TopicEntry[],
-): TopicNameTreeEntry[] {
+export function buildTopicNameTree<T extends NamedItem>(
+  allTopics: readonly TopicEntry<T>[],
+  matchingTopics: readonly TopicEntry<T>[],
+): TopicNameTreeEntry<T>[] {
   const matches = new Map(matchingTopics);
-  const root = makeNamespace();
+  const root = makeNamespace<T>();
   for (const entry of allTopics) {
     const [key, settings] = entry;
     const segments = key.replace(/^\//, "").split("/");
@@ -52,7 +53,7 @@ export function buildTopicNameTree(
       }
       let child = current.children.get(segment);
       if (!child) {
-        child = makeNamespace();
+        child = makeNamespace<T>();
         current.children.set(segment, child);
       }
       current = child;
@@ -60,8 +61,8 @@ export function buildTopicNameTree(
     current.topic = entry;
   }
 
-  function renderChildren(node: Namespace, parentPath: string): TopicNameTreeEntry[] {
-    const result: TopicNameTreeEntry[] = [];
+  function renderChildren(node: Namespace<T>, parentPath: string): TopicNameTreeEntry<T>[] {
+    const result: TopicNameTreeEntry<T>[] = [];
     for (const [segment, child] of node.children) {
       let branch = child;
       let label = segment;
