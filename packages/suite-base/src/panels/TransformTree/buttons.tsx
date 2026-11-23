@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MPL-2.0
 
-import { Dismiss12Regular } from "@fluentui/react-icons";
+import CloseIcon from "@mui/icons-material/Close";
 import { useTranslation } from "react-i18next";
 
 import type { PanelButton } from "@lichtblick/suite-base/components/PanelButton";
@@ -18,5 +18,5 @@ function MeasureToLabel(): React.JSX.Element {
 export const TRANSFORM_TREE_BUTTONS = {
   measureFrom: { id: "transformTreeMeasureFrom", icon: MeasureFromLabel, placement: "inline" },
   measureTo: { id: "transformTreeMeasureTo", icon: MeasureToLabel, placement: "inline" },
-  closeEditor: { id: "transformTreeCloseEditor", icon: Dismiss12Regular, placement: "inline" },
+  closeEditor: { id: "transformTreeCloseEditor", icon: CloseIcon, placement: "inline" },
 } as const satisfies Record<string, PanelButton>;

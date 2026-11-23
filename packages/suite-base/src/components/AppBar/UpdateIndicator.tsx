@@ -1,7 +1,8 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import { ArrowClockwise24Filled, ArrowSyncCircle24Filled } from "@fluentui/react-icons";
+import AutorenewIcon from "@mui/icons-material/Autorenew";
+import RefreshIcon from "@mui/icons-material/Refresh";
 import { useTheme } from "@mui/material";
 import { useTranslation } from "react-i18next";
 
@@ -25,7 +26,7 @@ export function UpdateIndicator(): React.JSX.Element | undefined {
   const stale = available.kind === "activated";
   const title = stale ? t("staleVersion") : t("updateAvailable");
   // the accent color: the muted app bar color is nearly invisible on the dark bar
-  const Icon = stale ? ArrowClockwise24Filled : ArrowSyncCircle24Filled;
+  const Icon = stale ? RefreshIcon : AutorenewIcon;
 
   return (
     <AppBarIconButton
@@ -41,7 +42,7 @@ export function UpdateIndicator(): React.JSX.Element | undefined {
       data-update-kind={available.kind}
       onClick={available.update}
     >
-      <Icon primaryFill={theme.palette.primary.main} />
+      <Icon htmlColor={theme.palette.primary.main} />
     </AppBarIconButton>
   );
 }

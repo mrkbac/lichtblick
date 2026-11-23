@@ -234,15 +234,19 @@ function Parameters({ config, saveConfig }: Props): ReactElement {
     [visibleNames, tree, filtering, collapsed],
   );
 
+  // A name can be both a parameter and a namespace, so include the kind
+  const getItemKey = useCallback(
+    (index: number) => {
+      const row = rows[index];
+      return row ? `${row.kind}:${row.key}` : index;
+    },
+    [rows],
+  );
   const virtualizer = useVirtualizer({
     count: rows.length,
     getScrollElement: () => listRef.current,
     estimateSize: () => 29,
-    // A name can be both a parameter and a namespace, so include the kind
-    getItemKey: (index) => {
-      const row = rows[index];
-      return row ? `${row.kind}:${row.key}` : index;
-    },
+    getItemKey,
     overscan: 10,
     useAnimationFrameWithResizeObserver: true,
   });

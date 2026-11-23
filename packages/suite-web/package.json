@@ -4,10 +4,10 @@
   "private": true,
   "main": "./src/index.tsx",
   "dependencies": {
-    "@lichtblick/suite-base": "workspace:*"
+    "@lichtblick/suite-base": "workspace:*",
+    "@mui/icons-material": "9.5.0"
   },
   "devDependencies": {
-    "@fluentui/react-icons": "2.0.347",
     "@lichtblick/log": "workspace:*",
     "@lichtblick/test-builders": "1.0.1",
     "@lichtblick/theme": "workspace:*",

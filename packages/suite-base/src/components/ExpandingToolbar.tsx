@@ -5,7 +5,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { ArrowMinimize20Filled } from "@fluentui/react-icons";
+import CloseFullscreenIcon from "@mui/icons-material/CloseFullscreen";
 import {
   Divider,
   Paper,
@@ -167,7 +167,7 @@ export default function ExpandingToolbar<T extends string>({
                 onSelectTab(undefined);
               }}
             >
-              <ArrowMinimize20Filled />
+              <CloseFullscreenIcon fontSize="small" />
             </IconButton>
           </Stack>
         </Paper>

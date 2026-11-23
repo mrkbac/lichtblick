@@ -5,7 +5,9 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { Dismiss16Regular, Pin16Filled, Pin16Regular } from "@fluentui/react-icons";
+import CloseIcon from "@mui/icons-material/Close";
+import PushPinIcon from "@mui/icons-material/PushPin";
+import PushPinOutlinedIcon from "@mui/icons-material/PushPinOutlined";
 import {
   Button,
   IconButton,
@@ -272,7 +274,11 @@ export default function Start(): React.JSX.Element {
                             togglePinRecent(recent.id);
                           }}
                         >
-                          {pinned ? <Pin16Filled /> : <Pin16Regular />}
+                          {pinned ? (
+                            <PushPinIcon style={{ fontSize: 16 }} />
+                          ) : (
+                            <PushPinOutlinedIcon style={{ fontSize: 16 }} />
+                          )}
                         </IconButton>
                       </Tooltip>
                       <Tooltip title={t("removeRecent")}>
@@ -285,7 +291,7 @@ export default function Start(): React.JSX.Element {
                             removeRecent(recent.id);
                           }}
                         >
-                          <Dismiss16Regular />
+                          <CloseIcon style={{ fontSize: 16 }} />
                         </IconButton>
                       </Tooltip>
                     </>

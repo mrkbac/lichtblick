@@ -119,7 +119,7 @@ export function prepareVideoFrame(
 }
 
 /**
- * Decodes one video frame. With `skipBitmap` the frame only advances the decoder (its reference
+ * Decodes one video frame. With `skipRender` the frame only advances the decoder (its reference
  * chain) and undefined is returned, which saves a full-resolution ImageBitmap for frames that are
  * never shown, e.g. the GOP leading up to a seek target.
  */
@@ -129,7 +129,7 @@ export async function decodeCompressedVideoToBitmap(
   videoPlayer: VideoPlayer,
   firstMessageTime: bigint,
   resizeWidth?: number,
-  { skipBitmap = false }: { skipBitmap?: boolean } = {},
+  { skipRender = false }: { skipRender?: boolean } = {},
 ): Promise<ImageBitmap | undefined> {
   if (!videoPlayer.isInitialized()) {
     return await emptyVideoFrame(videoPlayer, resizeWidth);
@@ -144,7 +144,7 @@ export async function decodeCompressedVideoToBitmap(
     preparedFrame.type,
   );
   try {
-    if (skipBitmap) {
+    if (skipRender) {
       return undefined;
     }
     return videoFrame
@@ -170,7 +170,7 @@ export async function paintVideoBitmap(
 
 /**
  * The newest decoded picture, for frames that bring none of their own (decode timeout, B-frames,
- * empty frames). Frames decoded with `skipBitmap` move `lastVideoFrame` ahead of
+ * empty frames). Frames decoded with `skipRender` move `lastVideoFrame` ahead of
  * `lastImageBitmap`, so the bitmap is reused only while it still shows `lastVideoFrame`.
  */
 export async function latestVideoBitmap(

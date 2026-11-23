@@ -14,7 +14,7 @@
 //   found at http://www.apache.org/licenses/LICENSE-2.0
 //   You may not use this file except in compliance with the License.
 
-import { Database20Filled } from "@fluentui/react-icons";
+import StorageIcon from "@mui/icons-material/Storage";
 import { useTheme } from "@mui/material";
 import { PropsWithChildren } from "react";
 import { fireEvent, screen } from "storybook/test";
@@ -104,7 +104,7 @@ export const OneAdditionalIcon: PanelToolbarStoryObj = {
   render: (args) => {
     const additionalIcons = (
       <ToolbarIconButton title="database icon">
-        <Database20Filled />
+        <StorageIcon fontSize="small" />
       </ToolbarIconButton>
     );
     return (

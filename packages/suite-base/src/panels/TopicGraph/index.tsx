@@ -347,17 +347,18 @@ function TopicGraph() {
           checked={topicVisibility !== "none"}
           dataTest="set-topic-visibility"
           tooltip={topicVisibilityTooltip}
-          icon={<TOPIC_GRAPH_BUTTONS.topics.icon />}
+          icon={<TOPIC_GRAPH_BUTTONS.topics.icon fontSize="small" />}
           toolbarItems={
             <>
               <Tooltip placement="left" title={zoomFitTitle}>
                 <IconButton size="small" aria-label={zoomFitTitle} onClick={onZoomFit}>
-                  <TOPIC_GRAPH_BUTTONS.zoomFit.icon />
+                  <TOPIC_GRAPH_BUTTONS.zoomFit.icon fontSize="small" />
                 </IconButton>
               </Tooltip>
               <Tooltip placement="left" title={orientationTitle}>
                 <IconButton size="small" aria-label={orientationTitle} onClick={toggleOrientation}>
                   <TOPIC_GRAPH_BUTTONS.orientation.icon
+                    fontSize="small"
                     style={{ transform: `rotate(${lrOrientation ? 90 : 0}deg)` }}
                   />
                 </IconButton>
@@ -369,7 +370,7 @@ function TopicGraph() {
                   aria-label={servicesTitle}
                   onClick={toggleShowServices}
                 >
-                  <TOPIC_GRAPH_BUTTONS.services.icon />
+                  <TOPIC_GRAPH_BUTTONS.services.icon fontSize="small" />
                 </IconButton>
               </Tooltip>
             </>

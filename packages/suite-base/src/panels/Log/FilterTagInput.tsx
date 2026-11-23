@@ -5,7 +5,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { Dismiss12Filled } from "@fluentui/react-icons";
+import CloseIcon from "@mui/icons-material/Close";
 import { TextField, inputBaseClasses } from "@mui/material";
 import Autocomplete, { autocompleteClasses } from "@mui/material/Autocomplete";
 import { useTranslation } from "react-i18next";
@@ -60,7 +60,7 @@ export function FilterTagInput({
           className: classes.chip,
           variant: "filled",
           size: "small",
-          deleteIcon: <Dismiss12Filled />,
+          deleteIcon: <CloseIcon style={{ fontSize: 12 }} />,
         },
       }}
       renderInput={(params) => (

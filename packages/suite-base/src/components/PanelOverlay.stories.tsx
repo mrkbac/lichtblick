@@ -5,12 +5,10 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import {
-  Delete20Regular,
-  TabDesktop20Regular,
-  TabDesktopMultiple20Regular,
-  TableSimple20Regular,
-} from "@fluentui/react-icons";
+import DeleteOutlinedIcon from "@mui/icons-material/DeleteOutlined";
+import FilterNoneIcon from "@mui/icons-material/FilterNone";
+import GridOnOutlinedIcon from "@mui/icons-material/GridOnOutlined";
+import TabOutlinedIcon from "@mui/icons-material/TabOutlined";
 import { Meta, StoryObj } from "storybook-react-rsbuild";
 
 import Stack from "@lichtblick/suite-base/components/Stack";
@@ -62,8 +60,8 @@ export const SelectedPanelActions: Story = {
     open: true,
     variant: "selected",
     actions: [
-      { key: "group", text: "Group in tab", icon: <TabDesktop20Regular /> },
-      { key: "create-tabs", text: "Create tabs", icon: <TabDesktopMultiple20Regular /> },
+      { key: "group", text: "Group in tab", icon: <TabOutlinedIcon fontSize="small" /> },
+      { key: "create-tabs", text: "Create tabs", icon: <FilterNoneIcon fontSize="small" /> },
     ],
   },
   parameters: {
@@ -95,8 +93,13 @@ export const QuickActions: Story = {
     open: true,
     variant: "selected",
     actions: [
-      { key: "split", text: "Split panel", icon: <TableSimple20Regular /> },
-      { key: "remove", text: "Remove panel", icon: <Delete20Regular />, color: "error" },
+      { key: "split", text: "Split panel", icon: <GridOnOutlinedIcon fontSize="small" /> },
+      {
+        key: "remove",
+        text: "Remove panel",
+        icon: <DeleteOutlinedIcon fontSize="small" />,
+        color: "error",
+      },
     ],
   },
   parameters: {

@@ -1,7 +1,8 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import { Info20Filled, Info20Regular } from "@fluentui/react-icons";
+import InfoIcon from "@mui/icons-material/Info";
+import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 import { Popover } from "@mui/material";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -33,8 +34,8 @@ export function DataSourceInfoButton({ disabled }: { disabled: boolean }): React
         aria-label={t("dataSource")}
         aria-expanded={anchor != undefined}
         disabled={disabled}
-        icon={anchor ? <Info20Filled /> : <Info20Regular />}
-        activeIcon={<Info20Filled />}
+        icon={anchor ? <InfoIcon fontSize="small" /> : <InfoOutlinedIcon fontSize="small" />}
+        activeIcon={<InfoIcon fontSize="small" />}
         onClick={(event) => {
           setAnchor(event.currentTarget);
         }}

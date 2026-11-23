@@ -16,7 +16,7 @@ import { firstBindingLabel, KeyboardShortcut } from "@lichtblick/suite-base/util
 export type PanelButton = {
   /** Key in the panelButtons i18n namespace, which holds the title and the help text. */
   id: keyof typeof panelButtons;
-  icon: ComponentType;
+  icon: ComponentType<{ fontSize?: "small" | "inherit" }>;
   /** Where the panel draws it: its toolbar, a floating overlay toolbar, or inline in content. */
   placement: "toolbar" | "overlay" | "inline";
   /** The shortcut that does the same; its key is appended to the title, e.g. "Box zoom (Z)". */
@@ -45,10 +45,11 @@ export function PanelIconButton(props: PanelIconButtonProps): React.JSX.Element 
   const { button, children, ...rest } = props;
   const Icon = button.icon;
   const title = usePanelButtonTitle(button);
-  const content = children ?? <Icon />;
   // A disabled button gets no pointer events, so its wrapper carries the tooltip.
   const tooltip = rest.disabled === true ? undefined : title;
   const toolbar = button.placement === "toolbar";
+  // Toolbar buttons size their icon by CSS; elsewhere use the 20px small size.
+  const content = children ?? <Icon fontSize={toolbar ? undefined : "small"} />;
   const Button = toolbar ? ToolbarIconButton : IconButton;
   const element = (
     <Button size={toolbar ? undefined : "small"} title={tooltip} aria-label={title} {...rest}>

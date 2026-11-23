@@ -5,15 +5,10 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import {
-  ClockAlarm20Regular,
-  Delete12Regular,
-  Delete16Regular,
-  Delete20Regular,
-  Delete28Regular,
-  Fingerprint20Regular,
-  ShoppingBag20Regular,
-} from "@fluentui/react-icons";
+import AlarmOutlinedIcon from "@mui/icons-material/AlarmOutlined";
+import DeleteOutlinedIcon from "@mui/icons-material/DeleteOutlined";
+import FingerprintIcon from "@mui/icons-material/Fingerprint";
+import ShoppingBagOutlinedIcon from "@mui/icons-material/ShoppingBagOutlined";
 import { IconButtonProps, IconButton as MuiIconButton, Stack } from "@mui/material";
 import { Meta, StoryObj } from "storybook-react-rsbuild";
 
@@ -44,16 +39,16 @@ export const Default: StoryObj = {
       }}
     >
       <MuiIconButton aria-label="delete">
-        <Delete20Regular />
+        <DeleteOutlinedIcon fontSize="small" />
       </MuiIconButton>
       <MuiIconButton aria-label="delete" disabled color="primary">
-        <Delete20Regular />
+        <DeleteOutlinedIcon fontSize="small" />
       </MuiIconButton>
       <MuiIconButton color="secondary" aria-label="add an alarm">
-        <ClockAlarm20Regular />
+        <AlarmOutlinedIcon fontSize="small" />
       </MuiIconButton>
       <MuiIconButton color="primary" aria-label="add to shopping cart">
-        <ShoppingBag20Regular />
+        <ShoppingBagOutlinedIcon fontSize="small" />
       </MuiIconButton>
     </Stack>
   ),
@@ -70,16 +65,16 @@ export const Sizes: StoryObj = {
       }}
     >
       <MuiIconButton aria-label="delete" size="small">
-        <Delete12Regular />
+        <DeleteOutlinedIcon style={{ fontSize: 12 }} />
       </MuiIconButton>
       <MuiIconButton aria-label="delete" size="small">
-        <Delete16Regular />
+        <DeleteOutlinedIcon style={{ fontSize: 16 }} />
       </MuiIconButton>
       <MuiIconButton aria-label="delete" size="large">
-        <Delete20Regular />
+        <DeleteOutlinedIcon fontSize="small" />
       </MuiIconButton>
       <MuiIconButton aria-label="delete" size="large">
-        <Delete28Regular />
+        <DeleteOutlinedIcon style={{ fontSize: 28 }} />
       </MuiIconButton>
     </Stack>
   ),
@@ -97,7 +92,7 @@ export const Color: StoryObj = {
     >
       {colors.map((color) => (
         <MuiIconButton {...{ color }} key={color}>
-          <Fingerprint20Regular />
+          <FingerprintIcon fontSize="small" />
         </MuiIconButton>
       ))}
     </Stack>

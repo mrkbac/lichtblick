@@ -1,8 +1,10 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import { Image20Filled, Image20Regular, ImageOff20Regular } from "@fluentui/react-icons";
 import CheckIcon from "@mui/icons-material/Check";
+import HideImageOutlinedIcon from "@mui/icons-material/HideImageOutlined";
+import ImageIcon from "@mui/icons-material/Image";
+import ImageOutlinedIcon from "@mui/icons-material/ImageOutlined";
 import { Divider, ListItemIcon, ListItemText, ListSubheader, Menu, MenuItem } from "@mui/material";
 import { useState } from "react";
 
@@ -52,8 +54,16 @@ export function ScrubPreviewMenu(): null | React.JSX.Element {
         size="small"
         title={topic ? `Timeline preview: ${topic}` : "Timeline preview: off"}
         color={topic ? "primary" : "inherit"}
-        icon={topic ? <Image20Regular /> : <ImageOff20Regular />}
-        activeIcon={topic ? <Image20Filled /> : <ImageOff20Regular />}
+        icon={
+          topic ? (
+            <ImageOutlinedIcon fontSize="small" />
+          ) : (
+            <HideImageOutlinedIcon fontSize="small" />
+          )
+        }
+        activeIcon={
+          topic ? <ImageIcon fontSize="small" /> : <HideImageOutlinedIcon fontSize="small" />
+        }
         aria-haspopup="true"
         onClick={(event) => {
           setAnchorEl(event.currentTarget);

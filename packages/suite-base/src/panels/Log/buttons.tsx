@@ -1,22 +1,19 @@
 // SPDX-License-Identifier: MPL-2.0
 
-import {
-  ArrowDown16Regular,
-  ArrowUp16Regular,
-  Copy16Regular,
-  Copy20Filled,
-  TextCaseTitle16Regular,
-} from "@fluentui/react-icons";
+import ArrowDownwardIcon from "@mui/icons-material/ArrowDownward";
+import ArrowUpwardIcon from "@mui/icons-material/ArrowUpward";
+import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import DoubleArrowDownIcon from "@mui/icons-material/KeyboardDoubleArrowDown";
+import TitleIcon from "@mui/icons-material/Title";
 
 import { type PanelButton, RegexLabel } from "@lichtblick/suite-base/components/PanelButton";
 
 export const LOG_BUTTONS = {
-  copy: { id: "logCopy", icon: Copy20Filled, placement: "toolbar" },
-  matchCase: { id: "logMatchCase", icon: TextCaseTitle16Regular, placement: "inline" },
+  copy: { id: "logCopy", icon: ContentCopyIcon, placement: "toolbar" },
+  matchCase: { id: "logMatchCase", icon: TitleIcon, placement: "inline" },
   regex: { id: "logRegex", icon: RegexLabel, placement: "inline" },
-  previousProblem: { id: "logPreviousProblem", icon: ArrowUp16Regular, placement: "inline" },
-  nextProblem: { id: "logNextProblem", icon: ArrowDown16Regular, placement: "inline" },
-  copyMessage: { id: "logCopyMessage", icon: Copy16Regular, placement: "inline" },
+  previousProblem: { id: "logPreviousProblem", icon: ArrowUpwardIcon, placement: "inline" },
+  nextProblem: { id: "logNextProblem", icon: ArrowDownwardIcon, placement: "inline" },
+  copyMessage: { id: "logCopyMessage", icon: ContentCopyIcon, placement: "inline" },
   followPlayhead: { id: "logFollowPlayhead", icon: DoubleArrowDownIcon, placement: "inline" },
 } as const satisfies Record<string, PanelButton>;

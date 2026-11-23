@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MPL-2.0
 
-import { ChevronLeft16Regular, ChevronRight16Regular, Copy16Regular } from "@fluentui/react-icons";
+import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
+import ChevronRightIcon from "@mui/icons-material/ChevronRight";
+import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import CopyAllIcon from "@mui/icons-material/CopyAll";
 import DiffOutlinedIcon from "@mui/icons-material/DifferenceOutlined";
 import DragIndicatorIcon from "@mui/icons-material/DragIndicator";
@@ -21,11 +23,11 @@ export const RAW_MESSAGES_BUTTONS = {
   search: { id: "rawMessagesSearch", icon: SearchIcon, placement: "toolbar" },
   previousMessage: {
     id: "rawMessagesPreviousMessage",
-    icon: ChevronLeft16Regular,
+    icon: ChevronLeftIcon,
     placement: "inline",
   },
-  nextMessage: { id: "rawMessagesNextMessage", icon: ChevronRight16Regular, placement: "inline" },
-  copyMessage: { id: "rawMessagesCopyMessage", icon: Copy16Regular, placement: "inline" },
+  nextMessage: { id: "rawMessagesNextMessage", icon: ChevronRightIcon, placement: "inline" },
+  copyMessage: { id: "rawMessagesCopyMessage", icon: ContentCopyIcon, placement: "inline" },
   dragValue: { id: "rawMessagesDragValue", icon: DragIndicatorIcon, placement: "inline" },
   copyValue: { id: "rawMessagesCopyValue", icon: CopyAllIcon, placement: "inline" },
   filter: { id: "rawMessagesFilter", icon: FilterIcon, placement: "inline" },
