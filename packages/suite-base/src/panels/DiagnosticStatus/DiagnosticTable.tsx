@@ -118,12 +118,13 @@ export default function DiagnosticTable(props: DiagnosticTableProps): React.JSX.
     return out;
   }, [infos]);
 
+  const getItemKey = useCallback((index: number) => rows[index]!.key, [rows]);
   const virtualizer = useVirtualizer({
     count: rows.length,
     getScrollElement: () => scrollRef.current,
     estimateSize: () => 26,
     overscan: 10,
-    getItemKey: (index) => rows[index]!.key,
+    getItemKey,
     measureElement: (element) => element.getBoundingClientRect().height,
   });
 

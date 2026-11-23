@@ -15,7 +15,7 @@ import { HIDDEN_RENDER_INTERVAL_MS } from "@lichtblick/suite-base/components/Pan
 
 export type PlaybackTimes = { start?: Time; end?: Time; current?: Time };
 
-const DEFAULT_UPDATE_INTERVAL_MS = 250;
+const UPDATE_INTERVAL_MS = 250;
 
 const same = (a?: Time, b?: Time) => (a && b ? areEqual(a, b) : a === b);
 const isSame = (a: PlaybackTimes, b: PlaybackTimes) =>
@@ -27,7 +27,7 @@ const isSame = (a: PlaybackTimes, b: PlaybackTimes) =>
  * Only pipeline updates schedule a read, so nothing wakes up while playback is paused. A hidden
  * panel reads at most once per HIDDEN_RENDER_INTERVAL_MS, and right away when shown.
  */
-export default function usePlaybackTimes(updateIntervalMillis?: number): PlaybackTimes {
+export default function usePlaybackTimes(): PlaybackTimes {
   const messagePipeline = useMessagePipelineGetter();
   const read = useCallback((): PlaybackTimes => {
     const activeData = messagePipeline().playerState.activeData;
@@ -45,9 +45,7 @@ export default function usePlaybackTimes(updateIntervalMillis?: number): Playbac
   }, [read]);
 
   const visible = useContext(PanelVisibleContext);
-  const intervalMs = visible
-    ? (updateIntervalMillis ?? DEFAULT_UPDATE_INTERVAL_MS)
-    : HIDDEN_RENDER_INTERVAL_MS;
+  const intervalMs = visible ? UPDATE_INTERVAL_MS : HIDDEN_RENDER_INTERVAL_MS;
   const subscribe = useMessagePipelineSubscribe();
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | undefined;

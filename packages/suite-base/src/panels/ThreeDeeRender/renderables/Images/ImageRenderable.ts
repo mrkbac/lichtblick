@@ -677,7 +677,7 @@ export class ImageRenderable extends Renderable<ImageUserData> {
   ): Promise<void> {
     try {
       const skipRender = options?.skipRender ?? false;
-      const result = await this.decodeImage(image, resizeWidth, skipRender);
+      const result = await this.decodeImage(image, resizeWidth, { skipRender });
       if (result == undefined) {
         // A video frame decoded only to keep the decoder's reference chain: nothing to show.
         return;
@@ -926,8 +926,7 @@ export class ImageRenderable extends Renderable<ImageUserData> {
   protected async decodeImage(
     image: AnyImage,
     resizeWidth?: number,
-    // eslint-disable-next-line @lichtblick/no-boolean-parameters
-    skipRender = false,
+    { skipRender = false }: { skipRender?: boolean } = {},
   ): Promise<ImageBitmap | ImageData | undefined> {
     if ("format" in image) {
       if (this.#codec == undefined) {
@@ -1006,7 +1005,7 @@ export class ImageRenderable extends Renderable<ImageUserData> {
           videoPlayer,
           this.#videoFirstMessageTime,
           resizeWidth,
-          { skipBitmap: skipRender },
+          { skipRender },
         );
       }
     }

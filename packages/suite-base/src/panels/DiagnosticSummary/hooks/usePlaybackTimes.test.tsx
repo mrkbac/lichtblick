@@ -59,32 +59,32 @@ describe("usePlaybackTimes", () => {
   });
 
   it("reads the current time at most once per interval and keeps identity while nothing changes", () => {
-    const { result } = renderHook(() => usePlaybackTimes(100));
+    const { result } = renderHook(() => usePlaybackTimes());
     const first = result.current;
 
     act(() => {
       current = { sec: 10, nsec: 0 }; // equal value, new object
       emit();
-      vi.advanceTimersByTime(100);
+      vi.advanceTimersByTime(250);
     });
     expect(result.current).toBe(first);
 
     act(() => {
       current = { sec: 11, nsec: 0 };
       emit();
-      vi.advanceTimersByTime(50);
+      vi.advanceTimersByTime(125);
       current = { sec: 12, nsec: 0 };
       emit();
     });
     expect(result.current.current).toEqual({ sec: 10, nsec: 0 });
     act(() => {
-      vi.advanceTimersByTime(50);
+      vi.advanceTimersByTime(125);
     });
     expect(result.current.current).toEqual({ sec: 12, nsec: 0 });
   });
 
   it("schedules nothing while the pipeline publishes nothing (paused)", () => {
-    const { unmount } = renderHook(() => usePlaybackTimes(100));
+    const { unmount } = renderHook(() => usePlaybackTimes());
     expect(vi.getTimerCount()).toBe(0);
     act(() => {
       emit();
@@ -97,7 +97,7 @@ describe("usePlaybackTimes", () => {
 
   it("reads once a second while hidden and right away when shown", () => {
     let visible = false;
-    const { result, rerender } = renderHook(() => usePlaybackTimes(100), {
+    const { result, rerender } = renderHook(() => usePlaybackTimes(), {
       wrapper: ({ children }: React.PropsWithChildren) => (
         <PanelVisibleContext.Provider value={visible}>{children}</PanelVisibleContext.Provider>
       ),

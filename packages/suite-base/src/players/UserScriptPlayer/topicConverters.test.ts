@@ -12,7 +12,6 @@ import {
 } from "@lichtblick/suite-base/players/types";
 import { buildContributionPoints } from "@lichtblick/suite-base/providers/helpers/buildContributionPoints";
 import ExtensionBuilder from "@lichtblick/suite-base/testing/builders/ExtensionBuilder";
-import delay from "@lichtblick/suite-base/util/delay";
 
 import UserScriptPlayer from ".";
 import { schemaDescriptionToDatatypes } from "./topicConverters";
@@ -322,6 +321,8 @@ describe("UserScriptPlayer topic converter backfill", () => {
 });
 
 describe("UserScriptPlayer topic converter preloading", () => {
+  const failedAlert = (states: PlayerState[]) =>
+    states.at(-1)!.alerts?.some(({ message }) => message.includes("failed")) === true;
   const block = (messages: MessageEvent[], needTopics = new Map()): MessageBlock => ({
     messagesByTopic: { "/in": messages },
     needTopics,
@@ -376,7 +377,7 @@ describe("UserScriptPlayer topic converter preloading", () => {
     expect(create).toHaveBeenCalledTimes(2);
   });
 
-  it("retries blocks whose conversion failed after a seek, keeping the alert", async () => {
+  it("keeps a failed block and its alert across seeks without converting it again", async () => {
     const create = vi.fn(() => (event: { message: unknown }) => {
       const { value } = event.message as { value: string };
       if (value === "bad") {
@@ -391,59 +392,25 @@ describe("UserScriptPlayer topic converter preloading", () => {
       startTime: { sec: 0, nsec: 0 },
       blocks: [block([input("good", 1)]), block([input("bad", 2)])],
     };
-    const failedAlert = () =>
-      states.at(-1)!.alerts?.some(({ message }) => message.includes("failed")) === true;
 
     await fakePlayer.emit({ activeData: activeData([]), progress: { messageCache } });
-    expect(failedAlert()).toBe(true);
+    expect(failedAlert(states)).toBe(true);
     expect(create).toHaveBeenCalledTimes(2);
 
-    // Same blocks, nothing changed: no retry on every frame.
+    // Same blocks, nothing changed: no reconversion on every frame.
     await fakePlayer.emit({ activeData: activeData([]), progress: { messageCache } });
     expect(create).toHaveBeenCalledTimes(2);
 
-    // A seek clears converter alerts. Its state comes out right away with the failed block's last
-    // result; only the failed block is converted again afterwards, raising the alert again.
+    // A seek clears converter alerts, but not the failed block's.
     await fakePlayer.emit({
       activeData: { ...activeData([]), lastSeekTime: 1 },
       progress: { messageCache },
     });
     expect(create).toHaveBeenCalledTimes(2);
+    expect(failedAlert(states)).toBe(true);
     expect(
       values(states.at(-1)!.progress.messageCache!.blocks[0]!.messagesByTopic["/out"]!, "/out"),
     ).toEqual(["good"]);
-    await vi.waitFor(() => {
-      expect(create).toHaveBeenCalledTimes(3);
-      expect(failedAlert()).toBe(true);
-    });
-  });
-
-  it("emits a block that converts on the retry after a seek", async () => {
-    let failing = true;
-    const create = vi.fn(() => (event: { message: unknown }) => {
-      if (failing) {
-        throw new Error("not ready");
-      }
-      return { value: (event.message as { value: string }).value };
-    });
-    const { fakePlayer, states } = await setup(converterArgs({ create }), [
-      { topic: "/out", preloadType: "full" },
-    ]);
-    const messageCache = { startTime: { sec: 0, nsec: 0 }, blocks: [block([input("one", 1)])] };
-    const outputs = () =>
-      values(states.at(-1)!.progress.messageCache!.blocks[0]!.messagesByTopic["/out"]!, "/out");
-
-    await fakePlayer.emit({ activeData: activeData([]), progress: { messageCache } });
-    expect(outputs()).toEqual([]);
-
-    failing = false;
-    await fakePlayer.emit({
-      activeData: { ...activeData([]), lastSeekTime: 1 },
-      progress: { messageCache },
-    });
-    await vi.waitFor(() => {
-      expect(outputs()).toEqual(["one"]);
-    });
   });
 
   const failOnBad = () =>
@@ -455,7 +422,7 @@ describe("UserScriptPlayer topic converter preloading", () => {
       return { value };
     });
 
-  it("does not retry an unchanged failed block when another block loads", async () => {
+  it("does not convert an unchanged failed block again when another block loads", async () => {
     const create = failOnBad();
     const { fakePlayer } = await setup(converterArgs({ create }), [
       { topic: "/out", preloadType: "full" },
@@ -545,7 +512,7 @@ describe("UserScriptPlayer topic converter preloading", () => {
     );
   });
 
-  it("drops a retry whose watched variable changed before it ran", async () => {
+  it("converts a failed block again when a watched variable changes", async () => {
     let failing = true;
     const create = vi.fn((variables: Readonly<Record<string, unknown>>) => {
       return (event: { message: unknown }) => {
@@ -564,95 +531,36 @@ describe("UserScriptPlayer topic converter preloading", () => {
       values(states.at(-1)!.progress.messageCache!.blocks[0]!.messagesByTopic["/out"]!, "/out");
     player.setGlobalVariables({ v: 1 });
     await fakePlayer.emit({ activeData: activeData([]), progress: { messageCache } });
+    expect(failedAlert(states)).toBe(true);
 
     failing = false;
-    // The seek schedules a retry under v = 1; v changes before it runs.
-    await fakePlayer.emit({
-      activeData: { ...activeData([]), lastSeekTime: 1 },
-      progress: { messageCache },
-    });
     player.setGlobalVariables({ v: 2 });
     await fakePlayer.emit({
       activeData: { ...activeData([]), lastSeekTime: 1 },
       progress: { messageCache },
     });
-    expect(outputs()).toEqual(["one:2"]);
-    await delay(20);
 
     expect(outputs()).toEqual(["one:2"]);
+    expect(failedAlert(states)).toBe(false);
   });
 
-  it("publishes a retry that recovers part of a block that still fails", async () => {
-    let flaky = true;
-    const create = vi.fn(() => (event: { message: unknown }) => {
-      const { value } = event.message as { value: string };
-      if (value === "bad" || (value === "flaky" && flaky)) {
-        throw new Error("bad input");
-      }
-      return { value };
+  it("clears a failed block's alert once its output is no longer preloaded", async () => {
+    const create = vi.fn(() => () => {
+      throw new Error("bad input");
     });
-    const { fakePlayer, states } = await setup(converterArgs({ create }), [
+    const { fakePlayer, player, states } = await setup(converterArgs({ create }), [
       { topic: "/out", preloadType: "full" },
     ]);
-    // The converter stops at the first error, so the first attempt converts nothing.
-    const messageCache = {
-      startTime: { sec: 0, nsec: 0 },
-      blocks: [block([input("flaky", 1), input("bad", 2)])],
-    };
-    const outputs = () =>
-      values(states.at(-1)!.progress.messageCache!.blocks[0]!.messagesByTopic["/out"]!, "/out");
+    const messageCache = { startTime: { sec: 0, nsec: 0 }, blocks: [block([input("one", 1)])] };
     await fakePlayer.emit({ activeData: activeData([]), progress: { messageCache } });
-    expect(outputs()).toEqual([]);
+    expect(failedAlert(states)).toBe(true);
 
-    flaky = false;
-    await fakePlayer.emit({
-      activeData: { ...activeData([]), lastSeekTime: 1 },
-      progress: { messageCache },
-    });
+    player.setSubscriptions([{ topic: "/out" }]);
+    await Promise.resolve();
+    await fakePlayer.emit({ activeData: activeData([]), progress: { messageCache } });
 
-    // "bad" still fails, but the retry recovered "flaky".
-    await vi.waitFor(() => {
-      expect(outputs()).toEqual(["flaky"]);
-    });
-  });
-
-  describe("drops a queued retry", () => {
-    async function failedThenSeeked() {
-      const create = vi.fn(() => () => {
-        throw new Error("bad input");
-      });
-      const env = await setup(converterArgs({ create }), [{ topic: "/out", preloadType: "full" }]);
-      const messageCache = { startTime: { sec: 0, nsec: 0 }, blocks: [block([input("one", 1)])] };
-      await env.fakePlayer.emit({ activeData: activeData([]), progress: { messageCache } });
-      // The seek clears the alert and queues a retry of the failed block.
-      await env.fakePlayer.emit({
-        activeData: { ...activeData([]), lastSeekTime: 1 },
-        progress: { messageCache },
-      });
-      expect(create).toHaveBeenCalledTimes(1);
-      return { ...env, create, messageCache };
-    }
-    const failedAlert = (states: PlayerState[]) =>
-      states.at(-1)!.alerts?.some(({ message }) => message.includes("failed")) === true;
-
-    it("when the output is no longer preloaded", async () => {
-      const { fakePlayer, player, states, create, messageCache } = await failedThenSeeked();
-      player.setSubscriptions([{ topic: "/out" }]);
-      await Promise.resolve();
-      await fakePlayer.emit({ activeData: activeData([]), progress: { messageCache } });
-      await delay(20);
-
-      expect(create).toHaveBeenCalledTimes(1);
-      expect(failedAlert(states)).toBe(false);
-    });
-
-    it("when the player closes", async () => {
-      const { player, create } = await failedThenSeeked();
-      player.close();
-      await delay(20);
-
-      expect(create).toHaveBeenCalledTimes(1);
-    });
+    expect(create).toHaveBeenCalledTimes(1);
+    expect(failedAlert(states)).toBe(false);
   });
 
   it("stops adding converter outputs once the output is no longer preloaded", async () => {
