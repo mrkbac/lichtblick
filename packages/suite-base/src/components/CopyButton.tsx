@@ -7,15 +7,7 @@
 
 import CheckIcon from "@mui/icons-material/Check";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
-import {
-  Button,
-  ButtonProps,
-  IconButton,
-  IconButtonProps,
-  Tooltip,
-  Typography,
-  useTheme,
-} from "@mui/material";
+import { Button, ButtonProps, IconButton, IconButtonProps, Tooltip, useTheme } from "@mui/material";
 import React, { useCallback, useState, PropsWithChildren, useMemo } from "react";
 
 import clipboard from "@lichtblick/suite-base/util/clipboard";
@@ -105,12 +97,10 @@ function CopyButtonComponent(
       size={size}
       className={className}
       onClick={handleCopy}
-      color="inherit"
+      color={copied ? "success" : color}
       startIcon={copied ? checkIcon : copyIcon}
     >
-      <Typography color={copied ? "textPrimary" : color} variant="body2">
-        {children}
-      </Typography>
+      {children}
     </Button>
   );
 }

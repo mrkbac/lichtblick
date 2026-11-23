@@ -15,6 +15,7 @@ import { useTranslation } from "react-i18next";
 
 import { formatByteSize } from "@lichtblick/den/format";
 import { useAsync } from "@lichtblick/hooks";
+import CopyButton from "@lichtblick/suite-base/components/CopyButton";
 import { downloadFiles } from "@lichtblick/suite-base/util/download";
 
 import { useStyles } from "./AttachmentDialog.style";
@@ -122,6 +123,9 @@ export function AttachmentDialog({
               size: formatByteSize(value.kind === "text" ? TEXT_PREVIEW_BYTES : HEX_PREVIEW_BYTES),
             })}
           </Typography>
+        )}
+        {value?.kind === "text" && value.text != undefined && (
+          <CopyButton getText={() => value.text ?? ""}>{t("copy")}</CopyButton>
         )}
         <Button
           disabled={!value}
