@@ -21,11 +21,24 @@ const clients = new Map<MessagePort, Set<AbortController>>();
 let status: SessionStatus = { state: "Starting", peers: [] };
 let started = false;
 let signedOut = false;
+let signingOut: Promise<void> | undefined;
 let node: IPN | undefined;
 let profile: Awaited<ReturnType<typeof openProfile>> | undefined;
 
+function abortStreams() {
+  for (const streams of clients.values()) {
+    for (const stream of streams) {
+      stream.abort();
+    }
+  }
+}
+
 function update(change: Partial<SessionStatus>) {
   status = { ...status, ...change };
+  // Pages fail their sockets on these states without telling the worker; free paused streams.
+  if (status.state === "LoggedOut" || status.state === "NeedsLogin" || status.error) {
+    abortStreams();
+  }
   for (const client of clients.keys()) {
     client.postMessage(status);
   }
@@ -49,6 +62,7 @@ async function start() {
   try {
     profile = await openProfile();
   } catch {
+    started = false; // let Retry try again once storage recovers
     update({ error: "tailscaleStorageError" });
     return;
   }
@@ -123,11 +137,7 @@ async function start() {
 
 async function logout() {
   signedOut = true;
-  for (const streams of clients.values()) {
-    for (const stream of streams) {
-      stream.abort();
-    }
-  }
+  abortStreams();
   node?.logout();
   if (profile) {
     await profile.clear();
@@ -151,7 +161,8 @@ scope.onconnect = ({ ports }) => {
     client.close();
     if (clients.size === 0) {
       // A tab may immediately reopen the dialog. Finish writes before retiring the idle node.
-      void Promise.resolve(profile?.flush())
+      // An in-flight sign-out must finish deleting the identity first.
+      void Promise.resolve(signingOut ?? profile?.flush())
         .catch(() => {})
         .then(() => {
           if (clients.size === 0) {
@@ -166,11 +177,11 @@ scope.onconnect = ({ ports }) => {
     if (data === "release") {
       release();
     } else if (data === "logout") {
-      if (!signedOut) {
-        void logout().catch(() => {
-          update({ error: "tailscaleStorageError" });
-        });
-      }
+      // A failed identity deletion can be retried; streams stay closed via signedOut.
+      signingOut ??= logout().catch(() => {
+        signingOut = undefined;
+        update({ error: "tailscaleStorageError" });
+      });
     } else if (data === "refreshPeers") {
       if (status.state === "Running" && !signedOut) {
         const snapshot = node?.status();
@@ -179,9 +190,11 @@ scope.onconnect = ({ ports }) => {
         }
       }
     } else if (data === "start") {
-      client.postMessage(status);
-      if (!started) {
+      if (started) {
+        client.postMessage(status);
+      } else {
         started = true;
+        update({ error: undefined });
         void start().catch(() => {
           update({ error: "tailscaleFailed" });
           profile?.close();

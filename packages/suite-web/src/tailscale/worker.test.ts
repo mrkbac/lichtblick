@@ -2,14 +2,50 @@
 
 import { gzipSync } from "node:zlib";
 
+import { openProfile } from "./profile";
 import { attachStream } from "./stream";
 import type { SessionStatus } from "./worker";
 
 vi.mock("@ai-ecoverse/wasm-tailscale/wasm_exec.js", () => ({}));
 vi.mock("./stream", () => ({ attachStream: vi.fn() }));
 vi.mock("./profile", () => ({
-  openProfile: async () => ({ flush: async () => {}, close: () => {}, storage: {} }),
+  openProfile: vi.fn(async () => ({ flush: async () => {}, close: () => {}, storage: {} })),
 }));
+
+afterEach(() => {
+  vi.resetModules();
+});
+
+it("retries startup after the browser profile could not be opened", async () => {
+  vi.stubGlobal("self", { location: new URL("https://example.org/worker.js"), close: vi.fn() });
+  // Stop startup right after the profile opens; only the retry path matters here.
+  vi.stubGlobal("fetch", async () => new Response(undefined, { status: 404 }));
+  vi.mocked(openProfile).mockRejectedValueOnce(new Error("blocked"));
+  const tab = new MessageChannel();
+  try {
+    await import("./worker");
+    const updates: SessionStatus[] = [];
+    tab.port2.onmessage = (event: MessageEvent<SessionStatus>) => {
+      updates.push(event.data);
+    };
+    (self as unknown as SharedWorkerGlobalScope).onconnect!({
+      ports: [tab.port1],
+    } as unknown as MessageEvent);
+    tab.port2.postMessage("start");
+    await vi.waitFor(() => {
+      expect(updates.at(-1)?.error).toBe("tailscaleStorageError");
+    });
+    tab.port2.postMessage("start");
+    await vi.waitFor(() => {
+      expect(openProfile).toHaveBeenCalledTimes(2);
+    });
+    expect(updates.some((update, i) => i > 0 && update.error == undefined)).toBe(true);
+  } finally {
+    tab.port1.close();
+    tab.port2.close();
+    vi.unstubAllGlobals();
+  }
+});
 
 it("releases only the closing tab's live streams and retires the node after the last tab", async () => {
   const scope = {

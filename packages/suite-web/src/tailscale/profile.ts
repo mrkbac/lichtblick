@@ -51,19 +51,21 @@ export async function openProfile(): Promise<{
     }
     const deviceKey = key;
     const saved = await db.get("profiles", "device");
-    const state = new Map<string, string>();
-    if (saved) {
-      const bytes = await crypto.subtle.decrypt(
-        { name: "AES-GCM", iv: saved.iv },
-        deviceKey,
-        saved.ciphertext,
-      );
-      for (const [id, value] of Object.entries(
-        JSON.parse(new TextDecoder().decode(bytes)) as State,
-      )) {
-        state.set(id, value);
-      }
-    }
+    const state = new Map<string, string>(
+      saved
+        ? Object.entries(
+            JSON.parse(
+              new TextDecoder().decode(
+                await crypto.subtle.decrypt(
+                  { name: "AES-GCM", iv: saved.iv },
+                  deviceKey,
+                  saved.ciphertext,
+                ),
+              ),
+            ) as State,
+          )
+        : [],
+    );
     let pending = Promise.resolve();
     let cleared = false;
     return {
@@ -75,21 +77,29 @@ export async function openProfile(): Promise<{
           }
           state.set(id, value);
           const bytes = new TextEncoder().encode(JSON.stringify(Object.fromEntries(state)));
-          pending = pending.then(async () => {
-            const iv = crypto.getRandomValues(new Uint8Array(12));
-            const ciphertext = await crypto.subtle.encrypt(
-              { name: "AES-GCM", iv },
-              deviceKey,
-              bytes,
-            );
-            await db.put("profiles", { iv, ciphertext }, "device");
-          });
+          // A failed write must not block later ones; flush still sees the latest result.
+          pending = pending
+            .catch(() => {})
+            .then(async () => {
+              const iv = crypto.getRandomValues(new Uint8Array(12));
+              const ciphertext = await crypto.subtle.encrypt(
+                { name: "AES-GCM", iv },
+                deviceKey,
+                bytes,
+              );
+              await db.put("profiles", { iv, ciphertext }, "device");
+            });
           // flush reports persistence failures to the session.
           void pending.catch(() => {});
         },
       },
       flush: async () => {
-        await pending;
+        // Writes queued while waiting replace `pending`; drain until it settles.
+        let current: Promise<void>;
+        do {
+          current = pending;
+          await current;
+        } while (current !== pending);
       },
       async clear() {
         cleared = true;
