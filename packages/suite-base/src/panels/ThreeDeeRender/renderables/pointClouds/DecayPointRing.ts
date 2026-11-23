@@ -131,6 +131,8 @@ export class DecayPointRing extends Renderable<BaseUserData, /*TRenderer=*/ unde
   public override pickable = true;
   // Old scans keep only their geometry (as before), so there are no per-point details to show
   public override pickableInstances = false;
+  /** What the shown decay limit notice says, to format it again only when that changes */
+  public noticeKey: string | undefined;
 
   readonly #limits: HistoryLimits;
   /** Point budget (a setting, so it can change at runtime; see enforceLimits) */
