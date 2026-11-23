@@ -9,39 +9,22 @@ export type InstallingProgress = {
   inProgress: boolean;
 };
 
+export const IDLE_INSTALLING_PROGRESS: InstallingProgress = {
+  installed: 0,
+  total: 0,
+  inProgress: false,
+};
+
 export type InstallingExtensionsState = {
   installingProgress: InstallingProgress;
-  setInstallingProgress: (progress: (lastState: InstallingProgress) => InstallingProgress) => void;
-  startInstallingProgress: (extensionsNumber: number) => void;
-  resetInstallingProgress: () => void;
+  setInstallingProgress: (progress: InstallingProgress) => void;
 };
 
 export const useInstallingExtensionsStore = createWithEqualityFn<InstallingExtensionsState>(
   (set) => ({
-    installingProgress: { installed: 0, total: 0, inProgress: false },
-    setInstallingProgress: (progress) => {
-      set((state) => ({
-        installingProgress: progress(state.installingProgress),
-      }));
-    },
-    startInstallingProgress: (extensionsToBeInstalled: number) => {
-      set((state) => ({
-        installingProgress: {
-          ...state.installingProgress,
-          total: extensionsToBeInstalled,
-          installed: 0,
-          inProgress: true,
-        },
-      }));
-    },
-    resetInstallingProgress: () => {
-      set(() => ({
-        installingProgress: {
-          total: 0,
-          installed: 0,
-          inProgress: false,
-        },
-      }));
+    installingProgress: IDLE_INSTALLING_PROGRESS,
+    setInstallingProgress: (installingProgress) => {
+      set({ installingProgress });
     },
   }),
 );

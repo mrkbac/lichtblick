@@ -11,23 +11,19 @@ import {
   ExtensionData,
   InstallExtensionsResult,
 } from "@lichtblick/suite-base/context/ExtensionCatalogContext";
-import { HttpError } from "@lichtblick/suite-base/services/http/HttpError";
 import { BasicBuilder } from "@lichtblick/test-builders";
 
 import { useInstallingExtensionsState } from "./useInstallingExtensionsState";
 
-const mockStartInstallingProgress = vi.fn();
 const mockSetInstallingProgress = vi.fn();
-const mockResetInstallingProgress = vi.fn();
 const mockInstallExtensions = vi.fn();
 const mockStore = {
   setInstallingProgress: mockSetInstallingProgress,
-  startInstallingProgress: mockStartInstallingProgress,
-  resetInstallingProgress: mockResetInstallingProgress,
   installingProgress: { installed: 0, total: 0, inProgress: false },
 };
 
-vi.mock("@lichtblick/suite-base/hooks/useInstallingExtensionsStore", () => ({
+vi.mock("@lichtblick/suite-base/hooks/useInstallingExtensionsStore", async () => ({
+  ...(await vi.importActual("@lichtblick/suite-base/hooks/useInstallingExtensionsStore")),
   useInstallingExtensionsStore: (selector: any) => selector(mockStore),
 }));
 
@@ -60,17 +56,14 @@ describe("useInstallingExtensionsState", () => {
   const createExtensionData = (count: number): ExtensionData[] => {
     return Array.from({ length: count }, () => ({
       buffer: new Uint8Array([BasicBuilder.number()]),
-      namespace: "org" as const,
+      namespace: "local" as const,
     }));
   };
 
   const createSuccessResult = (): InstallExtensionsResult => ({
     success: true,
     extensionName: BasicBuilder.string(),
-    loaderResults: [
-      { loaderType: "browser", success: true },
-      { loaderType: "server", success: true },
-    ],
+    loaderResults: [{ loaderType: "browser", success: true }],
   });
 
   const createPartialFailureResult = (): InstallExtensionsResult => ({
@@ -79,7 +72,7 @@ describe("useInstallingExtensionsState", () => {
     error: new Error(),
     loaderResults: [
       { loaderType: "browser", success: true },
-      { loaderType: "server", success: false, error: new Error("Network error") },
+      { loaderType: "filesystem", success: false, error: new Error("Disk error") },
     ],
   });
 
@@ -89,7 +82,7 @@ describe("useInstallingExtensionsState", () => {
     error: new Error("All loaders failed"),
     loaderResults: [
       { loaderType: "browser", success: false, error: new Error("Cache error") },
-      { loaderType: "server", success: false, error: new Error("Network error") },
+      { loaderType: "filesystem", success: false, error: new Error("Disk error") },
     ],
   });
 
@@ -123,10 +116,9 @@ describe("useInstallingExtensionsState", () => {
   });
 
   describe("Partial Success with Warnings Scenarios", () => {
-    it("should show warning when extensions install but some fail to sync to server", async () => {
+    it("should show warning when extensions install but another loader fails", async () => {
       // Given
       const extensionsData = createExtensionData(2);
-      // Mock each individual call since INSTALL_EXTENSIONS_BATCH = 1
       mockInstallExtensions
         .mockResolvedValueOnce([createPartialFailureResult()])
         .mockResolvedValueOnce([createPartialFailureResult()]);
@@ -148,13 +140,6 @@ describe("useInstallingExtensionsState", () => {
         "Successfully installed all 2 extensions with some warnings.",
         expect.objectContaining({ variant: "warning" }),
       );
-      expect(enqueueSnackbar).toHaveBeenCalledWith(
-        "Note: 2 extensions saved locally but not synced to server (offline).",
-        expect.objectContaining({
-          variant: "info",
-          persist: true,
-        }),
-      );
     });
 
     it("should show warning when extensions install but some fail to save to cache", async () => {
@@ -166,7 +151,7 @@ describe("useInstallingExtensionsState", () => {
         error: new Error(),
         loaderResults: [
           { loaderType: "browser", success: false, error: new Error("Cache error") },
-          { loaderType: "server", success: true },
+          { loaderType: "filesystem", success: true },
         ],
       };
       mockInstallExtensions.mockResolvedValueOnce([resultWithCacheFailure]);
@@ -224,7 +209,7 @@ describe("useInstallingExtensionsState", () => {
         expect.objectContaining({ variant: "error" }),
       );
       expect(enqueueSnackbar).toHaveBeenCalledWith(
-        "Details: 2 could not be saved to cache, 2 could not be synced to server.",
+        "Details: 2 could not be saved to cache.",
         expect.objectContaining({
           variant: "error",
           persist: true,
@@ -254,10 +239,13 @@ describe("useInstallingExtensionsState", () => {
       });
 
       // Then
-      expect(mockStartInstallingProgress).toHaveBeenCalledWith(2);
-      expect(mockSetInstallingProgress).toHaveBeenCalled();
+      expect(mockSetInstallingProgress.mock.calls).toEqual([
+        [{ installed: 0, total: 2, inProgress: true }],
+        [{ installed: 1, total: 2, inProgress: true }],
+        [{ installed: 2, total: 2, inProgress: true }],
+        [{ installed: 0, total: 0, inProgress: false }],
+      ]);
       expect(playMock).toHaveBeenCalled();
-      expect(mockResetInstallingProgress).toHaveBeenCalled();
     });
 
     it("should show progress snackbar when installation is in progress", () => {
@@ -314,33 +302,11 @@ describe("useInstallingExtensionsState", () => {
         `An error occurred during extension installation: ${errorMessage}`,
         expect.objectContaining({ variant: "error" }),
       );
-      expect(mockResetInstallingProgress).toHaveBeenCalled();
-    });
-
-    it("should show user-friendly error message when HttpError is thrown", async () => {
-      // Given
-      const httpError = new HttpError("Network error", 0, "Network Error");
-      const extensionsData = createExtensionData(1);
-      mockInstallExtensions.mockRejectedValue(httpError);
-
-      const { result } = renderHook(() =>
-        useInstallingExtensionsState({
-          isPlaying: false,
-          playerEvents: { play: playMock },
-        }),
-      );
-
-      // When
-      await act(async () => {
-        await result.current.installFoxeExtensions(extensionsData);
+      expect(mockSetInstallingProgress).toHaveBeenLastCalledWith({
+        installed: 0,
+        total: 0,
+        inProgress: false,
       });
-
-      // Then
-      expect(enqueueSnackbar).toHaveBeenCalledWith(
-        expect.stringContaining("Network connection error"),
-        expect.objectContaining({ variant: "error" }),
-      );
-      expect(mockResetInstallingProgress).toHaveBeenCalled();
     });
   });
 });

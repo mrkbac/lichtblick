@@ -43,8 +43,6 @@ vi.mock("@lichtblick/suite-base/hooks/useInstallingExtensionsStore", () => ({
   useInstallingExtensionsStore: (selector: any) =>
     selector({
       setInstallingProgress: vi.fn(),
-      startInstallingProgress: vi.fn(),
-      resetInstallingProgress: vi.fn(),
       installingProgress: { installed: 0, total: 0, inProgress: false },
     }),
 }));
