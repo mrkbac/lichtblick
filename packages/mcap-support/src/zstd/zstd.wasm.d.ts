@@ -2,6 +2,6 @@
 
 // Types for `import url from "./zstd.wasm"`: the bundlers turn it into a URL (asset/resource or
 // asset/inline, and a data: URL in vitest). A sibling file so every program that compiles this
-// package (the app, quicklook, the packages build) resolves it without extra typings.
+// package (the app, the packages build) resolves it without extra typings.
 declare const url: string;
 export default url;

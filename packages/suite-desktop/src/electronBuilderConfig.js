@@ -95,15 +95,6 @@ function makeElectronBuilderConfig(params) {
       category: "public.app-category.developer-tools",
       entitlements: path.join(__dirname, "../resources/mac/entitlements.plist"),
       entitlementsInherit: path.join(__dirname, "../resources/mac/entitlements.plist"),
-      extraFiles: [
-        {
-          from: path.join(
-            require.resolve("quicklookjs/index.d.ts"),
-            "../dist/PreviewExtension.appex",
-          ),
-          to: "PlugIns/PreviewExtension.appex",
-        },
-      ],
       extraResources: [
         { from: path.join(__dirname, "../resources/icon/BagIcon.png"), to: "BagIcon.png" },
         { from: path.join(__dirname, "../resources/icon/McapIcon.png"), to: "McapIcon.png" },
