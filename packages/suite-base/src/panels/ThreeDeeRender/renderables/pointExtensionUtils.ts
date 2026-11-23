@@ -206,6 +206,25 @@ export function payloadFingerprint(payload: ArrayBufferView): number {
   return (a >>> 0) * 2 ** 21 + (b >>> 11);
 }
 
+type RecordKey = {
+  recordId?: string;
+  receiveTime: bigint;
+  messageTime: bigint;
+  payload: ArrayBufferView;
+};
+
+/**
+ * Whether two scans are the same record: by record ID when both have one, else by both times and,
+ * only on that tie, the payload fingerprint.
+ */
+export function isSameRecord(a: RecordKey, b: RecordKey): boolean {
+  return a.recordId != undefined && b.recordId != undefined
+    ? a.recordId === b.recordId
+    : a.receiveTime === b.receiveTime &&
+        a.messageTime === b.messageTime &&
+        payloadFingerprint(a.payload) === payloadFingerprint(b.payload);
+}
+
 /**
  * A scene extension that takes messages read back after a seek straight into its decay history,
  * decoded right away (never through the renderer's message queue) and unsynchronized, since
@@ -224,29 +243,36 @@ export function isDecayHistoryIngest(extension: object): extension is DecayHisto
 }
 
 /**
- * Shows the notice that the limits shape a decay history (the latest scan alone fills the point
- * budget, scans in the window were dropped for it, or the ring keeps only 1 in N incoming scans), or
- * clears it. Takes and returns the key
- * of the shown notice, so its text is only formatted again when it changes.
+ * Expires, budget-checks and poses a layer's decay ring, and shows the notice that the limits shape
+ * it (the latest scan alone fills the point budget, scans in the window were dropped for it, or the
+ * ring keeps only 1 in N incoming scans) or clears it. Returns whether all its scans resolved.
  */
-export function updateDecayNotice({
-  renderer,
-  settingsPath,
-  ring,
-  maxPoints,
-  latestPoints,
-  windowStart,
-  shownKey,
-}: {
-  renderer: Renderer;
-  settingsPath: readonly string[];
-  ring: DecayPointRing;
-  maxPoints: number;
-  latestPoints: number;
-  /** Receive time where the decay window starts */
-  windowStart: bigint;
-  shownKey: string | undefined;
-}): string | undefined {
+export function updateDecayRing(
+  renderer: Renderer,
+  {
+    settings,
+    settingsPath,
+    historyOnly,
+  }: {
+    settings: LayerSettingsPointExtension;
+    settingsPath: readonly string[];
+    historyOnly?: boolean;
+  },
+  ring: DecayPointRing,
+  maxPoints: number,
+  latestPoints: number,
+  currentTime: bigint,
+  renderFrameId: string,
+  fixedFrameId: string,
+): boolean {
+  const windowStart = currentTime - BigInt(Math.round(settings.decayTime * 1e9));
+  ring.expire(windowStart);
+  if (historyOnly === true) {
+    ring.setStyle(pointStyle(settings));
+  }
+  // The latest scan counts toward the limits too, as when it was part of the history
+  ring.enforceLimits({ maxPoints, reservePoints: latestPoints });
+
   const errors = renderer.settings.errors;
   const evictedUntil = ring.budgetEvictedUntil();
   const droppedInWindow = evictedUntil != undefined && evictedUntil >= windowStart;
@@ -265,20 +291,48 @@ export function updateDecayNotice({
         : undefined;
   if (state == undefined) {
     errors.remove(settingsPath, DECAY_LIMITED);
-    return undefined;
+    ring.noticeKey = undefined;
+  } else {
+    const locale = i18next.language;
+    const key = `${locale} ${maxPoints} ${state} ${ring.stride()}`;
+    // Format the text only when it changes (errors can also be cleared elsewhere, e.g. on a topic reset)
+    if (key !== ring.noticeKey || !errors.hasError(settingsPath, DECAY_LIMITED)) {
+      const values = {
+        maxPoints: maxPoints.toLocaleString(locale),
+        maxScans: DECAY_HISTORY_LIMITS.maxEntries.toLocaleString(locale),
+        stride: ring.stride().toLocaleString(locale),
+      };
+      errors.add(settingsPath, DECAY_LIMITED, i18next.t(state, values));
+    }
+    ring.noticeKey = key;
   }
-  const locale = i18next.language;
-  const key = `${locale} ${maxPoints} ${state} ${ring.stride()}`;
-  // (errors can also be cleared elsewhere, e.g. on a topic reset)
-  if (key !== shownKey || !errors.hasError(settingsPath, DECAY_LIMITED)) {
-    const values = {
-      maxPoints: maxPoints.toLocaleString(locale),
-      maxScans: DECAY_HISTORY_LIMITS.maxEntries.toLocaleString(locale),
-      stride: ring.stride().toLocaleString(locale),
-    };
-    errors.add(settingsPath, DECAY_LIMITED, i18next.t(state, values));
+
+  const missingFrame = ring.updatePoses(
+    renderer.transformTree,
+    currentTime,
+    renderFrameId,
+    fixedFrameId,
+  );
+  if (ring.posesPending()) {
+    // Paused redraws stop on their own: draw again until every scan is placed
+    renderer.queueAnimationFrame();
   }
-  return key;
+  if (missingFrame != undefined) {
+    errors.add(
+      settingsPath,
+      MISSING_TRANSFORM,
+      missingTransformMessage(
+        renderer.transformTree,
+        renderFrameId,
+        fixedFrameId,
+        missingFrame.frameId,
+        currentTime,
+        missingFrame.messageTime,
+      ),
+    );
+    return false;
+  }
+  return true;
 }
 
 type HistoryEntry<TRenderable extends HistoryRenderable> = {
@@ -314,7 +368,12 @@ export class RenderObjectHistory<TRenderable extends HistoryRenderable> {
     this.#history = [initial];
     this.#renderer = renderer;
     this.#parentRenderable = parentRenderable;
-    this.#limits = limits;
+    this.#limits = { ...limits };
+  }
+
+  /** Changes the point budget, applied at the next trim */
+  public setMaxPoints(maxPoints: number): void {
+    this.#limits.maxPoints = maxPoints;
   }
 
   public addHistoryEntry(entry: HistoryEntry<TRenderable>): void {

@@ -15,10 +15,9 @@ import { Immutable } from "@lichtblick/suite";
 import { PlayerAlert } from "@lichtblick/suite-base/players/types";
 
 // Loaded on demand: it's only needed after the browser blocked a ws:// connection
-const WsMixedContentHelp = lazy(async () => ({
-  default: (await import("@lichtblick/suite-base/components/WsMixedContentHelp"))
-    .WsMixedContentHelp,
-}));
+const WsMixedContentHelp = lazy(
+  async () => await import("@lichtblick/suite-base/components/WsMixedContentHelp"),
+);
 
 const useStyles = makeStyles()({
   dialogTitle: {

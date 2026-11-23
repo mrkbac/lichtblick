@@ -9,7 +9,7 @@ import {
   HEAP_MIN_HISTORY_BYTES,
   heapLimitBytes,
   LiveHistoryBuffer,
-  transformChildFrames,
+  seedKeys,
 } from "./LiveHistoryBuffer";
 
 const SEC = 1_000_000_000n;
@@ -238,7 +238,7 @@ describe("LiveHistoryBuffer", () => {
       const latest = new Map<string, MessageEvent>();
       for (const m of all) {
         if (m.receiveTime.sec <= at) {
-          for (const key of transformChildFrames(m.message) ?? [""]) {
+          for (const key of seedKeys(m)) {
             latest.set(`${m.topic}/${key}`, m);
           }
         }
@@ -377,19 +377,20 @@ describe("LiveHistoryBuffer", () => {
   });
 });
 
-describe("transformChildFrames", () => {
+describe("seedKeys", () => {
   it("detects transform messages by shape", () => {
-    expect(
-      transformChildFrames({
-        transforms: [{ child_frame_id: "a" }, { child_frame_id: "b" }],
-      }),
-    ).toEqual(["a", "b"]);
-    expect(transformChildFrames({ parent_frame_id: "p", child_frame_id: "c" })).toEqual(["c"]);
-    expect(transformChildFrames({ child_frame_id: "c", pose: {} })).toBeUndefined();
-    expect(transformChildFrames({ transforms: [{ x: 1 }] })).toBeUndefined();
-    expect(transformChildFrames(undefined)).toBeUndefined();
-    expect(transformChildFrames({ transforms: [null] })).toBeUndefined();
-    expect(transformChildFrames({ transforms: ["a"] })).toBeUndefined();
+    const keys = (message: unknown) => seedKeys({ message } as MessageEvent);
+    expect(keys({ transforms: [{ child_frame_id: "a" }, { child_frame_id: "b" }] })).toEqual([
+      "a",
+      "b",
+    ]);
+    expect(keys({ parent_frame_id: "p", child_frame_id: "c" })).toEqual(["c"]);
+    // Anything else is replaced as a whole
+    expect(keys({ child_frame_id: "c", pose: {} })).toEqual([""]);
+    expect(keys({ transforms: [{ x: 1 }] })).toEqual([""]);
+    expect(keys(undefined)).toEqual([""]);
+    expect(keys({ transforms: [null] })).toEqual([""]);
+    expect(keys({ transforms: ["a"] })).toEqual([""]);
   });
 });
 

@@ -15,9 +15,9 @@ import {
   PointsRenderable,
   DECAY_HISTORY_LIMITS,
   DECAY_LIMITED,
-  payloadFingerprint,
   pointDecayTime,
-  updateDecayNotice,
+  updateDecayRing,
+  isSameRecord,
   pointStyle,
   RenderObjectHistory,
 } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/pointExtensionUtils";
@@ -42,7 +42,7 @@ import { laserScanSettingsNode } from "../settingsNodes/topics";
 import { topicIsConvertibleToSchema } from "../topicIsConvertibleToSchema";
 import { Pose } from "../transforms";
 import { DecayPointRing, type RingStyle } from "./pointClouds/DecayPointRing";
-import { MISSING_TRANSFORM, missingTransformMessage } from "./transforms";
+import { MISSING_TRANSFORM } from "./transforms";
 
 type LayerSettingsLaserScan = LayerSettingsPointExtension;
 const DEFAULT_SETTINGS = DEFAULT_POINT_SETTINGS;
@@ -118,8 +118,6 @@ class LaserScanHistoryRenderable extends Renderable<LaserScanHistoryUserData> {
   #decayRing: DecayPointRing | undefined;
   /** Decodes scans older than the latest before they are copied into the ring */
   #scratch: DynamicBufferGeometry | undefined;
-  /** Key of the shown decay limit notice, see updateDecayNotice */
-  #decayNoticeKey: string | undefined;
 
   public constructor(topic: string, renderer: Renderer, userData: LaserScanHistoryUserData) {
     super(topic, renderer, userData);
@@ -196,12 +194,10 @@ class LaserScanHistoryRenderable extends Renderable<LaserScanHistoryUserData> {
     // (the same message read back after a seek and played counts as the same scan)
     const sameScan =
       laserScan === latest.userData.laserScan ||
-      (this.userData.recordId != undefined && latestEntry.recordId != undefined
-        ? this.userData.recordId === latestEntry.recordId
-        : latestEntry.receiveTime === receiveTime &&
-          latestEntry.messageTime === messageTime &&
-          payloadFingerprint(laserScan.ranges) ===
-            payloadFingerprint(latest.userData.laserScan?.ranges ?? EMPTY_RANGES));
+      isSameRecord(
+        { recordId: this.userData.recordId, receiveTime, messageTime, payload: laserScan.ranges },
+        { ...latestEntry, payload: latest.userData.laserScan?.ranges ?? EMPTY_RANGES },
+      );
     if (settings.decayTime > 0 && previousCount > 0 && !sameScan) {
       const { position, color } = latest.geometry.attributes;
       this.#ring(style).push(
@@ -294,59 +290,26 @@ class LaserScanHistoryRenderable extends Renderable<LaserScanHistoryUserData> {
   /** Expires, budgets and poses the decay ring; returns whether all its scans resolved */
   #updateDecayRing(currentTime: bigint, renderFrameId: string, fixedFrameId: string): boolean {
     const ring = this.#decayRing;
-    const { settings, settingsPath } = this.userData;
     if (!ring) {
       return true;
     }
-    if (settings.decayTime <= 0) {
+    if (this.userData.settings.decayTime <= 0) {
       ring.removeFromParent();
       ring.dispose();
       this.#decayRing = undefined;
-      this.renderer.settings.errors.remove(settingsPath, DECAY_LIMITED);
+      this.renderer.settings.errors.remove(this.userData.settingsPath, DECAY_LIMITED);
       return true;
     }
-    const windowStart = currentTime - BigInt(Math.round(settings.decayTime * 1e9));
-    ring.expire(windowStart);
-    if (this.userData.historyOnly === true) {
-      ring.setStyle(pointStyle(settings));
-    }
-    const latestPoints = this.#pointsHistory.latest().renderable.geometry.drawRange.count;
-    ring.enforceLimits({ maxPoints: DECAY_HISTORY_LIMITS.maxPoints, reservePoints: latestPoints });
-    this.#decayNoticeKey = updateDecayNotice({
-      renderer: this.renderer,
-      settingsPath,
+    return updateDecayRing(
+      this.renderer,
+      this.userData,
       ring,
-      maxPoints: DECAY_HISTORY_LIMITS.maxPoints,
-      latestPoints,
-      windowStart,
-      shownKey: this.#decayNoticeKey,
-    });
-    const missingFrame = ring.updatePoses(
-      this.renderer.transformTree,
+      DECAY_HISTORY_LIMITS.maxPoints,
+      this.#pointsHistory.latest().renderable.geometry.drawRange.count,
       currentTime,
       renderFrameId,
       fixedFrameId,
     );
-    if (ring.posesPending()) {
-      // Paused redraws stop on their own: draw again until every scan is placed
-      this.renderer.queueAnimationFrame();
-    }
-    if (missingFrame != undefined) {
-      this.renderer.settings.errors.add(
-        settingsPath,
-        MISSING_TRANSFORM,
-        missingTransformMessage(
-          this.renderer.transformTree,
-          renderFrameId,
-          fixedFrameId,
-          missingFrame.frameId,
-          currentTime,
-          missingFrame.messageTime,
-        ),
-      );
-      return false;
-    }
-    return true;
   }
 }
 
@@ -561,15 +524,18 @@ export class LaserScans extends SceneExtension<LaserScanHistoryRenderable> {
       renderable = this.#getOrCreateRenderable(messageEvent, laserScan);
       renderable.userData.historyOnly = true;
     }
-    const { settings, messageTime, historyOnly } = renderable.userData;
+    const { settings, historyOnly } = renderable.userData;
     const sameAsDrawn =
       historyOnly !== true &&
-      (recordId != undefined && renderable.userData.recordId != undefined
-        ? recordId === renderable.userData.recordId
-        : receiveTime === renderable.userData.receiveTime &&
-          toNanoSec(laserScan.timestamp) === messageTime &&
-          payloadFingerprint(laserScan.ranges) ===
-            payloadFingerprint(renderable.userData.latestLaserScan.ranges));
+      isSameRecord(
+        {
+          recordId,
+          receiveTime,
+          messageTime: toNanoSec(laserScan.timestamp),
+          payload: laserScan.ranges,
+        },
+        { ...renderable.userData, payload: renderable.userData.latestLaserScan.ranges },
+      );
     if (settings.decayTime <= 0 || sameAsDrawn) {
       return undefined;
     }

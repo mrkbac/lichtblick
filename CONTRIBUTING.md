@@ -15,10 +15,8 @@ Lichtblick is an integrated visualization and diagnosis tool for robotics, built
 - [Branching Strategy](#branching-strategy---git-flow)
 - [Code Style & Standards](#code-style--standards)
 - [Testing](#testing)
-- [AI-Assisted Development](#ai-assisted-development)
 - [Pull Request Guidelines](#pull-request-guidelines)
 - [Reporting Issues](#reporting-issues)
-- [Version Increment](#version-increment)
 - [Localization](#localization)
 - [License](#license)
 - [Credits](#credits)
@@ -60,7 +58,7 @@ External contributors do not have write access to the repository. To contribute,
 3. **Add the upstream remote** (to keep your fork up to date):
 
    ```sh
-   git remote add upstream https://github.com/lichtblick-suite/lichtblick.git
+   git remote add upstream https://github.com/mrkbac/lichtblick.git
    ```
 
 ### For internal team members
@@ -68,7 +66,7 @@ External contributors do not have write access to the repository. To contribute,
 Core team members with write access can clone the repository directly and create branches following the [Branching Strategy](#branching-strategy---git-flow):
 
 ```sh
-git clone https://github.com/lichtblick-suite/lichtblick.git
+git clone https://github.com/mrkbac/lichtblick.git
 cd lichtblick
 ```
 
@@ -114,7 +112,6 @@ pnpm test
 pnpm test:watch
 
 # Run E2E tests
-pnpm test:e2e:desktop
 pnpm test:e2e:web
 ```
 
@@ -380,12 +377,7 @@ The project uses a **Builder pattern** to streamline the creation of test data a
 
 ### End-to-End Tests (Playwright)
 
-E2E tests cover both desktop (Electron) and web versions, with the following strategy:
-
-- **Primary focus on desktop testing** — The desktop version is the final stage of the software, so the majority of E2E tests target it.
-- **Web-specific tests only when necessary** — Tests are written for the web version only when there is a distinct behavior that needs separate validation.
-- **Shared test architecture** — Page Object Models (POM) and helper functions are reused across both platforms.
-- **Playwright** is the chosen E2E framework.
+E2E tests run against the web app with **Playwright**. Page Object Models (POM) and helper functions keep the specs short.
 
 #### Filename pattern
 
@@ -400,30 +392,18 @@ Example: `install-multiple-extensions.web.spec.ts`
 ```
 e2e/
 ├── tests/
-│   ├── desktop/                          # Desktop E2E tests
-│   │   ├── open-files/
-│   │   │   └── open-mcap-via-ui.desktop.spec.ts
-│   │   ├── sidebar/
-│   │   ├── layout/
-│   │   ├── extension/
-│   │   ├── panel/
-│   │   ├── utils/                        # Shared desktop test utilities
-│   │   └── playwright.config.ts          # Desktop Playwright configuration
 │   └── web/                              # Web E2E tests
 │       ├── open-files/
 │       │   └── open-mcap-via-url.web.spec.ts
 │       ├── utils/
 │       └── playwright.config.ts          # Web Playwright configuration
-├── fixtures/                             # Test fixtures and data mocks
-└── helpers/                              # Generic test helper functions
+└── fixtures/                             # Test fixtures and data mocks
 ```
 
 #### Running E2E tests
 
 ```sh
-pnpm test:e2e:desktop           # Desktop E2E tests
 pnpm test:e2e:web               # Web E2E tests
-pnpm test:e2e:desktop:debug     # Desktop E2E with debug mode
 pnpm test:e2e:web:debug         # Web E2E with debug mode
 ```
 
@@ -440,67 +420,9 @@ The following checks run automatically on every PR:
 | **desktop**     | Production desktop build                                                                        |
 | **benchmark**   | Production benchmark build                                                                      |
 | **test**        | Full unit test suite                                                                            |
-| **e2e-desktop** | Desktop E2E tests (parallelized across 4 shards)                                                |
 | **e2e-web**     | Web E2E tests                                                                                   |
 
 > All CI checks must pass before a PR can be merged.
-
----
-
-## AI-Assisted Development
-
-The project uses **GitHub Copilot agent mode** (VS Code 1.99+) with project-specific agents and skills to accelerate development workflows. AI agents are configured via Markdown files in `.github/` and operate within clearly defined conventions.
-
-### Available Agents
-
-| Agent                 | Invocation     | Purpose                                                                                                              |
-| --------------------- | -------------- | -------------------------------------------------------------------------------------------------------------------- |
-| `Lichtblick E2E Test` | `@lb-e2e-test` | Creates Playwright E2E tests for desktop (Electron) and web, using the Playwright MCP browser for web UI exploration |
-
-For the full agent catalog see [docs/ai-agents/README.md](docs/ai-agents/README.md).
-
-### SDD Workflow Prompts
-
-Reusable prompts in `.github/prompts/` implement a Specify → Setup → Plan → Tasks → Implement cycle:
-
-| Prompt                                   | Purpose                                                   |
-| ---------------------------------------- | --------------------------------------------------------- |
-| `lb-feature-develop.prompt.md`          | Feature development end-to-end                            |
-| `lb-bug-fix.prompt.md`                  | Root-cause-driven bug fixes                               |
-| `lb-upstream-sync.prompt.md` | Upstream merge with risk analysis                         |
-| `lb-feature-adopt.prompt.md` | Adopt a specific upstream feature                         |
-| `lb-open-pr.prompt.md`                      | Create a well-structured PR via `github` MCP (fork-aware) |
-| `lb-review-pr.prompt.md`                    | Structured review integrating CodeRabbit                  |
-
-> **Fork-aware PR creation:** The `open-pr` and SDD prompts auto-detect whether the contributor is working from a fork or a direct clone. The correct `head` parameter (`owner:branch` for forks, `branch` for direct) is set automatically when calling `github/create_pull_request`.
-
-### MCP Servers
-
-Configured in `.mcp.json` at the repo root. Placing the config at the root makes it recognized by any MCP-compatible tool — VS Code Copilot, Claude Code, Cursor, and others. Two servers are available:
-
-| Server       | Purpose                                                                            |
-| ------------ | ---------------------------------------------------------------------------------- |
-| `github`     | Read/create GitHub Issues and PRs. Authenticated automatically via GitHub Copilot. |
-| `playwright` | Drive Chrome for web app exploration and E2E test scaffold generation.             |
-
-### Skills
-
-Skills are reusable domain knowledge files loaded by agents before performing tasks:
-
-| Skill                | Location                                     | Scope                                                                                     |
-| -------------------- | -------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| `test-conventions`   | `.github/skills/test-conventions/SKILL.md`   | GWT pattern, quality rules, and test-writing workflow for all test types                  |
-| `e2e-playwright-mcp` | `.github/skills/e2e-playwright-mcp/SKILL.md` | E2E-specific: fixture reference, selector strategy, MCP usage, and source instrumentation |
-
-### Global Context
-
-`.github/copilot-instructions.md` is auto-loaded at the start of every Copilot Chat session. It defines project-wide rules for code style, testing, available agents, and MCP servers.
-
-### Playwright MCP Server
-
-The Playwright MCP server (configured in `.mcp.json`) enables AI agents to explore the running web app via accessibility snapshots, discover stable selectors, and generate test scaffolds interactively.
-
-> **Note**: The MCP server drives Chrome (web) only — it cannot automate the Electron desktop app. See `e2e/README.md` for detailed workflow documentation.
 
 ---
 
@@ -557,47 +479,13 @@ If you want a fresh review of an existing PR, comment:
 
 ## Reporting Issues
 
-- **Bug reports:** Use the [Bug Report template](https://github.com/lichtblick-suite/lichtblick/issues/new?template=bug.md) on GitHub.
-- **Feature requests (recommended):** Use the [SDD Feature Request template](https://github.com/lichtblick-suite/lichtblick/issues/new?template=sdd-feature-request.yml) on GitHub.
-- **Feature ideas (early-stage):** Start a [Discussion](https://github.com/lichtblick-suite/lichtblick/discussions/new/choose) when the request is still exploratory.
-- **Questions:** Search existing [Discussions](https://github.com/lichtblick-suite/lichtblick/discussions) or ask on [Robotics Stack Exchange](https://robotics.stackexchange.com/questions/ask).
+Open an [issue](https://github.com/mrkbac/lichtblick/issues/new) with:
 
-### SDD Feature Request Template: Why and How
-
-The SDD Feature Request template adds a lightweight **spec-first** workflow so contributors define the request before implementation starts.
-
-Why this is necessary:
-
-- It makes scope explicit early (`Problem statement`, `Proposed solution`, `Scope and non-goals`).
-- It improves review quality by requiring clear `Acceptance criteria` and `Definition of done`.
-- It reduces rework by documenting risks and dependencies up front.
-
-How to use it:
-
-1. Open the template from the feature request link above.
-2. Fill all required fields (`Problem statement`, `Proposed solution`, `Acceptance criteria`, `Definition of done`, `Scope and non-goals`).
-3. Add `Risks and dependencies` when relevant.
-4. Submit the issue before opening an implementation PR, and link the issue in your PR description.
-
-When reporting a bug, please include:
-
-- Lichtblick version
+- Version
 - Platform (OS, browser, desktop)
 - Data source type (e.g., MCAP file, ROS 1/2 native, rosbridge)
 - Steps to reproduce
 - Expected vs. actual behavior
-
----
-
-## Version Increment
-
-The version format: `<major>.<minor>.<patch>`. Version bumps are **determined automatically** by the CI release workflow based on the branch name used:
-
-| Component | Branch Prefix    | Description                                                                            |
-| --------- | ---------------- | -------------------------------------------------------------------------------------- |
-| **MAJOR** | `release/major/` | Breaking changes — removed or reworked APIs. Users should expect a non-trivial update. |
-| **MINOR** | `release/minor/` | New functionality added without breaking backward compatibility.                       |
-| **PATCH** | `hotfix/`        | Bug fixes, security patches, and minor improvements.                                   |
 
 ---
 

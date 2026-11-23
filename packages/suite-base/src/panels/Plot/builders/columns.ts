@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import { Immutable, Time } from "@lichtblick/suite";
-import { Point } from "@lichtblick/suite-base/components/Chart/datasets";
+import { upperBound } from "@lichtblick/suite-base/util/sortedSearch";
 
 import { Datum, OriginalValue } from "../utils/datum";
 
@@ -376,51 +376,5 @@ export class PointColumns {
       this.#stampSec = grow(this.#stampSec, f64);
       this.#stampNsec = grow(this.#stampNsec!, u32);
     }
-  }
-}
-
-/** First index in [lo, hi) whose x is > value (or hi) */
-export function upperBound(xs: Float64Array, from: number, to: number, value: number): number {
-  let lo = from;
-  let hi = to;
-  while (lo < hi) {
-    const mid = (lo + hi) >>> 1;
-    if (xs[mid]! <= value) {
-      lo = mid + 1;
-    } else {
-      hi = mid;
-    }
-  }
-  return lo;
-}
-
-/** First index in [lo, hi) whose x is >= value (or hi) */
-export function lowerBound(xs: Float64Array, from: number, to: number, value: number): number {
-  let lo = from;
-  let hi = to;
-  while (lo < hi) {
-    const mid = (lo + hi) >>> 1;
-    if (xs[mid]! < value) {
-      lo = mid + 1;
-    } else {
-      hi = mid;
-    }
-  }
-  return lo;
-}
-
-/** Point view over columns for the shared downsamplers; the yielded object is reused. */
-export function* iteratePoints(
-  xs: Float64Array,
-  ys: Float64Array,
-  start: number,
-  end: number,
-): Generator<Point> {
-  const point: Point = { index: 0, x: 0, y: 0 };
-  for (let i = start; i < end; i++) {
-    point.index = i;
-    point.x = xs[i]!;
-    point.y = ys[i]!;
-    yield point;
   }
 }

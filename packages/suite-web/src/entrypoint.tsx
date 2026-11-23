@@ -7,10 +7,6 @@
 
 import "@lichtblick/suite-base/util/installSetImmediate";
 
-import AnalyticsProvider from "@lichtblick/suite-base/providers/AnalyticsProvider";
-
 import { main } from "./index";
 
-void main(async () => ({
-  extraProviders: [<AnalyticsProvider key="AnalyticsProvider" />],
-}));
+void main();

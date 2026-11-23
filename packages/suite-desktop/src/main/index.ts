@@ -9,7 +9,7 @@ import { app, BrowserWindow, ipcMain, Menu, nativeTheme, session } from "electro
 
 import Logger from "@lichtblick/log";
 import { AppSetting } from "@lichtblick/suite-base/src/AppSetting";
-import { initI18n, sharedI18nObject as i18n } from "@lichtblick/suite-base/src/i18n";
+import { initI18n } from "@lichtblick/suite-base/src/i18n";
 
 import StudioAppUpdater from "./StudioAppUpdater";
 import StudioWindow from "./StudioWindow";
@@ -51,13 +51,6 @@ function updateNativeColorScheme() {
     colorScheme === "dark" ? "dark" : colorScheme === "light" ? "light" : "system";
 }
 
-async function updateLanguage() {
-  const language = getAppSetting<string>(AppSetting.LANGUAGE);
-  log.info(`Loaded language from settings: ${language}`);
-  await i18n.changeLanguage(language);
-  log.info(`Set language: ${i18n.language}`);
-}
-
 export async function main(): Promise<void> {
   // Allow integration tests to override the userData directory. Otherwise keep the pre-rebrand
   // profile dir so layouts and settings survive the product name change.
@@ -69,8 +62,7 @@ export async function main(): Promise<void> {
       `${app.getPath("appData")}/${isProduction ? "Lichtblick" : "Lichtblick Dev"}`,
   );
 
-  await initI18n({ context: "electron-main" });
-  await updateLanguage();
+  await initI18n();
 
   // https://github.com/electron/electron/issues/28422#issuecomment-987504138
   app.commandLine.appendSwitch("enable-experimental-web-platform-features");
@@ -232,10 +224,6 @@ export async function main(): Promise<void> {
 
   ipcMain.handle("updateNativeColorScheme", () => {
     updateNativeColorScheme();
-  });
-
-  ipcMain.handle("updateLanguage", () => {
-    void updateLanguage();
   });
 
   // This method will be called when Electron has finished

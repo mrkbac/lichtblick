@@ -73,8 +73,7 @@ reviews:
         Performance-critical player and data-source code. Flag allocations inside tick loops or
         per-message hot paths, missing message batching, and subscriptions that iterate topics no
         panel requested. Verify message-cache/memory budgets are respected and that large buffers
-        are released behind the read head. Flag concrete regressions only — do not restate the
-        generic rules already in .github/instructions/performance.instructions.md.
+        are released behind the read head. Flag concrete regressions only.
 
     - path: "packages/suite-base/src/components/MessagePipeline/**"
       instructions: |

@@ -48,7 +48,3 @@ export type LayoutActionMenuItem =
       text: string;
       debug?: boolean;
     };
-
-export type SignInPromptProps = {
-  onDismiss?: () => void;
-};

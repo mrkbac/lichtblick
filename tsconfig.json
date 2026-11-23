@@ -11,7 +11,6 @@
     "./packages/suite-web/rspack.config.ts",
     "./packages/suite-desktop/rspack.config.ts",
     "./e2e/ci-helpers/**/*.ts",
-    "./benchmark/e2e/ci-helpers/**/*.ts",
     "./package.json"
   ],
   "compilerOptions": {

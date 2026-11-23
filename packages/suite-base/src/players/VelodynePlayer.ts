@@ -12,14 +12,12 @@ import { Model, RawPacket, ReturnMode, packetRate } from "@foxglove/velodyne-clo
 import { debouncePromise } from "@lichtblick/den/async";
 import Logger from "@lichtblick/log";
 import { ParameterValue } from "@lichtblick/suite";
-import { GlobalVariables } from "@lichtblick/suite-base/hooks/useGlobalVariables";
 import {
   LIVE_QUEUE_MAX_BYTES,
   LiveMessageQueue,
 } from "@lichtblick/suite-base/players/LiveMessageQueue";
 import PlayerAlertManager from "@lichtblick/suite-base/players/PlayerAlertManager";
 import {
-  AdvertiseOptions,
   MessageEvent,
   Player,
   PlayerPresence,
@@ -278,10 +276,6 @@ export default class VelodynePlayer implements Player {
 
   public setSubscriptions(_subscriptions: SubscribePayload[]): void {}
 
-  public setPublishers(_publishers: AdvertiseOptions[]): void {
-    // no-op
-  }
-
   // Modify a remote parameter such as a rosparam.
   public setParameter(_key: string, _value: ParameterValue): void {
     throw new Error(`Parameter modification is not supported for VelodynePlayer`);
@@ -293,10 +287,6 @@ export default class VelodynePlayer implements Player {
 
   public async callService(): Promise<unknown> {
     throw new Error("Service calls are not supported for VelodynePlayer");
-  }
-
-  public setGlobalVariables(_globalVariables: GlobalVariables): void {
-    // no-op
   }
 
   public getBatchIterator(): undefined {

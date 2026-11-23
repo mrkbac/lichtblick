@@ -14,12 +14,8 @@
   },
   "ignorePatterns": [
     "**/.webpack/**",
-    "**/.webpack-desktop/**",
-    "**/.yarn/**",
     "**/.storybook/**",
     "**/dist/**",
-    "**/out/**",
-    "**/template/**",
     "packages/**/wasm/*.js",
     "storybook-static/**",
     "**/coverage/**",
@@ -276,8 +272,7 @@
     "@lichtblick/no-push-spread": "error",
     "@lichtblick/no-object-url": "error",
     "@lichtblick/link-target": "error",
-    "@lichtblick/lodash-ramda-imports": "error",
-    "@lichtblick/ramda-usage": "error",
+    "@lichtblick/lodash-imports": "error",
     "tss-unused-classes/unused-classes": "error"
   },
   "overrides": [

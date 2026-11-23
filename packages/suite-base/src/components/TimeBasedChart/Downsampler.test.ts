@@ -5,6 +5,32 @@ import { Downsampler } from "./Downsampler";
 import { ChartDatasets } from "./types";
 
 describe("Downsampler", () => {
+  it("reads only the visible window of a sorted row, with the same result", () => {
+    const data = Array.from({ length: 10_000 }, (_, i) => ({
+      x: i / 10,
+      y: i % 97 === 0 ? Number.NaN : -1,
+      label: i % 97 === 0 ? undefined : String(Math.floor(i / 3) % 2),
+      value: Math.floor(i / 3) % 2,
+    }));
+    const downsample = ({ xSorted }: { xSorted: boolean }) => {
+      const downsampler = new Downsampler();
+      downsampler.update({
+        datasets: [{ data, xSorted }],
+        datasetBounds: {
+          width: 300,
+          height: 100,
+          bounds: { x: { min: 400, max: 450 }, y: { min: -2, max: 0 } },
+        },
+        scales: {
+          x: { min: 400, max: 450, pixelMin: 0, pixelMax: 300 },
+          y: { min: -2, max: 0, pixelMin: 100, pixelMax: 0 },
+        },
+      });
+      return downsampler.downsample()?.map((dataset) => dataset.data);
+    };
+    expect(downsample({ xSorted: true })).toEqual(downsample({ xSorted: false }));
+  });
+
   it("gives every row the chart's width, however many rows there are", () => {
     // 20 rows, each changing state every 6 px on a 1500 px chart: all fit.
     const transitions = 250;

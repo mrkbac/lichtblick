@@ -167,7 +167,7 @@ export function createMessagePipelineStore({
       },
       setPublishers(id, payloads) {
         get().dispatch({ type: "set-publishers", id, payloads });
-        get().player?.setPublishers(get().allPublishers);
+        get().player?.setPublishers?.(get().allPublishers);
       },
       setParameter(key, value) {
         get().player?.setParameter(key, value);

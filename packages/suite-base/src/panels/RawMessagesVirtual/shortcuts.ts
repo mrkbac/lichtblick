@@ -30,16 +30,10 @@ export const RAW_MESSAGES_SHORTCUTS = [
     titleKey: "rawMessagesFirstLastRow",
     keys: [{ key: "Home" }, { key: "End" }],
   },
-  { id: "rawMessages.expandRow", titleKey: "rawMessagesExpandRow", keys: [{ key: "ArrowRight" }] },
-  {
-    id: "rawMessages.collapseRow",
-    titleKey: "rawMessagesCollapseRow",
-    keys: [{ key: "ArrowLeft" }],
-  },
   {
     id: "rawMessages.toggleRow",
     titleKey: "rawMessagesToggleRow",
-    keys: [{ key: "Enter" }, { key: " " }],
+    keys: [{ key: "Enter" }],
     mouse: [{ action: "click" }],
   },
   {

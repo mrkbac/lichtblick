@@ -1,13 +1,8 @@
 # End-to-End (E2E) Testing for Lichtblick
 
-This directory contains all end-to-end (E2E) tests using [Playwright](https://playwright.dev/). The tests are organized and scoped by platform: **web** and **desktop** (Electron).
+This directory contains all end-to-end (E2E) tests using [Playwright](https://playwright.dev/). They run against the web app.
 
 ## 📦 How to Run
-
-```bash
-# Build desktop packages
-pnpm desktop:build:dev
-```
 
 ```bash
 # Install Playwright
@@ -27,26 +22,11 @@ pnpm test:e2e:web:debug
 pnpm test:e2e:web:report
 ```
 
-### Desktop (Electron)
+### Summary
 
 ```bash
-# Run all desktop tests
-pnpm test:e2e:desktop
-
-# Run in debug mode
-pnpm test:e2e:desktop:debug
-
-# View latest desktop test report
-pnpm test:e2e:desktop:report
-
-# Run desktop tests in CI (headless mode enforced in Electron)
-pnpm test:e2e:desktop:ci
-
-# Generate test summary with timings
+# Generate test summary with timings (after a run)
 pnpm test:e2e:summary
-
-# Run a specific test when developing (filename: uninstall-extension.desktop.spec.ts)
-pnpm test:e2e:desktop:debug uninstall-extens
 ```
 
 ## 🏷️ Test Categories
@@ -62,11 +42,9 @@ All E2E tests are labeled with one of two tags that control which CI pipeline ex
 
 ```bash
 # Smoke only
-pnpm test:e2e:desktop:smoke
 pnpm test:e2e:web:smoke
 
 # All tests (smoke + regression)
-pnpm test:e2e:desktop
 pnpm test:e2e:web
 ```
 
@@ -78,7 +56,7 @@ After running tests, you can generate a summary report showing test execution ti
 
 ```bash
 # Run tests and generate summary
-pnpm test:e2e:desktop
+pnpm test:e2e:web
 pnpm test:e2e:summary
 ```
 
@@ -110,18 +88,6 @@ install-multiple-extensions.web.spec.ts;
 ```text
 /e2e
   ├── tests/                         # E2E tests
-  │   ├── desktop/                   # Desktop e2e tests
-  │   │   ├── open-files/            # Tests for open files
-  │   │   │   ├── open-mcap-via-ui.desktop.spec.ts
-  │   │   │   └── ...desktop.spec.ts
-  │   │   ├── sidebar/               # Tests for right and left sidebars
-  │   │   ├── layout/                # Tests for layouts
-  │   │   ├── extension/             # Tests for extension
-  │   │   ├── panel/                 # Tests for panels
-  │   │   ├── utils/                 # Shared functions
-  │   │   ├── desktop-setup.ts       # Pre-script to setup desktop tests
-  │   │   ├── desktop-teardown.ts    # Pre-script to cleanup desktop tests
-  │   │   └── playwright.config.ts   # Desktop Playwright configuration
   │   └── web/                       # Web e2e tests
   │       ├── open-files/            # Tests for open files via URL
   │       │   ├── open-mcap-via-url.web.spec.ts
@@ -131,50 +97,19 @@ install-multiple-extensions.web.spec.ts;
   │       ├── web-teardown.ts        # Pre-script to cleanup web tests
   │       └── playwright.config.ts   # Web Playwright configuration
   ├── page-objects/                   # Page Object Models for UI abstraction
-  │   ├── data-source-dialog.ts      # DataSourceDialog interactions
   │   ├── sidebar.ts                 # Left/right sidebar navigation
   │   ├── player-controls.ts         # Playback controls (play, pause, seek)
   │   ├── layout-manager.ts          # Layout creation and management
-  │   ├── extension-manager.ts       # Extension install/uninstall workflows
-  │   ├── app-menu.ts                # Application menu (File, View)
-  │   ├── panels.ts                  # Panel add/configure operations
   │   └── index.ts                   # Barrel export
   ├── fixtures/                      # Fixtures for testing (e.g. data mocks)
-  ├── helpers/                       # Generic functions useful for testing
   ├── reports/                       # Automatically generated test reports
   ├── global-setup.ts                # Global setup before testing
   └── global-teardown.ts             # Cleanup after testing (clear DB, stored files, etc.)
 ```
 
-## AI-Assisted Test Authoring with Playwright MCP
+## Selector discovery with Playwright MCP
 
-The project integrates the [Playwright MCP server](https://github.com/microsoft/playwright-mcp) to enable AI agents (GitHub Copilot, Claude) to assist with E2E test development.
-
-### How It Works
-
-The Playwright MCP server exposes browser automation as MCP tools that AI agents can invoke. Instead of screenshots, the server captures structured **accessibility snapshots** (ARIA roles, names, test IDs) that LLMs reason about deterministically. This produces reliable, maintainable selectors.
-
-### Prerequisites
-
-- VS Code with [GitHub Copilot](https://marketplace.visualstudio.com/items?itemName=GitHub.copilot) extension
-- Copilot agent mode enabled (VS Code 1.99+)
-- The `.mcp.json` file at the repo root configures the Playwright MCP server. It is recognized by VS Code Copilot, Claude Code, Cursor, and other MCP-compatible tools.
-
-### Workflow
-
-1. Start the web app: `pnpm web:serve`
-2. Open VS Code agent mode (Copilot Chat) and invoke `@lb-e2e-test`
-3. The MCP server starts automatically and opens a Chromium browser
-4. Ask the agent to navigate to `http://localhost:8080` and explore the UI
-5. The agent captures accessibility snapshots to identify selectors
-6. Ask the agent to generate test scaffolds following the project conventions
-7. Review the generated test, add meaningful assertions, and refine
-
-### Limitations
-
-- The MCP server controls **Chromium** (web version), not Electron directly. Use it for selector discovery and test scaffolding; Electron-specific behavior uses the custom fixture.
-- AI-generated tests require human review for correctness and meaningful assertions.
-- MCP server is a development-time tool only — it does not affect CI/CD.
+`.mcp.json` at the repo root configures the [Playwright MCP server](https://github.com/microsoft/playwright-mcp) for MCP-capable agents. With `pnpm web:serve` running, an agent can open `http://localhost:8080`, read accessibility snapshots to find stable selectors, and scaffold tests that follow the conventions above. Review generated tests and add meaningful assertions.
 
 ## Page Object Models (POMs)
 
@@ -184,42 +119,37 @@ Reusable UI abstractions live in `e2e/page-objects/`. They encapsulate common in
 
 | POM                | Purpose                         | Key Methods                                                                                                            |
 | ------------------ | ------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| `DataSourceDialog` | Data source dialog interactions | `close()`, `connect(url)`, `openConnectionTypeMenu()`, `isVisible()`, `getLocator()`                                   |
 | `Sidebar`          | Left/right sidebar tabs         | `openLayoutsTab()`, `openTopicsTab()`, `toggleLeftSidebar()`, `getLeftSidebar()`, `getPanelSettingsTab()`              |
 | `PlayerControls`   | Playback controls               | `play()`, `pause()`, `seekForward()`, `setSpeed()`, `getTimestampValue()`, `getPlayButton()`, `getSlider()`            |
 | `LayoutManager`    | Layout CRUD                     | `openDefaultLayout()`, `createNewLayout()`, `selectPanel()`, `revertLayout()`, `getLayoutListItem()`                   |
-| `ExtensionManager` | Extension workflows             | `open()`, `search()`, `findExtension()`, `uninstall()`, `getSearchBar()`                                               |
-| `AppMenu`          | App menu navigation             | `openMenu()`, `openFile()`, `importLayoutFromMenu()`, `getMenuButton()`                                                |
-| `Panels`           | Panel operations                | `addPanel()`, `addPanelFromSearch()`, `setTopicPath()`, `splitPanelDown()`, `getAddPanelButton()`, `getLogPanelRoot()` |
 
 ### Usage Example
 
 ```ts
-import { test, expect } from "../../../fixtures/electron";
-import { DataSourceDialog, Sidebar, LayoutManager } from "../../../page-objects";
+import { test, expect } from "@playwright/test";
 
-test("create a new layout", async ({ mainWindow }) => {
-  const dialog = new DataSourceDialog(mainWindow);
-  const sidebar = new Sidebar(mainWindow);
-  const layout = new LayoutManager(mainWindow);
+import { LayoutManager, Sidebar } from "../../page-objects";
+
+test("create a new layout", async ({ page }) => {
+  const sidebar = new Sidebar(page);
+  const layout = new LayoutManager(page);
 
   // Given
-  await dialog.close();
+  await page.goto("/");
   await sidebar.openLayoutsTab();
 
   // When
   await layout.openDefaultLayout();
   await layout.createNewLayout();
-  await layout.selectPanel("Diagnostics – Detail (ROS)");
 
   // Then
-  await expect(mainWindow.getByText("Unnamed layout").nth(0)).toBeVisible();
+  await expect(page.getByText("Unnamed layout").nth(0)).toBeVisible();
 });
 ```
 
 ### When to Use POMs vs Direct Selectors
 
-- **Use POMs** for common, repeated interactions (dismissing dialogs, navigating sidebar, player controls)
+- **Use POMs** for common, repeated interactions (navigating the sidebar, player controls, layouts)
 - **Use direct selectors** for one-off, test-specific elements that don't appear across multiple tests
 
 ## Selector Priority Strategy

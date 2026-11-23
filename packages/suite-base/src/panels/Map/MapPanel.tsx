@@ -37,6 +37,7 @@ import ThemeProvider from "@lichtblick/suite-base/theme/ThemeProvider";
 import { turboColorString } from "@lichtblick/suite-base/util/colorUtils";
 import { formatTime } from "@lichtblick/suite-base/util/formatTime";
 import { darkColor, lineColors } from "@lichtblick/suite-base/util/plotColors";
+import { upperBound } from "@lichtblick/suite-base/util/sortedSearch";
 import { formatTimeRaw, isAbsoluteTime } from "@lichtblick/suite-base/util/time";
 import { toError } from "@lichtblick/suite-base/util/toError";
 
@@ -92,15 +93,7 @@ import {
   isValidMapMessage,
   expandLocationFixes,
 } from "./support";
-import {
-  lastIndexAtOrBefore,
-  SampleStore,
-  thinTrack,
-  thinViewCovers,
-  thinViewFor,
-  ThinView,
-  TrackStore,
-} from "./track";
+import { SampleStore, thinTrack, thinViewCovers, thinViewFor, ThinView, TrackStore } from "./track";
 
 const log = Logger.getLogger(__filename);
 
@@ -786,7 +779,7 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
       }
       const store = tracks.stores.get(topic);
       const end = store
-        ? lastIndexAtOrBefore(store.columns.time, store.length, eventTimeSec(current)) + 1
+        ? upperBound(store.columns.time, 0, store.length, eventTimeSec(current))
         : 0;
       const heading = store ? headingFromTrack(store, end, lngLatOf(current)) : undefined;
       if (heading != undefined) {
@@ -1195,7 +1188,7 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
     if (previewTime != undefined) {
       for (const store of visibleTracks) {
         const { time } = store.columns;
-        const index = lastIndexAtOrBefore(time, store.length, previewTime);
+        const index = upperBound(time, 0, store.length, previewTime) - 1;
         if (index >= 0 && (!best || time[index]! > best.store.columns.time[best.index]!)) {
           best = { store, index };
         }

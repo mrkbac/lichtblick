@@ -11,10 +11,9 @@ import { DetailsType } from "@lichtblick/suite-base/util/sendNotification";
 import { useStyles } from "./AlertsList.style";
 
 // Loaded on demand: it's only needed after the browser blocked a ws:// connection
-const WsMixedContentHelp = lazy(async () => ({
-  default: (await import("@lichtblick/suite-base/components/WsMixedContentHelp"))
-    .WsMixedContentHelp,
-}));
+const WsMixedContentHelp = lazy(
+  async () => await import("@lichtblick/suite-base/components/WsMixedContentHelp"),
+);
 
 export function AlertDetails(
   props: Readonly<{ details: DetailsType; tip?: string; guide?: PlayerAlertGuide }>,

@@ -16,6 +16,7 @@ import {
   payloadFingerprint,
   PointsRenderable,
   RenderObjectHistory,
+  isSameRecord,
   pointStyle,
 } from "./pointExtensionUtils";
 import type { BaseUserData } from "../Renderable";
@@ -296,5 +297,21 @@ describe("payloadFingerprint", () => {
     const shifted = new Uint8Array(10_001);
     shifted.set(payload, 1);
     expect(payloadFingerprint(shifted.subarray(1))).toBe(payloadFingerprint(payload));
+  });
+});
+
+describe("isSameRecord", () => {
+  // Hashing a view of a detached buffer throws
+  const detached = new ArrayBuffer(4);
+  const unread = new Uint8Array(detached);
+  structuredClone(detached, { transfer: [detached] });
+
+  it("hashes payloads only when both times tie", () => {
+    const a = { receiveTime: 1n, messageTime: 1n, payload: unread };
+    expect(isSameRecord(a, { ...a, receiveTime: 2n })).toBe(false);
+    expect(isSameRecord({ ...a, recordId: "x" }, { ...a, recordId: "x" })).toBe(true);
+    const bytes = Uint8Array.of(1, 2, 3);
+    expect(isSameRecord({ ...a, payload: bytes }, { ...a, payload: bytes.slice() })).toBe(true);
+    expect(isSameRecord({ ...a, payload: bytes }, { ...a, payload: Uint8Array.of(1) })).toBe(false);
   });
 });

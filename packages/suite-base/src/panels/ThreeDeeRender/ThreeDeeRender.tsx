@@ -37,7 +37,6 @@ import {
 } from "@lichtblick/suite";
 import { AppSetting } from "@lichtblick/suite-base/AppSetting";
 import { TopicSettingsUpdater } from "@lichtblick/suite-base/components/PanelExtensionAdapter/types";
-import { useAnalytics } from "@lichtblick/suite-base/context/AnalyticsContext";
 import { DEFAULT_SCENE_EXTENSION_CONFIG } from "@lichtblick/suite-base/panels/ThreeDeeRender/SceneExtensionConfig";
 import {
   DEFAULT_FOLLOW_MODE,
@@ -80,8 +79,6 @@ import { Shared3DPanelState, ThreeDeeRenderProps } from "./types";
 import { useGpuRecovery } from "./useGpuRecovery";
 
 import "maplibre-gl/dist/maplibre-gl.css";
-
-const LAYER_ERROR_LOG_GRACE_MS = 3000;
 
 const log = Logger.getLogger(__filename);
 
@@ -132,7 +129,6 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
     unstable_setMessagePathDropConfig: setMessagePathDropConfig,
     unstable_setAlert: setPanelAlert,
   } = context;
-  const analytics = useAnalytics();
   const { classes } = useStyles();
   const { t, i18n } = useTranslation("threeDee");
 
@@ -329,12 +325,6 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
   }, [renderer, customCameraModels]);
 
   useEffect(() => {
-    if (renderer) {
-      renderer.setAnalytics(analytics);
-    }
-  }, [renderer, analytics]);
-
-  useEffect(() => {
     setMessagePathDropConfig(
       renderer
         ? {
@@ -491,7 +481,6 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
     return reportPersistentErrors(
       renderer.settings.errors,
       handleLayerErrorUpdate,
-      LAYER_ERROR_LOG_GRACE_MS,
       () => renderer.currentTime,
     );
   }, [renderer, handleLayerErrorUpdate]);

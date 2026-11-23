@@ -10,7 +10,6 @@ import { useSnackbar } from "notistack";
 import type { Mock } from "vitest";
 
 import { ExtensionDetails } from "@lichtblick/suite-base/components/ExtensionDetails";
-import { useAnalytics } from "@lichtblick/suite-base/context/AnalyticsContext";
 import {
   ExtensionData,
   useExtensionCatalog,
@@ -27,10 +26,6 @@ vi.mock("notistack", () => ({
   useSnackbar: vi.fn(),
 }));
 
-vi.mock("@lichtblick/suite-base/context/AnalyticsContext", () => ({
-  useAnalytics: vi.fn(),
-}));
-
 vi.mock("@lichtblick/suite-base/context/ExtensionCatalogContext", () => ({
   useExtensionCatalog: vi.fn(),
 }));
@@ -43,7 +38,6 @@ vi.mock("@lichtblick/suite-base/util/isDesktopApp", () => ({ default: vi.fn() })
 
 describe("ExtensionDetails Component", () => {
   const mockEnqueueSnackbar = vi.fn();
-  const mockLogEvent = vi.fn();
   const mockDownloadExtension = vi.fn();
   const mockInstallExtensions = vi.fn();
   const mockUninstallExtension = vi.fn();
@@ -55,7 +49,6 @@ describe("ExtensionDetails Component", () => {
 
   beforeEach(() => {
     (useSnackbar as Mock).mockReturnValue({ enqueueSnackbar: mockEnqueueSnackbar });
-    (useAnalytics as Mock).mockReturnValue({ logEvent: mockLogEvent });
     (useExtensionCatalog as Mock).mockImplementation((selector) => {
       const mockExtensionCatalog = {
         downloadExtension: mockDownloadExtension,
@@ -131,9 +124,6 @@ describe("ExtensionDetails Component", () => {
           `${mockExtension.name} installed successfully`,
           { variant: "success" },
         );
-        expect(mockLogEvent).toHaveBeenCalledWith("Studio: Extension Installed", {
-          type: mockExtension.id,
-        });
       });
     });
 
@@ -249,7 +239,7 @@ describe("ExtensionDetails Component", () => {
       expect(installButton).not.toBeInTheDocument();
     });
 
-    it("does not log analytics event when component is unmounted before install completes", async () => {
+    it("still reports a completed install after the component unmounts", async () => {
       // Given
       (isDesktopApp as Mock).mockReturnValue(true);
 
@@ -282,9 +272,13 @@ describe("ExtensionDetails Component", () => {
         expect(mockDownloadExtension).toHaveBeenCalled();
         expect(mockInstallExtensions).toHaveBeenCalled();
       });
+      await mockInstallExtensions.mock.results[0]?.value;
 
-      // logEvent should not be called because component was unmounted
-      expect(mockLogEvent).not.toHaveBeenCalled();
+      // The install finished, so it is still announced
+      expect(mockEnqueueSnackbar).toHaveBeenCalledWith(
+        `${mockExtension.name} installed successfully`,
+        { variant: "success" },
+      );
     });
   });
 
@@ -306,9 +300,6 @@ describe("ExtensionDetails Component", () => {
           `${mockExtension.name} uninstalled successfully`,
           { variant: "success" },
         );
-        expect(mockLogEvent).toHaveBeenCalledWith("Studio: Extension Uninstalled", {
-          type: mockExtension.id,
-        });
       });
     });
 
@@ -361,7 +352,7 @@ describe("ExtensionDetails Component", () => {
       });
     });
 
-    it("does not log analytics event when component is unmounted before uninstall completes", async () => {
+    it("still reports a completed uninstall after the component unmounts", async () => {
       mockUninstallExtension.mockImplementation(
         async () => await new Promise((resolve) => setTimeout(resolve, 300)),
       );
@@ -381,8 +372,11 @@ describe("ExtensionDetails Component", () => {
       });
       await mockUninstallExtension.mock.results[0]?.value;
 
-      // logEvent should not be called because component was unmounted
-      expect(mockLogEvent).not.toHaveBeenCalled();
+      // The uninstall finished, so it is still announced
+      expect(mockEnqueueSnackbar).toHaveBeenCalledWith(
+        `${mockExtension.name} uninstalled successfully`,
+        { variant: "success" },
+      );
     });
   });
 });

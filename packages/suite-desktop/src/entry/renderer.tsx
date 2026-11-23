@@ -8,7 +8,6 @@
 import "@lichtblick/suite-base/util/installSetImmediate";
 
 import { AppSetting } from "@lichtblick/suite-base";
-import AnalyticsProvider from "@lichtblick/suite-base/providers/AnalyticsProvider";
 
 import { Storage } from "../common/types";
 import { main as rendererMain } from "../renderer/index";
@@ -26,10 +25,7 @@ async function main() {
     },
   );
 
-  await rendererMain({
-    appConfiguration,
-    extraProviders: [<AnalyticsProvider key="AnalyticsProvider" />],
-  });
+  await rendererMain({ appConfiguration });
 }
 
 void main();

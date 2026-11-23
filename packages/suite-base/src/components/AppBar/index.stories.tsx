@@ -5,7 +5,6 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { action } from "storybook/actions";
 import { Meta, StoryObj } from "storybook-react-rsbuild";
 
 import MockMessagePipelineProvider, {
@@ -21,12 +20,6 @@ export default {
   title: "components/AppBar",
   component: AppBar,
   decorators: [StorybookDecorator],
-  args: {
-    onMinimizeWindow: action("onMinimizeWindow"),
-    onMaximizeWindow: action("onMaximizeWindow"),
-    onUnmaximizeWindow: action("onUnmaximizeWindow"),
-    onCloseWindow: action("onCloseWindow"),
-  },
   parameters: { colorScheme: "both-column" },
 } satisfies Meta<typeof AppBar>;
 
@@ -36,16 +29,8 @@ export const Default: Story = {};
 export const DefaultChinese: Story = { parameters: { forceLanguage: "zh" } };
 export const DefaultJapanese: Story = { parameters: { forceLanguage: "ja" } };
 
-export const CustomWindowControls: Story = {
-  args: { showCustomWindowControls: true },
-};
-
-export const CustomWindowControlsMaximized: Story = {
-  args: { isMaximized: true, showCustomWindowControls: true },
-};
-
-export const CustomWindowControlsDragRegion: Story = {
-  args: { showCustomWindowControls: true, debugDragRegion: true },
+export const DragRegion: Story = {
+  args: { debugDragRegion: true },
 };
 
 const Grid = (Story: React.ComponentType): React.JSX.Element => (

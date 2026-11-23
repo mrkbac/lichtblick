@@ -103,11 +103,12 @@ const DiagnosticSummary = (props: DiagnosticSummaryProps): React.JSX.Element => 
   }, [diagnostics, hardwareIdFilter, pinnedIds, sortByLevel, minLevel]);
 
   const scrollRef = useRef<HTMLDivElement>(null);
+  const getItemKey = useCallback((index: number) => nodes[index]!.id, [nodes]);
   const virtualizer = useVirtualizer({
     count: nodes.length,
     getScrollElement: () => scrollRef.current,
     estimateSize: () => ROW_HEIGHT,
-    getItemKey: (index) => nodes[index]!.id,
+    getItemKey,
     overscan: 10,
   });
 

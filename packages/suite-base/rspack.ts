@@ -148,12 +148,6 @@ type Options = {
   packageDir?: string;
 };
 
-function buildEnvVars(): Record<string, string | undefined> {
-  return {
-    "process.env.DEV_WORKSPACE": JSON.stringify(process.env.DEV_WORKSPACE),
-  };
-}
-
 // Create a partial webpack configuration required to build app using webpack.
 // Returns a webpack configuration containing resolve, module, plugins, and node fields.
 export function makeConfig(
@@ -180,8 +174,8 @@ export function makeConfig(
       alias: {
         ...decoderSrcAliases(),
         "@lichtblick/suite-base": _nodeFileURLToPath(new URL("src", dirHref)),
-        // Apps outside suite-base (web/src, desktop/renderer) don't depend on react themselves, and
-        // pnpm doesn't hoist it, so JSX there resolves the runtime from suite-base.
+        // Code without its own react dependency (pnpm doesn't hoist it) resolves the JSX runtime
+        // from suite-base.
         "react/jsx-runtime": localRequire.resolve("react/jsx-runtime"),
         "react/jsx-dev-runtime": localRequire.resolve("react/jsx-dev-runtime"),
         // Run Monaco's TS worker on our `typescript` instead of the copy Monaco bundles.
@@ -297,9 +291,6 @@ export function makeConfig(
         LICHTBLICK_REPOSITORY_URL: JSON.stringify(product.repositoryUrl),
         // licht deploys talk to its organization server unless API_URL says otherwise.
         API_URL: JSON.stringify(process.env.API_URL ?? "https://licht-server.marko.im"),
-        DEV_WORKSPACE: JSON.stringify(process.env.DEV_WORKSPACE),
-        OTLP_ENDPOINT: JSON.stringify(process.env.OTLP_ENDPOINT),
-        ...buildEnvVars(),
       }),
     ],
     optimization: {

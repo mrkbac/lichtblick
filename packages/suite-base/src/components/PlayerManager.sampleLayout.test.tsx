@@ -23,9 +23,6 @@ vi.mock("@lichtblick/suite-base/components/MessagePipeline", () => ({
 vi.mock("@lichtblick/suite-base/components/Compare/CompareContext", () => ({
   CompareProvider: ({ children }: PropsWithChildren) => <>{children}</>,
 }));
-vi.mock("@lichtblick/suite-base/context/AnalyticsContext", () => ({
-  useAnalytics: () => ({ logEvent: vi.fn() }),
-}));
 vi.mock("@lichtblick/suite-base/context/CurrentLayoutContext", () => ({
   useCurrentLayoutSelector: () => undefined,
   useCurrentLayoutActions: () => ({ setSelectedLayoutId }),

@@ -9,7 +9,7 @@ import {
   IDataSourceFactory,
   DataSourceFactoryInitializeArgs,
 } from "@lichtblick/suite-base/context/PlayerSelectionContext";
-import { loadVelodynePlayer, prefetch } from "@lichtblick/suite-base/dataSources/playerModules";
+import { loadVelodynePlayer } from "@lichtblick/suite-base/dataSources/playerModules";
 import { Player } from "@lichtblick/suite-base/players/types";
 
 class VelodyneDataSourceFactory implements IDataSourceFactory {
@@ -24,9 +24,7 @@ class VelodyneDataSourceFactory implements IDataSourceFactory {
     fields: [{ id: "port", label: "UDP Port", defaultValue: "2369" }],
   };
 
-  public prefetch = (): void => {
-    prefetch(loadVelodynePlayer);
-  };
+  public prefetch = loadVelodynePlayer;
 
   public async initialize(args: DataSourceFactoryInitializeArgs): Promise<Player | undefined> {
     const VelodynePlayer = await loadVelodynePlayer();

@@ -14,7 +14,6 @@ import { shallow } from "zustand/shallow";
 import { useAsync, useAsyncFn, useMountedState, useShallowMemo } from "@lichtblick/hooks";
 import Logger from "@lichtblick/log";
 import { VariableValue } from "@lichtblick/suite";
-import { useAnalytics } from "@lichtblick/suite-base/context/AnalyticsContext";
 import { useAppParameters } from "@lichtblick/suite-base/context/AppParametersContext";
 import CurrentLayoutContext, {
   ICurrentLayout,
@@ -46,7 +45,6 @@ import useUpdateSharedPanelState from "@lichtblick/suite-base/providers/CurrentL
 import { LayoutHistory } from "@lichtblick/suite-base/providers/CurrentLayoutProvider/layoutHistory";
 import { loadDefaultLayouts } from "@lichtblick/suite-base/providers/CurrentLayoutProvider/loadDefaultLayouts";
 import { findFavoriteLayout } from "@lichtblick/suite-base/providers/CurrentLayoutProvider/utils";
-import { AppEvent } from "@lichtblick/suite-base/services/IAnalytics";
 import { LayoutLoader } from "@lichtblick/suite-base/services/ILayoutLoader";
 import { LayoutManagerEventTypes } from "@lichtblick/suite-base/services/ILayoutManager";
 import {
@@ -77,7 +75,6 @@ export default function CurrentLayoutProvider({
   const { enqueueSnackbar } = useSnackbar();
   const { getUserProfile, setUserProfile } = useUserProfileStorage();
   const layoutManager = useLayoutManager();
-  const analytics = useAnalytics();
   const isMounted = useMountedState();
 
   const { t } = useTranslation("general");
@@ -502,7 +499,6 @@ export default function CurrentLayoutProvider({
         performAction({ type: "CLOSE_PANEL", payload });
         // Deselect the removed panel
         setSelectedPanelIds((ids) => ids.filter((id) => id !== payload.id));
-        analytics.logEvent(AppEvent.PANEL_DELETE, { type: getPanelTypeFromId(payload.id) });
       },
       splitPanel: (payload: SplitPanelPayload) => {
         performAction({ type: "SPLIT_PANEL", payload });
@@ -522,15 +518,9 @@ export default function CurrentLayoutProvider({
           );
           setSelectedPanelIds(_.difference(afterPanelIds, beforePanelIds));
         }
-        analytics.logEvent(AppEvent.PANEL_ADD, { type: payload.type, action: "swap" });
-        analytics.logEvent(AppEvent.PANEL_DELETE, {
-          type: getPanelTypeFromId(payload.originalId),
-          action: "swap",
-        });
       },
       addPanel: (payload: AddPanelPayload) => {
         performAction({ type: "ADD_PANEL", payload });
-        analytics.logEvent(AppEvent.PANEL_ADD, { type: getPanelTypeFromId(payload.id) });
       },
       groupPanels: (payload: GroupPanelsPayload) => {
         performAction({ type: "GROUP_PANELS", payload });
@@ -552,7 +542,6 @@ export default function CurrentLayoutProvider({
       subscribeLayoutHistory: (listener: () => void) => history.current.subscribe(listener),
     }),
     [
-      analytics,
       commitLayoutData,
       performAction,
       setSelectedLayoutId,

@@ -15,7 +15,6 @@
   "files.trimTrailingWhitespace": true,
   "search.exclude": {
     "**/*.code-search": true,
-    "**/bower_components": true,
     "**/node_modules": true,
     "pnpm-lock.yaml": true
   },

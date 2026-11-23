@@ -6,10 +6,8 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import Log from "@lichtblick/log";
-import { GlobalVariables } from "@lichtblick/suite-base/hooks/useGlobalVariables";
 import { IteratorResult } from "@lichtblick/suite-base/players/IterablePlayer/IIterableSource";
 import {
-  AdvertiseOptions,
   Player,
   PlayerState,
   PublishPayload,
@@ -34,7 +32,7 @@ abstract class BenchmarkPlayerBase implements Player {
    * Set by `close()` so that subclasses with unbounded `run()` loops (e.g. synthetic players
    * that produce messages as fast as the message pipeline allows) can exit promptly. Without
    * this, `run()` keeps calling `listener()` forever, which keeps the renderer's event loop busy
-   * and significantly delays Electron's shutdown once the test/host tears down the player.
+   * and significantly delays shutdown once the host tears down the player.
    */
   protected closed = false;
 
@@ -58,9 +56,6 @@ abstract class BenchmarkPlayerBase implements Player {
   public setSubscriptions(_subscriptions: SubscribePayload[]): void {
     // no-op
   }
-  public setPublishers(_publishers: AdvertiseOptions[]): void {
-    // no-op
-  }
   public setParameter(_key: string, _value: unknown): void {
     throw new Error("Method not implemented.");
   }
@@ -69,9 +64,6 @@ abstract class BenchmarkPlayerBase implements Player {
   }
   public async callService(_service: string, _request: unknown): Promise<unknown> {
     throw new Error("Method not implemented.");
-  }
-  public setGlobalVariables(_globalVariables: GlobalVariables): void {
-    // no-op
   }
 }
 

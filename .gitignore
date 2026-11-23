@@ -2,31 +2,22 @@
 *.tsbuildinfo
 .DS_Store
 .webpack/
-.webpack-desktop/
 benchmark/.artifacts/
 benchmark/.perf/
-ci/apt/packages
 dist/
 node_modules/
-storybook-screenshots/
 storybook-static/
 tmp/
-# for jest --coverage
+# vitest --coverage
 coverage/
 .env
 
 # E2E tests
 .playwright-mcp/
 e2e/reports
-e2e/tests/reports/desktop/*
 e2e/tests/reports/web/*
 e2e/tmp/*
-benchmark/e2e/reports/*
-benchmark/test-results/*
 test-results/*
-
-.pnp.*
 
 lint-report.sarif
 blob-report/*
-.eslintcache

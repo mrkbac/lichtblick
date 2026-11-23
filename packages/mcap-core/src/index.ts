@@ -7,7 +7,7 @@ export * from "./ChunkCache.ts";
 export { BlobReadable } from "./BlobReadable.ts";
 export { isEmptyMcap } from "./isEmptyMcap.ts";
 export { openCachedMcapReader } from "./openCachedMcapReader.ts";
-export { McapRecoveryScanner, checkChunk } from "./McapRecoveryScanner.ts";
+export { McapRecoveryScanner, checkChunk, decompressChunk } from "./McapRecoveryScanner.ts";
 export type { LiveReader, RecoveryLosses } from "./McapRecoveryScanner.ts";
 export { ChunkMessageIndex } from "./ChunkCursor.ts";
 export { default as McapStreamReader } from "./McapStreamReader.ts";
