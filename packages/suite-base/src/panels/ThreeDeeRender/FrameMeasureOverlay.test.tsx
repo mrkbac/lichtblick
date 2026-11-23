@@ -189,6 +189,12 @@ describe("FrameMeasureOverlay", () => {
     );
   });
 
+  it("measures frames in a tree that does not contain the display frame", () => {
+    // Display frame is map; imu and rig are only connected to each other
+    setup({ from: "rig", to: "imu" });
+    expect(screen.getByTestId("frame-measure-values")).toHaveTextContent("0.000 m");
+  });
+
   it("names a frame without a transform", () => {
     setup({ from: "lidar", to: "gps" });
     expect(screen.getByRole("status")).toHaveTextContent("No transform for gps");

@@ -45,6 +45,9 @@ export const threeDee = {
     "The coordinate frame to place the camera in. The camera position and orientation will be relative to the origin of this frame.",
   editable: "Editable",
   enablePreloading: "Enable preloading",
+  staticTransformTopics: "Static topics",
+  staticTransformTopicsHelp:
+    "Transforms received from a static topic are kept and re-applied when seeking back, so they are not lost before the topic publishes again. Applies to transforms received after it is turned on. Defaults to on for topics named like tf_static.",
   enablePreloadingTooltip:
     "Keep the transforms of the whole recording in memory, so seeking rarely needs to read them again. Very long recordings keep fewer transforms per frame to fit in memory. When off, transforms are read around the new time after each seek, which uses less memory.",
   loadingTransforms_one: "Loading transforms: {{formattedCount}} message",

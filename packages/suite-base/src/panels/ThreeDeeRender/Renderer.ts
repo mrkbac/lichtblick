@@ -100,9 +100,17 @@ import { SelectEntry } from "./settings";
 import {
   buildTopicQuickFilters,
   customLayersRootNode,
+  defaultIsStaticTransformTopic,
   topicsRootNode,
 } from "./settingsNodes/global";
-import { AddTransformResult, CoordinateFrame, TransformTree, Transform } from "./transforms";
+import { topicIsConvertibleToSchema } from "./topicIsConvertibleToSchema";
+import {
+  AddTransformResult,
+  CoordinateFrame,
+  isAddedTransform,
+  TransformTree,
+  Transform,
+} from "./transforms";
 import { InterfaceMode } from "./types";
 
 const log = Logger.getLogger(__filename);
@@ -131,6 +139,19 @@ export const NO_FRAME_SELECTED = "NO_FRAME_SELECTED";
 const CYCLE_DETECTED = "CYCLE_DETECTED";
 const FOLLOW_FRAME_NOT_FOUND = "FOLLOW_FRAME_NOT_FOUND";
 const ADD_TRANSFORM_ERROR = "ADD_TRANSFORM_ERROR";
+const INVALID_TRANSFORM = "INVALID_TRANSFORM";
+
+/** A zero or non-finite quaternion has no rotation; normalizing it would poison the tree with NaN */
+export function isValidTransform(t: Vector3, q: Quaternion): boolean {
+  const norm2 = q.x * q.x + q.y * q.y + q.z * q.z + q.w * q.w;
+  return (
+    Number.isFinite(t.x) &&
+    Number.isFinite(t.y) &&
+    Number.isFinite(t.z) &&
+    Number.isFinite(norm2) &&
+    norm2 > 1e-12
+  );
+}
 const LABEL_ATLAS_ERROR = "LABEL_ATLAS_ERROR";
 
 // An extensionId for creating the top-level settings nodes such as "Topics" and
@@ -200,11 +221,6 @@ type StaticTransform = {
   translation: Vector3;
   rotation: Quaternion;
 };
-
-/** Whether a topic name follows the `/tf_static`-style naming convention for latched, permanently valid transforms */
-function isStaticTransformTopic(topic: string): boolean {
-  return topic.endsWith("tf_static") || topic.endsWith("static_transform");
-}
 
 /**
  * An extensible 3D renderer attached to a `HTMLCanvasElement`,
@@ -331,6 +347,8 @@ export class Renderer extends EventEmitter<RendererEvents> {
   #hoverPickRequest = 0;
   #rendering = false;
   #disposed = false;
+  /** Only ImageMode is subscribed, see enableImageOnlySubscriptionMode */
+  #imageOnlySubscriptionMode = false;
   #animationFrame?: number;
   /** Advances three's node frame; once per drawn frame (see stopThreeAnimationLoop) */
   #advanceNodeFrame = (): void => {};
@@ -444,10 +462,23 @@ export class Renderer extends EventEmitter<RendererEvents> {
       this.#clickHandler(cursorCoords);
     });
 
-    // Throttled hover picking: perform GPU pick on mousemove at 10 Hz
+    // Throttled hover picking: perform GPU pick on mousemove at 10 Hz, leading and trailing edge,
+    // so the last pick is always at where the cursor stopped.
     // Mouse position is emitted on every move for smooth tooltip following.
     let hoverThrottleTimer: ReturnType<typeof setTimeout> | undefined;
+    let pendingHoverCoords: THREE.Vector2 | undefined;
     let isMouseDown = false;
+    const hoverPick = (cursorCoords: THREE.Vector2) => {
+      this.#hoverHandler(cursorCoords);
+      hoverThrottleTimer = setTimeout(() => {
+        hoverThrottleTimer = undefined;
+        const pending = pendingHoverCoords;
+        pendingHoverCoords = undefined;
+        if (pending && !this.#disposed && !isMouseDown && this.#pickingEnabled) {
+          hoverPick(pending);
+        }
+      }, HOVER_PICK_THROTTLE_MS);
+    };
     this.input.on("mousedown", () => {
       isMouseDown = true;
     });
@@ -460,12 +491,11 @@ export class Renderer extends EventEmitter<RendererEvents> {
       }
       this.emit("hoverMoved", cursorCoords, this);
       if (hoverThrottleTimer != undefined) {
+        // Input reuses its vector
+        pendingHoverCoords = (pendingHoverCoords ?? new THREE.Vector2()).copy(cursorCoords);
         return;
       }
-      hoverThrottleTimer = setTimeout(() => {
-        hoverThrottleTimer = undefined;
-      }, HOVER_PICK_THROTTLE_MS);
-      this.#hoverHandler(cursorCoords);
+      hoverPick(cursorCoords);
     });
 
     this.#picker = new Picker(this.gl, this.#scene, (camera, hidden) => {
@@ -811,6 +841,39 @@ export class Renderer extends EventEmitter<RendererEvents> {
     this.#transformTreeUpdated();
   }
 
+  /** Whether the topic's transforms are static: the per-topic setting, else the naming default */
+  public isStaticTransformTopic(topic: string): boolean {
+    return (
+      this.config.scene.transforms?.staticTopics?.[topic] ?? defaultIsStaticTransformTopic(topic)
+    );
+  }
+
+  public setStaticTransformTopic(topic: string, { isStatic }: { isStatic: boolean }): void {
+    this.updateConfig((draft) => {
+      draft.scene.transforms = {
+        ...draft.scene.transforms,
+        staticTopics: { ...draft.scene.transforms?.staticTopics, [topic]: isStatic },
+      };
+    });
+    if (!isStatic) {
+      // Its transforms must no longer survive seeks and history resets
+      for (const [childFrameId, cached] of this.#staticTransformCache) {
+        if (cached.topic === topic) {
+          this.#staticTransformCache.delete(childFrameId);
+        }
+      }
+    }
+  }
+
+  /** Names of the data source's topics carrying transforms */
+  public transformTopicNames(): string[] {
+    return (this.topics ?? [])
+      .filter((topic) =>
+        TRANSFORM_SCHEMAS.some((schemas) => topicIsConvertibleToSchema(topic, schemas)),
+      )
+      .map((topic) => topic.name);
+  }
+
   /** Whether the frame's transform came from a static transform topic */
   public isStaticTransformFrame(frameId: string): boolean {
     return this.#staticTransformCache.has(frameId);
@@ -821,7 +884,7 @@ export class Renderer extends EventEmitter<RendererEvents> {
     this.#batchTransformTreeUpdates(() => {
       for (const [childFrameId, { parentFrameId, stamp, translation, rotation }] of cache) {
         const result = this.addTransform(parentFrameId, childFrameId, stamp, translation, rotation);
-        if (result === AddTransformResult.CYCLE_DETECTED) {
+        if (!isAddedTransform(result)) {
           // The cached transform no longer fits the tree (e.g. an intervening dynamic transform
           // now makes it cyclic); drop it so later backward seeks stop retrying it.
           cache.delete(childFrameId);
@@ -868,7 +931,19 @@ export class Renderer extends EventEmitter<RendererEvents> {
       }
       extension.removeAllRenderables();
     }
+    // A selection whose renderable was just removed would keep the scene dimmed with nothing lit
+    if (this.#selectedRenderable && !this.#isInScene(this.#selectedRenderable.renderable)) {
+      this.setSelectedRenderable(undefined);
+    }
     this.queueAnimationFrame();
+  }
+
+  #isInScene(object: THREE.Object3D): boolean {
+    let node = object;
+    while (node.parent) {
+      node = node.parent;
+    }
+    return node === this.#scene;
   }
 
   #clearSubscriptionQueues(): void {
@@ -911,6 +986,8 @@ export class Renderer extends EventEmitter<RendererEvents> {
 
   // eslint-disable-next-line @lichtblick/no-boolean-parameters
   readonly #clearTransformTree = (preserveStaticTransforms?: boolean) => {
+    // An emptied tree no longer holds the whole history, so it must be read again
+    this.transformTree.setComplete(false);
     this.transformTree.clear();
     if (preserveStaticTransforms !== true) {
       this.#staticTransformCache.clear();
@@ -997,9 +1074,16 @@ export class Renderer extends EventEmitter<RendererEvents> {
       (extension) => extension === this.#imageModeExtension,
     );
     this.settings.addNodeValidator(this.#imageOnlyModeTopicSettingsValidator);
+    this.#imageOnlySubscriptionMode = true;
   };
 
   public disableImageOnlySubscriptionMode = (): void => {
+    // Called on every image topic change with a calibration: clearing the transforms again would
+    // drop the preloaded history and static transforms of a mode that didn't change
+    if (!this.#imageOnlySubscriptionMode) {
+      return;
+    }
+    this.#imageOnlySubscriptionMode = false;
     // .clear() will clean up remaining errors on topics
     this.settings.removeNodeValidator(this.#imageOnlyModeTopicSettingsValidator);
     this.clear({
@@ -1594,7 +1678,19 @@ export class Renderer extends EventEmitter<RendererEvents> {
         options.receiveTime,
       );
 
-      if (options.isStatic && result !== AddTransformResult.CYCLE_DETECTED) {
+      // On the parent node too: a frame whose first transform is invalid has no node of its own
+      const invalidId = `${INVALID_TRANSFORM}:${childId}`;
+      if (result === AddTransformResult.INVALID) {
+        this.settings.errors.add(
+          ["transforms"],
+          invalidId,
+          `Invalid transform for frame "${childId}" on topic "${options.topic}": translation must be finite and rotation a finite, non-zero quaternion. Transform message dropped.`,
+        );
+      } else {
+        this.settings.errors.remove(["transforms"], invalidId);
+      }
+
+      if (options.isStatic && isAddedTransform(result)) {
         this.#staticTransformCache.set(childId, {
           topic: options.topic,
           parentFrameId: parentId,
@@ -1627,6 +1723,19 @@ export class Renderer extends EventEmitter<RendererEvents> {
   ): AddTransformResult {
     const t = translation;
     const q = rotation;
+
+    if (!isValidTransform(t, q)) {
+      const message = `Invalid transform for frame "${childFrameId}" (parent "${parentFrameId}"): translation must be finite and rotation a finite, non-zero quaternion. Transform message dropped.`;
+      this.settings.errors.add(["transforms", `frame:${childFrameId}`], INVALID_TRANSFORM, message);
+      if (errorSettingsPath) {
+        this.settings.errors.add(errorSettingsPath, INVALID_TRANSFORM, message);
+      }
+      return AddTransformResult.INVALID;
+    }
+    this.settings.errors.remove(["transforms", `frame:${childFrameId}`], INVALID_TRANSFORM);
+    if (errorSettingsPath) {
+      this.settings.errors.remove(errorSettingsPath, INVALID_TRANSFORM);
+    }
 
     tempVec3[0] = t.x;
     tempVec3[1] = t.y;
@@ -1696,8 +1805,12 @@ export class Renderer extends EventEmitter<RendererEvents> {
       this.#animationFrame = undefined;
     }
     if (!this.#rendering) {
-      this.#frameHandler(this.currentTime);
-      this.#rendering = false;
+      try {
+        this.#frameHandler(this.currentTime);
+      } finally {
+        // A throwing frame must not block every later one
+        this.#rendering = false;
+      }
     }
   };
 
@@ -1984,7 +2097,11 @@ export class Renderer extends EventEmitter<RendererEvents> {
     receiveTime: bigint;
     topic: string;
   } {
-    return { isStatic: isStaticTransformTopic(topic), receiveTime: toNanoSec(receiveTime), topic };
+    return {
+      isStatic: this.isStaticTransformTopic(topic),
+      receiveTime: toNanoSec(receiveTime),
+      topic,
+    };
   }
 
   readonly #handleFrameTransform = (event: MessageEvent<DeepPartial<FrameTransform>>): void => {

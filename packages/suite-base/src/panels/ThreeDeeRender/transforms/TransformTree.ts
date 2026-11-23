@@ -43,6 +43,13 @@ export enum AddTransformResult {
   NOT_UPDATED,
   UPDATED,
   CYCLE_DETECTED,
+  /** Non-finite translation or zero/non-finite rotation; rejected before reaching the tree */
+  INVALID,
+}
+
+/** Whether the transform made it into the tree */
+export function isAddedTransform(result: AddTransformResult): boolean {
+  return result === AddTransformResult.NOT_UPDATED || result === AddTransformResult.UPDATED;
 }
 
 // Coordinate frames named in [REP-105](https://www.ros.org/reps/rep-0105.html)

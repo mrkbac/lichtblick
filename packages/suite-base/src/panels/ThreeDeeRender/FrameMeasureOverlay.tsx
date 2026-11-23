@@ -35,7 +35,8 @@ type Result = { pose?: Pose; missing?: MissingLink | "unavailable" };
 /** Pose of `to` in `from` at the renderer's current time, or why there is none */
 function measureInRenderer(renderer: Renderer, from: string, to: string): Result {
   const tree = renderer.transformTree;
-  if (!frameTransform(tempMatrix, tree, from, renderer.fixedFrameId, to, renderer.currentTime)) {
+  // No root: at one time any common ancestor works, and the display frame may not be connected
+  if (!frameTransform(tempMatrix, tree, from, undefined, to, renderer.currentTime)) {
     const missing = findMissingLink(
       from,
       to,

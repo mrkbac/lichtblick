@@ -123,7 +123,8 @@ export function normalizeQuaternion(quat: Partial<Quaternion> | undefined): Quat
   if (!quat) {
     return { x: 0, y: 0, z: 0, w: 1 };
   }
-  return { x: quat.x ?? 0, y: quat.y ?? 0, z: quat.z ?? 0, w: quat.w ?? 0 };
+  // Like the schema default: a missing w is the identity's, not a 180° turn
+  return { x: quat.x ?? 0, y: quat.y ?? 0, z: quat.z ?? 0, w: quat.w ?? 1 };
 }
 
 export function normalizeColorRGBA(color: Partial<ColorRGBA> | undefined): ColorRGBA {

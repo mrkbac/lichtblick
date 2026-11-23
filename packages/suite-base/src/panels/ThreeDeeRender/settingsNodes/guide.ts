@@ -15,10 +15,12 @@ import type {
 
 import {
   customLayersRootNode,
+  defaultIsStaticTransformTopic,
   frameFields,
   frameSettingsNode,
   publishSettingsNode,
   sceneSettingsNode,
+  staticTransformTopicsNode,
   topicsRootNode,
   transformSettingsNode,
   viewSettingsNode,
@@ -227,6 +229,10 @@ export function threeDeeGuideSettings(): DocumentedNodes {
           showOriginal: false,
           hasOffsets: true,
         }),
+        staticTopics: staticTransformTopicsNode(
+          ["/tf", "/tf_static"],
+          defaultIsStaticTransformTopic,
+        ),
         frame: frameNode,
       },
     },

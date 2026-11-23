@@ -142,6 +142,11 @@ export type RendererConfig = {
       rotationConvention?: RotationConvention;
       /** Frame moved by the keyboard (arrows, PageUp/PageDown) while editable */
       keyboardFrame?: string;
+      /**
+       * topicName -> whether its transforms are static (valid at every time, kept across seeks).
+       * Unset topics use {@link defaultIsStaticTransformTopic}.
+       */
+      staticTopics?: Record<string, boolean | undefined>;
     };
     /** Sync camera with other 3d panels */
     syncCamera?: boolean;
