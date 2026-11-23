@@ -163,8 +163,10 @@ describe("usePlotInteractionHandlers", () => {
   const triggerWheel = (
     result: any,
     boundingRect: DOMRect,
+    modifiers: Partial<React.WheelEvent<HTMLElement>> = {},
   ): Partial<React.WheelEvent<HTMLElement>> => {
     const event: Partial<React.WheelEvent<HTMLElement>> = {
+      ...modifiers,
       deltaX: BasicBuilder.number(),
       deltaY: BasicBuilder.number(),
       clientX: BasicBuilder.number(),
@@ -448,14 +450,26 @@ describe("usePlotInteractionHandlers", () => {
   });
 
   describe("onWheel", () => {
-    it("handles wheel event correctly", () => {
+    it("pans both axes on a plain scroll", () => {
+      const { result, props } = setup({ coordinator: mockCoordinator });
+
+      const wheel = triggerWheel(result, { left: 0, top: 0 } as DOMRect);
+
+      expect(props.coordinator?.addInteractionEvent).toHaveBeenCalledWith({
+        type: "scroll",
+        deltaX: wheel.deltaX,
+        deltaY: wheel.deltaY,
+      });
+    });
+
+    it("zooms on pinch or ctrl+wheel", () => {
       const { result, props } = setup({ coordinator: mockCoordinator });
       const boundingRect = {
         left: BasicBuilder.number(),
         top: BasicBuilder.number(),
       } as unknown as DOMRect;
 
-      const wheel = triggerWheel(result, boundingRect);
+      const wheel = triggerWheel(result, boundingRect, { ctrlKey: true });
 
       expect(props.coordinator?.addInteractionEvent).toHaveBeenCalledWith({
         type: "wheel",

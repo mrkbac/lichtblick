@@ -73,6 +73,19 @@ export class ChartViewport {
     });
   }
 
+  /** Pan by a scroll gesture (two-finger swipe, mouse wheel); scrolling down moves the view down. */
+  public scroll(event: PanInput): void {
+    const pan = this.#chart.options.plugins?.zoom?.pan;
+    if (pan?.enabled !== true) {
+      return;
+    }
+    const mode = pan.mode ?? "xy";
+    const delta = { x: event.deltaX, y: event.deltaY };
+    this.#transform(undefined, (axis, pixel) =>
+      mode.includes(axis) && Number.isFinite(delta[axis]) ? pixel + delta[axis] : pixel,
+    );
+  }
+
   public panstart(event: PanInput): void {
     this.#pan = { deltaX: 0, deltaY: 0 };
     this.panmove(event);

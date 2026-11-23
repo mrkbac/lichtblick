@@ -49,7 +49,7 @@ export type ZoomMode = NonNullable<WheelInput["zoomMode"]>;
 
 export type InteractionEvent =
   | (WheelInput & { type: "wheel" })
-  | (PanInput & { type: "panstart" | "panmove" })
+  | (PanInput & { type: "panstart" | "panmove" | "scroll" })
   | { type: "panend" };
 
 export type Datum = { x: number; y: number } & { value?: OriginalValue };

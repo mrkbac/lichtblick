@@ -85,4 +85,14 @@ describe("ChartViewport", () => {
     expect(x!.max).toBeCloseTo(80);
     expect([y!.min, y!.max]).toEqual([0, 100]);
   });
+
+  it("scrolls the view along both pan axes", () => {
+    const { x, y } = chart.scales;
+    viewport.scroll({ deltaX: x!.width / 10, deltaY: -y!.height / 10 });
+
+    expect(x!.min).toBeCloseTo(10);
+    expect(x!.max).toBeCloseTo(110);
+    expect(y!.min).toBeCloseTo(10);
+    expect(y!.max).toBeCloseTo(110);
+  });
 });
