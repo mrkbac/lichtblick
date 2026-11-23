@@ -4,7 +4,6 @@
 import { useSnackbar } from "notistack";
 import { useCallback, useState } from "react";
 
-import { useMountedState } from "@lichtblick/hooks";
 import { Immutable } from "@lichtblick/suite";
 import {
   UseExtensionOperationsOptions,
@@ -33,7 +32,6 @@ export function useExtensionOperations(
   const uninstallExtension = useExtensionCatalog((state) => state.uninstallExtension);
   const { enqueueSnackbar } = useSnackbar();
   const analytics = useAnalytics();
-  const isMounted = useMountedState();
   const [operatingExtensionId, setOperatingExtensionId] = useState<string | undefined>();
   const [operationStatus, setOperationStatus] = useState<OperationStatus>(OperationStatus.IDLE);
 
@@ -60,9 +58,6 @@ export function useExtensionOperations(
       try {
         const extensionBuffer = await downloadExtension(url);
         await installExtensions("local", [{ buffer: extensionBuffer }]);
-        if (!isMounted()) {
-          return;
-        }
         enqueueSnackbar(`${extension.name} installed successfully`, { variant: "success" });
         analytics.logEvent(AppEvent.EXTENSION_INSTALL, { type: extension.id });
         onInstallSuccess?.(extension.id);
@@ -71,13 +66,11 @@ export function useExtensionOperations(
           variant: "error",
         });
       } finally {
-        if (isMounted()) {
-          setOperatingExtensionId(undefined);
-          setOperationStatus(OperationStatus.IDLE);
-        }
+        setOperatingExtensionId(undefined);
+        setOperationStatus(OperationStatus.IDLE);
       }
     },
-    [analytics, downloadExtension, enqueueSnackbar, installExtensions, isMounted, onInstallSuccess],
+    [analytics, downloadExtension, enqueueSnackbar, installExtensions, onInstallSuccess],
   );
 
   const handleUninstall = useCallback(
@@ -87,9 +80,6 @@ export function useExtensionOperations(
 
       try {
         await uninstallExtension(extension.namespace ?? "local", extension.id);
-        if (!isMounted()) {
-          return;
-        }
         enqueueSnackbar(`${extension.name} uninstalled successfully`, { variant: "success" });
         analytics.logEvent(AppEvent.EXTENSION_UNINSTALL, { type: extension.id });
         onUninstallSuccess?.(extension.id);
@@ -98,13 +88,11 @@ export function useExtensionOperations(
           variant: "error",
         });
       } finally {
-        if (isMounted()) {
-          setOperatingExtensionId(undefined);
-          setOperationStatus(OperationStatus.IDLE);
-        }
+        setOperatingExtensionId(undefined);
+        setOperationStatus(OperationStatus.IDLE);
       }
     },
-    [analytics, enqueueSnackbar, isMounted, onUninstallSuccess, uninstallExtension],
+    [analytics, enqueueSnackbar, onUninstallSuccess, uninstallExtension],
   );
 
   const isOperating = useCallback(
