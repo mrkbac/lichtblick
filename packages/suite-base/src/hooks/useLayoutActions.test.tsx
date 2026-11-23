@@ -46,7 +46,9 @@ function setup(options: Partial<LayoutSetupOptions> = {}) {
     dispatch = vi.fn(),
   } = options;
 
-  const { result } = renderHook(() => useLayoutActions({ state, dispatch, onSelectLayout: onSelectLayoutMock }));
+  const { result } = renderHook(() =>
+    useLayoutActions({ state, dispatch, onSelectLayout: onSelectLayoutMock }),
+  );
   return { result, dispatch };
 }
 

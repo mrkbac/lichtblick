@@ -107,7 +107,8 @@ export class IdbLayoutStorage implements ILayoutStorage {
         // source never loses a layout.
         const data = layoutData(layout);
         const isDuplicate = targetRecords.some(
-          (record) => record.layout.name === layout.name && _.isEqual(layoutData(record.layout), data),
+          (record) =>
+            record.layout.name === layout.name && _.isEqual(layoutData(record.layout), data),
         );
         if (!isDuplicate) {
           let name = layout.name;
