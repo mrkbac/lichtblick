@@ -3,13 +3,13 @@
 import type { IDataSourceFactory } from "@lichtblick/suite-base/context/PlayerSelectionContext";
 
 import {
-  compareNamesOf,
   draftFromFiles,
   draftToCompare,
   encodeCompareNames,
   mergeArgs,
   recordingExtension,
   recordingName,
+  remoteCompareNames,
 } from "./compareSides";
 
 // Node's File has no webkitRelativePath
@@ -96,28 +96,40 @@ describe("recording names", () => {
 });
 
 describe("side names in params", () => {
+  const urls = (count: number) =>
+    Array.from({ length: count }, (_, i) => `https://example.com/${i}.mcap`);
+
   it("keeps commas and percent signs in compareNames", () => {
     const names = ["a.mcap", "B, tuned", "100% load"];
     const compareNames = encodeCompareNames(names);
     expect(compareNames).toBe("a.mcap,B%2C tuned,100%25 load");
-    expect(compareNamesOf({ compareNames })).toEqual(names);
+    expect(remoteCompareNames(urls(3), { compareNames })).toEqual(names);
   });
 
   it("reads older plain compare lists as they are, keeping labels like %41 apart from A", () => {
-    expect(compareNamesOf({ compare: "A,%41" })).toEqual(["A", "%41"]);
-    expect(compareNamesOf({ compare: "true" })).toBeUndefined();
-    expect(compareNamesOf({})).toBeUndefined();
+    expect(remoteCompareNames(urls(2), { compare: "A,%41" })).toEqual(["A", "%41"]);
+    expect(remoteCompareNames(urls(2), { compare: "true" })).toEqual(["0.mcap", "1.mcap"]);
+    expect(remoteCompareNames(urls(2), {})).toBeUndefined();
   });
 
   it("prefers compareNames over compare, whatever compare says", () => {
-    expect(compareNamesOf({ compare: "true", compareNames: "A,B,C" })).toEqual(["A", "B", "C"]);
-    expect(compareNamesOf({ compare: "X,Y", compareNames: "A,B,C" })).toEqual(["A", "B", "C"]);
+    expect(remoteCompareNames(urls(3), { compare: "true", compareNames: "A,B,C" })).toEqual([
+      "A",
+      "B",
+      "C",
+    ]);
+    expect(remoteCompareNames(urls(3), { compare: "X,Y", compareNames: "A,B,C" })).toEqual([
+      "A",
+      "B",
+      "C",
+    ]);
   });
 });
 
 describe("recording names of URLs", () => {
   it("falls back to the raw file name when it has a literal %", () => {
     expect(recordingName("https://example.com/runs/100%.mcap")).toBe("100%.mcap");
+    expect(recordingName("https://example.com/data/run%201.mcap?sig=x")).toBe("run 1.mcap");
   });
 });
 

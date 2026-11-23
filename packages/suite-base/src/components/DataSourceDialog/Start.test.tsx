@@ -11,6 +11,7 @@ import type { Mock } from "vitest";
 
 import { CatalogRecording } from "@lichtblick/suite-base/components/Catalog/types";
 import { useCatalogFolder } from "@lichtblick/suite-base/components/Catalog/useCatalogFolder";
+import { useCatalogUrl } from "@lichtblick/suite-base/components/Catalog/useCatalogUrl";
 import { APP_CONFIG } from "@lichtblick/suite-base/constants/config";
 import {
   IDataSourceFactory,
@@ -44,12 +45,12 @@ vi.mock("@lichtblick/suite-base/components/Catalog/Catalog", () => ({
   default: ({ query }: { query: string }) => <div data-testid="catalog">{query}</div>,
 }));
 
-vi.mock("@lichtblick/suite-base/components/Catalog/useCatalogFolder", () => ({
-  useCatalogFolder: vi.fn(),
+vi.mock("@lichtblick/suite-base/components/Catalog/useCatalogUrl", () => ({
+  useCatalogUrl: vi.fn(),
 }));
 
-vi.mock("@lichtblick/suite-base/context/AnalyticsContext", () => ({
-  useAnalytics: () => ({ logEvent: vi.fn() }),
+vi.mock("@lichtblick/suite-base/components/Catalog/useCatalogFolder", () => ({
+  useCatalogFolder: vi.fn(),
 }));
 
 const wsSource = {
@@ -147,8 +148,7 @@ describe("Start Component", () => {
       clearRecents: mockClearRecents,
     });
     const ref = createRef<StartHandle>();
-    render(<Start ref={ref} />);
-    return ref;
+    return { ...render(<Start ref={ref} />), ref };
   };
 
   const typeUrl = (value: string) => {
@@ -158,6 +158,13 @@ describe("Start Component", () => {
   };
 
   beforeEach(() => {
+    localStorage.clear();
+    vi.mocked(useCatalogUrl).mockReturnValue({
+      name: "Hosted catalog",
+      recordings: [],
+      open: vi.fn(),
+      loadPreview: vi.fn(),
+    });
     (useTranslation as Mock).mockReturnValue({
       t: (key: string, options?: { version?: string; count?: number }) =>
         key === "version" && options
@@ -252,7 +259,7 @@ describe("Start Component", () => {
     const deviceSearch = screen.getByRole("searchbox", { name: "searchLiveDevices" });
     deviceSearch.focus();
     act(() => {
-      start.current!.focusAddress();
+      start.ref.current!.focusAddress();
     });
     expect(screen.getByRole("button", { name: "tabAll" })).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByPlaceholderText("openUrlPlaceholder")).toHaveFocus();
@@ -343,10 +350,47 @@ describe("Start Component", () => {
   it("disables open for URLs without a matching source", () => {
     setup();
 
-    typeUrl("https://example.com/page");
+    typeUrl("ftp://example.com/page");
 
     expect(screen.getByText("open").closest("button")).toBeDisabled();
     expect(screen.getByText("unrecognizedUrl")).toBeInTheDocument();
+  });
+
+  it("opens and remembers HTTP catalogs, including extensionless endpoints", () => {
+    setup();
+    typeUrl("https://example.com/catalog");
+    fireEvent.keyDown(screen.getByPlaceholderText("openUrlPlaceholder"), { key: "Enter" });
+
+    expect(useCatalogUrl).toHaveBeenCalledWith("https://example.com/catalog");
+    expect(screen.getByRole("combobox", { name: "catalogSource" })).toHaveTextContent(
+      "Hosted catalog",
+    );
+    expect(screen.getByPlaceholderText("openUrlPlaceholder")).toHaveValue("");
+
+    fireEvent.click(screen.getByRole("button", { name: "manageCatalogs" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "filterCatalogs" }), {
+      target: { value: "Hosted" },
+    });
+    fireEvent.click(screen.getByRole("switch", { name: "showCatalogNamed" }));
+    expect(screen.getByRole("switch", { name: "showCatalogNamed" })).not.toBeChecked();
+  });
+
+  it("keeps additional local catalogs in separate slots and restores them after reopening", () => {
+    const dialog = setup();
+    fireEvent.click(screen.getByText("tabCatalog"));
+    fireEvent.click(screen.getByRole("button", { name: "addLocalCatalog" }));
+    const firstSlot = vi.mocked(useCatalogFolder).mock.lastCall?.[0];
+    fireEvent.click(screen.getByRole("button", { name: "addLocalCatalog" }));
+    const secondSlot = vi.mocked(useCatalogFolder).mock.lastCall?.[0];
+    expect(firstSlot).toBeDefined();
+    expect(secondSlot).toBeDefined();
+    expect(secondSlot).not.toBe(firstSlot);
+
+    dialog.unmount();
+    setup();
+    fireEvent.click(screen.getByText("tabCatalog"));
+    fireEvent.mouseDown(screen.getByRole("combobox", { name: "catalogSource" }));
+    expect(screen.getAllByRole("option", { name: "newLocalFolder" })).toHaveLength(2);
   });
 
   it("opens the top search match on Enter, a recent before a catalog recording", () => {

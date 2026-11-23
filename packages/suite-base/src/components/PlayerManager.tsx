@@ -33,7 +33,6 @@ import Logger from "@lichtblick/log";
 import { Immutable } from "@lichtblick/suite";
 import { CompareProvider } from "@lichtblick/suite-base/components/Compare/CompareContext";
 import { MessagePipelineProvider } from "@lichtblick/suite-base/components/MessagePipeline";
-import { useAnalytics } from "@lichtblick/suite-base/context/AnalyticsContext";
 import {
   LayoutID,
   LayoutState,
@@ -67,7 +66,6 @@ import {
 } from "@lichtblick/suite-base/players/TopicAliasingPlayer/TopicAliasingPlayer";
 import UserScriptPlayer from "@lichtblick/suite-base/players/UserScriptPlayer";
 import { Player } from "@lichtblick/suite-base/players/types";
-import { AppEvent } from "@lichtblick/suite-base/services/IAnalytics";
 import { UserScripts } from "@lichtblick/suite-base/types/panels";
 import { updateAppURLState } from "@lichtblick/suite-base/util/appURLState";
 import {
@@ -80,6 +78,7 @@ import {
   connectionRecentArgs,
   recentArgs,
   recentFileTitle,
+  urlsOf,
 } from "@lichtblick/suite-base/util/recentSources";
 import { takeSourcePick } from "@lichtblick/suite-base/util/sourcePick";
 import { toError } from "@lichtblick/suite-base/util/toError";
@@ -94,6 +93,11 @@ const LAST_FILE_SOURCE_KEY = "lichtblick.lastFileSource";
 type LastFileSource = { sourceId: string; title: string; recentId?: string };
 
 // Reopening on reload is a convenience: blocked storage or a bad value must not break the app
+/** Starts loading a source's player code without waiting; a failure surfaces when it opens */
+function prefetch(source: IDataSourceFactory): void {
+  source.prefetch?.().catch(() => {});
+}
+
 function readLastFile(): LastFileSource | undefined {
   try {
     const value = JSON.parse(sessionStorage.getItem(LAST_FILE_SOURCE_KEY) ?? "null") as unknown;
@@ -152,8 +156,6 @@ export default function PlayerManager(
   const userScriptActions = useUserScriptState(selectUserScriptActions);
 
   const isMounted = useMountedState();
-
-  const analytics = useAnalytics();
 
   const [basePlayer, setBasePlayer] = useState<Player | undefined>();
 
@@ -272,7 +274,7 @@ export default function PlayerManager(
     const prefetchAll = () => {
       for (const source of playerSources) {
         if (source.type !== "connection") {
-          source.prefetch?.();
+          prefetch(source);
         }
       }
     };
@@ -306,7 +308,7 @@ export default function PlayerManager(
 
       // Start loading the player's code while the rest of the selection (permission prompts,
       // reading file handles) runs
-      foundSource.prefetch?.();
+      prefetch(foundSource);
 
       // Factories may load their player's code first. Resolves undefined when a newer selection
       // or a close superseded this one meanwhile; a player built for it anyway is closed again.
@@ -320,9 +322,6 @@ export default function PlayerManager(
         if (!isMounted() || seq !== selectionSeq.current) {
           newPlayer?.close();
           return undefined;
-        }
-        if (newPlayer) {
-          analytics.logEvent(AppEvent.PLAYER_CONSTRUCTED, { player: sourceId });
         }
         return { player: newPlayer };
       };
@@ -462,8 +461,7 @@ export default function PlayerManager(
               return;
             }
             // Remote recordings (not live connections) can be compared like local files
-            const url = args.params?.url;
-            const urls = args.urls ?? (url == undefined ? [] : [url]);
+            const urls = urlsOf(args);
             const withCookies = args.params?.includeCredentials === "true";
             // One remote file can also be exported
             const remoteFile: RemoteFileSelection | undefined =
@@ -604,15 +602,7 @@ export default function PlayerManager(
         }
       }
     },
-    [
-      playerSources,
-      analytics,
-      enqueueSnackbar,
-      isMounted,
-      addRecent,
-      layoutManager,
-      setSelectedLayoutId,
-    ],
+    [playerSources, enqueueSnackbar, isMounted, addRecent, layoutManager, setSelectedLayoutId],
   );
 
   // Opening from what the user did (a menu, the open page, a recent, a link): a source picked for

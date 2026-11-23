@@ -641,8 +641,17 @@ export class BlockLoader {
     budget: ByteBudget,
     evicted: Map<number, Set<string>>,
   ): void {
-    const { plan, fits } = this.#planEviction(distance, loading, budget.used(), budget.capacity);
-    if (!fits) {
+    const excess = budget.used() - budget.capacity;
+    const plan = this.#planEviction(
+      distance,
+      loading,
+      this.#topicBytes(loading),
+      budget.capacity,
+      excess,
+    );
+    // Evict only if that makes room: otherwise the block being read is dropped anyway and the
+    // evicted data would be lost for nothing
+    if (plan.reduce((sum, { bytes }) => sum + bytes, 0) < excess) {
       return;
     }
     for (const { id, topic } of plan) {
@@ -669,20 +678,17 @@ export class BlockLoader {
   }
 
   /**
-   * What #evict would free to bring `used` bytes (counting `loading`) down to `capacity`, and
-   * whether that is enough.
+   * What #evict would free, farthest from the playhead first, until `excess` bytes are freed:
+   * slices of topics holding more than their fair share of `capacity` (`topicBytes`, updated as
+   * slices are planned)
    */
   #planEviction(
     distance: number,
     loading: Record<string, MessageEvent[]>,
-    used: number,
+    topicBytes: Map<string, number>,
     capacity: number,
-  ): { plan: { id: number; topic: string }[]; fits: boolean } {
-    const topicBytes = this.#topicBytes();
-    for (const [topic, messages] of Object.entries(loading)) {
-      const bytes = messages.reduce((sum, message) => sum + message.sizeInBytes, 0);
-      topicBytes.set(topic, (topicBytes.get(topic) ?? 0) + bytes);
-    }
+    excess = Infinity,
+  ): { id: number; topic: string; bytes: number }[] {
     const fairShare = capacity / Math.max(1, this.#topics.size);
     const playhead = this.#playheadBlock();
     const victims: { id: number; topic: string; distance: number }[] = [];
@@ -701,24 +707,22 @@ export class BlockLoader {
       }
     }
     victims.sort((a, b) => b.distance - a.distance);
-    // Evict only if that makes room: otherwise the block being read is dropped anyway and the
-    // evicted data would be lost for nothing
-    const plan: typeof victims = [];
+    const plan: { id: number; topic: string; bytes: number }[] = [];
     let freed = 0;
-    for (const victim of victims) {
-      if (used - freed <= capacity) {
+    for (const { id, topic } of victims) {
+      if (freed >= excess) {
         break;
       }
-      const messages = this.#blocks[victim.id]?.messagesByTopic[victim.topic];
-      if (!messages || (topicBytes.get(victim.topic) ?? 0) <= fairShare) {
+      const messages = this.#blocks[id]?.messagesByTopic[topic];
+      if (!messages || (topicBytes.get(topic) ?? 0) <= fairShare) {
         continue;
       }
       const bytes = this.#bytesOf(messages);
-      topicBytes.set(victim.topic, (topicBytes.get(victim.topic) ?? 0) - bytes);
+      topicBytes.set(topic, (topicBytes.get(topic) ?? 0) - bytes);
       freed += bytes;
-      plan.push(victim);
+      plan.push({ id, topic, bytes });
     }
-    return { plan, fits: used - freed <= capacity };
+    return plan;
   }
 
   #selectTopics(
@@ -726,40 +730,21 @@ export class BlockLoader {
     loading: Record<string, MessageEvent[]>,
     budget: ByteBudget,
   ): Set<string> {
-    const held = this.#topicBytes();
-    const playhead = this.#playheadBlock();
-    const fairShare = budget.capacity / Math.max(1, this.#topics.size);
-    const cached = this.#blocks
-      .flatMap((block, id) => {
-        const blockDistance = this.#distance(id, playhead);
-        return blockDistance > 0 && block ? [{ block, distance: blockDistance }] : [];
-      })
-      .sort((a, b) => b.distance - a.distance);
-
-    // A topic's eviction room depends only on its own bytes and whether we admit its new slice.
-    // Calculate that room using the same farthest-first rule as #planEviction.
+    // A topic's eviction room depends only on its own bytes and whether we admit its new slice
     const released = (topicBytes: Map<string, number>, nextDistance: number) => {
       const result = new Map<string, number>();
-      for (const entry of cached) {
-        for (const [topic, messages] of Object.entries(entry.block.messagesByTopic)) {
-          const remaining = topicBytes.get(topic) ?? 0;
-          if (
-            remaining > fairShare &&
-            entry.distance > this.#evictionThreshold(topic, loading, nextDistance)
-          ) {
-            const bytes = this.#bytesOf(messages);
-            topicBytes.set(topic, remaining - bytes);
-            result.set(topic, (result.get(topic) ?? 0) + bytes);
-          }
-        }
+      for (const { topic, bytes } of this.#planEviction(
+        nextDistance,
+        loading,
+        topicBytes,
+        budget.capacity,
+      )) {
+        result.set(topic, (result.get(topic) ?? 0) + bytes);
       }
       return result;
     };
-    const admittedBytes = new Map(held);
-    for (const [topic, messages] of Object.entries(loading)) {
-      admittedBytes.set(topic, (held.get(topic) ?? 0) + this.#bytesOf(messages));
-    }
-    const ifSkipped = released(new Map(held), 0);
+    const admittedBytes = this.#topicBytes(loading);
+    const ifSkipped = released(this.#topicBytes(), 0);
     const ifAdmitted = released(new Map(admittedBytes), distance);
     const available =
       budget.capacity -
@@ -782,10 +767,10 @@ export class BlockLoader {
     return Object.hasOwn(loading, topic) ? distance : 0;
   }
 
-  /** Loaded bytes per topic, across all blocks */
-  #topicBytes(): Map<string, number> {
+  /** Loaded bytes per topic, across all blocks and `loading` (the block being read) */
+  #topicBytes(loading: Record<string, MessageEvent[]> = {}): Map<string, number> {
     const bytes = new Map<string, number>();
-    for (const block of this.#blocks) {
+    for (const block of [...this.#blocks, { messagesByTopic: loading }]) {
       for (const [topic, messages] of Object.entries(block?.messagesByTopic ?? {})) {
         bytes.set(topic, (bytes.get(topic) ?? 0) + this.#bytesOf(messages));
       }

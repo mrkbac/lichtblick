@@ -4,8 +4,9 @@
 import * as _ from "lodash-es";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { useAsync } from "@lichtblick/hooks";
+import { useAsync, useMountedState } from "@lichtblick/hooks";
 import { usePlayerSelection } from "@lichtblick/suite-base/context/PlayerSelectionContext";
+import { parseLiveRecordingName } from "@lichtblick/suite-base/players/liveHistory/liveRecordings";
 
 import {
   FolderFile,
@@ -17,42 +18,7 @@ import {
   loadPreview,
   saveLastFolder,
 } from "./indexFolder";
-import { PreviewFrame } from "./preview";
-import { CatalogRecording } from "./types";
-
-export type CatalogFolder = {
-  /** Name of the open folder; undefined until one is picked or reopened. */
-  name?: string;
-  /** The folder picked last time, which may need a click to grant access again. */
-  lastFolder?: FileSystemDirectoryHandle;
-  recordings: CatalogRecording[];
-  progress?: { done: number; total: number };
-  error?: string;
-  /** Undefined for a catalog that is not a folder, e.g. one from a URL. */
-  pickFolder?: () => Promise<void>;
-  reopenLastFolder: () => Promise<void>;
-  /** Look for new files and retry failed ones; undefined while no folder is open. */
-  rescan?: () => Promise<void>;
-  open: (recording: CatalogRecording) => Promise<void>;
-  /** Preview frames of one of a recording's image topics. */
-  loadPreview: (recording: CatalogRecording, topic: string) => Promise<PreviewFrame[]>;
-  /**
-   * Open a folder dropped from the file manager. Returns whether the drop held one, synchronously,
-   * so the caller can stop the drop from also opening its files.
-   */
-  dropFolder: (dataTransfer: DataTransfer) => boolean;
-  /** The browser refused to read the picked folder; `pickFolderWithInput` may still work. */
-  accessDenied: boolean;
-  /**
-   * The folder picker closed without a folder. Usually a cancel, but embedded browsers also abort
-   * it themselves, even after a folder was picked, so the upload picker is offered too.
-   */
-  pickerClosed: boolean;
-  /** Pick a folder with the classic upload dialog, which works where folder handles don't. */
-  pickFolderWithInput: () => void;
-  /** More buttons for a recording in its details, next to Open. */
-  recordingActions?: (recording: CatalogRecording) => React.ReactNode;
-};
+import { CatalogBackend, CatalogRecording } from "./types";
 
 function isAccessError(err: unknown): boolean {
   return (
@@ -61,7 +27,7 @@ function isAccessError(err: unknown): boolean {
 }
 
 /** Index a local folder of recordings, reopening the last one when the browser allows it. */
-export function useCatalogFolder(): CatalogFolder {
+export function useCatalogFolder(slot?: string): CatalogBackend {
   const { selectSource } = usePlayerSelection();
 
   const [name, setName] = useState<string>();
@@ -73,8 +39,9 @@ export function useCatalogFolder(): CatalogFolder {
   const [accessDenied, setAccessDenied] = useState(false);
   const [pickerClosed, setPickerClosed] = useState(false);
   const scanIdRef = useRef(0);
+  const isMounted = useMountedState();
 
-  const { value: lastFolder } = useAsync(loadLastFolder, []);
+  const { value: lastFolder } = useAsync(async () => await loadLastFolder(slot), [slot]);
 
   const scan = useCallback(
     async (
@@ -83,7 +50,7 @@ export function useCatalogFolder(): CatalogFolder {
       { retryErrors = false }: { retryErrors?: boolean } = {},
     ) => {
       const scanId = ++scanIdRef.current;
-      const isStale = () => scanId !== scanIdRef.current;
+      const isStale = () => !isMounted() || scanId !== scanIdRef.current;
       setName(folderName);
       setRelist(() => list);
       setError(undefined);
@@ -97,6 +64,13 @@ export function useCatalogFolder(): CatalogFolder {
         setFiles(folderFiles);
         setRecordings([]);
         setProgress({ done: 0, total: folderFiles.length });
+        const withFolderMetadata = (recording: CatalogRecording): CatalogRecording => ({
+          ...recording,
+          machine: parseLiveRecordingName(recording.name).machine,
+          dataset: recording.id.includes("/")
+            ? recording.id.slice(0, recording.id.lastIndexOf("/"))
+            : folderName,
+        });
         const ready: CatalogRecording[] = [];
         const flush = _.throttle(() => {
           if (!isStale()) {
@@ -108,13 +82,13 @@ export function useCatalogFolder(): CatalogFolder {
           retryErrors,
           isCancelled: isStale,
           onRecording: (recording) => {
-            ready.push(recording);
+            ready.push(withFolderMetadata(recording));
             flush();
           },
         });
         flush.cancel();
         if (!isStale()) {
-          setRecordings(results);
+          setRecordings(results.map(withFolderMetadata));
           setProgress(undefined);
         }
       } catch (err: unknown) {
@@ -125,7 +99,7 @@ export function useCatalogFolder(): CatalogFolder {
         }
       }
     },
-    [],
+    [isMounted],
   );
 
   const openDirectory = useCallback(
@@ -141,11 +115,22 @@ export function useCatalogFolder(): CatalogFolder {
     if (!lastFolder) {
       return;
     }
+    const controller = new AbortController();
     void (async () => {
-      if ((await lastFolder.queryPermission({ mode: "read" })) === "granted") {
+      if (
+        (await lastFolder.queryPermission({ mode: "read" })) === "granted" &&
+        !controller.signal.aborted
+      ) {
         await openDirectory(lastFolder);
       }
-    })();
+    })().catch((err: unknown) => {
+      if (!controller.signal.aborted) {
+        setError(String(err));
+      }
+    });
+    return () => {
+      controller.abort();
+    };
   }, [lastFolder, openDirectory]);
 
   const pickFolderWithInput = useCallback(() => {
@@ -179,11 +164,11 @@ export function useCatalogFolder(): CatalogFolder {
       return;
     }
     // Remembering the folder is a convenience; open it even if that fails.
-    await saveLastFolder(dir).catch((err: unknown) => {
+    await saveLastFolder(dir, slot).catch((err: unknown) => {
       console.warn("Failed to remember the catalog folder", err);
     });
     await openDirectory(dir);
-  }, [openDirectory, pickFolderWithInput]);
+  }, [openDirectory, pickFolderWithInput, slot]);
 
   const dropFolder = useCallback(
     (dataTransfer: DataTransfer) => {
@@ -202,7 +187,7 @@ export function useCatalogFolder(): CatalogFolder {
         if (dir?.kind === "directory") {
           try {
             const listed = await listDirectory(dir as FileSystemDirectoryHandle);
-            await saveLastFolder(dir as FileSystemDirectoryHandle).catch((err: unknown) => {
+            await saveLastFolder(dir as FileSystemDirectoryHandle, slot).catch((err: unknown) => {
               console.warn("Failed to remember the catalog folder", err);
             });
             return listed;
@@ -216,7 +201,7 @@ export function useCatalogFolder(): CatalogFolder {
       });
       return true;
     },
-    [scan],
+    [scan, slot],
   );
 
   const reopenLastFolder = useCallback(async () => {

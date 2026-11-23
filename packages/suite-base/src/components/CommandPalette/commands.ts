@@ -10,7 +10,6 @@ import {
   parseMessagePath,
   quoteTopicNameIfNeeded,
 } from "@lichtblick/message-path";
-import { KEY_WORKSPACE_PREFIX } from "@lichtblick/suite-base/constants/browserStorageKeys";
 
 export type Command = {
   /** Stable id, used to remember recently used commands. */
@@ -290,7 +289,7 @@ export function paletteReducer(state: PaletteState, action: PaletteAction): Pale
 
 // ---- Recently used ----
 
-const RECENT_KEY = `${KEY_WORKSPACE_PREFIX}studio.command-palette.recent`;
+const RECENT_KEY = "studio.command-palette.recent";
 const MAX_RECENT = 30;
 
 /** Reads recently used command ids, most recent first; empty if storage is unavailable. */

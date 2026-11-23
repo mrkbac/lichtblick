@@ -13,7 +13,6 @@ import { downloadFiles } from "@lichtblick/suite-base/util/download";
 
 import type { ExportChunkWorker } from "./exportChunk.worker";
 
-export { remoteFileName } from "./exportSource";
 export type { ExportReadable, ExportSource } from "./exportSource";
 
 /**

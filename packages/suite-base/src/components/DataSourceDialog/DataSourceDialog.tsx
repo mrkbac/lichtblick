@@ -13,14 +13,12 @@ import { makeStyles } from "tss-react/mui";
 import { useMountedState } from "@lichtblick/hooks";
 import { APP_BAR_HEIGHT } from "@lichtblick/suite-base/components/AppBar/constants";
 import Stack from "@lichtblick/suite-base/components/Stack";
-import { useAnalytics } from "@lichtblick/suite-base/context/AnalyticsContext";
 import {
   WorkspaceContextStore,
   useWorkspaceStore,
 } from "@lichtblick/suite-base/context/Workspace/WorkspaceContext";
 import { useWorkspaceActions } from "@lichtblick/suite-base/context/Workspace/useWorkspaceActions";
 import { SAMPLES_CATALOG_URL } from "@lichtblick/suite-base/dataSources/constants";
-import { AppEvent } from "@lichtblick/suite-base/services/IAnalytics";
 import { useSourcePick } from "@lichtblick/suite-base/util/sourcePick";
 
 import { CatalogUrlView } from "./CatalogUrlView";
@@ -49,23 +47,16 @@ export function DataSourceDialog({
 }): React.JSX.Element {
   const { classes } = useStyles();
   const { dialogActions } = useWorkspaceActions();
-  const {
-    activeDataSource,
-    item: activeView,
-    catalogUrl,
-  } = useWorkspaceStore(selectDataSourceDialog);
+  const { item: activeView, catalogUrl } = useWorkspaceStore(selectDataSourceDialog);
 
   const isMounted = useMountedState();
   const { t } = useTranslation("compare");
   // Opened to pick a recording for something else (e.g. a comparison) rather than to open it
   const pickLabel = useSourcePick((state) => state.pick?.label);
 
-  const analytics = useAnalytics();
-
   const onModalClose = useCallback(() => {
-    analytics.logEvent(AppEvent.DIALOG_CLOSE, { activeDataSource });
     dialogActions.dataSource.close();
-  }, [analytics, activeDataSource, dialogActions.dataSource]);
+  }, [dialogActions.dataSource]);
 
   const prevActiveViewRef = useRef<DataSourceDialogItem | undefined>(undefined);
   useLayoutEffect(() => {

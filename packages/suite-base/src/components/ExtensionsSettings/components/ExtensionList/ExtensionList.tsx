@@ -48,10 +48,8 @@ import {
   ExtensionOperationStatusLabel,
 } from "@lichtblick/suite-base/components/ExtensionsSettings/types";
 import Stack from "@lichtblick/suite-base/components/Stack";
-import { useAnalytics } from "@lichtblick/suite-base/context/AnalyticsContext";
 import { useExtensionCatalog } from "@lichtblick/suite-base/context/ExtensionCatalogContext";
 import { ExtensionMarketplaceDetail } from "@lichtblick/suite-base/context/ExtensionMarketplaceContext";
-import { AppEvent } from "@lichtblick/suite-base/services/IAnalytics";
 import { canInstallExtension } from "@lichtblick/suite-base/util/canInstallExtension";
 import isDesktopApp from "@lichtblick/suite-base/util/isDesktopApp";
 
@@ -102,7 +100,6 @@ export default function ExtensionList({
   const installedExtensions = useExtensionCatalog((state) => state.installedExtensions);
   const uninstallExtension = useExtensionCatalog((state) => state.uninstallExtension);
   const { enqueueSnackbar } = useSnackbar();
-  const analytics = useAnalytics();
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
   const [isBulkOperating, setIsBulkOperating] = useState(false);
 
@@ -137,9 +134,6 @@ export default function ExtensionList({
       try {
         await uninstallExtension(extension.namespace ?? "local", extension.id);
         successCount++;
-        analytics.logEvent(AppEvent.EXTENSION_UNINSTALL, {
-          type: extension.id,
-        });
       } catch (error) {
         console.error("Failed to uninstall extension:", error);
         failCount++;
@@ -159,7 +153,7 @@ export default function ExtensionList({
 
     setIsBulkOperating(false);
     setRowSelection({});
-  }, [analytics, enqueueSnackbar, isExtensionInstalled, selectedExtensions, uninstallExtension]);
+  }, [enqueueSnackbar, isExtensionInstalled, selectedExtensions, uninstallExtension]);
 
   // Rendered inline, not as a column `cell`: flexRender mounts `cell` as a component, so a new
   // closure (on every catalog or operation change) would remount the button and drop a click

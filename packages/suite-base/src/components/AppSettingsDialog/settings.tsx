@@ -20,7 +20,6 @@ import {
   FormLabel,
   MenuItem,
   Select,
-  SelectChangeEvent,
   TextField,
   ToggleButton,
   ToggleButtonGroup,
@@ -37,7 +36,6 @@ import OsContextSingleton from "@lichtblick/suite-base/OsContextSingleton";
 import Stack from "@lichtblick/suite-base/components/Stack";
 import { useAppTimeFormat } from "@lichtblick/suite-base/hooks";
 import { useAppConfigurationValue } from "@lichtblick/suite-base/hooks/useAppConfigurationValue";
-import { Language } from "@lichtblick/suite-base/i18n";
 import {
   formatLiveHistoryMemory,
   formatLiveHistoryWindow,
@@ -46,7 +44,6 @@ import {
   liveHistorySettings,
   LIVE_RECORDING_DISK_OPTIONS_MIB,
 } from "@lichtblick/suite-base/players/liveHistory/liveHistorySettings";
-import { reportError } from "@lichtblick/suite-base/reportError";
 import { LaunchPreferenceValue } from "@lichtblick/suite-base/types/LaunchPreferenceValue";
 import { TimeDisplayMethod } from "@lichtblick/suite-base/types/panels";
 import {
@@ -56,10 +53,8 @@ import {
   timezoneOffsetMinutes,
 } from "@lichtblick/suite-base/util/formatTime";
 import { formatTimeRaw } from "@lichtblick/suite-base/util/time";
-import { toError } from "@lichtblick/suite-base/util/toError";
 
 const MESSAGE_RATES = [1, 3, 5, 10, 15, 20, 30, 60];
-const LANGUAGE_OPTIONS: { key: Language; value: string }[] = [{ key: "en", value: "English" }];
 
 const useStyles = makeStyles()((theme) => ({
   checkbox: {
@@ -530,45 +525,5 @@ export function RosPackagePath(): React.ReactElement {
       value={rosPackagePath ?? ""}
       onChange={(event) => void setRosPackagePath(event.target.value)}
     />
-  );
-}
-
-export function LanguageSettings(): React.ReactElement {
-  const { t, i18n } = useTranslation("appSettings");
-  const [selectedLanguage = "en", setSelectedLanguage] = useAppConfigurationValue<Language>(
-    AppSetting.LANGUAGE,
-  );
-  const onChangeLanguage = useCallback(
-    (event: SelectChangeEvent<Language>) => {
-      const lang = event.target.value;
-      void setSelectedLanguage(lang);
-      i18n.changeLanguage(lang).catch((error: unknown) => {
-        console.error("Failed to switch languages", error);
-        reportError(toError(error));
-      });
-    },
-    [i18n, setSelectedLanguage],
-  );
-  const options: { key: string; text: string; data: string }[] = useMemo(
-    () =>
-      LANGUAGE_OPTIONS.map((language) => ({
-        key: language.key,
-        text: language.value,
-        data: language.key,
-      })),
-    [],
-  );
-
-  return (
-    <Stack>
-      <FormLabel>{t("language")}:</FormLabel>
-      <Select<Language> value={selectedLanguage} fullWidth onChange={onChangeLanguage}>
-        {options.map((option) => (
-          <MenuItem key={option.key} value={option.key}>
-            {option.text}
-          </MenuItem>
-        ))}
-      </Select>
-    </Stack>
   );
 }

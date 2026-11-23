@@ -61,7 +61,7 @@ export default React.memo(function LayoutRow({
   anySelectedModifiedLayouts: boolean;
   multiSelectedIds: readonly string[];
   selected: boolean;
-  onSelect: (item: Layout, params?: { selectedViaClick?: boolean; event?: MouseEvent }) => void;
+  onSelect: (item: Layout, params?: { event?: MouseEvent }) => void;
   onRename: (item: Layout, newName: string) => void;
   onDuplicate: (item: Layout) => void;
   onDelete: (item: Layout) => void;
@@ -380,7 +380,7 @@ export default React.memo(function LayoutRow({
         onSubmit={onSubmit}
         onClick={(event) => {
           // Toggle selection for multi-select support
-          onSelect(layout, { selectedViaClick: true, event });
+          onSelect(layout, { event });
         }}
         onContextMenu={editingName ? undefined : handleContextMenu}
         component="form"

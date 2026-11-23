@@ -102,7 +102,7 @@ export interface IDataSourceFactory {
   ) => Player | undefined | Promise<Player | undefined>;
 
   /** Starts loading what `initialize` needs, so opening the source later is fast. */
-  prefetch?: () => void;
+  prefetch?: () => Promise<unknown>;
 }
 
 /**

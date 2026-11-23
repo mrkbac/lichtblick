@@ -70,7 +70,7 @@ export interface Player {
   // Set a new set of subscriptions/advertisers. This might trigger fetching
   // new data, which might in turn trigger a backfill of messages.
   setSubscriptions(subscriptions: Immutable<SubscribePayload[]>): void;
-  setPublishers(publishers: AdvertiseOptions[]): void;
+  setPublishers?(publishers: AdvertiseOptions[]): void;
   // Modify a remote parameter such as a rosparam.
   setParameter(key: string, value: ParameterValue): void;
   // If the Player supports publishing (i.e. PlayerState#capabilities contains
@@ -90,7 +90,7 @@ export interface Player {
   // If the Player supports non-real-time speeds (i.e. PlayerState#capabilities contains
   // PlayerCapabilities.setSpeed), set that speed. E.g. 1.0 is real time, 0.2 is 20% of real time.
   setPlaybackSpeed?(speedFraction: number): void;
-  setGlobalVariables(globalVariables: GlobalVariables): void;
+  setGlobalVariables?(globalVariables: GlobalVariables): void;
   getMetadata?: () => ReadonlyArray<Readonly<Metadata>>;
   // Create a batch iterator for streaming messages. Available for data source players that support message iteration.
   getBatchIterator: (

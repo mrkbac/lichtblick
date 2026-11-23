@@ -77,12 +77,19 @@ function startupAssets(compilation: Compilation): Map<string, number> {
   return files;
 }
 
-/** Fails the build when the startup chunks exceed STARTUP_JS_BUDGET_BYTES. */
+/**
+ * Fails the build when the startup chunks exceed STARTUP_JS_BUDGET_BYTES, and lists them in
+ * startup-js.json for ci/perf-budget.ts.
+ */
 const startupBudgetPlugin: RspackPluginInstance = {
   apply: (compiler) => {
-    compiler.hooks.afterEmit.tap("StartupBudget", (compilation) => {
+    compiler.hooks.afterEmit.tapPromise("StartupBudget", async (compilation) => {
       const files = new Map(
         [...startupAssets(compilation)].filter(([file]) => file.endsWith(".js")),
+      );
+      await writeFile(
+        path.join(compiler.outputPath, "startup-js.json"),
+        JSON.stringify([...files.keys()]) ?? "",
       );
       const total = [...files.values()].reduce((sum, size) => sum + size, 0);
       if (total > STARTUP_JS_BUDGET_BYTES) {

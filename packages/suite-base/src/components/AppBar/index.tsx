@@ -42,7 +42,6 @@ import { AddPanelMenu } from "./AddPanelMenu";
 import { AppBarContainer } from "./AppBarContainer";
 import { AppBarIconButton } from "./AppBarIconButton";
 import { AppMenu } from "./AppMenu";
-import { CustomWindowControls, CustomWindowControlsProps } from "./CustomWindowControls";
 import { DataSource } from "./DataSource";
 import { MonitorSetupButtons } from "./MonitorSetupButtons";
 import { NetworkStatusIndicator } from "./NetworkStatusIndicator";
@@ -158,7 +157,7 @@ const useStyles = makeStyles<{ debugDragRegion?: boolean }, "avatar">()(
   },
 );
 
-export type AppBarProps = CustomWindowControlsProps & {
+export type AppBarProps = {
   leftInset?: number;
   onDoubleClick?: () => void;
   debugDragRegion?: boolean;
@@ -169,17 +168,7 @@ const selectLeftSidebarOpen = (store: WorkspaceContextStore) => store.sidebars.l
 const selectRightSidebarOpen = (store: WorkspaceContextStore) => store.sidebars.right.open;
 
 export function AppBar(props: AppBarProps): React.JSX.Element {
-  const {
-    debugDragRegion,
-    isMaximized,
-    leftInset,
-    onCloseWindow,
-    onDoubleClick,
-    onMaximizeWindow,
-    onMinimizeWindow,
-    onUnmaximizeWindow,
-    showCustomWindowControls = false,
-  } = props;
+  const { debugDragRegion, leftInset, onDoubleClick } = props;
   const { classes, cx, theme } = useStyles({ debugDragRegion });
   const { t } = useTranslation("appBar");
 
@@ -347,15 +336,6 @@ export function AppBar(props: AppBarProps): React.JSX.Element {
                     </Avatar>
                   </IconButton>
                 </Tooltip>
-              )}
-              {showCustomWindowControls && (
-                <CustomWindowControls
-                  onMinimizeWindow={onMinimizeWindow}
-                  isMaximized={isMaximized}
-                  onUnmaximizeWindow={onUnmaximizeWindow}
-                  onMaximizeWindow={onMaximizeWindow}
-                  onCloseWindow={onCloseWindow}
-                />
               )}
             </div>
           </div>

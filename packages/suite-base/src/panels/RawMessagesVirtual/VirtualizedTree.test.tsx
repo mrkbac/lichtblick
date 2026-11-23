@@ -15,6 +15,7 @@ import type { Mock } from "vitest";
 import KeyListener from "@lichtblick/suite-base/components/KeyListener";
 import { TreeNode } from "@lichtblick/suite-base/panels/RawMessagesCommon/types";
 import { VirtualizedTree } from "@lichtblick/suite-base/panels/RawMessagesVirtual/VirtualizedTree";
+import { RAW_MESSAGES_SHORTCUTS } from "@lichtblick/suite-base/panels/RawMessagesVirtual/shortcuts";
 import { BasicBuilder } from "@lichtblick/test-builders";
 
 vi.mock("@tanstack/react-virtual", () => ({
@@ -253,6 +254,14 @@ describe("VirtualizedTree", () => {
 
       fireEvent.keyDown(tree, { key: "Enter" });
       expect(mockOnToggleExpand).toHaveBeenCalledTimes(1);
+
+      // The shortcut sheet doesn't claim the playback keys for the tree
+      const treeKeys = RAW_MESSAGES_SHORTCUTS.flatMap((shortcut) =>
+        shortcut.keys.map((key) => key.key),
+      );
+      expect(treeKeys).not.toContain("ArrowLeft");
+      expect(treeKeys).not.toContain("ArrowRight");
+      expect(treeKeys).not.toContain(" ");
     });
 
     it("should leave Space and Enter to a focused expand button", () => {

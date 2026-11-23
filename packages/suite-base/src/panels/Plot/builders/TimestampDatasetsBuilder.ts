@@ -40,8 +40,6 @@ const registry = new FinalizationRegistry<() => void>((dispose) => {
   dispose();
 });
 
-const emptyPaths = new Set<string>();
-
 type ReceiveMark = { time: Immutable<Time>; count: number };
 
 type TimestampSeriesItem = {
@@ -213,13 +211,7 @@ export class TimestampDatasetsBuilder implements IDatasetsBuilder {
   ): Promise<GetViewportDatasetsResult> {
     await this.#flushPendingDispatch();
 
-    const { datasetsByConfigIndex, approximateSeries } =
-      await this.#datasetsBuilderRemote.getViewportResult(viewport);
-    return {
-      datasetsByConfigIndex,
-      pathsWithMismatchedDataLengths: emptyPaths,
-      ...(approximateSeries.length > 0 && { approximateSeries }),
-    };
+    return await this.#datasetsBuilderRemote.getViewportDatasets(viewport);
   }
 
   public async getDerivedValuesAt(x: number): Promise<readonly unknown[]> {

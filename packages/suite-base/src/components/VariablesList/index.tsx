@@ -10,11 +10,9 @@ import * as _ from "lodash-es";
 import { useMemo, useRef, useState, ReactElement, useEffect } from "react";
 
 import Stack from "@lichtblick/suite-base/components/Stack";
-import { useAnalytics } from "@lichtblick/suite-base/context/AnalyticsContext";
 import useGlobalVariables, {
   GlobalVariables,
 } from "@lichtblick/suite-base/hooks/useGlobalVariables";
-import { AppEvent } from "@lichtblick/suite-base/services/IAnalytics";
 
 import Variable from "./Variable";
 
@@ -26,8 +24,6 @@ export default function VariablesList(): ReactElement {
 
   // Don't run the animation when the sidebar first renders
   const skipAnimation = useRef<boolean>(true);
-
-  const analytics = useAnalytics();
 
   useEffect(() => {
     const timeoutId = setTimeout(() => (skipAnimation.current = false), ANIMATION_RESET_DELAY_MS);
@@ -82,7 +78,6 @@ export default function VariablesList(): ReactElement {
           disabled={globalVariables[""] != undefined}
           onClick={() => {
             setGlobalVariables({ "": '""' });
-            analytics.logEvent(AppEvent.VARIABLE_ADD);
           }}
         >
           Add variable

@@ -12,10 +12,6 @@ import { CameraModelsMap } from "@lichtblick/den/image/types";
 import { useCrash } from "@lichtblick/hooks";
 import { Time } from "@lichtblick/suite";
 import { CaptureErrorBoundary } from "@lichtblick/suite-base/components/CaptureErrorBoundary";
-import {
-  ForwardAnalyticsContextProvider,
-  useForwardAnalytics,
-} from "@lichtblick/suite-base/components/ForwardAnalyticsContextProvider";
 import Panel from "@lichtblick/suite-base/components/Panel";
 import PanelContext from "@lichtblick/suite-base/components/PanelContext";
 import {
@@ -32,7 +28,6 @@ import { InitPanelArgs, InterfaceMode } from "./types";
 function initPanel(args: InitPanelArgs, context: BuiltinPanelExtensionContext) {
   const {
     crash,
-    forwardedAnalytics,
     interfaceMode,
     testOptions,
     customCameraModels,
@@ -41,16 +36,14 @@ function initPanel(args: InitPanelArgs, context: BuiltinPanelExtensionContext) {
   } = args;
   return createSyncRoot(
     <CaptureErrorBoundary onError={crash}>
-      <ForwardAnalyticsContextProvider forwardedAnalytics={forwardedAnalytics}>
-        <ThreeDeeRender
-          context={context}
-          interfaceMode={interfaceMode}
-          testOptions={testOptions}
-          customCameraModels={customCameraModels}
-          enqueueSnackbarFromParent={enqueueSnackbarFromParent}
-          logError={logError}
-        />
-      </ForwardAnalyticsContextProvider>
+      <ThreeDeeRender
+        context={context}
+        interfaceMode={interfaceMode}
+        testOptions={testOptions}
+        customCameraModels={customCameraModels}
+        enqueueSnackbarFromParent={enqueueSnackbarFromParent}
+        logError={logError}
+      />
     </CaptureErrorBoundary>,
     context.panelElement,
   );
@@ -72,8 +65,6 @@ function ThreeDeeRenderAdapter(interfaceMode: InterfaceMode, props: Props) {
     (state) => state.installedCameraModels,
   ) as CameraModelsMap;
 
-  const forwardedAnalytics = useForwardAnalytics();
-
   const panelLog = panelContext?.log;
   const logError = useMemo(
     () =>
@@ -89,7 +80,6 @@ function ThreeDeeRenderAdapter(interfaceMode: InterfaceMode, props: Props) {
     () =>
       initPanel.bind(undefined, {
         crash,
-        forwardedAnalytics,
         interfaceMode,
         testOptions: {
           onDownloadImage: props.onDownloadImage,
@@ -106,7 +96,6 @@ function ThreeDeeRenderAdapter(interfaceMode: InterfaceMode, props: Props) {
       }),
     [
       crash,
-      forwardedAnalytics,
       interfaceMode,
       props.onDownloadImage,
       props.debugPicking,

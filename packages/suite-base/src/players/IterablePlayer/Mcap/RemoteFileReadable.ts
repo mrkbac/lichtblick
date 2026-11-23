@@ -12,6 +12,7 @@ import { McapTypes } from "@lichtblick/mcap-core";
 import BrowserHttpReader from "@lichtblick/suite-base/util/BrowserHttpReader";
 import CachedFilelike from "@lichtblick/suite-base/util/CachedFilelike";
 import type { ReadOptions } from "@lichtblick/suite-base/util/CachedFilelike.types";
+import { abortable } from "@lichtblick/suite-base/util/abortable";
 
 import { BatchingReadable } from "./BatchingReadable";
 import type { PrefetchOptions, RemoteFileReadableOptions } from "./RemoteFileReadable.types";
@@ -117,16 +118,14 @@ export class RemoteFileReadable {
   }
 
   async #read(start: number, end: number, options?: ReadOptions): Promise<Uint8Array> {
-    // Skim prefetches belong to playback and may outlive this range read.
-    if (options?.signal) {
-      return await this.#batchingReadable.read(BigInt(start), BigInt(end - start), options);
-    }
     let prefetched = this.#findPrefetched(start, end);
-    if (!prefetched && Date.now() - this.#lastPrefetchMs < PREFETCH_ACTIVE_MS) {
+    // Prefetches are shared and outlive a cancellable read, so such a read reuses them but never
+    // starts one
+    if (!prefetched && !options?.signal && Date.now() - this.#lastPrefetchMs < PREFETCH_ACTIVE_MS) {
       this.prefetch([{ offset: BigInt(start), length: BigInt(end - start) }]);
       prefetched = this.#findPrefetched(start, end);
     }
-    const data = await prefetched?.data;
+    const data = prefetched && (await abortable(prefetched.data, options?.signal));
     if (prefetched && data) {
       return data.subarray(start - prefetched.start, end - prefetched.start);
     }

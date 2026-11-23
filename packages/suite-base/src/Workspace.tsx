@@ -118,6 +118,7 @@ import { parseAppURLState } from "@lichtblick/suite-base/util/appURLState";
 import useBroadcast from "@lichtblick/suite-base/util/broadcast/useBroadcast";
 import isDesktopApp from "@lichtblick/suite-base/util/isDesktopApp";
 import { shortcutKeyHandlers } from "@lichtblick/suite-base/util/keyboardShortcuts";
+import { basename, extname } from "@lichtblick/suite-base/util/path";
 import { pwaProtocolUrl } from "@lichtblick/suite-base/util/pwaProtocolUrl";
 import { decodeSharedLayout, sharedLayoutFromHash } from "@lichtblick/suite-base/util/shareLink";
 
@@ -597,8 +598,7 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
    */
   const installLayoutText = useCallback(
     async (text: string, filename: string, signal: AbortSignal) => {
-      const dotIndex = filename.lastIndexOf(".");
-      const layoutName = dotIndex > 0 ? filename.slice(0, dotIndex) : filename;
+      const layoutName = basename(filename, extname(filename));
 
       // Find existing layouts with the same name before saving (safe deduplication)
       const existingLayouts = await layoutManager.getLayouts();
@@ -615,6 +615,7 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
           await layoutManager.deleteLayout({ id: layout.id });
         }
       }
+      return newLayout;
     },
     [layoutManager, parseAndInstallLayout],
   );
@@ -647,11 +648,7 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
       try {
         const text = await decodeSharedLayout(encoded);
         controller.signal.throwIfAborted();
-        const file = new File([text], "Shared layout.json", { type: "application/json" });
-        // Anyone can make a link: its user scripts wait for the user's approval.
-        const layout = await parseAndInstallLayout(file, "local", controller.signal, {
-          untrusted: true,
-        });
+        const layout = await installLayoutText(text, "Shared layout.json", controller.signal);
         return { installed: layout != undefined };
       } catch (error) {
         if (!controller.signal.aborted) {
@@ -801,27 +798,9 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
       <AppBarComponent
         leftInset={props.appBarLeftInset}
         onDoubleClick={props.onAppBarDoubleClick}
-        showCustomWindowControls={props.showCustomWindowControls}
-        isMaximized={props.isMaximized}
-        initialZoomFactor={props.initialZoomFactor}
-        onMinimizeWindow={props.onMinimizeWindow}
-        onMaximizeWindow={props.onMaximizeWindow}
-        onUnmaximizeWindow={props.onUnmaximizeWindow}
-        onCloseWindow={props.onCloseWindow}
       />
     ),
-    [
-      AppBarComponent,
-      props.appBarLeftInset,
-      props.isMaximized,
-      props.initialZoomFactor,
-      props.onAppBarDoubleClick,
-      props.onCloseWindow,
-      props.onMaximizeWindow,
-      props.onMinimizeWindow,
-      props.onUnmaximizeWindow,
-      props.showCustomWindowControls,
-    ],
+    [AppBarComponent, props.appBarLeftInset, props.onAppBarDoubleClick],
   );
 
   useBroadcast({

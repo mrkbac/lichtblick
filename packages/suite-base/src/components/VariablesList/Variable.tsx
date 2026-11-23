@@ -29,11 +29,9 @@ import { VariableValue } from "@lichtblick/suite";
 import CopyButton from "@lichtblick/suite-base/components/CopyButton";
 import JsonInput from "@lichtblick/suite-base/components/JsonInput";
 import Stack from "@lichtblick/suite-base/components/Stack";
-import { useAnalytics } from "@lichtblick/suite-base/context/AnalyticsContext";
 import useGlobalVariables, {
   GlobalVariables,
 } from "@lichtblick/suite-base/hooks/useGlobalVariables";
-import { AppEvent } from "@lichtblick/suite-base/services/IAnalytics";
 
 const useStyles = makeStyles<void, "copyButton">()((theme, _params, classes) => ({
   root: {
@@ -133,13 +131,10 @@ export default function Variable(props: {
     setAnchorEl(undefined);
   };
 
-  const analytics = useAnalytics();
-
   const deleteVariable = useCallback(() => {
     setGlobalVariables({ [name]: undefined });
-    analytics.logEvent(AppEvent.VARIABLE_DELETE);
     handleClose();
-  }, [analytics, name, setGlobalVariables]);
+  }, [name, setGlobalVariables]);
 
   const value = useMemo(() => globalVariables[name], [globalVariables, name]);
 

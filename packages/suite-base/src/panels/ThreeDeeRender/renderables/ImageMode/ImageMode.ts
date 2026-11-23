@@ -74,7 +74,6 @@ import {
 import { DEFAULT_IMAGE_CONFIG } from "@lichtblick/suite-base/panels/ThreeDeeRender/settingsNodes/imageMode";
 import { t3D } from "@lichtblick/suite-base/panels/ThreeDeeRender/t3D";
 import { makePose, AnyFrameId } from "@lichtblick/suite-base/panels/ThreeDeeRender/transforms";
-import { AppEvent } from "@lichtblick/suite-base/services/IAnalytics";
 import { downloadFiles } from "@lichtblick/suite-base/util/download";
 import { toError } from "@lichtblick/suite-base/util/toError";
 
@@ -984,7 +983,6 @@ export class ImageMode
         // remove any leading / so the image name doesn't start with _
         const topicName = topic.replace(/^\/+/, "");
         const fileName = `${topicName}-${stamp.sec}-${stamp.nsec}`;
-        this.renderer.analytics?.logEvent(AppEvent.IMAGE_DOWNLOAD);
         if (this.renderer.testOptions.onDownloadImage) {
           this.renderer.testOptions.onDownloadImage(blob, fileName);
         } else {

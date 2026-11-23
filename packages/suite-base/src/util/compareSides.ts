@@ -69,7 +69,7 @@ export function encodeCompareNames(names: readonly string[]): string {
  * The side names in a remote source's params: `compareNames` (see encodeCompareNames), else the
  * plain `compare` list. `compare=true` (one side per file) names none.
  */
-export function compareNamesOf(
+function compareNamesOf(
   params: Record<string, string | undefined> | undefined,
 ): string[] | undefined {
   if (params?.compareNames != undefined) {

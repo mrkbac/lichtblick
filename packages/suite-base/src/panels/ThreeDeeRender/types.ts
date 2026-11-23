@@ -8,7 +8,6 @@
 import { CameraModelsMap } from "@lichtblick/den/image/types";
 import { useCrash } from "@lichtblick/hooks";
 import { Time } from "@lichtblick/suite";
-import { ForwardedAnalytics } from "@lichtblick/suite-base/components/ForwardAnalyticsContextProvider";
 import { BuiltinPanelExtensionContext } from "@lichtblick/suite-base/components/PanelExtensionAdapter";
 import { FollowMode, TestOptions } from "@lichtblick/suite-base/panels/ThreeDeeRender/IRenderer";
 import { CameraState } from "@lichtblick/suite-base/panels/ThreeDeeRender/camera";
@@ -37,7 +36,6 @@ export type ThreeDeeRenderProps = {
 
 export type InitPanelArgs = {
   crash: ReturnType<typeof useCrash>;
-  forwardedAnalytics: ForwardedAnalytics;
   interfaceMode: InterfaceMode;
   testOptions: TestOptions;
   customCameraModels: CameraModelsMap;

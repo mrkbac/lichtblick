@@ -6,8 +6,6 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 export { default as filterMap } from "./filterMap";
-export * from "./ArrayMap";
-export * from "./ObjectPool";
 export * from "./VecQueue";
 export * from "./RingBuffer";
 export * from "./pushAll";

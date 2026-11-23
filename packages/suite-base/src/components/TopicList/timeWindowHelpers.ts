@@ -9,11 +9,8 @@ const NANOSECONDS_PER_SECOND = 1_000_000_000;
 
 // Window size constants (in milliseconds)
 export const DEFAULT_WINDOW_MS = 500;
-const MIN_WINDOW_MS = 100;
-const MAX_WINDOW_MS = 30 * 1000; // 30 seconds
-
-// Adaptive window calculation constants
-const DEFAULT_TARGET_MESSAGES = 10;
+export const MIN_WINDOW_MS = 100;
+export const MAX_WINDOW_MS = 30 * 1000; // 30 seconds
 export const WINDOW_GROWTH_FACTOR = 5;
 
 /**
@@ -33,48 +30,4 @@ export function subtractMilliseconds(time: Time, milliseconds: number): Time {
   }
   // The input's nsec may be fractional (computed times): keep an integer nanosecond count
   return { sec, nsec: Math.round(nsec) };
-}
-
-/**
- * Converts Time to seconds (decimal).
- */
-export function timeToSec(time: Time): number {
-  return time.sec + time.nsec / NANOSECONDS_PER_SECOND;
-}
-
-/**
- * Calculates an optimal time window size for finding messages based on topic statistics.
- * Returns the window size in milliseconds.
- */
-export function calculateOptimalWindowMs(params: {
-  numMessages: number;
-  firstMessageTime: Time;
-  lastMessageTime: Time;
-  targetMessagesInWindow?: number;
-}): number {
-  const {
-    numMessages,
-    firstMessageTime,
-    lastMessageTime,
-    targetMessagesInWindow = DEFAULT_TARGET_MESSAGES,
-  } = params;
-
-  const totalDurationSec = timeToSec(lastMessageTime) - timeToSec(firstMessageTime);
-
-  if (totalDurationSec <= 0 || numMessages <= 0) {
-    return DEFAULT_WINDOW_MS;
-  }
-
-  const messagesPerSecond = numMessages / totalDurationSec;
-
-  if (messagesPerSecond === 0) {
-    return MAX_WINDOW_MS;
-  }
-
-  const estimatedWindowSec = targetMessagesInWindow / messagesPerSecond;
-
-  // Clamp between min and max window sizes
-  const windowMs = Math.max(MIN_WINDOW_MS, Math.min(MAX_WINDOW_MS, estimatedWindowSec * 1000));
-
-  return windowMs;
 }

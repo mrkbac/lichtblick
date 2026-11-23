@@ -7,13 +7,14 @@ import type { LayerSpecification, SourceSpecification } from "maplibre-gl";
 import { MessageEvent } from "@lichtblick/suite";
 import { turboColorString } from "@lichtblick/suite-base/util/colorUtils";
 import { darkColor, lightColor } from "@lichtblick/suite-base/util/plotColors";
+import { upperBound } from "@lichtblick/suite-base/util/sortedSearch";
 
 import { normalize } from "./colorBy";
 import { DEFAULT_POINT_SIZE, TopicStyle } from "./config";
 import { bearingDegrees, distanceMeters, ellipseRing, LngLat } from "./geo";
 import { getAccuracy } from "./getAccuracy";
 import { GeoJsonMessage, hasFix, parseGeoJSON } from "./support";
-import { lastIndexAtOrBefore, nearestFix, TrackStore } from "./track";
+import { nearestFix, TrackStore } from "./track";
 import { NavSatFixMsg } from "./types";
 
 export type NavMessage = MessageEvent<NavSatFixMsg>;
@@ -521,7 +522,7 @@ export function resolveTrackFix(
   // The newest drawn row may have been replaced in place by a later fix since.
   const usable =
     track.store.tailReplacements === track.tailReplacements ? track.length : track.length - 1;
-  const position = lastIndexAtOrBefore(track.indices, track.indices.length, i);
+  const position = upperBound(track.indices, 0, track.indices.length, i) - 1;
   if (track.indices[position] !== i) {
     return undefined;
   }
