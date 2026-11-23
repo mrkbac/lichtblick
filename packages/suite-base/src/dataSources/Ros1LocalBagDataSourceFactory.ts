@@ -6,57 +6,23 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { AllowedFileExtensions } from "@lichtblick/suite-base/constants/allowedFileExtensions";
-import {
-  IDataSourceFactory,
-  DataSourceFactoryInitializeArgs,
-} from "@lichtblick/suite-base/context/PlayerSelectionContext";
-import { loadIterablePlayer } from "@lichtblick/suite-base/dataSources/playerModules";
-import { Player } from "@lichtblick/suite-base/players/types";
+import { LocalFileDataSourceFactory } from "@lichtblick/suite-base/dataSources/LocalFileDataSourceFactory";
 
-class Ros1LocalBagDataSourceFactory implements IDataSourceFactory {
-  public id = "ros1-local-bagfile";
-  public type: IDataSourceFactory["type"] = "file";
-  public displayName = "ROS 1 Bag";
-  public iconName: IDataSourceFactory["iconName"] = "OpenFile";
-  public supportedFileTypes = [AllowedFileExtensions.BAG];
-
-  public prefetch = loadIterablePlayer;
-
-  public async initialize(args: DataSourceFactoryInitializeArgs): Promise<Player | undefined> {
-    const { IterablePlayer, WorkerSerializedIterableSource } = await loadIterablePlayer();
-    const files = args.files ?? [];
-
-    if (args.file) {
-      files.push(args.file);
-    }
-    if (files.length === 0) {
-      return;
-    }
-
-    const file: File | undefined = files[0];
-    if (!file) {
-      return;
-    }
-
-    const source = new WorkerSerializedIterableSource({
-      initWorker: () => {
-        return new Worker(
+export default class Ros1LocalBagDataSourceFactory extends LocalFileDataSourceFactory {
+  public constructor() {
+    super({
+      id: "ros1-local-bagfile",
+      displayName: "ROS 1 Bag",
+      supportedFileTypes: [AllowedFileExtensions.BAG],
+      initWorker: () =>
+        new Worker(
           new URL(
             "@lichtblick/suite-base/players/IterablePlayer/BagIterableSourceWorker.worker",
             import.meta.url,
           ),
-        );
-      },
-      initArgs: { file },
-    });
-
-    return new IterablePlayer({
-      source,
-      name: file.name,
-      sourceId: this.id,
+        ),
+      serialized: true,
       readAheadDuration: { sec: 120, nsec: 0 },
     });
   }
 }
-
-export default Ros1LocalBagDataSourceFactory;
