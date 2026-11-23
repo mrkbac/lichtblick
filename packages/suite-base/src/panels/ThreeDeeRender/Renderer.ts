@@ -43,7 +43,6 @@ import { DEFAULT_MESH_UP_AXIS } from "@lichtblick/suite-base/panels/ThreeDeeRend
 import { ICameraHandler } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/ICameraHandler";
 import type { DocumentedNodes } from "@lichtblick/suite-base/panels/shared/documentedSettings";
 import { showHideAllValue } from "@lichtblick/suite-base/panels/shared/topicList";
-import IAnalytics from "@lichtblick/suite-base/services/IAnalytics";
 import { randomUUID } from "@lichtblick/suite-base/util/randomUUID";
 import { toError } from "@lichtblick/suite-base/util/toError";
 import { palette, fontMonospace } from "@lichtblick/theme";
@@ -343,7 +342,6 @@ export class Renderer extends EventEmitter<RendererEvents> {
   public readonly displayTemporaryError?: (str: string) => void;
   /** Options passed for local testing and storybook. */
   public readonly testOptions: TestOptions;
-  public analytics?: IAnalytics;
 
   public constructor(args: {
     canvas: HTMLCanvasElement;
@@ -1847,8 +1845,14 @@ export class Renderer extends EventEmitter<RendererEvents> {
     this.#updateFixedFrameId();
 
     // A hidden tab shows nothing, but live data keeps driving frames: keep the scene state current
-    // and skip the GPU work. #onVisibilityChange repaints when the tab is shown again.
-    const draw = this.#gpuReady && this.#canvas.ownerDocument.visibilityState !== "hidden";
+    // and skip the GPU work. #onVisibilityChange repaints when the tab is shown again. An empty
+    // canvas (e.g. collapsed while another panel is fullscreen) has no swapchain texture to draw to.
+    const bufferSize = this.gl.getDrawingBufferSize(tempVec2);
+    const draw =
+      this.#gpuReady &&
+      this.#canvas.ownerDocument.visibilityState !== "hidden" &&
+      bufferSize.width > 0 &&
+      bufferSize.height > 0;
     if (draw) {
       this.gl.clear();
     }
@@ -1998,6 +2002,11 @@ export class Renderer extends EventEmitter<RendererEvents> {
   }
 
   #resizeHandler = (size: THREE.Vector2): void => {
+    // A collapsed panel (e.g. while another one is fullscreen) keeps its last size: a 0-sized
+    // WebGPU canvas fails validation. The next real resize repaints it.
+    if (size.width === 0 || size.height === 0) {
+      return;
+    }
     this.gl.setPixelRatio(this.#ownerWindow.devicePixelRatio);
     this.gl.setSize(size.width, size.height);
     this.sharedMap?.map.setPixelRatio(this.#ownerWindow.devicePixelRatio);
@@ -2388,10 +2397,6 @@ export class Renderer extends EventEmitter<RendererEvents> {
       ...(this.topicsByName?.get(path.topicName)?.convertibleTo ?? []),
     ];
     return schemas.some((schema) => this.schemaSubscriptions.has(schema));
-  }
-
-  public setAnalytics(analytics: IAnalytics): void {
-    this.analytics = analytics;
   }
 
   public setCustomCameraModels(newCameraModels: CameraModelsMap): void {

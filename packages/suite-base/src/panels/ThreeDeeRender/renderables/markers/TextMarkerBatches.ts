@@ -4,7 +4,7 @@ import { LabelNodeMaterial, type LabelPool } from "@foxglove/three-text/webgpu";
 import * as THREE from "three";
 import { attribute, context, highpModelViewMatrix, mat4, vec4 } from "three/tsl";
 
-import { setPickOnly } from "./MarkerBatches";
+import { cellKey, isFinitePosition, setPickOnly } from "./MarkerBatches";
 import { RenderableTextViewFacing } from "./RenderableTextViewFacing";
 import { getLuminance, SRGBToLinear } from "../../color";
 
@@ -15,7 +15,6 @@ const GLYPH_ATTRIBUTES = [
   "instanceBoxSize",
   "instanceCharSize",
 ] as const;
-const CELL_SIZE = 5_000;
 const MAX_BATCH_GLYPHS = 16_384;
 
 type Batch = {
@@ -43,29 +42,17 @@ export class TextMarkerBatches extends THREE.Object3D {
 
   public addMarker(marker: RenderableTextViewFacing): void {
     setPickOnly(marker.label.mesh, { pickOnly: false });
-    const { x, y, z } = marker.position;
     const { color, text, scale } = marker.userData.marker;
     if (
       !marker.label.visible ||
       color.a !== 1 ||
       marker.label.geometry.instanceCount <= 0 ||
-      !Number.isFinite(x) ||
-      !Number.isFinite(y) ||
-      !Number.isFinite(z) ||
+      !isFinitePosition(marker.position) ||
       !Number.isFinite(scale.z)
     ) {
       return;
     }
-    const key = [
-      Math.floor(x / CELL_SIZE),
-      Math.floor(y / CELL_SIZE),
-      Math.floor(z / CELL_SIZE),
-      scale.z,
-      color.r,
-      color.g,
-      color.b,
-      text,
-    ].join(":");
+    const key = [cellKey(marker.position), scale.z, color.r, color.g, color.b, text].join(":");
     const group = this.#groups.get(key);
     if (group) {
       group.push(marker);

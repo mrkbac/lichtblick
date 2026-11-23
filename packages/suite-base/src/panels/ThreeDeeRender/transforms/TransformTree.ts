@@ -416,16 +416,4 @@ export class TransformTree {
     }
     return false;
   }
-
-  public static Clone(tree: TransformTree): TransformTree {
-    const newTree = new TransformTree(tree.#maxStorageTime, tree.#sampleBudget);
-    newTree.#frames = tree.#frames;
-    newTree.version = tree.version;
-    newTree.#complete = tree.#complete;
-    newTree.#receivedUntil = tree.#receivedUntil;
-    newTree.#visibility = tree.#visibility;
-    newTree.#sampleCount = tree.#sampleCount;
-    newTree.decimations = tree.decimations;
-    return newTree;
-  }
 }

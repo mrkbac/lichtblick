@@ -22,7 +22,7 @@ import {
   SeriesItem,
   Viewport,
 } from "./IDatasetsBuilder";
-import { DataItem, PointColumns, iteratePoints } from "./columns";
+import { DataItem, PointColumns } from "./columns";
 import { buildDatasetStyle } from "./utils";
 import { Dataset } from "../types";
 import { OriginalValue } from "../utils/datum";
@@ -300,7 +300,7 @@ export class CustomDatasetsBuilderImpl {
         const picked =
           dataset.showLine === true
             ? downsamplePathColumns(xs, ys, 0, length, view, MAX_POINTS)
-            : downsampleScatter(iteratePoints(xs, ys, 0, length), view);
+            : downsampleScatter(xs, ys, 0, length, view);
         indices = picked;
         count = picked.length;
       }

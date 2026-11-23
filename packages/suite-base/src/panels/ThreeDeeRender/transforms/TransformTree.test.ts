@@ -7,7 +7,7 @@
 
 import { Transform } from "@lichtblick/suite-base/panels/ThreeDeeRender/transforms/Transform";
 
-import { MAX_DURATION } from "./CoordinateFrame";
+import { CoordinateFrame, MAX_DURATION } from "./CoordinateFrame";
 import {
   AddTransformResult,
   FULL_RATE_TRANSFORM_TIME,
@@ -16,6 +16,15 @@ import {
 } from "./TransformTree";
 
 const tf = Transform.Identity();
+
+/** Time of the newest transform at or before `time` that lookups can see, if any */
+function latestTimeAtOrBefore(frame: CoordinateFrame, time: bigint): bigint | undefined {
+  const lower: [bigint, Transform] = [0n, Transform.Identity()];
+  const upper: [bigint, Transform] = [0n, Transform.Identity()];
+  return frame.findClosestTransforms(lower, upper, time, MAX_DURATION) && lower[0] <= time
+    ? lower[0]
+    : undefined;
+}
 describe("TransformTree", () => {
   it("updates tree when adding a transform that would not create a cycle", () => {
     const tfTree = new TransformTree();
@@ -140,7 +149,7 @@ describe("TransformTree", () => {
     const times: bigint[] = [];
     for (let t: bigint | undefined = newest; t != undefined; ) {
       times.push(t);
-      t = t > 0n ? frame.latestTimeAtOrBefore(t - 1n) : undefined;
+      t = t > 0n ? latestTimeAtOrBefore(frame, t - 1n) : undefined;
     }
     times.reverse();
     const recent = times.filter((t) => t >= newest - FULL_RATE_TRANSFORM_TIME);
@@ -163,8 +172,8 @@ describe("TransformTree", () => {
     const frame = tfTree.frame("b")!;
     expect(tfTree.decimations).toBeGreaterThan(0);
     expect(frame.transformsSize()).toBeLessThanOrEqual(100);
-    expect(frame.latestTimeAtOrBefore(0n)).toBe(0n);
-    expect(frame.latestTimeAtOrBefore(1000n * sec)).toBe(300n * sec);
+    expect(latestTimeAtOrBefore(frame, 0n)).toBe(0n);
+    expect(latestTimeAtOrBefore(frame, 1000n * sec)).toBe(300n * sec);
   });
 
   it("keeps every live transform again once the thinned window ages out", () => {
@@ -182,7 +191,7 @@ describe("TransformTree", () => {
     // The rate falls to 1 Hz: 10 transforms per window
     add(1n, 60n);
     expect(tfTree.decimations).toBe(0);
-    expect(tfTree.frame("b")!.latestTimeAtOrBefore(t - 2n * sec)).toBe(t - 2n * sec);
+    expect(latestTimeAtOrBefore(tfTree.frame("b")!, t - 2n * sec)).toBe(t - 2n * sec);
   });
 
   it("keeps steps exact in thinned live history", () => {
@@ -201,7 +210,7 @@ describe("TransformTree", () => {
     expect(lower[1].position()[0]).toBe(200);
     expect(upper[1].position()[0]).toBe(200);
     // The step itself stays where it was
-    expect(frame.latestTimeAtOrBefore(10_009n * ms)).toBe(10_000n * ms);
+    expect(latestTimeAtOrBefore(frame, 10_009n * ms)).toBe(10_000n * ms);
   });
 
   it("thins older live transforms to one per spacing interval, also for slower streams", () => {
@@ -221,7 +230,7 @@ describe("TransformTree", () => {
     let kept = 0;
     for (let t: bigint | undefined = 20n * sec; t != undefined && t >= 10n * sec; ) {
       kept++;
-      t = frame.latestTimeAtOrBefore(t - 1n);
+      t = latestTimeAtOrBefore(frame, t - 1n);
     }
     // 10 s of thinned history at 20 Hz
     expect(kept).toBeGreaterThanOrEqual(10 * 20);
@@ -343,8 +352,8 @@ describe("TransformTree", () => {
       const frame = tfTree.frame("b")!;
       expect(tfTree.decimations).toBe(1);
       expect(frame.transformsSize()).toBe(51);
-      expect(frame.latestTimeAtOrBefore(0n)).toBe(0n);
-      expect(frame.latestTimeAtOrBefore(1000n * sec)).toBe(100n * sec);
+      expect(latestTimeAtOrBefore(frame, 0n)).toBe(0n);
+      expect(latestTimeAtOrBefore(frame, 1000n * sec)).toBe(100n * sec);
     });
 
     it("keeps the thinned density for transforms added after thinning", () => {
@@ -357,7 +366,7 @@ describe("TransformTree", () => {
       const times: bigint[] = [];
       for (let t: bigint | undefined = 300n * sec; t != undefined; ) {
         times.push(t);
-        t = t > 0n ? frame.latestTimeAtOrBefore(t - 1n) : undefined;
+        t = t > 0n ? latestTimeAtOrBefore(frame, t - 1n) : undefined;
       }
       const gaps = times.slice(1).map((t, i) => Number((times[i]! - t) / sec));
       // Spaced by the final thinning step all through the recording (twice that where a halving

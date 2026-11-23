@@ -12,6 +12,7 @@ import { LayoutID } from "@lichtblick/suite-base/context/CurrentLayoutContext";
 import { parseTimeUrlString } from "@lichtblick/suite-base/util/time";
 
 import { keyMap } from "./constants";
+import { splitRemoteRecordingUrlList } from "./recentSources";
 
 export type AppURLState = {
   ds?: string;
@@ -104,7 +105,12 @@ export function parseAppURLState(url: URL): AppURLState | undefined {
   const timeString = url.searchParams.get("time");
   const time = parseTimeUrlString(timeString ?? undefined);
   const dsParams: Record<string, string> = {};
-  const urls = url.searchParams.getAll("ds.url").filter(Boolean);
+  const urlParams = url.searchParams.getAll("ds.url").filter(Boolean);
+  const urls =
+    urlParams.length === 1 &&
+    (ds === "remote-file" || ds === "mcap-remote-file" || ds === "ros1-remote-bagfile")
+      ? (splitRemoteRecordingUrlList(urlParams[0]!) ?? urlParams)
+      : urlParams;
   url.searchParams.forEach((v, k) => {
     if (k && v && k.startsWith("ds.")) {
       const cleanKey = k.replace(/^ds./, "");

@@ -23,13 +23,10 @@ export function SharedRoot(
   props: ISharedRootContext & { children: React.JSX.Element },
 ): React.JSX.Element {
   const {
-    appBarLeftInset,
     appConfiguration,
     appParameters,
-    onAppBarDoubleClick,
     AppBarComponent,
     children,
-    customWindowControlProps,
     dataSources,
     deepLinks,
     enableGlobalCss = false,
@@ -40,30 +37,24 @@ export function SharedRoot(
 
   const contextValue = useMemo(
     () => ({
-      appBarLeftInset,
       AppBarComponent,
       appConfiguration,
       appParameters,
-      customWindowControlProps,
       dataSources,
       deepLinks,
       enableLaunchPreferenceScreen,
       extensionLoaders,
       extraProviders,
-      onAppBarDoubleClick,
     }),
     [
-      appBarLeftInset,
       AppBarComponent,
       appConfiguration,
       appParameters,
-      customWindowControlProps,
       dataSources,
       deepLinks,
       enableLaunchPreferenceScreen,
       extensionLoaders,
       extraProviders,
-      onAppBarDoubleClick,
     ],
   );
 

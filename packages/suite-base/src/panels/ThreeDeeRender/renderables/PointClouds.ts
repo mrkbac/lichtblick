@@ -19,9 +19,9 @@ import {
   RenderObjectHistory,
   PointsRenderable,
   DECAY_LIMITED,
-  payloadFingerprint,
   pointDecayTime,
-  updateDecayNotice,
+  updateDecayRing,
+  isSameRecord,
 } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/pointExtensionUtils";
 import { colorFieldComputedPrefix } from "@lichtblick/suite-base/panels/ThreeDeeRender/settingsNodes/colorMode";
 import {
@@ -41,6 +41,7 @@ import type { Renderer } from "../Renderer";
 import { PartialMessage, PartialMessageEvent, SceneExtension } from "../SceneExtension";
 import { SettingsTreeEntry, SettingsTreeNodeWithActionHandler } from "../SettingsManager";
 import { POINTCLOUD_DATATYPES as FOXGLOVE_POINTCLOUD_DATATYPES } from "../foxglove";
+import { sameBytes } from "../math";
 import {
   normalizeByteArray,
   normalizeHeader,
@@ -64,14 +65,14 @@ import {
   colorHasTransparency,
   getColorConverter,
 } from "./colorMode";
-import { DecayPointRing, type RingScanInfo, sameBytes } from "./pointClouds/DecayPointRing";
+import { DecayPointRing, type RingScanInfo } from "./pointClouds/DecayPointRing";
 import {
   applyCameraFallback,
   paintPointColors,
   type PointCloudCameraFrame,
 } from "./pointClouds/cameraColor";
 import { FieldReader, getReader, isSupportedField } from "./pointClouds/fieldReaders";
-import { MISSING_TRANSFORM, missingTransformMessage } from "./transforms";
+import { MISSING_TRANSFORM } from "./transforms";
 
 type PointCloudFieldReaders = {
   xReader: FieldReader;
@@ -100,6 +101,11 @@ function decayMaxPoints(settings: LayerSettingsPointClouds): number {
   return millions != undefined && Number.isFinite(millions) && millions > 0
     ? Math.round(millions * 1e6)
     : DEFAULT_DECAY_MAX_POINTS_MILLIONS * 1e6;
+}
+
+/** Stixels draw two vertices per point: the budget that covers the same decay window as the points */
+function stixelMaxVertices(settings: LayerSettingsPointClouds): number {
+  return 2 * decayMaxPoints(settings);
 }
 
 const DEFAULT_SETTINGS = {
@@ -210,8 +216,6 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
   #decayRing: DecayPointRing | undefined;
   /** Decodes scans older than the latest before they are copied into the ring */
   #scratch: DynamicBufferGeometry | undefined;
-  /** What the shown decay limit notice says, to format it again only when that changes */
-  #decayNoticeKey: string | undefined;
   #latestUnpaintedColors: Uint8Array | undefined;
   #latestPaintedPoints: Uint8Array | undefined;
   #latestCameraFrame: PointCloudCameraFrame | undefined;
@@ -281,7 +285,7 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
       },
       parentRenderable: this,
       renderer,
-      limits: DECAY_HISTORY_LIMITS,
+      limits: DECAY_HISTORY_LIMITS, // maxPoints set before each trim
     });
 
     this.add(stixels);
@@ -594,6 +598,7 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
       entry.renderable.syncPoints();
     });
     if (this.userData.settings.stixelsEnabled) {
+      this.#stixelsHistory.setMaxPoints(stixelMaxVertices(this.userData.settings));
       this.#stixelsHistory.updateHistoryFromCurrentTime(currentTime);
       posesResolved =
         this.#stixelsHistory.updatePoses(currentTime, renderFrameId, fixedFrameId, poseOptions) &&
@@ -613,11 +618,15 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
     if (latest.historyOnly === true || !this.#pointsHistory.latest().renderable.decoded) {
       return false;
     }
-    return recordId != undefined && latest.recordId != undefined
-      ? recordId === latest.recordId
-      : latest.receiveTime === receiveTime &&
-          latest.messageTime === toNanoSec(getTimestamp(pointCloud)) &&
-          payloadFingerprint(latest.latestPointCloud.data) === payloadFingerprint(pointCloud.data);
+    return isSameRecord(
+      {
+        recordId,
+        receiveTime,
+        messageTime: toNanoSec(getTimestamp(pointCloud)),
+        payload: pointCloud.data,
+      },
+      { ...latest, payload: latest.latestPointCloud.data },
+    );
   }
 
   public pushHistory(
@@ -803,6 +812,7 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
     );
     stixels.setCameraCoverage(unpaintedColors, paintedPoints);
     this.add(stixels);
+    this.#stixelsHistory.setMaxPoints(stixelMaxVertices(settings));
     this.#stixelsHistory.insertOlderEntry({
       receiveTime,
       messageTime,
@@ -828,65 +838,26 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
   /** Expires, poses and budget-checks the decay ring. Returns whether all its scans resolved. */
   #updateDecayRing(currentTime: bigint, renderFrameId: string, fixedFrameId: string): boolean {
     const ring = this.#decayRing;
-    const { settings, settingsPath } = this.userData;
     if (!ring) {
       return true;
     }
-    if (settings.decayTime <= 0) {
+    if (this.userData.settings.decayTime <= 0) {
       ring.removeFromParent();
       ring.dispose();
       this.#decayRing = undefined;
-      this.renderer.settings.errors.remove(settingsPath, DECAY_LIMITED);
+      this.renderer.settings.errors.remove(this.userData.settingsPath, DECAY_LIMITED);
       return true;
     }
-    const decayNs = BigInt(Math.round(settings.decayTime * 1e9));
-    const expireTime = currentTime - decayNs;
-    ring.expire(expireTime);
-    if (this.userData.historyOnly === true) {
-      ring.setStyle(pointStyle(settings));
-    }
-    // The latest scan counts toward the limits too, as when it was part of the history
-    ring.enforceLimits({
-      maxPoints: decayMaxPoints(settings),
-      reservePoints: this.#pointsHistory.latest().renderable.geometry.drawRange.count,
-    });
-
-    this.#decayNoticeKey = updateDecayNotice({
-      renderer: this.renderer,
-      settingsPath,
+    return updateDecayRing(
+      this.renderer,
+      this.userData,
       ring,
-      maxPoints: decayMaxPoints(settings),
-      latestPoints: this.#pointsHistory.latest().renderable.geometry.drawRange.count,
-      windowStart: expireTime,
-      shownKey: this.#decayNoticeKey,
-    });
-
-    const missingFrame = ring.updatePoses(
-      this.renderer.transformTree,
+      decayMaxPoints(this.userData.settings),
+      this.#pointsHistory.latest().renderable.geometry.drawRange.count,
       currentTime,
       renderFrameId,
       fixedFrameId,
     );
-    if (ring.posesPending()) {
-      // Paused redraws stop on their own: draw again until every scan is placed
-      this.renderer.queueAnimationFrame();
-    }
-    if (missingFrame != undefined) {
-      this.renderer.settings.errors.add(
-        settingsPath,
-        MISSING_TRANSFORM,
-        missingTransformMessage(
-          this.renderer.transformTree,
-          renderFrameId,
-          fixedFrameId,
-          missingFrame.frameId,
-          currentTime,
-          missingFrame.messageTime,
-        ),
-      );
-      return false;
-    }
-    return true;
   }
 
   #invalidError = (message: string): void => {
@@ -1699,15 +1670,13 @@ export class PointClouds extends SceneExtension<PointCloudHistoryRenderable> {
       getFrameId(pointCloud),
       { historyOnly: true },
     );
-    const { settings, messageTime, historyOnly } = renderable.userData;
+    const { settings, historyOnly } = renderable.userData;
     const sameAsDrawn =
       historyOnly !== true &&
-      (recordId != undefined && renderable.userData.recordId != undefined
-        ? recordId === renderable.userData.recordId
-        : receiveTime === renderable.userData.receiveTime &&
-          stamp === messageTime &&
-          payloadFingerprint(pointCloud.data) ===
-            payloadFingerprint(renderable.userData.latestPointCloud.data));
+      isSameRecord(
+        { recordId, receiveTime, messageTime: stamp, payload: pointCloud.data },
+        { ...renderable.userData, payload: renderable.userData.latestPointCloud.data },
+      );
     if (settings.decayTime <= 0 || sameAsDrawn) {
       return undefined;
     }

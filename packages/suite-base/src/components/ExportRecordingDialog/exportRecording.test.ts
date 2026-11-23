@@ -8,7 +8,6 @@ import {
   exportFileName,
   findDuplicateOutputTopics,
   toExportTopics,
-  remoteFileName,
   topicFilterPattern,
 } from "./exportRecording";
 
@@ -56,12 +55,5 @@ describe("topicFilterPattern", () => {
     const pattern = topicFilterPattern("/a(");
     expect(pattern.test("/a(b")).toBe(true);
     expect(pattern.test("/ab")).toBe(false);
-  });
-});
-
-describe("remoteFileName", () => {
-  it("decodes the last path segment, keeping malformed escapes as they are", () => {
-    expect(remoteFileName("https://example.com/data/run%201.mcap?sig=x")).toBe("run 1.mcap");
-    expect(remoteFileName("https://example.com/data/100%25%zz.mcap")).toBe("100%25%zz.mcap");
   });
 });

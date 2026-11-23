@@ -6,6 +6,4 @@ Object.assign(globalThis, {
   LICHTBLICK_PRODUCT_NAME: "Lichtblick",
   LICHTBLICK_REPOSITORY_URL: "https://github.com/mrkbac/lichtblick",
   API_URL: "/",
-  DEV_WORKSPACE: "",
-  OTLP_ENDPOINT: undefined,
 });

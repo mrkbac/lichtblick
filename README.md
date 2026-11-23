@@ -58,10 +58,6 @@ pnpm clean                          # remove build output
 
 The Linux `.tar.gz` does not install system libraries. Installing Chrome usually brings them; otherwise launch from a terminal and install whatever library it names (typically `libgtk-3-0 libnss3 libasound2 libgbm1 libxtst6`).
 
-## :satellite: Telemetry
-
-Off unless the build sets `OTLP_ENDPOINT`; there is no runtime toggle. When enabled, only a fixed set of named UI events (see [`AppEvent`](packages/suite-base/src/services/IAnalytics.ts)) with anonymous random IDs is sent as OTLP/HTTP logs and traces to `${OTLP_ENDPOINT}/v1/logs` and `/v1/traces`, rate-limited per session. No message data, file contents or personal data.
-
 ## :pencil: License
 
 [Mozilla Public License v2.0](/LICENSE). See [CONTRIBUTING.md](CONTRIBUTING.md) to contribute.

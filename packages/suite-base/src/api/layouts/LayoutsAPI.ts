@@ -16,6 +16,7 @@ import {
   RemoteLayout,
 } from "@lichtblick/suite-base/services/IRemoteLayoutStorage";
 import HttpService from "@lichtblick/suite-base/services/http/HttpService";
+import { decodeLayoutTrust, encodeLayoutTrust } from "@lichtblick/suite-base/util/layout";
 
 export class LayoutsAPI implements IRemoteLayoutStorage {
   public readonly workspace: string;
@@ -35,7 +36,7 @@ export class LayoutsAPI implements IRemoteLayoutStorage {
       id: layout.layoutId,
       externalId: layout.id,
       name: layout.name,
-      data: layout.data,
+      ...decodeLayoutTrust(layout.data),
       permission: layout.permission,
       savedAt: layout.updatedAt as ISO8601Timestamp,
     }));
@@ -48,7 +49,7 @@ export class LayoutsAPI implements IRemoteLayoutStorage {
   public async saveNewLayout(params: SaveNewLayoutParams): Promise<RemoteLayout> {
     const requestPayload: CreateLayoutRequest = {
       layoutId: params.id,
-      data: params.data,
+      data: encodeLayoutTrust(params.data, params),
       name: params.name,
       permission: params.permission,
     };
@@ -64,7 +65,7 @@ export class LayoutsAPI implements IRemoteLayoutStorage {
       id: layoutData.layoutId,
       externalId: layoutData.id,
       name: layoutData.name,
-      data: layoutData.data,
+      ...decodeLayoutTrust(layoutData.data),
       permission: layoutData.permission,
       savedAt: layoutData.updatedAt as ISO8601Timestamp,
     };
@@ -75,7 +76,7 @@ export class LayoutsAPI implements IRemoteLayoutStorage {
   public async updateLayout(params: UpdateLayoutRequest): Promise<UpdateLayoutResponse> {
     const requestBody: UpdateLayoutRequestBody = {
       name: params.name,
-      data: params.data,
+      data: params.data ? encodeLayoutTrust(params.data, params) : undefined,
       permission: params.permission,
     };
 
@@ -89,7 +90,7 @@ export class LayoutsAPI implements IRemoteLayoutStorage {
       id: layoutData.layoutId,
       externalId: layoutData.id,
       name: layoutData.name,
-      data: layoutData.data,
+      ...decodeLayoutTrust(layoutData.data),
       permission: layoutData.permission,
       savedAt: layoutData.updatedAt as ISO8601Timestamp,
     };

@@ -5,6 +5,31 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-export * from "./createMuiTheme";
+import { createTheme, Theme } from "@mui/material/styles";
+
+import * as components from "./components";
+import * as palette from "./palette";
+import { typography } from "./typography";
+
 export * as palette from "./palette";
 export * from "./typography";
+
+type ThemePreference = "dark" | "light";
+
+declare module "@mui/material/styles" {
+  interface Theme {
+    name?: ThemePreference;
+  }
+  interface ThemeOptions {
+    name?: ThemePreference;
+  }
+}
+
+export const createMuiTheme = (themePreference: ThemePreference): Theme =>
+  createTheme({
+    name: themePreference,
+    palette: palette[themePreference],
+    shape: { borderRadius: 6 },
+    typography,
+    components,
+  });

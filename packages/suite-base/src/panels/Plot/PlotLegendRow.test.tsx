@@ -41,7 +41,7 @@ describe("formatLegendNumber", () => {
 });
 
 describe("PlotLegendRow", () => {
-  it("puts the full value in the title, so a value clipped by the fixed column stays readable", () => {
+  const renderRow = (value: unknown) => {
     const path = { value: "/a.b", enabled: true, timestampMethod: "receiveTime" as const };
     render(
       <PanelContext.Provider value={{ id: "Plot!1", type: "Plot" } as never}>
@@ -51,7 +51,7 @@ describe("PlotLegendRow", () => {
           onClickPath={vi.fn()}
           path={path}
           paths={[path]}
-          value={1700000000.123456}
+          value={value}
           valueSource="current"
           savePaths={vi.fn()}
           editing={false}
@@ -61,6 +61,15 @@ describe("PlotLegendRow", () => {
         />
       </PanelContext.Provider>,
     );
+  };
+
+  it("puts the full value in the title, so a value clipped by the fixed column stays readable", () => {
+    renderRow(1700000000.123456);
     expect(screen.getByTitle("1700000000.1235")).toBeTruthy();
+  });
+
+  it("shows a ROS 2 { sec, nanosec } stamp", () => {
+    renderRow({ sec: 1700000000, nanosec: 500_000_000 });
+    expect(screen.getByTitle("1700000000.5000")).toBeTruthy();
   });
 });

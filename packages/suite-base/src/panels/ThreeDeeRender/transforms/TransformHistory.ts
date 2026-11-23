@@ -87,7 +87,7 @@ export class TransformHistory {
   }
 
   /**
-   * Same contract as ArrayMap.binarySearch: the index of `time`, or the bitwise complement of the
+   * Binary search contract: the index of `time`, or the bitwise complement of the
    * index it would be inserted at.
    */
   public binarySearch(time: Time, size = this.#size): number {
