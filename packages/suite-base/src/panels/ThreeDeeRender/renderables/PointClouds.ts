@@ -432,7 +432,8 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
       stixelsHistory.clearHistory();
     }
 
-    // Invalid point cloud checks
+    // Invalid point cloud checks; a valid cloud clears the previous message's error
+    this.renderer.settings.errors.removeFromTopic(this.userData.topic, INVALID_POINTCLOUD);
     if (!this.#validatePointCloud(pointCloud)) {
       return;
     }

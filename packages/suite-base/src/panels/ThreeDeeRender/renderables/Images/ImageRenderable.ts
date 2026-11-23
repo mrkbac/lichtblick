@@ -589,6 +589,7 @@ export class ImageRenderable extends Renderable<ImageUserData> {
     this.#canReplayVideoGop = false;
     this.#pendingVideoDecodeQueue.length = 0;
     this.#videoFrameHistory.length = 0;
+    this.#videoFrameHistoryBytes = 0;
     this.videoPlayer?.resetForSeek();
     // Timestamps restart from the new stream's first frame, so the old bitmap's no longer applies
     if (this.videoPlayer) {
