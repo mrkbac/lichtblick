@@ -999,6 +999,17 @@ describe("Workspace - fetchLayoutFromUrl", () => {
     });
   });
 
+  it("replaces the layout from an earlier share link", async () => {
+    mockGetLayouts.mockResolvedValue([{ id: "old-id", name: "Shared layout" }]);
+    const encoded = await encodeSharedLayout({ configById: {} });
+
+    render(<Workspace deepLinks={[`lichtblick://open#layout=${encoded}`]} />);
+
+    await waitFor(() => {
+      expect(mockDeleteLayout).toHaveBeenCalledWith({ id: "old-id" });
+    });
+  });
+
   it("only keeps the link's layout for the launch that installed it", async () => {
     const selectSource = vi.fn();
     (usePlayerSelection as Mock).mockReturnValue({ availableSources: [], selectSource });
