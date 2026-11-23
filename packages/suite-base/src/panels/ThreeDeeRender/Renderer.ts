@@ -74,7 +74,6 @@ import { HOVER_PICK_THROTTLE_MS } from "./constants";
 import { FRAME_TRANSFORMS_DATATYPES, FRAME_TRANSFORM_DATATYPES } from "./foxglove";
 import { getGpuDevice } from "./gpuDevice";
 import { LAYER_DEFAULT, LAYER_PICK_ONLY, LAYER_SELECTED } from "./layers";
-import { DetailLevel } from "./lod";
 import {
   normalizeFrameTransform,
   normalizeFrameTransforms,
@@ -244,7 +243,6 @@ export class Renderer extends EventEmitter<RendererEvents> {
   /** Set once the device is lost (emitted as `gpuLost` unless it happened during startup) */
   public gpuLost = false;
   public readonly sharedMap?: SharedMap;
-  public maxLod = DetailLevel.High;
 
   public customCameraModels: CameraModelsMap = new Map();
 

@@ -11,7 +11,7 @@ import { RenderableMarker } from "./RenderableMarker";
 import { makeStandardMaterial } from "./materials";
 import type { Renderer } from "../../Renderer";
 import { rgbToThreeColor } from "../../color";
-import { cylinderSubdivisions, DetailLevel } from "../../lod";
+import { GEOMETRY_SEGMENTS } from "../../constants";
 import { Marker } from "../../ros";
 
 export class RenderableCylinder extends RenderableMarker {
@@ -29,8 +29,8 @@ export class RenderableCylinder extends RenderableMarker {
     // Cylinder mesh
     const material = makeStandardMaterial(marker.color);
     const cylinderGeometry = renderer.sharedGeometry.getGeometry(
-      `${this.constructor.name}-cylinder-${renderer.maxLod}`,
-      () => createGeometry(renderer.maxLod),
+      `${this.constructor.name}-cylinder`,
+      createGeometry,
     );
     this.mesh = new THREE.Mesh(cylinderGeometry, material);
     this.mesh.castShadow = true;
@@ -39,7 +39,7 @@ export class RenderableCylinder extends RenderableMarker {
 
     // Cylinder outline
     const edgesGeometry = renderer.sharedGeometry.getGeometry(
-      `${this.constructor.name}-edges-${renderer.maxLod}`,
+      `${this.constructor.name}-edges`,
       () => createEdgesGeometry(cylinderGeometry),
     );
     this.outline = new THREE.LineSegments(edgesGeometry, renderer.outlineMaterial);
@@ -72,9 +72,8 @@ export class RenderableCylinder extends RenderableMarker {
     this.scale.set(marker.scale.x, marker.scale.y, marker.scale.z);
   }
 }
-function createGeometry(lod: DetailLevel): THREE.CylinderGeometry {
-  const subdivisions = cylinderSubdivisions(lod);
-  const cylinderGeometry = new THREE.CylinderGeometry(0.5, 0.5, 1, subdivisions);
+function createGeometry(): THREE.CylinderGeometry {
+  const cylinderGeometry = new THREE.CylinderGeometry(0.5, 0.5, 1, GEOMETRY_SEGMENTS);
   cylinderGeometry.rotateX(Math.PI / 2); // Make the cylinder geometry stand upright
   cylinderGeometry.computeBoundingSphere();
   return cylinderGeometry;

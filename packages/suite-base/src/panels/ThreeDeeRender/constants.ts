@@ -19,3 +19,6 @@ export const DEFAULT_FOLLOW_MODE = "follow-pose";
 
 // Throttle hover GPU picking to reduce load (10 Hz)
 export const HOVER_PICK_THROTTLE_MS = 100;
+
+/** Radial segments of the arrow, cylinder and sphere primitive geometries */
+export const GEOMETRY_SEGMENTS = 32;

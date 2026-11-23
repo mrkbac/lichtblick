@@ -11,7 +11,7 @@ import { RenderableMarker } from "./RenderableMarker";
 import { makeStandardMaterial } from "./materials";
 import type { Renderer } from "../../Renderer";
 import { rgbToThreeColor } from "../../color";
-import { DetailLevel, sphereSubdivisions } from "../../lod";
+import { GEOMETRY_SEGMENTS } from "../../constants";
 import { Marker } from "../../ros";
 
 export class RenderableSphere extends RenderableMarker {
@@ -27,10 +27,7 @@ export class RenderableSphere extends RenderableMarker {
     super(topic, marker, receiveTime, renderer);
 
     // Sphere mesh
-    const geometry = renderer.sharedGeometry.getGeometry(
-      `${this.constructor.name}-${renderer.maxLod}`,
-      () => createGeometry(renderer.maxLod),
-    );
+    const geometry = renderer.sharedGeometry.getGeometry(this.constructor.name, createGeometry);
     this.mesh = new THREE.Mesh(geometry, makeStandardMaterial(marker.color));
     this.mesh.castShadow = true;
     this.mesh.receiveShadow = true;
@@ -61,9 +58,8 @@ export class RenderableSphere extends RenderableMarker {
   }
 }
 
-export function createGeometry(lod: DetailLevel): THREE.SphereGeometry {
-  const subdivisions = sphereSubdivisions(lod);
-  const sphereGeometry = new THREE.SphereGeometry(0.5, subdivisions, subdivisions);
+export function createGeometry(): THREE.SphereGeometry {
+  const sphereGeometry = new THREE.SphereGeometry(0.5, GEOMETRY_SEGMENTS, GEOMETRY_SEGMENTS);
   sphereGeometry.computeBoundingSphere();
   return sphereGeometry;
 }

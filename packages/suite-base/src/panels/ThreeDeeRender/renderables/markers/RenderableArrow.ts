@@ -12,7 +12,7 @@ import { RenderableMarker } from "./RenderableMarker";
 import { makeStandardMaterial } from "./materials";
 import type { Renderer } from "../../Renderer";
 import { rgbToThreeColor } from "../../color";
-import { arrowHeadSubdivisions, arrowShaftSubdivisions, DetailLevel } from "../../lod";
+import { GEOMETRY_SEGMENTS } from "../../constants";
 import { getRotationTo } from "../../math";
 import { Marker } from "../../ros";
 
@@ -44,19 +44,19 @@ export class RenderableArrow extends RenderableMarker {
     super(topic, marker, receiveTime, renderer);
 
     const shaftGeometry = this.renderer.sharedGeometry.getGeometry(
-      `${this.constructor.name}-shaft-${renderer.maxLod}`,
-      () => createShaftGeometry(renderer.maxLod),
+      `${this.constructor.name}-shaft`,
+      createShaftGeometry,
     );
     const headGeometry = this.renderer.sharedGeometry.getGeometry(
-      `${this.constructor.name}-head-${renderer.maxLod}`,
-      () => createHeadGeometry(renderer.maxLod),
+      `${this.constructor.name}-head`,
+      createHeadGeometry,
     );
     const shaftEdgesGeometry = this.renderer.sharedGeometry.getGeometry(
-      `${this.constructor.name}-shaftedges-${renderer.maxLod}`,
+      `${this.constructor.name}-shaftedges`,
       () => createShaftEdgesGeometry(shaftGeometry),
     );
     const headEdgesGeometry = this.renderer.sharedGeometry.getGeometry(
-      `${this.constructor.name}-headedges-${renderer.maxLod}`,
+      `${this.constructor.name}-headedges`,
       () => createHeadEdgesGeometry(headGeometry),
     );
     // Shaft mesh
@@ -158,17 +158,15 @@ export class RenderableArrow extends RenderableMarker {
   }
 }
 
-function createShaftGeometry(lod: DetailLevel): THREE.CylinderGeometry {
-  const subdivs = arrowShaftSubdivisions(lod);
-  const shaftGeometry = new THREE.CylinderGeometry(0.5, 0.5, 1, subdivs, 1, false);
+function createShaftGeometry(): THREE.CylinderGeometry {
+  const shaftGeometry = new THREE.CylinderGeometry(0.5, 0.5, 1, GEOMETRY_SEGMENTS, 1, false);
   shaftGeometry.rotateZ(-Math.PI / 2);
   shaftGeometry.computeBoundingSphere();
   return shaftGeometry;
 }
 
-function createHeadGeometry(lod: DetailLevel): THREE.ConeGeometry {
-  const subdivs = arrowHeadSubdivisions(lod);
-  const headGeometry = new THREE.ConeGeometry(0.5, 1, subdivs, 1, false);
+function createHeadGeometry(): THREE.ConeGeometry {
+  const headGeometry = new THREE.ConeGeometry(0.5, 1, GEOMETRY_SEGMENTS, 1, false);
   headGeometry.rotateZ(-Math.PI / 2);
   headGeometry.computeBoundingSphere();
   return headGeometry;
