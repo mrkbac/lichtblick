@@ -159,9 +159,9 @@ export default class LayoutManager implements ILayoutManager {
 
   /** Runs `fn`, reporting progress through isBusy() and the "busychange" event. */
   async #busy<T>(fn: () => Promise<T>): Promise<T> {
-    this.busyCount++;
-    this.emitter.emit("busychange");
     try {
+      this.busyCount++;
+      this.emitter.emit("busychange");
       return await fn();
     } finally {
       this.busyCount--;
