@@ -62,16 +62,13 @@ export function makeRgb(): ColorRGB {
   return { r: 0, g: 0, b: 0 };
 }
 
+const tempRgba = makeRgba();
+
 export function stringToRgb<T extends ColorRGB | THREE.Color>(output: T, colorStr: string): T {
-  const color = parseColor(colorStr);
-  if (!color.isValid()) {
-    output.r = output.g = output.b = 1;
-    return output;
-  }
-  const rgb = color.toRgb();
-  output.r = rgb.r / 255;
-  output.g = rgb.g / 255;
-  output.b = rgb.b / 255;
+  stringToRgba(tempRgba, colorStr);
+  output.r = tempRgba.r;
+  output.g = tempRgba.g;
+  output.b = tempRgba.b;
   return output;
 }
 
