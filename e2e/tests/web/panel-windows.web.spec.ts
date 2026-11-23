@@ -5,7 +5,7 @@ import { expect, Page, test } from "@playwright/test";
 
 import { loadFiles } from "../../fixtures/load-files";
 
-/** Returns a popped-out panel; the click closes its window, which can cut the click short. */
+/** Moves a popped-out panel back to the workspace; the click closes its window mid-action. */
 async function returnToWorkspace(monitor: Page): Promise<void> {
   await monitor.getByTestId("panel-menu").click();
   const closed = monitor.waitForEvent("close");
