@@ -14,9 +14,6 @@ overrides:
   utif>pako: ^2.2.0
 
 patchedDependencies:
-  '@foxglove/rosbag2@6.0.0':
-    hash: a05249625d5e99f9147be96e9ef6c877d8f88dfe4780fb0bb87b304070346ca9
-    path: patches/@foxglove__rosbag2@6.0.0.patch
   '@foxglove/ulog@2.3.2':
     hash: a0e41ee7471d62292e44e84f8c45e7090552c3d2fa2d217ea33f9677c3e88c6b
     path: patches/@foxglove__ulog@2.3.2.patch
@@ -479,7 +476,7 @@ importers:
         version: 0.4.2
       '@foxglove/rosbag2':
         specifier: 6.0.0
-        version: 6.0.0(patch_hash=a05249625d5e99f9147be96e9ef6c877d8f88dfe4780fb0bb87b304070346ca9)
+        version: 6.0.0
       '@foxglove/roslibjs':
         specifier: 0.0.4
         version: 0.0.4
@@ -9374,7 +9371,7 @@ snapshots:
       '@foxglove/omgidl-parser': 1.2.2
       md5-typescript: 1.0.5
 
-  '@foxglove/rosbag2@6.0.0(patch_hash=a05249625d5e99f9147be96e9ef6c877d8f88dfe4780fb0bb87b304070346ca9)':
+  '@foxglove/rosbag2@6.0.0':
     dependencies:
       '@foxglove/rosmsg-msgs-common': 3.3.0
       '@foxglove/rosmsg2-serialization': 3.1.2

@@ -34,7 +34,6 @@ overrides:
   "utif>pako": ^2.2.0
 
 patchedDependencies:
-  "@foxglove/rosbag2@6.0.0": patches/@foxglove__rosbag2@6.0.0.patch
   "@foxglove/ulog@2.3.2": patches/@foxglove__ulog@2.3.2.patch
 
 # TypeScript looks for @types packages in parent node_modules folders. Hoist them to the root so
