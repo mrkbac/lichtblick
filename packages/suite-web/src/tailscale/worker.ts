@@ -24,6 +24,7 @@ let signedOut = false;
 let signingOut: Promise<void> | undefined;
 let node: IPN | undefined;
 let profile: Awaited<ReturnType<typeof openProfile>> | undefined;
+let nodeState = "";
 
 function abortStreams() {
   for (const streams of clients.values()) {
@@ -42,6 +43,20 @@ function update(change: Partial<SessionStatus>) {
   for (const client of clients.keys()) {
     client.postMessage(status);
   }
+}
+
+// Report Running only once the node's identity is saved; a later flush (Retry) clears the error.
+function confirmRunning() {
+  void profile?.flush().then(
+    () => {
+      if (!signedOut && nodeState === "Running") {
+        update({ state: "Running", login: undefined, error: undefined });
+      }
+    },
+    () => {
+      update({ error: "tailscaleStorageError" });
+    },
+  );
 }
 
 function updatePeers(json: string, source: "netmap" | "status") {
@@ -88,24 +103,14 @@ async function start() {
     throw ipn;
   }
   node = ipn;
-  let latestState = "";
   ipn.run({
     notifyState: (state) => {
-      latestState = state;
+      nodeState = state;
       if (signedOut) {
         return;
       }
       if (state === "Running") {
-        void profile?.flush().then(
-          () => {
-            if (!signedOut && latestState === state) {
-              update({ state, login: undefined });
-            }
-          },
-          () => {
-            update({ error: "tailscaleStorageError" });
-          },
-        );
+        confirmRunning();
       } else {
         update({ state });
         if (state === "NeedsLogin") {
@@ -192,6 +197,9 @@ scope.onconnect = ({ ports }) => {
     } else if (data === "start") {
       if (started) {
         client.postMessage(status);
+        if (node && status.error === "tailscaleStorageError") {
+          confirmRunning();
+        }
       } else {
         started = true;
         update({ error: undefined });

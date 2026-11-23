@@ -47,7 +47,7 @@ it("retries startup after the browser profile could not be opened", async () => 
   }
 });
 
-it("releases only the closing tab's live streams and retires the node after the last tab", async () => {
+function stubRuntime() {
   const scope = {
     location: new URL("https://example.org/worker.js"),
     onconnect: vi.fn(),
@@ -80,6 +80,11 @@ it("releases only the closing tab's live streams and retires the node after the 
     "fetch",
     async () => new Response(gzipSync(Uint8Array.of(0, 97, 115, 109, 1, 0, 0, 0))),
   );
+  return { scope, run };
+}
+
+it("releases only the closing tab's live streams and retires the node after the last tab", async () => {
+  const { scope, run } = stubRuntime();
   const first = new MessageChannel();
   const second = new MessageChannel();
   const streamA = new MessageChannel();
@@ -151,6 +156,48 @@ it("releases only the closing tab's live streams and retires the node after the 
       port.close();
     }
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  }
+});
+
+it("lets Retry recover from a failed identity write while another tab stays connected", async () => {
+  const { scope, run } = stubRuntime();
+  const flush = vi.fn<() => Promise<void>>().mockRejectedValueOnce(new Error("quota"));
+  flush.mockResolvedValue();
+  vi.mocked(openProfile).mockResolvedValueOnce({
+    flush,
+    close: () => {},
+    clear: async () => {},
+    storage: { getState: () => "", setState: () => {} },
+  });
+  const kept = new MessageChannel();
+  const retry = new MessageChannel();
+  try {
+    await import("./worker");
+    const updates: SessionStatus[] = [];
+    kept.port2.onmessage = (event: MessageEvent<SessionStatus>) => {
+      updates.push(event.data);
+    };
+    scope.onconnect({ ports: [kept.port1] });
+    kept.port2.postMessage("start");
+    await vi.waitFor(() => {
+      expect(run).toHaveBeenCalledOnce();
+    });
+    run.mock.calls[0]![0].notifyState("Running");
+    await vi.waitFor(() => {
+      expect(updates.at(-1)?.error).toBe("tailscaleStorageError");
+    });
+    scope.onconnect({ ports: [retry.port1] });
+    retry.port2.postMessage("start");
+    await vi.waitFor(() => {
+      expect(updates.at(-1)).toMatchObject({ state: "Running", error: undefined });
+    });
+    expect(run).toHaveBeenCalledOnce();
+  } finally {
+    for (const channel of [kept, retry]) {
+      channel.port1.close();
+      channel.port2.close();
+    }
     vi.unstubAllGlobals();
   }
 });

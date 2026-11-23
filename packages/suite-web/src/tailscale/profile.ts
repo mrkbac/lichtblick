@@ -67,7 +67,24 @@ export async function openProfile(): Promise<{
         : [],
     );
     let pending = Promise.resolve();
+    let failed = false;
     let cleared = false;
+    // Persist the latest state. A failed write must not block later ones; flush sees the result.
+    const write = () => {
+      pending = pending
+        .catch(() => {})
+        .then(async () => {
+          const bytes = new TextEncoder().encode(JSON.stringify(Object.fromEntries(state)));
+          const iv = crypto.getRandomValues(new Uint8Array(12));
+          const ciphertext = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, deviceKey, bytes);
+          await db.put("profiles", { iv, ciphertext }, "device");
+          failed = false;
+        });
+      // flush reports persistence failures to the session.
+      void pending.catch(() => {
+        failed = true;
+      });
+    };
     return {
       storage: {
         getState: (id: string) => state.get(id) ?? "",
@@ -76,24 +93,14 @@ export async function openProfile(): Promise<{
             return;
           }
           state.set(id, value);
-          const bytes = new TextEncoder().encode(JSON.stringify(Object.fromEntries(state)));
-          // A failed write must not block later ones; flush still sees the latest result.
-          pending = pending
-            .catch(() => {})
-            .then(async () => {
-              const iv = crypto.getRandomValues(new Uint8Array(12));
-              const ciphertext = await crypto.subtle.encrypt(
-                { name: "AES-GCM", iv },
-                deviceKey,
-                bytes,
-              );
-              await db.put("profiles", { iv, ciphertext }, "device");
-            });
-          // flush reports persistence failures to the session.
-          void pending.catch(() => {});
+          write();
         },
       },
       flush: async () => {
+        // Retry the latest state after a failed write, so a recovered store catches up.
+        if (failed && !cleared) {
+          write();
+        }
         // Writes queued while waiting replace `pending`; drain until it settles.
         let current: Promise<void>;
         do {

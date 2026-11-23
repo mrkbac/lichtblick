@@ -49,6 +49,8 @@ describe("Tailscale browser profile", () => {
     });
     first.storage.setState("profile", "lost");
     await expect(first.flush()).rejects.toThrow("quota");
+    await first.flush(); // retries the failed write
+    expect((await open()).storage.getState("profile")).toBe("lost");
     first.storage.setState("profile", "recovered");
     await first.flush();
     first.close();
