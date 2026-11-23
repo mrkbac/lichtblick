@@ -5,9 +5,8 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { type Configuration, type RspackPluginInstance, rspack } from "@rspack/core";
+import { type Configuration, rspack } from "@rspack/core";
 import { ReactRefreshRspackPlugin } from "@rspack/plugin-react-refresh";
-import fs from "node:fs";
 import path from "node:path";
 
 import { resolveConfigs, type RspackArgv } from "@lichtblick/suite-base/RspackArgv.ts";
@@ -20,12 +19,6 @@ import {
 import * as palette from "@lichtblick/theme/src/palette.ts";
 
 import packageJson from "../../package.json" with { type: "json" };
-
-// Load .env if present (Node's built-in loader; existing env vars win)
-const envFile = path.resolve(import.meta.dirname, "../../.env");
-if (fs.existsSync(envFile)) {
-  process.loadEnvFile(envFile);
-}
 
 const outputPath = path.resolve(import.meta.dirname, ".webpack");
 // Maps stay next to the build for debugging; electronBuilderConfig.js keeps them out of the app
@@ -157,12 +150,6 @@ const rendererConfig = (env: unknown, argv: RspackArgv): Configuration => {
   const isDev = argv.mode === "development";
   const isServe = argv.env?.RSPACK_SERVE ?? false;
 
-  const plugins: RspackPluginInstance[] = [];
-
-  if (isServe) {
-    plugins.push(new ReactRefreshRspackPlugin({ resourceQuery: { not: /raw/ } }));
-  }
-
   const appConfig = makeConfig(env, argv, {
     version: packageJson.version,
     product: productInfo(packageJson),
@@ -185,14 +172,9 @@ const rendererConfig = (env: unknown, argv: RspackArgv): Configuration => {
         directory: outputPath,
       },
       devMiddleware: {
-        writeToDisk: (filePath) => {
-          // Electron needs to open the main thread source and preload source from disk
-          // avoid writing the hot-update js and json files
-          // allow writing package.json at root -> needed for electron to find entrypoint
-          return /\.webpack[\\/]((main|extensions)[\\/](?!.*hot-update)|package\.json)/.test(
-            filePath,
-          );
-        },
+        // Electron opens main, preload and the root package.json from disk; skip hot-update files
+        writeToDisk: (filePath) =>
+          /\.webpack[\\/]((main|extensions)[\\/](?!.*hot-update)|package\.json)/.test(filePath),
       },
       client: {
         overlay: {
@@ -214,7 +196,7 @@ const rendererConfig = (env: unknown, argv: RspackArgv): Configuration => {
     },
 
     plugins: [
-      ...plugins,
+      ...(isServe ? [new ReactRefreshRspackPlugin({ resourceQuery: { not: /raw/ } })] : []),
       ...(appConfig.plugins ?? []),
       new rspack.HtmlRspackPlugin({
         templateContent: `

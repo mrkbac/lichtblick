@@ -100,6 +100,12 @@ export function swcRule({
 const dirHref = _nodePathToFileURL(import.meta.dirname + "/").href;
 const localRequire = _nodeCreateRequire(import.meta.dirname + "/package.json");
 
+// Load .env on import, before any config factory runs (Node's built-in loader; existing env vars win)
+const envFile = path.resolve(import.meta.dirname, "../../.env");
+if (fs.existsSync(envFile)) {
+  process.loadEnvFile(envFile);
+}
+
 /** What the UI shows about the product; one place to rebrand (root package.json). */
 export type ProductInfo = {
   name: string;
@@ -138,12 +144,6 @@ export function makeConfig(
   Configuration,
   "resolve" | "module" | "plugins" | "node" | "ignoreWarnings" | "optimization"
 > {
-  // Load .env if present (Node's built-in loader; existing env vars win)
-  const envFile = _nodeFileURLToPath(new URL("../../.env", dirHref));
-  if (fs.existsSync(envFile)) {
-    process.loadEnvFile(envFile);
-  }
-
   const isDev = argv.mode === "development";
   const isServe = argv.env?.RSPACK_SERVE ?? false;
 
