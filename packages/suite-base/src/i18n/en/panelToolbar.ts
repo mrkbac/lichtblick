@@ -20,6 +20,7 @@ export const panelToolbar = {
   panelGuide: "Panel guide",
   panelGuideSections: "Sections",
   panelInfo: "About this panel",
+  panelSettings: "Panel settings",
   settings: "Settings",
   openPopout: "Open in new window",
   openPictureInPicture: "Open Picture-in-Picture monitor",

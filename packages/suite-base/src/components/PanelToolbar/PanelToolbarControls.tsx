@@ -9,6 +9,7 @@ import ListAltIcon from "@mui/icons-material/ListAlt";
 import SettingsIcon from "@mui/icons-material/Settings";
 import { Badge } from "@mui/material";
 import React, { Ref, useCallback, useContext, useMemo } from "react";
+import { useTranslation } from "react-i18next";
 
 import { CompareSidePicker } from "@lichtblick/suite-base/components/Compare/CompareSidePicker";
 import PanelContext from "@lichtblick/suite-base/components/PanelContext";
@@ -48,6 +49,7 @@ function PanelToolbarControlsComponent(
   const panelCatalog = useContext(PanelCatalogContext);
   const { setSelectedPanelIds } = useSelectedPanels();
   const { openPanelSettings } = useWorkspaceActions();
+  const { t } = useTranslation("panelToolbar");
 
   const hasSettingsSelector = useCallback(
     (store: PanelStateStore) => (panelId ? store.settingsTrees[panelId] != undefined : false),
@@ -96,7 +98,7 @@ function PanelToolbarControlsComponent(
         </ToolbarIconButton>
       </Badge>
       {showSettingsButton && (
-        <ToolbarIconButton title="Settings" onClick={openSettings}>
+        <ToolbarIconButton title={t("panelSettings")} onClick={openSettings}>
           <SettingsIcon />
         </ToolbarIconButton>
       )}
