@@ -1,12 +1,29 @@
 # Changelog
 
-Highlights from the Lichtblick fork. Dates follow when changes reached the `licht` branch, in Europe/Berlin time.
+Highlights from Digitalis, a fork of Lichtblick. Dates follow when changes reached the `licht` branch, in Europe/Berlin time.
+
+## 2026-11-23
+
+- The web and desktop apps are now named **Digitalis**, with a new logo and icons. [#424](https://github.com/mrkbac/lichtblick/pull/424)
+- Connect the web viewer to a Foxglove bridge over Tailscale. Sign in, select a peer, and open the connection through the browser’s WireGuard tunnel. [#423](https://github.com/mrkbac/lichtblick/pull/423)
+- Color LiDAR points from a calibrated camera image. Scan trails retain their sampled colors, and you can switch cameras while paused. [#443](https://github.com/mrkbac/lichtblick/pull/443)
+- Save multiple local and hosted recording catalogs. Browse their timelines, devices, datasets, and events, including sessions and episodes when the catalog provides them. [#469](https://github.com/mrkbac/lichtblick/pull/469)
+- Playback follows the display refresh rate by default. In a Chrome development build on a 120 Hz MacBook, the Boreas sample went from **59.2 to 120 player updates/s**. [#508](https://github.com/mrkbac/lichtblick/pull/508)
+- The Playback Performance panel distinguishes display frame rate from player updates and shows per-topic data rates, memory use, and main-thread delays. [#505](https://github.com/mrkbac/lichtblick/pull/505)
+- State Transitions retains up to one million live samples per path. Downsampling one million alternating transitions for a 30-second view fell from **15.7 ms to 0.14 ms** in the panel benchmark. [#475](https://github.com/mrkbac/lichtblick/pull/475)
+- The playback bar highlights the visible time range of the focused Plot or State Transitions panel. [#467](https://github.com/mrkbac/lichtblick/pull/467)
+- Browse topics by namespace in panel settings and toggle visibility for a whole branch. [#468](https://github.com/mrkbac/lichtblick/pull/468)
+- Raw Messages stacks old and new values and aligns their decimal points when comparing messages. [#506](https://github.com/mrkbac/lichtblick/pull/506)
+- The desktop package no longer includes the macOS Quick Look extension. [#470](https://github.com/mrkbac/lichtblick/pull/470)
 
 ## 2026-11-22
 
+- Removing a Plot series preserves the history of the others. Derived live values carry an approximation warning when recalculated from thinned data. [#453](https://github.com/mrkbac/lichtblick/pull/453)
+- Imported layouts require approval before their scripts can run, including older JSON exports. The approval requirement travels with exported and synchronized layouts. [#451](https://github.com/mrkbac/lichtblick/pull/451)
+- The web app loads players and infrequently used controls on demand, cutting cold-start JavaScript by **226.5 kB**. [#430](https://github.com/mrkbac/lichtblick/pull/430)
 - Choose local files, URLs, catalog entries, samples, or recent MCAPs directly in the comparison picker. Mix local and remote recordings in one comparison. [#400](https://github.com/mrkbac/lichtblick/pull/400)
 - Export a clip from a single remote MCAP and filter the topic list with a regular expression. [#397](https://github.com/mrkbac/lichtblick/pull/397)
-- Copy a link that reopens a URL-backed recording at the current timestamp with the current layout. Local files and per-side comparison offsets are not included in these links. [#402](https://github.com/mrkbac/lichtblick/pull/402)
+- Copy a link that reopens a URL-backed recording at the current timestamp with the current layout. Shared remote comparisons also restore the recordings on each side and their time offsets. [#402](https://github.com/mrkbac/lichtblick/pull/402) · [#454](https://github.com/mrkbac/lichtblick/pull/454)
 - See each topic’s share of recorded bytes and inspect its largest gaps in Data Source Info. [#396](https://github.com/mrkbac/lichtblick/pull/396)
 - Read MCAPs without a usable index on demand, including unchunked recordings. Report conflicting records found during the scan. [#357](https://github.com/mrkbac/lichtblick/pull/357)
 - Fetch a remote chunk and its message indexes together, and backfill topics in parallel. In the 44-topic benchmark at 50 ms network latency, median total seek time fell from **4.96 s to 3.64 s**. [#398](https://github.com/mrkbac/lichtblick/pull/398)
