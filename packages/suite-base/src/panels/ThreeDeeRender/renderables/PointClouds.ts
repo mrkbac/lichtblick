@@ -41,6 +41,7 @@ import type { Renderer } from "../Renderer";
 import { PartialMessage, PartialMessageEvent, SceneExtension } from "../SceneExtension";
 import { SettingsTreeEntry, SettingsTreeNodeWithActionHandler } from "../SettingsManager";
 import { POINTCLOUD_DATATYPES as FOXGLOVE_POINTCLOUD_DATATYPES } from "../foxglove";
+import { sameBytes } from "../math";
 import {
   normalizeByteArray,
   normalizeHeader,
@@ -64,7 +65,7 @@ import {
   colorHasTransparency,
   getColorConverter,
 } from "./colorMode";
-import { DecayPointRing, type RingScanInfo, sameBytes } from "./pointClouds/DecayPointRing";
+import { DecayPointRing, type RingScanInfo } from "./pointClouds/DecayPointRing";
 import {
   applyCameraFallback,
   paintPointColors,
