@@ -14,6 +14,7 @@ export const topicList = {
   copyTopicName: "Copy topic name",
   copyTopicNames: "Copy selected topic names",
   doubleClick: "Double-click",
+  groupTopicsByName: "Group topics by name",
   noDataSourceSelected: "No data source selected",
   noTopicsAvailable: "No topics available. ",
   openIn: "Open in",

@@ -5,15 +5,28 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+import AccountTreeIcon from "@mui/icons-material/AccountTree";
+import ChevronRightIcon from "@mui/icons-material/ChevronRight";
+import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
+import FolderOutlinedIcon from "@mui/icons-material/FolderOutlined";
 import SearchIcon from "@mui/icons-material/Search";
-import { List, ListItem, ListItemText, PopoverPosition, Skeleton } from "@mui/material";
+import {
+  List,
+  ListItem,
+  ListItemText,
+  PopoverPosition,
+  Skeleton,
+  ToggleButton,
+  Tooltip,
+  Typography,
+} from "@mui/material";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { MouseEvent, Suspense, lazy, useCallback, useRef, useState } from "react";
+import { MouseEvent, Suspense, lazy, useCallback, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useDebounce } from "use-debounce";
 
 import { filterMap } from "@lichtblick/den/collection";
-import { useLatest } from "@lichtblick/hooks";
+import { useLatest, useSessionStorageValue } from "@lichtblick/hooks";
 import { useDataSourceInfo } from "@lichtblick/suite-base/PanelAPI";
 import { DirectTopicStatsUpdater } from "@lichtblick/suite-base/components/DirectTopicStatsUpdater";
 import EmptyState from "@lichtblick/suite-base/components/EmptyState";
@@ -30,9 +43,11 @@ import { MessagePathRow } from "./MessagePathRow";
 import { SelectedTopicKeys } from "./SelectedTopicKeys";
 import { useStyles } from "./TopicList.style";
 import { TopicRow } from "./TopicRow";
+import { groupTopicListItems, TopicListRow } from "./groupTopicListItems";
 import { useMultiSelection } from "./useMultiSelection";
 import { useOpenMessagePathsInPanel, usePrefetchOpenInSchemas } from "./useOpenMessagePathsInPanel";
 import { useTopicListSearch } from "./useTopicListSearch";
+import { useTopicListStyles } from "./useTopicListStyles";
 
 // Only needed on right-click: kept out of the startup bundle
 const ContextMenu = lazy(async () => ({
@@ -53,11 +68,38 @@ export function TopicList(): React.JSX.Element {
 
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  const treeItems = useTopicListSearch({
+  const searchItems = useTopicListSearch({
     topics,
     datatypes,
     filterText: debouncedFilterText,
   });
+
+  const [treeModeValue, setTreeModeValue] = useSessionStorageValue("topicList.treeMode");
+  const treeMode = treeModeValue === "true";
+  // Namespaces whose state differs from the default: collapsed without a filter, open with one.
+  // A new filter reopens everything it matches.
+  const [toggled, setToggled] = useState({ filter: "", keys: new Set<string>() });
+  const toggledKeys = toggled.filter === debouncedFilterText ? toggled.keys : undefined;
+  const treeItems: TopicListRow[] = useMemo(
+    () =>
+      treeMode
+        ? groupTopicListItems(
+            searchItems,
+            (key) => (toggledKeys?.has(key) ?? false) !== (debouncedFilterText !== ""),
+          )
+        : searchItems,
+    [treeMode, searchItems, toggledKeys, debouncedFilterText],
+  );
+  const toggleNamespace = useCallback(
+    (key: string) => {
+      const keys = new Set(toggledKeys);
+      if (!keys.delete(key)) {
+        keys.add(key);
+      }
+      setToggled({ filter: debouncedFilterText, keys });
+    },
+    [toggledKeys, debouncedFilterText],
+  );
   const { selectedIndexes, onSelect, getSelectedIndexes } = useMultiSelection(treeItems);
   const soleSelectedItem =
     selectedIndexes.size === 1 ? treeItems[selectedIndexes.values().next().value!] : undefined;
@@ -88,7 +130,7 @@ export function TopicList(): React.JSX.Element {
       Array.from(getSelectedIndexes()).sort((a, b) => a - b),
       (index): DraggedMessagePath | undefined => {
         const item = latestTreeItems.current[index];
-        return item ? getDraggedMessagePath(item) : undefined;
+        return item && item.type !== "namespace" ? getDraggedMessagePath(item) : undefined;
       },
     );
   }, [getSelectedIndexes, latestTreeItems]);
@@ -136,9 +178,25 @@ export function TopicList(): React.JSX.Element {
   }, []);
 
   const renderRow = useCallback(
-    (index: number, key: React.Key, style: React.CSSProperties): React.JSX.Element | null => {
+    (index: number, key: React.Key, baseStyle: React.CSSProperties): React.JSX.Element | null => {
       const treeItem = treeItems[index]!;
+      if (treeItem.type === "namespace") {
+        return (
+          <NamespaceRow
+            key={key}
+            style={baseStyle}
+            row={treeItem}
+            onToggle={() => {
+              toggleNamespace(treeItem.key);
+            }}
+          />
+        );
+      }
       const selected = selectedIndexes.has(index);
+      const style =
+        treeItem.depth == undefined
+          ? baseStyle
+          : { ...baseStyle, paddingLeft: indentPx(treeItem.depth) };
       const onClick = (event: React.MouseEvent) => {
         event.preventDefault();
         onSelect({
@@ -154,6 +212,7 @@ export function TopicList(): React.JSX.Element {
               key={key}
               style={style}
               topicResult={treeItem.item}
+              label={treeItem.label}
               selected={selected}
               onClick={onClick}
               onDoubleClick={handleDoubleClick}
@@ -188,6 +247,7 @@ export function TopicList(): React.JSX.Element {
       handleOpenInPanelClick,
       onSelect,
       selectedIndexes,
+      toggleNamespace,
       treeItems,
     ],
   );
@@ -236,16 +296,32 @@ export function TopicList(): React.JSX.Element {
   return (
     <MessagePathSelectionProvider getSelectedItems={getSelectedItemsAsDraggedMessagePaths}>
       <div className={classes.root} onPointerEnter={prefetchOpenInSchemas}>
-        <SearchBar
-          id="topic-filter"
-          placeholder={t("searchBarPlaceholder")}
-          onChange={(event) => {
-            setFilterText(event.target.value);
-          }}
-          value={undebouncedFilterText}
-          showClearIcon={!!debouncedFilterText}
-          onClear={onClear}
-        />
+        <div className={classes.searchRow}>
+          <SearchBar
+            id="topic-filter"
+            placeholder={t("searchBarPlaceholder")}
+            onChange={(event) => {
+              setFilterText(event.target.value);
+            }}
+            value={undebouncedFilterText}
+            showClearIcon={!!debouncedFilterText}
+            onClear={onClear}
+          />
+          <Tooltip title={t("groupTopicsByName")}>
+            <ToggleButton
+              size="small"
+              value="tree"
+              selected={treeMode}
+              aria-label={t("groupTopicsByName")}
+              className={classes.treeToggle}
+              onChange={() => {
+                setTreeModeValue(treeMode ? undefined : "true");
+              }}
+            >
+              <AccountTreeIcon fontSize="small" />
+            </ToggleButton>
+          </Tooltip>
+        </div>
         {treeItems.length > 0 ? (
           // Focusable, so clicking a row focuses the list and its keys (N / Shift+N) apply
           <div
@@ -291,5 +367,48 @@ export function TopicList(): React.JSX.Element {
         </Suspense>
       )}
     </MessagePathSelectionProvider>
+  );
+}
+
+function indentPx(depth: number): number {
+  return 8 + depth * 16;
+}
+
+function NamespaceRow({
+  row,
+  style,
+  onToggle,
+}: {
+  row: Extract<TopicListRow, { type: "namespace" }>;
+  style: React.CSSProperties;
+  onToggle: () => void;
+}): React.JSX.Element {
+  const { classes } = useTopicListStyles();
+  const { classes: namespaceClasses } = useStyles();
+  const Chevron = row.expanded ? ExpandMoreIcon : ChevronRightIcon;
+  return (
+    <div
+      className={classes.row}
+      style={{ ...style, paddingLeft: indentPx(row.depth) - 4, cursor: "pointer" }}
+      role="button"
+      tabIndex={0}
+      aria-expanded={row.expanded}
+      onClick={onToggle}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onToggle();
+        }
+      }}
+    >
+      <Chevron style={{ fontSize: 16 }} color="action" />
+      <FolderOutlinedIcon style={{ fontSize: 16 }} color="action" />
+      <Typography variant="body2" noWrap className={namespaceClasses.namespaceLabel}>
+        {row.label}
+      </Typography>
+      <Typography variant="caption" color="textSecondary">
+        {row.topicCount}
+      </Typography>
+    </div>
   );
 }
