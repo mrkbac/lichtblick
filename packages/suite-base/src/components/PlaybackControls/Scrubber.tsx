@@ -39,6 +39,7 @@ import BroadcastManager from "@lichtblick/suite-base/util/broadcast/BroadcastMan
 import { randomUUID } from "@lichtblick/suite-base/util/randomUUID";
 
 import { EventsOverlay } from "./EventsOverlay";
+import { PanelTimeRangeOverlay } from "./PanelTimeRangeOverlay";
 import PlaybackBarHoverTicks from "./PlaybackBarHoverTicks";
 import { PlaybackControlsTooltipContent } from "./PlaybackControlsTooltipContent";
 import { ProgressPlot } from "./ProgressPlot";
@@ -163,9 +164,10 @@ export default function Scrubber(props: Props): React.JSX.Element {
 
   const min = startTime && toSec(startTime);
   const max = endTime && toSec(endTime);
+  const duration = startTime && endTime ? toSec(subtractTimes(endTime, startTime)) : 0;
   const fraction =
-    currentTime && startTime && endTime
-      ? toSec(subtractTimes(currentTime, startTime)) / toSec(subtractTimes(endTime, startTime))
+    currentTime && startTime && duration > 0
+      ? toSec(subtractTimes(currentTime, startTime)) / duration
       : undefined;
 
   const loading = presence === PlayerPresence.INITIALIZING || presence === PlayerPresence.BUFFERING;
@@ -247,6 +249,7 @@ export default function Scrubber(props: Props): React.JSX.Element {
             renderSlider={renderSlider}
           />
         </Stack>
+        <PanelTimeRangeOverlay duration={duration} />
         <CompareTimelineOverlay />
         <TrimRangeOverlay />
         <EventsOverlay />

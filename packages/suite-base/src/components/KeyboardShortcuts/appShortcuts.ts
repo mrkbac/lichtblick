@@ -50,9 +50,16 @@ export const PLAYBACK_SHORTCUTS = [
       { key: "ArrowRight", alt: true },
     ],
   },
-  // YouTube's keys: Shift+, and Shift+. on US layouts
-  { id: "playback.slower", titleKey: "playbackSlower", keys: [{ key: "<" }] },
-  { id: "playback.faster", titleKey: "playbackFaster", keys: [{ key: ">" }] },
+  {
+    id: "playback.slower",
+    titleKey: "playbackSlower",
+    keys: [{ key: "ArrowDown", shift: true, alt: false }, { key: "<" }],
+  },
+  {
+    id: "playback.faster",
+    titleKey: "playbackFaster",
+    keys: [{ key: "ArrowUp", shift: true, alt: false }, { key: ">" }],
+  },
   { id: "playback.seekStart", titleKey: "seekStart", keys: [{ key: "Home" }] },
   { id: "playback.seekEnd", titleKey: "seekEnd", keys: [{ key: "End" }] },
   { id: "playback.trimIn", titleKey: "trimIn", keys: [{ key: "i" }] },

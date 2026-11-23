@@ -92,6 +92,19 @@ describe("Given the speed button", () => {
     return screen.getByTestId("PlaybackSpeedControls-Dropdown");
   };
 
+  it("Steps through speed presets with Shift+Up and Shift+Down", () => {
+    const button = renderButton();
+
+    fireEvent.keyDown(document.body, { key: "ArrowUp" });
+    expect(button).toHaveTextContent(/^1×$/);
+
+    fireEvent.keyDown(document.body, { key: "ArrowUp", shiftKey: true });
+    expect(button).toHaveTextContent(/^2×$/);
+
+    fireEvent.keyDown(document.body, { key: "ArrowDown", shiftKey: true });
+    expect(button).toHaveTextContent(/^1×$/);
+  });
+
   it("When scrolled Then steps through presets, ignoring small trackpad deltas", () => {
     const button = renderButton();
 

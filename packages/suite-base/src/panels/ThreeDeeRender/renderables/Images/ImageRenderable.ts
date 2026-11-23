@@ -212,6 +212,8 @@ export class ImageRenderable extends Renderable<ImageUserData> {
   #isUpdating = false;
 
   #decodedImage?: ImageBitmap | ImageData;
+  public decodedImageTime: bigint | undefined;
+  public decodeWithoutOverlay = false;
   protected decoder?: WorkerImageDecoder;
   #receivedImageSequenceNumber = 0;
   // Sequence number of the newest video frame put in `#pendingVideoDecodeQueue`. Frames that are
@@ -686,6 +688,17 @@ export class ImageRenderable extends Renderable<ImageUserData> {
         return;
       }
       this.#displayedImageSequenceNumber = seq;
+      const imageTime = toNanoSec("header" in image ? image.header.stamp : image.timestamp);
+      // Video decoding can return the last good frame or a placeholder instead of this message.
+      const videoTime = this.videoPlayer?.lastImageBitmapTimestampMicros;
+      const videoStart = this.#videoFirstMessageTime;
+      this.decodedImageTime =
+        this.#codec == undefined ||
+        (videoTime != undefined &&
+          videoStart != undefined &&
+          BigInt(videoTime) === (imageTime - videoStart) / 1000n)
+          ? imageTime
+          : undefined;
       this.#setDecodedImage(result);
       this.#textureNeedsUpdate = true;
       if (!skipRender) {
@@ -716,6 +729,7 @@ export class ImageRenderable extends Renderable<ImageUserData> {
       errorBitmap.close();
       return;
     }
+    this.decodedImageTime = undefined;
     this.#setDecodedImage(errorBitmap);
     this.#textureNeedsUpdate = true;
     this.update();
@@ -1006,7 +1020,7 @@ export class ImageRenderable extends Renderable<ImageUserData> {
   }
 
   public update(): void {
-    if (this.#isUpdating) {
+    if (this.#isUpdating || this.decodeWithoutOverlay) {
       return;
     }
     this.#isUpdating = true;

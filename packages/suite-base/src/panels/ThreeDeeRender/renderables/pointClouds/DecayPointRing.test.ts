@@ -99,6 +99,71 @@ describe("DecayPointRing", () => {
     expect(ring.visible).toBe(true);
   });
 
+  it("repaints existing scans and restores the layer colors when the camera is removed", () => {
+    const { ring, points } = makeRing();
+    const { positions, colors } = scan(1, 20);
+    ring.push(
+      { receiveTime: 1n, messageTime: 1n, frameId: "lidar", pose: makePose() },
+      positions,
+      colors,
+      Uint8Array.of(10, 10, 10, 10),
+    );
+    push(ring, 2n, 1);
+    const bytes = () => {
+      const rgba = points.colorAttribute().array as Uint32Array;
+      return Array.from(new Uint8Array(rgba.buffer, rgba.byteOffset, 8));
+    };
+
+    ring.recolor((entry, _xyz, rgba) => {
+      rgba[0] = Number(entry.messageTime) + 100;
+    });
+    expect(bytes()).toEqual([101, 10, 10, 10, 102, 2, 2, 2]);
+    expect(ring.pointCount()).toBe(2);
+
+    ring.recolor();
+    expect(bytes()).toEqual([10, 10, 10, 10, 2, 2, 2, 2]);
+  });
+
+  it("applies the hide fallback to existing scans without repainting them", () => {
+    const { ring, points } = makeRing();
+    const { positions, colors } = scan(2, 20);
+    ring.push(
+      { receiveTime: 1n, messageTime: 1n, frameId: "lidar", pose: makePose() },
+      positions,
+      colors,
+      Uint8Array.of(10, 10, 10, 100, 30, 30, 30, 200),
+      Uint8Array.of(1, 0),
+    );
+    push(ring, 2n, 1);
+    const bytes = () => {
+      const rgba = points.colorAttribute().array as Uint32Array;
+      return Array.from(new Uint8Array(rgba.buffer, rgba.byteOffset, 12));
+    };
+
+    ring.updateCameraFallback({ hide: true });
+    expect(bytes()).toEqual([20, 20, 20, 100, 20, 20, 20, 0, 2, 2, 2, 0]);
+    ring.updateCameraFallback({ hide: false });
+    expect(bytes()).toEqual([20, 20, 20, 100, 20, 20, 20, 200, 2, 2, 2, 2]);
+  });
+
+  it("preserves the appearance and backup colors when the ring color encoding changes", () => {
+    const { ring, points } = makeRing();
+    ring.push(
+      { receiveTime: 1n, messageTime: 1n, frameId: "lidar", pose: makePose() },
+      Float32Array.of(1, 2, 3),
+      Uint8Array.of(55, 0, 0, 180),
+      Uint8Array.of(0, 55, 0, 180),
+    );
+    const bytes = () => {
+      const rgba = points.colorAttribute().array as Uint32Array;
+      return Array.from(new Uint8Array(rgba.buffer, rgba.byteOffset, 4));
+    };
+    ring.setStyle({ ...style, encoding: "srgb" }, { preserveColors: true });
+    expect(bytes()).toEqual([128, 0, 0, 180]);
+    ring.recolor();
+    expect(bytes()).toEqual([0, 128, 0, 180]);
+  });
+
   it("keeps distinct records with the same times apart by their content", () => {
     const { ring } = makeRing();
     const info = { receiveTime: 1n, messageTime: 1n, frameId: "lidar", pose: makePose() };

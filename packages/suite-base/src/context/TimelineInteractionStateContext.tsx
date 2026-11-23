@@ -34,6 +34,9 @@ export type SyncBounds = {
   userInteraction: boolean;
 };
 
+/** Visible bounds in seconds from the start of the playback timeline. */
+export type PanelTimeRange = { min: number; max: number };
+
 /**
  * The TimelineInteractionStateStore manages state related to dynamic user interactions with data in the app.
  * Things like the hovered time value and global bounds for plots are managed here.
@@ -41,6 +44,16 @@ export type SyncBounds = {
 export type TimelineInteractionStateStore = Immutable<{
   /** The events overlapping the current hover time, if any. */
   eventsAtHoverValue: Record<string, TimelinePositionedEvent>;
+
+  /** Panel most recently interacted with in the workspace. */
+  focusedPanelId: string | undefined;
+
+  /** Visible playback time ranges reported by mounted panels. */
+  panelTimeRanges: ReadonlyMap<string, PanelTimeRange>;
+
+  setFocusedPanel: (panelId: string) => void;
+  clearFocusedPanel: (panelId: string) => void;
+  setPanelTimeRange: (panelId: string, range: PanelTimeRange | undefined) => void;
 
   /** Shared time bounds for synced plots, if any. */
   globalBounds: undefined | SyncBounds;

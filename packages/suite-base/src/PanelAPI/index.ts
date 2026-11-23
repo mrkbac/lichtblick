@@ -26,5 +26,6 @@ export { useBlocksSubscriptions } from "./useBlocksSubscriptions";
 export { useMessagesByTopic } from "./useMessagesByTopic";
 export type { MessageHistoryByTopic } from "./useMessagesByTopic";
 export { useMessageHistory } from "./useMessageHistory";
+export { usePublishPanelTimeRange } from "./usePublishPanelTimeRange";
 
 export { default as useConfigById } from "./useConfigById";

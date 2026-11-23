@@ -10,32 +10,18 @@ import { CompressedImage, RawImage } from "@foxglove/schemas";
 import * as THREE from "three";
 import { assert } from "ts-essentials";
 
-import { filterMap } from "@lichtblick/den/collection";
 import { selectCameraModel } from "@lichtblick/den/image";
 import { CameraModelsMap } from "@lichtblick/den/image/types";
 import Logger from "@lichtblick/log";
 import { SettingsTreeAction } from "@lichtblick/suite";
 import { ALL_SUPPORTED_IMAGE_SCHEMAS } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/ImageMode/schemas";
+import {
+  imageProjectionSettingsNode,
+  pointCloudColorCamera,
+  type PointCloudCameraSettings,
+} from "@lichtblick/suite-base/panels/ThreeDeeRender/settingsNodes/topics";
 import { toError } from "@lichtblick/suite-base/util/toError";
 
-import {
-  IMAGE_RENDERABLE_DEFAULT_SETTINGS,
-  ImageRenderable,
-  ImageRenderableSettings,
-  ImageUserData,
-} from "./Images/ImageRenderable";
-import { ALL_CAMERA_INFO_SCHEMAS, AnyImage, CompressedVideo } from "./Images/ImageTypes";
-import { MultiMap } from "./Images/MultiMap";
-import { filterCompressedVideoQueue } from "./Images/filterCompressedVideoQueue";
-import {
-  normalizeCompressedImage,
-  normalizeCompressedVideo,
-  normalizeRawImage,
-  normalizeRosCompressedImage,
-  normalizeRosImage,
-} from "./Images/imageNormalizers";
-import { getTopicMatchPrefix, sortPrefixMatchesToFront } from "./Images/topicPrefixMatching";
-import { cameraInfosEqual, normalizeCameraInfo } from "./projections";
 import type { AnyRendererSubscription } from "../IRenderer";
 import type { Renderer } from "../Renderer";
 import { PartialMessageEvent, SceneExtension, onlyLastByTopicMessage } from "../SceneExtension";
@@ -55,9 +41,27 @@ import {
   Image as RosImage,
 } from "../ros";
 import { BaseSettings } from "../settings";
-import { imageProjectionSettingsNode } from "../settingsNodes/topics";
 import { topicIsConvertibleToSchema } from "../topicIsConvertibleToSchema";
 import { makePose, AnyFrameId } from "../transforms";
+import {
+  IMAGE_RENDERABLE_DEFAULT_SETTINGS,
+  ImageRenderable,
+  ImageRenderableSettings,
+  ImageUserData,
+} from "./Images/ImageRenderable";
+import { ALL_CAMERA_INFO_SCHEMAS, AnyImage, CompressedVideo } from "./Images/ImageTypes";
+import { MultiMap } from "./Images/MultiMap";
+import { filterCompressedVideoQueue } from "./Images/filterCompressedVideoQueue";
+import {
+  normalizeCompressedImage,
+  normalizeCompressedVideo,
+  normalizeRawImage,
+  normalizeRosCompressedImage,
+  normalizeRosImage,
+} from "./Images/imageNormalizers";
+import { getTopicMatchPrefix, sortPrefixMatchesToFront } from "./Images/topicPrefixMatching";
+import { CAMERA_COLOR_MAX_DELTA, type PointCloudCameraFrame } from "./pointClouds/cameraColor";
+import { cameraInfosEqual, normalizeCameraInfo } from "./projections";
 
 const log = Logger.getLogger(__filename);
 void log;
@@ -106,6 +110,15 @@ export class Images extends SceneExtension<ImageRenderable> {
    */
   #latestColorImageByTopic = new Map<string, AnyImage>();
 
+  #pixelBuffers = new WeakMap<ImageBitmap, ImageData>();
+  #pixelCanvas: OffscreenCanvas | undefined;
+  // Keep a few already-read frames after hiding/unsubscribing; a paused player may not
+  // redeliver a frame when another panel is already subscribed to the same camera.
+  #recentPointCloudFrames = new Map<
+    string,
+    { frame: PointCloudCameraFrame; receiveTime: bigint }
+  >();
+
   public customCameraModels: CameraModelsMap;
 
   protected supportedImageSchemas = ALL_SUPPORTED_IMAGE_SCHEMAS;
@@ -122,6 +135,11 @@ export class Images extends SceneExtension<ImageRenderable> {
     super.dispose();
   }
 
+  public override removeAllRenderables(): void {
+    this.#recentPointCloudFrames.clear();
+    super.removeAllRenderables();
+  }
+
   public override startFrame(
     currentTime: bigint,
     renderFrameId: AnyFrameId,
@@ -132,16 +150,23 @@ export class Images extends SceneExtension<ImageRenderable> {
     // means the full GOP batch is already in each queue, so skipRender correctly suppresses every
     // intermediate frame and only the last one triggers a GPU upload.
     for (const renderable of this.renderables.values()) {
-      // A hidden topic gets no messages; free its texture, decoder and video cache now instead of
-      // keeping them until the panel closes. Showing it again re-creates it from the next message.
-      if (!renderable.userData.settings.visible) {
+      const { settings, topic } = renderable.userData;
+      const wasDecodeOnly = renderable.decodeWithoutOverlay;
+      renderable.decodeWithoutOverlay = !settings.visible;
+      if (!settings.visible && !this.#isPointCloudCamera(topic)) {
         this.renderer.settings.errors.clearPath(renderable.userData.settingsPath);
         renderable.removeFromParent();
         renderable.dispose();
         this.renderables.delete(renderable.userData.topic);
         continue;
       }
+      if (settings.visible && wasDecodeOnly) {
+        this.#applyOverlayCalibration(renderable);
+      }
       renderable.flushPendingDecodes();
+      if (settings.visible && wasDecodeOnly) {
+        renderable.update();
+      }
     }
     super.startFrame(currentTime, renderFrameId, fixedFrameId);
 
@@ -254,6 +279,7 @@ export class Images extends SceneExtension<ImageRenderable> {
           // For non-HEVC streams this collapses to the original onlyLastByTopicMessage behavior.
           // For HEVC, the filter preserves the active GOP so P-frames are still decodable.
           filterQueue: filterCompressedVideoQueue,
+          shouldSubscribe: this.#imageShouldSubscribe,
         },
       },
     ];
@@ -345,7 +371,7 @@ export class Images extends SceneExtension<ImageRenderable> {
 
     // The camera info topic changed for our renderable
     // Remove the previous camera_info_topic -> image_topic mapping
-    if (prevCameraInfoTopic != undefined) {
+    if (prevCameraInfoTopic != undefined && prevCameraInfoTopic !== cameraInfoTopic) {
       this.#cameraInfoToImageTopics.delete(prevCameraInfoTopic, imageTopic);
     }
 
@@ -368,9 +394,120 @@ export class Images extends SceneExtension<ImageRenderable> {
     renderable.update();
   };
 
-  /** Visible image topics, plus the RGB topics that color a visible depth map. */
   #imageShouldSubscribe = (imageTopic: string): boolean =>
-    this.renderer.config.topics[imageTopic]?.visible === true || this.#isColorTopic(imageTopic);
+    this.renderer.config.topics[imageTopic]?.visible === true ||
+    this.#isColorTopic(imageTopic) ||
+    this.#isPointCloudCamera(imageTopic);
+
+  #isPointCloudCamera(imageTopic: string): boolean {
+    return Object.values(this.renderer.config.topics).some(
+      (config: (Partial<BaseSettings> & PointCloudCameraSettings) | undefined) =>
+        config?.visible === true && pointCloudColorCamera(config) === imageTopic,
+    );
+  }
+
+  #pointCloudCalibrationTopic(imageTopic: string): string | undefined {
+    const config: Partial<LayerSettingsImage> | undefined = this.renderer.config.topics[imageTopic];
+    const topics = [...this.#cameraInfoTopics].sort();
+    const namespace = getTopicMatchPrefix(imageTopic);
+    const parent = namespace == undefined ? undefined : getTopicMatchPrefix(namespace.slice(0, -1));
+    return (
+      config?.cameraInfoTopic ??
+      topics.find((topic) => topic.startsWith(imageTopic + "/")) ??
+      this.#matchingCalibrationTopic(imageTopic) ??
+      // ROS image transports add a topic segment under the base image topic.
+      (parent == undefined
+        ? undefined
+        : topics.find((topic) => getTopicMatchPrefix(topic) === parent))
+    );
+  }
+
+  #matchingCalibrationTopic(imageTopic: string): string | undefined {
+    const prefix = getTopicMatchPrefix(imageTopic);
+    return prefix == undefined
+      ? undefined
+      : [...this.#cameraInfoTopics].sort().find((topic) => topic.startsWith(prefix));
+  }
+
+  public pointCloudCameraFrame(
+    imageTopic: string,
+    scanTime?: bigint,
+  ): PointCloudCameraFrame | undefined {
+    const renderable = this.renderables.get(imageTopic);
+    const time = renderable?.decodedImageTime;
+    const image = renderable?.getDecodedImage();
+    if (time == undefined || !image || !renderable) {
+      const cached = this.#recentPointCloudFrames.get(imageTopic);
+      if (
+        cached &&
+        (scanTime != undefined
+          ? this.#nearScanTime(cached.frame.time, scanTime)
+          : this.#nearScanTime(cached.receiveTime, this.renderer.currentTime))
+      ) {
+        return cached.frame;
+      }
+      return undefined;
+    }
+    if (scanTime != undefined && !this.#nearScanTime(time, scanTime)) {
+      return undefined;
+    }
+    const calibrationTopic = this.#pointCloudCalibrationTopic(imageTopic);
+    const calibration =
+      calibrationTopic == undefined ? undefined : this.#cameraInfoByTopic.get(calibrationTopic);
+    if (calibration == undefined) {
+      return undefined;
+    }
+    const frameId = this.renderer.normalizeFrameId(
+      calibration.header.frame_id || renderable.userData.frameId,
+    );
+    const pixels = this.#getPointCloudPixels(image);
+    if (!pixels) {
+      return undefined;
+    }
+    const frame = { time, frameId, calibration, pixels };
+    this.#recentPointCloudFrames.delete(imageTopic);
+    this.#recentPointCloudFrames.set(imageTopic, {
+      frame,
+      receiveTime: renderable.userData.receiveTime,
+    });
+    if (this.#recentPointCloudFrames.size > 4) {
+      this.#recentPointCloudFrames.delete(this.#recentPointCloudFrames.keys().next().value!);
+    }
+    return frame;
+  }
+
+  #nearScanTime(imageTime: bigint, scanTime: bigint): boolean {
+    return (
+      imageTime >= scanTime - CAMERA_COLOR_MAX_DELTA &&
+      imageTime <= scanTime + CAMERA_COLOR_MAX_DELTA
+    );
+  }
+
+  #getPointCloudPixels(image: ImageBitmap | ImageData): ImageData | undefined {
+    if (image instanceof ImageData) {
+      return image;
+    }
+    let pixels = this.#pixelBuffers.get(image);
+    if (pixels == undefined) {
+      if (image.width === 0 || image.height === 0) {
+        return undefined;
+      }
+      const canvas = (this.#pixelCanvas ??= new OffscreenCanvas(image.width, image.height));
+      if (canvas.width !== image.width || canvas.height !== image.height) {
+        canvas.width = image.width;
+        canvas.height = image.height;
+      }
+      const context = canvas.getContext("2d", { willReadFrequently: true });
+      if (!context) {
+        return undefined;
+      }
+      context.clearRect(0, 0, image.width, image.height);
+      context.drawImage(image, 0, 0);
+      pixels = context.getImageData(0, 0, image.width, image.height);
+      this.#pixelBuffers.set(image, pixels);
+    }
+    return pixels;
+  }
 
   #isColorTopic(imageTopic: string): boolean {
     return Object.values(this.renderer.config.topics).some(
@@ -401,7 +538,12 @@ export class Images extends SceneExtension<ImageRenderable> {
       }
     }
 
-    return false;
+    return Object.values(this.renderer.config.topics).some(
+      (config: (Partial<BaseSettings> & PointCloudCameraSettings) | undefined) => {
+        const topic = config?.visible === true ? pointCloudColorCamera(config) : undefined;
+        return topic != undefined && this.#pointCloudCalibrationTopic(topic) === cameraInfoTopic;
+      },
+    );
   };
 
   #handleRosRawImage = (messageEvent: PartialMessageEvent<RosImage>): void => {
@@ -435,8 +577,8 @@ export class Images extends SceneExtension<ImageRenderable> {
         }
       }
     }
-    // Subscribed only to color a depth map
-    if (this.renderer.config.topics[imageTopic]?.visible !== true) {
+    const visible = this.renderer.config.topics[imageTopic]?.visible === true;
+    if (!visible && !this.#isPointCloudCamera(imageTopic)) {
       return;
     }
     const receiveTime = toNanoSec(messageEvent.receiveTime);
@@ -445,17 +587,20 @@ export class Images extends SceneExtension<ImageRenderable> {
     const renderable = this.#getImageRenderable(imageTopic, receiveTime, image, frameId);
 
     renderable.userData.receiveTime = receiveTime;
+    renderable.decodeWithoutOverlay = !visible;
     renderable.setImage(image, DEFAULT_BITMAP_WIDTH);
+    if (visible) {
+      this.#applyOverlayCalibration(renderable);
+    }
+  };
+
+  #applyOverlayCalibration(renderable: ImageRenderable): void {
     // Auto-select settings.cameraInfoTopic if it's not already set
-    const settings = renderable.userData.settings;
+    const { topic: imageTopic, settings } = renderable.userData;
     if (settings.cameraInfoTopic == undefined) {
-      const prefix = getTopicMatchPrefix(imageTopic);
-      const newCameraInfoTopic =
-        prefix != undefined
-          ? filterMap(this.#cameraInfoTopics, (topic) =>
-              topic.startsWith(prefix) ? topic : undefined,
-            ).sort()[0]
-          : undefined;
+      const newCameraInfoTopic = this.#isPointCloudCamera(imageTopic)
+        ? this.#pointCloudCalibrationTopic(imageTopic)
+        : this.#matchingCalibrationTopic(imageTopic);
       settings.cameraInfoTopic = newCameraInfoTopic;
       renderable.setSettings(settings);
 
@@ -497,13 +642,15 @@ export class Images extends SceneExtension<ImageRenderable> {
     } else {
       this.#recomputeCameraModel(renderable, cameraInfo);
     }
-  };
+  }
 
   #handleCameraInfo = (messageEvent: PartialMessageEvent<CameraInfo>): void => {
     // Store the last camera info on each topic, when processing an image message we'll look up
     // the camera info by the info topic configured for the image
     const cameraInfo = normalizeCameraInfo(messageEvent.message);
-    this.#cameraInfoByTopic.set(messageEvent.topic, cameraInfo);
+    if (!cameraInfosEqual(this.#cameraInfoByTopic.get(messageEvent.topic), cameraInfo)) {
+      this.#cameraInfoByTopic.set(messageEvent.topic, cameraInfo);
+    }
 
     // Look up any image topics assigned to our camera info topic and determine if we need to update
     // those renderables since we now have a camera info whereas we may not have previously
