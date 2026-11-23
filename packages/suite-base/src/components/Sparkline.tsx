@@ -24,7 +24,7 @@ export type SparklinePoint = { value: number; timestamp: number };
 
 type SparklineProps = {
   points: Immutable<SparklinePoint[]>;
-  width: number;
+  width: React.CSSProperties["width"];
   height: number;
   timeRange: number;
   maximum?: number;
