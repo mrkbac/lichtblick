@@ -12,7 +12,8 @@ import { MessagePathDropConfig } from "@lichtblick/suite-base/components/PanelEx
 import { usePanelSettingsTreeUpdate } from "@lichtblick/suite-base/providers/PanelStateContextProvider";
 import { RosDatatypes } from "@lichtblick/suite-base/types/RosDatatypes";
 
-import { defaultConfig, usePublishPanelSettings } from "./settings";
+import { usePublishPanelSettings } from "./settings";
+import { defaultConfig } from "./settingsTree";
 import { PublishConfig } from "./types";
 
 vi.mock("@lichtblick/suite-base/providers/PanelStateContextProvider", () => ({

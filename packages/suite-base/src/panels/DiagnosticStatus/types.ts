@@ -22,11 +22,7 @@ export type DiagnosticStatusPanelProps = {
   saveConfig: SaveConfig<DiagnosticStatusConfig>;
 };
 
-export interface ToString {
-  toString(): string;
-}
-
-export type DiagnosticId = string & ToString;
+export type DiagnosticId = string;
 
 export type KeyValue = { key: string; value: string };
 

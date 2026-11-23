@@ -17,7 +17,6 @@ const docs: PanelDocs = {
         rules: DEFAULT_CONFIG.rules.map((rule) => ({ ...rule, alertSound: "beep" as const })),
       },
       undefined,
-      undefined,
       "default",
     ),
   sections: [

@@ -2,8 +2,11 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import { fromSec, toSec } from "@foxglove/rostime";
-import { useCallback, useMemo } from "react";
+import { produce } from "immer";
+import * as _ from "lodash-es";
+import { useCallback, useEffect, useMemo } from "react";
 
+import { SettingsTreeAction } from "@lichtblick/suite";
 import { useMessagePipeline } from "@lichtblick/suite-base/components/MessagePipeline";
 import { selectSeekPlayback } from "@lichtblick/suite-base/components/MessagePipeline/selectors";
 import { DEFAULT_SECONDS_UNTIL_STALE } from "@lichtblick/suite-base/panels/DiagnosticSummary/constants";
@@ -11,7 +14,9 @@ import { useDiagnosticHistory } from "@lichtblick/suite-base/panels/DiagnosticSu
 import {
   DiagnosticTopics,
   DiagnosticTopicsConfig,
+  handleTopicToggle,
   useDiagnosticTopics,
+  useDiagnosticTopicsDrop,
 } from "@lichtblick/suite-base/panels/DiagnosticSummary/hooks/useDiagnosticTopics";
 import useDiagnostics from "@lichtblick/suite-base/panels/DiagnosticSummary/hooks/useDiagnostics";
 import usePlaybackTimes from "@lichtblick/suite-base/panels/DiagnosticSummary/hooks/usePlaybackTimes";
@@ -19,6 +24,9 @@ import { DiagnosticsById } from "@lichtblick/suite-base/panels/DiagnosticSummary
 import { getDiagnosticsWithStales } from "@lichtblick/suite-base/panels/DiagnosticSummary/utils/getDiagnosticsWithStales";
 import { HistoryById } from "@lichtblick/suite-base/panels/DiagnosticSummary/utils/history";
 import { getStaleTime } from "@lichtblick/suite-base/panels/DiagnosticSummary/utils/util";
+import type { DocumentedNodes } from "@lichtblick/suite-base/panels/shared/documentedSettings";
+import { usePanelSettingsTreeUpdate } from "@lichtblick/suite-base/providers/PanelStateContextProvider";
+import { SaveConfig } from "@lichtblick/suite-base/types/panels";
 
 export type TimelineRange = { start: number; end: number; current: number | undefined };
 
@@ -82,4 +90,33 @@ export function useDiagnosticsPanelData(
     range,
     seek: seekPlayback ? seekSeconds : undefined,
   };
+}
+
+/** Settings tree and topic drop shared by both diagnostics panels; `nodes` must be memoized. */
+export function useDiagnosticsPanelSettings(
+  topics: DiagnosticTopics,
+  saveConfig: SaveConfig<DiagnosticTopicsConfig>,
+  nodes: DocumentedNodes,
+): void {
+  const updatePanelSettingsTree = usePanelSettingsTreeUpdate();
+  const actionHandler = useCallback(
+    (action: SettingsTreeAction) => {
+      if (action.action !== "update") {
+        return;
+      }
+      const { path, value } = action.payload;
+      const topicPatch = handleTopicToggle(path, value, topics);
+      if (topicPatch) {
+        saveConfig(topicPatch);
+        return;
+      }
+      saveConfig(produce<DiagnosticTopicsConfig>((draft) => _.set(draft, path.slice(1), value)));
+    },
+    [saveConfig, topics],
+  );
+  useDiagnosticTopicsDrop(topics, saveConfig);
+
+  useEffect(() => {
+    updatePanelSettingsTree({ actionHandler, nodes });
+  }, [actionHandler, nodes, updatePanelSettingsTree]);
 }

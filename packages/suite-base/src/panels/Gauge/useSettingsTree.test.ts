@@ -22,7 +22,6 @@ describe("useSettingsTree", () => {
     const props: SettingsTreeNodesProps = {
       config: GaugeBuilder.config(),
       error: undefined,
-      pathParseError: undefined,
       ...propsOverride,
     };
     return { props };
@@ -46,7 +45,6 @@ describe("useSettingsTree", () => {
       input: "messagepath",
       supportsMathModifiers: true,
       value: props.config.path,
-      error: props.pathParseError,
       validTypes: expect.any(Array),
     });
     expect(general.fields!.minValue).toEqual({
@@ -120,18 +118,6 @@ describe("useSettingsTree", () => {
 
     expect(general.error).toEqual(props.error);
   });
-
-  it("should set pathParseError when provided", () => {
-    const { props } = setup({
-      config: GaugeBuilder.config(),
-      pathParseError: BasicBuilder.string(),
-    });
-
-    const { result } = renderHook(() => useSettingsTree(props));
-    const { general } = result.current;
-
-    expect(general.fields!.path!.error).toEqual(props.pathParseError);
-  });
 });
 
 it("shows angle settings only for inclinometers", () => {
@@ -139,7 +125,6 @@ it("shows angle settings only for inclinometers", () => {
     useSettingsTree({
       config: GaugeBuilder.config({ displayMode: "roll" }),
       error: undefined,
-      pathParseError: undefined,
     }),
   );
   expect(result.current.general.fields!.angleUnit).toBeDefined();
@@ -156,7 +141,6 @@ it("reports invalid angle thresholds in settings", () => {
     useSettingsTree({
       config: GaugeBuilder.config({ displayMode: "roll", warningAngle: 50 }),
       error: undefined,
-      pathParseError: undefined,
     }),
   );
   expect(result.current.general.fields!.angleRange!.error).toBe("invalidAngles");
@@ -169,7 +153,6 @@ it.each([[{ minValue: 5, maxValue: 5 }], [{ minValue: undefined, maxValue: 5 }]]
       useSettingsTree({
         config: { ...GaugeBuilder.config({ displayMode: "slider" }), ...limits },
         error: undefined,
-        pathParseError: undefined,
       }),
     );
     expect(result.current.general.fields!.maxValue!.error).toBe("invalidLimits");

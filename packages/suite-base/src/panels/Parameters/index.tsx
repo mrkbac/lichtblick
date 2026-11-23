@@ -258,14 +258,6 @@ function Parameters({ config, saveConfig }: Props): ReactElement {
     [saveConfig],
   );
 
-  // No debounce: each submit is an explicit user action, and a shared debounce drops edits
-  const onSubmit = useCallback(
-    (name: string, value: ParameterValue) => {
-      setParameter(name, value);
-    },
-    [setParameter],
-  );
-
   const onToggleSelected = useCallback((name: string) => {
     setSelected((old) => {
       const next = new Set(old);
@@ -581,7 +573,7 @@ function Parameters({ config, saveConfig }: Props): ReactElement {
                     onToggle={onToggle}
                     value={parameters.get(row.key)}
                     canSet={canSetParams}
-                    onSubmit={onSubmit}
+                    onSubmit={setParameter}
                     highlighted={changed.has(row.key)}
                     diff={diff?.get(row.key)}
                     snapshotValue={snapshotValues?.get(row.key)}

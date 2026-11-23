@@ -13,10 +13,7 @@ import { useTranslation } from "react-i18next";
 import { SettingsTreeAction } from "@lichtblick/suite";
 import { DEFAULT_STATE_TRANSITION_PATH } from "@lichtblick/suite-base/panels/StateTransitions/constants";
 import { buildSettingsTree } from "@lichtblick/suite-base/panels/StateTransitions/settings";
-import {
-  assignDefaultColorsToSeries,
-  handleReorderSeriesAction,
-} from "@lichtblick/suite-base/panels/utils";
+import { assignDefaultColorsToSeries, moveItem } from "@lichtblick/suite-base/panels/utils";
 import { usePanelSettingsTreeUpdate } from "@lichtblick/suite-base/providers/PanelStateContextProvider";
 import { SaveConfig } from "@lichtblick/suite-base/types/panels";
 
@@ -39,7 +36,7 @@ export function usePanelSettings(
         saveConfig(
           produce<StateTransitionConfig>((draft) => {
             assignDefaultColorsToSeries(draft.paths);
-            handleReorderSeriesAction(draft, sourceIndex, targetIndex);
+            moveItem(draft.paths, sourceIndex, targetIndex);
           }),
         );
       } else if (action === "update") {

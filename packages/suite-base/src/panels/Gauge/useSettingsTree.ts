@@ -12,7 +12,7 @@ import { ColorMapConfig, ColorModeConfig, SettingsTreeNodesProps } from "./types
 
 /** Shows the controls for the selected display and reports invalid inclinometer thresholds. */
 export function buildSettingsTree(
-  { config, pathParseError, error }: SettingsTreeNodesProps,
+  { config, error }: SettingsTreeNodesProps,
   t: TFunction<"gauge">,
 ): Record<"general", DocumentedNode> {
   const {
@@ -50,7 +50,6 @@ export function buildSettingsTree(
           input: "messagepath",
           supportsMathModifiers: true,
           value: path,
-          error: pathParseError,
           validTypes: DATA_TYPES,
         },
         ...(isAngle && {
@@ -146,12 +145,8 @@ export function buildSettingsTree(
 
 export function useSettingsTree({
   config,
-  pathParseError,
   error,
 }: SettingsTreeNodesProps): Record<"general", DocumentedNode> {
   const { t } = useTranslation("gauge");
-  return useMemo(
-    () => buildSettingsTree({ config, pathParseError, error }, t),
-    [config, pathParseError, error, t],
-  );
+  return useMemo(() => buildSettingsTree({ config, error }, t), [config, error, t]);
 }

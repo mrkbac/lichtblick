@@ -8,12 +8,6 @@ import { PanelIconButton } from "@lichtblick/suite-base/components/PanelButton";
 import { useDeltaOverlayStyles } from "@lichtblick/suite-base/panels/shared/DeltaOverlay.style";
 import { MISSING_VALUE_PLACEHOLDER } from "@lichtblick/suite-base/panels/shared/constants";
 import { DELTA_OVERLAY_BUTTONS } from "@lichtblick/suite-base/panels/shared/deltaOverlayButtons";
-import { DeltaResult } from "@lichtblick/suite-base/panels/shared/types";
-
-export type DeltaOverlaySeriesLabel = {
-  configIndex: number;
-  label: string;
-};
 
 export type DeltaOverlayProps = Immutable<{
   deltaRowLabel: string;
@@ -29,8 +23,6 @@ export type DeltaOverlayProps = Immutable<{
   yValueB?: number | string;
   deltaX: number | undefined;
   deltaY?: number;
-  seriesLabels?: DeltaOverlaySeriesLabel[];
-  series?: DeltaResult["series"];
   formatXValue?: (value: number) => string;
   formatYValue?: (value: number) => string;
   onRemoveMarkerA: () => void;
@@ -179,9 +171,7 @@ export const DeltaOverlay = React.memo(function DeltaOverlay(
             data-testid="delta-overlay-remove-marker-a"
             data-delta-overlay-action
             onClick={onRemoveMarkerA}
-          >
-            <DELTA_OVERLAY_BUTTONS.removeMarkerA.icon fontSize="small" />
-          </PanelIconButton>
+          />
         ) : (
           <div />
         )}
@@ -206,9 +196,7 @@ export const DeltaOverlay = React.memo(function DeltaOverlay(
             data-testid="delta-overlay-remove-marker-b"
             data-delta-overlay-action
             onClick={onRemoveMarkerB}
-          >
-            <DELTA_OVERLAY_BUTTONS.removeMarkerB.icon fontSize="small" />
-          </PanelIconButton>
+          />
         ) : (
           <div />
         )}

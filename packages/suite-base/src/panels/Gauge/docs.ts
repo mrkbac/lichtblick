@@ -15,10 +15,8 @@ import { buildSettingsTree } from "./useSettingsTree";
 function allFields(): DocumentedNodes {
   const t = sharedI18nObject.getFixedT(null, "gauge");
   const fields = (patch: Partial<GaugeConfig>): DocumentedFields | undefined =>
-    buildSettingsTree(
-      { config: { ...DEFAULT_CONFIG, ...patch }, pathParseError: undefined, error: undefined },
-      t,
-    ).general.fields;
+    buildSettingsTree({ config: { ...DEFAULT_CONFIG, ...patch }, error: undefined }, t).general
+      .fields;
   return {
     general: {
       fields: {

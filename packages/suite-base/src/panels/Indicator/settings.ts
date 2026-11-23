@@ -193,7 +193,6 @@ export function notificationSettings(
 
 export function buildSettingsTree(
   config: IndicatorConfig,
-  pathParseError: string | undefined,
   error: string | undefined,
   notificationPermission: NotificationPermissionState,
 ): DocumentedNodes {
@@ -209,7 +208,6 @@ export function buildSettingsTree(
           input: "messagepath",
           supportsMathModifiers: true,
           value: path,
-          error: pathParseError,
         },
         style: {
           label: "Style",

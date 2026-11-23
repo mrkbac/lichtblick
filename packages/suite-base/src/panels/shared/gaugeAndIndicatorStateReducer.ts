@@ -24,9 +24,6 @@ function handleFrameActionState({
   messages: readonly MessageEvent[];
   state: GaugeAndIndicatorState;
 }): GaugeAndIndicatorState {
-  if (state.pathParseError != undefined) {
-    return { ...state, latestMessage: messages.at(-1), error: undefined };
-  }
   if (!state.parsedPath) {
     return { ...state, error: undefined };
   }
@@ -64,7 +61,6 @@ function handlePathActionStateWithGlobalVars({
       latestMatchingQueriedData: undefined,
       parsedPath: undefined,
       path,
-      pathParseError: undefined,
     };
   }
   // Keep the raw path: `$variables` are filled in per evaluation so later variable changes apply.
@@ -73,7 +69,6 @@ function handlePathActionStateWithGlobalVars({
     ...evaluateLatestMessage(state, newPath),
     parsedPath: newPath,
     path,
-    pathParseError: undefined,
   };
 }
 
@@ -105,7 +100,6 @@ export function initialState({ path }: { path: string }): GaugeAndIndicatorState
     parsedPath: parseMessagePath(path),
     latestMessage: undefined,
     latestMatchingQueriedData: undefined,
-    pathParseError: undefined,
     error: undefined,
   };
 }

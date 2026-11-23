@@ -53,7 +53,7 @@ export function Indicator({ context }: IndicatorProps): React.JSX.Element {
 
   const [state, dispatch] = useReducer(stateReducer, config, initialState);
 
-  const { error, latestMatchingQueriedData, parsedPath, pathParseError } = state;
+  const { error, latestMatchingQueriedData, parsedPath } = state;
 
   // Drop a field from the topic list to show it
   useReplacePathDrop(context, setConfig);
@@ -138,8 +138,8 @@ export function Indicator({ context }: IndicatorProps): React.JSX.Element {
   );
 
   const settingsTree = useMemo(
-    () => buildSettingsTree(config, pathParseError, error?.message, notificationPermission),
-    [config, pathParseError, error?.message, notificationPermission],
+    () => buildSettingsTree(config, error?.message, notificationPermission),
+    [config, error?.message, notificationPermission],
   );
   const colorScheme = usePathPanel({
     context,

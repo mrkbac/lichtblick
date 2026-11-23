@@ -98,7 +98,6 @@ describe("stateReducer", () => {
       latestMessage: undefined,
       parsedPath: buildMessagePath(),
       path: "",
-      pathParseError: undefined,
       ...stateOverride,
     };
 
@@ -113,15 +112,16 @@ describe("stateReducer", () => {
   it("should return the state when throw an error", () => {
     const { state } = setup();
 
-    const { pathParseError, error, latestMatchingQueriedData, latestMessage, parsedPath, path } =
-      stateReducer(state, undefined as unknown as GaugeAndIndicatorAction);
+    const { error, latestMatchingQueriedData, latestMessage, parsedPath, path } = stateReducer(
+      state,
+      undefined as unknown as GaugeAndIndicatorAction,
+    );
 
     expect(error).not.toBeUndefined();
     expect(latestMatchingQueriedData).toBeUndefined();
     expect(latestMessage).toEqual(state.latestMessage);
     expect(parsedPath).toEqual(state.parsedPath);
     expect(path).toEqual(state.path);
-    expect(pathParseError).toEqual(state.pathParseError);
   });
 
   describe("stateReducer when frame action", () => {
@@ -188,19 +188,6 @@ describe("stateReducer", () => {
 
       expect(newState).toEqual(state);
     });
-
-    it("should handle latestMessage when pathParseError is not undefined", () => {
-      const { action, state } = setup({
-        stateOverride: {
-          pathParseError: BasicBuilder.string(),
-        },
-      });
-      const frameAction = action as FrameAction;
-
-      const newState = stateReducer(state, action);
-
-      expect(newState.latestMessage).toEqual(frameAction.messages[frameAction.messages.length - 1]);
-    });
   });
 
   describe("stateReducer when path action", () => {
@@ -222,7 +209,6 @@ describe("stateReducer", () => {
       expect(newState.path).toBe(pathAction.path);
       expect(newState.parsedPath).toMatchObject(newPath);
       expect(newState.error).toBeUndefined();
-      expect(newState.pathParseError).toBeUndefined();
       expect(newState.latestMatchingQueriedData).toBeUndefined();
     });
 
@@ -250,7 +236,6 @@ describe("stateReducer", () => {
       expect(newState.path).toBe(pathAction.path);
       expect(newState.parsedPath).toMatchObject(newPath);
       expect(newState.error).toBeUndefined();
-      expect(newState.pathParseError).toBeUndefined();
       expect(newState.latestMatchingQueriedData).toBe(expectedLatestMessage);
     });
   });
@@ -306,7 +291,6 @@ describe("stateReducer", () => {
       expect(newState.latestMessage).toBe(state.latestMessage);
       expect(newState.parsedPath).toBe(state.parsedPath);
       expect(newState.path).toBe(state.path);
-      expect(newState.pathParseError).toBe(state.pathParseError);
     });
   });
 });

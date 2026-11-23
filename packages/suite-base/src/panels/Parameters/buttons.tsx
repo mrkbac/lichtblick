@@ -10,56 +10,48 @@ import RestoreIcon from "@mui/icons-material/Restore";
 import UnfoldLessIcon from "@mui/icons-material/UnfoldLess";
 import UnfoldMoreIcon from "@mui/icons-material/UnfoldMore";
 import ViewListIcon from "@mui/icons-material/ViewList";
-import type { SvgIconProps } from "@mui/material";
-import type { ComponentType } from "react";
 
 import { type PanelButton, RegexLabel } from "@lichtblick/suite-base/components/PanelButton";
 
 import { PARAMETERS_SHORTCUT } from "./shortcuts";
 
-function small(Icon: ComponentType<SvgIconProps>): ComponentType {
-  return function SmallIcon() {
-    return <Icon fontSize="small" />;
-  };
-}
-
 export const PARAMETERS_BUTTONS = {
   regex: { id: "parametersRegex", icon: RegexLabel, placement: "inline" },
-  flatList: { id: "parametersFlatList", icon: small(ViewListIcon), placement: "inline" },
+  flatList: { id: "parametersFlatList", icon: ViewListIcon, placement: "inline" },
   groupByNamespace: {
     id: "parametersGroupByNamespace",
-    icon: small(AccountTreeOutlinedIcon),
+    icon: AccountTreeOutlinedIcon,
     placement: "inline",
   },
-  expandAll: { id: "parametersExpandAll", icon: small(UnfoldMoreIcon), placement: "inline" },
-  collapseAll: { id: "parametersCollapseAll", icon: small(UnfoldLessIcon), placement: "inline" },
+  expandAll: { id: "parametersExpandAll", icon: UnfoldMoreIcon, placement: "inline" },
+  collapseAll: { id: "parametersCollapseAll", icon: UnfoldLessIcon, placement: "inline" },
   snapshots: {
     id: "parametersSnapshots",
-    icon: small(PhotoCameraOutlinedIcon),
+    icon: PhotoCameraOutlinedIcon,
     placement: "inline",
   },
   exportSnapshot: {
     id: "parametersExportSnapshot",
-    icon: small(FileDownloadOutlinedIcon),
+    icon: FileDownloadOutlinedIcon,
     placement: "inline",
   },
   deleteSnapshot: {
     id: "parametersDeleteSnapshot",
-    icon: small(DeleteOutlineIcon),
+    icon: DeleteOutlineIcon,
     placement: "inline",
   },
-  stopComparing: { id: "parametersStopComparing", icon: small(ClearIcon), placement: "inline" },
+  stopComparing: { id: "parametersStopComparing", icon: ClearIcon, placement: "inline" },
   submitValue: {
     id: "parametersSubmitValue",
-    icon: small(CheckIcon),
+    icon: CheckIcon,
     placement: "inline",
     shortcut: PARAMETERS_SHORTCUT.submitValue,
   },
   resetValue: {
     id: "parametersResetValue",
-    icon: small(ClearIcon),
+    icon: ClearIcon,
     placement: "inline",
     shortcut: PARAMETERS_SHORTCUT.resetValue,
   },
-  restoreValue: { id: "parametersRestoreValue", icon: small(RestoreIcon), placement: "inline" },
+  restoreValue: { id: "parametersRestoreValue", icon: RestoreIcon, placement: "inline" },
 } as const satisfies Record<string, PanelButton>;

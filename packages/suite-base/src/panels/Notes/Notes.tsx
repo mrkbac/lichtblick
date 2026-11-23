@@ -16,7 +16,6 @@ import { findShortcut } from "@lichtblick/suite-base/util/keyboardShortcuts";
 
 import { headingDecorations } from "./headingDecorations";
 import { NOTES_SHORTCUTS } from "./shortcuts";
-import { toggleTask } from "./toggleTask";
 import { NotesConfig } from "./types";
 import { useNotesSettings } from "./useNotesSettings";
 import MonacoEditor, { EditorDidMount, EditorWillMount } from "../UserScriptEditor/MonacoEditor";
@@ -141,17 +140,12 @@ export function Notes({ config, saveConfig }: Props): React.JSX.Element {
         ) {
           return;
         }
-        const offset = model.getOffsetAt({
-          lineNumber: position.lineNumber,
-          column: line.search(/\S/) + 1,
-        });
-        const toggled = toggleTask(model.getValue(), offset);
         const column = task[1]!.length + 2;
         instance.pushUndoStop();
         instance.executeEdits("notes.toggleTask", [
           {
             range: new monaco.Range(position.lineNumber, column, position.lineNumber, column + 1),
-            text: toggled[model.getOffsetAt({ lineNumber: position.lineNumber, column })]!,
+            text: task[2] === "[ ]" ? "x" : " ",
           },
         ]);
         instance.pushUndoStop();
