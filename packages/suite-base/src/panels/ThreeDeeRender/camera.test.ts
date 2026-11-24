@@ -26,9 +26,7 @@ describe("isTrackpadScroll", () => {
 
   it("leaves mouse wheels and pinches to zoom", () => {
     expect(isTrackpadScroll(wheel({ deltaY: 100 }, -120))).toBe(false);
-    expect(isTrackpadScroll(wheel({ deltaY: 3, deltaMode: 1 }))).toBe(
-      false,
-    );
+    expect(isTrackpadScroll(wheel({ deltaY: 3, deltaMode: 1 }))).toBe(false);
     expect(isTrackpadScroll(wheel({ deltaY: 4, ctrlKey: true }, -12))).toBe(false);
     expect(isTrackpadScroll(wheel({ deltaX: 100, shiftKey: true }))).toBe(false);
   });

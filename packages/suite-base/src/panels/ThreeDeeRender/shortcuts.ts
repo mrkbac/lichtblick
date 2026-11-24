@@ -51,7 +51,10 @@ export const THREE_DEE_SHORTCUTS = [
       { key: "s", shift: true },
       { key: "d", shift: true },
     ],
-    mouse: [{ action: "drag", button: "right" }, { action: "two-finger-scroll", alt: true }],
+    mouse: [
+      { action: "drag", button: "right" },
+      { action: "two-finger-scroll", alt: true },
+    ],
   },
   {
     id: "3d.zoom",
