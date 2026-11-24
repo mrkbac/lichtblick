@@ -224,16 +224,20 @@ export class CoordinateFrame<ID extends AnyFrameId = UserFrameId> {
   }
 
   /**
-   * Halves this frame's history, keeping its first and last transform, and keeps one in
-   * `keepEvery` transforms added later. Returns the count removed.
+   * Halves this frame's history, keeping its first and last transform, and keeps half as many of
+   * the transforms added later. Returns the count removed.
    */
-  public decimate(keepEvery: number): number {
-    this.setKeepEvery(keepEvery);
+  public decimate(): number {
+    this.setKeepEvery(this.#keepEvery * 2);
     let removed = this.#transforms.decimate();
     for (const { transforms } of this.#earlier) {
       removed += transforms.decimate();
     }
     return removed;
+  }
+
+  public keepEvery(): number {
+    return this.#keepEvery;
   }
 
   /** Keep one in `keepEvery` transforms added from now on */

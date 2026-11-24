@@ -129,7 +129,7 @@ export class TransformTree {
       // age out.
       this.decimations--;
       for (const other of this.#frames.values()) {
-        other.setKeepEvery(2 ** this.decimations);
+        other.setKeepEvery(Math.max(1, other.keepEvery() / 2));
       }
     }
 
@@ -260,7 +260,8 @@ export class TransformTree {
 
   #applyLimits(frame: CoordinateFrame): void {
     frame.maxStorageTime = this.#complete ? MAX_DURATION : this.#maxStorageTime;
-    frame.setKeepEvery(2 ** this.decimations);
+    // New frames start at full rate; #decimate thins them once they outgrow their share
+    frame.setKeepEvery(1);
     // A complete history is scrubbed anywhere, so only live ones thin by age
     frame.setAgeThinning(
       this.#complete ? Infinity : FULL_RATE_TRANSFORM_TIME,
@@ -269,11 +270,14 @@ export class TransformTree {
   }
 
   #decimate(): void {
-    // ponytail: halves every frame, also sparse ones; per-frame budgets if a dense frame starves
-    // slow ones of resolution.
+    // Only frames over an even share of the budget are halved, so a dense frame can't starve sparse
+    // ones of resolution. Some frame is always over it, since the total is over the budget.
     this.decimations++;
+    const share = this.#sampleBudget / this.#frames.size;
     for (const frame of this.#frames.values()) {
-      this.#sampleCount -= frame.decimate(2 ** this.decimations);
+      if (frame.transformsSize() > share) {
+        this.#sampleCount -= frame.decimate();
+      }
     }
   }
 
