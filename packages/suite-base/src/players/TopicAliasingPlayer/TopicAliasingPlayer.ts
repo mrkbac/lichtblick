@@ -45,6 +45,7 @@ export class TopicAliasingPlayer implements Player {
   #inputs: Immutable<StateFactoryInput>;
   #aliasedSubscriptions: undefined | SubscribePayload[];
   #subscriptions: SubscribePayload[] = [];
+  #subscriptionGeneration: number | undefined;
 
   // True if no aliases are active and we can pass calls directly through to the
   // underlying player.
@@ -114,11 +115,12 @@ export class TopicAliasingPlayer implements Player {
     this.#player.close();
   }
 
-  public setSubscriptions(subscriptions: SubscribePayload[]): void {
+  public setSubscriptions(subscriptions: SubscribePayload[], generation?: number): void {
     this.#subscriptions = subscriptions;
+    this.#subscriptionGeneration = generation;
     this.#aliasedSubscriptions =
       this.#stateProcessor?.aliasSubscriptions(subscriptions) ?? subscriptions;
-    this.#player.setSubscriptions(this.#aliasedSubscriptions);
+    this.#player.setSubscriptions(this.#aliasedSubscriptions, generation);
   }
 
   public setPublishers(publishers: AdvertiseOptions[]): void {
@@ -255,7 +257,7 @@ export class TopicAliasingPlayer implements Player {
       this.#stateProcessor?.aliasSubscriptions(this.#subscriptions) ?? this.#subscriptions;
     if (!_.isEqual(this.#aliasedSubscriptions, aliasedSubscriptions)) {
       this.#aliasedSubscriptions = aliasedSubscriptions;
-      this.#player.setSubscriptions(aliasedSubscriptions);
+      this.#player.setSubscriptions(aliasedSubscriptions, this.#subscriptionGeneration);
     }
   }
 }

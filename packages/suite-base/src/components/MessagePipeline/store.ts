@@ -63,6 +63,13 @@ export type MessagePipelineInternalState = {
   /** Preserves reference equality of subscriptions to minimize player subscription churn. */
   subscriptionMemoizer: (sub: SubscribePayload) => SubscribePayload;
   subscriptionsById: Map<string, Immutable<SubscribePayload[]>>;
+  /** Numbers each change of `public.subscriptions`; the player gets it with them. */
+  subscriptionGeneration: number;
+  /**
+   * The subscriptions of generations a player may still be loading messages for, to tell which
+   * fields the messages of a frame stamped with an older generation were sliced to.
+   */
+  subscriptionsByGeneration: Map<number, Immutable<SubscribePayload[]>>;
   publishersById: { [key: string]: AdvertiseOptions[] };
   allPublishers: AdvertiseOptions[];
   /**
@@ -116,6 +123,8 @@ export function createMessagePipelineStore({
     allPublishers: [],
     subscriptionMemoizer: makeSubscriptionMemoizer(),
     subscriptionsById: new Map(),
+    subscriptionGeneration: 0,
+    subscriptionsByGeneration: new Map(),
     subscriberIdsByTopic: new Map(),
     newTopicsBySubscriberId: new Map(),
     lastMessageEventByTopic: new Map(),
@@ -132,6 +141,7 @@ export function createMessagePipelineStore({
         allPublishers: [],
         subscriptionMemoizer: makeSubscriptionMemoizer(),
         subscriptionsById: new Map(),
+        subscriptionsByGeneration: new Map(),
         subscriberIdsByTopic: new Map(),
         newTopicsBySubscriberId: new Map(),
         lastMessageEventByTopic: new Map(),
@@ -367,6 +377,8 @@ function updateSubscriberAction(
   }
 
   const subscriptions = mergeSubscriptions(Array.from(subscriptionsById.values()).flat());
+  const subscriptionGeneration = prevState.subscriptionGeneration + 1;
+  prevState.subscriptionsByGeneration.set(subscriptionGeneration, subscriptions);
 
   const newPublicState = {
     ...prevState.public,
@@ -379,6 +391,7 @@ function updateSubscriberAction(
     ...prevState,
     lastMessageEventByTopic,
     subscriptionsById,
+    subscriptionGeneration,
     subscriberIdsByTopic,
     public: newPublicState,
   };
@@ -420,16 +433,30 @@ function updatePlayerStateAction(
     }
   }
 
+  // Players apply subscriptions asynchronously: a frame can be loaded for older subscriptions.
+  const generation = nextData?.subscriptionGeneration;
+  const byGeneration = prevState.subscriptionsByGeneration;
+  const loadedFor =
+    (generation != undefined ? byGeneration.get(generation) : undefined) ??
+    prevState.public.subscriptions;
+  const stale = loadedFor !== prevState.public.subscriptions;
+  // Later frames are not loaded for older generations.
+  for (const older of byGeneration.keys()) {
+    if (older >= (generation ?? prevState.subscriptionGeneration)) {
+      break;
+    }
+    byGeneration.delete(older);
+  }
+
   // Put messages into per-subscriber queues
   if (messages && messages !== prevState.public.playerState.activeData?.messages) {
     // Playback messages follow the non-preload subscriptions, sliced to their fields.
-    // Assumes the player already applies the latest subscriptions; a frame it emits just after a
-    // change can still be sliced the old way, so panels must not trust shapes.
     const fieldsByTopic = new Map(
-      prevState.public.subscriptions
-        .filter((sub) => sub.preloadType !== "full")
-        .map((sub) => [sub.topic, sub.fields]),
+      loadedFor.filter((sub) => sub.preloadType !== "full").map((sub) => [sub.topic, sub.fields]),
     );
+    const coveredFor = (subs: Immutable<SubscribePayload[]> | undefined, topic: string) =>
+      subs?.some((sub) => subscriptionCovers({ topic, fields: fieldsByTopic.get(topic) }, sub)) ??
+      false;
     for (const messageEvent of messages) {
       // Save the last message on every topic to send the last message
       // to newly subscribed panels.
@@ -445,6 +472,10 @@ function updatePlayerStateAction(
       }
 
       for (const id of ids) {
+        // A message sliced for older subscriptions only goes to panels it has every field for.
+        if (stale && !coveredFor(prevState.subscriptionsById.get(id), messageEvent.topic)) {
+          continue;
+        }
         const subscriberMessageEvents = messagesBySubscriberId.get(id);
         if (!subscriberMessageEvents) {
           messagesBySubscriberId.set(id, [messageEvent]);

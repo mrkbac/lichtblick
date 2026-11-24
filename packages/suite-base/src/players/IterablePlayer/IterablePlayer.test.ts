@@ -1456,6 +1456,27 @@ describe("IterablePlayer", () => {
     await player.isClosed;
   });
 
+  it("stamps frames with the generation of the subscriptions they were loaded for", async () => {
+    const source = new TestSource();
+    const topic = BasicBuilder.string();
+    const player = new IterablePlayer({ source, enablePreload: false, sourceId: "test" });
+    const store = new PlayerStateStore(4);
+    player.setSubscriptions([{ topic }], 1);
+    player.setListener(async (state) => {
+      await store.add(state);
+    });
+    expect((await store.done).at(-1)?.activeData?.subscriptionGeneration).toBe(1);
+
+    // The same selection again needs no new load; a new one loads for its generation
+    store.reset(2);
+    player.setSubscriptions([{ topic }], 2);
+    player.setSubscriptions([{ topic }, { topic: BasicBuilder.string() }], 3);
+    expect((await store.done).at(-1)?.activeData?.subscriptionGeneration).toBe(3);
+
+    player.close();
+    await player.isClosed;
+  });
+
   it("preloads from the playhead, not from the start", async () => {
     const source = new TestSource();
     const topic = BasicBuilder.string();

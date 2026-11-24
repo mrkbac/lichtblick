@@ -59,8 +59,9 @@ export interface Player {
   // Close the player; i.e. terminate any connections it might have open.
   close(): void;
   // Set a new set of subscriptions/advertisers. This might trigger fetching
-  // new data, which might in turn trigger a backfill of messages.
-  setSubscriptions(subscriptions: Immutable<SubscribePayload[]>): void;
+  // new data, which might in turn trigger a backfill of messages. `generation` numbers the call,
+  // see PlayerStateActiveData.subscriptionGeneration.
+  setSubscriptions(subscriptions: Immutable<SubscribePayload[]>, generation?: number): void;
   setPublishers?(publishers: AdvertiseOptions[]): void;
   // Modify a remote parameter such as a rosparam.
   setParameter(key: string, value: ParameterValue): void;
@@ -230,6 +231,11 @@ export type PlayerStateActiveData = {
   compareSides?: readonly CompareSide[];
   /** The `request` of the last setCompareOffsets call the published sides include */
   compareRequest?: number;
+  /**
+   * The `generation` of the setSubscriptions call `messages` were loaded for, by a player that
+   * slices messages to the subscribed `fields`. Unset: messages are whole.
+   */
+  subscriptionGeneration?: number;
 
   // A complete list of ROS datatypes. Allowed to change. But it must always be "complete" (every
   // topic must refer to a datatype that is present in this list, every datatypes that refers to
