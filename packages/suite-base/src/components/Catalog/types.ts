@@ -70,6 +70,8 @@ export type CatalogRecording = CatalogSummary & {
   description?: string;
   /** Layout to apply when the recording opens. */
   layoutUrl?: string;
+  /** Preview clips listed by a catalog URL, per image topic (in `previewTopics` order). */
+  previews?: Record<string, PreviewFrame[]>;
 };
 
 export type CatalogBackend = {

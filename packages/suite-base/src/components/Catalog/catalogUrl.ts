@@ -2,7 +2,8 @@
 
 import { compare, fromRFC3339String } from "@foxglove/rostime";
 
-import { CatalogEvent, CatalogRecording, CatalogTopic } from "./types";
+import type { PreviewFrame } from "./preview";
+import { CatalogEvent, CatalogRecording, CatalogTopic, CatalogTrack } from "./types";
 
 /**
  * A served catalog (schema v1): JSON that lists recordings to open from URLs. Relative URLs are
@@ -25,6 +26,11 @@ import { CatalogEvent, CatalogRecording, CatalogTopic } from "./types";
  *     "device": "Robot 1", "dataset": "Outdoor trials",
  *     "session": "Morning run", "episode": "Approach",
  *     "events": [{ "name": "Reached waypoint", "start": "2026-10-01T10:01:00Z" }],
+ *     "tracks": [{ "topic": "/gps/fix", "points": [[11.57602, 48.13743]] }], // [lon, lat], for the map
+ *     "previews": [{                                       // clips, the first one plays in the list
+ *       "topic": "/camera/front",
+ *       "frames": [{ "offset": 0, "url": "previews/droid/000.jpg" }] // seconds since start
+ *     }],
  *     "description": "DROID, Alexander Khazatsky et al. · CC BY 4.0"
  *   }]
  * }
@@ -92,6 +98,60 @@ function parseEvents(value: unknown): CatalogEvent[] | undefined {
   });
 }
 
+function parsePoint(value: unknown): [number, number] | undefined {
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+  const [lon, lat] = value as unknown[];
+  return typeof lon === "number" &&
+    typeof lat === "number" &&
+    Math.abs(lon) <= 180 &&
+    Math.abs(lat) <= 90
+    ? [lon, lat]
+    : undefined;
+}
+
+function parseTracks(value: unknown): CatalogTrack[] | undefined {
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+  return value.flatMap((track): CatalogTrack[] => {
+    if (!isRecord(track) || typeof track.topic !== "string" || !Array.isArray(track.points)) {
+      return [];
+    }
+    const points = track.points.flatMap((point): [number, number][] => {
+      const parsed = parsePoint(point);
+      return parsed ? [parsed] : [];
+    });
+    return points.length > 0 ? [{ topic: track.topic, points }] : [];
+  });
+}
+
+/** Preview clips per topic, in the catalog's order, with frame URLs resolved by `resolve`. */
+function parsePreviews(
+  value: unknown,
+  resolve: (url: unknown) => string | undefined,
+): Record<string, PreviewFrame[]> | undefined {
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+  const previews: Record<string, PreviewFrame[]> = {};
+  for (const preview of value) {
+    if (!isRecord(preview) || typeof preview.topic !== "string" || !Array.isArray(preview.frames)) {
+      continue;
+    }
+    const frames = preview.frames.flatMap((frame): PreviewFrame[] => {
+      const url = isRecord(frame) ? resolve(frame.url) : undefined;
+      const offsetSec = isRecord(frame) ? optionalNumber(frame.offset) : undefined;
+      return url != undefined && offsetSec != undefined ? [{ offsetSec, url }] : [];
+    });
+    if (frames.length > 0) {
+      previews[preview.topic] = frames;
+    }
+  }
+  return Object.keys(previews).length > 0 ? previews : undefined;
+}
+
 /** The URL's last path segment, decoded when it is valid UTF-8. */
 function fileName(url: string): string {
   const name = new URL(url).pathname.split("/").pop()!;
@@ -137,6 +197,8 @@ export function parseCatalog(json: unknown, catalogUrl: string): ServedCatalog {
         { id: entry.id },
       );
     }
+    const previews = parsePreviews(entry.previews, resolve);
+    const previewTopics = previews && Object.keys(previews);
     return {
       id: entry.id,
       name: optionalString(entry.name) ?? fileName(url),
@@ -146,7 +208,11 @@ export function parseCatalog(json: unknown, catalogUrl: string): ServedCatalog {
       size: optionalNumber(entry.size),
       messages: optionalNumber(entry.messages),
       topics: parseTopics(entry.topics),
-      thumbnail: resolve(entry.thumbnail),
+      // Without a thumbnail, a frame from the first clip stands in
+      thumbnail: resolve(entry.thumbnail) ?? previews?.[previewTopics![0]!]?.[0]?.url,
+      tracks: parseTracks(entry.tracks),
+      previews,
+      previewTopics,
       layoutUrl: resolve(entry.layout),
       description: optionalString(entry.description),
       machine: optionalString(entry.device),

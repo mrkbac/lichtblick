@@ -321,7 +321,7 @@ export default function Catalog({
   const selected = recordings.find((r) => r.id === selectedId);
   const loadSelectedPreview = useMemo(
     () =>
-      selected?.source.type === "local-file"
+      selected?.source.type === "local-file" || selected?.previews != undefined
         ? async (topic: string) => await folder.loadPreview(selected, topic)
         : undefined,
     [folder, selected],
