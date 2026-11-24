@@ -24,7 +24,12 @@ import type { FollowMode } from "../IRenderer";
 import type { Renderer } from "../Renderer";
 import { SceneExtension } from "../SceneExtension";
 import { SettingsTreeEntry } from "../SettingsManager";
-import { CameraState, DEFAULT_CAMERA_STATE, DEFAULT_ORBIT_CONTROLS_CONFIG } from "../camera";
+import {
+  CameraState,
+  DEFAULT_CAMERA_STATE,
+  DEFAULT_ORBIT_CONTROLS_CONFIG,
+  isTrackpadScroll,
+} from "../camera";
 import { frameSettingsNode, viewSettingsNode } from "../settingsNodes/global";
 
 /** Number fields of the camera settings node, see `viewSettingsNode` */
@@ -40,6 +45,8 @@ const PI_2 = Math.PI / 2;
 const snapshotInRenderFrame = makePose();
 
 const tempVec3 = new THREE.Vector3();
+/** Wheel events further apart than this start a new gesture. */
+const TRACKPAD_GESTURE_GAP_MS = 200;
 
 const tempSpherical = new THREE.Spherical();
 const tempEuler = new THREE.Euler();
@@ -91,6 +98,35 @@ export class CameraStateSettings extends SceneExtension implements ICameraHandle
     this.#cameraGroup.add(this.#perspectiveCamera);
     this.#cameraGroup.add(this.#orthographicCamera);
     this.add(this.#cameraGroup);
+
+    // Trackpad: two-finger scroll pans like a drag and Alt+scroll orbits like a right-drag. Pinch
+    // and mouse wheels fall through to OrbitControls' zoom. Registered before OrbitControls (and
+    // in the capture phase) so it can claim the event first. A gesture stays a trackpad gesture
+    // while its events keep coming, so momentum and pure-vertical scrolls don't flip to zoom.
+    let trackpadGestureUntil = 0;
+    canvas.addEventListener(
+      "wheel",
+      (event) => {
+        const inGesture = event.timeStamp < trackpadGestureUntil;
+        if (event.ctrlKey || !(inGesture || isTrackpadScroll(event))) {
+          return;
+        }
+        trackpadGestureUntil = event.timeStamp + TRACKPAD_GESTURE_GAP_MS;
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        if (!this.#controls.enabled) {
+          return;
+        }
+        if (event.altKey) {
+          const radiansPerPixel = (2 * Math.PI) / canvas.clientHeight;
+          this.#controls.rotateLeft(-event.deltaX * radiansPerPixel);
+          this.#controls.rotateUp(-event.deltaY * radiansPerPixel);
+        } else {
+          this.#controls.pan(-event.deltaX, -event.deltaY);
+        }
+      },
+      { capture: true, passive: false },
+    );
 
     this.#controls = new OrbitControls(this.#perspectiveCamera, this.#canvas);
     this.#controls.screenSpacePanning = DEFAULT_ORBIT_CONTROLS_CONFIG.screenSpacePanning;

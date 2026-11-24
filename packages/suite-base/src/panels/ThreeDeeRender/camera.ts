@@ -52,3 +52,23 @@ export const DEFAULT_ORBIT_CONTROLS_CONFIG: OrbitControlsConfig = {
   },
   keys: { LEFT: "KeyA", RIGHT: "KeyD", UP: "KeyW", BOTTOM: "KeyS" },
 };
+
+/**
+ * True for two-finger trackpad scrolling; false for a mouse wheel and for pinching, which browsers
+ * report as Ctrl+wheel. Chrome and Safari report `wheelDeltaY` as exactly -3 × `deltaY` only for
+ * trackpads, and a mouse wheel scrolls sideways only with Shift (or a tilt wheel).
+ * ponytail: heuristic; smooth-scrolling mice (e.g. Magic Mouse) count as trackpads and pan, and
+ * Firefox's vertical-only trackpad scrolls still zoom. Add a setting if that bites.
+ */
+export function isTrackpadScroll(
+  event: Pick<WheelEvent, "ctrlKey" | "shiftKey" | "deltaMode" | "deltaX" | "deltaY">,
+): boolean {
+  if (event.ctrlKey || event.deltaMode !== 0 /* DOM_DELTA_PIXEL */) {
+    return false;
+  }
+  if (event.deltaX !== 0 && !event.shiftKey) {
+    return true;
+  }
+  const { wheelDeltaY } = event as typeof event & { wheelDeltaY?: number };
+  return wheelDeltaY != undefined && event.deltaY !== 0 && wheelDeltaY === -3 * event.deltaY;
+}
