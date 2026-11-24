@@ -10,6 +10,7 @@ import type { Mock } from "vitest";
 import {
   MessagePipelineContext,
   useMessagePipeline,
+  useMessagePipelineBatchedWhenHidden,
 } from "@lichtblick/suite-base/components/MessagePipeline";
 import { subtractTimes } from "@lichtblick/suite-base/players/UserScriptPlayer/transformerWorker/typescript/userUtils/time";
 import { PlayerStateActiveData } from "@lichtblick/suite-base/players/types";
@@ -33,6 +34,9 @@ describe("useStateTransitionsTime", () => {
       playerState: { activeData: activeData as PlayerStateActiveData },
     } as unknown as MessagePipelineContext;
     mockUseMessagePipeline.mockImplementation((selector) => selector(mockContext));
+    (useMessagePipelineBatchedWhenHidden as Mock).mockImplementation((selector) =>
+      selector(mockContext),
+    );
   };
 
   beforeEach(() => {

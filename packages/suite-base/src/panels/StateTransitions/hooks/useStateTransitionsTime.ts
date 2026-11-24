@@ -4,10 +4,14 @@
 import { Time, toSec } from "@foxglove/rostime";
 import { useMemo } from "react";
 
-import { useMessagePipeline } from "@lichtblick/suite-base/components/MessagePipeline";
+import {
+  useMessagePipeline,
+  useMessagePipelineBatchedWhenHidden,
+} from "@lichtblick/suite-base/components/MessagePipeline";
 import {
   selectCurrentTime,
   selectEndTime,
+  selectLastSeekTime,
   selectStartTime,
 } from "@lichtblick/suite-base/components/MessagePipeline/selectors";
 import { subtractTimes } from "@lichtblick/suite-base/players/UserScriptPlayer/transformerWorker/typescript/userUtils/time";
@@ -20,7 +24,10 @@ type UseStateTransitionsTime = {
 
 const useStateTransitionsTime = (): UseStateTransitionsTime => {
   const startTime = useMessagePipeline(selectStartTime);
-  const currentTime = useMessagePipeline(selectCurrentTime);
+  // The whole panel re-renders with the playhead; a hidden one catches up once per interval
+  const currentTime = useMessagePipelineBatchedWhenHidden(selectCurrentTime, {
+    flushKey: selectLastSeekTime,
+  });
   const endTime = useMessagePipeline(selectEndTime);
 
   const currentTimeSinceStart = useMemo(

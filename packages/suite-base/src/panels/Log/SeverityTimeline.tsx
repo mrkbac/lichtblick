@@ -11,11 +11,13 @@ import AutoSizingCanvas from "@lichtblick/suite-base/components/AutoSizingCanvas
 import {
   MessagePipelineContext,
   useMessagePipeline,
+  useMessagePipelineBatchedWhenHidden,
   useMessagePipelineGetter,
 } from "@lichtblick/suite-base/components/MessagePipeline";
 import {
   selectCurrentTime,
   selectEndTime,
+  selectLastSeekTime,
   selectStartTime,
 } from "@lichtblick/suite-base/components/MessagePipeline/selectors";
 import {
@@ -97,7 +99,9 @@ export function binLevels(
 
 function Playhead({ start }: { start: Time }) {
   const { classes } = useStyles();
-  const currentTime = useMessagePipeline(selectCurrentTime);
+  const currentTime = useMessagePipelineBatchedWhenHidden(selectCurrentTime, {
+    flushKey: selectLastSeekTime,
+  });
   // Re-renders every tick anyway, so position it with the exact duration
   const durationSec = exactDurationSec(start, useMessagePipeline(selectEndTime));
   if (currentTime == undefined) {

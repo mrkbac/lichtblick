@@ -6,10 +6,12 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import * as _ from "lodash-es";
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useContext, useEffect, useRef, useState } from "react";
 import { makeStyles } from "tss-react/mui";
 
 import { Immutable } from "@lichtblick/suite";
+import { PanelVisibleContext } from "@lichtblick/suite-base/components/DockPanelContext";
+import { HIDDEN_RENDER_INTERVAL_MS } from "@lichtblick/suite-base/components/PanelExtensionAdapter/hiddenFrames";
 import { PANEL_FLOATING_TOOLBAR_HEIGHT } from "@lichtblick/suite-base/components/PanelToolbar/constants";
 import { SaveConfig } from "@lichtblick/suite-base/types/panels";
 import { parseColor, toHex8 } from "@lichtblick/suite-base/util/parseColor";
@@ -195,22 +197,36 @@ function PlotLegendComponent(props: Props): React.JSX.Element {
   const [currentValuesBySeriesIndex, setCurrentValuesBySeriesIndex] = useState<
     unknown[] | undefined
   >();
+  // A hidden panel (inactive tab, behind a maximized panel) catches up once per interval; showing
+  // it shows the latest values right away
+  const visible = useContext(PanelVisibleContext);
   useEffect(() => {
     if (!coordinator || !showValues) {
       return;
     }
+    let shownAt = -Infinity;
     const handler = (values: readonly unknown[]) => {
+      const now = performance.now();
+      if (!visible && now - shownAt < HIDDEN_RENDER_INTERVAL_MS) {
+        return;
+      }
+      shownAt = now;
       // Emitted every frame; keep the old array when no value changed, so the legend doesn't re-render.
       setCurrentValuesBySeriesIndex((prev) =>
         // An index loop, not every(): every() skips holes, which mark series without a value.
         prev && sameValues(prev, values) ? prev : values.slice(),
       );
     };
+    handler(coordinator.getCurrentValues());
     coordinator.on("currentValuesChanged", handler);
     return () => {
       coordinator.off("currentValuesChanged", handler);
-      setCurrentValuesBySeriesIndex(undefined);
     };
+  }, [coordinator, showValues, visible]);
+  useEffect(() => {
+    if (!coordinator || !showValues) {
+      setCurrentValuesBySeriesIndex(undefined);
+    }
   }, [coordinator, showValues]);
 
   const valuesBySeriesIndex = hoveredValuesBySeriesIndex ?? currentValuesBySeriesIndex;

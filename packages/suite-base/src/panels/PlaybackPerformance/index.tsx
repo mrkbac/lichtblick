@@ -16,11 +16,12 @@
 
 import { subtract as subtractTimes, toSec } from "@foxglove/rostime";
 import { Typography } from "@mui/material";
-import React, { ReactElement, useEffect, useReducer, useRef } from "react";
+import React, { ReactElement, useContext, useEffect, useReducer, useRef } from "react";
 import { makeStyles } from "tss-react/mui";
 
 import { formatByteSize } from "@lichtblick/den/format";
 import { Immutable } from "@lichtblick/suite";
+import { PanelVisibleContext } from "@lichtblick/suite-base/components/DockPanelContext";
 import {
   MessagePipelineContext,
   useMessagePipelineGetter,
@@ -98,13 +99,22 @@ export function formatBitRate(bitsPerSec: number): string {
 
 /**
  * Samples the message pipeline, the browser frame loop and memory every TICK_MS and returns the
- * accumulated stats. Re-renders the caller once per tick.
+ * accumulated stats. Re-renders the caller once per tick while it is shown.
  */
 function usePerformanceStats(): Stats {
   const subscribe = useMessagePipelineSubscribe();
   const getPipelineState = useMessagePipelineGetter();
   const stats = useRef<Stats>(newStats());
   const [, rerender] = useReducer((n: number) => n + 1, 0);
+  // Hidden (inactive tab, behind a maximized panel): keep sampling, show it when shown again
+  const visible = useContext(PanelVisibleContext);
+  const visibleRef = useRef(visible);
+  useEffect(() => {
+    visibleRef.current = visible;
+    if (visible) {
+      rerender();
+    }
+  }, [visible]);
 
   useEffect(() => {
     const perf = performance as PerformanceWithMemory;
@@ -240,7 +250,7 @@ function usePerformanceStats(): Stats {
       }
 
       frames = updates = messages = recordingMs = playingUpdates = 0;
-      if (!document.hidden) {
+      if (!document.hidden && visibleRef.current) {
         rerender();
       }
       schedule();
