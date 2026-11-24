@@ -11,7 +11,7 @@ import { upperBound } from "@lichtblick/suite-base/util/sortedSearch";
 
 import { normalize } from "./colorBy";
 import { DEFAULT_POINT_SIZE, TopicStyle } from "./config";
-import { bearingDegrees, distanceMeters, ellipseRing, LngLat } from "./geo";
+import { bearingDegrees, ellipseRing, LngLat } from "./geo";
 import { getAccuracy } from "./getAccuracy";
 import { GeoJsonMessage, hasFix, parseGeoJSON } from "./support";
 import { nearestFix, TrackStore } from "./track";
@@ -474,14 +474,21 @@ export function geoJsonFeatures(
   return collection(features);
 }
 
+/** Metres per degree of latitude */
+const METERS_PER_DEGREE = 111_195;
+
 /** Direction of travel to `to` from the latest fix before `end` at least 1 m back. */
 export function headingFromTrack(track: TrackStore, end: number, to: LngLat): number | undefined {
-  // ponytail: 500 fixes back at most, so a long stop doesn't scan the whole track.
-  for (let i = end - 1; i >= Math.max(0, end - 500); i--) {
-    const from = track.lngLat(i);
-    // ponytail: below 1 m GNSS jitter dominates, so a stationary receiver keeps its last heading.
-    if (distanceMeters(from, to) >= 1) {
-      return bearingDegrees(from, to);
+  // Scans back to wherever the receiver last moved, however long it stood still, so the distance
+  // is a flat-earth one on the columns (exact enough at 1 m, no trig or allocation per fix).
+  // Below 1 m GNSS jitter dominates, so a stationary receiver keeps its last heading.
+  const { lon, lat } = track.columns;
+  const lonScale = Math.cos((to[1] * Math.PI) / 180);
+  for (let i = end - 1; i >= 0; i--) {
+    const dx = (lon[i]! - to[0]) * lonScale;
+    const dy = lat[i]! - to[1];
+    if ((dx * dx + dy * dy) * METERS_PER_DEGREE * METERS_PER_DEGREE >= 1) {
+      return bearingDegrees(track.lngLat(i), to);
     }
   }
   return undefined;
