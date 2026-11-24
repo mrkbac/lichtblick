@@ -8,10 +8,14 @@
 import { attribute, materialOpacity } from "three/tsl";
 import * as THREE from "three/webgpu";
 
+// Shared by every instance: a node's shader cache key is its id, so a node per material would
+// compile a new shader for every entity
+const INSTANCE_OPACITY = attribute("instanceOpacity", "float").mul(materialOpacity);
+
 /** MeshStandardNodeMaterial with a per-instance alpha from the geometry's `instanceOpacity` attribute */
 export class MeshStandardMaterialWithInstanceOpacity extends THREE.MeshStandardNodeMaterial {
   public constructor(parameters?: THREE.MeshStandardNodeMaterialParameters) {
     super(parameters);
-    this.opacityNode = attribute("instanceOpacity", "float").mul(materialOpacity);
+    this.opacityNode = INSTANCE_OPACITY;
   }
 }

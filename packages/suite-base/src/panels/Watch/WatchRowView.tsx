@@ -149,10 +149,19 @@ function PathEditor({
   );
 }
 
-function drawSparkline(canvas: HTMLCanvasElement, values: readonly number[], color: string): void {
+/** CSS size of each sparkline canvas, kept by a ResizeObserver: reading it while painting would
+ * force a layout per row right after the row's text changed */
+type CanvasSize = { width: number; height: number };
+
+function drawSparkline(
+  canvas: HTMLCanvasElement,
+  size: CanvasSize,
+  values: readonly number[],
+  color: string,
+): void {
   const dpr = window.devicePixelRatio;
-  const width = Math.round(canvas.clientWidth * dpr);
-  const height = Math.round(canvas.clientHeight * dpr);
+  const width = Math.round(size.width * dpr);
+  const height = Math.round(size.height * dpr);
   if (canvas.width !== width || canvas.height !== height) {
     canvas.width = width;
     canvas.height = height;
@@ -240,6 +249,7 @@ export const WatchRowView = memo(function WatchRowViewInner({
   const rootRef = useRef<HTMLDivElement>(null);
   const valueRef = useRef<HTMLSpanElement>(null);
   const sparkRef = useRef<HTMLCanvasElement>(null);
+  const sparkSize = useRef<CanvasSize | undefined>(undefined);
   const ageRef = useRef<HTMLSpanElement>(null);
   // The expanded tree renders with React; it is only shown for the rows being inspected
   const [treeValue, setTreeValue] = useState<{ value: unknown; text: string }>();
@@ -316,8 +326,13 @@ export const WatchRowView = memo(function WatchRowViewInner({
     hadValue.current = value != undefined;
     root.dataset.error = String(error != undefined);
     root.dataset.expandable = String(isExpandable(value));
-    if (sparkRef.current) {
-      drawSparkline(sparkRef.current, state ? historyValues(state) : [], lineColor);
+    if (sparkRef.current && sparkSize.current) {
+      drawSparkline(
+        sparkRef.current,
+        sparkSize.current,
+        state ? historyValues(state) : [],
+        lineColor,
+      );
     }
     if (expanded) {
       setTreeValue((prev) =>
@@ -350,6 +365,28 @@ export const WatchRowView = memo(function WatchRowViewInner({
       painters.delete(row.id);
     };
   }, [expanded, paint, paintAge, painters, row.id, showAge, sparklines]);
+
+  // The sparkline sizes its backing store to the canvas: repaint when the canvas resizes
+  const paintRef = useRef(paint);
+  paintRef.current = paint;
+  useEffect(() => {
+    const canvas = sparkRef.current;
+    if (!canvas || typeof ResizeObserver === "undefined") {
+      return;
+    }
+    const Observer = canvas.ownerDocument.defaultView?.ResizeObserver ?? ResizeObserver;
+    const observer = new Observer(([entry]) => {
+      if (entry) {
+        sparkSize.current = { width: entry.contentRect.width, height: entry.contentRect.height };
+        paintRef.current();
+      }
+    });
+    observer.observe(canvas);
+    return () => {
+      observer.disconnect();
+      sparkSize.current = undefined;
+    };
+  }, [sparklines]);
 
   // Dragging a row reorders it here, and adds its path to other panels (e.g. a Plot)
   // Not while editing, so the mouse can select text in the input

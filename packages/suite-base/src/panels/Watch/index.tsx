@@ -116,25 +116,6 @@ function Watch({ config: rawConfig, saveConfig }: Props): React.JSX.Element {
   const requestPaint = scheduler.request;
   useEffect(() => scheduler.cancel, [scheduler]);
 
-  // Sparkline canvases size their backing store when painted, so repaint all rows on resize
-  const rootRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const root = rootRef.current;
-    if (!root || typeof ResizeObserver === "undefined") {
-      return;
-    }
-    const Observer = root.ownerDocument.defaultView?.ResizeObserver ?? ResizeObserver;
-    const observer = new Observer(() => {
-      for (const paint of painters.values()) {
-        paint();
-      }
-    });
-    observer.observe(root);
-    return () => {
-      observer.disconnect();
-    };
-  }, [painters]);
-
   // Age values against the playback time without re-rendering: repaint only the age badges
   const getPipeline = useMessagePipelineGetter();
   // Hidden (inactive tab, behind a maximized panel): no ticking; showing it repaints right away.
@@ -355,7 +336,6 @@ function Watch({ config: rawConfig, saveConfig }: Props): React.JSX.Element {
 
   return (
     <div
-      ref={rootRef}
       className={classes.root}
       onPaste={onPaste}
       onDragEnd={() => {

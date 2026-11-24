@@ -262,17 +262,20 @@ class CylinderMaterial extends MeshStandardMaterialWithInstanceOpacity {
   }
 }
 
+// Shared by every outline: a node's shader cache key is its id, so a node per material would
+// compile a new shader for every entity
+const OUTLINE_POSITION = mat4(
+  attribute("instanceMatrix0", "vec4"),
+  attribute("instanceMatrix1", "vec4"),
+  attribute("instanceMatrix2", "vec4"),
+  attribute("instanceMatrix3", "vec4"),
+).mul(vec4(taper(positionGeometry), 1)).xyz;
+
 /** Instanced outline: reads the cylinder instance matrices from the outline geometry's own attributes */
 class CylinderOutlineMaterial extends THREE.LineBasicNodeMaterial {
   public constructor() {
     super();
-    const matrix = mat4(
-      attribute("instanceMatrix0", "vec4"),
-      attribute("instanceMatrix1", "vec4"),
-      attribute("instanceMatrix2", "vec4"),
-      attribute("instanceMatrix3", "vec4"),
-    );
-    this.positionNode = matrix.mul(vec4(taper(positionGeometry), 1)).xyz;
+    this.positionNode = OUTLINE_POSITION;
   }
 }
 
