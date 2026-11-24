@@ -18,6 +18,7 @@ import roslib from "@foxglove/roslibjs";
 import { parse as parseMessageDefinition } from "@foxglove/rosmsg";
 import { MessageReader as ROS1MessageReader } from "@foxglove/rosmsg-serialization";
 import { Time, fromMillis, toSec } from "@foxglove/rostime";
+import { Semaphore } from "async-mutex";
 import * as _ from "lodash-es";
 
 import { debouncePromise } from "@lichtblick/den/async";
@@ -58,6 +59,9 @@ const log = Log.getLogger(__dirname);
 const INTERNAL_TOPICS: readonly string[] = ["/clock"];
 
 type MessageDecoder = { readMessage: (data: Uint8Array) => unknown };
+
+// Services whose rosapi lookups run at once
+const SERVICE_LOOKUP_CONCURRENCY = 8;
 
 const CAPABILITIES = [PLAYER_CAPABILITIES.advertise, PLAYER_CAPABILITIES.callServices];
 
@@ -720,8 +724,6 @@ export default class RosbridgePlayer implements Player {
 
   // Look up request/response definitions of services via rosapi, so panels can build request
   // templates. Lookups are cached; services without rosapi details are left out.
-  // ponytail: one rosapi call per unknown service at once; add a concurrency limit if large graphs
-  // overload rosbridge.
   async #resolveServiceTypes(): Promise<void> {
     const services = this.#services;
     const missing = [...services.keys()].filter((name) => !this.#serviceTypes.has(name));
@@ -730,15 +732,20 @@ export default class RosbridgePlayer implements Player {
       return;
     }
 
+    // A large graph has hundreds of services: look up a few at a time, not flood rosbridge
+    const lookups = new Semaphore(SERVICE_LOOKUP_CONCURRENCY);
     const results = await Promise.allSettled(
-      missing.map(async (name) => {
-        const type = await this.#getServiceType(name);
-        const [request, response] = await Promise.all([
-          this.#getServiceDetails(type, "request"),
-          this.#getServiceDetails(type, "response"),
-        ]);
-        return { name, type, request, response };
-      }),
+      missing.map(
+        async (name) =>
+          await lookups.runExclusive(async () => {
+            const type = await this.#getServiceType(name);
+            const [request, response] = await Promise.all([
+              this.#getServiceDetails(type, "request"),
+              this.#getServiceDetails(type, "response"),
+            ]);
+            return { name, type, request, response };
+          }),
+      ),
     );
     if (this.#services !== services) {
       return; // graph changed meanwhile; the next refresh resolves again

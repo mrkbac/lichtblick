@@ -144,10 +144,13 @@ class MockRosClient {
   public holdNodes = false;
   public nodeRequests = 0;
 
+  /** Services of the one node the graph has, if set */
+  public services: string[] = [];
+
   public getNodes(callback: (nodes: string[]) => void, _errCb: (error: Error) => void) {
     this.nodeRequests++;
     if (!this.holdNodes) {
-      callback([]);
+      callback(this.services.length > 0 ? ["/node"] : []);
     }
   }
 
@@ -156,7 +159,24 @@ class MockRosClient {
     callback: (subscriptions: string[], publications: string[], services: string[]) => void,
     _errCb: (error: Error) => void,
   ) {
-    callback([], [], []);
+    callback([], [], this.services);
+  }
+
+  /** Service type lookups that haven't answered yet */
+  public pendingServiceTypes: (() => void)[] = [];
+
+  public getServiceType(_service: string, callback: (type: string) => void) {
+    this.pendingServiceTypes.push(() => {
+      callback("pkg/Srv");
+    });
+  }
+
+  public getServiceRequestDetails(_type: string, callback: (result: { typedefs: [] }) => void) {
+    callback({ typedefs: [] });
+  }
+
+  public getServiceResponseDetails(_type: string, callback: (result: { typedefs: [] }) => void) {
+    callback({ typedefs: [] });
   }
 }
 
@@ -267,6 +287,27 @@ describe("RosbridgePlayer", () => {
     second.setup({ types: ["rosgraph_msgs/Log"] });
     await vi.advanceTimersByTimeAsync(0);
     expect(second.nodeRequests).toBe(1);
+  });
+
+  it("looks up a large graph's services a few at a time", async () => {
+    vi.useFakeTimers();
+    onTestFinished(() => {
+      vi.useRealTimers();
+    });
+    workerInstance.services = Array.from({ length: 100 }, (_, i) => `/service_${i}`);
+    workerInstance.setup({ types: ["rosgraph_msgs/Log"] });
+    await vi.advanceTimersByTimeAsync(0);
+
+    let lookups = 0;
+    while (workerInstance.pendingServiceTypes.length > 0) {
+      expect(workerInstance.pendingServiceTypes.length).toBeLessThanOrEqual(8);
+      lookups += workerInstance.pendingServiceTypes.length;
+      workerInstance.pendingServiceTypes.splice(0).forEach((answer) => {
+        answer();
+      });
+      await vi.advanceTimersByTimeAsync(0);
+    }
+    expect(lookups).toBe(100);
   });
 
   it("polls again while hidden once a panel requests a topic that isn't advertised yet", async () => {

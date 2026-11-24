@@ -135,7 +135,8 @@ export class HydratedSourcePool {
       if (entry.pins === 0) {
         await entry.hydrator.close(old);
       } else {
-        // ponytail: pins don't say which value they hold, so wait for all of them
+        // Pins don't say which value they hold, so it waits for all of them. Values are only
+        // replaced while their source is being indexed, so few pile up.
         entry.retired.push(old);
       }
     }

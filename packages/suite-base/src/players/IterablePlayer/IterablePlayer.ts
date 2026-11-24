@@ -82,6 +82,10 @@ const SKIM_UPDATES_PER_SEC = 30;
 const SKIM_ADAPT_WINDOW_SEC = 3;
 // Below this fraction of the requested speed, skim takes fewer, larger steps
 const SKIM_MIN_ACHIEVED_SPEED = 0.8;
+// From this fraction on, skim tries more updates again, a few more per window. A step up stays
+// within 0.95 / 0.8, so on its own it doesn't fall below SKIM_MIN_ACHIEVED_SPEED and step back down.
+const SKIM_RECOVERED_SPEED = 0.95;
+const SKIM_STEP_UP = 1.15;
 
 // Amount to wait until panels have had the chance to subscribe to topics before
 // we start playback
@@ -383,9 +387,9 @@ export class IterablePlayer implements Player {
 
   /**
    * Each skim update costs about the same to read, so when the source can't deliver them in time,
-   * take fewer, larger steps instead of playing slower than the selected speed.
+   * take fewer, larger steps instead of playing slower than the selected speed. When it keeps up
+   * again (e.g. after a network hiccup), take more steps again.
    */
-  // ponytail: only steps down; it resets on speed change, add probing up if bandwidth recovers often
   #adaptSkimRate(): void {
     if (!this.#playbackSkimInterval || !this.#currentTime) {
       return;
@@ -404,6 +408,11 @@ export class IterablePlayer implements Player {
     this.#skimCheck = { wallMs: now, time: this.#currentTime };
     if (achieved < SKIM_MIN_ACHIEVED_SPEED) {
       this.#skimUpdatesPerSec = Math.max(1, Math.floor(this.#skimUpdatesPerSec * achieved));
+    } else if (achieved >= SKIM_RECOVERED_SPEED) {
+      this.#skimUpdatesPerSec = Math.min(
+        SKIM_UPDATES_PER_SEC,
+        Math.ceil(this.#skimUpdatesPerSec * SKIM_STEP_UP),
+      );
     }
   }
 

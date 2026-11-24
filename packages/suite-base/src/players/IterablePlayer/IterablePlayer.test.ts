@@ -1547,8 +1547,10 @@ describe("IterablePlayer", () => {
     await player.isClosed;
   });
 
-  it("skims at high speed and takes larger steps when the source can't keep up", async () => {
-    // A source that needs 100ms per skim update while 50x at 30 updates/s needs one every 33ms
+  it("skims at high speed, takes larger steps while the source can't keep up and smaller ones once it does", async () => {
+    // A source that first needs 100ms per skim update while 50x at 30 updates/s needs one every
+    // 33ms, then keeps up again
+    let slow = true;
     class SlowSource extends TestSource {
       public override async initialize(): Promise<Initialization> {
         return { ...(await super.initialize()), end: { sec: 10_000, nsec: 0 } };
@@ -1562,7 +1564,8 @@ describe("IterablePlayer", () => {
           ? args.skimInterval.sec + args.skimInterval.nsec / 1e9
           : 1;
         for (let t = startSec + stepSec; t < 10_000; t += stepSec) {
-          await new Promise((resolve) => setTimeout(resolve, 100));
+          const delayMs = slow ? 100 : 1;
+          await new Promise((resolve) => setTimeout(resolve, delayMs));
           yield { type: "stamp", stamp: fromSec(t) };
         }
       }
@@ -1584,20 +1587,25 @@ describe("IterablePlayer", () => {
     player.startPlayback();
 
     await new Promise((resolve) => setTimeout(resolve, 4500));
-
-    const skimSec = iteratorSpy.mock.calls.map(([args]) =>
-      args.skimInterval ? args.skimInterval.sec + args.skimInterval.nsec / 1e9 : undefined,
-    );
+    const skimSec = () =>
+      iteratorSpy.mock.calls.map(([args]) =>
+        args.skimInterval ? args.skimInterval.sec + args.skimInterval.nsec / 1e9 : undefined,
+      );
     // Starts at 30 updates per second ...
-    expect(skimSec[0]).toBeCloseTo(50 / 30);
+    expect(skimSec()[0]).toBeCloseTo(50 / 30);
     // ... and drops to roughly the 10 per second the source delivers
-    const last = skimSec[skimSec.length - 1]!;
-    expect(last).toBeGreaterThanOrEqual(50 / 15);
-    expect(last).toBeLessThanOrEqual(50 / 5);
+    const dropped = skimSec().at(-1)!;
+    expect(dropped).toBeGreaterThanOrEqual(50 / 15);
+    expect(dropped).toBeLessThanOrEqual(50 / 5);
+
+    // Once the source keeps up again, it takes more updates again
+    slow = false;
+    await new Promise((resolve) => setTimeout(resolve, 5000));
+    expect(skimSec().at(-1)!).toBeLessThan(dropped);
 
     player.close();
     await player.isClosed;
-  }, 10_000);
+  }, 15_000);
 
   it("should allow changing subscriptions when player in start-play state", async () => {
     const source = new TestSource();

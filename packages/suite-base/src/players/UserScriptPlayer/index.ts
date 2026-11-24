@@ -1117,8 +1117,8 @@ export default class UserScriptPlayer implements Player {
     const inputs = sourceTopics
       .flatMap((topic) => block.messagesByTopic[topic] ?? [])
       .sort(byReceiveTime);
-    // ponytail: fresh converter instances per block, so converter state does not carry across
-    // block boundaries; carry it over in time order if a stateful converter needs it.
+    // Fresh converter instances per block: blocks load in any order, so state kept by a script
+    // (e.g. a running sum) starts over at each block boundary.
     const outputs = await runFresh(inputs, needed, globalVariables);
     const messagesByTopic: Record<string, MessageEvent[]> = { ...block.messagesByTopic };
     let sizeInBytes = block.sizeInBytes;
