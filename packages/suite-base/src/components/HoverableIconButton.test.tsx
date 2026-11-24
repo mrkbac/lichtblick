@@ -92,15 +92,17 @@ describe("Given HoverableIconButton", () => {
     // When
     renderComponent(props);
 
-    expect(screen.getByTestId("test-icon")).toBeInTheDocument();
-    expect(screen.queryByTestId("active-icon")).not.toBeInTheDocument();
+    expect(screen.getByTestId("test-icon")).toBeVisible();
+    expect(screen.getByTestId("active-icon")).not.toBeVisible();
 
     const button = screen.getByRole("button");
+    const icon = screen.getByTestId("test-icon");
     fireEvent.mouseEnter(button);
 
-    // Then
-    expect(screen.queryByTestId("test-icon")).not.toBeInTheDocument();
-    expect(screen.getByTestId("active-icon")).toBeInTheDocument();
+    // Then the icon stays mounted (a click that started on it still lands) but is hidden
+    expect(screen.getByTestId("test-icon")).toBe(icon);
+    expect(icon).not.toBeVisible();
+    expect(screen.getByTestId("active-icon")).toBeVisible();
   });
 
   it("When mouse leaves Then reverts to normal icon", () => {
@@ -114,12 +116,12 @@ describe("Given HoverableIconButton", () => {
 
     const button = screen.getByRole("button");
     fireEvent.mouseEnter(button);
-    expect(screen.getByTestId("active-icon")).toBeInTheDocument();
+    expect(screen.getByTestId("active-icon")).toBeVisible();
 
     // Then
     fireEvent.mouseLeave(button);
-    expect(screen.getByTestId("test-icon")).toBeInTheDocument();
-    expect(screen.queryByTestId("active-icon")).not.toBeInTheDocument();
+    expect(screen.getByTestId("test-icon")).toBeVisible();
+    expect(screen.getByTestId("active-icon")).not.toBeVisible();
   });
 
   it("When disabled and hovered Then does not show activeIcon", () => {
@@ -136,8 +138,8 @@ describe("Given HoverableIconButton", () => {
     const button = screen.getByRole("button");
     fireEvent.mouseEnter(button);
 
-    expect(screen.getByTestId("test-icon")).toBeInTheDocument();
-    expect(screen.queryByTestId("active-icon")).not.toBeInTheDocument();
+    expect(screen.getByTestId("test-icon")).toBeVisible();
+    expect(screen.getByTestId("active-icon")).not.toBeVisible();
   });
 
   it("When clicked Then calls onClick handler", () => {
