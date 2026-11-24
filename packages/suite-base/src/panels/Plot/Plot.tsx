@@ -35,6 +35,7 @@ import { PANEL_TITLE_TOOLBAR_SPACE } from "@lichtblick/suite-base/components/Pan
 import Stack from "@lichtblick/suite-base/components/Stack";
 import TimeBasedChartTooltipContent from "@lichtblick/suite-base/components/TimeBasedChart/TimeBasedChartTooltipContent";
 import useGlobalVariables from "@lichtblick/suite-base/hooks/useGlobalVariables";
+import usePreventWheelDefault from "@lichtblick/suite-base/hooks/usePreventWheelDefault";
 import { DeltaMarkerBars } from "@lichtblick/suite-base/panels/Plot/DeltaMarkerBars";
 import { VerticalBars } from "@lichtblick/suite-base/panels/Plot/VerticalBars";
 import { PLOT_BUTTONS } from "@lichtblick/suite-base/panels/Plot/buttons";
@@ -129,6 +130,7 @@ const Plot = (props: PlotProps): React.JSX.Element => {
 
   const [subscriberId] = useState(() => randomUUID());
   const [canvasDiv, setCanvasDiv] = useState<HTMLDivElement | null>(null);
+  usePreventWheelDefault(canvasDiv);
   const [coordinator, setCoordinator] = useState<PlotCoordinator | undefined>(undefined);
   const [approximateSeries, setApproximateSeries] = useState(noApproximateSeries);
   const shouldSync = config.isSynced;

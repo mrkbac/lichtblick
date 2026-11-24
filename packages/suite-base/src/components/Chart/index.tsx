@@ -22,6 +22,7 @@ import Logger from "@lichtblick/log";
 import ChartJsMux, {
   ChartUpdateMessage,
 } from "@lichtblick/suite-base/components/Chart/worker/ChartJsMux";
+import usePreventWheelDefault from "@lichtblick/suite-base/hooks/usePreventWheelDefault";
 import { listenForPan } from "@lichtblick/suite-base/util/listenForPan";
 import { mightActuallyBePartial } from "@lichtblick/suite-base/util/mightActuallyBePartial";
 import { randomUUID } from "@lichtblick/suite-base/util/randomUUID";
@@ -124,6 +125,11 @@ function Chart(props: Props): React.JSX.Element {
   const initialized = useRef(false);
   const canvasRef = useRef<HTMLCanvasElement>(undefined);
   const containerRef = useRef<HTMLDivElement>(null);
+  const [wheelTarget, setWheelTarget] = useState<HTMLDivElement | null>(null);
+  const setContainerRef = useCallback((element: HTMLDivElement | null) => {
+    containerRef.current = element;
+    setWheelTarget(element);
+  }, []);
   const isMounted = useMountedState();
 
   // to avoid changing useCallback deps for callbacks which access the scale value
@@ -131,6 +137,7 @@ function Chart(props: Props): React.JSX.Element {
   const currentScalesRef = useRef<RpcScales | undefined>(undefined);
 
   const zoomEnabled = props.options.plugins?.zoom?.zoom?.enabled ?? false;
+  usePreventWheelDefault(zoomEnabled ? wheelTarget : undefined);
   const panEnabled = props.options.plugins?.zoom?.pan?.enabled ?? false;
 
   const { type, data, isBoundsReset, options, width, height, onStartRender, onFinishRender } =
@@ -532,7 +539,7 @@ function Chart(props: Props): React.JSX.Element {
 
   return (
     <div
-      ref={containerRef}
+      ref={setContainerRef}
       onWheel={onWheel}
       onClick={onClick}
       onMouseDown={onMouseDown}
