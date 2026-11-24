@@ -93,8 +93,8 @@ const RESUME_PLAYBACK_KEY = "lichtblick.resumePlaybackAfterReload";
 /**
  * Identifies the recording a player plays, across a reload (the player id is new each load).
  * Undefined while the player has no source.
- * ponytail: source type + player name (the file names, or the URL's), so a different file with the
- * same name would resume too. Players report no size or mtime; add one to PlayerState if that bites.
+ * Source type + player name (the file names, or the URL's), so a different file with the same name
+ * would resume too: players report no size or mtime.
  */
 export function playerSourceKey(
   playerState: Pick<PlayerState, "urlState" | "name">,

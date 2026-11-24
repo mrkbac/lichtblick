@@ -50,8 +50,7 @@ const TIME_FIELDS: Field[] = [
   { name: "nsec", type: "uint32" },
 ];
 
-// ponytail: larger arrays are edited as one JSON value to keep the form fast; add virtualization
-// if people need to edit long arrays item by item.
+// Larger arrays are edited as one JSON value to keep the form fast.
 const MAX_FORM_ARRAY_ITEMS = 50;
 
 const useStyles = makeStyles()((theme) => ({

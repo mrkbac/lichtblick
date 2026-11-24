@@ -171,7 +171,7 @@ export async function openExportOutput(fileName: string): Promise<ExportOutput |
     };
   }
 
-  // ponytail: whole file held in memory; browsers without showSaveFilePicker can't stream to disk.
+  // Browsers without showSaveFilePicker can't stream to disk: the whole file is held in memory.
   const parts: Uint8Array<ArrayBuffer>[] = [];
   let position = 0n;
   return {

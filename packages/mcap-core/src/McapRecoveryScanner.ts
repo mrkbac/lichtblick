@@ -240,8 +240,8 @@ export class McapRecoveryScanner {
         break;
       }
       // Not a record (opcodes 0x80+ are private records and fine to skip): garbage, stop here.
-      // ponytail: no resync after garbage; scanning for the next plausible record header would
-      // recover data behind a corrupt record length.
+      // No resync: data behind a corrupt record length is lost. Scanning for the next plausible
+      // header could misread payload bytes as records, and truncated files don't need it.
       if (opcode < 0x80 && !isKnownOpcode(opcode)) {
         break;
       }

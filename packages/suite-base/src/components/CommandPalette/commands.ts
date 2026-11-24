@@ -42,7 +42,7 @@ export type Command = {
 
 export type RankedCommand = { command: Command; positions: Set<number> };
 
-// ponytail: rendering is capped; virtualize the list if users need to scroll past this.
+// Rendering is capped; typing narrows the list long before anyone scrolls this far.
 export const MAX_RESULTS = 200;
 
 /**

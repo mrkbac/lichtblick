@@ -85,6 +85,11 @@ describe("rosPackageResources", () => {
       const name = await rosPackageNameAtPath(path.join(PACKAGES_ROOT, "./foo"));
       expect(name).toEqual("foo");
     });
+
+    it("skips names in XML comments and CDATA", async () => {
+      const name = await rosPackageNameAtPath(path.join(PACKAGES_ROOT, "./commented"));
+      expect(name).toEqual("commented");
+    });
   });
 
   describe("findRosPackage", () => {

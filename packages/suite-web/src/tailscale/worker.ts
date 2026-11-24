@@ -208,7 +208,7 @@ scope.onconnect = ({ ports }) => {
     } else if (data === "start") {
       if (started && status.error === "tailscaleFailed" && !signedOut && !signingOut) {
         // The Go runtime exited or the node failed; nothing in it is reusable. Drop it and boot a
-        // fresh one. ponytail: IPN has no stop(), so a node that only recovered a panic lingers
+        // fresh one. IPN has no stop(), so a node that only recovered a panic lingers
         // (its callbacks muted, its profile closed) until this worker retires.
         abortStreams();
         node = undefined;

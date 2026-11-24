@@ -267,7 +267,7 @@ export function downsamplePathColumns(
       return indices;
     }
     if (distance > Math.max(width, height)) {
-      // ponytail: a line crossing the view more often than it has pixels (e.g. noise around an
+      // A line crossing the view more often than it has pixels (e.g. noise around an
       // edge) keeps evenly spaced rows. Gaps and the last row stay so lines still break at gaps.
       const stride = Math.ceil(indices.length / maxPoints);
       return indices.filter(

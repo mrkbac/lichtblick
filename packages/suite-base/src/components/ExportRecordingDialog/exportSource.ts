@@ -17,7 +17,7 @@ import { recordingName } from "@lichtblick/suite-base/util/compareSides";
 /** The opened file, if it can be exported: currently a single local MCAP file. */
 export function useExportableFile(): File | undefined {
   const { selectedRecordings } = usePlayerSelection();
-  // ponytail: single file only; merging several open files is a later step.
+  // A single file only: several open files would have to be merged into one recording.
   const file = selectedRecordings?.length === 1 ? selectedRecordings[0] : undefined;
   return typeof file === "object" && /\.mcap$/i.test(file.name) ? file : undefined;
 }

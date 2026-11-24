@@ -6,7 +6,7 @@ import {
 } from "@lichtblick/suite-base/components/PanelExtensionAdapter";
 
 // Lets code outside a panel (e.g. the topic list) "drop" message paths onto it without dragging.
-// ponytail: module-level state, fine while only one layout is mounted at a time.
+// Module-level state: only one layout is mounted at a time.
 const dropConfigs = new Map<string, MessagePathDropConfig>();
 const pendingDrops = new Map<string, readonly DraggedMessagePath[]>();
 
