@@ -31,6 +31,10 @@ const CLIP_CACHE_LIMIT = 200;
 const clips = new Map<string, Promise<PreviewFrame[] | undefined>>();
 
 async function clipFor(recording: CatalogRecording): Promise<PreviewFrame[] | undefined> {
+  // A catalog URL's clips are in memory already, and its recordings have no cache key
+  if (recording.previews) {
+    return recording.previews[recording.previewTopics?.[0] ?? ""];
+  }
   const key = `${recording.previewKey}|${recording.previewTopics?.[0]}`;
   let clip = clips.get(key);
   if (!clip) {

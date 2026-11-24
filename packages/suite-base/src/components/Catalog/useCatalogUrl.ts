@@ -106,9 +106,7 @@ export function useCatalogUrl(url: string): CatalogBackend {
           launch({ ds: source.type, dsParams: { url: source.url, name }, layoutUrl });
         }
       },
-      loadPreview: async () => {
-        throw new Error("Catalog URL recordings have no preview clips");
-      },
+      loadPreview: async (recording, topic) => recording.previews?.[topic] ?? [],
     }),
     [catalog, error, url, launch],
   );
