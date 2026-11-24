@@ -71,6 +71,7 @@ import { CameraState } from "./camera";
 import { DARK_OUTLINE, LIGHT_OUTLINE, stringToRgb } from "./color";
 import { HOVER_PICK_THROTTLE_MS } from "./constants";
 import { FRAME_TRANSFORMS_DATATYPES, FRAME_TRANSFORM_DATATYPES } from "./foxglove";
+import { frameSchedulerFor } from "./frameScheduler";
 import { getGpuDevice } from "./gpuDevice";
 import { LAYER_DEFAULT, LAYER_PICK_ONLY, LAYER_SELECTED } from "./layers";
 import {
@@ -349,7 +350,6 @@ export class Renderer extends EventEmitter<RendererEvents> {
   #disposed = false;
   /** Only ImageMode is subscribed, see enableImageOnlySubscriptionMode */
   #imageOnlySubscriptionMode = false;
-  #animationFrame?: number;
   /** Advances three's node frame; once per drawn frame (see stopThreeAnimationLoop) */
   #advanceNodeFrame = (): void => {};
   #historyRepaintTimer: ReturnType<typeof setTimeout> | undefined;
@@ -698,10 +698,7 @@ export class Renderer extends EventEmitter<RendererEvents> {
     this.cameraHandler.commitPendingCameraState();
     this.#disposed = true;
     this.sharedMap?.detach(this);
-    if (this.#animationFrame != undefined) {
-      this.#ownerWindow.cancelAnimationFrame(this.#animationFrame);
-      this.#animationFrame = undefined;
-    }
+    frameSchedulerFor(this.#ownerWindow).cancel(this.animationFrame);
     clearTimeout(this.#historyRepaintTimer);
     log.warn(`Disposing renderer`);
     this.#devicePixelRatioMediaQuery?.removeEventListener("change", this.#onDevicePixelRatioChange);
@@ -1796,14 +1793,9 @@ export class Renderer extends EventEmitter<RendererEvents> {
     if (this.#disposed) {
       return;
     }
-    // Cancel any requestAnimationFrame (rAF) that `queueAnimationFrame()` scheduled. When this runs synchronously (e.g. a
-    // seek's `handleSeek`/`clear` queued a frame and the render-if-requested effect then calls us
-    // directly in the same tick) the queued rAF would otherwise fire on the next tick and paint a
-    // redundant second frame.
-    if (this.#animationFrame != undefined) {
-      this.#ownerWindow.cancelAnimationFrame(this.#animationFrame);
-      this.#animationFrame = undefined;
-    }
+    // Drop a frame `queueAnimationFrame()` scheduled: drawing now covers it, and it would paint a
+    // redundant second frame
+    frameSchedulerFor(this.#ownerWindow).cancel(this.animationFrame);
     if (!this.#rendering) {
       try {
         this.#frameHandler(this.currentTime);
@@ -1818,7 +1810,7 @@ export class Renderer extends EventEmitter<RendererEvents> {
     if (this.#disposed) {
       return;
     }
-    this.#animationFrame ??= this.#ownerWindow.requestAnimationFrame(this.animationFrame);
+    frameSchedulerFor(this.#ownerWindow).request(this.animationFrame);
   }
 
   public async settleVideoDecodes(): Promise<void> {

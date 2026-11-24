@@ -1139,10 +1139,11 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
     sharedPanelState,
   ]);
 
-  // Render a new frame if requested
+  // Draw a new frame if requested, in an animation frame: drawing here would add it to this
+  // commit, and every panel updating on the same message would draw in one long task
   useEffect(() => {
     if (renderer && renderRef.current.needsRender) {
-      renderer.animationFrame();
+      renderer.queueAnimationFrame();
       renderRef.current.needsRender = false;
     }
   });

@@ -403,36 +403,31 @@ describe("3D Renderer", () => {
     renderer.dispose();
   });
 
-  it("cancels a queued animation frame when animationFrame runs synchronously", () => {
+  it("drops a queued animation frame when animationFrame runs synchronously", () => {
     // Given
-    const mockResult = BasicBuilder.number();
+    const callbacks: FrameRequestCallback[] = [];
     const requestAnimationFrameSpy = vi
       .spyOn(window, "requestAnimationFrame")
-      .mockImplementation(function () {
-        return mockResult;
+      .mockImplementation(function (callback) {
+        return callbacks.push(callback);
       });
-    const cancelAnimationFrameSpy = vi
-      .spyOn(window, "cancelAnimationFrame")
-      .mockImplementation(function () {
-        return undefined;
-      });
-
     const renderer = new Renderer({ ...defaultRendererProps, canvas });
-
-    // Renderer init may schedule internal frames; focus this test on the explicit queue+sync path.
-    requestAnimationFrameSpy.mockClear();
-    cancelAnimationFrameSpy.mockClear();
+    const frames = vi.fn();
+    renderer.on("startFrame", frames);
 
     // When
     // Simulate seek/clear code path that queues a frame, then immediately renders synchronously.
     renderer.queueAnimationFrame();
     renderer.animationFrame();
+    for (const callback of callbacks.splice(0)) {
+      callback(performance.now());
+    }
 
-    // Then
-    expect(requestAnimationFrameSpy).toHaveBeenCalledTimes(1);
-    expect(cancelAnimationFrameSpy).toHaveBeenCalledWith(mockResult);
+    // Then: the queued frame doesn't draw a second time
+    expect(frames).toHaveBeenCalledTimes(1);
 
     renderer.dispose();
+    requestAnimationFrameSpy.mockRestore();
   });
 
   it("stops three's idle animation loop and advances the node frame once per drawn frame", async () => {
@@ -541,7 +536,7 @@ describe("3D Renderer", () => {
       expect(draw).toHaveBeenCalled();
       frame.mockClear();
       childDocument.dispatchEvent(new Event("visibilitychange"));
-      expect(frame).toHaveBeenCalledWith(renderer.animationFrame);
+      expect(frame).toHaveBeenCalled();
     } finally {
       renderer.dispose();
       hidden.mockRestore();
@@ -602,7 +597,7 @@ describe("3D Renderer", () => {
       visibility.mockReturnValue("visible");
       requestAnimationFrameSpy.mockClear();
       document.dispatchEvent(new Event("visibilitychange"));
-      expect(requestAnimationFrameSpy).toHaveBeenCalledWith(renderer.animationFrame);
+      expect(requestAnimationFrameSpy).toHaveBeenCalled();
       renderer.animationFrame();
       expect(render).toHaveBeenCalled();
     } finally {
