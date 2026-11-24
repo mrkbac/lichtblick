@@ -1139,10 +1139,16 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
     sharedPanelState,
   ]);
 
-  // Render a new frame if requested
+  // Draw a new frame if requested, in an animation frame: drawing here would add it to this
+  // commit, and every panel updating on the same message would draw in one long task. A seek frame
+  // draws now: the barrier below waits for the video decodes this frame starts.
   useEffect(() => {
     if (renderer && renderRef.current.needsRender) {
-      renderer.animationFrame();
+      if (seekFrameRef.current) {
+        renderer.animationFrame();
+      } else {
+        renderer.queueAnimationFrame();
+      }
       renderRef.current.needsRender = false;
     }
   });

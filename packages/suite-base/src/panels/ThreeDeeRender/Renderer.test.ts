@@ -435,6 +435,48 @@ describe("3D Renderer", () => {
     renderer.dispose();
   });
 
+  it("moves a panel to the next display frame once the frame's drawing budget is used", () => {
+    // Given: two panels queue a frame for the same display frame, and the first draw is slow
+    const callbacks: FrameRequestCallback[] = [];
+    const requestAnimationFrameSpy = vi
+      .spyOn(window, "requestAnimationFrame")
+      .mockImplementation(function (callback) {
+        return callbacks.push(callback);
+      });
+    let now = 1000;
+    const nowSpy = vi.spyOn(performance, "now").mockImplementation(() => now);
+    const first = new Renderer({ ...defaultRendererProps, canvas });
+    const second = new Renderer({ ...defaultRendererProps, canvas });
+    const firstFrames = vi.fn(() => {
+      now += 10;
+    });
+    const secondFrames = vi.fn();
+    first.on("startFrame", firstFrames);
+    second.on("startFrame", secondFrames);
+    callbacks.length = 0;
+    const runFrame = (time: number) => {
+      for (const callback of callbacks.splice(0)) {
+        callback(time);
+      }
+    };
+
+    // When
+    first.queueAnimationFrame();
+    second.queueAnimationFrame();
+    runFrame(1);
+
+    // Then: the second panel draws first thing in the next frame
+    expect(firstFrames).toHaveBeenCalledTimes(1);
+    expect(secondFrames).not.toHaveBeenCalled();
+    runFrame(2);
+    expect(secondFrames).toHaveBeenCalledTimes(1);
+
+    first.dispose();
+    second.dispose();
+    nowSpy.mockRestore();
+    requestAnimationFrameSpy.mockRestore();
+  });
+
   it("stops three's idle animation loop and advances the node frame once per drawn frame", async () => {
     // Given
     const visible = vi.spyOn(document, "visibilityState", "get").mockReturnValue("visible");
