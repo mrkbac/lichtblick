@@ -18,7 +18,7 @@ import { InternalSubscribePayload, SubscribePayload } from "@lichtblick/suite-ba
  * Note that this has unlimited cache size so it should be managed by some containing scope.
  */
 export function makeSubscriptionMemoizer(): (val: SubscribePayload) => SubscribePayload {
-  // ponytail: linear scan over every distinct payload seen; fine for the handful of subscriptions per panel
+  // Linear scan over every distinct payload seen; fine for the handful of subscriptions per panel
   const seen: SubscribePayload[] = [];
   return (val) => {
     const existing = seen.find((item) => _.isEqual(item, val));

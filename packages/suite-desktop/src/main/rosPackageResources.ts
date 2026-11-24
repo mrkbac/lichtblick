@@ -20,9 +20,9 @@ const log = Logger.getLogger(__filename);
 
 /** Extract a package name from a ROS package.xml file. */
 function rosPackageName(packageXmlContents: string): string | undefined {
-  // ponytail: first <name> element wins, XML comments and CDATA are not skipped; use a real XML
-  // parser if a package.xml ever comments out a <name> before the real one.
-  return /<name>\s*([^<]+?)\s*<\/name>/.exec(packageXmlContents)?.[1];
+  // The first <name> outside comments and CDATA, which may hold an old or example name
+  const xml = packageXmlContents.replace(/<!--[\s\S]*?-->|<!\[CDATA\[[\s\S]*?\]\]>/g, "");
+  return /<name>\s*([^<]+?)\s*<\/name>/.exec(xml)?.[1];
 }
 
 /**

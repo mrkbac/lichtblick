@@ -423,8 +423,8 @@ function updatePlayerStateAction(
   // Put messages into per-subscriber queues
   if (messages && messages !== prevState.public.playerState.activeData?.messages) {
     // Playback messages follow the non-preload subscriptions, sliced to their fields.
-    // ponytail: assumes the player already applies the latest subscriptions; a frame it emits
-    // just after a change can still be sliced the old way, so panels must not trust shapes.
+    // Assumes the player already applies the latest subscriptions; a frame it emits just after a
+    // change can still be sliced the old way, so panels must not trust shapes.
     const fieldsByTopic = new Map(
       prevState.public.subscriptions
         .filter((sub) => sub.preloadType !== "full")

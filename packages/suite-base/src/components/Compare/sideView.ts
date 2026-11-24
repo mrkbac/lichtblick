@@ -229,8 +229,8 @@ export class SideView {
       // Other sides' topics keep their prefixed names, which never clash with this side's
       const name = this.fromSide(topic) ?? topic;
       if (name !== topic || messagesByTopic[name] == undefined) {
-        // ponytail: copies each preloaded event of a shown topic once per side to rename it;
-        // switch to renaming in the block consumers if that memory shows up in profiles
+        // Copies each preloaded event of a shown topic once per side to rename it; the payloads
+        // are shared. Renaming in the block consumers instead would avoid the copies.
         messagesByTopic[name] = events.map((event) => this.#mapEvent(event));
       }
     }

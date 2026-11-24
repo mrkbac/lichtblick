@@ -111,6 +111,20 @@ let refreshing: Promise<string | undefined> | undefined;
 
 /** The current access token, refreshed when needed; undefined when not logged in. */
 export async function getAccessToken(): Promise<string | undefined> {
+  const token = storedToken();
+  if (typeof token !== "object") {
+    return token;
+  }
+  refreshing ??= refreshOncePerBrowser().finally(() => {
+    refreshing = undefined;
+  });
+  return await refreshing;
+}
+
+type RefreshableTokens = Tokens & { refreshToken: string };
+
+/** The stored access token while valid; the stored tokens when they need a refresh. */
+function storedToken(): string | undefined | RefreshableTokens {
   const tokens = readJson<Tokens>(localStorage, TOKENS_KEY);
   if (!tokens) {
     return undefined;
@@ -122,11 +136,20 @@ export async function getAccessToken(): Promise<string | undefined> {
     localStorage.removeItem(TOKENS_KEY);
     return undefined;
   }
-  // ponytail: one refresh per tab; tabs refreshing at the same moment can race token rotation.
-  refreshing ??= refresh(tokens, tokens.refreshToken).finally(() => {
-    refreshing = undefined;
-  });
-  return await refreshing;
+  return { ...tokens, refreshToken: tokens.refreshToken };
+}
+
+// Refresh tokens rotate: a second tab refreshing with the same token gets it rejected, or the
+// identity provider revokes the whole session. Tabs take turns, and a tab that waited uses the
+// tokens the previous one stored.
+async function refreshOncePerBrowser(): Promise<string | undefined> {
+  const run = async () => {
+    const token = storedToken();
+    return typeof token === "object" ? await refresh(token, token.refreshToken) : token;
+  };
+  return "locks" in navigator
+    ? await navigator.locks.request("lichtblick.organization.tokenRefresh", run)
+    : await run();
 }
 
 /** Forgets the tokens and ends the identity provider session, coming back to this page. */

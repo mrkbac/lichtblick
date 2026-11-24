@@ -6,7 +6,7 @@ type Frame = Immutable<MessageEvent[]>;
 
 /** A hidden panel renders at most this often; showing it renders right away. */
 export const HIDDEN_RENDER_INTERVAL_MS = 1000;
-// ponytail: drops the oldest frames past this, only reached when a hidden panel never renders.
+// Drops the oldest frames past this, only reached when a hidden panel never renders.
 const MAX_PENDING_FRAMES = 600;
 
 /**

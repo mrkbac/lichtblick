@@ -117,7 +117,7 @@ async function measureHeap(dir: string, mcapPath: string): Promise<Metrics> {
 function startupBytes(dir: string): Metrics {
   const out = path.join(dir, "web/.webpack");
   const list = path.join(out, "startup-js.json");
-  // ponytail: a base built before the list existed has no row; drop once every base has it
+  // Bases from before the list existed (2026-11-23) have none, e.g. older branches or --base: no row
   if (!fs.existsSync(list)) {
     return {};
   }

@@ -13,8 +13,8 @@ import packageJson from "../../package.json" with { type: "json" };
 import { type ConfigParams, mainConfig } from "./src/rspackConfigs.ts";
 
 const params: ConfigParams = {
-  // ponytail: still web/.webpack because Cloudflare Pages and perf-budget (which builds the base
-  // commit) read it there. Move it to this package once the Pages output directory is switched.
+  // Still web/.webpack because Cloudflare Pages and perf-budget (which builds the base commit)
+  // read it there.
   outputPath: path.resolve(import.meta.dirname, "../../web/.webpack"),
   contextPath: path.resolve(import.meta.dirname, "src"),
   entrypoint: "./entrypoint.tsx",

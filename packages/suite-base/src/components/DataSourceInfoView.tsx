@@ -404,7 +404,7 @@ function LiveFields(): React.JSX.Element | null {
     const fileName = liveHistoryFileName(new Date());
     setSaveState({ status: "saving" });
     try {
-      // ponytail: whole file built in memory, bounded by the history memory limit.
+      // The whole file is built in memory, bounded by the history memory limit.
       const file = new TempBuffer();
       await exportLiveHistory(file);
       downloadFiles([{ blob: new Blob([file.get() as Uint8Array<ArrayBuffer>]), fileName }]);

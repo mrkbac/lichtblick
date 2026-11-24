@@ -9,8 +9,7 @@ const log = Log.getLogger(__filename);
 /** Edits land in IndexedDB at most this often; typing must not rewrite the history each key. */
 const SAVE_THROTTLE_MS = 1000;
 
-// ponytail: local IndexedDB only, last writer wins across tabs; a server-backed store can
-// implement these three calls.
+// Local IndexedDB only, last writer wins across tabs.
 const store = createKeyValueStore("lichtblick-layout-history", "history");
 
 let pending: { layoutId: string; history: HistorySnapshot } | undefined;

@@ -21,7 +21,7 @@ import { TimeDisplayMethod } from "@lichtblick/suite-base/types/panels";
 import parseFuzzyRosTime from "./parseFuzzyRosTime";
 
 // Building an Intl.DateTimeFormat costs ~25 µs and this runs for every formatted timestamp.
-// ponytail: an OS timezone change is picked up on reload only.
+// An OS timezone change is picked up on reload only.
 let systemTimezone: string | undefined;
 export function guessTimezone(): string {
   return (systemTimezone ??= Intl.DateTimeFormat().resolvedOptions().timeZone);

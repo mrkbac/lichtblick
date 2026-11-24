@@ -136,7 +136,7 @@ export default function Start({ ref }: { ref?: React.Ref<StartHandle> }): React.
   };
 
   const catalogByName = useMemo(
-    // ponytail: matches by file name only; the first recording wins when names repeat
+    // Recents keep only the file name, so the first recording wins when names repeat
     () => new Map(folder.recordings.map((r) => [r.name, r])),
     [folder.recordings],
   );
@@ -187,7 +187,7 @@ export default function Start({ ref }: { ref?: React.Ref<StartHandle> }): React.
     view === "all" && sources.find((source) => source.id === DEFAULT_CATALOG)?.hidden !== true;
 
   // Enter in the search box opens the first recent listed, else the first catalog match.
-  // ponytail: the catalog's first match is in folder order, not the catalog's current sort
+  // The catalog's first match is in folder order: the table's sort lives inside Catalog
   const topRecent = showRecents && query.trim() !== "" ? visibleRecents[0] : undefined;
   const topRecording =
     !topRecent && showOverview && query.trim() !== ""
