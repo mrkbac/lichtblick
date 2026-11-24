@@ -5,4 +5,4 @@ set -euo pipefail
 pnpm install --frozen-lockfile
 pnpm web:build:prod
 cp packages/suite-web/.cloudflare/* web/.webpack/
-git archive --format=zip --prefix=licht-ws-proxy/ -o web/.webpack/licht-ws-proxy.zip HEAD:chrome-extension
+git archive --format=zip --prefix=digitalis-proxy/ -o web/.webpack/digitalis-proxy.zip HEAD:chrome-extension
