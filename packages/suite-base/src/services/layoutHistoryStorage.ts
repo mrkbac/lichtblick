@@ -5,6 +5,7 @@ import * as _ from "lodash-es";
 import Log from "@lichtblick/log";
 import {
   HISTORY_LIMIT,
+  type HistoryEntry,
   type HistorySnapshot,
 } from "@lichtblick/suite-base/providers/CurrentLayoutProvider/layoutHistory";
 import { createKeyValueStore } from "@lichtblick/suite-base/util/idbKeyValueStore";
@@ -14,59 +15,34 @@ const log = Log.getLogger(__filename);
 /** Edits land in IndexedDB at most this often; typing must not rewrite the history each key. */
 const SAVE_THROTTLE_MS = 1000;
 
-/**
- * Each tab writes its history of a layout under its own key, [layoutId, tab], so tabs editing the
- * same layout don't overwrite each other; reads merge every tab's steps by time. Histories saved
- * before that are under the plain layout id.
- */
 const store = createKeyValueStore("lichtblick-layout-history", "history");
+/** Saved steps carry the tab that wrote them, so a write keeps only other tabs' steps. */
 const TAB = crypto.randomUUID();
+type SavedEntry = HistoryEntry & { tab?: string };
 
-type SavedHistory = HistorySnapshot & { writtenAt?: number };
-
-const layoutRange = (layoutId: string) => IDBKeyRange.bound([layoutId], [layoutId, []]);
+/**
+ * Merges this tab's history into the saved one in one transaction, so tabs editing the same layout
+ * keep each other's steps. Steps this tab dropped (redo steps after an edit, coalesced edits) stay
+ * dropped.
+ */
+async function write(layoutId: string, history: HistorySnapshot): Promise<void> {
+  const mine: SavedEntry[] = history.entries.map((entry: SavedEntry) =>
+    entry.tab != undefined ? entry : { ...entry, tab: TAB },
+  );
+  const steps = new Set(mine.map((entry) => entry.savedAt));
+  const tx = await store.readwrite();
+  const saved = (await tx.get(layoutId)) as HistorySnapshot | undefined;
+  const others = (saved?.entries ?? []).filter(
+    (entry: SavedEntry) => entry.tab !== TAB && !steps.has(entry.savedAt),
+  );
+  const entries = _.sortBy([...mine, ...others], "savedAt").slice(-(HISTORY_LIMIT + 1));
+  const index = entries.indexOf(mine[history.index]!);
+  await tx.put({ entries, index: index === -1 ? entries.length - 1 : index }, layoutId);
+  await tx.transaction.done;
+}
 
 let pending: { layoutId: string; history: HistorySnapshot } | undefined;
 let timer: ReturnType<typeof setTimeout> | undefined;
-
-/** Steps of all histories by time, a step in several (loaded by another tab) once. */
-function merge(histories: SavedHistory[]): HistorySnapshot | undefined {
-  const newestFirst = _.sortBy(histories, (h) => -(h.writtenAt ?? 0));
-  const entries = _.sortBy(
-    _.uniqBy(
-      newestFirst.flatMap((h) => h.entries),
-      "savedAt",
-    ),
-    "savedAt",
-  ).slice(-(HISTORY_LIMIT + 1));
-  // The current step of the tab that wrote last.
-  const latest = newestFirst[0];
-  const current = latest?.entries[latest.index];
-  const index = entries.findIndex((entry) => entry.savedAt === current?.savedAt);
-  return latest && { entries, index: index === -1 ? entries.length - 1 : index };
-}
-
-async function write(layoutId: string, history: HistorySnapshot): Promise<void> {
-  const tx = await store.readwrite();
-  // Drop what this history already has, e.g. a closed tab's steps this tab loaded. Steps older than
-  // its oldest would fall off the limit anyway.
-  const steps = new Set(history.entries.map((entry) => entry.savedAt));
-  const oldest = history.entries[0]?.savedAt ?? Infinity;
-  const covered = (saved: SavedHistory) =>
-    saved.entries.every((entry) => entry.savedAt < oldest || steps.has(entry.savedAt));
-  for (let cursor = await tx.openCursor(layoutRange(layoutId)); cursor; ) {
-    if ((cursor.key as string[])[1] !== TAB && covered(cursor.value as SavedHistory)) {
-      await cursor.delete();
-    }
-    cursor = await cursor.continue();
-  }
-  const legacy = (await tx.get(layoutId)) as SavedHistory | undefined;
-  if (legacy && covered(legacy)) {
-    await tx.delete(layoutId);
-  }
-  await tx.put({ ...history, writtenAt: Date.now() } satisfies SavedHistory, [layoutId, TAB]);
-  await tx.transaction.done;
-}
 
 function flush(): void {
   clearTimeout(timer);
@@ -81,18 +57,10 @@ function flush(): void {
 }
 
 export async function loadLayoutHistory(layoutId: string): Promise<HistorySnapshot | undefined> {
-  const tx = await store.readwrite();
-  const keys = (await tx.getAllKeys(layoutRange(layoutId))) as string[][];
-  const saved = (await tx.getAll(layoutRange(layoutId))) as SavedHistory[];
-  const legacy = (await tx.get(layoutId)) as SavedHistory | undefined;
-  // This tab's pending save is newer than what it wrote.
-  const mine = pending?.layoutId === layoutId ? pending.history : undefined;
-  const histories = saved.filter((_history, i) => mine == undefined || keys[i]![1] !== TAB);
-  return merge([
-    ...histories,
-    ...(legacy ? [legacy] : []),
-    ...(mine ? [{ ...mine, writtenAt: Date.now() }] : []),
-  ]);
+  if (pending?.layoutId === layoutId) {
+    return pending.history;
+  }
+  return await store.get<HistorySnapshot>(layoutId);
 }
 
 /** Saves a layout's history soon; a newer save of the same layout replaces a pending one. */
@@ -111,6 +79,5 @@ export async function deleteLayoutHistory(layoutId: string): Promise<void> {
   if (pending?.layoutId === layoutId) {
     pending = undefined;
   }
-  const tx = await store.readwrite();
-  await Promise.all([tx.delete(layoutRange(layoutId)), tx.delete(layoutId), tx.transaction.done]);
+  await store.delete(layoutId);
 }
