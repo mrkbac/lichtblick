@@ -86,7 +86,7 @@ export async function readTransformRange(args: {
   return !failed;
 }
 
-/** Lookback windows read before a seek target, newest first */
+/** Lookback windows read before a seek target, newest first; then back to the floor */
 export const SEEK_LOOKBACK_NS = [2e9, 8e9, 32e9, 128e9].map(BigInt);
 
 /**
@@ -108,7 +108,11 @@ export async function readTransformsBefore(args: {
   signal: AbortSignal;
 }): Promise<boolean> {
   const { time, floor, minLookback = 0n, isMissing, signal } = args;
-  const lookbacks = new Set(SEEK_LOOKBACK_NS.map((l) => (l > minLookback ? l : minLookback)));
+  // The last window reaches the complete history, so a frame silent for long (a dynamic frame
+  // published once) is still found
+  const lookbacks = new Set(
+    [...SEEK_LOOKBACK_NS, time - floor].map((l) => (l > minLookback ? l : minLookback)),
+  );
   let end = time;
   for (const lookback of lookbacks) {
     const start = time - lookback > floor ? time - lookback : floor;
@@ -124,7 +128,5 @@ export async function readTransformsBefore(args: {
     // Next window only reads the older part; ranges are inclusive, so step one nanosecond back
     end = start - 1n;
   }
-  // ponytail: frames silent for over SEEK_LOOKBACK_NS stay missing (e.g. a dynamic frame that
-  // stopped publishing long ago); widen the last window if that matters.
   return true;
 }

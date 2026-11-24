@@ -451,8 +451,9 @@ export function composeStyle(input: ComposeStyleInput): StyleSpecification {
         if (!vector) {
           break;
         }
-        // ponytail: one glyph/sprite set per map; the first vector style wins. All OpenFreeMap
-        // styles share theirs. Supporting mixed sprites needs rewriting icon-image expressions.
+        // MapLibre takes one glyph/sprite set per map, so the first vector style's wins. All
+        // OpenFreeMap styles share theirs; mixing providers would need rewritten icon-image
+        // expressions.
         style.glyphs ??= vector.glyphs;
         style.sprite ??= vector.sprite;
         for (const [name, source] of Object.entries(vector.sources)) {

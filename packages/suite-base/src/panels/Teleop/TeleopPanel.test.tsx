@@ -253,6 +253,22 @@ describe("TeleopPanel", () => {
       });
     });
 
+    it("stamps the header with the data source time when set", () => {
+      const { publish, context } = setup({
+        messageType: "TwistStamped",
+        stampSource: "playbackTime",
+      });
+      expect(context.watch).toHaveBeenCalledWith("currentTime");
+      act(() => {
+        (context as unknown as { onRender: (state: unknown, done: () => void) => void }).onRender(
+          { currentTime: { sec: 42, nsec: 5 } },
+          () => {},
+        );
+      });
+      fireEvent.click(screen.getByText("UP"));
+      expect(publish.mock.calls.at(-1)![1].header.stamp).toEqual({ sec: 42, nsec: 5 });
+    });
+
     it("publishes Joy in the ROS 2 joy layout with on-screen buttons", () => {
       Element.prototype.setPointerCapture = vi.fn();
       const { publish, context } = setup(

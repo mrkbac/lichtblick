@@ -356,6 +356,20 @@ describe("TransformTree", () => {
       expect(latestTimeAtOrBefore(frame, 1000n * sec)).toBe(100n * sec);
     });
 
+    it("thins only dense frames, so sparse ones keep every transform", () => {
+      const tfTree = new TransformTree(undefined, 100);
+      tfTree.setComplete(true);
+      for (let i = 0; i <= 1000; i++) {
+        tfTree.addTransform("dense", "a", BigInt(i) * sec, at(i));
+        if (i % 50 === 0) {
+          tfTree.addTransform("sparse", "a", BigInt(i) * sec, at(i));
+        }
+      }
+      expect(tfTree.decimations).toBeGreaterThan(1);
+      expect(tfTree.frame("sparse")!.transformsSize()).toBe(21);
+      expect(tfTree.frame("dense")!.transformsSize()).toBeLessThanOrEqual(80);
+    });
+
     it("keeps the thinned density for transforms added after thinning", () => {
       const tfTree = new TransformTree(undefined, 100);
       tfTree.setComplete(true);

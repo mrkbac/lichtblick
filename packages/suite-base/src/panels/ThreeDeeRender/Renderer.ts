@@ -728,8 +728,8 @@ export class Renderer extends EventEmitter<RendererEvents> {
     this.input.dispose();
     // The shared device's loss reaction keeps three's renderer alive; this callback must not keep
     // the whole panel (scene, extensions, messages) alive with it.
-    // ponytail: three's renderer shell and canvas stay retained until device loss; needs a
-    // removable loss subscription upstream to fix
+    // three's renderer shell and canvas stay retained until device loss: three subscribes to the
+    // device's loss promise, which can't be unsubscribed
     this.gl.onDeviceLost = () => {};
     // Rejects when startup failed, which was already reported
     this.gl.dispose().catch((error: unknown) => {

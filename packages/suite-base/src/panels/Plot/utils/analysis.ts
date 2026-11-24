@@ -83,8 +83,8 @@ export function computeSpectrum(
   }
   diffs.sort();
   const span = tx[tx.length - 1]! - tx[0]!;
-  // ponytail: gaps are interpolated over; a long gap smears low frequencies. Split at gaps
-  // (Welch averaging) if that matters.
+  // Gaps are interpolated over, so a long gap smears low frequencies; zoom the plot to a
+  // gap-free range for a clean spectrum.
   const count = Math.min(Math.floor(span / diffs[diffs.length >> 1]!) + 1, MAX_FFT_SAMPLES);
   const dt = span / (count - 1);
 

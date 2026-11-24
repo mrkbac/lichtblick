@@ -90,8 +90,7 @@ export function messagesToDataset(
   ) {
     // Live players can move the playback start forward as their rewind buffer fills. Shift the
     // cached points onto the new axis in place: no per-point allocation or timestamp lookup.
-    // ponytail: each shift may round x by an ulp (~1e-13 s); rebuild from timestamps if that drift
-    // ever shows.
+    // Each shift may round x by an ulp (~1e-13 s), far below anything the chart can show.
     const shift = toSec(subtractTimes(startTime, checkpoint.origin));
     for (const point of checkpoint.data) {
       point!.x -= shift;

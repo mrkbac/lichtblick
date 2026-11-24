@@ -643,7 +643,7 @@ export class TimestampDatasetsBuilderImpl {
   /** Rows from `row` on changed; drop cached derived values from there. */
   #invalidate(series: Series, row: number): void {
     if (series.derived && row < series.derived.upTo) {
-      // ponytail: the running state is only kept at the cache end, so recompute from the start.
+      // The running state is only kept at the cache end, so recompute from the start.
       // Out-of-order inserts into preloaded rows are rare (blocks load in time order).
       series.derived = undefined;
     }

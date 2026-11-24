@@ -301,6 +301,12 @@ describe("headingFromTrack", () => {
     expect(headingFromTrack(store, 3, [0, 0.001])).toBeCloseTo(0);
     expect(headingFromTrack(store, 0, [0, 0.001])).toBeUndefined();
   });
+
+  it("keeps the heading through a long stop", () => {
+    const stop: [number, number][] = Array.from({ length: 2000 }, () => [0.001, 0.001]);
+    const store = storeOf([[0, 0.001], ...stop]);
+    expect(headingFromTrack(store, store.length, [0.001, 0.001])).toBeCloseTo(90);
+  });
 });
 
 describe("trackFlushDelayMs", () => {

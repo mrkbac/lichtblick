@@ -6,8 +6,8 @@ import { fromUrl } from "geotiff";
 import { LngLat, utmToLngLat, webMercatorToLngLat } from "./geo";
 import type { ImageOverlay } from "./layers";
 
-// ponytail: the whole image is decoded once, downsampled to this size. Streaming tiles from
-// Cloud Optimized GeoTIFFs would lift the limit if huge orthophotos become common.
+// The whole image is decoded once, downsampled to this size, which bounds memory for any file.
+// Sharper huge orthophotos would need tiles streamed from Cloud Optimized GeoTIFFs.
 const MAX_SIZE = 4096;
 
 /** Returns a converter from the file's CRS to lon/lat, or throws for unsupported CRSs. */

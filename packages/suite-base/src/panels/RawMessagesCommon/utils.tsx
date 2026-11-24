@@ -24,8 +24,8 @@ import { isTypedArray } from "@lichtblick/suite-base/types/isTypedArray";
 
 ROS1_COMMON_MSG_PACKAGES.add("turtlesim");
 
-// ponytail: "expand all" leaves big arrays (point clouds, images) collapsed so a message with
-// millions of elements stays responsive; they can still be expanded one by one.
+// "Expand all" leaves big arrays (point clouds, images) collapsed so a message with millions of
+// elements stays responsive; they can still be expanded one by one.
 const EXPAND_ALL_MAX_ARRAY_LENGTH = 500;
 
 function isLargeArray(value: unknown): boolean {

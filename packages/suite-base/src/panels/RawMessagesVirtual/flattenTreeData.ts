@@ -250,8 +250,8 @@ export function searchTreeData(
           String(child as string | number | boolean | bigint | undefined)
             .toLowerCase()
             .includes(needle));
-      // ponytail: typed arrays (point clouds, images) are skipped; searching millions of numbers
-      // per message is slow and rarely useful. Search their parent key instead.
+      // Typed arrays (point clouds, images) are skipped: searching millions of numbers per
+      // message is slow and rarely useful. Their parent key still matches.
       const childMatch = !isLeaf && !ArrayBuffer.isView(child) && visit(child, nodePath);
       if (selfMatch) {
         matches.add(nodePath);

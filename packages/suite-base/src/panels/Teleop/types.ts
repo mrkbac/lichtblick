@@ -39,6 +39,8 @@ export type TeleopConfig = {
   topic: undefined | string;
   messageType: OutputType;
   frameId: string;
+  /** Header stamp: the computer's clock, or the data source's current time (robots on sim time) */
+  stampSource: "wallClock" | "playbackTime";
   /** undefined while the settings field is cleared: DEFAULT_PUBLISH_RATE */
   publishRate: number | undefined;
   stopOnRelease: boolean;

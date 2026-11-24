@@ -296,6 +296,19 @@ describe("StateTransitions", () => {
     expect(mockSeekPlayback).toHaveBeenCalledTimes(2);
   });
 
+  it("with several condition panels, N only seeks in the hovered one", () => {
+    const path = { value: "/a.b", condition: "> 2", timestampMethod: "receiveTime" as const };
+    renderPanel({ paths: [path] });
+    renderPanel({ paths: [path] });
+
+    fireEvent.keyDown(document, { key: "n" });
+    expect(mockSeekPlayback).not.toHaveBeenCalled();
+
+    fireEvent.pointerEnter(screen.getAllByTestId("state-transitions-match-count")[1]!);
+    fireEvent.keyDown(document, { key: "n" });
+    expect(mockSeekPlayback).toHaveBeenCalledTimes(1);
+  });
+
   it.each([
     [1, "1/2", true, false],
     [3, "1/2", false, false],
