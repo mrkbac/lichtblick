@@ -140,7 +140,7 @@ export type TerrainSlope = {
 
 /**
  * Terrain steepness and facing at a point, from elevation samples `spacingMeters` around it.
- * ponytail: the DEM's resolution bounds the result; cliffs narrower than a DEM pixel read flatter.
+ * The DEM's resolution bounds the result: cliffs narrower than a DEM pixel read flatter.
  */
 export function terrainSlope(
   point: LngLat,

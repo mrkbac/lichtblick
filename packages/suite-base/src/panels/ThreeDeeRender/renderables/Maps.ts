@@ -260,7 +260,8 @@ class MapRenderable extends Renderable<MapUserData> {
     const images = new Map<string, ImageOverlay>();
     const errors = new Map<string, string>();
     const attributions: string[] = [];
-    // ponytail: stale loads finish in the background and land in the cache; never aborted.
+    // Stale loads are not aborted: they finish in the background and land in the cache, so
+    // switching back to a layer is instant.
     const signal = new AbortController().signal;
     await Promise.all(
       layers.map(async (layer) => {
@@ -604,7 +605,7 @@ export class Maps extends SceneExtension<MapRenderable> {
             ? `${settings.label}: waiting for the transform to the location fix frame`
             : `${settings.label}: waiting for a location fix`,
       });
-      // ponytail: the HUD re-reads the text only when items change; fine for rarely changing credits.
+      // The HUD re-reads the text only when items change, which credits rarely do.
       this.renderer.hud.displayIfTrue(
         settings.visible && anchor != undefined && renderable.attribution() !== "",
         {

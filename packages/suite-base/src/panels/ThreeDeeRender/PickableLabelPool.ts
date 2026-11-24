@@ -19,7 +19,7 @@ import { pickObjectId, pickOutput } from "./Picker";
 export class PickableLabelPool extends LabelPool {
   protected override createLabel(): Label {
     const label = super.createLabel();
-    // ponytail: works around the library's InstancedMesh; drop once three-text draws a plain Mesh
+    // Works around the library's InstancedMesh; drop once three-text draws a plain Mesh
     Object.assign(label.mesh, { isInstancedMesh: false });
     const picking = label.pickingMaterial as LabelNodeMaterial;
     picking.fragmentNode = null;

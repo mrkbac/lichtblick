@@ -477,8 +477,8 @@ export class ChartRenderer {
     const seriesCount = datasets.length - this.#fillCount;
     for (let configIndex = 0; configIndex < seriesCount; ++configIndex) {
       const data = datasets[configIndex]?.data ?? [];
-      // ponytail: linear scan of the (already downsampled) visible data; binary search if it shows
-      // up in profiles. NaN entries are line breaks, so they are skipped.
+      // Linear scan: the visible data is downsampled to at most MAX_POINTS per series. NaN entries
+      // are line breaks, so they are skipped.
       for (let i = data.length - 1; i >= 0; --i) {
         const datum = data[i];
         if (datum == undefined || !(datum.x <= xValue) || Number.isNaN(datum.y)) {

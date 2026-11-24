@@ -44,7 +44,7 @@ export function useSeriesDrag(pathValue: string | undefined): {
   const item = useMemo<DraggedMessagePath | undefined>(
     () =>
       pathValue && topicName
-        ? // ponytail: a series a panel already plots is a plottable field, so it counts as a leaf.
+        ? // A series a panel already plots is a plottable field, so it counts as a leaf.
           {
             path: pathValue,
             rootSchemaName,

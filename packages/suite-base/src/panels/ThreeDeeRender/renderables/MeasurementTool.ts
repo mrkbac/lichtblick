@@ -74,8 +74,7 @@ const SELECTED_COLOR = 0x00e5ff;
 const VERTEX_GRAB_RADIUS = 8;
 /** Max movement for a right-click to count as "finish" rather than a pan */
 const RIGHT_CLICK_SLOP = 4;
-// ponytail: one GPU pick per sample; resample from a depth readback if profiles over huge point
-// clouds hitch
+// One GPU pick per sample, run when the line changes rather than every frame
 const PROFILE_SAMPLES = 64;
 /**
  * Heights above the line a profile sample looks straight down from. Starting low keeps ceilings and
@@ -844,8 +843,8 @@ export class MeasurementTool extends SceneExtension<Renderable, MeasurementToolE
     if (width <= 0 || height <= 0) {
       return false;
     }
-    // ponytail: one canvas pixel covers half a sample step, so a point a few pixels wide is caught
-    // within about one step of the line; widen if sparse clouds leave gaps
+    // One canvas pixel covers half a sample step, so a point a few pixels wide is caught within
+    // about one step of the line
     const perPixel = Math.max(step / 2, 0.005);
     camera.left = (-perPixel * width) / 2;
     camera.right = (perPixel * width) / 2;

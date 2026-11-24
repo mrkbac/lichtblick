@@ -208,7 +208,8 @@ export function thinViewFor(zoom: number, bounds: Viewport): ThinView {
     south: bounds.south - height,
     north: bounds.north + height,
   };
-  // ponytail: no culling across the antimeridian or when the whole world is in view.
+  // No culling across the antimeridian or when the whole world is in view: the budget still
+  // bounds the track, and wrapped bounds would need two boxes.
   const wraps = viewport.west < -180 || viewport.east > 180;
   return { zoom, viewport: wraps ? undefined : viewport };
 }
@@ -256,8 +257,8 @@ export function thinTrack(
       Math.min(lat[i]!, lat[i + 1]!) <= v.north &&
       Math.max(lat[i]!, lat[i + 1]!) >= v.south);
   // MapLibre's world is 512 px wide at zoom 0.
-  // ponytail: ignores pitch, so near the camera a tilted map shows the spacing; scale by the
-  // tilt if that matters.
+  // Spacing is for the zoom at the map center; a tilted map is magnified near the camera, where
+  // points (drawn at a fixed pixel size) can show the spacing. Lines are thinned at 1 px.
   // In degrees of longitude. Locally a degree of latitude is 1/cos(lat) as long on a Mercator map,
   // so distances need no projection (no log or sin per fix).
   let minDistance = (options.minPixels / (512 * 2 ** options.zoom)) * 360;
