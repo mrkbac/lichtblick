@@ -2,8 +2,25 @@
 
 Highlights from Digitalis, a fork of Lichtblick. Dates follow when changes reached the `licht` branch, in Europe/Berlin time.
 
+## 2026-11-24
+
+- Navigate the 3D view with a trackpad. Pan with two fingers, orbit with Alt/Option and two fingers, and pinch to zoom. [#551](https://github.com/mrkbac/lichtblick/pull/551)
+- Hover over the playback timeline to preview compressed video. The thumbnail shows the nearest keyframe at or before the hovered time. [#536](https://github.com/mrkbac/lichtblick/pull/536)
+- Switch the Topics sidebar to a collapsible namespace tree. Searching expands matching branches and shows the matching topics in context. [#537](https://github.com/mrkbac/lichtblick/pull/537)
+- Pause playback immediately while a remote read is pending, and search topics while the recording buffers. [#535](https://github.com/mrkbac/lichtblick/pull/535)
+- Camera drags over a sparse point cloud at point size 5 improved from **77–96 to 118–120 fps** in a Chrome production build on a 120 Hz MacBook. [#550](https://github.com/mrkbac/lichtblick/pull/550)
+- Hidden tabs keep their panel state while the browser skips layout and painting for their contents. On the default Boreas layout at 1× playback in Chrome on a 120 Hz display, median frame time fell from **15 to 9.7 ms**. [#555](https://github.com/mrkbac/lichtblick/pull/555)
+- The optional app-bar performance display shows frames per second, the longest frame in the last second, and JavaScript heap usage where available. [#553](https://github.com/mrkbac/lichtblick/pull/553)
+- Editing the same layout in two browser tabs now preserves undo history from both tabs. [#546](https://github.com/mrkbac/lichtblick/pull/546)
+- Teleop can stamp Joy and TwistStamped messages with data-source time for robots running on a simulation clock. [#544](https://github.com/mrkbac/lichtblick/pull/544)
+- After a seek, the 3D panel can recover dynamic transforms whose last update was more than 128 seconds earlier. [#544](https://github.com/mrkbac/lichtblick/pull/544)
+
 ## 2026-11-23
 
+- Scrolling over Plot now pans the chart. Pinch or hold Ctrl/Cmd while scrolling to zoom around the cursor. [#534](https://github.com/mrkbac/lichtblick/pull/534)
+- Opening a layout link preserves same-named personal and shared layouts. Subsequent link installs can still replace the copy previously installed from a link. [#524](https://github.com/mrkbac/lichtblick/pull/524)
+- Teleop and Publish restore their publishers after a Foxglove WebSocket reconnect. Pending service calls now report a closed connection when the link drops. [#530](https://github.com/mrkbac/lichtblick/pull/530)
+- The desktop app validates paths when installing extensions and restricts which URLs it opens externally. [#531](https://github.com/mrkbac/lichtblick/pull/531)
 - The web and desktop apps are now named **Digitalis**, with a new logo and icons. [#424](https://github.com/mrkbac/lichtblick/pull/424)
 - Connect the web viewer to a Foxglove bridge over Tailscale. Sign in, select a peer, and open the connection through the browser’s WireGuard tunnel. [#423](https://github.com/mrkbac/lichtblick/pull/423)
 - Color LiDAR points from a calibrated camera image. Scan trails retain their sampled colors, and you can switch cameras while paused. [#443](https://github.com/mrkbac/lichtblick/pull/443)
