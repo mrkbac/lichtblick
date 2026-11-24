@@ -22,7 +22,16 @@ export type KeyCombo = {
 
 /** One mouse gesture, e.g. a right-drag or an Alt-click. */
 export type MouseGesture = {
-  action: "click" | "double-click" | "drag" | "scroll" | "hover" | "long-press" | "drop";
+  action:
+    | "click"
+    | "double-click"
+    | "drag"
+    | "scroll"
+    | "two-finger-scroll"
+    | "pinch"
+    | "hover"
+    | "long-press"
+    | "drop";
   /** Left when left out. */
   button?: "right" | "middle";
   /** Cmd on macOS, Ctrl elsewhere. */
@@ -169,6 +178,8 @@ const MOUSE_ACTION_LABELS: Record<MouseGesture["action"], string> = {
   "double-click": "Double-click",
   drag: "Drag",
   scroll: "Scroll",
+  "two-finger-scroll": "Two-finger scroll",
+  pinch: "Pinch",
   hover: "Hover",
   "long-press": "Long-press",
   drop: "Drop",

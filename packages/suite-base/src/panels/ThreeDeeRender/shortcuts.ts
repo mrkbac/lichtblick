@@ -34,7 +34,7 @@ export const THREE_DEE_SHORTCUTS = [
     id: "3d.pan",
     titleKey: "moveCamera",
     keys: [{ key: "w" }, { key: "a" }, { key: "s" }, { key: "d" }],
-    mouse: [{ action: "drag" }],
+    mouse: [{ action: "drag" }, { action: "two-finger-scroll" }],
   },
   {
     id: "3d.screenSpacePan",
@@ -51,13 +51,16 @@ export const THREE_DEE_SHORTCUTS = [
       { key: "s", shift: true },
       { key: "d", shift: true },
     ],
-    mouse: [{ action: "drag", button: "right" }],
+    mouse: [
+      { action: "drag", button: "right" },
+      { action: "two-finger-scroll", alt: true },
+    ],
   },
   {
     id: "3d.zoom",
     titleKey: "zoomCamera",
     keys: [],
-    mouse: [{ action: "scroll" }, { action: "drag", button: "middle" }],
+    mouse: [{ action: "scroll" }, { action: "pinch" }, { action: "drag", button: "middle" }],
   },
   { id: "3d.dropTopic", titleKey: "dropTopicToShow", keys: [], mouse: [{ action: "drop" }] },
   ...INSPECT_SHORTCUTS,
