@@ -7,7 +7,7 @@
 
 import { IWebSocket } from "@foxglove/ws-protocol";
 
-import { PROXY_ORIGINS } from "@lichtblick/suite-base/players/wsProxyOrigins";
+import { PROXY_ORIGINS, isLoopback } from "@lichtblick/suite-base/players/wsProxyOrigins";
 
 // Page half of the WebSocket proxy extension in chrome-extension/. Chrome blocks an https
 // page from opening ws:// to a non-loopback host (mixed content); the extension can, so we
@@ -26,15 +26,6 @@ type FromProxy =
   | { ev: "close"; code: number; reason: string; wasClean?: boolean };
 
 type CloseEventLike = { code: number; reason: string; wasClean: boolean };
-
-function isLoopback(hostname: string): boolean {
-  return (
-    hostname === "localhost" ||
-    hostname.endsWith(".localhost") ||
-    hostname === "[::1]" ||
-    /^127(\.\d{1,3}){3}$/.test(hostname)
-  );
-}
 
 // Origins the extension's content script runs on (chrome-extension/manifest.json). Elsewhere
 // keep the direct socket: Chrome may still allow it (e.g. local network access).

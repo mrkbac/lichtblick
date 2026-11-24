@@ -17,6 +17,7 @@ import { EventEmitter } from "eventemitter3";
 
 import Log from "@lichtblick/log";
 import { globalRequestQueue } from "@lichtblick/suite-base/util/RequestQueue";
+import { proxiedFetch } from "@lichtblick/suite-base/util/httpProxy";
 import { toError } from "@lichtblick/suite-base/util/toError";
 
 const log = Log.getLogger(__filename);
@@ -41,7 +42,7 @@ export default class FetchReader extends EventEmitter<EventTypes> {
     this.#url = url;
     this.#controller = new AbortController();
     this.#response = globalRequestQueue.runExclusive(
-      async () => await fetch(url, { ...options, signal: this.#controller.signal }),
+      async () => await proxiedFetch(url, { ...options, signal: this.#controller.signal }),
     );
   }
 

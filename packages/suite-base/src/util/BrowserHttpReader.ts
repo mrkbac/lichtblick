@@ -24,6 +24,7 @@ import type {
   FileStream,
 } from "@lichtblick/suite-base/util/CachedFilelike.types";
 import FetchReader from "@lichtblick/suite-base/util/FetchReader";
+import { proxiedFetch } from "@lichtblick/suite-base/util/httpProxy";
 import isDesktopApp from "@lichtblick/suite-base/util/isDesktopApp";
 
 // Bytes fetched from each end of the file when opening it
@@ -146,7 +147,7 @@ export default class BrowserHttpReader implements FileReader {
   } {
     const controller = new AbortController();
     // "no-store" keeps the browser cache from turning this into a conditional request
-    const response = fetch(this.#url, {
+    const response = proxiedFetch(this.#url, {
       headers: { range },
       cache: "no-store",
       credentials: this.#credentials,
@@ -169,7 +170,7 @@ export default class BrowserHttpReader implements FileReader {
     const controller = new AbortController();
     let response: Response;
     try {
-      response = await fetch(this.#url, {
+      response = await proxiedFetch(this.#url, {
         signal: this.#withSignal(controller.signal),
         cache: "no-store",
         credentials: this.#credentials,

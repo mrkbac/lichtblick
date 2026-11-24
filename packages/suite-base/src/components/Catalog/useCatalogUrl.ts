@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { useAppLaunch } from "@lichtblick/suite-base/util/appLaunch";
+import { needsHttpProxy, proxiedFetch } from "@lichtblick/suite-base/util/httpProxy";
 import { toError } from "@lichtblick/suite-base/util/toError";
 
 import { CatalogError, ServedCatalog, parseCatalog } from "./catalogUrl";
@@ -28,11 +29,12 @@ export function useCatalogUrl(url: string): CatalogBackend {
 
   useEffect(() => {
     const controller = new AbortController();
+    const objectUrls: string[] = [];
     setCatalog(undefined);
     setError(undefined);
     void (async () => {
       try {
-        const response = await fetch(url, { signal: controller.signal });
+        const response = await proxiedFetch(url, { signal: controller.signal });
         controller.signal.throwIfAborted();
         if (!response.ok) {
           setError(t("catalogHttpError", { status: response.status }));
@@ -40,7 +42,31 @@ export function useCatalogUrl(url: string): CatalogBackend {
         }
         const json: unknown = await response.json();
         controller.signal.throwIfAborted();
-        setCatalog(parseCatalog(json, response.url || url));
+        const parsed = parseCatalog(json, response.url || url);
+        setCatalog(parsed);
+        // Browsers block http:// images on an https page, so load those through the proxy
+        const recordings = await Promise.all(
+          parsed.recordings.map(async (recording) => {
+            const { thumbnail } = recording;
+            if (thumbnail == undefined || !needsHttpProxy(thumbnail)) {
+              return recording;
+            }
+            const image = await proxiedFetch(thumbnail, { signal: controller.signal }).catch(
+              () => undefined,
+            );
+            if (image?.ok !== true) {
+              return recording;
+            }
+            // eslint-disable-next-line @lichtblick/no-object-url -- revoked by this effect's cleanup
+            const objectUrl = URL.createObjectURL(await image.blob());
+            objectUrls.push(objectUrl);
+            return { ...recording, thumbnail: objectUrl };
+          }),
+        );
+        controller.signal.throwIfAborted();
+        if (objectUrls.length > 0) {
+          setCatalog({ ...parsed, recordings });
+        }
       } catch (err) {
         if (controller.signal.aborted) {
           return;
@@ -55,6 +81,9 @@ export function useCatalogUrl(url: string): CatalogBackend {
     })();
     return () => {
       controller.abort();
+      objectUrls.forEach((objectUrl) => {
+        URL.revokeObjectURL(objectUrl);
+      });
     };
   }, [url, t, revision]);
 

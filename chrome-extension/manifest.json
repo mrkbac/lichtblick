@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Digitalis WebSocket proxy",
-  "version": "1.1.0",
-  "description": "Lets Digitalis connect to ws:// servers that Chrome otherwise blocks as mixed content.",
+  "name": "Digitalis proxy",
+  "version": "1.2.0",
+  "description": "Lets Digitalis reach ws:// and http:// servers that Chrome otherwise blocks as mixed content.",
   "minimum_chrome_version": "140",
   "background": {
     "service_worker": "background.js"

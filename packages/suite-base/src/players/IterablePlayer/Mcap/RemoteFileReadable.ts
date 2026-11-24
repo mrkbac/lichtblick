@@ -13,6 +13,7 @@ import BrowserHttpReader from "@lichtblick/suite-base/util/BrowserHttpReader";
 import CachedFilelike from "@lichtblick/suite-base/util/CachedFilelike";
 import type { ReadOptions } from "@lichtblick/suite-base/util/CachedFilelike.types";
 import { abortable } from "@lichtblick/suite-base/util/abortable";
+import { proxiedFetch } from "@lichtblick/suite-base/util/httpProxy";
 
 import { BatchingReadable } from "./BatchingReadable";
 
@@ -210,7 +211,7 @@ export class RemoteFileReadable {
 
   async #fetchRange(start: number, end: number): Promise<Uint8Array | undefined> {
     const controller = new AbortController();
-    const response = await fetch(this.#url, {
+    const response = await proxiedFetch(this.#url, {
       headers: { range: `bytes=${start}-${end - 1}` },
       credentials: this.#credentials,
       signal: controller.signal,

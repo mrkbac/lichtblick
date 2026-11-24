@@ -3,7 +3,17 @@
 
 import manifest from "../../../../chrome-extension/manifest.json";
 
-/** Origins the WebSocket proxy extension's content script runs on. */
+/** Origins the proxy extension's content script runs on. */
 export const PROXY_ORIGINS: ReadonlySet<string> = new Set(
   manifest.content_scripts.flatMap(({ matches }) => matches.map((match) => new URL(match).origin)),
 );
+
+/** Hosts browsers let an https page reach over plain ws:// and http:// */
+export function isLoopback(hostname: string): boolean {
+  return (
+    hostname === "localhost" ||
+    hostname.endsWith(".localhost") ||
+    hostname === "[::1]" ||
+    /^127(\.\d{1,3}){3}$/.test(hostname)
+  );
+}

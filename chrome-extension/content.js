@@ -80,3 +80,84 @@ window.addEventListener("message", (event) => {
 
   worker.postMessage({ cmd: "open", url: msg.url, protocols: msg.protocols });
 });
+
+// HTTP relay: one MessagePort per request, from the page or from a worker's channel port.
+// Response chunks cross the worker hop as base64, like WebSocket frames.
+
+const FETCH_TYPE = "licht-http-proxy:fetch";
+const CHANNEL_TYPE = "licht-http-proxy:channel";
+
+function relayFetch(msg, pagePort) {
+  if (msg?.type !== FETCH_TYPE || typeof msg.url !== "string" || pagePort == undefined) {
+    return;
+  }
+  let worker;
+  try {
+    worker = chrome.runtime.connect({ name: "http" });
+  } catch {
+    pagePort.postMessage({
+      ev: "error",
+      message: "HTTP proxy extension unavailable",
+      missing: true,
+    });
+    pagePort.close();
+    return;
+  }
+  let done = false;
+  // Port messages keep the service worker alive while it waits for a slow server
+  const keepalive = setInterval(() => {
+    worker.postMessage({ cmd: "ping" });
+  }, 20_000);
+  const stop = () => {
+    clearInterval(keepalive);
+    pagePort.close();
+  };
+
+  pagePort.postMessage({ ev: "attached" });
+  worker.onMessage.addListener((m) => {
+    if (m.ev === "chunk") {
+      const data = Uint8Array.fromBase64(m.b64).buffer;
+      pagePort.postMessage({ ev: "chunk", data }, [data]);
+      return;
+    }
+    pagePort.postMessage(m);
+    if (m.ev === "end" || m.ev === "error") {
+      done = true;
+      worker.disconnect();
+      stop();
+    }
+  });
+  worker.onDisconnect.addListener(() => {
+    if (!done) {
+      pagePort.postMessage({ ev: "error", message: "Proxy disconnected" });
+    }
+    stop();
+  });
+  pagePort.onmessage = ({ data: m }) => {
+    if (m?.cmd === "abort") {
+      done = true;
+      worker.disconnect();
+      stop();
+    }
+  };
+  worker.postMessage({
+    cmd: "fetch",
+    url: msg.url,
+    method: msg.method,
+    headers: msg.headers,
+    credentials: msg.credentials,
+  });
+}
+
+window.addEventListener("message", (event) => {
+  if (event.source !== window || event.origin !== location.origin) {
+    return;
+  }
+  const channel = event.ports[0];
+  if (event.data?.type === CHANNEL_TYPE && channel != undefined) {
+    // A worker's requests: each message carries that request's own port
+    channel.onmessage = ({ data, ports }) => relayFetch(data, ports[0]);
+    return;
+  }
+  relayFetch(event.data, channel);
+});
