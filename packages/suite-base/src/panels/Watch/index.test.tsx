@@ -41,7 +41,7 @@ describe("Watch", () => {
     (console.error as Mock).mockClear();
   });
 
-  it("repaints rows when the panel is resized", async () => {
+  it("sizes and repaints a row's sparkline when its canvas is resized", async () => {
     const callbacks: ResizeObserverCallback[] = [];
     vi.stubGlobal(
       "ResizeObserver",
@@ -62,10 +62,16 @@ describe("Watch", () => {
       value.textContent = "stale";
       act(() => {
         for (const callback of callbacks) {
-          callback([], {} as ResizeObserver);
+          callback(
+            [{ contentRect: { width: 60, height: 16 } } as ResizeObserverEntry],
+            {} as ResizeObserver,
+          );
         }
       });
       expect(value.textContent).toBe("12.35");
+      const canvas = screen.getAllByTestId("watch-row")[0]!.querySelector("canvas")!;
+      expect(canvas.width).toBe(Math.round(60 * window.devicePixelRatio));
+      expect(canvas.height).toBe(Math.round(16 * window.devicePixelRatio));
       (console.error as Mock).mockClear();
     } finally {
       vi.unstubAllGlobals();
