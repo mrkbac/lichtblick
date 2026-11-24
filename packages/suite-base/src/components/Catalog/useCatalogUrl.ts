@@ -54,11 +54,15 @@ export function useCatalogUrl(url: string): CatalogBackend {
             const image = await proxiedFetch(thumbnail, { signal: controller.signal }).catch(
               () => undefined,
             );
-            if (image?.ok !== true) {
+            // A thumbnail that fails to load is left as it is; it doesn't fail the catalog
+            const blob = image?.ok === true ? await image.blob().catch(() => undefined) : undefined;
+            if (blob == undefined) {
               return recording;
             }
+            // Cleanup may already have run; a URL made after it would never be revoked
+            controller.signal.throwIfAborted();
             // eslint-disable-next-line @lichtblick/no-object-url -- revoked by this effect's cleanup
-            const objectUrl = URL.createObjectURL(await image.blob());
+            const objectUrl = URL.createObjectURL(blob);
             objectUrls.push(objectUrl);
             return { ...recording, thumbnail: objectUrl };
           }),

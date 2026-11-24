@@ -119,6 +119,8 @@ async function proxyFetch(url: string, init: RequestInit): Promise<Response> {
     };
     // No content script answered: the extension isn't installed or doesn't run on this origin
     const attachTimeout = setTimeout(() => {
+      // A content script that answers late would otherwise fetch it on top of the direct fallback
+      port.postMessage({ cmd: "abort" });
       extensionMissing = true;
       fail(new ProxyMissingError("HTTP proxy extension unavailable"));
     }, ATTACH_TIMEOUT_MS);
