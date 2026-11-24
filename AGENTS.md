@@ -46,7 +46,7 @@ E2E tests: `pnpm test:e2e:web`
 - `packages/suite/`: Extension API types
 - `e2e/`: Playwright end-to-end tests
 - `ci/`: CI and repository maintenance scripts
-- `chrome-extension/`: Chrome extension that lets https://licht.marko.im connect to plain `ws://` servers (mixed-content proxy)
+- `chrome-extension/`: Chrome extension that lets https://digitalis.marko.im (and the old https://licht.marko.im) connect to plain `ws://` servers (mixed-content proxy)
 
 ## High-Impact Conventions
 
@@ -100,13 +100,13 @@ Declare everything once; the panel and its guide page (ⓘ button, panel guide) 
 
 ## Fork Workflow (mrkbac/lichtblick)
 
-- `licht` is the default branch, deployed to https://licht.marko.im. `develop` only mirrors upstream: never commit on it and never base new work on it.
+- `licht` is the default branch, deployed to https://digitalis.marko.im (also served at https://licht.marko.im). `develop` only mirrors upstream: never commit on it and never base new work on it.
 - New work: branch from `origin/licht`, named `feature/…` or `bugfix/…`, in its own worktree so other work isn't touched.
 - Every branch gets one PR into `licht`, ready for review (not draft): `gh pr create -R mrkbac/lichtblick --base licht`. Title = what the change does as a conventional commit (e.g. `feat(ws): support playbackControl`), not the latest commit subject.
 - Don't push features or fixes directly to `licht`. Tiny fork-only config tweaks (deploy config) may go direct.
 - No upstream PRs or merges unless the user asks.
 - Before merging: `pnpm typecheck` and `pnpm build:packages` (CI runs it; unlike `typecheck` it also checks test files), targeted Vitest tests, and `pnpm exec oxlint --report-unused-disable-directives --max-warnings 0 --no-error-on-unmatched-pattern <changed files>` (same flags as CI's `pnpm lint:ci`). Merge with `gh pr merge --merge` (merge commit) and delete the branch.
-- Every pushed branch gets a Cloudflare Pages preview at `<branch>.lichtblick-2pl.pages.dev` (`/` in the branch name becomes `-`, e.g. `feature-foo`); merging into `licht` deploys licht.marko.im.
+- Every pushed branch gets a Cloudflare Pages preview at `<branch>.lichtblick-2pl.pages.dev` (`/` in the branch name becomes `-`, e.g. `feature-foo`); merging into `licht` deploys digitalis.marko.im (and licht.marko.im).
 
 ### Parallel Sessions
 

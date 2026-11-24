@@ -1,9 +1,9 @@
 {
   "name": "@lichtblick/suite-base",
-  "description": "Core components of Lichtblick Suite",
+  "description": "Core components of Digitalis",
   "private": true,
-  "productName": "Lichtblick",
-  "productDescription": "Lichtblick Suite",
+  "productName": "Digitalis",
+  "productDescription": "Digitalis",
   "license": "MPL-2.0",
   "repository": {
     "type": "git",

@@ -297,7 +297,7 @@ export async function exportMcap(
   };
 
   builder.writeMagic();
-  builder.writeHeader({ profile: reader.header.profile, library: "Lichtblick" });
+  builder.writeHeader({ profile: reader.header.profile, library: "Digitalis" });
 
   // Kept channels keep their ids, so copied chunks stay valid.
   const keptChannels = new Map<number, McapTypes.Channel>();
