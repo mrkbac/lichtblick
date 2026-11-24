@@ -55,6 +55,8 @@ export type Config = {
   units: Units;
   followTopic: string;
   followMode: "center" | "heading";
+  /** Glide between positions while following instead of jumping to each one. */
+  smoothFollow: boolean;
   allowRotation: boolean;
   showScale: boolean;
   showCoordinates: boolean;
@@ -126,6 +128,7 @@ export function normalizeConfig(initial: unknown): Config {
     units: config.units ?? "metric",
     followTopic: config.followTopic ?? "",
     followMode: config.followMode ?? "center",
+    smoothFollow: config.smoothFollow ?? false,
     allowRotation: config.allowRotation ?? true,
     showScale: config.showScale ?? true,
     showCoordinates: config.showCoordinates ?? true,
@@ -282,6 +285,14 @@ export function buildSettingsTree(
             { label: "Centered, heading up", value: "heading" },
           ],
           help: "Heading up rotates the map so the direction of travel points up.",
+        }
+      : undefined,
+    smoothFollow: config.followTopic
+      ? {
+          label: "Smooth follow",
+          input: "boolean",
+          value: config.smoothFollow,
+          help: "Glides between positions instead of jumping to each one. Redraws the map on every display frame while moving.",
         }
       : undefined,
     projection: {
