@@ -43,7 +43,6 @@
     "./src/services/LayoutManager/LayoutManager.ts",
     "./src/util/basicDatatypes.ts",
     "./src/util/foxgloveSchemas.ts",
-    "./src/util/installSetImmediate.ts",
     "./src/util/parseColor.ts",
     "./src/util/sendNotification.ts"
   ],

@@ -61,6 +61,18 @@ export default function HoverableIconButton(props: HoverableIconButtonProps): Re
     }
   }, [props.disabled]);
 
+  // Both icons stay mounted: swapping the pressed node mid-click (the hover render can land
+  // between pointerdown and pointerup) makes the browser drop the click.
+  const shownIcon =
+    activeIcon == undefined ? (
+      icon
+    ) : (
+      <>
+        <span style={{ display: hovered ? "none" : "contents" }}>{icon}</span>
+        <span style={{ display: hovered ? "contents" : "none" }}>{activeIcon}</span>
+      </>
+    );
+
   return (
     <IconButton
       {...rest}
@@ -69,9 +81,9 @@ export default function HoverableIconButton(props: HoverableIconButtonProps): Re
       onMouseLeave={handleMouseLeave}
       color={activeColor != undefined ? (hovered ? activeColor : color) : color}
     >
-      {iconPosition === "start" && (activeIcon != undefined ? (hovered ? activeIcon : icon) : icon)}
+      {iconPosition === "start" && shownIcon}
       {children}
-      {iconPosition === "end" && (activeIcon != undefined ? (hovered ? activeIcon : icon) : icon)}
+      {iconPosition === "end" && shownIcon}
     </IconButton>
   );
 }
