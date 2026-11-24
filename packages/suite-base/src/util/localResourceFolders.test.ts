@@ -249,6 +249,9 @@ describe("LocalResourceFolders persistence", () => {
       delete: async (key) => {
         values.delete(key);
       },
+      readwrite: async () => {
+        throw new Error("unused");
+      },
     };
   }
   function withPermission(

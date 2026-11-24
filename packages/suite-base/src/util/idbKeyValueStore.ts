@@ -1,12 +1,14 @@
 // SPDX-License-Identifier: MPL-2.0
 
-import { IDBPDatabase, openDB } from "idb";
+import { IDBPDatabase, IDBPObjectStore, openDB } from "idb";
 
 export type KeyValueStore = {
   get: <T>(key: IDBValidKey) => Promise<T | undefined>;
   set: (key: IDBValidKey, value: unknown) => Promise<void>;
   setMany: (entries: [IDBValidKey, unknown][]) => Promise<void>;
   delete: (key: IDBValidKey) => Promise<void>;
+  /** The store in a new readwrite transaction, for reads and writes that must not interleave. */
+  readwrite: () => Promise<IDBPObjectStore<unknown, [string], string, "readwrite">>;
 };
 
 /**
@@ -54,6 +56,7 @@ export function createKeyValueStore(dbName: string, storeName: string): KeyValue
     delete: async (key) => {
       await (await open()).delete(storeName, key);
     },
+    readwrite: async () => (await open()).transaction(storeName, "readwrite").store,
     setMany: async (entries) => {
       const tx = (await open()).transaction(storeName, "readwrite");
       await Promise.all([
