@@ -279,6 +279,33 @@ describe("RemoteFileReadable", () => {
       expect(fetchMock).toHaveBeenCalledTimes(1);
     });
 
+    it("evicts the least recently read range, not the oldest", async () => {
+      const fetchMock = vi
+        .fn()
+        .mockImplementation(async () => new Response(new Uint8Array(1), { status: 206 }));
+      globalThis.fetch = fetchMock;
+      const readable = new RemoteFileReadable(testUrl);
+      const mib60 = 60n * 1024n * 1024n;
+      const [a, b, c] = [0n, 1n << 30n, 2n << 30n];
+
+      // GIVEN: two ranges, the older one read again since
+      readable.prefetch([{ offset: a, length: mib60 }]);
+      readable.prefetch([{ offset: b, length: mib60 }]);
+      await readable.read(a, 1n);
+      // WHEN: a third range needs room
+      readable.prefetch([{ offset: c, length: mib60 }]);
+      readable.prefetch([{ offset: a, length: mib60 }]);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      // THEN: the recently read range is still there and wasn't downloaded again
+      const ranges = fetchMock.mock.calls.map(([, init]) => (init as RequestInit).headers);
+      expect(ranges).toEqual([
+        { range: `bytes=${a}-${a + mib60 - 1n}` },
+        { range: `bytes=${b}-${b + mib60 - 1n}` },
+        { range: `bytes=${c}-${c + mib60 - 1n}` },
+      ]);
+    });
+
     it("doesn't download a range dropped from the budget while it was queued", async () => {
       const pending: (() => void)[] = [];
       const fetchMock = vi.fn().mockImplementation(

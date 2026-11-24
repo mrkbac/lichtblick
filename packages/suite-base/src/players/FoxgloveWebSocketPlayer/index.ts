@@ -723,7 +723,6 @@ export default class FoxgloveWebSocketPlayer implements Player {
         };
         if (!this.#serverControlsPlayback) {
           this.#history.add(msgEvent);
-          // ponytail: raw bytes aren't counted in the history memory limit; the heap guard covers it.
           const raw = new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
           this.#rawByMessage.set(msgEvent, { data: raw, channel: chanInfo });
           this.#recordingFor()?.record(chanInfo.record, receiveTime, raw);

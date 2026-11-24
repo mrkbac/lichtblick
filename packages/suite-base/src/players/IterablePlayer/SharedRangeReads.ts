@@ -29,8 +29,8 @@ const GATHER_MS = 10;
  * also push each other's chunks out of the source's chunk cache. Reads of part of the recording
  * (e.g. stepping to the next message) start right away on their own.
  */
-// ponytail: a read that starts while a shared read is running makes its own pass; joining a running
-// pass would need a second read for the part it missed
+// A read that starts while a shared read is running makes its own pass: joining a running pass
+// would need a second read for the part it missed.
 export class SharedRangeReads {
   readonly #readRange: ReadRange;
   /** The shared read still gathering readers */

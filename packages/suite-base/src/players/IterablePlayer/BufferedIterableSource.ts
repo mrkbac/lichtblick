@@ -27,7 +27,7 @@ const log = Log.getLogger(__filename);
 
 const DEFAULT_READ_AHEAD_DURATION = { sec: 10, nsec: 0 };
 const DEFAULT_MIN_READ_AHEAD_DURATION = { sec: 1, nsec: 0 };
-// ponytail: caps the min read-ahead scale so a burst never exceeds ~5x the base before playback resumes
+// Caps the min read-ahead scale, so a burst never waits for more than ~5x the base before playback resumes
 const MAX_MIN_READ_AHEAD_SCALE = 5;
 
 type Options = {

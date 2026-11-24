@@ -30,7 +30,7 @@ export type PrefetchOptions = { skim?: boolean };
 const DEFAULT_CACHE_SIZE_BYTES = 1024 * 1024 * 500; // 500MiB
 // Parallel range requests hide per-request latency; a few saturate most links
 const PREFETCH_CONCURRENCY = 4;
-// ponytail: FIFO eviction; switch to LRU if prefetched ranges get re-read after long gaps
+// Prefetched ranges kept at most; the least recently used go first
 const PREFETCH_MAX_BYTES = 1024 * 1024 * 128;
 // While prefetches keep coming in, reads jump around: fetch misses exactly too instead of
 // opening a streaming connection that reads ahead megabytes the next jump skips
@@ -46,7 +46,7 @@ export class RemoteFileReadable {
   readonly #url: string;
   readonly #credentials: RequestCredentials | undefined;
   readonly #prefetchQueue = new Semaphore(PREFETCH_CONCURRENCY);
-  // Exact-range downloads keyed by start offset, in request order for eviction
+  // Exact-range downloads keyed by start offset, least recently used first
   readonly #prefetched = new Map<number, Prefetched>();
   #prefetchedBytes = 0;
   #lastPrefetchMs = 0;
@@ -137,9 +137,16 @@ export class RemoteFileReadable {
     }
     const data = prefetched && (await abortable(prefetched.data, options?.signal));
     if (prefetched && data) {
+      this.#touch(prefetched);
       return data.subarray(start - prefetched.start, end - prefetched.start);
     }
     return await this.#batchingReadable.read(BigInt(start), BigInt(end - start), options);
+  }
+
+  /** Marks it most recently used: a Map iterates in insertion order */
+  #touch(prefetched: Prefetched): void {
+    this.#prefetched.delete(prefetched.start);
+    this.#prefetched.set(prefetched.start, prefetched);
   }
 
   #findPrefetched(start: number, end: number): Prefetched | undefined {
@@ -174,7 +181,9 @@ export class RemoteFileReadable {
       if (batchBytes > PREFETCH_MAX_BYTES) {
         break;
       }
-      if (this.#prefetched.has(start)) {
+      const existing = this.#prefetched.get(start);
+      if (existing) {
+        this.#touch(existing);
         continue;
       }
       // Make room before queueing, so nothing is downloaded only to be dropped

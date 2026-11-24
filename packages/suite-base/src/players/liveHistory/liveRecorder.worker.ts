@@ -18,7 +18,7 @@ const FLUSH_INTERVAL_MS = 1000;
 /**
  * Messages reach the file a chunk at a time, so a crash loses at most this much. Smaller than the
  * default 1 MiB so slow streams land on disk sooner.
- * ponytail: bounded by size, not time; a time bound needs a chunk flush McapWriter doesn't expose.
+ * Bounded by size, not time: McapWriter has no call to end a chunk early.
  */
 const CHUNK_SIZE = 256 * 1024;
 

@@ -515,8 +515,8 @@ export class McapUnindexedIterableSource implements ISerializedIterableSource {
     const wanted = this.#wantedChannels(args.topics);
     const reader = new WindowedReader(this.#options.readable, this.#size);
     const found = new Map<string, MessageEvent<Uint8Array>>();
-    // ponytail: walks back message by message; a topic that is rare or absent before `time` costs a
-    // pass over the index (a typed-array walk, fast up to tens of millions of messages)
+    // Walks back message by message: a topic that is rare or absent before `time` costs a pass over
+    // the index, a typed-array walk that stays fast up to tens of millions of messages
     for (
       let i = lowerBound(index, toNanoSec(args.time) + 1n) - 1;
       i >= 0 && found.size < args.topics.size;
@@ -718,7 +718,8 @@ class IndexBuilder {
         }
       }
       if (!this.#sorted) {
-        // ponytail: comparator sort, a few seconds for tens of millions of out-of-order messages
+        // Once per file, and only for one without index whose messages are out of order: a few
+        // seconds for tens of millions of messages
         const logTimes = this.#logTimes;
         order.sort((a, b) =>
           logTimes[a]! < logTimes[b]! ? -1 : logTimes[a]! > logTimes[b]! ? 1 : a - b,

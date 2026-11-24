@@ -492,8 +492,8 @@ export class McapIterableSource implements ISerializedIterableSource {
    * Follows a local file without a footer that was opened from a handle, as it is written: see
    * #followGrowth. Undefined when there is nothing to follow.
    */
-  // ponytail: remote files aren't followed; that needs a Content-Length re-check every few
-  // seconds and a RemoteFileReadable whose size can grow.
+  // Remote files aren't followed: that would need a Content-Length re-check every few seconds and a
+  // RemoteFileReadable whose size can grow, for servers that serve a file while it is written.
   #tail(): Promise<void> | undefined {
     const handle = this.#source.type === "file" ? this.#source.handle : undefined;
     const readable = this.#blob;
