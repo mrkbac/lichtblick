@@ -33,7 +33,8 @@ export const appSettings = {
   liveRecordingOff: "Off",
   liveRecordingDescription:
     "Every live connection is recorded to an MCAP file in browser storage. When this much space is used, the oldest recordings are deleted. Find them under Live recordings in the app menu.",
-  memoryUseIndicatorDescription: "Show JavaScript heap use in the app bar",
+  memoryUseIndicatorDescription:
+    "Show frame rate, worst frame time and JavaScript heap use in the app bar",
   openLinksIn: "Open links in",
   openFoxgloveLinks: "Open foxglove:// links",
   openFoxgloveLinksDescription:
