@@ -38,6 +38,7 @@ import { RendererConfig } from "./IRenderer";
 import { Picker } from "./Picker";
 import { Renderable } from "./Renderable";
 import { SceneExtension } from "./SceneExtension";
+import type { SharedMap } from "./SharedMap";
 
 vi.mock("./Picker", async () => {
   const actual = await vi.importActual("./Picker");
@@ -464,6 +465,32 @@ describe("3D Renderer", () => {
     expect(gl.info.frame).toBe(nodeFrame.frameId);
     renderer.dispose();
     visible.mockRestore();
+  });
+
+  it("clears before each scene draw a map triggers, so transparent objects don't accumulate", async () => {
+    // Given: a map that draws the scene from its own repaints
+    let drawScene = (): void => {};
+    const sharedMap = {
+      layerId: undefined,
+      attach: (_renderer: unknown, draw: () => void) => {
+        drawScene = draw;
+      },
+      detach: vi.fn(),
+      render: vi.fn(),
+      map: { setPixelRatio: vi.fn(), resize: vi.fn() },
+    } as unknown as SharedMap;
+    const renderer = new Renderer({ ...defaultRendererProps, canvas, sharedMap });
+    await renderer.ready;
+    const gl = renderer.gl as unknown as { clear: Mock; render: Mock };
+    gl.clear.mockClear();
+
+    // When: the map repaints twice between our frames
+    drawScene();
+    drawScene();
+
+    // Then: each draw starts from a cleared canvas
+    expect(gl.clear).toHaveBeenCalledTimes(2);
+    renderer.dispose();
   });
 
   it("relies on three internals that still exist", async () => {
