@@ -811,6 +811,9 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
       maxPitch: 85,
       attributionControl: false,
       trackResize: false,
+      // Label fades ask for a repaint on every display frame after each move; while following,
+      // the map moves with every position, so it would never stop redrawing
+      fadeDuration: 0,
     });
     instance.addControl(new AutoHideAttributionControl(), "bottom-right");
     instance.addControl(new NavigationControl({ visualizePitch: true }), "top-right");
