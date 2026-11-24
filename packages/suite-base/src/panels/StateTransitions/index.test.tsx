@@ -304,7 +304,7 @@ describe("StateTransitions", () => {
     fireEvent.keyDown(document, { key: "n" });
     expect(mockSeekPlayback).not.toHaveBeenCalled();
 
-    fireEvent.mouseEnter(screen.getAllByTestId("state-transitions-match-count")[1]!);
+    fireEvent.pointerEnter(screen.getAllByTestId("state-transitions-match-count")[1]!);
     fireEvent.keyDown(document, { key: "n" });
     expect(mockSeekPlayback).toHaveBeenCalledTimes(1);
   });

@@ -368,8 +368,12 @@ function StateTransitions(props: StateTransitionPanelProps) {
       flexGrow={1}
       overflow="hidden"
       style={{ zIndex: 0 }}
-      onMouseEnter={() => (hovered.current = true)}
-      onMouseLeave={() => (hovered.current = false)}
+      onPointerEnter={() => {
+        hovered.current = true;
+      }}
+      onPointerLeave={() => {
+        hovered.current = false;
+      }}
     >
       <PanelToolbar
         additionalIcons={
