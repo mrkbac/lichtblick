@@ -1861,9 +1861,6 @@ export class Renderer extends EventEmitter<RendererEvents> {
       this.#canvas.ownerDocument.visibilityState !== "hidden" &&
       bufferSize.width > 0 &&
       bufferSize.height > 0;
-    if (draw) {
-      this.gl.clear();
-    }
     this.emit("startFrame", currentTime, this);
 
     const camera = this.cameraHandler.getActiveCamera();
@@ -1905,6 +1902,9 @@ export class Renderer extends EventEmitter<RendererEvents> {
     if (!this.#gpuReady) {
       return;
     }
+    // Clear on every draw, not once per frame: a map also draws the scene on its own repaints (tile
+    // loads, label fades), and without a clear each one blends transparent objects over the last.
+    this.gl.clear();
     this.#advanceNodeFrame();
     const camera = this.cameraHandler.getActiveCamera();
     camera.layers.set(LAYER_DEFAULT);
