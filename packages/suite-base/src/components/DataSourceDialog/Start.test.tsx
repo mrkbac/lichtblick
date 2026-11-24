@@ -42,7 +42,18 @@ vi.mock("@lichtblick/suite-base/components/DataSourceDialog/DontShowThisAgainChe
 
 vi.mock("@lichtblick/suite-base/components/Catalog/Catalog", () => ({
   __esModule: true,
-  default: ({ query }: { query: string }) => <div data-testid="catalog">{query}</div>,
+  default: ({
+    query,
+    onSortChange,
+  }: {
+    query: string;
+    onSortChange?: (sort: { key: string; desc: boolean }) => void;
+  }) => (
+    <div data-testid="catalog">
+      {query}
+      <button onClick={() => onSortChange?.({ key: "name", desc: true })}>sortByNameDesc</button>
+    </div>
+  ),
 }));
 
 vi.mock("@lichtblick/suite-base/components/Catalog/useCatalogUrl", () => ({
@@ -406,6 +417,24 @@ describe("Start Component", () => {
     fireEvent.keyDown(box, { key: "Enter" });
     expect(mockOpenRecording).toHaveBeenCalledWith(expect.objectContaining({ name: "drive.mcap" }));
     expect(mockSelectSource).not.toHaveBeenCalled();
+  });
+
+  it("opens the first catalog row in the table's sort order on Enter", () => {
+    setup([]);
+    const box = screen.getByPlaceholderText("openUrlPlaceholder");
+    typeUrl("topic:/camera");
+
+    // Default sort is newest first; both start together, so the later folder entry leads.
+    fireEvent.keyDown(box, { key: "Enter" });
+    expect(mockOpenRecording).toHaveBeenLastCalledWith(
+      expect.objectContaining({ name: "drive.mcap" }),
+    );
+
+    fireEvent.click(screen.getByText("sortByNameDesc"));
+    fireEvent.keyDown(box, { key: "Enter" });
+    expect(mockOpenRecording).toHaveBeenLastCalledWith(
+      expect.objectContaining({ name: "local.bag" }),
+    );
   });
 
   it("treats search filters that look like host:port as a search", () => {

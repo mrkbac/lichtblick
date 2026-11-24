@@ -28,7 +28,11 @@ import {
   RecordingThumbnail,
   recordingCaption,
 } from "@lichtblick/suite-base/components/Catalog/RecordingThumbnail";
-import { filterRecordings } from "@lichtblick/suite-base/components/Catalog/search";
+import {
+  DEFAULT_CATALOG_SORT,
+  filterRecordings,
+  sortRecordings,
+} from "@lichtblick/suite-base/components/Catalog/search";
 import { CatalogRecording } from "@lichtblick/suite-base/components/Catalog/types";
 import { useCatalogFolder } from "@lichtblick/suite-base/components/Catalog/useCatalogFolder";
 import DontShowThisAgainCheckbox from "@lichtblick/suite-base/components/DataSourceDialog/DontShowThisAgainCheckbox";
@@ -97,6 +101,7 @@ export default function Start({ ref }: { ref?: React.Ref<StartHandle> }): React.
 
   const [query, setQuery] = useState("");
   const [view, setView] = useState<View>("all");
+  const [catalogSort, setCatalogSort] = useState(DEFAULT_CATALOG_SORT);
   useImperativeHandle(
     ref,
     () => ({
@@ -186,12 +191,11 @@ export default function Start({ ref }: { ref?: React.Ref<StartHandle> }): React.
   const showOverview =
     view === "all" && sources.find((source) => source.id === DEFAULT_CATALOG)?.hidden !== true;
 
-  // Enter in the search box opens the first recent listed, else the first catalog match.
-  // The catalog's first match is in folder order: the table's sort lives inside Catalog
+  // Enter in the search box opens the first recent listed, else the first catalog row as sorted.
   const topRecent = showRecents && query.trim() !== "" ? visibleRecents[0] : undefined;
   const topRecording =
     !topRecent && showOverview && query.trim() !== ""
-      ? filterRecordings(folder.recordings, query)[0]
+      ? sortRecordings(filterRecordings(folder.recordings, query), catalogSort)[0]
       : undefined;
   const topMatch = topRecent
     ? (topRecent.name ?? splitRecentTitle(topRecent.title).primary)
@@ -418,6 +422,8 @@ export default function Start({ ref }: { ref?: React.Ref<StartHandle> }): React.
           onQueryChange={setQuery}
           view="list"
           sections={false}
+          sort={catalogSort}
+          onSortChange={setCatalogSort}
         />
       )}
 
