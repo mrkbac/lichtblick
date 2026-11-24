@@ -404,7 +404,7 @@ export default class FoxgloveWebSocketPlayer implements Player {
         this.#alerts.addAlert("ws:connection-failed", {
           severity: "error",
           message: "Your browser blocked ws:// from this https page",
-          tip: `Browsers only allow unencrypted ws:// connections from an https page to localhost. Install the Licht WebSocket proxy extension (chrome-extension/ in the repository), allow "Insecure content" in this site's settings, or serve ${this.#url} over wss://. Then reload the page.`,
+          tip: `Browsers only allow unencrypted ws:// connections from an https page to localhost. Install the Digitalis proxy extension (chrome-extension/ in the repository), allow "Insecure content" in this site's settings, or serve ${this.#url} over wss://. Then reload the page.`,
           guide: { type: "wsMixedContent", url: this.#url },
         });
       } else {

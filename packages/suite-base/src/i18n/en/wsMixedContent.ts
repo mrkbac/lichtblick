@@ -8,7 +8,7 @@ export const wsMixedContent = {
   copy: "Copy {{text}}",
   intro:
     "Browsers only allow unencrypted <ws/> connections from an https page to localhost, so <url/> was blocked. Use one of these, then reload the page.",
-  extensionHeading: "Recommended: install the Licht WebSocket proxy extension",
+  extensionHeading: "Recommended: install the Digitalis proxy extension",
   downloadExtension: "Download the extension",
   unzip: "and unzip it.",
   openExtensions: "Open <page/> and turn on <b>Developer mode</b>.",
@@ -16,7 +16,7 @@ export const wsMixedContent = {
   extensionNote:
     "Needs Chrome, Edge or another Chromium browser, version 140 or newer. It runs only on this site, asks for no permissions and relays only ws:// connections.",
   extensionElsewhere:
-    "The Licht WebSocket proxy extension runs on <site/> only. Open this connection there to use it.",
+    "The Digitalis proxy extension runs on <site/> only. Open this connection there to use it.",
   allowHeading: "Allow insecure content for this site",
   orAllowHeading: "Or allow insecure content for this site",
   chromiumSetting:

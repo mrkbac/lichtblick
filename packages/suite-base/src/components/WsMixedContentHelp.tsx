@@ -112,7 +112,7 @@ export default function WsMixedContentHelp({ url }: { url: string }): React.JSX.
                 size="small"
                 variant="outlined"
                 startIcon={<FileDownloadOutlinedIcon style={{ fontSize: 16 }} />}
-                href="/licht-ws-proxy.zip"
+                href="/digitalis-proxy.zip"
                 target="_self"
                 download
               >
@@ -134,7 +134,7 @@ export default function WsMixedContentHelp({ url }: { url: string }): React.JSX.
               <Trans
                 t={t}
                 i18nKey="loadUnpacked"
-                components={{ folder: <Code text="licht-ws-proxy" />, b: <b /> }}
+                components={{ folder: <Code text="digitalis-proxy" />, b: <b /> }}
               />
             </li>
           </ol>
