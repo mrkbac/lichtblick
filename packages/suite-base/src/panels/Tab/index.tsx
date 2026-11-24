@@ -50,6 +50,8 @@ import { TAB_SHORTCUTS } from "./shortcuts";
  * over the shown tab, so force it on every descendant; `!important` beats inline styles.
  */
 export const HIDDEN_TAB_STYLE = {
+  // Skips style, layout and paint of the hidden panels (all on the main thread, every frame)
+  contentVisibility: "hidden",
   visibility: "hidden",
   pointerEvents: "none",
   // csstype has no `!important` variants.
