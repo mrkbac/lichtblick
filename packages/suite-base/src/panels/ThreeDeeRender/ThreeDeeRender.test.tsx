@@ -690,6 +690,9 @@ describe("ThreeDeeRender", () => {
         expect(done).toHaveBeenCalledTimes(1);
       });
       expect(customRendererInstance.settleVideoDecodes).not.toHaveBeenCalled();
+      // Playback frames draw in an animation frame, not in the commit
+      expect(customRendererInstance.queueAnimationFrame).toHaveBeenCalled();
+      expect(customRendererInstance.animationFrame).not.toHaveBeenCalled();
     });
 
     it("defers done on seek frames until video decode settles", async () => {
@@ -727,6 +730,11 @@ describe("ThreeDeeRender", () => {
       await waitFor(() => {
         expect(customRendererInstance.settleVideoDecodes).toHaveBeenCalledTimes(1);
       });
+      // The seek frame draws before the barrier waits, so its video decodes have started
+      expect(customRendererInstance.animationFrame).toHaveBeenCalled();
+      expect(customRendererInstance.animationFrame.mock.invocationCallOrder[0]!).toBeLessThan(
+        customRendererInstance.settleVideoDecodes.mock.invocationCallOrder[0]!,
+      );
       expect(done).not.toHaveBeenCalled();
 
       await act(async () => {
