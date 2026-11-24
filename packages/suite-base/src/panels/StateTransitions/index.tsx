@@ -18,7 +18,7 @@ import { add as addTimes, fromSec } from "@foxglove/rostime";
 import { Typography, alpha, useTheme } from "@mui/material";
 import { AnnotationOptions } from "chartjs-plugin-annotation";
 import * as _ from "lodash-es";
-import { useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useDebounce } from "use-debounce";
 
@@ -76,6 +76,9 @@ const MATCH_EPSILON = 1e-6;
 
 // Compared recordings get a row each, named by their topic (`/a/…`, `/b/…`)
 const sameStyle = () => ({});
+
+/** Mounted StateTransitions panels that have a condition, for scoping the match shortcuts */
+const conditionPanels = new Set<symbol>();
 
 function StateTransitions(props: StateTransitionPanelProps) {
   const { config, saveConfig } = useComparedPaths(
@@ -239,19 +242,44 @@ function StateTransitions(props: StateTransitionPanelProps) {
     }
   }, [previousMatch, seekToSeconds]);
 
+  // With several condition panels open, N / Shift+N only seek in the hovered one
+  const hovered = useRef(false);
+  const panelKey = useRef(Symbol());
+  useEffect(() => {
+    if (!hasCondition) {
+      return;
+    }
+    const key = panelKey.current;
+    conditionPanels.add(key);
+    return () => {
+      conditionPanels.delete(key);
+    };
+  }, [hasCondition]);
+  const ownsMatchKeys = useCallback(() => conditionPanels.size <= 1 || hovered.current, []);
+
   const panelVisible = useContext(PanelVisibleContext);
   const keyDownHandlers = useMemo(
     () =>
       shortcutKeyHandlers(STATE_TRANSITIONS_SHORTCUTS, {
         "stateTransitions.exitMeasure": createMeasureModeEscapeHandler(deltaMode),
-        // ponytail: global listener, so every panel with a condition seeks on N; scope it to the
-        // focused panel if several condition panels get confusing.
         ...(hasCondition && {
-          "stateTransitions.next": seekToNextMatch,
-          "stateTransitions.previous": seekToPreviousMatch,
+          "stateTransitions.next": () => {
+            if (!ownsMatchKeys()) {
+              return false;
+            }
+            seekToNextMatch();
+            return true;
+          },
+          "stateTransitions.previous": () => {
+            if (!ownsMatchKeys()) {
+              return false;
+            }
+            seekToPreviousMatch();
+            return true;
+          },
         }),
       }),
-    [deltaMode, hasCondition, seekToNextMatch, seekToPreviousMatch],
+    [deltaMode, hasCondition, ownsMatchKeys, seekToNextMatch, seekToPreviousMatch],
   );
 
   const onClick = useCallback(
@@ -336,7 +364,13 @@ function StateTransitions(props: StateTransitionPanelProps) {
   );
 
   return (
-    <Stack flexGrow={1} overflow="hidden" style={{ zIndex: 0 }}>
+    <Stack
+      flexGrow={1}
+      overflow="hidden"
+      style={{ zIndex: 0 }}
+      onMouseEnter={() => (hovered.current = true)}
+      onMouseLeave={() => (hovered.current = false)}
+    >
       <PanelToolbar
         additionalIcons={
           <>
