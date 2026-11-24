@@ -9,10 +9,12 @@ import * as Comlink from "@foxglove/comlink";
 
 import { IterableSourceInitializeArgs } from "@lichtblick/suite-base/players/IterablePlayer/IIterableSource";
 import { WorkerIterableSourceWorker } from "@lichtblick/suite-base/players/IterablePlayer/WorkerIterableSourceWorker";
+import { setHttpProxyChannel } from "@lichtblick/suite-base/util/httpProxy";
 
 import { BagIterableSource } from "./BagIterableSource";
 
 export function initialize(args: IterableSourceInitializeArgs): WorkerIterableSourceWorker {
+  setHttpProxyChannel(args.httpProxy);
   if (args.file) {
     const source = new BagIterableSource({ type: "file", file: args.file });
     const wrapped = new WorkerIterableSourceWorker(source);

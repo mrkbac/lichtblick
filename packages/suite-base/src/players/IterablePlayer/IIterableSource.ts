@@ -269,6 +269,8 @@ export type IterableSourceInitializeArgs = {
   compareOffsets?: readonly number[];
   // Fetch credentials for `url`/`urls`, e.g. "include" to send cookies (`ds.includeCredentials`)
   credentials?: RequestCredentials;
+  // Port to the proxy extension for http:// URLs an https page can't fetch (util/httpProxy)
+  httpProxy?: MessagePort;
 };
 
 /**

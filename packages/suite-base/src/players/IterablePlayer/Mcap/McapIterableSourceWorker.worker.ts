@@ -10,10 +10,12 @@ import * as Comlink from "@foxglove/comlink";
 import { IterableSourceInitializeArgs } from "@lichtblick/suite-base/players/IterablePlayer/IIterableSource";
 import { WorkerIterableSourceWorker } from "@lichtblick/suite-base/players/IterablePlayer/WorkerIterableSourceWorker";
 import { MultiIterableSource } from "@lichtblick/suite-base/players/IterablePlayer/shared/MultiIterableSource";
+import { setHttpProxyChannel } from "@lichtblick/suite-base/util/httpProxy";
 
 import { McapIterableSource } from "./McapIterableSource";
 
 export function initialize(args: IterableSourceInitializeArgs): WorkerIterableSourceWorker {
+  setHttpProxyChannel(args.httpProxy);
   if (args.file) {
     const source = new McapIterableSource({ type: "file", file: args.file, handle: args.handle });
     const wrapped = new WorkerIterableSourceWorker(source);

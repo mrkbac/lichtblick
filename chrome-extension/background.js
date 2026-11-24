@@ -5,7 +5,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-// Opens the real ws:// socket. The service worker runs at chrome-extension://,
+// Opens the real ws:// socket and fetches http:// URLs. The service worker runs at chrome-extension://,
 // where Chrome's mixed-content block does not apply, so it can reach plain ws://
 // servers that an https page cannot. One runtime port per socket.
 //
@@ -19,11 +19,67 @@ const ALLOWED_ORIGINS = new Set(
 );
 
 chrome.runtime.onConnect.addListener((port) => {
-  if (port.name !== "ws" || !ALLOWED_ORIGINS.has(port.sender?.origin)) {
+  if (!ALLOWED_ORIGINS.has(port.sender?.origin)) {
     port.disconnect();
-    return;
+  } else if (port.name === "ws") {
+    relaySocket(port);
+  } else if (port.name === "http") {
+    relayFetch(port);
+  } else {
+    port.disconnect();
   }
+});
 
+// Fetches a plain http:// URL and streams the response back. Requests run from the extension's
+// origin, so the server's CORS headers decide what can be read, as they would for the page.
+function relayFetch(port) {
+  const controller = new AbortController();
+  let open = true;
+  const post = (msg) => {
+    if (open) {
+      port.postMessage(msg);
+    }
+  };
+  port.onDisconnect.addListener(() => {
+    open = false;
+    controller.abort();
+  });
+  port.onMessage.addListener(async (msg) => {
+    if (msg.cmd !== "fetch") {
+      return;
+    }
+    try {
+      const url = new URL(msg.url);
+      // https:// and loopback work without the proxy; only relay what the page can't reach.
+      if (url.protocol !== "http:") {
+        throw new Error("Proxy only relays http:// URLs");
+      }
+      const response = await fetch(url, {
+        method: typeof msg.method === "string" ? msg.method : "GET",
+        headers: Array.isArray(msg.headers) ? msg.headers : [],
+        credentials: msg.credentials === "include" ? "include" : "same-origin",
+        cache: "no-store",
+        signal: controller.signal,
+      });
+      post({
+        ev: "head",
+        status: response.status,
+        statusText: response.statusText,
+        headers: [...response.headers],
+      });
+      if (response.body != undefined) {
+        for await (const chunk of response.body) {
+          post({ ev: "chunk", b64: chunk.toBase64() });
+        }
+      }
+      post({ ev: "end" });
+    } catch (err) {
+      post({ ev: "error", message: err instanceof Error ? err.message : String(err) });
+    }
+  });
+}
+
+function relaySocket(port) {
   /** @type {WebSocket | undefined} */
   let ws;
 
@@ -95,4 +151,4 @@ chrome.runtime.onConnect.addListener((port) => {
   port.onDisconnect.addListener(() => {
     ws?.close();
   });
-});
+}

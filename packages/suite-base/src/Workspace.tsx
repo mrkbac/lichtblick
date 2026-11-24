@@ -110,6 +110,7 @@ import { WorkspaceProps } from "@lichtblick/suite-base/types";
 import { useAppLaunch } from "@lichtblick/suite-base/util/appLaunch";
 import { parseAppURLState } from "@lichtblick/suite-base/util/appURLState";
 import useBroadcast from "@lichtblick/suite-base/util/broadcast/useBroadcast";
+import { proxiedFetch } from "@lichtblick/suite-base/util/httpProxy";
 import isDesktopApp from "@lichtblick/suite-base/util/isDesktopApp";
 import { shortcutKeyHandlers } from "@lichtblick/suite-base/util/keyboardShortcuts";
 import { basename, extname } from "@lichtblick/suite-base/util/path";
@@ -592,7 +593,7 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
       layoutRequest.current = controller;
       const { signal } = controller;
       try {
-        const response = await fetch(layoutUrl, { signal });
+        const response = await proxiedFetch(layoutUrl, { signal });
         signal.throwIfAborted();
         if (!response.ok) {
           log.error(`Failed to fetch layout: ${safeUrlLabel} (status ${response.status})`);

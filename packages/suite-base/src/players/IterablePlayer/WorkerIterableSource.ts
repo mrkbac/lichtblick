@@ -11,6 +11,7 @@ import { promiseTimeout } from "@lichtblick/den/async";
 import { ComlinkWrap } from "@lichtblick/den/worker";
 import Log from "@lichtblick/log";
 import { Immutable, MessageEvent, Time } from "@lichtblick/suite";
+import { openHttpProxyChannel } from "@lichtblick/suite-base/util/httpProxy";
 
 import type {
   GetBackfillMessagesArgs,
@@ -62,7 +63,15 @@ class WorkerIterableSourceBase<MessageType> implements IIterableSource<MessageTy
       >(worker);
 
     this.#disposeRemote = dispose;
-    this.#sourceWorkerRemote = await initializeWorker(this.#args.initArgs);
+    const { initArgs } = this.#args;
+    const urls = [initArgs.url, ...(initArgs.urls ?? []), ...(initArgs.recordings ?? [])].filter(
+      (url): url is string => typeof url === "string",
+    );
+    // A new port per worker: a transferred port can't be sent again
+    const httpProxy = openHttpProxyChannel(urls);
+    this.#sourceWorkerRemote = await initializeWorker(
+      httpProxy ? Comlink.transfer({ ...initArgs, httpProxy }, [httpProxy]) : initArgs,
+    );
     return await this.#sourceWorkerRemote.initialize();
   }
 
