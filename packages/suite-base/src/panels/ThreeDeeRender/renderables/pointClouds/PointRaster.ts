@@ -61,6 +61,10 @@ type SetPasses = {
   modelView: THREE.UniformNode<"mat4", THREE.Matrix4>;
   count: THREE.UniformNode<"uint", number>;
   setBits: THREE.UniformNode<"uint", number>;
+  /** Footprint the depth and color passes write per point (0: just the point's pixel) */
+  splatRadius: THREE.UniformNode<"int", number>;
+  splatR2: THREE.UniformNode<"float", number>;
+  square: THREE.UniformNode<"uint", number>;
 };
 
 type ScreenBuffers = {
@@ -84,6 +88,11 @@ type Uint = THREE.Node<"uint">;
  * points occlude each other through the normal depth test, transparent objects blend over points,
  * and picking reads the same buffers. Cost per point is a few loads and one atomic, independent of
  * point size; this is what makes tens of millions of points per frame possible.
+ *
+ * The resolve search costs (2r+1)² loads for every pixel on screen, r being the largest searched
+ * footprint. A set whose points cover fewer pixels than the screen has (e.g. a few thousand large
+ * radar points) instead writes each point's whole footprint in the depth and color passes, so it
+ * doesn't widen the search for the whole screen.
  */
 export class PointRaster {
   readonly #renderer: THREE.WebGPURenderer;
@@ -104,6 +113,10 @@ export class PointRaster {
   readonly #size = new THREE.Vector2();
   readonly #infoFloats = new Float32Array(this.#setInfo.array.buffer);
   readonly #drawn: RasterPoints[] = [];
+  /** Per drawn set: footprint radius the passes write, or -1 when the resolve pass searches it */
+  readonly #splat: number[] = [];
+  /** Per drawn set: footprint radius² in device pixels */
+  readonly #r2: number[] = [];
   readonly #passes: SetPasses[] = [];
   /** Camera layers the screen buffers were last rasterized for */
   public preparedLayers = -1;
@@ -189,6 +202,9 @@ export class PointRaster {
     const infoFloats = this.#infoFloats;
     const drawn = this.#drawn;
     drawn.length = 0;
+    const splat = this.#splat;
+    splat.length = 0;
+    this.#r2.length = 0;
     let radius = 0;
     // Every visible point set in the scene; no registration, so nothing can leak
     this.#scene.traverseVisible((object) => {
@@ -220,8 +236,19 @@ export class PointRaster {
       }
       const index = drawn.length;
       const r = Math.max(0.5, (points.pointSize * pixelRatio) / 2);
-      radius = Math.max(radius, Math.min(MAX_RADIUS, Math.ceil(r - 0.5)));
-      infoFloats[index * 4] = r * r;
+      const reach = Math.min(MAX_RADIUS, Math.ceil(r - 0.5));
+      const side = 2 * reach + 1;
+      // Write the footprints when that's fewer writes than one search tap per screen pixel.
+      // ponytail: ignores how far other sets already widen the search; good enough to keep sparse
+      // large points from costing a full-screen (2r+1)² search
+      const splatted = points.drawCount * side * side <= width * height;
+      splat.push(splatted ? reach : -1);
+      this.#r2.push(r * r);
+      if (!splatted) {
+        radius = Math.max(radius, reach);
+      }
+      // A splatted point already covers its footprint; the search accepts it only at its own pixel
+      infoFloats[index * 4] = splatted ? 0 : r * r;
       info[index * 4 + 1] = points.encoding === "srgb" ? 1 : 0;
       info[index * 4 + 2] = points.id;
       info[index * 4 + 3] = points.square ? 1 : 0;
@@ -243,6 +270,10 @@ export class PointRaster {
       const set = this.#passesFor(points);
       set.setBits.value = index << SET_SHIFT;
       set.count.value = points.drawCount;
+      const reach = this.#splat[index]!;
+      set.splatRadius.value = Math.max(0, reach);
+      set.splatR2.value = reach < 0 ? 0 : this.#r2[index]!;
+      set.square.value = points.square ? 1 : 0;
       set.modelView.value.multiplyMatrices(camera.matrixWorldInverse, points.matrixWorld);
       passes.push(set);
     }
@@ -335,6 +366,9 @@ export class PointRaster {
     const modelView = passes?.modelView ?? uniform(new THREE.Matrix4());
     const count = passes?.count ?? uniform(0, "uint");
     const setBits = passes?.setBits ?? uniform(0, "uint");
+    const splatRadius = passes?.splatRadius ?? uniform(0, "int");
+    const splatR2 = passes?.splatR2 ?? uniform(0, "float");
+    const square = passes?.square ?? uniform(0, "uint");
     const capacity = points.capacity();
     const positions = storage(points.positionAttribute(), "float", capacity * 3).toReadOnly();
     const colors = storage(points.colorAttribute(), "uint", capacity).toReadOnly();
@@ -365,7 +399,7 @@ export class PointRaster {
     const width = this.#width;
     const height = this.#height;
 
-    /** Projects point `i`; calls `body` with its pixel and depth key when it is on screen */
+    /** Projects point `i`; calls `body` with each on-screen pixel of its written footprint */
     const project = (body: (pixel: Uint, key: Uint, i: Uint, color: Uint) => void) =>
       Fn(() => {
         const i = instanceIndex;
@@ -424,12 +458,32 @@ export class PointRaster {
         If(inside.not(), () => {
           Return();
         });
-        const x = uint(min(ndc.x.mul(0.5).add(0.5).mul(float(width)), float(width).sub(1)));
-        const y = uint(min(ndc.y.mul(-0.5).add(0.5).mul(float(height)), float(height).sub(1)));
-        const pixel = uint(y.mul(width).add(x)).toVar();
+        const cx = int(min(ndc.x.mul(0.5).add(0.5).mul(float(width)), float(width).sub(1))).toVar();
+        const cy = int(
+          min(ndc.y.mul(-0.5).add(0.5).mul(float(height)), float(height).sub(1)),
+        ).toVar();
         // Larger key = nearer; float bits of positive distances sort like the distances
         const key = uint(0xffffffff).sub(bitsOf(distance)).toVar();
-        body(pixel, key, i, color);
+        const w = int(width);
+        const range = { start: splatRadius.negate(), end: splatRadius, condition: "<=" };
+        Loop(range, range, ({ i: oy, j: ox }) => {
+          const x = cx.add(ox);
+          const y = cy.add(oy);
+          // Same footprint test as the resolve pass
+          const reach = max(float(ox).abs(), float(oy).abs());
+          const d2 = select(square.equal(1), reach.mul(reach), float(ox.mul(ox).add(oy.mul(oy))));
+          If(
+            x
+              .greaterThanEqual(0)
+              .and(x.lessThan(w))
+              .and(y.greaterThanEqual(0))
+              .and(y.lessThan(int(height)))
+              .and(d2.lessThanEqual(splatR2)),
+            () => {
+              body(uint(y.mul(w).add(x)), key, i, color);
+            },
+          );
+        });
       })();
 
     const depth = project((pixel, key) => {
@@ -450,6 +504,9 @@ export class PointRaster {
       modelView,
       count,
       setBits,
+      splatRadius,
+      splatR2,
+      square,
     };
     points.rasterData = passes;
     return passes;
