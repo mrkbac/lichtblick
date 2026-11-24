@@ -403,31 +403,36 @@ describe("3D Renderer", () => {
     renderer.dispose();
   });
 
-  it("drops a queued animation frame when animationFrame runs synchronously", () => {
+  it("cancels a queued animation frame when animationFrame runs synchronously", () => {
     // Given
-    const callbacks: FrameRequestCallback[] = [];
+    const mockResult = BasicBuilder.number();
     const requestAnimationFrameSpy = vi
       .spyOn(window, "requestAnimationFrame")
-      .mockImplementation(function (callback) {
-        return callbacks.push(callback);
+      .mockImplementation(function () {
+        return mockResult;
       });
+    const cancelAnimationFrameSpy = vi
+      .spyOn(window, "cancelAnimationFrame")
+      .mockImplementation(function () {
+        return undefined;
+      });
+
     const renderer = new Renderer({ ...defaultRendererProps, canvas });
-    const frames = vi.fn();
-    renderer.on("startFrame", frames);
+
+    // Renderer init may schedule internal frames; focus this test on the explicit queue+sync path.
+    requestAnimationFrameSpy.mockClear();
+    cancelAnimationFrameSpy.mockClear();
 
     // When
     // Simulate seek/clear code path that queues a frame, then immediately renders synchronously.
     renderer.queueAnimationFrame();
     renderer.animationFrame();
-    for (const callback of callbacks.splice(0)) {
-      callback(performance.now());
-    }
 
-    // Then: the queued frame doesn't draw a second time
-    expect(frames).toHaveBeenCalledTimes(1);
+    // Then
+    expect(requestAnimationFrameSpy).toHaveBeenCalledTimes(1);
+    expect(cancelAnimationFrameSpy).toHaveBeenCalledWith(mockResult);
 
     renderer.dispose();
-    requestAnimationFrameSpy.mockRestore();
   });
 
   it("stops three's idle animation loop and advances the node frame once per drawn frame", async () => {
@@ -534,9 +539,9 @@ describe("3D Renderer", () => {
       renderer.animationFrame();
       // Then
       expect(draw).toHaveBeenCalled();
-      const queue = vi.spyOn(renderer, "queueAnimationFrame");
+      frame.mockClear();
       childDocument.dispatchEvent(new Event("visibilitychange"));
-      expect(queue).toHaveBeenCalled();
+      expect(frame).toHaveBeenCalledWith(renderer.animationFrame);
     } finally {
       renderer.dispose();
       hidden.mockRestore();
@@ -595,9 +600,9 @@ describe("3D Renderer", () => {
       expect(queues.every((subscription) => subscription.queue == undefined)).toBe(true);
 
       visibility.mockReturnValue("visible");
-      const queue = vi.spyOn(renderer, "queueAnimationFrame");
+      requestAnimationFrameSpy.mockClear();
       document.dispatchEvent(new Event("visibilitychange"));
-      expect(queue).toHaveBeenCalled();
+      expect(requestAnimationFrameSpy).toHaveBeenCalledWith(renderer.animationFrame);
       renderer.animationFrame();
       expect(render).toHaveBeenCalled();
     } finally {
