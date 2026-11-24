@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import { subtract, toSec } from "@foxglove/rostime";
+import { subtract } from "@foxglove/rostime";
 import FolderOpenOutlinedIcon from "@mui/icons-material/FolderOpenOutlined";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import {
@@ -23,7 +23,6 @@ import {
   Typography,
 } from "@mui/material";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import * as _ from "lodash-es";
 import { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { makeStyles } from "tss-react/mui";
@@ -51,9 +50,15 @@ import {
   timelineRange,
   TimelineClock,
 } from "./catalogViews";
-import { filterRecordings } from "./search";
+import {
+  CatalogSort,
+  DEFAULT_CATALOG_SORT,
+  SortKey,
+  filterRecordings,
+  sortRecordings,
+} from "./search";
 import { Bounds, boundsIntersect, pickTrack, trackBounds } from "./track";
-import { CatalogBackend, CatalogRecording } from "./types";
+import { CatalogBackend } from "./types";
 
 // MapLibre is large; load it only when the map is shown.
 const CatalogMap = lazy(async () => await import("./CatalogMap"));
@@ -64,31 +69,6 @@ const COLUMNS = `${THUMB_WIDTH}px minmax(0, 1fr) 210px 120px 100px 120px 80px`;
 // With the details pane open (it lists messages and topics) or in a narrow window, those columns
 // make room for names.
 const COMPACT_COLUMNS = `${THUMB_WIDTH}px minmax(0, 1fr) 190px 110px 90px`;
-
-type SortKey = "name" | "start" | "duration" | "size" | "messages" | "topics";
-
-function durationSec(r: CatalogRecording): number | undefined {
-  return r.start && r.end ? toSec(r.end) - toSec(r.start) : undefined;
-}
-
-const SORT_VALUES: Record<SortKey, (r: CatalogRecording) => string | number | undefined> = {
-  name: (r) => r.name.toLowerCase(),
-  start: (r) => (r.start ? toSec(r.start) : undefined),
-  duration: durationSec,
-  size: (r) => r.size,
-  messages: (r) => r.messages,
-  topics: (r) => r.topics?.length,
-};
-
-function sortRecordings(
-  recordings: CatalogRecording[],
-  { key, desc }: { key: SortKey; desc: boolean },
-): CatalogRecording[] {
-  const value = SORT_VALUES[key];
-  const [known, unknown] = _.partition(recordings, (r) => value(r) != undefined);
-  const sorted = _.sortBy(known, value);
-  return [...(desc ? sorted.reverse() : sorted), ...unknown];
-}
 
 const useStyles = makeStyles()((theme) => ({
   root: {
@@ -251,6 +231,9 @@ type Props = {
   /** The first view of the catalog's own switch. */
   initialView?: "list" | "grid" | "map";
   sections?: boolean;
+  /** Set by a page that needs the table's order; otherwise the catalog keeps its own. */
+  sort?: CatalogSort;
+  onSortChange?: (sort: CatalogSort) => void;
 };
 
 /** Every recording of a catalog: a local folder, live recordings or a catalog URL. */
@@ -262,6 +245,8 @@ export default function Catalog({
   view: viewProp,
   initialView = "list",
   sections = true,
+  sort: sortProp,
+  onSortChange,
 }: Props): React.JSX.Element {
   const { classes, cx } = useStyles();
   const { t, i18n } = useTranslation("catalog");
@@ -279,10 +264,9 @@ export default function Catalog({
   const showList = view === "list" && !browsingGroups && section !== "events";
   const [gpsTopic, setGpsTopic] = useState<string>();
   const [area, setArea] = useState<Bounds>();
-  const [sort, setSort] = useState<{ key: SortKey; desc: boolean }>({
-    key: "start",
-    desc: true,
-  });
+  const [localSort, setLocalSort] = useState(DEFAULT_CATALOG_SORT);
+  const sort = sortProp ?? localSort;
+  const setSort = onSortChange ?? setLocalSort;
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const shown = useMemo(() => {
@@ -373,10 +357,7 @@ export default function Catalog({
       active={sort.key === key}
       direction={sort.key === key && sort.desc ? "desc" : "asc"}
       onClick={() => {
-        setSort((prev) => ({
-          key,
-          desc: prev.key === key ? !prev.desc : key !== "name",
-        }));
+        setSort({ key, desc: sort.key === key ? !sort.desc : key !== "name" });
       }}
     >
       {label}

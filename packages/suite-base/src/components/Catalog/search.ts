@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import { toSec } from "@foxglove/rostime";
+import * as _ from "lodash-es";
 
 import * as Foxglove from "@lichtblick/suite-base/panels/ThreeDeeRender/foxglove";
 import * as Ros from "@lichtblick/suite-base/panels/ThreeDeeRender/ros";
@@ -159,4 +160,27 @@ export function filterRecordings(
     predicates.push((r) => searchText(r).includes(needle));
   }
   return recordings.filter((r) => predicates.every((predicate) => predicate(r)));
+}
+
+export type SortKey = "name" | "start" | "duration" | "size" | "messages" | "topics";
+export type CatalogSort = { key: SortKey; desc: boolean };
+export const DEFAULT_CATALOG_SORT: CatalogSort = { key: "start", desc: true };
+
+const SORT_VALUES: Record<SortKey, (r: CatalogRecording) => string | number | undefined> = {
+  name: (r) => r.name.toLowerCase(),
+  start: (r) => (r.start ? toSec(r.start) : undefined),
+  duration: durationSec,
+  size: (r) => r.size,
+  messages: (r) => r.messages,
+  topics: (r) => r.topics?.length,
+};
+
+export function sortRecordings(
+  recordings: CatalogRecording[],
+  { key, desc }: CatalogSort,
+): CatalogRecording[] {
+  const value = SORT_VALUES[key];
+  const [known, unknown] = _.partition(recordings, (r) => value(r) != undefined);
+  const sorted = _.sortBy(known, value);
+  return [...(desc ? sorted.reverse() : sorted), ...unknown];
 }
