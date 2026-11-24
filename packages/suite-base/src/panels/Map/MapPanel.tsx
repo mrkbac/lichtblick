@@ -1293,8 +1293,9 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
       center,
       ...(heading != undefined ? { bearing: heading } : {}),
     };
-    // Jump on seeks and big moves, glide during normal playback.
-    if (map.getBounds().contains(center)) {
+    // Smooth follow glides during normal playback, which redraws the map on every display frame;
+    // otherwise jump, redrawing only when a new position arrives. Seeks and big moves always jump.
+    if (config.smoothFollow && map.getBounds().contains(center)) {
       map.easeTo(
         {
           ...options,
@@ -1307,7 +1308,7 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
     } else {
       map.jumpTo(options, FOLLOW_MOVE_EVENT);
     }
-  }, [config.followMode, config.followTopic, currentNav, headings, map]);
+  }, [config.followMode, config.followTopic, config.smoothFollow, currentNav, headings, map]);
 
   // --- Hover and click --------------------------------------------------------------------
 

@@ -23,6 +23,21 @@ const nodeAction = (id: string, path: string[]): SettingsTreeAction => ({
 });
 
 describe("normalizeConfig", () => {
+  it("follows by jumping unless smooth follow is turned on", () => {
+    const config = normalizeConfig({});
+    expect(config.smoothFollow).toBe(false);
+    const smooth = applySettingsAction(
+      config,
+      {
+        action: "update",
+        payload: { path: ["general", "smoothFollow"], input: "boolean", value: true },
+      },
+      [],
+    );
+    expect(smooth.smoothFollow).toBe(true);
+    expect(normalizeConfig(smooth).smoothFollow).toBe(true);
+  });
+
   it("migrates Leaflet-era layouts", () => {
     expect(normalizeConfig({ layer: "map" }).layers).toMatchObject([{ source: "osm" }]);
     expect(normalizeConfig({ layer: "satellite" }).layers).toMatchObject([
