@@ -4,6 +4,8 @@
 import { useState } from "react";
 import { makeStyles } from "tss-react/mui";
 
+import usePreventWheelDefault from "@lichtblick/suite-base/hooks/usePreventWheelDefault";
+
 import { zoomModeForModifiers } from "./hooks/usePlotInteractionHandlers";
 import { PixelRect, ZoomMode } from "./types";
 
@@ -41,6 +43,8 @@ export function BoxZoomOverlay({
 }: BoxZoomOverlayProps): React.JSX.Element {
   const { classes } = useStyles();
   const [drag, setDrag] = useState<Drag | undefined>();
+  const [root, setRoot] = useState<HTMLDivElement | null>(null);
+  usePreventWheelDefault(root);
 
   const position = (event: React.PointerEvent<HTMLDivElement>) => {
     const rect = event.currentTarget.getBoundingClientRect();
@@ -80,6 +84,7 @@ export function BoxZoomOverlay({
 
   return (
     <div
+      ref={setRoot}
       className={classes.root}
       data-testid="plot-box-zoom-overlay"
       onPointerDown={handlePointerDown}
