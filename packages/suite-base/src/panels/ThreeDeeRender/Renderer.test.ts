@@ -534,9 +534,9 @@ describe("3D Renderer", () => {
       renderer.animationFrame();
       // Then
       expect(draw).toHaveBeenCalled();
-      frame.mockClear();
+      const queue = vi.spyOn(renderer, "queueAnimationFrame");
       childDocument.dispatchEvent(new Event("visibilitychange"));
-      expect(frame).toHaveBeenCalled();
+      expect(queue).toHaveBeenCalled();
     } finally {
       renderer.dispose();
       hidden.mockRestore();
@@ -595,9 +595,9 @@ describe("3D Renderer", () => {
       expect(queues.every((subscription) => subscription.queue == undefined)).toBe(true);
 
       visibility.mockReturnValue("visible");
-      requestAnimationFrameSpy.mockClear();
+      const queue = vi.spyOn(renderer, "queueAnimationFrame");
       document.dispatchEvent(new Event("visibilitychange"));
-      expect(requestAnimationFrameSpy).toHaveBeenCalled();
+      expect(queue).toHaveBeenCalled();
       renderer.animationFrame();
       expect(render).toHaveBeenCalled();
     } finally {
