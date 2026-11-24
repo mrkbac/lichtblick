@@ -240,6 +240,13 @@ function settingsPathOf(object: THREE.Object3D): Path | undefined {
   return undefined;
 }
 
+/**
+ * Drawing time of all renderers in the current display frame (rAF callbacks of one frame get the
+ * same timestamp). A 120 Hz frame is 8.3 ms, and the rest of the app needs some of it.
+ */
+const FRAME_DRAW_BUDGET_MS = 4;
+const drawFrame = { time: -1, spentMs: 0 };
+
 export class Renderer extends EventEmitter<RendererEvents> {
   public readonly interfaceMode: InterfaceMode;
   #canvas: HTMLCanvasElement;
@@ -1792,10 +1799,24 @@ export class Renderer extends EventEmitter<RendererEvents> {
 
   // Callback handlers
 
-  public animationFrame = (): void => {
+  /** `time` is the animation frame's timestamp when the browser calls this from one. */
+  public animationFrame = (time?: number): void => {
     if (this.#disposed) {
       return;
     }
+    // Panels drawing in the same display frame (e.g. a 3D and an Image panel on one message)
+    // share its budget: past it, the rest draw first in the next frame
+    if (time != undefined) {
+      if (time !== drawFrame.time) {
+        drawFrame.time = time;
+        drawFrame.spentMs = 0;
+      } else if (drawFrame.spentMs > FRAME_DRAW_BUDGET_MS) {
+        this.#animationFrame = undefined;
+        this.queueAnimationFrame();
+        return;
+      }
+    }
+    const drawStart = performance.now();
     // Cancel any requestAnimationFrame (rAF) that `queueAnimationFrame()` scheduled. When this runs synchronously (e.g. a
     // seek's `handleSeek`/`clear` queued a frame and the render-if-requested effect then calls us
     // directly in the same tick) the queued rAF would otherwise fire on the next tick and paint a
@@ -1811,6 +1832,9 @@ export class Renderer extends EventEmitter<RendererEvents> {
         // A throwing frame must not block every later one
         this.#rendering = false;
       }
+    }
+    if (time != undefined) {
+      drawFrame.spentMs += performance.now() - drawStart;
     }
   };
 
