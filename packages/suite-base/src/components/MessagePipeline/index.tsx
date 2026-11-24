@@ -19,7 +19,6 @@ import { StoreApi } from "zustand";
 import { useStoreWithEqualityFn } from "zustand/traditional";
 
 import { useGuaranteedContext } from "@lichtblick/hooks";
-import { Immutable } from "@lichtblick/suite";
 import { AppSetting } from "@lichtblick/suite-base/AppSetting";
 import { PanelVisibleContext } from "@lichtblick/suite-base/components/DockPanelContext";
 import { HIDDEN_RENDER_INTERVAL_MS } from "@lichtblick/suite-base/components/PanelExtensionAdapter/hiddenFrames";
@@ -29,12 +28,7 @@ import CurrentLayoutContext, {
 } from "@lichtblick/suite-base/context/CurrentLayoutContext";
 import { useAppConfigurationValue } from "@lichtblick/suite-base/hooks/useAppConfigurationValue";
 import { GlobalVariables } from "@lichtblick/suite-base/hooks/useGlobalVariables";
-import {
-  Player,
-  PlayerAlert,
-  PlayerState,
-  SubscribePayload,
-} from "@lichtblick/suite-base/players/types";
+import { Player, PlayerAlert, PlayerState } from "@lichtblick/suite-base/players/types";
 
 import MessageOrderTracker from "./MessageOrderTracker";
 import { pauseFrameForPromises, FramePromise } from "./pauseFrameForPromise";
@@ -169,10 +163,11 @@ export function MessagePipelineProvider({ children, player }: ProviderProps): Re
   //
   // The delay of 0ms is intentional as we only want to give one timeout cycle to batch updates
   const debouncedPlayerSetSubscriptions = useMemo(() => {
-    return _.debounce((subs: Immutable<SubscribePayload[]>) => {
-      player?.setSubscriptions(subs);
+    return _.debounce(() => {
+      const { subscriptionGeneration, public: state } = store.getState();
+      player?.setSubscriptions(state.subscriptions, subscriptionGeneration);
     });
-  }, [player]);
+  }, [player, store]);
 
   // when unmounting or changing the debounce function cancel any pending debounce
   useEffect(() => {
@@ -181,10 +176,9 @@ export function MessagePipelineProvider({ children, player }: ProviderProps): Re
     };
   }, [debouncedPlayerSetSubscriptions]);
 
-  useEffect(
-    () => debouncedPlayerSetSubscriptions(subscriptions),
-    [debouncedPlayerSetSubscriptions, subscriptions],
-  );
+  useEffect(() => {
+    debouncedPlayerSetSubscriptions();
+  }, [debouncedPlayerSetSubscriptions, subscriptions]);
 
   // Slow down the message pipeline framerate to the given FPS if it is set to less than 60
   const [messageRate] = useAppConfigurationValue<number>(AppSetting.MESSAGE_RATE);

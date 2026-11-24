@@ -271,6 +271,7 @@ export default class UserScriptPlayer implements Player {
   #memoizedScriptTopics: readonly Topic[] = [];
 
   #subscriptions: SubscribePayload[] = [];
+  #subscriptionGeneration: number | undefined;
   #scriptSubscriptions: Record<string, SubscribePayload> = {};
 
   // listener for state updates
@@ -1339,11 +1340,15 @@ export default class UserScriptPlayer implements Player {
     });
   }
 
-  public setSubscriptions(subscriptions: SubscribePayload[]): void {
+  public setSubscriptions(subscriptions: SubscribePayload[], generation?: number): void {
     this.#subscriptions = subscriptions;
+    this.#subscriptionGeneration = generation;
     this.#protectedState
       .runExclusive(async (state) => {
-        this.#pruneLastMessages(state, this.#setSubscriptionsUnlocked(subscriptions, state));
+        this.#pruneLastMessages(
+          state,
+          this.#setSubscriptionsUnlocked(subscriptions, state, generation),
+        );
       })
       .catch((err: unknown) => {
         log.error(err);
@@ -1373,10 +1378,11 @@ export default class UserScriptPlayer implements Player {
   #setSubscriptionsUnlocked(
     subscriptions: SubscribePayload[],
     state: ProtectedState,
+    generation = this.#subscriptionGeneration,
   ): Immutable<SubscribePayload[]> {
     this.#scriptSubscriptions = getPreloadTypes(subscriptions);
     const remapped = remapVirtualSubscriptions(subscriptions, state.inputsByOutputTopic);
-    this.#player.setSubscriptions(remapped);
+    this.#player.setSubscriptions(remapped, generation);
     return remapped;
   }
 

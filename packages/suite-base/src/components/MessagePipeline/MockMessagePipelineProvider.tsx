@@ -331,6 +331,8 @@ export default function MockMessagePipelineProvider(
         publishersById: {},
         allPublishers: [],
         subscriptionsById: new Map(),
+        subscriptionGeneration: 0,
+        subscriptionsByGeneration: new Map(),
         subscriberIdsByTopic: new Map(),
         newTopicsBySubscriberId: new Map(),
         lastMessageEventByTopic: new Map(),

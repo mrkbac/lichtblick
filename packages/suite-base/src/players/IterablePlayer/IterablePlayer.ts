@@ -202,6 +202,11 @@ export class IterablePlayer implements Player {
   #compareRequest: number | undefined;
   #subscriptions: SubscribePayload[] = [];
   #allTopics: TopicSelection = new Map();
+  /** The generation of the newest setSubscriptions call that asked for each topic selection. */
+  #generationOf = new WeakMap<TopicSelection, number | undefined>();
+  /** The topic selections the playback iterator and `#messages` were loaded for. */
+  #playbackTopics: TopicSelection = this.#allTopics;
+  #messagesTopics: TopicSelection = this.#allTopics;
   #preloadTopics: TopicSelection = new Map();
 
   #progress: Progress = {};
@@ -470,7 +475,7 @@ export class IterablePlayer implements Player {
     this.#setState("seek-backfill");
   }
 
-  public setSubscriptions(newSubscriptions: SubscribePayload[]): void {
+  public setSubscriptions(newSubscriptions: SubscribePayload[], generation?: number): void {
     log.debug("set subscriptions", newSubscriptions);
     this.#subscriptions = applySamplingGuardToSubscriptions(newSubscriptions);
     this.#samplingEnabled = this.#subscriptions.some(
@@ -502,10 +507,12 @@ export class IterablePlayer implements Player {
       sameTopicSelection(allTopics, this.#allTopics) &&
       sameTopicSelection(preloadTopics, this.#preloadTopics)
     ) {
+      this.#generationOf.set(this.#allTopics, generation);
       return;
     }
 
     this.#allTopics = allTopics;
+    this.#generationOf.set(allTopics, generation);
     this.#preloadTopics = preloadTopics;
 
     this.#blockLoader?.setTopics(this.#preloadTopics);
@@ -956,6 +963,7 @@ export class IterablePlayer implements Player {
 
     log.debug("Initializing forward iterator from", next);
     this.#playbackSkimInterval = this.#skimInterval();
+    this.#playbackTopics = this.#allTopics;
     this.#playbackIterator = this.#bufferedSource.messageIterator({
       topics: this.#allTopics,
       start: next,
@@ -1004,6 +1012,7 @@ export class IterablePlayer implements Player {
 
     log.debug("Initializing forward iterator from", this.#start);
     this.#playbackSkimInterval = this.#skimInterval();
+    this.#playbackTopics = this.#allTopics;
     this.#playbackIterator = this.#bufferedSource.messageIterator({
       topics: this.#allTopics,
       start: this.#start,
@@ -1064,6 +1073,7 @@ export class IterablePlayer implements Player {
 
     this.#currentTime = stopTime;
     this.#messages = messageEvents;
+    this.#messagesTopics = this.#playbackTopics;
     this.#presence = PlayerPresence.PRESENT;
     this.#queueEmitState();
     if (this.#playbackIteratorStale) {
@@ -1126,6 +1136,7 @@ export class IterablePlayer implements Player {
       this.#abort = new AbortController();
       // #setState() aborts and drops #abort, so keep this seek's signal
       const abortSignal = this.#abort.signal;
+      const topics = this.#allTopics;
       const backfillMessages = await this.#getBackfillMessages(targetTime, abortSignal);
       // An optional, source-supplied hook may expand the backfill before emit (e.g. replaying a
       // video GOP so a P/B-frame is decodable). When no hook is supplied the raw backfill is used
@@ -1142,6 +1153,7 @@ export class IterablePlayer implements Player {
       }
 
       this.#messages = messages;
+      this.#messagesTopics = topics;
       this.#currentTime = targetTime;
       this.#lastSeekEmitTime = Date.now();
       this.#presence = PlayerPresence.PRESENT;
@@ -1243,6 +1255,7 @@ export class IterablePlayer implements Player {
         recordingFiles: this.#recordingFiles,
         compareSides: this.#compareSides,
         compareRequest: this.#compareRequest,
+        subscriptionGeneration: this.#generationOf.get(this.#messagesTopics),
         datatypes: this.#providerDatatypes,
         publishedTopics: this.#publishedTopics,
       };
@@ -1441,6 +1454,7 @@ export class IterablePlayer implements Player {
 
     this.#currentTime = tickEnd;
     this.#messages = msgEvents;
+    this.#messagesTopics = this.#playbackTopics;
     this.#queueEmitState();
 
     // This tick has reached the end of the untilTime so we go back to pause

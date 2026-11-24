@@ -94,8 +94,10 @@ export default class FakePlayer implements Player {
   public setParameter(_key: string, _value: ParameterValue): void {
     // no-op
   }
-  public setSubscriptions = (subs: SubscribePayload[]): void => {
+  public subscriptionGeneration?: number;
+  public setSubscriptions = (subs: SubscribePayload[], generation?: number): void => {
     this.subscriptions = subs;
+    this.subscriptionGeneration = generation;
   };
   public setCapabilities = (
     capabilities: (typeof PLAYER_CAPABILITIES)[keyof typeof PLAYER_CAPABILITIES][],

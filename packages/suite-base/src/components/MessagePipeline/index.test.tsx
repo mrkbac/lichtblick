@@ -415,10 +415,14 @@ describe("MessagePipelineProvider/useMessagePipeline", () => {
     };
     async function emitLatched(
       player: FakePlayer,
-      { isPlaying = true }: { isPlaying?: boolean } = {},
+      {
+        isPlaying = true,
+        subscriptionGeneration,
+      }: { isPlaying?: boolean; subscriptionGeneration?: number } = {},
     ) {
       const activeData = {
         messages: [latched],
+        subscriptionGeneration,
         currentTime: { sec: 0, nsec: 0 },
         startTime: { sec: 0, nsec: 0 },
         endTime: { sec: 1, nsec: 0 },
@@ -493,6 +497,47 @@ describe("MessagePipelineProvider/useMessagePipeline", () => {
         );
       },
     );
+
+    it("skips a message sliced for a panel's previous subscriptions", async () => {
+      // Given two panels reading one field, with the player applying those subscriptions
+      const player = new FakePlayer();
+      const { Hook, Wrapper } = makeTestHook({ player });
+      const { result } = renderHook(Hook, { wrapper: Wrapper });
+      act(() => {
+        result.current.setSubscriptions("panel", [{ topic: "/tf_static", fields: ["transforms"] }]);
+        result.current.setSubscriptions("other", [{ topic: "/tf_static", fields: ["transforms"] }]);
+      });
+      await act(async () => {
+        await delay(1);
+      });
+      const slicedGeneration = player.subscriptionGeneration;
+      expect(slicedGeneration).toBeDefined();
+
+      // When one panel asks for whole messages and the player emits before applying that
+      act(() => {
+        result.current.setSubscriptions("panel", [{ topic: "/tf_static" }]);
+      });
+      await doubleAct(async () => {
+        await emitLatched(player, { subscriptionGeneration: slicedGeneration });
+      });
+
+      // Then only the panel whose fields the slice holds gets it, and it isn't cached as whole
+      expect(result.current.messageEventsBySubscriberId.get("panel")).toBeUndefined();
+      expect(result.current.messageEventsBySubscriberId.get("other")).toEqual([latched]);
+      act(() => {
+        result.current.setSubscriptions("late", [{ topic: "/tf_static" }]);
+      });
+      expect(result.current.messageEventsBySubscriberId.get("late")).toBeUndefined();
+
+      // And once the player loads for the new subscriptions, the panel gets its messages
+      await act(async () => {
+        await delay(1);
+      });
+      await doubleAct(async () => {
+        await emitLatched(player, { subscriptionGeneration: player.subscriptionGeneration });
+      });
+      expect(result.current.messageEventsBySubscriberId.get("panel")).toEqual([latched]);
+    });
 
     it.each(["remount", "resume", "advance", "seek"] as const)(
       "keeps a paused recording frame only while its position stays unchanged (%s)",
