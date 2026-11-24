@@ -14,8 +14,11 @@ import { formatByteSize } from "@lichtblick/den/format";
 import { Immutable } from "@lichtblick/suite";
 import { AttachmentDialog } from "@lichtblick/suite-base/components/Attachments/AttachmentDialog";
 import { useExportableFile } from "@lichtblick/suite-base/components/ExportRecordingDialog/exportSource";
-import { useMessagePipeline } from "@lichtblick/suite-base/components/MessagePipeline";
-import { selectCurrentTime } from "@lichtblick/suite-base/components/MessagePipeline/selectors";
+import { useMessagePipelineBatchedWhenHidden } from "@lichtblick/suite-base/components/MessagePipeline";
+import {
+  selectCurrentTime,
+  selectLastSeekTime,
+} from "@lichtblick/suite-base/components/MessagePipeline/selectors";
 import { RecordingFileInfo } from "@lichtblick/suite-base/players/types";
 import { RosDatatypes } from "@lichtblick/suite-base/types/RosDatatypes";
 
@@ -25,7 +28,9 @@ import { differingPolicies, QOS_LABELS, QosProfile } from "./qos";
 
 function PlaybackMarker({ start, end }: { start: Time; end: Time }): React.JSX.Element | undefined {
   const { classes } = useStyles();
-  const current = useMessagePipeline(selectCurrentTime);
+  const current = useMessagePipelineBatchedWhenHidden(selectCurrentTime, {
+    flushKey: selectLastSeekTime,
+  });
   const duration = toSec(subtract(end, start));
   if (!current || duration <= 0) {
     return undefined;

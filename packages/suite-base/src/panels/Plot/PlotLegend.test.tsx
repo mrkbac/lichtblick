@@ -10,6 +10,7 @@ import EventEmitter from "eventemitter3";
 import { Profiler, useMemo } from "react";
 import type { Mock } from "vitest";
 
+import { PanelVisibleContext } from "@lichtblick/suite-base/components/DockPanelContext";
 import PanelContext from "@lichtblick/suite-base/components/PanelContext";
 import { useSelectedPanels } from "@lichtblick/suite-base/context/CurrentLayoutContext";
 import { BasicBuilder } from "@lichtblick/test-builders";
@@ -261,5 +262,45 @@ describe("PlotLegend", () => {
       coordinator.emit("pathsWithMismatchedDataLengthsChanged", [path]);
     });
     expect(onRender.mock.calls.length).toBeGreaterThan(renders);
+  });
+
+  it("updates a hidden panel's values once per interval and catches up when shown", () => {
+    vi.useFakeTimers();
+    let values: unknown[] = [1.5];
+    const coordinator = Object.assign(new EventEmitter(), { getCurrentValues: () => values });
+    const legend = ({ visible }: { visible: boolean }) => (
+      <TestWrapper>
+        <PanelVisibleContext.Provider value={visible}>
+          <PlotLegend
+            {...defaultProps}
+            coordinator={coordinator as unknown as PlotCoordinator}
+            legendDisplay="floating"
+            onClickPath={vi.fn()}
+            paths={[{ value: path, enabled: true, timestampMethod: "receiveTime" }]}
+            showValues
+          />
+        </PanelVisibleContext.Provider>
+      </TestWrapper>
+    );
+    const { rerender } = render(legend({ visible: false }));
+    expect(screen.getByText("1.5000")).toBeInTheDocument();
+
+    const emit = (value: number) => {
+      values = [value];
+      act(() => {
+        coordinator.emit("currentValuesChanged", values);
+      });
+    };
+    emit(2.5);
+    expect(screen.queryByText("2.5000")).not.toBeInTheDocument();
+    vi.advanceTimersByTime(1000);
+    emit(3.5);
+    expect(screen.getByText("3.5000")).toBeInTheDocument();
+    emit(4.5);
+    rerender(legend({ visible: true }));
+    expect(screen.getByText("4.5000")).toBeInTheDocument();
+    emit(5.5);
+    expect(screen.getByText("5.5000")).toBeInTheDocument();
+    vi.useRealTimers();
   });
 });

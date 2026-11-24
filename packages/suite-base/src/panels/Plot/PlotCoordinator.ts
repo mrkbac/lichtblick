@@ -724,6 +724,11 @@ export class PlotCoordinator extends EventEmitter<PlotCoordinatorEventTypes> {
     return await this.datasetsBuilder.getCsvData(xRange);
   }
 
+  /** The latest value of each series, as last emitted with "currentValuesChanged". */
+  public getCurrentValues(): readonly unknown[] {
+    return this.currentValuesByConfigIndex;
+  }
+
   public getXScale(): Scale | undefined {
     return this.latestXScale;
   }

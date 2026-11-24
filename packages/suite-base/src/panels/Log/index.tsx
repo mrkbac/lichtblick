@@ -26,10 +26,12 @@ import { SettingsTreeAction, Time } from "@lichtblick/suite";
 import { useDataSourceInfo } from "@lichtblick/suite-base/PanelAPI";
 import {
   useMessagePipeline,
+  useMessagePipelineBatchedWhenHidden,
   useMessagePipelineGetter,
 } from "@lichtblick/suite-base/components/MessagePipeline";
 import {
   selectCurrentTime,
+  selectLastSeekTime,
   selectSeekPlayback,
 } from "@lichtblick/suite-base/components/MessagePipeline/selectors";
 import Panel from "@lichtblick/suite-base/components/Panel";
@@ -120,7 +122,9 @@ type Props = {
 
 /** Subscribes to the playhead so that the panel itself doesn't re-render every frame. */
 function PlayheadLogList(props: Omit<LogListProps, "currentTime">): React.JSX.Element {
-  const currentTime = useMessagePipeline(selectCurrentTime);
+  const currentTime = useMessagePipelineBatchedWhenHidden(selectCurrentTime, {
+    flushKey: selectLastSeekTime,
+  });
   // Without seeking (live data) the newest message is the playhead
   return <LogList {...props} currentTime={props.onSeek ? currentTime : undefined} />;
 }
