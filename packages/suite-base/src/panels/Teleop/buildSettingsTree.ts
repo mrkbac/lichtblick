@@ -124,6 +124,16 @@ export function buildSettingsTreeTeleop(
             value: config.frameId,
             help: "Written to the header of each published message",
           },
+          stampSource: {
+            label: "Header stamp",
+            input: "select",
+            value: config.stampSource,
+            options: [
+              { label: "Wall clock", value: "wallClock" },
+              { label: "Data source time", value: "playbackTime" },
+            ],
+            help: "Data source time follows the connection's clock, for robots running on sim time",
+          },
         }),
         publishRate: {
           label: "Publish rate (Hz)",

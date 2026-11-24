@@ -131,6 +131,7 @@ export const DEFAULT_CONFIG: TeleopConfig = {
   topic: DEFAULT_TOPICS.Twist,
   messageType: "Twist",
   frameId: "",
+  stampSource: "wallClock",
   publishRate: DEFAULT_PUBLISH_RATE,
   stopOnRelease: true,
   mode: "joystick",

@@ -11,7 +11,7 @@ import * as _ from "lodash-es";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { useLatest } from "@lichtblick/hooks";
-import { SettingsTreeAction, Topic } from "@lichtblick/suite";
+import { SettingsTreeAction, Time, Topic } from "@lichtblick/suite";
 import EmptyState from "@lichtblick/suite-base/components/EmptyState";
 import { usePanelButtonTitle } from "@lichtblick/suite-base/components/PanelButton";
 import Stack from "@lichtblick/suite-base/components/Stack";
@@ -100,11 +100,15 @@ function speedOf(config: TeleopConfig, { turbo }: Pick<Command, "turbo">): numbe
   return turbo ? 1 : config.speedScale;
 }
 
-function buildMessage(config: TeleopConfig, { pad, turbo }: Pick<Command, "pad" | "turbo">) {
+/** `stamp` is the data source time; wall clock when it's undefined */
+function buildMessage(
+  config: TeleopConfig,
+  { pad, turbo }: Pick<Command, "pad" | "turbo">,
+  stamp?: Time,
+) {
   const now = Date.now();
-  // ponytail: wall-clock stamp; robots running on sim time (/clock) may reject it
   const header = {
-    stamp: { sec: Math.floor(now / 1000), nsec: (now % 1000) * 1e6 },
+    stamp: stamp ?? { sec: Math.floor(now / 1000), nsec: (now % 1000) * 1e6 },
     frame_id: config.frameId,
   };
   if (config.messageType === "Joy") {
@@ -162,11 +166,23 @@ function TeleopPanel(props: Readonly<TeleopPanelProps>): React.JSX.Element {
   // setup context render handler and render done handling
   const [renderDone, setRenderDone] = useState<() => void>(() => () => {});
   const [colorScheme, setColorScheme] = useState<"dark" | "light">("light");
+  const currentTime = useRef<Time | undefined>(undefined);
+  const lastRender = useRef<{ topics?: readonly Topic[]; colorScheme?: string }>({});
   useLayoutEffect(() => {
     context.watch("topics");
     context.watch("colorScheme");
 
     context.onRender = (renderState, done) => {
+      currentTime.current = renderState.currentTime;
+      // currentTime changes every frame; only re-render for what the panel shows
+      if (
+        renderState.topics === lastRender.current.topics &&
+        renderState.colorScheme === lastRender.current.colorScheme
+      ) {
+        done();
+        return;
+      }
+      lastRender.current = { topics: renderState.topics, colorScheme: renderState.colorScheme };
       setTopics(renderState.topics ?? []);
       setRenderDone(() => done);
       if (renderState.colorScheme) {
@@ -174,6 +190,13 @@ function TeleopPanel(props: Readonly<TeleopPanelProps>): React.JSX.Element {
       }
     };
   }, [context]);
+
+  const watchesTime = config.stampSource === "playbackTime";
+  useEffect(() => {
+    if (watchesTime) {
+      context.watch("currentTime");
+    }
+  }, [context, watchesTime]);
 
   useEffect(() => {
     context.updatePanelSettingsEditor({
@@ -224,7 +247,11 @@ function TeleopPanel(props: Readonly<TeleopPanelProps>): React.JSX.Element {
       if (!canSend || !cfg.topic) {
         return;
       }
-      const { active, message } = buildMessage(cfg, command);
+      const { active, message } = buildMessage(
+        cfg,
+        command,
+        cfg.stampSource === "playbackTime" ? currentTime.current : undefined,
+      );
       lastPublishedActive.current = active;
       try {
         context.publish?.(cfg.topic, message);

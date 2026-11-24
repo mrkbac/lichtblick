@@ -170,6 +170,20 @@ describe("readTransformsBefore", () => {
     ]);
   });
 
+  it("reads back to the complete history for a frame silent longer than every window", async () => {
+    const { subscribeRange, reads } = fakeSource();
+    await readTransformsBefore({
+      subscribeRange,
+      topics: [{ topic: "/tf" }],
+      time: 500n * sec,
+      floor: 100n * sec,
+      isMissing: () => true,
+      onBatch: vi.fn(),
+      signal: new AbortController().signal,
+    });
+    expect(reads.at(-1)).toEqual({ topic: "/tf", start: 100n * sec, end: 372n * sec - 1n });
+  });
+
   it("stops widening and reports failure when a window read fails", async () => {
     const subscribeRange = vi.fn(
       (args: SubscribeMessageRangeArgs & { rethrowErrors?: boolean }) => {
