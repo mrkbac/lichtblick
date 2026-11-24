@@ -7,8 +7,8 @@ import {
 
 import { TopicListItem } from "./useTopicListSearch";
 
-// `label` gives the tree builder a field it knows; topic rows never set one.
-type TopicItem = Extract<TopicListItem, { type: "topic" }> & { label?: string };
+// `visible` makes the tree builder list every topic under each namespace, which gives the count.
+type TopicItem = Extract<TopicListItem, { type: "topic" }> & { visible: true };
 
 export type NamespaceRow = {
   type: "namespace";
@@ -22,14 +22,6 @@ export type NamespaceRow = {
 /** A list row; `depth` and `label` are set in tree mode. */
 export type TopicListRow = (TopicListItem & { depth?: number; label?: string }) | NamespaceRow;
 
-function countTopics(entries: readonly TopicNameTreeEntry<TopicItem>[]): number {
-  let count = 0;
-  for (const entry of entries) {
-    count += entry.type === "topic" ? 1 : countTopics(entry.children);
-  }
-  return count;
-}
-
 /** Groups the flat search results by topic name segments, the same way the settings sidebar does. */
 export function groupTopicListItems(
   items: readonly TopicListItem[],
@@ -39,10 +31,15 @@ export function groupTopicListItems(
   const pathsByTopic = new Map<string, TopicListItem[]>();
   for (const item of items) {
     if (item.type === "topic") {
-      topics.push([item.item.item.name, { ...item, label: undefined }]);
+      topics.push([item.item.item.name, { ...item, visible: true }]);
     } else {
       const name = item.item.item.topic.name;
-      pathsByTopic.set(name, [...(pathsByTopic.get(name) ?? []), item]);
+      let paths = pathsByTopic.get(name);
+      if (!paths) {
+        paths = [];
+        pathsByTopic.set(name, paths);
+      }
+      paths.push(item);
     }
   }
   topics.sort(([a], [b]) => a.localeCompare(b));
@@ -58,14 +55,14 @@ export function groupTopicListItems(
         continue;
       }
       const expanded = isExpanded(entry.key);
-      const { key, label, children } = entry;
+      const { key, label, children, topics: namespaceTopics } = entry;
       rows.push({
         type: "namespace",
         key,
         label,
         depth,
         expanded,
-        topicCount: countTopics(children),
+        topicCount: namespaceTopics.length,
       });
       if (expanded) {
         visit(children, depth + 1);
