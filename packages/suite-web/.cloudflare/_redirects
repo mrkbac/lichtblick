@@ -7,6 +7,3 @@
 # does the same in the browser, since the service worker answers navigations first.
 /:org/view   /   302
 /:org/view/  /   302
-
-# Old name of the proxy extension download.
-/licht-ws-proxy.zip  /digitalis-proxy.zip  301
