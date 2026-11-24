@@ -9,14 +9,12 @@ import { deleteLayoutHistory, loadLayoutHistory, saveLayoutHistory } from "./lay
 // The database itself, to see what was written rather than what is still pending.
 const written = createKeyValueStore("lichtblick-layout-history", "history");
 
-const snapshot = (n: number): HistorySnapshot => ({
-  entries: [
-    {
-      data: { configById: {}, globalVariables: { n }, userNodes: {}, playbackConfig: { speed: 1 } },
-      savedAt: n,
-    },
-  ],
-  index: 0,
+const snapshot = (...steps: number[]): HistorySnapshot => ({
+  entries: steps.map((n) => ({
+    data: { configById: {}, globalVariables: { n }, userNodes: {}, playbackConfig: { speed: 1 } },
+    savedAt: n,
+  })),
+  index: steps.length - 1,
 });
 
 describe("layoutHistoryStorage", () => {
@@ -28,7 +26,7 @@ describe("layoutHistoryStorage", () => {
     vi.runAllTimers();
     vi.useRealTimers();
     await vi.waitFor(async () => {
-      expect(await loadLayoutHistory("a")).toEqual(snapshot(2));
+      expect(await loadLayoutHistory("a")).toMatchObject(snapshot(2));
     });
   });
 
@@ -36,7 +34,7 @@ describe("layoutHistoryStorage", () => {
     saveLayoutHistory("b", snapshot(3));
     saveLayoutHistory("c", snapshot(4));
     await vi.waitFor(async () => {
-      expect(await loadLayoutHistory("b")).toEqual(snapshot(3));
+      expect(await loadLayoutHistory("b")).toMatchObject(snapshot(3));
     });
   });
 
@@ -48,7 +46,7 @@ describe("layoutHistoryStorage", () => {
     vi.advanceTimersByTime(1);
     vi.useRealTimers();
     await vi.waitFor(async () => {
-      expect(await written.get("e")).toEqual(snapshot(6));
+      expect(await written.get("e")).toMatchObject(snapshot(6));
     });
   });
 
@@ -56,7 +54,7 @@ describe("layoutHistoryStorage", () => {
     saveLayoutHistory("f", snapshot(7));
     window.dispatchEvent(new Event("pagehide"));
     await vi.waitFor(async () => {
-      expect(await written.get("f")).toEqual(snapshot(7));
+      expect(await written.get("f")).toMatchObject(snapshot(7));
     });
   });
 
@@ -65,5 +63,26 @@ describe("layoutHistoryStorage", () => {
     await deleteLayoutHistory("d");
     window.dispatchEvent(new Event("pagehide"));
     expect(await loadLayoutHistory("d")).toBeUndefined();
+  });
+
+  it("keeps the steps of two tabs editing the same layout, but not steps a tab dropped", async () => {
+    const tabA = await import("./layoutHistoryStorage");
+    vi.resetModules();
+    const tabB = await import("./layoutHistoryStorage");
+    const savedSteps = async () =>
+      (await written.get<HistorySnapshot>("g"))?.entries.map((entry) => entry.savedAt);
+
+    tabA.saveLayoutHistory("g", snapshot(10, 11));
+    window.dispatchEvent(new Event("pagehide"));
+    await vi.waitFor(async () => {
+      expect(await savedSteps()).toEqual([10, 11]);
+    });
+    // Tab A undoes 11 and edits again, tab B (opened at 10) edits too
+    tabA.saveLayoutHistory("g", snapshot(10, 12));
+    tabB.saveLayoutHistory("g", snapshot(10, 13));
+    window.dispatchEvent(new Event("pagehide"));
+    await vi.waitFor(async () => {
+      expect(await savedSteps()).toEqual([10, 12, 13]);
+    });
   });
 });
