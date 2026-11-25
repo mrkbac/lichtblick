@@ -9,6 +9,11 @@ import { Tooltip, Typography } from "@mui/material";
 import { useEffect, useState } from "react";
 import { makeStyles } from "tss-react/mui";
 
+import {
+  type MessagePipelineContext,
+  useMessagePipelineSubscribe,
+} from "@lichtblick/suite-base/components/MessagePipeline";
+
 const useStyles = makeStyles()((theme) => ({
   root: {
     display: "flex",
@@ -36,7 +41,12 @@ const useStyles = makeStyles()((theme) => ({
 type HeapInfo = { usedJSHeapSize: number; jsHeapSizeLimit: number };
 
 type DebugStats = {
+  /** Frames the browser produced; on an idle page this is the display refresh rate. */
   fps: number;
+  /** Highest FPS seen so far: the display refresh rate, the target the FPS readout is judged by. */
+  refreshFps: number;
+  /** Player updates the app rendered (pipeline ticks), i.e. how often panels actually redrew. */
+  ups: number;
   /** Longest gap between two frames in the last sample, i.e. the worst stutter the user saw. */
   maxFrameMs: number;
   /** Chrome-only `performance.memory`. */
@@ -47,9 +57,19 @@ const SAMPLE_MS = 1000;
 
 function useDebugStats(): DebugStats | undefined {
   const [stats, setStats] = useState<DebugStats>();
+  const subscribe = useMessagePipelineSubscribe();
 
   useEffect(() => {
     let frames = 0;
+    let updates = 0;
+    let refreshFps = 0;
+    let lastPlayerState: MessagePipelineContext["playerState"] | undefined;
+    const unsubscribe = subscribe((state) => {
+      if (state.playerState !== lastPlayerState) {
+        lastPlayerState = state.playerState;
+        updates++;
+      }
+    });
     let maxFrameMs = 0;
     let lastFrame = performance.now();
     let lastSample = lastFrame;
@@ -65,22 +85,27 @@ function useDebugStats(): DebugStats | undefined {
       const now = performance.now();
       // Hidden tabs pause frames; a sample then would read as a false stall.
       if (!document.hidden) {
+        const fps = (frames * 1000) / (now - lastSample);
+        refreshFps = Math.max(refreshFps, fps);
         setStats({
-          fps: (frames * 1000) / (now - lastSample),
+          fps,
+          refreshFps,
+          ups: (updates * 1000) / (now - lastSample),
           // Include the frame still pending, or a full stall would read as 0 ms.
           maxFrameMs: Math.max(maxFrameMs, now - lastFrame),
           heap: (performance as { memory?: HeapInfo }).memory,
         });
       }
-      frames = maxFrameMs = 0;
+      frames = updates = maxFrameMs = 0;
       lastSample = now;
     }, SAMPLE_MS);
 
     return () => {
       cancelAnimationFrame(rafId);
       clearInterval(interval);
+      unsubscribe();
     };
-  }, []);
+  }, [subscribe]);
 
   return stats;
 }
@@ -138,8 +163,19 @@ function MemoryUseIndicator(): React.JSX.Element {
       <Stat
         label="FPS"
         value={stats.fps.toFixed(0)}
-        level={stats.fps < 20 ? "bad" : stats.fps < 45 ? "warn" : undefined}
-        tooltip="Frames rendered in the last second"
+        level={
+          stats.fps < stats.refreshFps / 3
+            ? "bad"
+            : stats.fps < stats.refreshFps * 0.75
+              ? "warn"
+              : undefined
+        }
+        tooltip={`Browser frames in the last second (display refreshes at ~${stats.refreshFps.toFixed(0)}). Below that, frames are being dropped.`}
+      />
+      <Stat
+        label="DRAW"
+        value={stats.ups.toFixed(0)}
+        tooltip="Redraws: player updates the panels rendered in the last second (0 while paused)"
       />
       <Stat
         label="MAX"
