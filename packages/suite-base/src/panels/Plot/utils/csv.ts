@@ -11,12 +11,31 @@ import { downloadFiles } from "@lichtblick/suite-base/util/download";
 import { formatTimeRaw } from "@lichtblick/suite-base/util/time";
 
 import { PlotXAxisVal } from "./config";
+import { OriginalValue } from "./datum";
 
-function getCSVRow(label: string, data: CsvDataset["data"][0]) {
+// Spreadsheets run cells starting with these as formulas (CSV injection)
+const FORMULA_START = /^[=+\-@\t\r]/;
+
+function escapeCSVCell(cell: string): string {
+  // Plain negative numbers like "-1.5e-7" stay numbers
+  const isNegativeNumber = cell.startsWith("-") && !Number.isNaN(Number(cell));
+  const safe = FORMULA_START.test(cell) && !isNegativeNumber ? `'${cell}` : cell;
+  // RFC 4180: quote cells with separators, quotes or line breaks; double inner quotes
+  return /[",\n\r]/.test(safe) ? `"${safe.replaceAll('"', '""')}"` : safe;
+}
+
+function formatValue(value: OriginalValue): string {
+  if (value == undefined) {
+    return "";
+  }
+  return typeof value === "object" ? formatTimeRaw(value) : String(value);
+}
+
+function getCSVRow(label: string, data: CsvDataset["data"][0]): string[] {
   const { x, receiveTime, headerStamp, value } = data;
   const receiveTimeFloat = formatTimeRaw(receiveTime);
   const stampTime = headerStamp ? formatTimeRaw(headerStamp) : "";
-  return [x, receiveTimeFloat, stampTime, label, value];
+  return [String(x), receiveTimeFloat, stampTime, label, formatValue(value)];
 }
 
 export const getCSVColName = (xAxisVal: PlotXAxisVal): string => {
@@ -34,13 +53,13 @@ export const getCSVColName = (xAxisVal: PlotXAxisVal): string => {
 
 function generateCSV(datasets: Immutable<CsvDataset[]>, xAxisVal: PlotXAxisVal): string {
   const headLine = [getCSVColName(xAxisVal), "receive time", "header.stamp", "topic", "value"];
-  const combinedLines: unknown[][] = [headLine];
+  const combinedLines: string[][] = [headLine];
   for (const dataset of datasets) {
     for (const datum of dataset.data) {
       combinedLines.push(getCSVRow(dataset.label, datum));
     }
   }
-  return combinedLines.join("\n");
+  return combinedLines.map((line) => line.map(escapeCSVCell).join(",")).join("\n");
 }
 
 function downloadCSV(
