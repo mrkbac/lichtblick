@@ -271,6 +271,8 @@ export type IterableSourceInitializeArgs = {
   credentials?: RequestCredentials;
   // Port to the proxy extension for http:// URLs an https page can't fetch (util/httpProxy)
   httpProxy?: MessagePort;
+  /** WebAssembly module of an extension's data loader that reads `files` */
+  wasmUrl?: string;
 };
 
 /**

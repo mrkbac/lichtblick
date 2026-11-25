@@ -648,6 +648,24 @@ export type TopicAliasFunction = (
   }>,
 ) => TopicAlias[];
 
+/**
+ * Arguments to {@link ExtensionContext.registerDataLoader}. Matches Foxglove's
+ * `RegisterLocalFileDataLoaderArgs`, so Foxglove data loader extensions load unchanged.
+ */
+export type RegisterDataLoaderArgs = {
+  /** Only local file loaders are supported. */
+  type: "file";
+  /**
+   * URL (usually a `data:` URL) of a WebAssembly module implementing the `foxglove:loader@0.1.0`
+   * WIT world, e.g. built with the `foxglove_data_loader` Rust crate for wasm32-unknown-unknown.
+   */
+  wasmUrl: string;
+  /** File extension the loader opens, including the dot, e.g. `.txt`. */
+  supportedFileType: `.${string}`;
+  /** Whether one loader instance can read several files at once. */
+  supportsMultiFile?: boolean;
+};
+
 export interface ExtensionContext {
   /** The current _mode_ of the application. */
   readonly mode: "production" | "development" | "test";
@@ -675,6 +693,9 @@ export interface ExtensionContext {
   registerTopicAliases(aliasFunction: TopicAliasFunction): void;
 
   registerCameraModel(args: RegisterCameraModelArgs): void;
+
+  /** Register a WebAssembly data loader that opens a new file format. */
+  registerDataLoader(args: RegisterDataLoaderArgs): void;
 }
 
 export type ExtensionActivate = (extensionContext: ExtensionContext) => void;

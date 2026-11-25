@@ -17,7 +17,7 @@ import { TopicAliasFunctions } from "@lichtblick/suite-base/players/TopicAliasin
 import { InstalledTopicConverter } from "@lichtblick/suite-base/players/UserScriptPlayer/topicConverters";
 import { TypeExtensionLoader } from "@lichtblick/suite-base/services/extension/IExtensionLoader";
 import { Namespace } from "@lichtblick/suite-base/types";
-import { ExtensionInfo } from "@lichtblick/suite-base/types/Extensions";
+import { ExtensionInfo, InstalledDataLoader } from "@lichtblick/suite-base/types/Extensions";
 import { InstalledMessageConverter } from "@lichtblick/suite-base/types/messageConverters";
 
 export type ExtensionData = {
@@ -78,6 +78,7 @@ export type ExtensionCatalog = Immutable<{
   installedTopicAliasFunctions: undefined | TopicAliasFunctions;
   installedTopicConverters: InstalledTopicConverter[];
   installedCameraModels: CameraModelsMap;
+  installedDataLoaders: InstalledDataLoader[];
   panelSettings: undefined | ExtensionSettings;
 }>;
 
@@ -88,6 +89,7 @@ export type ContributionPoints = {
   topicConverters: InstalledTopicConverter[];
   panelSettings: ExtensionSettings;
   cameraModels: CameraModelsMap;
+  dataLoaders: InstalledDataLoader[];
 };
 
 export const ExtensionCatalogContext = createContext<undefined | StoreApi<ExtensionCatalog>>(

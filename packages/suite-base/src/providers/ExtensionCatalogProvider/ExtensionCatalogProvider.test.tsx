@@ -903,6 +903,7 @@ describe("ExtensionCatalogProvider", () => {
       const contributionPoints: ContributionPoints = {
         messageConverters: [messageConverter],
         cameraModels: new Map(),
+        dataLoaders: [],
         topicAliasFunctions,
         topicConverters: [],
         panelSettings: {
@@ -967,6 +968,7 @@ describe("ExtensionCatalogProvider", () => {
           },
         ],
         cameraModels: new Map(),
+        dataLoaders: [],
         topicAliasFunctions: [
           { extensionId: info.id, extensionNamespace: info.namespace, aliasFunction: vi.fn() },
         ],
@@ -1008,6 +1010,7 @@ describe("ExtensionCatalogProvider", () => {
       const emptyContributionPoints: ContributionPoints = {
         messageConverters: [],
         cameraModels: new Map(),
+        dataLoaders: [],
         topicAliasFunctions: [],
         topicConverters: [],
         panelSettings: {},
@@ -1044,6 +1047,7 @@ describe("ExtensionCatalogProvider", () => {
       const emptyContributionPoints: ContributionPoints = {
         messageConverters: [],
         cameraModels: new Map(),
+        dataLoaders: [],
         topicAliasFunctions: [],
         topicConverters: [],
         panelSettings: {},
