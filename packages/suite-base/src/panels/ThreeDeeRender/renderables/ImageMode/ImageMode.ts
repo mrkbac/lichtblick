@@ -24,6 +24,7 @@ import {
 import { PanelContextMenuItem } from "@lichtblick/suite-base/components/PanelContextMenu";
 import { DraggedMessagePath } from "@lichtblick/suite-base/components/PanelExtensionAdapter";
 import { Path } from "@lichtblick/suite-base/panels/ThreeDeeRender/LayerErrors";
+import { makeTrackpadScrollDetector } from "@lichtblick/suite-base/panels/ThreeDeeRender/camera";
 import {
   COMPRESSED_VIDEO_DATATYPES,
   COMPRESSED_IMAGE_DATATYPES,
@@ -95,6 +96,9 @@ import { ICameraHandler } from "../ICameraHandler";
 import { getTopicMatchPrefix, sortPrefixMatchesToFront } from "../Images/topicPrefixMatching";
 
 const log = Logger.getLogger(__filename);
+
+const tempPanOffset = new THREE.Vector2();
+const tempWheelDelta = new THREE.Vector2();
 
 export class ImageMode
   extends SceneExtension<ImageRenderable, ImageModeEventMap>
@@ -189,12 +193,23 @@ export class ImageMode
       });
     });
 
+    // Two-finger trackpad scroll pans; pinch (Ctrl+wheel) and mouse wheels zoom at the cursor.
+    const isTrackpadPan = makeTrackpadScrollDetector();
     renderer.input.on("wheel", (cursorCoords, _worldSpaceCursorCoords, event) => {
-      this.#camera.updateZoomFromWheel(
-        // Clamp wheel deltas which can vary wildly across different operating systems, browsers, and input devices.
-        1 - 0.01 * THREE.MathUtils.clamp(event.deltaY, -30, 30),
-        cursorCoords,
-      );
+      // Keep a pinch from zooming the page and a scroll from scrolling it
+      event.preventDefault();
+      if (isTrackpadPan(event)) {
+        this.#camera.getPanOffset(tempPanOffset);
+        this.#camera.setPanOffset(
+          tempPanOffset.sub(tempWheelDelta.set(event.deltaX, event.deltaY)),
+        );
+      } else {
+        this.#camera.updateZoomFromWheel(
+          // Clamp wheel deltas which can vary wildly across different operating systems, browsers, and input devices.
+          1 - 0.01 * THREE.MathUtils.clamp(event.deltaY, -30, 30),
+          cursorCoords,
+        );
+      }
       this.#updateAnnotationsScale();
       this.#hasModifiedView = true;
       this.dispatchEvent({ type: "hasModifiedViewChanged" });

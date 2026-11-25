@@ -28,7 +28,7 @@ import {
   CameraState,
   DEFAULT_CAMERA_STATE,
   DEFAULT_ORBIT_CONTROLS_CONFIG,
-  isTrackpadScroll,
+  makeTrackpadScrollDetector,
 } from "../camera";
 import { frameSettingsNode, viewSettingsNode } from "../settingsNodes/global";
 
@@ -45,8 +45,6 @@ const PI_2 = Math.PI / 2;
 const snapshotInRenderFrame = makePose();
 
 const tempVec3 = new THREE.Vector3();
-/** Wheel events further apart than this start a new gesture. */
-const TRACKPAD_GESTURE_GAP_MS = 200;
 
 const tempSpherical = new THREE.Spherical();
 const tempEuler = new THREE.Euler();
@@ -101,17 +99,14 @@ export class CameraStateSettings extends SceneExtension implements ICameraHandle
 
     // Trackpad: two-finger scroll pans like a drag and Alt+scroll orbits like a right-drag. Pinch
     // and mouse wheels fall through to OrbitControls' zoom. Registered before OrbitControls (and
-    // in the capture phase) so it can claim the event first. A gesture stays a trackpad gesture
-    // while its events keep coming, so momentum and pure-vertical scrolls don't flip to zoom.
-    let trackpadGestureUntil = 0;
+    // in the capture phase) so it can claim the event first.
+    const isTrackpadPan = makeTrackpadScrollDetector();
     canvas.addEventListener(
       "wheel",
       (event) => {
-        const inGesture = event.timeStamp < trackpadGestureUntil;
-        if (event.ctrlKey || !(inGesture || isTrackpadScroll(event))) {
+        if (!isTrackpadPan(event)) {
           return;
         }
-        trackpadGestureUntil = event.timeStamp + TRACKPAD_GESTURE_GAP_MS;
         event.preventDefault();
         event.stopImmediatePropagation();
         if (!this.#controls.enabled) {
