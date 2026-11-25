@@ -8,11 +8,15 @@
 import { toNanoSec } from "@foxglove/rostime";
 import CloseIcon from "@mui/icons-material/Close";
 import { Button, IconButton, Tooltip, Typography } from "@mui/material";
-import { useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { makeStyles } from "tss-react/mui";
 
-import { useTrimStore } from "@lichtblick/suite-base/components/ExportRecordingDialog/trimStore";
+import { useLatest } from "@lichtblick/hooks";
+import {
+  shiftRange,
+  useTrimStore,
+} from "@lichtblick/suite-base/components/ExportRecordingDialog/trimStore";
 import {
   useMessagePipeline,
   useMessagePipelineGetter,
@@ -26,6 +30,12 @@ import {
 import Stack from "@lichtblick/suite-base/components/Stack";
 
 const HANDLE_WIDTH = 8;
+/** Half height of the strip around the track that keeps scrubbing; the band above and below it moves the cut. */
+const SCRUB_HALF_HEIGHT = 5;
+/** Matches the handles' 4px inset from the scrubber's top and bottom. */
+const GRAB_INSET = 4;
+/** Pointer travel before a press on the band counts as a drag instead of a click-to-seek. */
+const DRAG_THRESHOLD_PX = 3;
 
 const useStyles = makeStyles()((theme) => ({
   overlay: {
@@ -48,6 +58,16 @@ const useStyles = makeStyles()((theme) => ({
     borderTop: `2px solid ${theme.palette.primary.main}`,
     borderBottom: `2px solid ${theme.palette.primary.main}`,
     pointerEvents: "none",
+    "&:focus-visible": {
+      outline: `2px solid ${theme.palette.primary.dark}`,
+      outlineOffset: 2,
+    },
+  },
+  grab: {
+    "&, & *": { cursor: "grab !important" },
+  },
+  grabbing: {
+    "&, & *": { cursor: "grabbing !important" },
   },
   handle: {
     position: "absolute",
@@ -111,8 +131,18 @@ export function formatSeconds(ns: bigint): string {
   return (Number(ns) / 1e9).toFixed(3);
 }
 
-/** Highlighted trim range with draggable in and out handles, drawn over the scrubber. */
-export function TrimRangeOverlay(): React.JSX.Element | null {
+type OverlayProps = {
+  /** The scrubber's slider. Pressing the band above or below its track moves the whole cut. */
+  sliderRef: React.RefObject<HTMLDivElement | null>;
+  /** Seek to a fraction of the recording, for a press on the band that doesn't drag. */
+  onSeek: (fraction: number) => void;
+};
+
+/**
+ * Highlighted trim range with draggable in and out handles, drawn over the scrubber. While
+ * editing, dragging the band above or below the track moves both ends at a fixed length.
+ */
+export function TrimRangeOverlay({ sliderRef, onSeek }: OverlayProps): React.JSX.Element | null {
   const { classes, cx } = useStyles();
   const { t } = useTranslation("exportRecording");
   const editing = useTrimStore((state) => state.editing);
@@ -121,6 +151,94 @@ export function TrimRangeOverlay(): React.JSX.Element | null {
   const start = useTrimStore((state) => state.start);
   const end = useTrimStore((state) => state.end);
   const rootRef = useRef<HTMLDivElement>(null);
+  const latestBounds = useLatest(bounds);
+  const latestOnSeek = useLatest(onSeek);
+
+  // Native listeners on the slider: a capture-phase pointerdown on the band beats the slider's own
+  // seek-and-scrub, while hover keeps flowing to the slider (hover time, tooltip). Cursor and drag
+  // state live outside React, so hovering costs no renders.
+  useEffect(() => {
+    const slider = sliderRef.current;
+    if (!editing || !slider) {
+      return undefined;
+    }
+    const fractionAt = (clientX: number) => {
+      const rect = slider.getBoundingClientRect();
+      return Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
+    };
+    const timeAtX = (clientX: number, b: { start: bigint; end: bigint }) =>
+      b.start + BigInt(Math.round(fractionAt(clientX) * Number(b.end - b.start)));
+    const onBand = (ev: PointerEvent): boolean => {
+      const b = latestBounds.current;
+      const cut = useTrimStore.getState();
+      if (!b || cut.start == undefined || cut.end == undefined) {
+        return false;
+      }
+      const rect = slider.getBoundingClientRect();
+      const dy = Math.abs(ev.clientY - (rect.top + rect.height / 2));
+      if (dy < SCRUB_HALF_HEIGHT || dy > rect.height / 2 - GRAB_INSET) {
+        return false;
+      }
+      const time = timeAtX(ev.clientX, b);
+      return time > cut.start && time < cut.end;
+    };
+
+    let dragging = false;
+    const onHover = (ev: PointerEvent) => {
+      if (!dragging) {
+        slider.classList.toggle(classes.grab, onBand(ev));
+      }
+    };
+    const onLeave = () => {
+      slider.classList.remove(classes.grab);
+    };
+    const onDown = (ev: PointerEvent) => {
+      const b = latestBounds.current;
+      const cut = useTrimStore.getState();
+      const { start: cutStart, end: cutEnd } = cut;
+      if (ev.button !== 0 || !b || cutStart == undefined || cutEnd == undefined || !onBand(ev)) {
+        return;
+      }
+      ev.stopPropagation();
+      ev.preventDefault();
+      dragging = true;
+      slider.classList.add(classes.grabbing);
+      const x0 = ev.clientX;
+      const anchor = timeAtX(x0, b);
+      let moved = false;
+      const onMove = (move: PointerEvent) => {
+        if (!moved && Math.abs(move.clientX - x0) < DRAG_THRESHOLD_PX) {
+          return;
+        }
+        moved = true;
+        cut.setRange(
+          ...shiftRange(cutStart, cutEnd, timeAtX(move.clientX, b) - anchor, b.start, b.end),
+        );
+      };
+      const onUp = (up: PointerEvent) => {
+        window.removeEventListener("pointermove", onMove);
+        window.removeEventListener("pointerup", onUp);
+        window.removeEventListener("pointercancel", onUp);
+        dragging = false;
+        slider.classList.remove(classes.grabbing);
+        if (!moved && up.type === "pointerup") {
+          latestOnSeek.current(fractionAt(up.clientX));
+        }
+      };
+      window.addEventListener("pointermove", onMove);
+      window.addEventListener("pointerup", onUp);
+      window.addEventListener("pointercancel", onUp);
+    };
+    slider.addEventListener("pointerdown", onDown, { capture: true });
+    slider.addEventListener("pointermove", onHover);
+    slider.addEventListener("pointerleave", onLeave);
+    return () => {
+      slider.removeEventListener("pointerdown", onDown, { capture: true });
+      slider.removeEventListener("pointermove", onHover);
+      slider.removeEventListener("pointerleave", onLeave);
+      slider.classList.remove(classes.grab, classes.grabbing);
+    };
+  }, [editing, sliderRef, latestBounds, latestOnSeek, classes.grab, classes.grabbing]);
 
   if (!bounds || start == undefined || end == undefined) {
     return null;
@@ -185,6 +303,29 @@ export function TrimRangeOverlay(): React.JSX.Element | null {
       <div
         className={classes.band}
         style={{ left: `${startPercent}%`, width: `${endPercent - startPercent}%` }}
+        {...(editing && {
+          role: "slider",
+          tabIndex: 0,
+          "aria-label": t("trimMove"),
+          "aria-valuemin": 0,
+          "aria-valuemax": Number(formatSeconds(bounds.end - bounds.start - (end - start))),
+          "aria-valuenow": Number(formatSeconds(start - bounds.start)),
+          "aria-valuetext": `${formatSeconds(start - bounds.start)} s – ${formatSeconds(end - bounds.start)} s`,
+          onKeyDown: (event: React.KeyboardEvent<HTMLDivElement>) => {
+            const delta =
+              event.key === "ArrowLeft" ? -step : event.key === "ArrowRight" ? step : 0n;
+            if (delta === 0n) {
+              return;
+            }
+            event.stopPropagation();
+            event.preventDefault();
+            // Read the store, not render-time values, so fast key repeats accumulate.
+            const cut = useTrimStore.getState();
+            if (cut.start != undefined && cut.end != undefined) {
+              setRange(...shiftRange(cut.start, cut.end, delta, bounds.start, bounds.end));
+            }
+          },
+        })}
       />
       {editing && (
         <>

@@ -48,6 +48,7 @@ export const exportRecording = {
   topic: "Topic",
   topicsSelected: "{{selected}} of {{total}} topics",
   trimEnd: "Trim end",
+  trimMove: "Move trim range",
   trimRange: "Trim {{start}} s – {{end}} s ({{duration}} s)",
   trimStart: "Trim start",
 };
