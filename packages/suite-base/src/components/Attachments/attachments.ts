@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import { Opcode } from "@lichtblick/mcap-core";
+import { Opcode, type McapTypes } from "@lichtblick/mcap-core";
 import { RecordingFileInfo } from "@lichtblick/suite-base/players/types";
 
 import { PreviewKind } from "./types";
@@ -9,8 +9,8 @@ import { PreviewKind } from "./types";
 export type AttachmentInfo = RecordingFileInfo["attachments"][number];
 
 /**
- * The attachment's data as a lazy slice of the file, so large attachments are never copied into
- * memory. Read from the record at `offset`, not the file's summary, so attachments of a recovered
+ * The attachment's data. From a local file it is a lazy slice, so large attachments are never
+ * copied into memory; from a remote reader (`IReadable`) only its byte range is fetched. Read from the record at `offset`, not the file's summary, so attachments of a recovered
  * file (cut off, or still being recorded) open too. Undefined when the record there isn't this
  * attachment, e.g. the file changed since it was opened.
  *
@@ -18,9 +18,14 @@ export type AttachmentInfo = RecordingFileInfo["attachments"][number];
  * media_type string, data_len u64, data, crc u32 (strings are a u32 byte length + UTF-8).
  */
 export async function attachmentData(
-  file: Blob,
+  file: Blob | McapTypes.IReadable,
   { offset, name, mediaType, sizeBytes }: AttachmentInfo,
 ): Promise<Blob | undefined> {
+  const fileSize = file instanceof Blob ? file.size : Number(await file.size());
+  const read = async (from: number, to: number) =>
+    file instanceof Blob
+      ? new Uint8Array(await file.slice(from, to).arrayBuffer())
+      : await file.read(BigInt(from), BigInt(to - from));
   const encoder = new TextEncoder();
   const nameBytes = encoder.encode(name);
   const typeBytes = encoder.encode(mediaType);
@@ -28,16 +33,16 @@ export async function attachmentData(
   const typeStart = nameStart + nameBytes.length + 4;
   const headerSize = typeStart + typeBytes.length + 8;
   const start = offset + headerSize;
-  if (start + sizeBytes + 4 > file.size) {
+  if (start + sizeBytes + 4 > fileSize) {
     return undefined;
   }
-  const header = new Uint8Array(await file.slice(offset, start).arrayBuffer());
-  const view = new DataView(header.buffer);
+  const header = await read(offset, start);
+  const view = new DataView(header.buffer, header.byteOffset, header.byteLength);
   const recordLength = view.getBigUint64(1, true);
   if (
     header[0] !== Opcode.ATTACHMENT ||
     recordLength < BigInt(headerSize - 9 + sizeBytes + 4) ||
-    recordLength > BigInt(file.size - offset - 9) ||
+    recordLength > BigInt(fileSize - offset - 9) ||
     view.getUint32(nameStart - 4, true) !== nameBytes.length ||
     !nameBytes.every((byte, i) => header[nameStart + i] === byte) ||
     view.getUint32(typeStart - 4, true) !== typeBytes.length ||
@@ -46,7 +51,12 @@ export async function attachmentData(
   ) {
     return undefined;
   }
-  return file.slice(start, start + sizeBytes, mediaType);
+  if (file instanceof Blob) {
+    return file.slice(start, start + sizeBytes, mediaType);
+  }
+  return new Blob([(await read(start, start + sizeBytes)) as Uint8Array<ArrayBuffer>], {
+    type: mediaType,
+  });
 }
 
 const TEXT_TYPE = /^text\/|[/+](json|xml|yaml|x-yaml|toml|javascript|csv|x-sh|x-python)$/i;

@@ -57,6 +57,17 @@ describe("attachments", () => {
     expect(texts).toEqual(attachments.map((attachment) => attachment.data));
   });
 
+  it("reads each attachment through a reader, as for a remote file", async () => {
+    const { bytes, infos } = await recording();
+    const readable = new BlobReadable(new Blob([bytes]));
+    const data = await Promise.all(infos.map(async (info) => await attachmentData(readable, info)));
+    expect(data.map((blob) => blob?.type)).toEqual(attachments.map((a) => a.mediaType));
+    expect(await Promise.all(data.map(async (blob) => await blob?.text()))).toEqual(
+      attachments.map((attachment) => attachment.data),
+    );
+    expect(await attachmentData(readable, { ...infos[0]!, name: "other.json" })).toBeUndefined();
+  });
+
   it("opens the attachment at the byte offset listed for an unindexed recording", async () => {
     const { bytes, infos } = await recording();
     // Cut off like an interrupted recording: no complete second attachment, footer or summary.

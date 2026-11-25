@@ -7,7 +7,7 @@ export const attachments = {
   copy: "Copy",
   download: "Download",
   missing: "The attachment is no longer in the file.",
-  needsLocalFile: "Previews need a single recording opened as a local file.",
+  needsLocalFile: "Previews need a single recording.",
   noAttachments: "This recording has no attachments.",
   noMediaType: "No media type",
   noPdfViewer: "This browser cannot show PDFs inline. Download the attachment to open it.",
