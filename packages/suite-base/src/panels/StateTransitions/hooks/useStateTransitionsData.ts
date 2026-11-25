@@ -14,12 +14,21 @@ import {
   ROW_MARGIN,
   ROW_SPACING,
 } from "@lichtblick/suite-base/panels/StateTransitions/hooks/constants";
-import { UseStateTransitionsData } from "@lichtblick/suite-base/panels/StateTransitions/hooks/types";
+import {
+  StateTransitionRow,
+  UseStateTransitionsData,
+} from "@lichtblick/suite-base/panels/StateTransitions/hooks/types";
 import {
   LiveDatasetCache,
   messagesToDataset,
 } from "@lichtblick/suite-base/panels/StateTransitions/messagesToDataset";
 import { datasetContainsArray } from "@lichtblick/suite-base/panels/StateTransitions/shared";
+import {
+  STEP_LINE_WIDTH,
+  StepLane,
+  applyStepLanes,
+  stepLanesHeight,
+} from "@lichtblick/suite-base/panels/StateTransitions/stepLanes";
 import {
   MessageDatasetArgs,
   PathState,
@@ -93,6 +102,8 @@ function useStateTransitionsData(
         data: { datasets: [] },
         datasetPathIndexes: [],
         minY: undefined,
+        // Keep the legend's rows apart until data arrives.
+        rows: paths.map((_, index) => ({ top: -index * ROW_SPACING, span: ROW_SPACING })),
         pathState: [],
         matchStarts: [],
         matchesApproximate: false,
@@ -103,12 +114,15 @@ function useStateTransitionsData(
     const outDatasets: ChartDatasets = [];
     const datasetPathIndexes: number[] = [];
     const outPathState: PathState[] = [];
+    const rows: StateTransitionRow[] = [];
+    let rowTop = 0;
     const matchStarts = new Set<number>();
     let matchesApproximate = false;
 
     paths.forEach((path, pathIndex) => {
-      const y = -(pathIndex + 1) * ROW_SPACING;
-      outMinY = Math.min(outMinY ?? y, y - ROW_MARGIN);
+      // A bar sits here; a step series puts its highest state here and adds lanes below.
+      const y = rowTop - ROW_SPACING;
+      const pathDatasets: ChartDataset[] = [];
 
       const hasCondition = parseCondition(path.condition) != undefined;
       const blocksForPath = decodedBlocks.map((decodedBlock) => decodedBlock[path.value]);
@@ -123,8 +137,7 @@ function useStateTransitionsData(
         path,
         isArray,
       });
-      outDatasets.push(newBlockDataSet);
-      datasetPathIndexes.push(pathIndex);
+      pathDatasets.push(newBlockDataSet);
       if (hasCondition) {
         matchesApproximate =
           addMatches(blocksForPath, newBlockDataSet, datasetArgs, matchStarts) ||
@@ -135,16 +148,31 @@ function useStateTransitionsData(
       if (items == undefined) {
         cache.drawn.checkpoint = undefined;
         cache.exact.checkpoint = undefined;
-        return;
+      } else {
+        const newPathDataSet = messagesToDataset({ ...datasetArgs, blocks: [items] }, cache.drawn);
+        pathDatasets.push(newPathDataSet);
+        if (hasCondition) {
+          matchesApproximate =
+            addMatches([items], newPathDataSet, datasetArgs, matchStarts, cache.exact) ||
+            matchesApproximate;
+        }
       }
 
-      const newPathDataSet = messagesToDataset({ ...datasetArgs, blocks: [items] }, cache.drawn);
-      outDatasets.push(newPathDataSet);
-      datasetPathIndexes.push(pathIndex);
-      if (hasCondition) {
-        matchesApproximate =
-          addMatches([items], newPathDataSet, datasetArgs, matchStarts, cache.exact) ||
-          matchesApproximate;
+      let lanes: StepLane[] | undefined;
+      if (path.display === "step") {
+        lanes = applyStepLanes(pathDatasets, y);
+        for (const dataset of pathDatasets) {
+          dataset.stepped = true;
+          dataset.borderWidth = STEP_LINE_WIDTH;
+        }
+      }
+      const span = ROW_SPACING + stepLanesHeight(lanes?.length ?? 0);
+      rows.push({ top: rowTop, span, lanes });
+      rowTop -= span;
+      outMinY = rowTop - ROW_MARGIN;
+      for (const dataset of pathDatasets) {
+        outDatasets.push(dataset);
+        datasetPathIndexes.push(pathIndex);
       }
     });
 
@@ -152,6 +180,7 @@ function useStateTransitionsData(
       data: { datasets: outDatasets },
       datasetPathIndexes,
       minY: outMinY,
+      rows,
       pathState: outPathState,
       matchStarts: [...matchStarts].sort((a, b) => a - b),
       matchesApproximate,

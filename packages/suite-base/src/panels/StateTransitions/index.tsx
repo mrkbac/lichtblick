@@ -53,6 +53,10 @@ import {
   EMPTY_TOPICS,
   STATE_TRANSITION_PLUGINS,
 } from "@lichtblick/suite-base/panels/StateTransitions/constants";
+import {
+  ROW_HEIGHT_PX,
+  ROW_SPACING,
+} from "@lichtblick/suite-base/panels/StateTransitions/hooks/constants";
 import useChartScalesAndBounds from "@lichtblick/suite-base/panels/StateTransitions/hooks/useChartScalesAndBounds";
 import { useDecodedMessageRange } from "@lichtblick/suite-base/panels/StateTransitions/hooks/useDecodedMessageRange";
 import { usePanelSettings } from "@lichtblick/suite-base/panels/StateTransitions/hooks/usePanelSettings";
@@ -73,6 +77,7 @@ import { defaultConfig } from "./settings";
 import { StateTransitionPanelProps } from "./types";
 
 const MATCH_EPSILON = 1e-6;
+const X_AXIS_HEIGHT_PX = 30;
 
 // Compared recordings get a row each, named by their topic (`/a/…`, `/b/…`)
 const sameStyle = () => ({});
@@ -155,15 +160,6 @@ function StateTransitions(props: StateTransitionPanelProps) {
     changesPaths,
   );
 
-  const { height, heightPerTopic } = useMemo(() => {
-    const onlyTopicsHeight = paths.length * 64;
-    const xAxisHeight = 30;
-    return {
-      height: Math.max(80, onlyTopicsHeight + xAxisHeight),
-      heightPerTopic: paths.length === 0 ? 0 : onlyTopicsHeight / paths.length,
-    };
-  }, [paths.length]);
-
   // Publish live chart updates at most every LIVE_REDRAW_MS instead of once per message.
   const [throttledItemsByPath] = useDebounce(itemsByPath, LIVE_REDRAW_MS, {
     maxWait: LIVE_REDRAW_MS,
@@ -172,7 +168,7 @@ function StateTransitions(props: StateTransitionPanelProps) {
 
   const showPoints = config.showPoints === true;
 
-  const { pathState, data, datasetPathIndexes, minY, matchStarts, matchesApproximate } =
+  const { pathState, data, datasetPathIndexes, minY, rows, matchStarts, matchesApproximate } =
     useStateTransitionsData(
       paths,
       startTime,
@@ -181,6 +177,9 @@ function StateTransitions(props: StateTransitionPanelProps) {
       showPoints,
       theme.palette.mode,
     );
+
+  const rowsHeight = rows.reduce((sum, row) => sum + row.span, 0) * (ROW_HEIGHT_PX / ROW_SPACING);
+  const height = Math.max(80, rowsHeight + X_AXIS_HEIGHT_PX);
 
   const { yScale, xScale, databounds, width, sizeRef } = useChartScalesAndBounds(
     minY,
@@ -432,7 +431,7 @@ function StateTransitions(props: StateTransitionPanelProps) {
           />
           <PathLegend
             paths={paths}
-            heightPerTopic={heightPerTopic}
+            rows={rows}
             setFocusedPath={setFocusedPath}
             saveConfig={saveConfig}
           />

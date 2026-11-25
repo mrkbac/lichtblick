@@ -83,8 +83,9 @@ export class Downsampler {
         // grey out stretches that fit the chart's width. The width still caps each row.
         MAX_POINTS,
       );
-      // The row's y, from a point that isn't a gap (a gap's y is NaN).
-      const yValue = dataset.data.find((datum) => datum != undefined && !isNaN(datum.y))?.y ?? 0;
+      // A merged stretch stays at the y of the point before it (a step row has several), else at
+      // the row's first y. Gaps (y = NaN) don't count.
+      let yValue = dataset.data.find((datum) => datum != undefined && !isNaN(datum.y))?.y ?? 0;
       const resolved = downsampled.map(({ x, index, states }) => {
         if (index == undefined) {
           return {
@@ -99,6 +100,9 @@ export class Downsampler {
         const point = dataset.data[index];
         if (point == undefined) {
           return point;
+        }
+        if (!isNaN(point.y)) {
+          yValue = point.y;
         }
 
         return {

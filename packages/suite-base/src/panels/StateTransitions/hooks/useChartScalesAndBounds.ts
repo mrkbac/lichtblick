@@ -5,7 +5,10 @@ import { ScaleOptions } from "chart.js";
 import { RefCallback, useEffect, useMemo } from "react";
 
 import { useElementSize } from "@lichtblick/suite-base/hooks/useElementSize";
-import { DEFAULT_X_END_TIME } from "@lichtblick/suite-base/panels/StateTransitions/hooks/constants";
+import {
+  DEFAULT_X_END_TIME,
+  Y_AXIS_MAX,
+} from "@lichtblick/suite-base/panels/StateTransitions/hooks/constants";
 import { StateTransitionConfig } from "@lichtblick/suite-base/panels/StateTransitions/types";
 import { Bounds } from "@lichtblick/suite-base/types/Bounds";
 
@@ -34,7 +37,7 @@ const useChartScalesAndBounds = (
       },
       type: "linear",
       min: minY,
-      max: -3,
+      max: Y_AXIS_MAX,
     };
   }, [minY]);
 

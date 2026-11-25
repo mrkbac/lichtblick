@@ -30,12 +30,25 @@ describe("useStateTransitionsData", () => {
     mockDatasetContainsArray.mockClear();
   });
 
+  it("keeps a bar row per path while there is no start time", () => {
+    const paths: StateTransitionPath[] = [
+      { value: "path1", timestampMethod: "receiveTime", display: "step" },
+      { value: "path2", timestampMethod: "receiveTime" },
+    ];
+    const { result } = renderHook(() => useStateTransitionsData(paths, undefined, {}, [], false));
+    expect(result.current.rows).toEqual([
+      { top: -0, span: 9 },
+      { top: -9, span: 9 },
+    ]);
+  });
+
   it("should return default values when startTime is undefined", () => {
     const { result } = renderHook(() => useStateTransitionsData([], undefined, {}, [], false));
     expect(result.current).toEqual({
       data: { datasets: [] },
       datasetPathIndexes: [],
       minY: undefined,
+      rows: [],
       pathState: [],
       matchStarts: [],
       matchesApproximate: false,

@@ -18,6 +18,11 @@ export const stateTransitions = {
     conditionHelp:
       'Optional comparison against the value, e.g. > 2, == "ERROR" or != true. The series then shows when it is true.',
     deleteSeries: "Delete series",
+    display: "Display",
+    displayBar: "Bar",
+    displayHelp:
+      "Bar shows the state as one colored bar. Step gives each state its own lane and joins them at each change.",
+    displayStep: "Step",
     general: "General",
     helpGeneral: "Display a point for every state transition message",
     label: "Label",

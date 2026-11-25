@@ -44,7 +44,10 @@ describe("PathLegend Component", () => {
 
   const renderComponent = (propsOverride: Partial<PathLegendProps & { panelId: string }> = {}) => {
     const props: PathLegendProps = {
-      heightPerTopic: BasicBuilder.number({ min: 0, max: 5000 }),
+      rows: [
+        { top: 0, span: 9 },
+        { top: -9, span: 13 },
+      ],
       paths: [
         {
           value: BasicBuilder.string(),
@@ -111,12 +114,28 @@ describe("PathLegend Component", () => {
   });
 
   it("should apply the correct height for each topic", () => {
-    const { props } = renderComponent();
-    const { style: firstRowStyle } = screen.getByTestId(`row-0`);
-    const { style: secondRowStyle } = screen.getByTestId(`row-1`);
-    const heightStyle = `height: ${props.heightPerTopic}px;`;
+    renderComponent();
+    // 9 y units are 64 px; a step row with lanes is taller.
+    expect(screen.getByTestId(`row-0`).style.height).toBe("64px");
+    expect(Number.parseFloat(screen.getByTestId(`row-1`).style.height)).toBeCloseTo((13 * 64) / 9);
+  });
 
-    expect(firstRowStyle.cssText).toContain(heightStyle);
-    expect(secondRowStyle.cssText).toContain(heightStyle);
+  it("labels the lanes of a step row", () => {
+    renderComponent({
+      rows: [
+        {
+          top: 0,
+          span: 11,
+          lanes: [
+            { y: -11, label: "IDLE", color: "#ff0000" },
+            { y: -9, label: "RUN", color: "#0000ff" },
+          ],
+        },
+        { top: -11, span: 9 },
+      ],
+    });
+    const run = screen.getByText("RUN");
+    expect(Number.parseFloat(run.style.top)).toBeCloseTo((6 * 64) / 9);
+    expect(Number.parseFloat(screen.getByText("IDLE").style.top)).toBeCloseTo((8 * 64) / 9);
   });
 });

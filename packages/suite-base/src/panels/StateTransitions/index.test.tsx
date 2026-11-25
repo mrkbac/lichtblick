@@ -73,6 +73,7 @@ vi.mock("@lichtblick/suite-base/panels/StateTransitions/hooks/useStateTransition
     data: { datasets: [{ data: [{ x: 1, y: 0, value: "A" }] }] },
     datasetPathIndexes: [0],
     minY: 0,
+    rows: [],
     matchStarts: [1, 5],
     matchesApproximate: mockMatchesApproximate,
   }),

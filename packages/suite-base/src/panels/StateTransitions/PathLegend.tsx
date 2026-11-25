@@ -6,7 +6,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import AddIcon from "@mui/icons-material/Add";
-import { Button, ButtonGroup, Stack } from "@mui/material";
+import { Button, ButtonGroup, Stack, darken } from "@mui/material";
 import React, { MouseEvent, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -17,12 +17,19 @@ import { useWorkspaceActions } from "@lichtblick/suite-base/context/Workspace/us
 import useStyles from "@lichtblick/suite-base/panels/StateTransitions/PathLegend.style";
 import { STATE_TRANSITIONS_BUTTONS } from "@lichtblick/suite-base/panels/StateTransitions/buttons";
 import { DEFAULT_STATE_TRANSITION_PATH } from "@lichtblick/suite-base/panels/StateTransitions/constants";
+import {
+  ROW_HEIGHT_PX,
+  ROW_SPACING,
+  Y_AXIS_MAX,
+} from "@lichtblick/suite-base/panels/StateTransitions/hooks/constants";
 import { stateTransitionPathDisplayName } from "@lichtblick/suite-base/panels/StateTransitions/shared";
 import {
   PathLegendProps,
   StateTransitionPath,
 } from "@lichtblick/suite-base/panels/StateTransitions/types";
 import { useSeriesDrag } from "@lichtblick/suite-base/panels/shared/useSeriesDrag";
+
+const PX_PER_UNIT = ROW_HEIGHT_PX / ROW_SPACING;
 
 /** The series label; dragging it copies the series onto another panel. */
 function SeriesButton({
@@ -58,11 +65,14 @@ function SeriesButton({
 
 export const PathLegend = React.memo(function PathLegend(props: PathLegendProps) {
   const { t } = useTranslation("stateTransitions");
-  const { paths, heightPerTopic, setFocusedPath, saveConfig } = props;
+  const { paths, rows, setFocusedPath, saveConfig } = props;
   const { setSelectedPanelIds } = useSelectedPanels();
   const { id: panelId } = usePanelContext();
   const { openPanelSettings } = useWorkspaceActions();
-  const { classes } = useStyles();
+  const { classes, theme } = useStyles();
+  // Same as the transition labels: light state colors need darker text on a light background.
+  const laneTextColor = (color: string) =>
+    theme.palette.mode === "light" ? darken(color, 0.45) : color;
   const deleteTitle = usePanelButtonTitle(STATE_TRANSITIONS_BUTTONS.deleteSeries);
   const DeleteIcon = STATE_TRANSITIONS_BUTTONS.deleteSeries.icon;
 
@@ -100,8 +110,20 @@ export const PathLegend = React.memo(function PathLegend(props: PathLegendProps)
             data-testid={`row-${index}`}
             className={classes.row}
             key={index}
-            style={{ height: heightPerTopic }}
+            style={{ height: (rows[index]?.span ?? 0) * PX_PER_UNIT }}
           >
+            {rows[index]?.lanes?.map((lane) => (
+              <span
+                key={lane.label}
+                className={classes.laneLabel}
+                style={{
+                  top: (rows[index]!.top + Y_AXIS_MAX - lane.y) * PX_PER_UNIT,
+                  color: laneTextColor(lane.color),
+                }}
+              >
+                {lane.label}
+              </span>
+            ))}
             <ButtonGroup
               size="small"
               color="inherit"
