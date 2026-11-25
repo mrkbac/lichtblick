@@ -205,9 +205,26 @@ export function useCatalogFolder(slot?: string): CatalogBackend {
   );
 
   const reopenLastFolder = useCallback(async () => {
-    if (lastFolder && (await lastFolder.requestPermission({ mode: "read" })) === "granted") {
-      await openDirectory(lastFolder);
+    if (!lastFolder) {
+      return;
     }
+    // A refused or failed permission request must show, not leave the previous banner up.
+    let permission: PermissionState;
+    try {
+      permission = await lastFolder.requestPermission({ mode: "read" });
+    } catch (err: unknown) {
+      setPickerClosed(false);
+      setAccessDenied(isAccessError(err));
+      setError(String(err));
+      return;
+    }
+    if (permission !== "granted") {
+      setPickerClosed(false);
+      setAccessDenied(true);
+      setError(`Read permission for ${lastFolder.name}: ${permission}`);
+      return;
+    }
+    await openDirectory(lastFolder);
   }, [lastFolder, openDirectory]);
 
   const rescan = useMemo(
