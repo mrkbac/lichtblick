@@ -17,7 +17,7 @@ import { assert } from "ts-essentials";
 import { LineMaterialWithAlphaVertex } from "@lichtblick/suite-base/panels/ThreeDeeRender/LineMaterialWithAlphaVertex";
 import { makeLinePickingMaterial } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/markers/materials";
 
-import { RenderablePrimitive } from "./RenderablePrimitive";
+import { LinePart, RenderablePrimitive } from "./RenderablePrimitive";
 import type { Renderer } from "../../Renderer";
 import { makeRgba, rgbToThreeColor, SRGBToLinear, stringToRgba } from "../../color";
 import { setLineColors, setLinePositions } from "../../setLinePositions";
@@ -63,6 +63,20 @@ export class RenderableLines extends RenderablePrimitive {
       );
       this.add(lineRenderable);
     }
+  }
+
+  public override lineParts(): readonly (LinePart & { parent: THREE.Object3D })[] {
+    const parts: (LinePart & { parent: THREE.Object3D })[] = [];
+    // Only the lines of the current entity are children
+    for (const child of this.children) {
+      if (child instanceof LinePrimitiveRenderable && child.visible) {
+        const part = child.part();
+        if (part) {
+          parts.push({ ...part, parent: child });
+        }
+      }
+    }
+    return parts;
   }
 
   public override dispose(): void {
@@ -127,6 +141,11 @@ class LinePrimitiveRenderable extends THREE.Object3D {
     this.#pickingMaterial = makeLinePickingMaterial(primitive.thickness, {
       worldUnits: !primitive.scale_invariant,
     });
+  }
+
+  /** The drawn line and its material, once built */
+  public part(): LinePart | undefined {
+    return this.#line ? { line: this.#line, material: this.#material } : undefined;
   }
 
   public setSettings(settings: LayerSettingsEntity): void {

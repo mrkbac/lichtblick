@@ -9,7 +9,7 @@ import { toNanoSec } from "@foxglove/rostime";
 import { CubePrimitive, SceneEntity, SpherePrimitive } from "@foxglove/schemas";
 import * as THREE from "three";
 
-import { RenderablePrimitive } from "./RenderablePrimitive";
+import { InstancedPart, RenderablePrimitive } from "./RenderablePrimitive";
 import type { Renderer } from "../../Renderer";
 import { makeRgba, rgbToThreeColor, stringToRgba } from "../../color";
 import { LayerSettingsEntity } from "../../settings";
@@ -46,6 +46,7 @@ export class RenderableInstancedShapes extends RenderablePrimitive {
   // stored for ease of use
   #sharedEdgesGeometry: THREE.EdgesGeometry | undefined;
   #shapes: (entity: SceneEntity) => (CubePrimitive | SpherePrimitive)[];
+  #sharedGeometry: THREE.BufferGeometry;
 
   protected constructor(
     renderer: Renderer,
@@ -57,7 +58,8 @@ export class RenderableInstancedShapes extends RenderablePrimitive {
     super("", renderer);
     this.#shapes = shapes;
 
-    this.#geometry = renderer.sharedGeometry.getGeometry(geometryKey, createGeometry).clone();
+    this.#sharedGeometry = renderer.sharedGeometry.getGeometry(geometryKey, createGeometry);
+    this.#geometry = this.#sharedGeometry.clone();
 
     this.#maxInstances = 16;
     this.#mesh = new THREE.InstancedMesh(this.#geometry, this.#material, this.#maxInstances);
@@ -172,6 +174,16 @@ export class RenderableInstancedShapes extends RenderablePrimitive {
     if (this.#mesh.instanceColor) {
       this.#mesh.instanceColor.needsUpdate = true;
     }
+  }
+
+  public override instancedParts(): readonly InstancedPart[] {
+    return [
+      {
+        mesh: this.#mesh,
+        outline: this.#outline,
+        shape: { geometry: this.#sharedGeometry, edges: this.#sharedEdgesGeometry },
+      },
+    ];
   }
 
   public override dispose(): void {

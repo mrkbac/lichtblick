@@ -5,6 +5,8 @@ import * as THREE from "three";
 import { LineSegmentsGeometry } from "three/examples/jsm/lines/LineSegmentsGeometry.js";
 import { LineSegments2 } from "three/examples/jsm/lines/webgpu/LineSegments2.js";
 
+import { LineMaterialWithAlphaVertex } from "@lichtblick/suite-base/panels/ThreeDeeRender/LineMaterialWithAlphaVertex";
+
 import { RenderableArrow } from "./RenderableArrow";
 import { RenderableCube } from "./RenderableCube";
 import { RenderableCylinder } from "./RenderableCylinder";
@@ -157,6 +159,15 @@ type LineBatch = {
   count: number;
 };
 
+/** Transparent lines with per-point alpha (scene entity lines), drawn in one pass */
+type AlphaLineBatch = {
+  line: LineSegments2;
+  origin: THREE.Vector3;
+  positions: Float32Array;
+  colors: Float32Array;
+  count: number;
+};
+
 /** Uploads only the instances in use */
 function markUsed(attribute: THREE.BufferAttribute, count: number): void {
   attribute.clearUpdateRanges();
@@ -182,6 +193,7 @@ export function isFinitePosition(position: THREE.Vector3): boolean {
 }
 
 const markerMatrix = new THREE.Matrix4();
+const instancesMatrix = new THREE.Matrix4();
 const viewMatrix = new THREE.Matrix4();
 
 /**
@@ -242,6 +254,7 @@ export class MarkerBatches extends THREE.Object3D {
   #batches = new Map<string, Batch>();
   #lineBatches = new Map<string, LineBatch>();
   #pendingLines = new Map<string, LineBatchEntry>();
+  #alphaLineBatches = new Map<string, AlphaLineBatch>();
   #outlineMaterial: THREE.Material;
 
   public constructor(outlineMaterial: THREE.Material) {
@@ -251,6 +264,9 @@ export class MarkerBatches extends THREE.Object3D {
   }
 
   public begin(): void {
+    for (const batch of this.#alphaLineBatches.values()) {
+      batch.count = 0;
+    }
     for (const batch of this.#lineBatches.values()) {
       batch.count = 0;
     }
@@ -286,29 +302,86 @@ export class MarkerBatches extends THREE.Object3D {
   }
 
   #addMesh(mesh: MarkerMesh, outline: THREE.LineSegments | undefined, color: ColorRGBA): void {
-    // A reflected matrix needs flipped winding. Non-finite poses cannot seed a batch origin.
-    const position = tempPosition.setFromMatrixPosition(tempMatrix);
-    const determinant = tempMatrix.determinant();
-    const batch =
-      isFinitePosition(position) && Number.isFinite(determinant) && determinant > 0
-        ? this.#batchFor(mesh, outline, position, Math.min(color.a, 1))
-        : undefined;
+    const batch = this.#batchAt(mesh.geometry, outline?.geometry, color.a);
     setPickOnly(mesh, { pickOnly: batch != undefined });
     if (outline) {
       setPickOnly(outline, { pickOnly: batch != undefined });
     }
-    if (!batch) {
+    if (batch) {
+      this.#push(batch, rgbToThreeColor(tempColor, color), { outlined: outline?.visible === true });
+    }
+  }
+
+  /**
+   * Draws every instance of an instanced shape (e.g. a scene entity's cubes) through the batches,
+   * or none of them: a mesh drawing on its own draws all its instances. `geometry` and `edges` are
+   * the shared shape the mesh's own geometry was cloned from, so equal shapes share a batch.
+   * `parent` maps the mesh's parent into this object's space.
+   */
+  public addInstances(
+    mesh: THREE.InstancedMesh,
+    outline: THREE.LineSegments | undefined,
+    shape: { geometry: THREE.BufferGeometry; edges: THREE.BufferGeometry | undefined },
+    parent: THREE.Matrix4,
+  ): void {
+    const { instanceColor, count } = mesh;
+    const opacities = mesh.geometry.getAttribute("instanceOpacity") as
+      | THREE.BufferAttribute
+      | undefined;
+    mesh.updateMatrix();
+    instancesMatrix.multiplyMatrices(parent, mesh.matrix);
+    const outlineShape = outline ? shape.edges : undefined;
+    // An invisible instance still draws its outline on its own, so it keeps the mesh unbatched
+    let batched = mesh.visible && count > 0 && instanceColor != undefined && opacities != undefined;
+    for (let i = 0; batched && i < count; i++) {
+      mesh.getMatrixAt(i, tempMatrix);
+      tempMatrix.premultiply(instancesMatrix);
+      const opacity = opacities!.getX(i);
+      batched = opacity > 0 && this.#batchAt(shape.geometry, outlineShape, opacity) != undefined;
+    }
+    setPickOnly(mesh, { pickOnly: batched });
+    if (outline) {
+      setPickOnly(outline, { pickOnly: batched });
+    }
+    if (!batched) {
       return;
     }
+    for (let i = 0; i < count; i++) {
+      mesh.getMatrixAt(i, tempMatrix);
+      tempMatrix.premultiply(instancesMatrix);
+      const batch = this.#batchAt(shape.geometry, outlineShape, opacities!.getX(i))!;
+      this.#push(batch, tempColor.fromBufferAttribute(instanceColor!, i), {
+        outlined: outline?.visible === true,
+      });
+    }
+  }
+
+  /** The batch for the instance at `tempMatrix`, or undefined if it must draw on its own */
+  #batchAt(
+    geometry: THREE.BufferGeometry,
+    edges: THREE.BufferGeometry | undefined,
+    opacity: number,
+  ): Batch | undefined {
+    // A reflected matrix needs flipped winding. Non-finite poses cannot seed a batch origin.
+    const position = tempPosition.setFromMatrixPosition(tempMatrix);
+    const determinant = tempMatrix.determinant();
+    return isFinitePosition(position) && Number.isFinite(determinant) && determinant > 0
+      ? this.#batchFor(geometry, edges, position, Math.min(opacity, 1))
+      : undefined;
+  }
+
+  /** Appends the instance at `tempMatrix` */
+  #push(batch: Batch, color: THREE.Color, { outlined }: { outlined: boolean }): void {
+    const position = tempPosition.setFromMatrixPosition(tempMatrix);
     if (batch.meshCount === 0) {
       batch.origin.copy(position);
     }
     tempMatrix.setPosition(position.sub(batch.origin));
     reserve(batch.mesh, batch.meshCount + 1);
     batch.mesh.setMatrixAt(batch.meshCount, tempMatrix);
-    batch.mesh.setColorAt(batch.meshCount, rgbToThreeColor(tempColor, color));
+    batch.mesh.setColorAt(batch.meshCount, color);
     batch.meshCount++;
-    if (outline?.visible === true && batch.outline) {
+    if (outlined && batch.outline) {
       reserve(batch.outline, batch.outlineCount + 1);
       tempMatrix.toArray(batch.outline.instanceMatrix.array, batch.outlineCount * 16);
       batch.outlineCount++;
@@ -446,6 +519,136 @@ export class MarkerBatches extends THREE.Object3D {
     return true;
   }
 
+  /**
+   * Draws a scene entity line (always transparent, alpha per point or from its material) through a
+   * batch of lines with the same width and units, or on its own when it can't be. `parent` maps the
+   * line's parent into this object's space.
+   */
+  public addAlphaLine(
+    line: LineSegments2,
+    material: LineMaterialWithAlphaVertex,
+    parent: THREE.Matrix4,
+  ): void {
+    const geometry = line.geometry;
+    const positions = geometry.getAttribute("instanceStart");
+    const colors = material.vertexColors ? geometry.getAttribute("instanceColorStart") : undefined;
+    const count = geometry.instanceCount;
+    line.updateMatrix();
+    tempMatrix.multiplyMatrices(parent, line.matrix);
+    const origin = tempPosition.setFromMatrixPosition(tempMatrix);
+    const batchable =
+      line.visible &&
+      count > 0 &&
+      count < MAX_BATCH_LINE_SEGMENTS &&
+      isFinitePosition(origin) &&
+      Number.isFinite(material.linewidth) &&
+      positions instanceof THREE.InterleavedBufferAttribute &&
+      (colors == undefined ||
+        (colors instanceof THREE.InterleavedBufferAttribute &&
+          colors.data.array instanceof Float32Array));
+    const key = `${material.worldUnits}:${material.linewidth}:${cellKey(origin)}`;
+    const batch = batchable ? this.#alphaLineBatchFor(key, material) : undefined;
+    const appended =
+      batch != undefined &&
+      batch.count + count <= MAX_BATCH_LINE_SEGMENTS &&
+      this.#appendAlphaLine(
+        batch,
+        (positions as THREE.InterleavedBufferAttribute).data.array as Float32Array,
+        (colors as THREE.InterleavedBufferAttribute | undefined)?.data.array as
+          | Float32Array
+          | undefined,
+        count,
+        material,
+      );
+    setPickOnly(line, { pickOnly: appended });
+  }
+
+  #alphaLineBatchFor(key: string, material: LineMaterialWithAlphaVertex): AlphaLineBatch {
+    let batch = this.#alphaLineBatches.get(key);
+    if (!batch) {
+      const line = new LineSegments2(
+        new LineSegmentsGeometry(),
+        new LineMaterialWithAlphaVertex({
+          worldUnits: material.worldUnits,
+          linewidth: material.linewidth,
+          transparent: true,
+          depthWrite: false,
+          vertexColors: true,
+        }),
+      );
+      line.userData.picking = false;
+      line.frustumCulled = false;
+      this.add(line);
+      batch = {
+        line,
+        origin: new THREE.Vector3(),
+        positions: new Float32Array(),
+        colors: new Float32Array(),
+        count: 0,
+      };
+      this.#alphaLineBatches.set(key, batch);
+    }
+    return batch;
+  }
+
+  /** Appends `count` segments at `tempMatrix`; false (and nothing appended) if they don't fit */
+  #appendAlphaLine(
+    batch: AlphaLineBatch,
+    positions: Float32Array,
+    colors: Float32Array | undefined,
+    count: number,
+    material: LineMaterialWithAlphaVertex,
+  ): boolean {
+    const total = batch.count + count;
+    if (total * 6 > batch.positions.length) {
+      const capacity = Math.min(MAX_BATCH_LINE_SEGMENTS, Math.max(total, batch.count * 2, 16));
+      const resizedPositions = new Float32Array(capacity * 6);
+      resizedPositions.set(batch.positions);
+      const resizedColors = new Float32Array(capacity * 8);
+      resizedColors.set(batch.colors);
+      batch.positions = resizedPositions;
+      batch.colors = resizedColors;
+    }
+    if (batch.count === 0) {
+      batch.origin.setFromMatrixPosition(tempMatrix);
+    }
+    tempMatrix.setPosition(tempPosition.setFromMatrixPosition(tempMatrix).sub(batch.origin));
+    const start = batch.count * 6;
+    for (let i = 0; i < count * 6; i += 6) {
+      const index = start + i;
+      tempPosition.set(positions[i]!, positions[i + 1]!, positions[i + 2]);
+      tempPosition.applyMatrix4(tempMatrix).toArray(batch.positions, index);
+      tempPosition.set(positions[i + 3]!, positions[i + 4]!, positions[i + 5]);
+      tempPosition.applyMatrix4(tempMatrix).toArray(batch.positions, index + 3);
+      // Baking into a shared float32 buffer must not collapse an originally distinct endpoint.
+      if (
+        batch.positions[index] === batch.positions[index + 3] &&
+        batch.positions[index + 1] === batch.positions[index + 4] &&
+        batch.positions[index + 2] === batch.positions[index + 5] &&
+        (positions[i] !== positions[i + 3] ||
+          positions[i + 1] !== positions[i + 4] ||
+          positions[i + 2] !== positions[i + 5])
+      ) {
+        return false;
+      }
+    }
+    const colorStart = batch.count * 8;
+    if (colors) {
+      batch.colors.set(colors.subarray(0, count * 8), colorStart);
+    } else {
+      const { r, g, b } = material.color;
+      const a = material.opacity;
+      for (let i = colorStart; i < colorStart + count * 8; i += 4) {
+        batch.colors[i] = r;
+        batch.colors[i + 1] = g;
+        batch.colors[i + 2] = b;
+        batch.colors[i + 3] = a;
+      }
+    }
+    batch.count = total;
+    return true;
+  }
+
   #disposeLineBatch(batch: LineBatch): void {
     batch.depth.removeFromParent();
     batch.color.removeFromParent();
@@ -456,6 +659,20 @@ export class MarkerBatches extends THREE.Object3D {
 
   public end(): void {
     this.#pendingLines.clear();
+    for (const [key, batch] of this.#alphaLineBatches) {
+      if (batch.count === 0) {
+        batch.line.removeFromParent();
+        batch.line.material.dispose();
+        batch.line.geometry.dispose();
+        this.#alphaLineBatches.delete(key);
+        continue;
+      }
+      batch.line.position.copy(batch.origin);
+      // Only the segments in use: the buffers keep their capacity across fills
+      setLinePositions(batch.line.geometry, batch.positions);
+      setLineColors(batch.line.geometry, batch.colors);
+      batch.line.geometry.instanceCount = batch.count;
+    }
     for (const [key, batch] of this.#lineBatches) {
       if (batch.count === 0) {
         this.#disposeLineBatch(batch);
@@ -496,6 +713,12 @@ export class MarkerBatches extends THREE.Object3D {
 
   public override dispose(): void {
     this.#pendingLines.clear();
+    for (const batch of this.#alphaLineBatches.values()) {
+      batch.line.removeFromParent();
+      batch.line.material.dispose();
+      batch.line.geometry.dispose();
+    }
+    this.#alphaLineBatches.clear();
     for (const batch of this.#lineBatches.values()) {
       this.#disposeLineBatch(batch);
     }
@@ -516,12 +739,13 @@ export class MarkerBatches extends THREE.Object3D {
   }
 
   #batchFor(
-    mesh: MarkerMesh,
-    outline: THREE.LineSegments | undefined,
+    geometry: THREE.BufferGeometry,
+    edges: THREE.BufferGeometry | undefined,
     position: THREE.Vector3,
     opacity: number,
   ): Batch {
-    const key = `${mesh.geometry.id}:${cellKey(position)}:${opacity}`;
+    // A shape batches with or without its outline, never both ways in one batch
+    const key = `${geometry.id}:${edges?.id}:${cellKey(position)}:${opacity}`;
     let batch = this.#batches.get(key);
     if (!batch) {
       const transparent = opacity < 1;
@@ -533,14 +757,14 @@ export class MarkerBatches extends THREE.Object3D {
         transparent,
         depthWrite: !transparent,
       });
-      const instanced = new THREE.InstancedMesh(mesh.geometry, material, 0);
+      const instanced = new THREE.InstancedMesh(geometry, material, 0);
       instanced.castShadow = true;
       instanced.receiveShadow = true;
       instanced.userData.picking = false;
       this.add(instanced);
       let instancedOutline: InstancedLineSegments | undefined;
-      if (outline) {
-        instancedOutline = new InstancedLineSegments(outline.geometry, this.#outlineMaterial);
+      if (edges) {
+        instancedOutline = new InstancedLineSegments(edges, this.#outlineMaterial);
         instancedOutline.userData.picking = false;
         this.add(instancedOutline);
       }
