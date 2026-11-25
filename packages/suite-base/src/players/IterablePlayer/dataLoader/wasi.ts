@@ -58,17 +58,10 @@ export function wasiImports(memory: () => ArrayBuffer, log: Log): Record<string,
     },
     // No preopened directories: wasi-libc stops looking for them at the first EBADF
     fd_prestat_get: () => EBADF,
-    fd_close: () => EBADF,
-    fd_seek: () => EBADF,
-    fd_read: () => EBADF,
     environ_sizes_get: (countPtr, sizePtr) => writeZeros(Number(countPtr), Number(sizePtr)),
     environ_get: () => SUCCESS,
     args_sizes_get: (countPtr, sizePtr) => writeZeros(Number(countPtr), Number(sizePtr)),
     args_get: () => SUCCESS,
-    clock_res_get: (_id, resPtr) => {
-      view().setBigUint64(Number(resPtr), 1000n, true);
-      return SUCCESS;
-    },
     clock_time_get: (id, _precision, timePtr) => {
       // 0 is the realtime clock; the others count from an arbitrary start
       const ms = id === 0 ? Date.now() : performance.now();
@@ -84,7 +77,6 @@ export function wasiImports(memory: () => ArrayBuffer, log: Log): Record<string,
       }
       return SUCCESS;
     },
-    sched_yield: () => SUCCESS,
     proc_exit: (code) => {
       throw new Error(`Data loader exited with code ${code}`);
     },

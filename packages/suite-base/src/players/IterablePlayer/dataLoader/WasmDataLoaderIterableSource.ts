@@ -69,14 +69,12 @@ export class WasmDataLoaderIterableSource implements ISerializedIterableSource {
       }
       const topic = channel.topicName;
       this.#channels.set(channel.id, { topic, schemaName: schema?.name ?? "" });
-      this.#channelIdsByTopic.set(topic, [
-        ...(this.#channelIdsByTopic.get(topic) ?? []),
-        channel.id,
-      ]);
-      publishersByTopic.set(
-        topic,
-        new Set([...(publishersByTopic.get(topic) ?? []), String(channel.id)]),
-      );
+      const channelIds = this.#channelIdsByTopic.get(topic) ?? [];
+      this.#channelIdsByTopic.set(topic, channelIds);
+      channelIds.push(channel.id);
+      const publishers = publishersByTopic.get(topic) ?? new Set();
+      publishersByTopic.set(topic, publishers);
+      publishers.add(String(channel.id));
       if (!topics.has(topic)) {
         topics.set(topic, {
           name: topic,
