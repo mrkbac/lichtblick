@@ -1,5 +1,8 @@
-# Test fixture for WasmDataLoader. Rebuild with:
-#   cargo build --release --target wasm32-unknown-unknown && cp target/wasm32-unknown-unknown/release/text_loader.wasm ../text_loader.wasm
+# Test fixture for WasmDataLoader, built twice to cover Foxglove's crate and target range:
+#   text_loader.wasm:              this file as is, for wasm32-unknown-unknown
+#   text_loader_v0.1_wasip1.wasm:  with foxglove_data_loader = "=0.1.0" and foxglove = "0.9.0",
+#                                  for wasm32-wasip1 (WASI imports, older wit-bindgen)
+#   cargo build --release --target <target>
 [package]
 name = "text_loader"
 version = "0.1.0"

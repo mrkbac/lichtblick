@@ -53,6 +53,8 @@ impl DataLoader for TextLoader {
         }
         self.rows.sort_by_key(|r| r.time);
         console::log(&format!("loaded {} rows", self.rows.len()));
+        // Goes to stdout: WASI's fd_write on wasm32-wasip1, nowhere on wasm32-unknown-unknown
+        println!("stdout: {} rows", self.rows.len());
         let mut init = Initialization::builder()
             .time_range(TimeRange {
                 start_time: self.rows.first().map_or(0, |r| r.time),

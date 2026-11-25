@@ -57,7 +57,7 @@ import {
   UserScriptStore,
   useUserScriptState,
 } from "@lichtblick/suite-base/context/UserScriptStateContext";
-import { WasmDataLoaderDataSourceFactory } from "@lichtblick/suite-base/dataSources/WasmDataLoaderDataSourceFactory";
+import { createWasmDataLoaderSource } from "@lichtblick/suite-base/dataSources/WasmDataLoaderDataSourceFactory";
 import { GlobalVariables } from "@lichtblick/suite-base/hooks/useGlobalVariables";
 import useIndexedDbRecents, {
   RecentRecord,
@@ -167,7 +167,7 @@ export default function PlayerManager(
   const playerSources = useMemo(
     (): readonly IDataSourceFactory[] => [
       ...props.playerSources,
-      ...dataLoaders.map((loader) => new WasmDataLoaderDataSourceFactory(loader)),
+      ...dataLoaders.map(createWasmDataLoaderSource),
     ],
     [props.playerSources, dataLoaders],
   );

@@ -6,19 +6,8 @@ import * as Comlink from "@foxglove/comlink";
 import { IterableSourceInitializeArgs } from "@lichtblick/suite-base/players/IterablePlayer/IIterableSource";
 import { WorkerIterableSourceWorker } from "@lichtblick/suite-base/players/IterablePlayer/WorkerIterableSourceWorker";
 
-import { SyncFile } from "./WasmDataLoader";
 import { WasmDataLoaderIterableSource } from "./WasmDataLoaderIterableSource";
-
-// The loader reads files synchronously, which only a worker can do with a File.
-// ponytail: one FileReaderSync call per guest read; add a block cache if loaders do many tiny reads.
-function syncFile(file: File): SyncFile {
-  const reader = new FileReaderSync();
-  return {
-    size: file.size,
-    read: (offset, length) =>
-      new Uint8Array(reader.readAsArrayBuffer(file.slice(offset, offset + length))),
-  };
-}
+import { BlockCachedFile } from "../rosdb3/BlockCachedFile";
 
 export async function initialize(
   args: IterableSourceInitializeArgs,
@@ -31,7 +20,7 @@ export async function initialize(
   const wasm = await WebAssembly.compile(await response.arrayBuffer());
   const source = new WasmDataLoaderIterableSource(
     wasm,
-    new Map(files.map((file) => [file.name, syncFile(file)])),
+    new Map(files.map((file) => [file.name, new BlockCachedFile(file)])),
   );
   return Comlink.proxy(new WorkerIterableSourceWorker(source));
 }

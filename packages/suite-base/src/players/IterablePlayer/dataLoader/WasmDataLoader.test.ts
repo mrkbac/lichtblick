@@ -7,23 +7,32 @@ import path from "node:path";
 import { SyncFile, WasmDataLoader } from "./WasmDataLoader";
 import { WasmDataLoaderIterableSource } from "./WasmDataLoaderIterableSource";
 
-// Built from fixtures/text_loader with the published foxglove_data_loader crate. Each input line is
-// `<log_time_ns> <topic> <json>`.
-const wasm = fs.readFileSync(path.join(__dirname, "fixtures/text_loader.wasm"));
+// Loaders built from fixtures/text_loader with Foxglove's published foxglove_data_loader crate.
+// Each input line is `<log_time_ns> <topic> <json>`.
+const fixture = (name: string) => fs.readFileSync(path.join(__dirname, "fixtures", name));
+const FIXTURES = {
+  "crate 0.2.1, wasm32-unknown-unknown": fixture("text_loader.wasm"),
+  "crate 0.1.0, wasm32-wasip1": fixture("text_loader_v0.1_wasip1.wasm"),
+};
+const wasm = FIXTURES["crate 0.2.1, wasm32-unknown-unknown"];
 
 function memFile(text: string): SyncFile {
   const bytes = new TextEncoder().encode(text);
   return {
     size: bytes.byteLength,
-    read: (offset, length) => bytes.slice(offset, offset + length),
+    readInto: (out, offset) => {
+      const chunk = bytes.subarray(offset, offset + out.byteLength);
+      out.set(chunk);
+      return chunk.byteLength;
+    },
   };
 }
 
 const log = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
 
-async function load(files: Record<string, string>) {
+async function load(files: Record<string, string>, module: Uint8Array = wasm) {
   return await WasmDataLoader.create(
-    wasm,
+    module,
     new Map(Object.entries(files).map(([name, text]) => [name, memFile(text)])),
     log,
   );
@@ -31,41 +40,119 @@ async function load(files: Record<string, string>) {
 
 const decode = (data: Uint8Array) => new TextDecoder().decode(data);
 
-describe("WasmDataLoader", () => {
-  it("initializes, iterates and backfills a foxglove:loader module", async () => {
-    const loader = await load({
-      "a.txt": '30 /b {"v":3}\n10 /a {"v":1}\nbroken\n',
-      "b.txt": '20 /a {"v":2}\n',
-    });
+/**
+ * The core-module import and export names that the canonical ABI gives Foxglove's WIT world
+ * (loader.wit, vendored unchanged): imported interfaces become import modules, the exported
+ * interface becomes `<interface>#<function>` exports plus resource intrinsics.
+ */
+function abiNamesFromWit(wit: string) {
+  const pkg = /^package ([\w:-]+)@([\d.]+);/m.exec(wit)!;
+  const interfaces = new Map<string, { funcs: string[]; resources: Map<string, string[]> }>();
+  for (const [, name, body] of wit.matchAll(/^interface ([\w-]+) \{([\s\S]*?)^\}/gm)) {
+    const resources = new Map<string, string[]>();
+    for (const [, res, resBody] of body!.matchAll(/resource ([\w-]+) \{([\s\S]*?)\n {4}\}/g)) {
+      resources.set(
+        res!,
+        [...resBody!.matchAll(/^\s*(constructor|[\w-]+: func)\(/gm)].map(([, f]) =>
+          f === "constructor" ? `[constructor]${res}` : `[method]${res}.${f!.split(":")[0]}`,
+        ),
+      );
+    }
+    const withoutResources = body!.replace(/resource [\w-]+ \{[\s\S]*?\n {4}\}/g, "");
+    const funcs = [...withoutResources.matchAll(/^\s*([\w-]+): func\(/gm)].map(([, f]) => f!);
+    interfaces.set(name!, { funcs, resources });
+  }
+  const world = /^world [\w-]+ \{([\s\S]*?)^\}/m.exec(wit)![1]!;
+  const qualified = (iface: string) => `${pkg[1]}/${iface}@${pkg[2]}`;
+  const imports: Record<string, string[]> = {};
+  const exports: string[] = [];
+  for (const [, kind, iface] of world.matchAll(/^\s*(import|export) ([\w-]+);/gm)) {
+    const { funcs, resources } = interfaces.get(iface!)!;
+    if (kind === "import") {
+      imports[qualified(iface!)] = [
+        ...funcs,
+        ...[...resources].flatMap(([res, fns]) => [...fns, `[resource-drop]${res}`]),
+      ].sort();
+    } else {
+      exports.push(
+        ...[...funcs, ...[...resources].flatMap(([res, fns]) => [...fns, `[dtor]${res}`])].map(
+          (f) => `${qualified(iface!)}#${f}`,
+        ),
+      );
+      imports[`[export]${qualified(iface!)}`] = [...resources.keys()]
+        .flatMap((res) => [`[resource-new]${res}`, `[resource-rep]${res}`, `[resource-drop]${res}`])
+        .sort();
+    }
+  }
+  return { imports, exports: exports.sort() };
+}
+
+describe("foxglove:loader contract", () => {
+  const abi = abiNamesFromWit(fs.readFileSync(path.join(__dirname, "loader.wit"), "utf8"));
+
+  it("derives the expected names from Foxglove's WIT", () => {
+    expect(Object.keys(abi.imports).sort()).toEqual([
+      "[export]foxglove:loader/loader@0.1.0",
+      "foxglove:loader/console@0.1.0",
+      "foxglove:loader/reader@0.1.0",
+    ]);
+    expect(abi.imports["foxglove:loader/reader@0.1.0"]).toContain("[method]reader.read");
+    expect(abi.exports).toContain("foxglove:loader/loader@0.1.0#[method]message-iterator.next");
+  });
+
+  it("provides exactly the imports the WIT world defines", async () => {
+    const instantiate = vi.spyOn(WebAssembly, "instantiate");
+    await load({});
+    const imports = instantiate.mock.calls[0]![1] as Record<string, Record<string, unknown>>;
+    instantiate.mockRestore();
+    for (const [module, names] of Object.entries(abi.imports)) {
+      expect(Object.keys(imports[module]!).sort()).toEqual(names);
+    }
+  });
+
+  it.each(Object.entries(FIXTURES))("matches what Foxglove's crate generates (%s)", (_, bytes) => {
+    const module = new WebAssembly.Module(bytes);
+    const loaderExports = WebAssembly.Module.exports(module)
+      .map(({ name }) => name)
+      .filter((name) => name.startsWith("foxglove:"));
+    expect(loaderExports.sort()).toEqual(abi.exports);
+    const outsideWit = WebAssembly.Module.imports(module).filter(
+      ({ module: mod, name }) =>
+        mod !== "wasi_snapshot_preview1" && abi.imports[mod]?.includes(name) !== true,
+    );
+    expect(outsideWit).toEqual([]);
+  });
+});
+
+describe.each(Object.entries(FIXTURES))("WasmDataLoader (%s)", (target, module) => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("initializes, iterates and backfills", async () => {
+    const loader = await load(
+      {
+        "a.txt": '30 /b {"v":3}\n10 /a {"v":1}\nbroken\n',
+        "b.txt": '20 /a {"v":2}\n',
+      },
+      module,
+    );
 
     const init = loader.initialize();
     expect(log.info).toHaveBeenCalledWith("loaded 3 rows");
+    // stdout only exists through WASI
+    expect(log.info.mock.calls.some(([msg]) => msg === "stdout: 3 rows")).toBe(
+      target.includes("wasip1"),
+    );
     expect(init.startTime).toBe(10n);
     expect(init.endTime).toBe(30n);
     expect(init.schemas).toEqual([
-      {
-        id: 1,
-        name: "test.Value",
-        encoding: "jsonschema",
-        data: expect.any(Uint8Array),
-      },
+      { id: 1, name: "test.Value", encoding: "jsonschema", data: expect.any(Uint8Array) },
     ]);
     expect(decode(init.schemas[0]!.data)).toBe('{"type":"object"}');
     expect(init.channels).toEqual([
-      {
-        id: 1,
-        schemaId: 1,
-        topicName: "/b",
-        messageEncoding: "json",
-        messageCount: 1n,
-      },
-      {
-        id: 2,
-        schemaId: 1,
-        topicName: "/a",
-        messageEncoding: "json",
-        messageCount: 2n,
-      },
+      { id: 1, schemaId: 1, topicName: "/b", messageEncoding: "json", messageCount: 1n },
+      { id: 2, schemaId: 1, topicName: "/a", messageEncoding: "json", messageCount: 2n },
     ]);
     expect(init.problems).toEqual([
       { severity: "warn", message: "a.txt:3: malformed line", tip: undefined },
@@ -86,20 +173,18 @@ describe("WasmDataLoader", () => {
   });
 
   it("surfaces loader errors", async () => {
-    const loader = await load({ "a.txt": "notanumber /a {}\n" });
+    const loader = await load({ "a.txt": "notanumber /a {}\n" }, module);
     expect(() => loader.initialize()).toThrow("invalid digit");
   });
+});
 
-  it("rejects modules with imports outside the loader world", async () => {
-    // (module (import "wasi_snapshot_preview1" "fd_write" (func)))
+describe("WasmDataLoader imports", () => {
+  it("rejects modules that import outside the loader world and WASI", async () => {
+    // (module (import "env" "f" (func)))
     const bytes = Uint8Array.from([
-      0, 97, 115, 109, 1, 0, 0, 0, 1, 4, 1, 96, 0, 0, 2, 35, 1, 22, 119, 97, 115, 105, 95, 115, 110,
-      97, 112, 115, 104, 111, 116, 95, 112, 114, 101, 118, 105, 101, 119, 49, 8, 102, 100, 95, 119,
-      114, 105, 116, 101, 0, 0,
+      0, 97, 115, 109, 1, 0, 0, 0, 1, 4, 1, 96, 0, 0, 2, 9, 1, 3, 101, 110, 118, 1, 102, 0, 0,
     ]);
-    await expect(WasmDataLoader.create(bytes, new Map(), log)).rejects.toThrow(
-      "wasi_snapshot_preview1.fd_write",
-    );
+    await expect(WasmDataLoader.create(bytes, new Map(), log)).rejects.toThrow("env.f");
   });
 });
 

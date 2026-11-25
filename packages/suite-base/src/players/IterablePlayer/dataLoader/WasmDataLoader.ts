@@ -1,18 +1,22 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-// Host for data loaders built against the public `foxglove:loader@0.1.0` WIT world (e.g. with the
-// MIT `foxglove_data_loader` crate for wasm32-unknown-unknown). Such a .wasm is a core module whose
-// imports and exports follow the component model's canonical ABI, so this file lifts and lowers
-// exactly the types of that one interface by hand instead of pulling in a component runtime.
+// Host for data loaders built against the public `foxglove:loader@0.1.0` WIT world (vendored as
+// loader.wit), e.g. with Foxglove's `foxglove_data_loader` Rust crate or C++ SDK, for
+// wasm32-unknown-unknown or wasm32-wasip1. Such a .wasm is a core module whose imports and exports
+// follow the component model's canonical ABI, so this file lifts and lowers exactly the types of
+// that one interface by hand instead of pulling in a component runtime.
+
+import { wasiImports } from "./wasi";
 
 const LOADER = "foxglove:loader/loader@0.1.0";
 const EXPORTED = `[export]${LOADER}`;
 
-/** A file the loader can read synchronously (in a worker, via FileReaderSync). */
+/** A file the loader can read synchronously, e.g. a BlockCachedFile in a worker. */
 export type SyncFile = {
   size: number;
-  read(offset: number, length: number): Uint8Array;
+  /** Copies bytes from `offset` into `out` and returns how many it copied. */
+  readInto(out: Uint8Array, offset: number): number;
 };
 
 export type LoaderChannel = {
@@ -156,15 +160,15 @@ export class WasmDataLoader {
         "[method]reader.size": (handle: number) => BigInt(readers.get(handle).file.size),
         "[method]reader.read": (handle: number, ptr: number, len: number) => {
           const reader = readers.get(handle);
-          const bytes = reader.file.read(reader.pos, Math.min(len, reader.file.size - reader.pos));
-          new Uint8Array(mem(), ptr, bytes.byteLength).set(bytes);
-          reader.pos += bytes.byteLength;
-          return BigInt(bytes.byteLength);
+          const n = reader.file.readInto(new Uint8Array(mem(), ptr, len), reader.pos);
+          reader.pos += n;
+          return BigInt(n);
         },
         "[resource-drop]reader": (handle: number) => {
           readers.remove(handle);
         },
       },
+      wasi_snapshot_preview1: wasiImports(mem, log),
     };
 
     const module = wasm instanceof WebAssembly.Module ? wasm : await WebAssembly.compile(wasm);
@@ -178,6 +182,9 @@ export class WasmDataLoader {
       );
     }
     instance.exports = (await WebAssembly.instantiate(module, imports)).exports as Exports;
+    // WASI reactors (e.g. C++ loaders) set up their runtime here before any other call
+    // eslint-disable-next-line no-underscore-dangle -- the export name WASI defines
+    (instance.exports._initialize as Fn | undefined)?.();
     return new WasmDataLoader(instance.exports, reps, [...files.keys()]);
   }
 

@@ -42,11 +42,7 @@ export class WasmDataLoaderIterableSource implements ISerializedIterableSource {
   public async initialize(): Promise<Initialization> {
     this.#loader = await WasmDataLoader.create(this.#wasm, this.#files, log);
     const init = this.#loader.initialize();
-    const alerts: Initialization["alerts"] = init.problems.map(({ severity, message, tip }) => ({
-      severity,
-      message,
-      tip,
-    }));
+    const alerts: Initialization["alerts"] = [...init.problems];
 
     const schemas = new Map(init.schemas.map((schema) => [schema.id, schema]));
     const topics = new Map<string, TopicWithDecodingInfo>();

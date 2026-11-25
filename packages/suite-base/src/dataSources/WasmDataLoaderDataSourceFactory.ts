@@ -5,22 +5,23 @@ import { LocalFileDataSourceFactory } from "@lichtblick/suite-base/dataSources/L
 import { InstalledDataLoader } from "@lichtblick/suite-base/types/Extensions";
 
 /** Opens files of the type an extension's data loader registered for. */
-export class WasmDataLoaderDataSourceFactory extends LocalFileDataSourceFactory {
-  public constructor({ extensionName, args }: InstalledDataLoader) {
-    super({
-      id: `data-loader:${extensionName}:${args.supportedFileType}`,
-      displayName: `${args.supportedFileType} (${extensionName})`,
-      supportedFileTypes: [args.supportedFileType],
-      initWorker: () =>
-        new Worker(
-          new URL(
-            "@lichtblick/suite-base/players/IterablePlayer/dataLoader/WasmDataLoaderWorker.worker",
-            import.meta.url,
-          ),
+export function createWasmDataLoaderSource({
+  extensionName,
+  args,
+}: InstalledDataLoader): LocalFileDataSourceFactory {
+  return new LocalFileDataSourceFactory({
+    id: `data-loader:${extensionName}:${args.supportedFileType}`,
+    displayName: `${args.supportedFileType} (${extensionName})`,
+    supportedFileTypes: [args.supportedFileType],
+    initWorker: () =>
+      new Worker(
+        new URL(
+          "@lichtblick/suite-base/players/IterablePlayer/dataLoader/WasmDataLoaderWorker.worker",
+          import.meta.url,
         ),
-      serialized: true,
-      multiFile: args.supportsMultiFile === true,
-      wasmUrl: args.wasmUrl,
-    });
-  }
+      ),
+    serialized: true,
+    multiFile: args.supportsMultiFile === true,
+    wasmUrl: args.wasmUrl,
+  });
 }

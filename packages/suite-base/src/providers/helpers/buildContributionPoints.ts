@@ -62,8 +62,11 @@ export async function buildContributionPoints(
         ? "test"
         : "development";
 
-  // Typed as both APIs so tsc checks that Foxglove-built extensions can call every method.
-  const ctx: ExtensionContext & Foxglove.ExtensionContext = {
+  // Typed as both APIs so tsc checks that Foxglove-built extensions can call every method,
+  // including the experimental data loader registration.
+  const ctx: ExtensionContext &
+    Foxglove.ExtensionContext &
+    Pick<Foxglove.Experimental.ExtensionContext, "registerDataLoader"> = {
     mode: extensionMode,
 
     registerPanel: (
