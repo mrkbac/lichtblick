@@ -11,7 +11,6 @@ import * as _ from "lodash-es";
 import { MutexLocked } from "@lichtblick/den/async";
 import type { IWritable } from "@lichtblick/mcap-core";
 import { Immutable, Metadata, MessageEvent, ParameterValue } from "@lichtblick/suite";
-import { Asset } from "@lichtblick/suite-base/components/PanelExtensionAdapter";
 import { GlobalVariables } from "@lichtblick/suite-base/hooks/useGlobalVariables";
 import {
   AdvertiseOptions,
@@ -63,8 +62,12 @@ export class TopicAliasingPlayer implements Player {
   // mutex prevents invoking the listener concurrently.
   #listener?: MutexLocked<(state: PlayerState) => Promise<void>>;
 
+  /** Absent when the wrapped player has none, so callers fall back to their own lookup. */
+  public readonly fetchAsset?: Player["fetchAsset"];
+
   public constructor(player: Player) {
     this.#player = player;
+    this.fetchAsset = player.fetchAsset?.bind(player);
     this.#skipAliasing = true;
     this.#inputs = {
       aliasFunctions: [],
@@ -176,13 +179,6 @@ export class TopicAliasingPlayer implements Player {
 
     this.#inputs = { ...this.#inputs, variables: globalVariables };
     this.#reprocessLastState();
-  }
-
-  public async fetchAsset(uri: string): Promise<Asset> {
-    if (this.#player.fetchAsset) {
-      return await this.#player.fetchAsset(uri);
-    }
-    throw Error("Player does not support fetching assets");
   }
 
   async #onPlayerState(playerState: PlayerState) {

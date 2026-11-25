@@ -25,7 +25,6 @@ import { filterMap, VecQueue } from "@lichtblick/den/collection";
 import Log from "@lichtblick/log";
 import type { IWritable } from "@lichtblick/mcap-core";
 import { Immutable, Metadata, ParameterValue } from "@lichtblick/suite";
-import { Asset } from "@lichtblick/suite-base/components/PanelExtensionAdapter";
 import { GlobalVariables } from "@lichtblick/suite-base/hooks/useGlobalVariables";
 import {
   GetBackfillMessagesArgs,
@@ -370,8 +369,12 @@ export default class UserScriptPlayer implements Player {
     });
   };
 
+  /** Absent when the wrapped player has none, so callers fall back to their own lookup. */
+  public readonly fetchAsset?: Player["fetchAsset"];
+
   public constructor(player: Player, userScriptActions: UserScriptActions) {
     this.#player = player;
+    this.fetchAsset = player.fetchAsset?.bind(player);
     this.#userScriptActions = userScriptActions;
     const { setUserScriptDiagnostics, addUserScriptLogs } = userScriptActions;
 
@@ -1803,13 +1806,6 @@ export default class UserScriptPlayer implements Player {
 
   public async callService(service: string, request: unknown): Promise<unknown> {
     return await this.#player.callService(service, request);
-  }
-
-  public async fetchAsset(uri: string): Promise<Asset> {
-    if (this.#player.fetchAsset) {
-      return await this.#player.fetchAsset(uri);
-    }
-    throw Error("Player does not support fetching assets");
   }
 
   public startPlayback(): void {
