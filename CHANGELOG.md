@@ -4,6 +4,9 @@ Highlights from Digitalis, a fork of Lichtblick. Dates follow when changes reach
 
 ## 2026-11-24
 
+- Hosted catalogs can include GPS tracks. Search the catalog map by area and highlight a recording’s route before opening it. [#562](https://github.com/mrkbac/lichtblick/pull/562)
+- Hosted catalogs can include camera preview clips. Watch a thumbnail in the list or grid, then scrub any available camera clip in the recording details. On the HTTPS site, preview frames on non-loopback HTTP servers are still blocked. [#562](https://github.com/mrkbac/lichtblick/pull/562)
+- The Digitalis Chrome proxy extension lets the HTTPS viewer open catalogs, thumbnails, layouts, and remote MCAP or ROS bag files from plain HTTP servers. The server must allow cross-origin reads. [#560](https://github.com/mrkbac/lichtblick/pull/560)
 - Navigate the 3D view with a trackpad. Pan with two fingers, orbit with Alt/Option and two fingers, and pinch to zoom. [#551](https://github.com/mrkbac/lichtblick/pull/551)
 - Hover over the playback timeline to preview compressed video. The thumbnail shows the nearest keyframe at or before the hovered time. [#536](https://github.com/mrkbac/lichtblick/pull/536)
 - Switch the Topics sidebar to a collapsible namespace tree. Searching expands matching branches and shows the matching topics in context. [#537](https://github.com/mrkbac/lichtblick/pull/537)
