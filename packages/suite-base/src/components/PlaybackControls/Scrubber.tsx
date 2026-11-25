@@ -13,7 +13,7 @@ import {
   Time,
 } from "@foxglove/rostime";
 import { Fade, PopperProps, Tooltip } from "@mui/material";
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { makeStyles } from "tss-react/mui";
 
 import { useLatest } from "@lichtblick/hooks";
@@ -92,6 +92,7 @@ export default function Scrubber(props: Props): React.JSX.Element {
   const ranges = useMessagePipeline(selectRanges);
 
   const setHoverValue = useSetHoverValue();
+  const sliderRef = useRef<HTMLDivElement>(null);
 
   type HoverInfo = {
     stamp: Time;
@@ -239,7 +240,14 @@ export default function Scrubber(props: Props): React.JSX.Element {
         <Stack position="absolute" flex="auto" fullWidth style={{ height: 6 }}>
           <ProgressPlot loading={loading} availableRanges={ranges} />
         </Stack>
-        <Stack fullHeight fullWidth position="absolute" flex={1} data-testid="playback-slider">
+        <Stack
+          ref={sliderRef}
+          fullHeight
+          fullWidth
+          position="absolute"
+          flex={1}
+          data-testid="playback-slider"
+        >
           <Slider
             disabled={min == undefined || max == undefined}
             fraction={fraction}
@@ -251,7 +259,7 @@ export default function Scrubber(props: Props): React.JSX.Element {
         </Stack>
         <PanelTimeRangeOverlay duration={duration} />
         <CompareTimelineOverlay />
-        <TrimRangeOverlay />
+        <TrimRangeOverlay sliderRef={sliderRef} onSeek={onChange} />
         <EventsOverlay />
         <PlaybackBarHoverTicks componentId={hoverComponentId} />
       </Stack>

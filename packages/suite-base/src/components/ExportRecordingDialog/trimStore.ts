@@ -55,6 +55,28 @@ export const useTrimStore = create<TrimState>()((set) => ({
   },
 }));
 
+/**
+ * Moves `start`..`end` by `delta` without changing its length, kept inside `lo`..`hi`.
+ * A range longer than `lo`..`hi` stays pinned to `lo`.
+ */
+export function shiftRange(
+  start: bigint,
+  end: bigint,
+  delta: bigint,
+  lo: bigint,
+  hi: bigint,
+): [bigint, bigint] {
+  const length = end - start;
+  let next = start + delta;
+  if (next + length > hi) {
+    next = hi - length;
+  }
+  if (next < lo) {
+    next = lo;
+  }
+  return [next, next + length];
+}
+
 /** Clamps `ns` into the cut, if one is set. */
 export function clampToCut(ns: bigint, { start, end }: Pick<TrimState, "start" | "end">): bigint {
   if (start != undefined && ns < start) {
