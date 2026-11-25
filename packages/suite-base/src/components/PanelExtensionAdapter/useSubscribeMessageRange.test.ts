@@ -128,7 +128,8 @@ describe("useSubscribeMessageRange", () => {
     // Then
     expect(mockGetBatchIterator).toHaveBeenCalledWith(topic, { start: undefined, end: undefined });
     expect(onNewRangeIterator).toHaveBeenCalledWith(mockIterable);
-    expect(cancel).toBe(mockCancel);
+    cancel();
+    expect(mockCancel).toHaveBeenCalledTimes(1);
     expect(mockCreateMessageRangeIterator).toHaveBeenCalledWith(
       expect.objectContaining({
         topic,
@@ -136,5 +137,30 @@ describe("useSubscribeMessageRange", () => {
         sortedTopics: [],
       }),
     );
+  });
+  it("cancels subscriptions still open when it unmounts", () => {
+    // An extension that never calls cancel() must not keep reading after its panel is gone
+    const cancel = vi.fn();
+    mockCreateMessageRangeIterator.mockReturnValue({
+      iterable: { [Symbol.asyncIterator]: vi.fn() },
+      cancel,
+    });
+    mockUseMessagePipelineGetter.mockReturnValue(
+      vi.fn().mockReturnValue({
+        sortedTopics: [],
+        getBatchIterator: vi.fn().mockReturnValue({ [Symbol.asyncIterator]: vi.fn() }),
+      }),
+    );
+    const { result, unmount } = renderHook(() => useSubscribeMessageRange());
+    const onNewRangeIterator = vi.fn().mockResolvedValue(undefined);
+    act(() => {
+      result.current({ topic: "/a", onNewRangeIterator });
+      result.current({ topic: "/b", onNewRangeIterator })();
+    });
+    expect(cancel).toHaveBeenCalledTimes(1);
+
+    unmount();
+
+    expect(cancel).toHaveBeenCalledTimes(2);
   });
 });

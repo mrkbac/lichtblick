@@ -1772,6 +1772,42 @@ describe("IterablePlayer", () => {
       expect(iterator).toBeUndefined();
     });
 
+    it("stops range reads when the player closes", async () => {
+      // Panels re-subscribe to the new data source; the old one's reads must not keep going
+      const source = new TestSource();
+      const signals: AbortSignal[] = [];
+      source.messageIterator = async function* (args: MessageIteratorArgs) {
+        if (args.consumptionType !== "full") {
+          return;
+        }
+        signals.push(args.abort!);
+        yield {
+          type: "message-event",
+          msgEvent: messageEvent({
+            topic: "test_topic",
+            receiveTime: { sec: 1, nsec: 0 },
+            message: {},
+            sizeInBytes: 1,
+            schemaName: "",
+          }),
+        };
+        await new Promise(() => {});
+      };
+      const player = new IterablePlayer({ source, enablePreload: false, sourceId: "test" });
+      const store = new PlayerStateStore(4);
+      player.setListener(async (state) => {
+        await store.add(state);
+      });
+      await store.done;
+      const iterator = player.getBatchIterator("test_topic")!;
+      await iterator.next();
+      expect(signals.map((signal) => signal.aborted)).toEqual([false]);
+
+      player.close();
+
+      expect(signals.map((signal) => signal.aborted)).toEqual([true]);
+    });
+
     it("should create correct topic selection and call messageIterator", async () => {
       const source = new TestSource();
 

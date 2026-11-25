@@ -469,6 +469,45 @@ describe("McapIndexedIterableSource", () => {
     ]);
     expect(skim.bytesRead).toBeLessThan(full.bytesRead / 3);
   });
+  it("reads nothing for a range that ends before it starts", async () => {
+    const tempBuffer = new TempBuffer();
+    const writer = new McapWriter({ writable: tempBuffer, startChannelId: 1 });
+    await writer.start({ library: "", profile: "" });
+    await writer.registerChannel({
+      messageEncoding: "json",
+      schemaId: 0,
+      metadata: new Map(),
+      topic: "a",
+    });
+    for (const logTime of [1_000_000_000n, 2_000_000_000n, 3_000_000_000n]) {
+      await writer.addMessage({
+        channelId: 1,
+        data: new Uint8Array(1),
+        logTime,
+        publishTime: logTime,
+        sequence: 0,
+      });
+    }
+    await writer.end();
+    const reader = await McapIndexedReader.Initialize({
+      readable: new BlobReadable(new Blob([tempBuffer.get().slice()])),
+      decompressHandlers: await loadDecompressHandlers(),
+    });
+    const source = new McapIndexedIterableSource(reader);
+    await source.initialize();
+
+    const results = [];
+    for await (const result of source.messageIterator({
+      topics: new Map([["a", { topic: "a" }]]),
+      start: { sec: 3, nsec: 0 },
+      end: { sec: 1, nsec: 0 },
+    })) {
+      results.push(result);
+    }
+
+    expect(results).toEqual([]);
+  });
+
   it("prefetches each topic's latest chunk before reading backfill", async () => {
     const tempBuffer = new TempBuffer();
     const writer = new McapWriter({ writable: tempBuffer, startChannelId: 1, chunkSize: 500 });

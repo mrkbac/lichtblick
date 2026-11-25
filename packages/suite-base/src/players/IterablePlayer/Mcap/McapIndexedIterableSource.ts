@@ -497,7 +497,8 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
     const start = args.start ?? this.#start;
     const end = args.end ?? this.#end;
 
-    if (topics.size === 0 || !start || !end) {
+    // mcap-core throws for an inverted range; it holds no messages
+    if (topics.size === 0 || !start || !end || toNanoSec(start) > toNanoSec(end)) {
       return;
     }
 

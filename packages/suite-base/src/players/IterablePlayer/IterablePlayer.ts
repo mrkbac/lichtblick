@@ -259,7 +259,13 @@ export class IterablePlayer implements Player {
   readonly #unbufferedSource: IDeserializedIterableSource;
   /** Range reads (getBatchIterator) that start together share one pass over the recording */
   readonly #rangeReads = new SharedRangeReads((topics, range, abort) =>
-    this.#unbufferedSource.messageIterator({ topics, consumptionType: "full", ...range, abort }),
+    this.#unbufferedSource.messageIterator({
+      topics,
+      consumptionType: "full",
+      ...range,
+      // Closing the player (e.g. switching data sources) stops reads nobody cancelled
+      abort: AbortSignal.any([abort, this.#closeAbort.signal]),
+    }),
   );
   // #unbufferedSource once initialized
   #messageRangeSource?: IDeserializedIterableSource;
