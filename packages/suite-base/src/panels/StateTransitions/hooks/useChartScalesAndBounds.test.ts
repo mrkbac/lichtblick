@@ -3,7 +3,7 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import { renderHook } from "@testing-library/react";
+import { act, renderHook } from "@testing-library/react";
 
 import { DEFAULT_X_END_TIME } from "@lichtblick/suite-base/panels/StateTransitions/hooks/constants";
 import { StateTransitionConfig } from "@lichtblick/suite-base/panels/StateTransitions/types";
@@ -123,5 +123,72 @@ describe("useChartScalesAndBounds", () => {
     );
     expect(result.current.width).toBeUndefined();
     expect(result.current.sizeRef).toBeDefined();
+  });
+  describe("wheel over the chart", () => {
+    beforeEach(() => {
+      // Size tracking is irrelevant here; the jsdom stub fires during the effect and trips React.
+      vi.stubGlobal(
+        "ResizeObserver",
+        class {
+          public observe(): void {}
+          public disconnect(): void {}
+        },
+      );
+    });
+    afterEach(() => {
+      vi.unstubAllGlobals();
+    });
+
+    function setup() {
+      const scroller = document.createElement("div");
+      const wrapper = document.createElement("div");
+      scroller.appendChild(wrapper);
+      document.body.appendChild(scroller);
+      const { result, unmount } = renderHook(() =>
+        useChartScalesAndBounds(undefined, undefined, undefined, config),
+      );
+      act(() => {
+        result.current.sizeRef(wrapper);
+      });
+      // React listens at the root, so a listener above the wrapper stands in for the chart's zoom.
+      const zoom = vi.fn();
+      scroller.addEventListener("wheel", zoom);
+      const wheel = (init: WheelEventInit) => {
+        const event = new WheelEvent("wheel", { bubbles: true, cancelable: true, ...init });
+        wrapper.dispatchEvent(event);
+        return event;
+      };
+      return { scroller, zoom, wheel, unmount };
+    }
+
+    it("zooms on a plain wheel and never scrolls natively", () => {
+      const { scroller, zoom, wheel, unmount } = setup();
+      const event = wheel({ deltaY: 100 });
+      expect(event.defaultPrevented).toBe(true);
+      expect(zoom).toHaveBeenCalledTimes(1);
+      expect(scroller.scrollTop).toBe(0);
+      unmount();
+    });
+
+    it.each([
+      { name: "deltaY", init: { deltaY: 100 }, expected: 100 },
+      {
+        name: "deltaX (macOS reports Shift+wheel as horizontal)",
+        init: { deltaX: 50 },
+        expected: 50,
+      },
+      {
+        name: "line mode",
+        init: { deltaY: 3, deltaMode: WheelEvent.DOM_DELTA_LINE },
+        expected: 48,
+      },
+    ])("scrolls the panel instead of zooming on Shift+wheel ($name)", ({ init, expected }) => {
+      const { scroller, zoom, wheel, unmount } = setup();
+      const event = wheel({ shiftKey: true, ...init });
+      expect(event.defaultPrevented).toBe(true);
+      expect(zoom).not.toHaveBeenCalled();
+      expect(scroller.scrollTop).toBe(expected);
+      unmount();
+    });
   });
 });

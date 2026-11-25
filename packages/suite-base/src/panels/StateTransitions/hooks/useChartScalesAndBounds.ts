@@ -98,22 +98,24 @@ const useChartScalesAndBounds = (
 
   const { width, ref: sizeRef, element: sizeElement } = useElementSize<HTMLDivElement>();
 
-  // Disable the wheel event for the chart wrapper div (which is where we use sizeRef)
-  //
-  // The chart component uses wheel events for zoom and pan. After adding more series, the logic
-  // expands the chart element beyond the visible area of the panel. When this happens, scrolling on
-  // the chart also scrolls the chart wrapper div and results in zooming that chart AND scrolling
-  // the panel. This behavior is undesirable.
-  //
-  // This effect registers a wheel event handler for the wrapper div to prevent scrolling. To scroll
-  // the panel the user will use the scrollbar.
+  // A plain wheel zooms the chart, so native scrolling of the chart wrapper (sizeRef) is always
+  // blocked; it would otherwise zoom AND scroll once the rows overflow the panel. Shift+wheel
+  // scrolls the panel instead (macOS reports it as deltaX, Firefox may report lines).
   useEffect(() => {
     const el = sizeElement;
     const handler = (ev: WheelEvent) => {
       ev.preventDefault();
+      const scroller = el?.parentElement;
+      if (!ev.shiftKey || !scroller) {
+        return;
+      }
+      // Runs before React's root listener, so the chart's onWheel doesn't zoom.
+      ev.stopPropagation();
+      const delta = ev.deltaY !== 0 ? ev.deltaY : ev.deltaX;
+      scroller.scrollTop += ev.deltaMode === WheelEvent.DOM_DELTA_LINE ? delta * 16 : delta;
     };
 
-    el?.addEventListener("wheel", handler);
+    el?.addEventListener("wheel", handler, { passive: false });
     return () => {
       el?.removeEventListener("wheel", handler);
     };

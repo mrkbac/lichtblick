@@ -716,7 +716,9 @@ export default function TimeBasedChart(props: Props): React.JSX.Element {
         slotProps={{ transition: { timeout: 0 } }}
       >
         <Stack direction="row" style={{ width }}>
-          <div className={classes.root} onDoubleClick={onResetZoom}>
+          {/* minHeight: the playback and hover bars span the whole chart when it's taller than the
+              panel and scrolls (State Transitions with many rows) */}
+          <div className={classes.root} style={{ minHeight: height }} onDoubleClick={onResetZoom}>
             <HoverBar componentId={componentId} isPlaybackSeconds scales={currentScalesRef.current}>
               <div
                 className={classes.bar}
