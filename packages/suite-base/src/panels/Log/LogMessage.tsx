@@ -14,6 +14,7 @@
 //   found at http://www.apache.org/licenses/LICENSE-2.0
 //   You may not use this file except in compliance with the License.
 
+import { alpha } from "@mui/material";
 import React from "react";
 import { makeStyles } from "tss-react/mui";
 
@@ -60,6 +61,13 @@ const useStyles = makeStyles()((theme) => ({
   future: {
     opacity: 0.5,
   },
+  // Matches the hover bar color of Plot and the timelines; shown at full strength even after the
+  // playhead (declared after `future` so it wins)
+  hovered: {
+    backgroundColor: alpha(theme.palette.warning.main, 0.2),
+    borderLeftColor: theme.palette.warning.main,
+    opacity: 1,
+  },
   copyButton: {
     visibility: "hidden",
     position: "absolute",
@@ -87,10 +95,23 @@ export default React.memo(function LogMessage(props: {
   current?: boolean;
   /** Row after the playhead */
   future?: boolean;
+  /** Row nearest the time hovered in another panel or timeline */
+  hovered?: boolean;
+  onHover?: (value: NormalizedLogMessage) => void;
   onClick?: (value: NormalizedLogMessage) => void;
   onCopy?: (value: NormalizedLogMessage) => void;
 }) {
-  const { value: msg, timestampFormat, timeZone, current, future, onClick, onCopy } = props;
+  const {
+    value: msg,
+    timestampFormat,
+    timeZone,
+    current,
+    future,
+    hovered,
+    onHover,
+    onClick,
+    onCopy,
+  } = props;
 
   const { classes, cx } = useStyles();
   const { classes: logClasses } = useLogStyles();
@@ -114,7 +135,15 @@ export default React.memo(function LogMessage(props: {
         [classes.seekable]: onClick != undefined,
         [classes.current]: current === true,
         [classes.future]: future === true,
+        [classes.hovered]: hovered === true,
       })}
+      onMouseEnter={
+        onHover
+          ? () => {
+              onHover(msg);
+            }
+          : undefined
+      }
       onClick={
         onClick
           ? () => {

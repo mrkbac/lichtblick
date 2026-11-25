@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MPL-2.0
 
-import { compare } from "@foxglove/rostime";
+import { compare, subtract, toSec } from "@foxglove/rostime";
 
 import { Time } from "@lichtblick/suite";
 
@@ -32,6 +32,20 @@ export function searchByTime(
 /** Index of the last item at or before `time`, -1 if none. */
 export function lastIndexAtOrBefore(items: readonly NormalizedLogMessage[], time: Time): number {
   return searchByTime(items, time) - 1;
+}
+
+/** Index of the item closest in time to `time` (the earlier one on a tie), -1 if empty. */
+export function nearestIndex(items: readonly NormalizedLogMessage[], time: Time): number {
+  const after = searchByTime(items, time, { inclusive: true });
+  if (after === 0) {
+    return items.length === 0 ? -1 : 0;
+  }
+  if (after === items.length) {
+    return after - 1;
+  }
+  const gapAfter = toSec(subtract(items[after]!.receiveTime, time));
+  const gapBefore = toSec(subtract(time, items[after - 1]!.receiveTime));
+  return gapAfter < gapBefore ? after : after - 1;
 }
 
 /**

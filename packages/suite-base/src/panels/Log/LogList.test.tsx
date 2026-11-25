@@ -8,12 +8,19 @@ import { createRef } from "react";
 import type { Mock } from "vitest";
 import "@testing-library/jest-dom/vitest";
 
+import MockMessagePipelineProvider from "@lichtblick/suite-base/components/MessagePipeline/MockMessagePipelineProvider";
 import MockPanelContextProvider from "@lichtblick/suite-base/components/MockPanelContextProvider";
+import {
+  TimelineInteractionStateStore,
+  useTimelineInteractionState,
+} from "@lichtblick/suite-base/context/TimelineInteractionStateContext";
 import { useAppTimeFormat } from "@lichtblick/suite-base/hooks";
 import { NormalizedLogMessage } from "@lichtblick/suite-base/panels/Log/types";
+import TimelineInteractionStateProvider from "@lichtblick/suite-base/providers/TimelineInteractionStateProvider";
 import ThemeProvider from "@lichtblick/suite-base/theme/ThemeProvider";
 
 import LogList, { LogListApi, LogListProps } from "./LogList";
+import { PlayheadLogList } from "./index";
 
 function createMockLogMessage(
   index: number,
@@ -324,5 +331,67 @@ describe("LogList Component", () => {
 
     // Then the rows are not all walked again
     expect(reads).toBeLessThan(200);
+  });
+
+  describe("shared hover time", () => {
+    let store: TimelineInteractionStateStore | undefined;
+    function StoreSpy() {
+      store = useTimelineInteractionState((state) => state);
+      return <></>;
+    }
+
+    function setupHover() {
+      // Rows at 2000..2004 s, data source starts at 2000 s
+      const items = [0, 1, 2, 3, 4].map((i) => createMockLogMessage(i, 2));
+      render(
+        <ThemeProvider isDark>
+          <MockMessagePipelineProvider startTime={{ sec: 2000, nsec: 0 }}>
+            <TimelineInteractionStateProvider>
+              <MockPanelContextProvider>
+                <StoreSpy />
+                <PlayheadLogList items={items} />
+              </MockPanelContextProvider>
+            </TimelineInteractionStateProvider>
+          </MockMessagePipelineProvider>
+        </ThemeProvider>,
+      );
+      return screen.getAllByRole("listitem");
+    }
+
+    const hoveredRows = () =>
+      screen
+        .getAllByRole("listitem")
+        .filter((row) => (row.firstChild as HTMLElement).className.includes("hovered"))
+        .map((row) => row.getAttribute("aria-posinset"));
+
+    it("publishes the hovered row's time and clears it on leave", () => {
+      const rows = setupHover();
+      fireEvent.mouseEnter(rows[3]!.firstChild as HTMLElement);
+      expect(store?.hoverValue).toMatchObject({ type: "PLAYBACK_SECONDS", value: 3 });
+      // Its own hover doesn't mark rows, the pointer already shows which one
+      expect(hoveredRows()).toEqual([]);
+
+      fireEvent.mouseLeave(screen.getByTestId("virtualized-list"));
+      expect(store?.hoverValue).toBeUndefined();
+    });
+
+    it("marks the row nearest a time hovered elsewhere, without scrolling", () => {
+      setupHover();
+      const scrollable = screen.getByTestId("scrollable-list");
+      const scrollTop = scrollable.scrollTop;
+
+      act(() => {
+        store!.setHoverValue({ componentId: "plot", type: "PLAYBACK_SECONDS", value: 1.6 });
+      });
+      expect(hoveredRows()).toEqual(["3"]);
+      expect(scrollable.scrollTop).toBe(scrollTop);
+      expect(screen.queryByTestId("scroll-to-bottom-button")).not.toBeInTheDocument();
+
+      // Non-time axes (e.g. a Plot over a message index) don't map to rows
+      act(() => {
+        store!.setHoverValue({ componentId: "plot", type: "OTHER", value: 1 });
+      });
+      expect(hoveredRows()).toEqual([]);
+    });
   });
 });
