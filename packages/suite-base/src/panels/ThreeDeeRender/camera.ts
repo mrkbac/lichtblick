@@ -72,3 +72,22 @@ export function isTrackpadScroll(
   const { wheelDeltaY } = event as typeof event & { wheelDeltaY?: number };
   return wheelDeltaY != undefined && event.deltaY !== 0 && wheelDeltaY === -3 * event.deltaY;
 }
+
+/** Wheel events further apart than this start a new gesture. */
+const TRACKPAD_GESTURE_GAP_MS = 200;
+
+/**
+ * Returns a per-element detector for trackpad pan gestures (see `isTrackpadScroll`). A gesture
+ * stays a trackpad gesture while its events keep coming, so momentum and pure-vertical scrolls
+ * don't flip to zoom mid-swipe. Pinch (Ctrl+wheel) is never a pan.
+ */
+export function makeTrackpadScrollDetector(): (event: WheelEvent) => boolean {
+  let gestureUntil = 0;
+  return (event) => {
+    if (event.ctrlKey || !(event.timeStamp < gestureUntil || isTrackpadScroll(event))) {
+      return false;
+    }
+    gestureUntil = event.timeStamp + TRACKPAD_GESTURE_GAP_MS;
+    return true;
+  };
+}

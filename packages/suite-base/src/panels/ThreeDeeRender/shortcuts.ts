@@ -110,8 +110,18 @@ export const THREE_DEE_SHORTCUTS = [
 
 /** Display only: pan and zoom are handled by ImageMode, the menu by PanelContextMenu. */
 export const IMAGE_SHORTCUTS = [
-  { id: "image.pan", titleKey: "imagePan", keys: [], mouse: [{ action: "drag" }] },
-  { id: "image.zoom", titleKey: "imageZoom", keys: [], mouse: [{ action: "scroll" }] },
+  {
+    id: "image.pan",
+    titleKey: "imagePan",
+    keys: [],
+    mouse: [{ action: "drag" }, { action: "two-finger-scroll" }],
+  },
+  {
+    id: "image.zoom",
+    titleKey: "imageZoom",
+    keys: [],
+    mouse: [{ action: "scroll" }, { action: "pinch" }],
+  },
   {
     id: "image.menu",
     titleKey: "imageMenu",
