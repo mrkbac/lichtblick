@@ -8,7 +8,8 @@ import { STATE_TRANSITIONS_BUTTONS } from "./buttons";
 import { buildSettingsTree, defaultConfig } from "./settings";
 
 const docs: PanelDocs = {
-  intro: "Shows how discrete values, like states or modes, change over time as colored bars.",
+  intro:
+    "Shows how discrete values, like states or modes, change over time, as colored bars or as a step line with one lane per state.",
   buttons: [...Object.values(STATE_TRANSITIONS_BUTTONS), ...Object.values(DELTA_OVERLAY_BUTTONS)],
   settings: () =>
     buildSettingsTree(defaultConfig, [], sharedI18nObject.getFixedT(null, "stateTransitions")),

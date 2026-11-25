@@ -62,6 +62,37 @@ describe("Downsampler", () => {
     }
   });
 
+  it("keeps a dense stretch of a step row on the lane before it", () => {
+    // A step row: each state on its own y. The stretch merges states on several lanes.
+    const laneY = (state: number) => -10 + state * 2;
+    const data = [
+      { x: 0, y: laneY(3), label: "3", value: 3 },
+      { x: 5, y: laneY(2), label: "2", value: 2 },
+      ...Array.from({ length: 50 }, (_, i) => ({
+        x: 10 + i * 0.001,
+        y: laneY(i % 2),
+        label: String(i % 2),
+        value: i % 2,
+      })),
+      { x: 20, y: laneY(2), label: "2", value: 2 },
+    ];
+    const downsampler = new Downsampler();
+    downsampler.update({
+      datasets: [{ data }],
+      datasetBounds: {
+        width: 100,
+        height: 100,
+        bounds: { x: { min: 0, max: 20 }, y: { min: -12, max: 0 } },
+      },
+      scales: {
+        x: { min: 0, max: 20, pixelMin: 0, pixelMax: 100 },
+        y: { min: -12, max: 0, pixelMin: 100, pixelMax: 0 },
+      },
+    });
+    const merged = downsampler.downsample()![0]!.data.find((datum) => datum?.label === "[...]");
+    expect(merged?.y).toBe(laneY(2));
+  });
+
   it("draws dense stretches on the row even when the row starts with a gap", () => {
     const data = [
       { x: 0, y: Number.NaN },

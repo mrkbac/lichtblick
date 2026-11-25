@@ -4,6 +4,7 @@ import { buttonClasses } from "@mui/material";
 import { makeStyles } from "tss-react/mui";
 
 import { parseColor } from "@lichtblick/suite-base/util/parseColor";
+import { fontMonospace } from "@lichtblick/theme";
 
 export default makeStyles()((theme) => ({
   chartOverlay: {
@@ -15,8 +16,24 @@ export default makeStyles()((theme) => ({
     pointerEvents: "none",
   },
   row: {
+    position: "relative",
     paddingInline: theme.spacing(1, 0.5),
     pointerEvents: "none",
+  },
+  laneLabel: {
+    position: "absolute",
+    right: theme.spacing(1),
+    transform: "translateY(-50%)",
+    fontFamily: fontMonospace,
+    fontSize: 10,
+    lineHeight: 1,
+    paddingInline: 2,
+    borderRadius: 2,
+    backgroundColor: parseColor(theme.palette.background.paper).alpha(0.67).toRgbString(),
+    whiteSpace: "nowrap",
+    maxWidth: "30%",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
   },
   dragging: {
     opacity: 0.5,

@@ -81,6 +81,16 @@ export const makeSeriesNode = (
           ? { error: t("conditionErrorMessage") }
           : {}),
       },
+      display: {
+        input: "toggle",
+        label: t("labels.display"),
+        help: t("labels.displayHelp"),
+        options: [
+          { label: t("labels.displayBar"), value: "bar" },
+          { label: t("labels.displayStep"), value: "step" },
+        ],
+        value: path.display ?? "bar",
+      },
       label: {
         input: "string",
         label: t("labels.label"),

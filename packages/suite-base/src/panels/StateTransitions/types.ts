@@ -9,6 +9,7 @@ import { Time } from "@foxglove/rostime";
 
 import { SettingsTreeNodeActionItem } from "@lichtblick/suite";
 import { PathSampleColumns } from "@lichtblick/suite-base/components/MessagePathSyntax/PathSampleColumns";
+import type { StateTransitionRow } from "@lichtblick/suite-base/panels/StateTransitions/hooks/types";
 import { SaveConfig } from "@lichtblick/suite-base/types/panels";
 import { TimestampMethod } from "@lichtblick/suite-base/util/time";
 
@@ -20,6 +21,8 @@ export type StateTransitionPath = {
   label?: string;
   enabled?: boolean;
   timestampMethod: TimestampMethod;
+  /** "step" draws each state on its own lane, joined at each change. Default "bar". */
+  display?: "bar" | "step";
 };
 
 export type StateTransitionConfig = {
@@ -39,7 +42,8 @@ export type StateTransitionPanelProps = {
 
 export type PathLegendProps = {
   paths: StateTransitionPath[];
-  heightPerTopic: number;
+  /** One per path, from useStateTransitionsData. */
+  rows: readonly StateTransitionRow[];
   setFocusedPath: (value: string[] | undefined) => void;
   saveConfig: SaveConfig<StateTransitionConfig>;
 };
