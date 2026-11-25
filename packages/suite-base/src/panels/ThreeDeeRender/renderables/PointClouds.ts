@@ -1717,6 +1717,7 @@ function pointFieldWidth(type: PointFieldType): number {
       return 1;
     case PointFieldType.INT16:
     case PointFieldType.UINT16:
+    case PointFieldType.FLOAT16:
       return 2;
     case PointFieldType.INT32:
     case PointFieldType.UINT32:

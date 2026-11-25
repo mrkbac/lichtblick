@@ -141,8 +141,8 @@ importers:
         specifier: 1.1.3
         version: 1.1.3
       '@foxglove/schemas':
-        specifier: 2.3.1
-        version: 2.3.1
+        specifier: 2.4.0
+        version: 2.4.0
       '@lichtblick/den':
         specifier: workspace:*
         version: link:../packages/den
@@ -273,8 +273,8 @@ importers:
         specifier: 3.1.2
         version: 3.1.2
       '@foxglove/schemas':
-        specifier: 2.3.1
-        version: 2.3.1
+        specifier: 2.4.0
+        version: 2.4.0
       '@foxglove/wasm-bz2':
         specifier: 0.3.0
         version: 0.3.0
@@ -405,8 +405,8 @@ importers:
         specifier: 1.1.3
         version: 1.1.3
       '@foxglove/schemas':
-        specifier: 2.3.1
-        version: 2.3.1
+        specifier: 2.4.0
+        version: 2.4.0
       '@foxglove/three-text':
         specifier: 0.6.1
         version: 0.6.1(three@0.187.0)
@@ -1949,6 +1949,9 @@ packages:
 
   '@foxglove/schemas@2.3.1':
     resolution: {integrity: sha512-od+YARzRjPz79KjOO7BOq0tkyBO8ylzOJXr+xkSnudoSfu9gAsEgYbJLqGofdJCIQmYiSCgGnuNxxCzazFvptA==}
+
+  '@foxglove/schemas@2.4.0':
+    resolution: {integrity: sha512-c7RQ3wzPDPdqo2Z8LXzR4/NdIGwGR9KBeFOQO81bJ5foMpPgzANy1MpnuAcDWDU0UZQ2BVCFNcT/6wvW2yYtgg==}
 
   '@foxglove/three-text@0.6.1':
     resolution: {integrity: sha512-fbtxhJM2hq+2cWdZ3f+9DNfnOkR/I4Q3lK5EMn3SWnAudPlplRtarVZ98xVL7bK9cCKhBayq9NNKyIuf4SObAg==}
@@ -9045,6 +9048,12 @@ snapshots:
   '@foxglove/rostime@1.1.3': {}
 
   '@foxglove/schemas@2.3.1':
+    dependencies:
+      '@foxglove/message-definition': 0.5.0
+      '@foxglove/rosmsg-msgs-common': 3.3.0
+      tslib: 2.9.1
+
+  '@foxglove/schemas@2.4.0':
     dependencies:
       '@foxglove/message-definition': 0.5.0
       '@foxglove/rosmsg-msgs-common': 3.3.0

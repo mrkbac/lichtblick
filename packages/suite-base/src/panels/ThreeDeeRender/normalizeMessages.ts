@@ -234,6 +234,8 @@ export function numericTypeToPointFieldType(type: NumericType): PointFieldType {
       return PointFieldType.FLOAT32;
     case NumericType.FLOAT64:
       return PointFieldType.FLOAT64;
+    case NumericType.FLOAT16:
+      return PointFieldType.FLOAT16;
     default:
       return PointFieldType.UNKNOWN;
   }

@@ -102,6 +102,8 @@ export enum PointFieldType {
   UINT32 = 6,
   FLOAT32 = 7,
   FLOAT64 = 8,
+  /** Not a ROS datatype: mirrors foxglove NumericType.FLOAT16 so packed fields keep their width */
+  FLOAT16 = 9,
 }
 
 export type RosTime = Time;
