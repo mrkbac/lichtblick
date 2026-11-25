@@ -233,12 +233,15 @@ describe("nearestFix", () => {
     expect(nearestFix(store, kept, 0, [0.07, 0]).nearest).toBe(49);
   });
 
-  it("lists the runs within the radius, following a long stop past the scan cap", () => {
-    // Parked: 30k fixes on one spot, then moving away; drawn as just the first and last fix.
-    const store = storeOf(30_010, (i) => [i < 30_000 ? 0 : (i - 29_999) * 1e-3, 0]);
-    const kept = Uint32Array.of(0, 30_009);
-    expect(nearestFix(store, kept, 0, [0, 0], store.length, 1e-6).within).toEqual([[0, 29_999]]);
-    expect(nearestFix(store, kept, 0, [5, 0], store.length, 1e-6).within).toEqual([]);
+  it("lists the runs within the radius", () => {
+    const store = storeOf(100, (i) => [i < 40 ? 0 : i < 60 ? 1 : 0, 0]);
+    const kept = Uint32Array.of(0, 50, 99);
+    // A visit, a step away, and a second visit.
+    expect(nearestFix(store, kept, 1, [0, 0], store.length, 0.5).within).toEqual([
+      [1, 39],
+      [60, 98],
+    ]);
+    expect(nearestFix(store, kept, 1, [5, 0], store.length, 0.5).within).toEqual([]);
   });
 
   it("finds the fix from another copy of the world", () => {

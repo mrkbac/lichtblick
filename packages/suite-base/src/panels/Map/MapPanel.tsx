@@ -15,7 +15,6 @@ import {
   MapGeoJSONFeature,
   Map as MapLibreMap,
   MapMouseEvent,
-  MercatorCoordinate,
   NavigationControl,
   Popup,
   ScaleControl,
@@ -105,16 +104,7 @@ const log = Logger.getLogger(__filename);
 const TRACK_POINT_BUDGET = 50_000;
 
 /** `id` tells hovered things apart: the same fix or feature keeps its popup. */
-type NavHitStop = { first: NavMessage; last: NavMessage; count: number };
-
-type NavHit = {
-  kind: "nav";
-  id: unknown;
-  message: NavMessage;
-  value?: string;
-  /** The stop `message` belongs to, when the cursor is over more than one of its fixes. */
-  stop?: NavHitStop;
-};
+type NavHit = { kind: "nav"; id: unknown; message: NavMessage; value?: string };
 
 type Hit = NavHit | { kind: "geojson"; id: unknown; message: GeoJsonMessage; name?: string };
 
@@ -124,9 +114,14 @@ function eventTimeSec(event: MessageEvent): number {
   return toSec(event.receiveTime);
 }
 
-function hitContent(hit: Hit): HTMLElement {
+function popupRoot(): HTMLElement {
   const root = document.createElement("div");
   root.style.font = "12px/1.4 system-ui, sans-serif";
+  return root;
+}
+
+function hitContent(hit: Hit): HTMLElement {
+  const root = popupRoot();
   const line = (text: string, style?: { bold: boolean }) => {
     const el = document.createElement("div");
     el.textContent = text;
@@ -139,7 +134,7 @@ function hitContent(hit: Hit): HTMLElement {
     line(hit.name, { bold: true });
   }
   line(hit.message.topic, { bold: hit.kind === "nav" });
-  line(stampText(startOf(hit)));
+  line(stampText(hit.message));
   if (hit.kind === "nav") {
     const { latitude, longitude, altitude } = hit.message.message;
     line(`${latitude.toFixed(7)}, ${longitude.toFixed(7)}`);
@@ -150,9 +145,6 @@ function hitContent(hit: Hit): HTMLElement {
     if (hit.value != undefined) {
       line(hit.value, { bold: true });
     }
-    if (hit.stop) {
-      line(`here ${stopText(hit.stop)}`);
-    }
   }
   return root;
 }
@@ -160,32 +152,6 @@ function hitContent(hit: Hit): HTMLElement {
 /** Rows listed per topic, and topics listed, when several features are under the cursor. */
 const ROWS_PER_TOPIC = 3;
 const TOPICS_LISTED = 6;
-
-/**
- * The visit of fixes `first` to `last` when it is a stop (a second or more), not just dense
- * sampling while passing by.
- */
-function stopAt(store: TrackStore, first: number, last: number): NavHitStop | undefined {
-  const { time } = store.columns;
-  return time[last]! - time[first]! >= 1
-    ? { first: store.message(first), last: store.message(last), count: last - first + 1 }
-    : undefined;
-}
-
-/** "600 fixes, 9:59": how long the cursor's spot was visited. */
-function stopText({ first, last, count }: NavHitStop): string {
-  const seconds = toSec(last.receiveTime) - toSec(first.receiveTime);
-  const span =
-    seconds < 60
-      ? `${seconds.toFixed(1)} s`
-      : `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, "0")}`;
-  return `${count} fixes, ${span}`;
-}
-
-/** Where a hit is in time: a stop where it starts, so seeking there shows the whole stop. */
-function startOf(hit: Hit): MessageEvent {
-  return (hit.kind === "nav" ? hit.stop?.first : undefined) ?? hit.message;
-}
 
 function stampText(message: MessageEvent): string {
   const stamp = message.receiveTime;
@@ -200,8 +166,7 @@ function hitsContent(
   groups: readonly Hit[][],
   onPick: (message: MessageEvent) => void,
 ): HTMLElement {
-  const root = document.createElement("div");
-  root.style.font = "12px/1.4 system-ui, sans-serif";
+  const root = popupRoot();
   const add = (text: string, className?: string) => {
     const el = document.createElement("div");
     el.textContent = text;
@@ -215,20 +180,14 @@ function hitsContent(
     const count = group.length;
     add(count > 1 ? `${topic} (${count})` : topic, "hit-topic");
     for (const hit of group.slice(0, ROWS_PER_TOPIC)) {
-      const stop = hit.kind === "nav" ? hit.stop : undefined;
-      const start = startOf(hit);
       const detail =
-        hit.kind === "geojson"
-          ? (hit.name ?? "feature")
-          : stop
-            ? stopText(stop)
-            : (hit.value ?? fixLabel(hit.message));
+        hit.kind === "geojson" ? (hit.name ?? "feature") : (hit.value ?? fixLabel(hit.message));
       const row = document.createElement("button");
       row.type = "button";
       row.className = "hit-row";
-      row.textContent = `${stampText(start)} · ${detail}`;
+      row.textContent = `${stampText(hit.message)} · ${detail}`;
       row.addEventListener("click", () => {
-        onPick(start);
+        onPick(hit.message);
       });
       root.appendChild(row);
     }
@@ -1470,12 +1429,12 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
         { layers },
       );
       const sorted = _.sortBy(features, (feature) => priority.indexOf(feature.layer.id));
-      // A pixel in Web Mercator units, for the fixes a drawn track point stands for.
-      const at = MercatorCoordinate.fromLngLat(event.lngLat);
-      const edge = MercatorCoordinate.fromLngLat(map.unproject([x + 1, y]));
-      const pixel = Math.hypot(edge.x - at.x, edge.y - at.y);
+      // A pixel in degrees of latitude, for the fixes a drawn track point stands for.
+      const { lng, lat } = event.lngLat;
+      const edge = map.unproject([x + 1, y]);
+      const pixel = Math.hypot((edge.lng - lng) * Math.cos((lat * Math.PI) / 180), edge.lat - lat);
       // Drawn points of a track stand for overlapping runs of fixes: merged into passes below.
-      const stacks = new Map<DrawnTrack, { runs: [number, number][]; nearest: number[] }>();
+      const stacks = new Map<DrawnTrack, [number, number][]>();
       const hits: Hit[] = [];
       for (const feature of sorted) {
         const index: unknown = feature.properties.i;
@@ -1488,11 +1447,8 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
           const generationTracks =
             typeof generation === "number" ? trackGenerations.current.get(generation) : undefined;
           const drawn = typeof k === "number" ? generationTracks?.[k] : undefined;
-          // Another point of a stop already found it, end to end (a parked receiver): skip the scan.
-          if (
-            drawn &&
-            stacks.get(drawn)?.runs.some(([a, b]) => a <= index && index <= b) === true
-          ) {
+          // Another drawn point's scan already found this one: skip scanning again.
+          if (drawn && stacks.get(drawn)?.some(([a, b]) => a <= index && index <= b) === true) {
             continue;
           }
           const size: unknown = feature.properties.r;
@@ -1500,15 +1456,14 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
             generationTracks,
             k,
             index,
-            [event.lngLat.lng, event.lngLat.lat],
+            [lng, lat],
             // Hit where its drawn circle meets the slack box: the box's corners plus the circle.
             pixel * (6 + (typeof size === "number" ? size : 0)),
           );
           if (found) {
-            const stack = stacks.get(found.track) ?? { runs: [], nearest: [] };
-            pushAll(stack.runs, found.runs);
-            stack.nearest.push(found.fix);
-            stacks.set(found.track, stack);
+            const runs = stacks.get(found.track) ?? [];
+            pushAll(runs, found.runs);
+            stacks.set(found.track, runs);
           }
         } else {
           const hit = toHit(feature, index);
@@ -1517,12 +1472,12 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
           }
         }
       }
-      const passes = [...stacks].flatMap(([track, stack]) =>
-        fixPasses(stack.runs, stack.nearest).map((pass) => ({ track, pass })),
+      const passes = [...stacks].flatMap(([track, runs]) =>
+        fixPasses(runs).map((pass) => ({ track, pass })),
       );
       // By topic: features of one layer come in no particular order, and the list shouldn't jump.
       const trackHits = _.sortBy(
-        passes.map(({ track, pass }) => trackHit(track, pass)),
+        passes.map(({ track, pass }) => trackHit(track, pass.first)),
         (hit) => hit.message.topic,
       );
       // A current marker is the newest fix of its track: the pass holding it lists it already.
@@ -1541,24 +1496,18 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
       return groupHitsByTopic([...current.filter((hit) => !listed(hit)), ...trackHits, ...geo]);
     };
 
-    const trackHit = (
-      track: DrawnTrack,
-      { fix, first, last }: { fix: number; first: number; last: number },
-    ): NavHit => {
-      const { store, colorScale: colored } = track;
+    // A pass by where it starts: that doesn't change as the cursor moves over it.
+    const trackHit = ({ store, colorScale: colored }: DrawnTrack, fix: number): NavHit => {
       const value = colored?.values[fix];
-      const stop = stopAt(store, first, last);
       return {
         kind: "nav",
-        // The fix, not the overlay: the popup and preview time stay put across redraws. A stop by
-        // where it starts, which doesn't change as the cursor moves over it.
-        id: trackFixKey(store, stop ? first : fix),
+        // The fix, not the overlay: the popup and preview time stay put across redraws.
+        id: trackFixKey(store, fix),
         message: store.message(fix),
         value:
           colored && value != undefined && isFinite(value)
             ? `${Number(value.toPrecision(4))}${colored.unit}`
             : undefined,
-        stop,
       };
     };
 
@@ -1603,7 +1552,7 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
           ? hitContent(hits[0]!)
           : hitsContent(groups, (message) => context.seekPlayback?.(message.receiveTime));
       popup.setDOMContent(content).addTo(map);
-      context.setPreviewTime(eventTimeSec(startOf(hits[0]!)));
+      context.setPreviewTime(eventTimeSec(hits[0]!.message));
     };
 
     const onMove = (event: MapMouseEvent) => {
@@ -1640,7 +1589,7 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
       const groups = pick(event);
       const hits = groups.flat();
       if (hits.length === 1) {
-        context.seekPlayback?.(startOf(hits[0]!).receiveTime);
+        context.seekPlayback?.(hits[0]!.message.receiveTime);
       } else if (hits.length > 1) {
         // A stack: keep its list open so a row can be picked.
         show(groups, event.lngLat);

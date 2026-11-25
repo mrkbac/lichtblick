@@ -498,7 +498,7 @@ export function headingFromTrack(track: TrackStore, end: number, to: LngLat): nu
 /**
  * The fix under the cursor for a track point feature (`k`, `i` from `trackFeatures`) drawn from
  * `tracks`: the full-resolution fix nearest `at` among those the point stands for, and `runs`, the
- * runs of those within `radius` of `at` (Web Mercator units) as `[first, last]`, or just the
+ * runs of those within `radius` of `at` (degrees of latitude) as `[first, last]`, or just the
  * nearest one when none is. Undefined when the feature doesn't belong to `tracks` or the track
  * changed since (cleared or thinned).
  */
@@ -573,27 +573,18 @@ export function groupHitsByTopic<T extends { message: MessageEvent; name?: strin
 
 /**
  * Runs of fixes under the cursor (`[first, last]`, from several drawn points, overlapping) merged
- * into passes: one per visit, so a receiver standing still is one long pass and a crossing two.
- * Each pass is represented by the fix of `preferred` it holds (the nearest to the cursor), else by
- * its first fix.
+ * into passes: one per visit, so a receiver standing still is one pass and a crossing two.
  */
 export function fixPasses(
   runs: readonly (readonly [number, number])[],
-  preferred: Iterable<number>,
-): { fix: number; first: number; last: number }[] {
-  const passes: { fix: number; first: number; last: number }[] = [];
+): { first: number; last: number }[] {
+  const passes: { first: number; last: number }[] = [];
   for (const [first, last] of [...runs].sort((a, b) => a[0] - b[0])) {
     const pass = passes.at(-1);
     if (pass && first <= pass.last + 1) {
       pass.last = Math.max(pass.last, last);
     } else {
-      passes.push({ fix: first, first, last });
-    }
-  }
-  for (const fix of preferred) {
-    const pass = passes.find((p) => p.first <= fix && fix <= p.last);
-    if (pass && pass.fix === pass.first) {
-      pass.fix = fix;
+      passes.push({ first, last });
     }
   }
   return passes;

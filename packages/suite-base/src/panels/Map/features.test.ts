@@ -187,11 +187,11 @@ describe("resolveTrackFix", () => {
 
   it("lists the runs of fixes the point stands for within the radius", () => {
     const tracks = [drawn(storeOf(points))];
-    // Point 2 stands for fixes 1-3; one degree is 1/360 in Web Mercator.
-    expect(resolveTrackFix(tracks, 0, 2, [2, 0], 1.5 / 360)?.runs).toEqual([[1, 3]]);
-    expect(resolveTrackFix(tracks, 0, 2, [2.6, 0], 0.5 / 360)?.runs).toEqual([[3, 3]]);
+    // Point 2 stands for fixes 1-3.
+    expect(resolveTrackFix(tracks, 0, 2, [2, 0], 1.5)?.runs).toEqual([[1, 3]]);
+    expect(resolveTrackFix(tracks, 0, 2, [2.6, 0], 0.5)?.runs).toEqual([[3, 3]]);
     // None that close: the nearest one, as without a radius.
-    expect(resolveTrackFix(tracks, 0, 2, [1.6, 0], 0.1 / 360)?.runs).toEqual([[2, 2]]);
+    expect(resolveTrackFix(tracks, 0, 2, [1.6, 0], 0.1)?.runs).toEqual([[2, 2]]);
     expect(resolveTrackFix(tracks, 0, 2, [1.1, 0])?.runs).toEqual([[1, 1]]);
   });
 
@@ -364,23 +364,20 @@ describe("groupHitsByTopic", () => {
 });
 
 describe("fixPasses", () => {
-  it("merges overlapping and adjacent runs, each shown by its preferred fix or else its first", () => {
+  it("merges overlapping and adjacent runs", () => {
     expect(
-      fixPasses(
-        [
-          [20, 21],
-          [3, 4],
-          [4, 5],
-          [9, 9],
-          [6, 6],
-        ],
-        [4, 21],
-      ),
+      fixPasses([
+        [20, 21],
+        [3, 4],
+        [4, 5],
+        [9, 9],
+        [6, 6],
+      ]),
     ).toEqual([
-      { fix: 4, first: 3, last: 6 },
-      { fix: 9, first: 9, last: 9 },
-      { fix: 21, first: 20, last: 21 },
+      { first: 3, last: 6 },
+      { first: 9, last: 9 },
+      { first: 20, last: 21 },
     ]);
-    expect(fixPasses([], [])).toEqual([]);
+    expect(fixPasses([])).toEqual([]);
   });
 });

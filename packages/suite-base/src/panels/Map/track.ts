@@ -358,9 +358,8 @@ function sampleEvenly(
 
 /**
  * The fix between the kept neighbors of `kept[k]` that is closest to `at`, at full resolution,
- * among the first `length` rows. With `radius` (Web Mercator units, the world is 1 wide), also
- * the runs of fixes that close to `at`, as `[first, last]` in store order: the stops a drawn
- * point stands for.
+ * among the first `length` rows. With `radius` (degrees of latitude), also the runs of fixes that
+ * close to `at`, as `[first, last]` in store order.
  */
 export function nearestFix(
   store: TrackStore,
@@ -370,11 +369,14 @@ export function nearestFix(
   length = store.length,
   radius = 0,
 ): { nearest: number; within: [number, number][] } {
-  // `kept` may be from before the store last changed: stay inside it.
-  const end = Math.min(length, store.length) - 1;
   // Capped: across a part outside the viewport the neighbors can be far apart, and far away.
   const from = Math.max(kept[k]! - 10_000, k > 0 ? kept[k - 1]! + 1 : 0);
-  const to = Math.min(kept[k]! + 10_000, k + 1 < kept.length ? kept[k + 1]! - 1 : Infinity, end);
+  // `kept` may be from before the store last changed: stay inside it.
+  const to = Math.min(
+    kept[k]! + 10_000,
+    k + 1 < kept.length ? kept[k + 1]! - 1 : Infinity,
+    Math.min(length, store.length) - 1,
+  );
   // Web Mercator distance near `at`, squared and in degrees of latitude: flat-earth, exact at the
   // cursor's few pixels and with no projection per fix.
   const { lon, lat } = store.columns;
@@ -386,7 +388,7 @@ export function nearestFix(
     const dy = lat[i]! - at[1];
     return dx * dx + dy * dy;
   };
-  const limit = (radius * 360 * scale) ** 2;
+  const limit = radius * radius;
   let best = Math.min(kept[k]!, store.length - 1);
   let bestDistance = Infinity;
   const within: [number, number][] = [];
@@ -403,20 +405,6 @@ export function nearestFix(
       } else {
         within.push([i, i]);
       }
-    }
-  }
-  // A stop past the cap or the neighbors (a receiver parked for hours): follow it to its ends, so
-  // one drawn point finds all of it.
-  const first = within[0];
-  if (first?.[0] === from) {
-    while (first[0] > 0 && distance(first[0] - 1) <= limit) {
-      first[0]--;
-    }
-  }
-  const last = within.at(-1);
-  if (last?.[1] === to) {
-    while (last[1] < end && distance(last[1] + 1) <= limit) {
-      last[1]++;
     }
   }
   return { nearest: best, within };
