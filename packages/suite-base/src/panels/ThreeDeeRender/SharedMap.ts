@@ -205,11 +205,14 @@ export class SharedMap {
     const pose = this.#pose;
     const origin = this.#origin;
     const time = renderer.currentTime;
+    // The drawing buffer MapLibre sized on its last resize: reading clientHeight here would force a
+    // layout on every frame
+    const height = this.map.getCanvas().height / this.map.getPixelRatio();
     const available =
       anchor != undefined &&
       origin != undefined &&
       camera instanceof THREE.PerspectiveCamera &&
-      this.map.getCanvas().clientHeight > 0 &&
+      height > 0 &&
       Boolean(
         renderer.transformTree.apply(
           pose,
@@ -224,7 +227,6 @@ export class SharedMap {
     let placed = false;
     if (available) {
       // Convert MapLibre's minimum zoom to an orbit distance in the anchor's meter scale.
-      const height = this.map.getCanvas().clientHeight;
       this.maxCameraDistance =
         height /
         (2 *

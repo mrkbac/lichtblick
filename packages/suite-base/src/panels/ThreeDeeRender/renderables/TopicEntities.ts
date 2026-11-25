@@ -7,14 +7,17 @@
 
 import { toNanoSec } from "@foxglove/rostime";
 import { SceneEntity, SceneEntityDeletion, SceneEntityDeletionType } from "@foxglove/schemas";
+import * as THREE from "three";
 
 import { BaseUserData, Renderable } from "../Renderable";
+import { MarkerBatches, setPickOnly } from "./markers/MarkerBatches";
 import { PrimitivePool } from "./primitives/PrimitivePool";
 import { RenderableArrows } from "./primitives/RenderableArrows";
 import { RenderableCubes, RenderableSpheres } from "./primitives/RenderableCubes";
 import { RenderableCylinders } from "./primitives/RenderableCylinders";
 import { RenderableLines } from "./primitives/RenderableLines";
 import { RenderableModels } from "./primitives/RenderableModels";
+import type { RenderablePrimitive } from "./primitives/RenderablePrimitive";
 import { RenderableTexts } from "./primitives/RenderableTexts";
 import { RenderableTriangles } from "./primitives/RenderableTriangles";
 import { ALL_PRIMITIVE_TYPES, PrimitiveType } from "./primitives/constants";
@@ -24,6 +27,8 @@ import { LayerSettingsEntity } from "../settings";
 import { updatePose } from "../updatePose";
 
 const INVALID_DELETION_TYPE = "INVALID_DELETION_TYPE";
+
+const tempMatrix = new THREE.Matrix4();
 
 export type EntityTopicUserData = BaseUserData & {
   topic: string;
@@ -55,6 +60,11 @@ const PRIMITIVE_KEYS = {
 export class TopicEntities extends Renderable<EntityTopicUserData> {
   public override pickable = false;
   #renderablesById = new Map<string, EntityRenderables>();
+  /**
+   * Draws the entities' shapes and lines with a few instanced draws instead of several per entity;
+   * the entities keep their own meshes for picking and selection
+   */
+  readonly #batches: MarkerBatches;
 
   public constructor(
     name: string,
@@ -63,9 +73,12 @@ export class TopicEntities extends Renderable<EntityTopicUserData> {
     userData: EntityTopicUserData,
   ) {
     super(name, renderer, userData);
+    this.#batches = new MarkerBatches(renderer.outlineMaterial);
+    this.add(this.#batches);
   }
 
   public override dispose(): void {
+    this.#batches.dispose();
     this.children.length = 0;
     this.#deleteAllEntities();
   }
@@ -97,6 +110,7 @@ export class TopicEntities extends Renderable<EntityTopicUserData> {
     // Report missing transforms once per frame (see TopicMarkers.startFrame)
     let missingTransform: string | undefined;
     let anyUpdated = false;
+    this.#batches.begin();
     for (const renderables of this.#renderablesById.values()) {
       for (const renderable of Object.values(renderables)) {
         const entity = renderable.userData.entity;
@@ -134,14 +148,28 @@ export class TopicEntities extends Renderable<EntityTopicUserData> {
           );
         } else {
           anyUpdated = true;
+          this.#batch(renderable);
         }
       }
     }
+    this.#batches.end();
     const topic = this.userData.topic;
     if (missingTransform != undefined) {
       this.renderer.settings.errors.addToTopic(topic, MISSING_TRANSFORM, missingTransform);
     } else if (anyUpdated) {
       this.renderer.settings.errors.removeFromTopic(topic, MISSING_TRANSFORM);
+    }
+  }
+
+  #batch(renderable: RenderablePrimitive): void {
+    renderable.updateMatrix();
+    for (const part of renderable.instancedParts()) {
+      this.#batches.addInstances(part.mesh, part.outline, part.shape, renderable.matrix);
+    }
+    for (const part of renderable.lineParts()) {
+      part.parent.updateMatrix();
+      tempMatrix.multiplyMatrices(renderable.matrix, part.parent.matrix);
+      this.#batches.addAlphaLine(part.line, part.material, tempMatrix);
     }
   }
 
@@ -169,6 +197,7 @@ export class TopicEntities extends Renderable<EntityTopicUserData> {
         renderable.update(this.userData.topic, entity, this.userData.settings, receiveTime);
       } else if (renderable) {
         this.remove(renderable);
+        unbatch(renderable);
         delete renderables[primitiveType];
         this.primitivePool.release(primitiveType, renderable);
       }
@@ -200,6 +229,7 @@ export class TopicEntities extends Renderable<EntityTopicUserData> {
     ][]) {
       if (primitive) {
         this.remove(primitive);
+        unbatch(primitive);
         this.primitivePool.release(primitiveType, primitive);
       }
     }
@@ -218,5 +248,18 @@ export class TopicEntities extends Renderable<EntityTopicUserData> {
       this.#removeRenderables(renderables);
     }
     this.#renderablesById.clear();
+  }
+}
+
+/** The primitive's own meshes draw again, before the pool hands it to another entity */
+function unbatch(renderable: RenderablePrimitive): void {
+  for (const { mesh, outline } of renderable.instancedParts()) {
+    setPickOnly(mesh, { pickOnly: false });
+    if (outline) {
+      setPickOnly(outline, { pickOnly: false });
+    }
+  }
+  for (const { line } of renderable.lineParts()) {
+    setPickOnly(line, { pickOnly: false });
   }
 }

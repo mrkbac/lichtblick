@@ -9,7 +9,7 @@ import { toNanoSec } from "@foxglove/rostime";
 import { ArrowPrimitive, SceneEntity } from "@foxglove/schemas";
 import * as THREE from "three";
 
-import { RenderablePrimitive } from "./RenderablePrimitive";
+import { InstancedPart, RenderablePrimitive } from "./RenderablePrimitive";
 import type { Renderer } from "../../Renderer";
 import { makeRgba, rgbToThreeColor, stringToRgba } from "../../color";
 import { LayerSettingsEntity } from "../../settings";
@@ -47,6 +47,9 @@ export class RenderableArrows extends RenderablePrimitive {
 
   #shaftOutline: THREE.LineSegments;
   #headOutline: THREE.LineSegments;
+  /** The shared shapes the geometries above were cloned from, for batching */
+  #shaftShape: InstancedPart["shape"];
+  #headShape: InstancedPart["shape"];
 
   public constructor(renderer: Renderer) {
     super("", renderer, undefined);
@@ -57,9 +60,11 @@ export class RenderableArrows extends RenderablePrimitive {
       1,
     );
 
-    this.#shaftGeometry = renderer.sharedGeometry
-      .getGeometry(`${this.constructor.name}-shaft`, createShaftGeometry)
-      .clone();
+    const sharedShaft = renderer.sharedGeometry.getGeometry(
+      `${this.constructor.name}-shaft`,
+      createShaftGeometry,
+    );
+    this.#shaftGeometry = sharedShaft.clone();
     this.#shaftGeometry.setAttribute("instanceOpacity", this.#instanceOpacity);
     this.#shaftMesh = new THREE.InstancedMesh(
       this.#shaftGeometry,
@@ -70,9 +75,11 @@ export class RenderableArrows extends RenderablePrimitive {
     this.#shaftMesh.count = 0;
     this.add(this.#shaftMesh);
 
-    this.#headGeometry = renderer.sharedGeometry
-      .getGeometry(`${this.constructor.name}-head`, createHeadGeometry)
-      .clone();
+    const sharedHead = renderer.sharedGeometry.getGeometry(
+      `${this.constructor.name}-head`,
+      createHeadGeometry,
+    );
+    this.#headGeometry = sharedHead.clone();
     this.#headGeometry.setAttribute("instanceOpacity", this.#instanceOpacity);
     this.#headMesh = new THREE.InstancedMesh(
       this.#headGeometry,
@@ -112,6 +119,9 @@ export class RenderableArrows extends RenderablePrimitive {
     this.#headOutline.frustumCulled = false;
     this.#headOutline.userData.picking = false;
     this.add(this.#headOutline);
+
+    this.#shaftShape = { geometry: sharedShaft, edges: shaftEdgesGeometry };
+    this.#headShape = { geometry: sharedHead, edges: headEdgesGeometry };
   }
 
   #ensureCapacity(numArrows: number) {
@@ -245,6 +255,13 @@ export class RenderableArrows extends RenderablePrimitive {
     if (this.#headMesh.instanceColor) {
       this.#headMesh.instanceColor.needsUpdate = true;
     }
+  }
+
+  public override instancedParts(): readonly InstancedPart[] {
+    return [
+      { mesh: this.#shaftMesh, outline: this.#shaftOutline, shape: this.#shaftShape },
+      { mesh: this.#headMesh, outline: this.#headOutline, shape: this.#headShape },
+    ];
   }
 
   public override dispose(): void {

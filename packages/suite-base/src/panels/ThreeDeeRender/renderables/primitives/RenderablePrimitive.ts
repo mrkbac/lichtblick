@@ -6,13 +6,30 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { SceneEntity } from "@foxglove/schemas";
+import type * as THREE from "three";
+import type { LineSegments2 } from "three/examples/jsm/lines/webgpu/LineSegments2.js";
 
 import { BaseUserData, Renderable } from "@lichtblick/suite-base/panels/ThreeDeeRender/Renderable";
 import type { Renderer } from "@lichtblick/suite-base/panels/ThreeDeeRender/Renderer";
 import { RosValue } from "@lichtblick/suite-base/players/types";
 import { emptyPose } from "@lichtblick/suite-base/util/Pose";
 
+import type { LineMaterialWithAlphaVertex } from "../../LineMaterialWithAlphaVertex";
 import { LayerSettingsEntity } from "../../settings";
+
+/** An instanced mesh a batch can draw, with the shared shape its own geometry was cloned from */
+export type InstancedPart = {
+  mesh: THREE.InstancedMesh;
+  outline: THREE.LineSegments | undefined;
+  shape: { geometry: THREE.BufferGeometry; edges: THREE.BufferGeometry | undefined };
+};
+
+/** A line a batch can draw; `parent` holds its pose within the primitive */
+export type LinePart = {
+  line: LineSegments2;
+  material: LineMaterialWithAlphaVertex;
+  parent: THREE.Object3D;
+};
 
 export type EntityRenderableUserData = BaseUserData & {
   topic?: string;
@@ -78,6 +95,16 @@ export class RenderablePrimitive extends Renderable<EntityRenderableUserData> {
 
   public setColorScheme(colorScheme: "dark" | "light"): void {
     void colorScheme;
+  }
+
+  /** Instanced meshes, children of this object, that a batch may draw instead */
+  public instancedParts(): readonly InstancedPart[] {
+    return [];
+  }
+
+  /** Lines, in their parent's space, that a batch may draw instead */
+  public lineParts(): readonly LinePart[] {
+    return [];
   }
 
   public prepareForReuse(): void {

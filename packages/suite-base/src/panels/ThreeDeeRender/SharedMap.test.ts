@@ -55,7 +55,8 @@ describe("SharedMap", () => {
       >(() => ({ zoom: 10 })),
       getMinZoom: () => 0,
       getZoom: vi.fn(() => 10),
-      getCanvas: vi.fn(() => ({ clientHeight: 800 })),
+      getCanvas: vi.fn(() => ({ height: 800 })),
+      getPixelRatio: () => 1,
       jumpTo: vi.fn(),
       redraw: vi.fn(),
     };
@@ -145,11 +146,11 @@ describe("SharedMap", () => {
       expect(value).toBeCloseTo(new THREE.Matrix4().elements[index]!, 5);
     });
     // A collapsed panel must not clamp its saved orbit distance to zero.
-    map.getCanvas.mockReturnValue({ clientHeight: 0 });
+    map.getCanvas.mockReturnValue({ height: 0 });
     shared.render("base", "map");
     expect(setCameraState).not.toHaveBeenCalled();
     expect(shared.maxCameraDistance).toBe(Infinity);
-    map.getCanvas.mockReturnValue({ clientHeight: 800 });
+    map.getCanvas.mockReturnValue({ height: 800 });
     map.getZoom.mockReturnValue(11);
     shared.render("base", "map");
     expect(shared.maxCameraDistance).toBe(10);
@@ -180,7 +181,8 @@ describe("SharedMap ground height", () => {
       >(() => ({ zoom: 10 })),
       getMinZoom: () => 0,
       getZoom: () => 10,
-      getCanvas: () => ({ clientHeight: 800 }),
+      getCanvas: () => ({ height: 800 }),
+      getPixelRatio: () => 1,
       jumpTo: vi.fn(),
       redraw: vi.fn(),
     };
