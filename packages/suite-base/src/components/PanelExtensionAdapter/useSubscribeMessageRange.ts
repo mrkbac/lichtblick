@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import { useCallback, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 
 import Logger from "@lichtblick/log";
 import { SubscribeMessageRangeArgs } from "@lichtblick/suite";
@@ -49,6 +49,17 @@ export function useSubscribeMessageRange(
   const emitAlertRef = useRef(emitAlert);
   emitAlertRef.current = emitAlert;
 
+  // Panels (often extensions) that never cancel must not keep reading once they unmount
+  const openCancels = useRef(new Set<() => void>());
+  useEffect(() => {
+    const cancels = openCancels.current;
+    return () => {
+      for (const cancel of cancels) {
+        cancel();
+      }
+    };
+  }, []);
+
   return useCallback(
     ({ topic, convertTo, start, end, onNewRangeIterator, onReset, rethrowErrors }) => {
       const { sortedTopics, getBatchIterator } = getMessagePipelineContext();
@@ -73,7 +84,12 @@ export function useSubscribeMessageRange(
         log.error("Error in useSubscribeMessageRange onNewRangeIterator:", err);
       });
 
-      return cancel;
+      const cancelOnce = () => {
+        openCancels.current.delete(cancelOnce);
+        cancel();
+      };
+      openCancels.current.add(cancelOnce);
+      return cancelOnce;
     },
     [getMessagePipelineContext], // getMessagePipelineContext is already stable, but listed for clarity
   );
