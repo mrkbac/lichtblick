@@ -75,9 +75,13 @@ export function TimelineHoverCursor({ durationSec }: { durationSec: number }): R
 /**
  * Publishes the hovered time (seconds since the data source start) to the shared hover state that
  * Plot, State Transitions, the playback bar and the other timelines show; undefined clears it.
+ * Pass `id` to recognize this publisher's own hover values in the store.
  */
-export function usePublishPlaybackHover(): (secondsSinceStart: number | undefined) => void {
-  const componentId = useId();
+export function usePublishPlaybackHover(
+  id?: string,
+): (secondsSinceStart: number | undefined) => void {
+  const generatedId = useId();
+  const componentId = id ?? generatedId;
   const setHoverValue = useSetHoverValue();
   const clearHoverValue = useClearHoverValue();
 

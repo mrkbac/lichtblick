@@ -42,6 +42,10 @@ export type LogListProps = {
   /** Called when a row is clicked; rows are not clickable without it */
   onSeek?: (time: Time) => void;
   onCopy?: (item: NormalizedLogMessage) => void;
+  /** Row to mark as nearest the shared hover time; never scrolled to */
+  hoveredIndex?: number;
+  /** Called with the row under the pointer, undefined when the pointer leaves the list */
+  onHover?: (item: NormalizedLogMessage | undefined) => void;
   apiRef?: React.Ref<LogListApi>;
 };
 
@@ -50,7 +54,15 @@ export type LogListProps = {
  * is highlighted and kept in view. For live data this means following the newest row.
  * Scrolling away stops following until the user scrolls back or presses the follow button.
  */
-function LogList({ items, currentTime, onSeek, onCopy, apiRef }: LogListProps): React.JSX.Element {
+function LogList({
+  items,
+  currentTime,
+  onSeek,
+  onCopy,
+  hoveredIndex,
+  onHover,
+  apiRef,
+}: LogListProps): React.JSX.Element {
   const { classes } = useStyles();
   const followTitle = usePanelButtonTitle(LOG_BUTTONS.followPlayhead);
   const { timeFormat, timeZone } = useAppTimeFormat();
@@ -178,6 +190,9 @@ function LogList({ items, currentTime, onSeek, onCopy, apiRef }: LogListProps): 
     <div
       style={{ position: "relative", width: "100%", height: "100%" }}
       data-testid="virtualized-list"
+      onMouseLeave={() => {
+        onHover?.(undefined);
+      }}
     >
       <div
         ref={scrollRef}
@@ -210,6 +225,8 @@ function LogList({ items, currentTime, onSeek, onCopy, apiRef }: LogListProps): 
                   timeZone={timeZone}
                   current={index === playheadIndex}
                   future={dimFuture && index > playheadIndex}
+                  hovered={index === hoveredIndex}
+                  onHover={onHover}
                   onClick={onRowClick}
                   onCopy={onCopy}
                 />

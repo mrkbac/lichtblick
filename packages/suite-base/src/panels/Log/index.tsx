@@ -14,11 +14,12 @@
 //   found at http://www.apache.org/licenses/LICENSE-2.0
 //   You may not use this file except in compliance with the License.
 
+import { add as addTimes, fromSec, subtract as subtractTimes, toSec } from "@foxglove/rostime";
 import { Alert, Button, Divider, LinearProgress, Typography } from "@mui/material";
 import { produce } from "immer";
 import * as _ from "lodash-es";
 import { useSnackbar } from "notistack";
-import React, { useCallback, useEffect, useMemo, useRef } from "react";
+import React, { useCallback, useEffect, useId, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
 
 import { useDeepMemo } from "@lichtblick/hooks";
@@ -33,11 +34,17 @@ import {
   selectCurrentTime,
   selectLastSeekTime,
   selectSeekPlayback,
+  selectStartTime,
 } from "@lichtblick/suite-base/components/MessagePipeline/selectors";
 import Panel from "@lichtblick/suite-base/components/Panel";
 import { PanelButton, PanelIconButton } from "@lichtblick/suite-base/components/PanelButton";
 import PanelToolbar from "@lichtblick/suite-base/components/PanelToolbar";
 import Stack from "@lichtblick/suite-base/components/Stack";
+import { usePublishPlaybackHover } from "@lichtblick/suite-base/components/TimelineHoverCursor";
+import {
+  TimelineInteractionStateStore,
+  useTimelineInteractionState,
+} from "@lichtblick/suite-base/context/TimelineInteractionStateContext";
 import { useAppTimeFormat } from "@lichtblick/suite-base/hooks/useAppTimeFormat";
 import { FilterTagInput } from "@lichtblick/suite-base/panels/Log/FilterTagInput";
 import formatMessage from "@lichtblick/suite-base/panels/Log/formatMessages";
@@ -51,7 +58,7 @@ import { LOG_BUTTONS } from "./buttons";
 import { SUPPORTED_DATATYPES } from "./conversion";
 import filterMessages, { compileSearch } from "./filterMessages";
 import { buildSettingsTree, defaultConfig, isTopicVisible } from "./settings";
-import { findLevel, lastIndexAtOrBefore } from "./timeIndex";
+import { findLevel, lastIndexAtOrBefore, nearestIndex } from "./timeIndex";
 import { Config, LogLevel, NormalizedLogMessage } from "./types";
 import { useLogMessages } from "./useLogMessages";
 
@@ -120,13 +127,51 @@ type Props = {
   saveConfig: SaveConfig<Config>;
 };
 
-/** Subscribes to the playhead so that the panel itself doesn't re-render every frame. */
-function PlayheadLogList(props: Omit<LogListProps, "currentTime">): React.JSX.Element {
+/**
+ * Subscribes to the playhead and the shared hover time so that the panel itself doesn't re-render
+ * every frame. Hovering a row publishes its time; hovering a time elsewhere (Plot, timelines)
+ * marks the nearest row.
+ */
+export function PlayheadLogList(
+  props: Omit<LogListProps, "currentTime" | "hoveredIndex" | "onHover">,
+): React.JSX.Element {
+  const { items } = props;
   const currentTime = useMessagePipelineBatchedWhenHidden(selectCurrentTime, {
     flushKey: selectLastSeekTime,
   });
-  // Without seeking (live data) the newest message is the playhead
-  return <LogList {...props} currentTime={props.onSeek ? currentTime : undefined} />;
+  const startTime = useMessagePipeline(selectStartTime);
+
+  const hoverId = useId();
+  const publishHover = usePublishPlaybackHover(hoverId);
+  const onHover = useCallback(
+    (item: NormalizedLogMessage | undefined) => {
+      publishHover(
+        item && startTime ? toSec(subtractTimes(item.receiveTime, startTime)) : undefined,
+      );
+    },
+    [publishHover, startTime],
+  );
+
+  // Selecting the index, not the hover value, re-renders the list only when the marked row changes
+  const hoveredIndex = useTimelineInteractionState(
+    useCallback(
+      ({ hoverValue }: TimelineInteractionStateStore) =>
+        startTime && hoverValue?.type === "PLAYBACK_SECONDS" && hoverValue.componentId !== hoverId
+          ? nearestIndex(items, addTimes(startTime, fromSec(Math.max(0, hoverValue.value))))
+          : undefined,
+      [items, startTime, hoverId],
+    ),
+  );
+
+  return (
+    <LogList
+      {...props}
+      // Without seeking (live data) the newest message is the playhead
+      currentTime={props.onSeek ? currentTime : undefined}
+      hoveredIndex={hoveredIndex}
+      onHover={onHover}
+    />
+  );
 }
 
 function ToggleButton(props: {

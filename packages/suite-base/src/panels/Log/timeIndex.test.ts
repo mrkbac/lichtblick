@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import { findLevel, lastIndexAtOrBefore, searchByTime } from "./timeIndex";
+import { findLevel, lastIndexAtOrBefore, nearestIndex, searchByTime } from "./timeIndex";
 import { LogLevel, NormalizedLogMessage } from "./types";
 
 const at = (sec: number, level = LogLevel.INFO): NormalizedLogMessage => ({
@@ -40,5 +40,15 @@ describe("timeIndex", () => {
   it("starts at the ends without an anchor time", () => {
     expect(findLevel(items, undefined, 1)).toBe(2);
     expect(findLevel(items, undefined, -1)).toBe(4);
+  });
+
+  it("picks the row closest in time, the earlier one on a tie", () => {
+    expect(nearestIndex([], { sec: 2, nsec: 0 })).toBe(-1);
+    expect(nearestIndex(items, { sec: 0, nsec: 0 })).toBe(0);
+    expect(nearestIndex(items, { sec: 9, nsec: 0 })).toBe(5);
+    expect(nearestIndex(items, { sec: 2, nsec: 0 })).toBe(1);
+    expect(nearestIndex(items, { sec: 3, nsec: 400_000_000 })).toBe(3);
+    expect(nearestIndex(items, { sec: 3, nsec: 600_000_000 })).toBe(4);
+    expect(nearestIndex(items, { sec: 3, nsec: 500_000_000 })).toBe(3);
   });
 });
