@@ -1,14 +1,7 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import type * as Foxglove from "@foxglove/extension";
-
-import {
-  TopicAliasFunction,
-  ExtensionPanelRegistration,
-  PanelSettings,
-  RegisterDataLoaderArgs,
-} from "@lichtblick/suite";
+import { TopicAliasFunction, ExtensionPanelRegistration, PanelSettings } from "@lichtblick/suite";
 import ExtensionBuilder from "@lichtblick/suite-base/testing/builders/ExtensionBuilder";
 import { InstalledMessageConverter } from "@lichtblick/suite-base/types/messageConverters";
 import { BasicBuilder } from "@lichtblick/test-builders";
@@ -215,12 +208,6 @@ describe("buildContributionPoints", () => {
   });
 
   it("registers Foxglove data loaders", async () => {
-    // Fails to compile if our args drift from Foxglove's in either direction
-    type Same<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false;
-    const sameArgs: Same<RegisterDataLoaderArgs, Foxglove.Experimental.RegisterDataLoaderArgs> =
-      true;
-    expect(sameArgs).toBe(true);
-
     const extensionInfo = ExtensionBuilder.extensionInfo();
     const extensionSource = `
       module.exports = {

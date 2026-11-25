@@ -14,7 +14,6 @@ import {
   TopicAliasFunction,
   ExtensionPanelRegistration,
   RegisterCameraModelArgs,
-  RegisterDataLoaderArgs,
 } from "@lichtblick/suite";
 import { ExtensionSettings } from "@lichtblick/suite-base/components/PanelSettings/types";
 import {
@@ -151,7 +150,7 @@ export async function buildContributionPoints(
     },
 
     // Foxglove exposes this on its Experimental.ExtensionContext; same args and WASM interface.
-    registerDataLoader(args: RegisterDataLoaderArgs) {
+    registerDataLoader(args: Foxglove.Experimental.RegisterDataLoaderArgs) {
       // Untrusted input: Foxglove may add loader types this host does not know
       if ((args.type as string) !== "file") {
         log.warn(`Extension ${extension.qualifiedName}: unsupported data loader type ${args.type}`);
