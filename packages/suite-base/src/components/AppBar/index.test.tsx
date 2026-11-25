@@ -25,6 +25,7 @@ import PlayerSelectionContext, {
 } from "@lichtblick/suite-base/context/PlayerSelectionContext";
 import { initI18n } from "@lichtblick/suite-base/i18n";
 import MockCurrentLayoutProvider from "@lichtblick/suite-base/providers/CurrentLayoutProvider/MockCurrentLayoutProvider";
+import EventsProvider from "@lichtblick/suite-base/providers/EventsProvider";
 import TimelineInteractionStateProvider from "@lichtblick/suite-base/providers/TimelineInteractionStateProvider";
 import WorkspaceContextProvider from "@lichtblick/suite-base/providers/WorkspaceContextProvider";
 import MockLayoutManager from "@lichtblick/suite-base/services/LayoutManager/MockLayoutManager";
@@ -43,6 +44,7 @@ function Wrapper({ children }: React.PropsWithChildren): React.JSX.Element {
     <TimelineInteractionStateProvider />,
     <MockMessagePipelineProvider />,
     <MockCurrentLayoutProvider />,
+    <EventsProvider />,
     <ThemeProvider isDark />,
     <LayoutManagerContext.Provider value={new MockLayoutManager()} />,
     /* eslint-enable react/jsx-key */
