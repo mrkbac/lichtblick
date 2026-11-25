@@ -81,6 +81,33 @@ function float32Reader(fieldOffset: number): FieldReader {
   return (view: DataView, pointOffset: number) => view.getFloat32(pointOffset + fieldOffset, true);
 }
 
+/**
+ * Decodes IEEE 754 half-precision bits. Fallback for engines without DataView.getFloat16
+ * (Chrome < 135, Safari < 18.2).
+ */
+export function halfToFloat(bits: number): number {
+  const exponent = (bits >> 10) & 0x1f;
+  const fraction = bits & 0x3ff;
+  const sign = (bits & 0x8000) !== 0 ? -1 : 1;
+  if (exponent === 0) {
+    return sign * fraction * 2 ** -24; // zero and subnormals
+  }
+  if (exponent === 0x1f) {
+    return fraction === 0 ? sign * Infinity : NaN;
+  }
+  return sign * (1024 + fraction) * 2 ** (exponent - 25);
+}
+
+// lib.es2025 types getFloat16 as always present, but older browsers lack it
+const hasNativeFloat16 = typeof (DataView.prototype as Partial<DataView>).getFloat16 === "function";
+
+function float16Reader(fieldOffset: number): FieldReader {
+  return hasNativeFloat16
+    ? (view: DataView, pointOffset: number) => view.getFloat16(pointOffset + fieldOffset, true)
+    : (view: DataView, pointOffset: number) =>
+        halfToFloat(view.getUint16(pointOffset + fieldOffset, true));
+}
+
 function float64Reader(fieldOffset: number): FieldReader {
   return (view: DataView, pointOffset: number) => view.getFloat64(pointOffset + fieldOffset, true);
 }
@@ -147,6 +174,8 @@ export function getReader(
         return field.offset + 4 <= stride ? float32Reader(field.offset) : undefined;
       case NumericType.FLOAT64:
         return field.offset + 8 <= stride ? float64Reader(field.offset) : undefined;
+      case NumericType.FLOAT16:
+        return field.offset + 2 <= stride ? float16Reader(field.offset) : undefined;
       default:
         return undefined;
     }

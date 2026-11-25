@@ -748,6 +748,7 @@ export function numericTypeWidth(type: NumericType): number {
       return 1;
     case NumericType.INT16:
     case NumericType.UINT16:
+    case NumericType.FLOAT16:
       return 2;
     case NumericType.INT32:
     case NumericType.UINT32:
@@ -985,4 +986,5 @@ const NumericTypeMinMaxValueMap: Record<NumericType, [number, number]> = {
   [NumericType.INT32]: [-Math.pow(2, 32 - 1), -Math.pow(2, 32 - 1) - 1],
   [NumericType.FLOAT32]: [0, 1.0],
   [NumericType.FLOAT64]: [0, 1.0],
+  [NumericType.FLOAT16]: [0, 1.0],
 };
