@@ -21,6 +21,7 @@ const docs: PanelDocs = {
         ["Other topics", "Any message with data and format fields also works."],
         ["Formats", "PCM (s16, s32, f32, u8, μ-law, A-law), Opus, MP3, AAC, Vorbis, FLAC and WAV."],
         ["Enable audio", "Browsers block sound until you interact with the panel once."],
+        ["Playback speed", "Audio keeps its pitch at any speed, so speech stays intelligible."],
       ],
     },
   ],

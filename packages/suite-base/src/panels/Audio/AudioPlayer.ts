@@ -11,6 +11,7 @@ import {
 } from "./decode";
 import { decodeG726, G726Bits, G726Decoder } from "./g726";
 import { LATENCY_SEC, MAX_DRIFT_SEC, planChunk } from "./schedule";
+import { TimeStretcher } from "./stretch";
 
 const FADE_SEC = 0.01;
 
@@ -39,6 +40,8 @@ export class AudioPlayer {
   #pendingStart = 0;
   /** G.726 predictor state carries over between messages until a cut or a format change. */
   #g726: { format: G726Format; decoder: G726Decoder } | undefined;
+  /** Keeps the pitch when speed != 1. Its input carries over between messages until a cut. */
+  #stretch: { key: string; stretcher: TimeStretcher } | undefined;
 
   public constructor() {
     this.#ctx = new AudioContext({ latencyHint: "playback" });
@@ -84,6 +87,7 @@ export class AudioPlayer {
     this.#fallbackQueue = Promise.resolve();
     this.#pending = new Uint8Array(0);
     this.#g726 = undefined;
+    this.#stretch = undefined;
   }
 
   #fadeOut(): void {
@@ -237,13 +241,35 @@ export class AudioPlayer {
     this.#pendingStart = start;
   }
 
-  #play(planes: Float32Array<ArrayBuffer>[], sampleRate: number, idealStart: number): void {
-    const frames = planes[0]?.length ?? 0;
-    if (frames === 0 || !this.isRunning()) {
+  #play(input: Float32Array<ArrayBuffer>[], sampleRate: number, inputStart: number): void {
+    if ((input[0]?.length ?? 0) === 0 || !this.isRunning()) {
       return;
     }
     const speed = this.#speed;
-    const duration = frames / sampleRate / speed;
+    let planes = input;
+    let idealStart = inputStart;
+    // Time-stretched audio plays at rate 1; plain audio is resampled, which shifts the pitch
+    let rate = speed;
+    if (speed !== 1) {
+      const key = `${sampleRate}/${input.length}`;
+      if (this.#stretch?.key !== key) {
+        this.#stretch = { key, stretcher: new TimeStretcher(input.length, sampleRate, speed) };
+      }
+      const { stretcher } = this.#stretch;
+      const inputIndex = stretcher.inputFrames;
+      const out = stretcher.push(input);
+      planes = out.planes;
+      // The output starts before this input (it was held back): place it by its input position,
+      // plus the stretcher's worst-case hold-back so it never arrives too late
+      idealStart =
+        inputStart + (out.inputPos - inputIndex + stretcher.latency) / sampleRate / speed;
+      rate = 1;
+    }
+    const frames = planes[0]?.length ?? 0;
+    if (frames === 0) {
+      return;
+    }
+    const duration = frames / sampleRate / rate;
     const now = this.#ctx.currentTime;
     const plan = planChunk({ now, nextStart: this.#nextStart, idealStart, duration });
     if (plan.kind === "drop") {
@@ -266,9 +292,9 @@ export class AudioPlayer {
 
     const source = this.#ctx.createBufferSource();
     source.buffer = buffer;
-    source.playbackRate.value = speed;
+    source.playbackRate.value = rate;
     source.connect(this.#session);
-    source.start(plan.start, plan.skip * speed);
+    source.start(plan.start, plan.skip * rate);
     source.onended = () => this.#sources.delete(source);
     this.#sources.add(source);
     this.#nextStart = plan.start + duration - plan.skip;
