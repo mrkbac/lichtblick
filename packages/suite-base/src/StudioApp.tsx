@@ -94,6 +94,12 @@ export function StudioApp(): React.JSX.Element {
     };
   }, []);
 
+  // Until the session is known, the layout manager would run on the local namespace: anything
+  // created there (Default, sample layouts) gets imported into the account as a "(local)" copy.
+  if (organization.status === "loading") {
+    return <></>;
+  }
+
   return (
     <MaybeLaunchPreference>
       <MultiProvider providers={providers}>
