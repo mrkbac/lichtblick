@@ -7,7 +7,10 @@ import { useTranslation } from "react-i18next";
 
 import { formatByteSize } from "@lichtblick/den/format";
 import EmptyState from "@lichtblick/suite-base/components/EmptyState";
-import { useExportableFile } from "@lichtblick/suite-base/components/ExportRecordingDialog/exportSource";
+import {
+  useExportSource,
+  useExportableFile,
+} from "@lichtblick/suite-base/components/ExportRecordingDialog/exportSource";
 import { useMessagePipeline } from "@lichtblick/suite-base/components/MessagePipeline";
 import { selectRecordingFiles } from "@lichtblick/suite-base/components/MessagePipeline/selectors";
 
@@ -28,8 +31,10 @@ export function AttachmentList(): React.JSX.Element {
   const { t } = useTranslation("attachments");
   const files = useMessagePipeline(selectRecordingFiles) ?? [];
   const localFile = useExportableFile();
-  // Attachment bytes are read from the local file; remote and compared files only list them.
-  const viewableFile = files.length === 1 ? localFile : undefined;
+  const remoteSource = useExportSource();
+  // Bytes come from the local file (even a recovered one) or by range requests from a remote
+  // one; compared files only list them.
+  const viewableFile = files.length === 1 ? (localFile ?? remoteSource) : undefined;
   const attachments = files.flatMap((file) => file.attachments);
   const [viewing, setViewing] = useState<number>();
   const viewed = viewing != undefined ? attachments[viewing] : undefined;

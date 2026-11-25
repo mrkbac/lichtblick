@@ -16,6 +16,7 @@ import { useTranslation } from "react-i18next";
 import { formatByteSize } from "@lichtblick/den/format";
 import { useAsync } from "@lichtblick/hooks";
 import CopyButton from "@lichtblick/suite-base/components/CopyButton";
+import type { ExportSource } from "@lichtblick/suite-base/components/ExportRecordingDialog/exportSource";
 import { downloadFiles } from "@lichtblick/suite-base/util/download";
 
 import { useStyles } from "./AttachmentDialog.style";
@@ -23,9 +24,29 @@ import { AttachmentInfo, attachmentData, formatText, hexDump, previewKind } from
 import { HEX_PREVIEW_BYTES, TEXT_PREVIEW_BYTES } from "./constants";
 import { AttachmentDialogProps, Preview, PreviewKind } from "./types";
 
+async function readAttachment(
+  file: Blob | ExportSource,
+  attachment: AttachmentInfo,
+  signal: AbortSignal,
+): Promise<Blob | undefined> {
+  if (file instanceof Blob) {
+    return await attachmentData(file, attachment);
+  }
+  const readable = await file.open(signal);
+  try {
+    return await attachmentData(readable, attachment);
+  } finally {
+    readable.close?.();
+  }
+}
+
 /** Undefined when the file no longer has the attachment where it was. */
-async function loadPreview(file: Blob, attachment: AttachmentInfo): Promise<Preview | undefined> {
-  const data = await attachmentData(file, attachment);
+async function loadPreview(
+  file: Blob | ExportSource,
+  attachment: AttachmentInfo,
+  signal: AbortSignal,
+): Promise<Preview | undefined> {
+  const data = await readAttachment(file, attachment, signal);
   if (!data) {
     return undefined;
   }
@@ -88,12 +109,23 @@ export function AttachmentDialog({
 }: AttachmentDialogProps): React.JSX.Element {
   const { classes } = useStyles();
   const { t } = useTranslation("attachments");
+  const [signal, setSignal] = useState<AbortSignal>();
+  useEffect(() => {
+    // Closing the dialog cancels a remote read still in flight.
+    const controller = new AbortController();
+    setSignal(controller.signal);
+    return () => {
+      controller.abort();
+    };
+  }, [file, offset]);
   const preview = useAsync(
-    async () => await loadPreview(file, { name, mediaType, sizeBytes, offset }),
-    [file, name, mediaType, sizeBytes, offset],
+    async () =>
+      signal ? await loadPreview(file, { name, mediaType, sizeBytes, offset }, signal) : undefined,
+    [signal, file, name, mediaType, sizeBytes, offset],
   );
   const value = preview.value;
-  const missing = !preview.loading && !preview.error && !value;
+  const loading = preview.loading || !signal;
+  const missing = !loading && !preview.error && !value;
 
   return (
     <Dialog open onClose={onClose} maxWidth="lg" fullWidth>
@@ -104,7 +136,7 @@ export function AttachmentDialog({
         </Typography>
       </DialogTitle>
       <DialogContent className={classes.content}>
-        {preview.loading && <CircularProgress size={24} />}
+        {loading && <CircularProgress size={24} />}
         {preview.error && <Typography color="error">{preview.error.message}</Typography>}
         {missing && <Typography color="error">{t("missing")}</Typography>}
         {value?.text != undefined && (
