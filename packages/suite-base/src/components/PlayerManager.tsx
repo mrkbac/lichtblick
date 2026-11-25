@@ -28,9 +28,11 @@ import {
   useState,
 } from "react";
 
+import { promiseTimeout } from "@lichtblick/den/async";
 import { useLatest, useMountedState } from "@lichtblick/hooks";
 import Logger from "@lichtblick/log";
 import { Immutable } from "@lichtblick/suite";
+import { relinkFileHandle } from "@lichtblick/suite-base/components/Catalog/indexFolder";
 import { CompareProvider } from "@lichtblick/suite-base/components/Compare/CompareContext";
 import { MessagePipelineProvider } from "@lichtblick/suite-base/components/MessagePipeline";
 import {
@@ -496,7 +498,7 @@ export default function PlayerManager(
             return;
           }
           case "file": {
-            const handles = args.handles;
+            let handles = args.handles;
             let files = args.files;
 
             // Handles are stored in recents (IndexedDB) so the file can be reopened later.
@@ -504,9 +506,18 @@ export default function PlayerManager(
             if (handles) {
               // A file compared in several sides repeats its handle: ask and read it once
               // URLs (in a comparison that mixes them with files) need no permission
-              const uniqueHandles = [
+              const stored = [
                 ...new Set(handles.filter((h): h is FileSystemFileHandle => typeof h !== "string")),
               ];
+              const relinked = new Map(
+                await Promise.all(stored.map(async (h) => [h, await relinkFileHandle(h)] as const)),
+              );
+              if (!isMounted() || seq !== selectionSeq.current) {
+                return;
+              }
+              // The recent saved below keeps the relinked handles
+              handles = handles.map((h) => (typeof h === "string" ? h : relinked.get(h)!));
+              const uniqueHandles = [...new Set(relinked.values())];
               for (const handle of uniqueHandles) {
                 const permission = await handle.queryPermission({
                   mode: "read",
@@ -656,7 +667,10 @@ export default function PlayerManager(
     void (async () => {
       const permissions = await Promise.all(
         recent.handles.map(async (h) =>
-          typeof h === "string" ? "granted" : await h.queryPermission({ mode: "read" }),
+          typeof h === "string"
+            ? "granted"
+            : // A dead handle can hang: ask with a click, which relinks or says why it can't
+              await promiseTimeout(h.queryPermission({ mode: "read" }), 3000).catch(() => "prompt"),
         ),
       );
       // The user opened or closed a source meanwhile: don't override that with the restore

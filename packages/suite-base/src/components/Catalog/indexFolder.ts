@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
+import { promiseTimeout } from "@lichtblick/den/async";
 import { pushAll } from "@lichtblick/den/collection";
 import { createKeyValueStore } from "@lichtblick/suite-base/util/idbKeyValueStore";
 
@@ -111,6 +112,62 @@ export async function loadLastFolder(
 
 export async function forgetCatalogFolder(slot: string): Promise<void> {
   await folderStore.delete(slot);
+}
+
+// A handle to a moved file or a detached drive can hang on every call instead of failing
+const HANDLE_TIMEOUT_MS = 3000;
+
+/** The only file named `name` in a remembered catalog folder the browser still grants. */
+async function findInCatalogFolders(name: string): Promise<FileSystemFileHandle | undefined> {
+  const folders = (await (await folderStore.readwrite()).getAll()) as FileSystemDirectoryHandle[];
+  for (const dir of folders) {
+    try {
+      if (
+        (await promiseTimeout(dir.queryPermission({ mode: "read" }), HANDLE_TIMEOUT_MS)) !==
+        "granted"
+      ) {
+        continue;
+      }
+      const matches = (await listDirectory(dir)).filter((f) => f.path.split("/").at(-1) === name);
+      if (matches.length === 1) {
+        return matches[0]!.handle;
+      }
+    } catch {
+      // An unreadable folder can't hold the file; try the next one
+    }
+  }
+  return undefined;
+}
+
+/**
+ * `handle`, or when it no longer reads (its file was moved or deleted, or its folder unlinked) the
+ * file of the same name in a remembered catalog folder, so picking that folder again relinks
+ * recents. Throws when neither works.
+ */
+export async function relinkFileHandle(
+  handle: FileSystemFileHandle,
+): Promise<FileSystemFileHandle> {
+  try {
+    const permission = await promiseTimeout(
+      handle.queryPermission({ mode: "read" }),
+      HANDLE_TIMEOUT_MS,
+    );
+    // Without permission the file can't be checked; the caller asks for it
+    if (permission !== "granted") {
+      return handle;
+    }
+    await promiseTimeout(handle.getFile(), HANDLE_TIMEOUT_MS);
+    return handle;
+  } catch {
+    // Look for it in the catalog folders below
+  }
+  const found = await findInCatalogFolders(handle.name);
+  if (!found) {
+    throw new Error(
+      `${handle.name} can't be opened: it was moved or deleted, or its folder is no longer linked. Open its folder in the catalog to relink it.`,
+    );
+  }
+  return found;
 }
 
 async function indexFile(
