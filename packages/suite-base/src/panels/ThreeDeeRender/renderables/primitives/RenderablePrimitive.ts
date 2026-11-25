@@ -24,8 +24,12 @@ export type InstancedPart = {
   shape: { geometry: THREE.BufferGeometry; edges: THREE.BufferGeometry | undefined };
 };
 
-/** A line a batch can draw */
-export type LinePart = { line: LineSegments2; material: LineMaterialWithAlphaVertex };
+/** A line a batch can draw; `parent` holds its pose within the primitive */
+export type LinePart = {
+  line: LineSegments2;
+  material: LineMaterialWithAlphaVertex;
+  parent: THREE.Object3D;
+};
 
 export type EntityRenderableUserData = BaseUserData & {
   topic?: string;
@@ -99,7 +103,7 @@ export class RenderablePrimitive extends Renderable<EntityRenderableUserData> {
   }
 
   /** Lines, in their parent's space, that a batch may draw instead */
-  public lineParts(): readonly (LinePart & { parent: THREE.Object3D })[] {
+  public lineParts(): readonly LinePart[] {
     return [];
   }
 

@@ -65,15 +65,14 @@ export class RenderableLines extends RenderablePrimitive {
     }
   }
 
-  public override lineParts(): readonly (LinePart & { parent: THREE.Object3D })[] {
-    const parts: (LinePart & { parent: THREE.Object3D })[] = [];
+  public override lineParts(): readonly LinePart[] {
+    const parts: LinePart[] = [];
     // Only the lines of the current entity are children
     for (const child of this.children) {
-      if (child instanceof LinePrimitiveRenderable && child.visible) {
-        const part = child.part();
-        if (part) {
-          parts.push({ ...part, parent: child });
-        }
+      const part =
+        child instanceof LinePrimitiveRenderable && child.visible ? child.part() : undefined;
+      if (part) {
+        parts.push(part);
       }
     }
     return parts;
@@ -145,7 +144,7 @@ class LinePrimitiveRenderable extends THREE.Object3D {
 
   /** The drawn line and its material, once built */
   public part(): LinePart | undefined {
-    return this.#line ? { line: this.#line, material: this.#material } : undefined;
+    return this.#line ? { line: this.#line, material: this.#material, parent: this } : undefined;
   }
 
   public setSettings(settings: LayerSettingsEntity): void {

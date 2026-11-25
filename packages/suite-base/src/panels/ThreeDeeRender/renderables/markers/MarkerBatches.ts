@@ -168,6 +168,63 @@ type AlphaLineBatch = {
   count: number;
 };
 
+/**
+ * Grows a line batch's buffers to hold `total` segments, keeping the segments written so far.
+ * True if they grew.
+ */
+function reserveSegments<C extends Float32Array | Uint8Array>(
+  batch: { positions: Float32Array; colors: C },
+  total: number,
+  makeColors: (length: number) => C,
+): boolean {
+  if (total * 6 <= batch.positions.length) {
+    return false;
+  }
+  const capacity = Math.min(
+    MAX_BATCH_LINE_SEGMENTS,
+    Math.max(total, batch.positions.length / 3, 16),
+  );
+  const positions = new Float32Array(capacity * 6);
+  positions.set(batch.positions);
+  const colors = makeColors(capacity * 8);
+  colors.set(batch.colors);
+  batch.positions = positions;
+  batch.colors = colors;
+  return true;
+}
+
+/**
+ * Writes `count` segments (start/end point pairs) transformed by `matrix` into `target` from
+ * segment `at`. False if baking into float32 collapsed an originally distinct segment.
+ */
+function bakeSegments(
+  target: Float32Array,
+  at: number,
+  positions: ArrayLike<number>,
+  count: number,
+  matrix: THREE.Matrix4,
+): boolean {
+  const start = at * 6;
+  for (let i = 0; i < count * 6; i += 6) {
+    const index = start + i;
+    tempPosition.set(positions[i]!, positions[i + 1]!, positions[i + 2]);
+    tempPosition.applyMatrix4(matrix).toArray(target, index);
+    tempPosition.set(positions[i + 3]!, positions[i + 4]!, positions[i + 5]);
+    tempPosition.applyMatrix4(matrix).toArray(target, index + 3);
+    if (
+      target[index] === target[index + 3] &&
+      target[index + 1] === target[index + 4] &&
+      target[index + 2] === target[index + 5] &&
+      (positions[i] !== positions[i + 3] ||
+        positions[i + 1] !== positions[i + 4] ||
+        positions[i + 2] !== positions[i + 5])
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
 /** Uploads only the instances in use */
 function markUsed(attribute: THREE.BufferAttribute, count: number): void {
   attribute.clearUpdateRanges();
@@ -475,42 +532,16 @@ export class MarkerBatches extends THREE.Object3D {
   }
 
   #appendLine(batch: LineBatch, { marker, count, positions, colors }: LineBatchEntry): boolean {
-    if ((batch.count + count) * 6 > batch.positions.length) {
-      const capacity = Math.min(
-        MAX_BATCH_LINE_SEGMENTS,
-        Math.max(batch.count + count, batch.positions.length / 3, 16),
-      );
-      const resizedPositions = new Float32Array(capacity * 6);
-      resizedPositions.set(batch.positions);
-      const resizedColors = new Uint8Array(capacity * 8);
-      resizedColors.set(batch.colors);
-      if (batch.positions.length > 0) {
-        batch.color.geometry.dispose();
-        batch.depth.geometry = batch.color.geometry = new LineSegmentsGeometry();
-      }
-      batch.positions = resizedPositions;
-      batch.colors = resizedColors;
+    const hadSegments = batch.positions.length > 0;
+    if (reserveSegments(batch, batch.count + count, (n) => new Uint8Array(n)) && hadSegments) {
+      batch.color.geometry.dispose();
+      batch.depth.geometry = batch.color.geometry = new LineSegmentsGeometry();
     }
     markerMatrix.compose(marker.position, marker.quaternion, marker.scale);
     markerMatrix.setPosition(tempPosition.subVectors(marker.position, batch.origin));
-    const start = batch.count * 6;
-    for (let i = 0; i < count * 6; i += 6) {
-      const index = start + i;
-      tempPosition.set(positions[i]!, positions[i + 1]!, positions[i + 2]);
-      tempPosition.applyMatrix4(markerMatrix).toArray(batch.positions, index);
-      tempPosition.set(positions[i + 3]!, positions[i + 4]!, positions[i + 5]);
-      tempPosition.applyMatrix4(markerMatrix).toArray(batch.positions, index + 3);
-      // Baking into a shared float32 buffer must not collapse an originally distinct endpoint.
-      if (
-        batch.positions[index] === batch.positions[index + 3] &&
-        batch.positions[index + 1] === batch.positions[index + 4] &&
-        batch.positions[index + 2] === batch.positions[index + 5] &&
-        (positions[i] !== positions[i + 3] ||
-          positions[i + 1] !== positions[i + 4] ||
-          positions[i + 2] !== positions[i + 5])
-      ) {
-        return false;
-      }
+    // Baking into a shared float32 buffer must not collapse an originally distinct endpoint.
+    if (!bakeSegments(batch.positions, batch.count, positions, count, markerMatrix)) {
+      return false;
     }
     batch.colors.set(colors.subarray(0, count * 8), batch.count * 8);
     batch.count += count;
@@ -599,38 +630,13 @@ export class MarkerBatches extends THREE.Object3D {
     count: number,
     material: LineMaterialWithAlphaVertex,
   ): boolean {
-    const total = batch.count + count;
-    if (total * 6 > batch.positions.length) {
-      const capacity = Math.min(MAX_BATCH_LINE_SEGMENTS, Math.max(total, batch.count * 2, 16));
-      const resizedPositions = new Float32Array(capacity * 6);
-      resizedPositions.set(batch.positions);
-      const resizedColors = new Float32Array(capacity * 8);
-      resizedColors.set(batch.colors);
-      batch.positions = resizedPositions;
-      batch.colors = resizedColors;
-    }
+    reserveSegments(batch, batch.count + count, (n) => new Float32Array(n));
     if (batch.count === 0) {
       batch.origin.setFromMatrixPosition(tempMatrix);
     }
     tempMatrix.setPosition(tempPosition.setFromMatrixPosition(tempMatrix).sub(batch.origin));
-    const start = batch.count * 6;
-    for (let i = 0; i < count * 6; i += 6) {
-      const index = start + i;
-      tempPosition.set(positions[i]!, positions[i + 1]!, positions[i + 2]);
-      tempPosition.applyMatrix4(tempMatrix).toArray(batch.positions, index);
-      tempPosition.set(positions[i + 3]!, positions[i + 4]!, positions[i + 5]);
-      tempPosition.applyMatrix4(tempMatrix).toArray(batch.positions, index + 3);
-      // Baking into a shared float32 buffer must not collapse an originally distinct endpoint.
-      if (
-        batch.positions[index] === batch.positions[index + 3] &&
-        batch.positions[index + 1] === batch.positions[index + 4] &&
-        batch.positions[index + 2] === batch.positions[index + 5] &&
-        (positions[i] !== positions[i + 3] ||
-          positions[i + 1] !== positions[i + 4] ||
-          positions[i + 2] !== positions[i + 5])
-      ) {
-        return false;
-      }
+    if (!bakeSegments(batch.positions, batch.count, positions, count, tempMatrix)) {
+      return false;
     }
     const colorStart = batch.count * 8;
     if (colors) {
@@ -645,8 +651,14 @@ export class MarkerBatches extends THREE.Object3D {
         batch.colors[i + 3] = a;
       }
     }
-    batch.count = total;
+    batch.count += count;
     return true;
+  }
+
+  #disposeAlphaLineBatch(batch: AlphaLineBatch): void {
+    batch.line.removeFromParent();
+    batch.line.material.dispose();
+    batch.line.geometry.dispose();
   }
 
   #disposeLineBatch(batch: LineBatch): void {
@@ -661,9 +673,7 @@ export class MarkerBatches extends THREE.Object3D {
     this.#pendingLines.clear();
     for (const [key, batch] of this.#alphaLineBatches) {
       if (batch.count === 0) {
-        batch.line.removeFromParent();
-        batch.line.material.dispose();
-        batch.line.geometry.dispose();
+        this.#disposeAlphaLineBatch(batch);
         this.#alphaLineBatches.delete(key);
         continue;
       }
@@ -714,9 +724,7 @@ export class MarkerBatches extends THREE.Object3D {
   public override dispose(): void {
     this.#pendingLines.clear();
     for (const batch of this.#alphaLineBatches.values()) {
-      batch.line.removeFromParent();
-      batch.line.material.dispose();
-      batch.line.geometry.dispose();
+      this.#disposeAlphaLineBatch(batch);
     }
     this.#alphaLineBatches.clear();
     for (const batch of this.#lineBatches.values()) {
