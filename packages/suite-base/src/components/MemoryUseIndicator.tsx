@@ -45,8 +45,8 @@ type DebugStats = {
   fps: number;
   /** Highest FPS seen so far: the display refresh rate, the target the FPS readout is judged by. */
   refreshFps: number;
-  /** Player updates the app rendered (pipeline ticks), i.e. how often panels actually redrew. */
-  ups: number;
+  /** Frames that showed new player data: a redraw of the panels, at most one per frame. */
+  draws: number;
   /** Longest gap between two frames in the last sample, i.e. the worst stutter the user saw. */
   maxFrameMs: number;
   /** Chrome-only `performance.memory`. */
@@ -61,13 +61,16 @@ function useDebugStats(): DebugStats | undefined {
 
   useEffect(() => {
     let frames = 0;
-    let updates = 0;
+    let draws = 0;
     let refreshFps = 0;
+    // Panels render a new player state in the next frame; several states before one frame show as
+    // one redraw, and store changes that aren't a new player state don't redraw anything
+    let pendingDraw = false;
     let lastPlayerState: MessagePipelineContext["playerState"] | undefined;
     const unsubscribe = subscribe((state) => {
       if (state.playerState !== lastPlayerState) {
         lastPlayerState = state.playerState;
-        updates++;
+        pendingDraw = true;
       }
     });
     let maxFrameMs = 0;
@@ -76,6 +79,10 @@ function useDebugStats(): DebugStats | undefined {
 
     let rafId = requestAnimationFrame(function onFrame(now) {
       frames++;
+      if (pendingDraw) {
+        pendingDraw = false;
+        draws++;
+      }
       maxFrameMs = Math.max(maxFrameMs, now - lastFrame);
       lastFrame = now;
       rafId = requestAnimationFrame(onFrame);
@@ -90,13 +97,13 @@ function useDebugStats(): DebugStats | undefined {
         setStats({
           fps,
           refreshFps,
-          ups: (updates * 1000) / (now - lastSample),
+          draws: (draws * 1000) / (now - lastSample),
           // Include the frame still pending, or a full stall would read as 0 ms.
           maxFrameMs: Math.max(maxFrameMs, now - lastFrame),
           heap: (performance as { memory?: HeapInfo }).memory,
         });
       }
-      frames = updates = maxFrameMs = 0;
+      frames = draws = maxFrameMs = 0;
       lastSample = now;
     }, SAMPLE_MS);
 
@@ -174,8 +181,8 @@ function MemoryUseIndicator(): React.JSX.Element {
       />
       <Stat
         label="DRAW"
-        value={stats.ups.toFixed(0)}
-        tooltip="Redraws: player updates the panels rendered in the last second (0 while paused)"
+        value={stats.draws.toFixed(0)}
+        tooltip="Frames in the last second that showed new player data (0 while paused)"
       />
       <Stat
         label="MAX"
