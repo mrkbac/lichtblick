@@ -1,8 +1,12 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
+import { MessageEvent } from "@lichtblick/suite";
+
 import {
   DrawnTrack,
+  fixPasses,
+  groupHitsByTopic,
   headingFromTrack,
   resolveTrackFix,
   trackFeatures,
@@ -181,6 +185,16 @@ describe("resolveTrackFix", () => {
     expect(resolveTrackFix(tracks, 0, 4, [4, 0])?.fix).toBe(4);
   });
 
+  it("lists the runs of fixes the point stands for within the radius", () => {
+    const tracks = [drawn(storeOf(points))];
+    // Point 2 stands for fixes 1-3.
+    expect(resolveTrackFix(tracks, 0, 2, [2, 0], 1.5)?.runs).toEqual([[1, 3]]);
+    expect(resolveTrackFix(tracks, 0, 2, [2.6, 0], 0.5)?.runs).toEqual([[3, 3]]);
+    // None that close: the nearest one, as without a radius.
+    expect(resolveTrackFix(tracks, 0, 2, [1.6, 0], 0.1)?.runs).toEqual([[2, 2]]);
+    expect(resolveTrackFix(tracks, 0, 2, [1.1, 0])?.runs).toEqual([[1, 1]]);
+  });
+
   it("rejects features that aren't from these tracks", () => {
     const tracks = [drawn(storeOf(points))];
     expect(resolveTrackFix(undefined, 0, 2, [2, 0])).toBeUndefined();
@@ -314,5 +328,56 @@ describe("trackFlushDelayMs", () => {
     expect(trackFlushDelayMs(0, "recorded")).toBe(50);
     expect(trackFlushDelayMs(0, "live")).toBe(500);
     expect(trackFlushDelayMs(2_000_000, "recorded")).toBe(1000);
+  });
+});
+
+describe("groupHitsByTopic", () => {
+  const hit = (topic: string, sec: number, name?: string) => ({
+    message: { topic, receiveTime: { sec, nsec: 0 } } as MessageEvent,
+    name,
+  });
+
+  it("groups by topic in first-seen order, each by time, without duplicates", () => {
+    const groups = groupHitsByTopic([
+      hit("/b", 5),
+      hit("/a", 3),
+      hit("/b", 1),
+      // The same fix as a track point and as the current marker.
+      hit("/a", 3),
+      hit("/a", 2),
+      // Two features of one GeoJSON message.
+      hit("/zones", 1, "Zone 1"),
+      hit("/zones", 1, "Waypoint"),
+    ]);
+    expect(
+      groups.map((group) => group.map((h) => `${h.message.topic}@${h.message.receiveTime.sec}`)),
+    ).toEqual([
+      ["/b@1", "/b@5"],
+      ["/a@2", "/a@3"],
+      ["/zones@1", "/zones@1"],
+    ]);
+  });
+
+  it("is empty with no hits", () => {
+    expect(groupHitsByTopic([])).toEqual([]);
+  });
+});
+
+describe("fixPasses", () => {
+  it("merges overlapping and adjacent runs", () => {
+    expect(
+      fixPasses([
+        [20, 21],
+        [3, 4],
+        [4, 5],
+        [9, 9],
+        [6, 6],
+      ]),
+    ).toEqual([
+      { first: 3, last: 6 },
+      { first: 9, last: 9 },
+      { first: 20, last: 21 },
+    ]);
+    expect(fixPasses([])).toEqual([]);
   });
 });

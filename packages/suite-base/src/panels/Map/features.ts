@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
+import { compare } from "@foxglove/rostime";
 import type { Feature, FeatureCollection } from "geojson";
 import type { LayerSpecification, SourceSpecification } from "maplibre-gl";
 
@@ -496,15 +497,18 @@ export function headingFromTrack(track: TrackStore, end: number, to: LngLat): nu
 
 /**
  * The fix under the cursor for a track point feature (`k`, `i` from `trackFeatures`) drawn from
- * `tracks`: the full-resolution fix nearest `at` among those the point stands for. Undefined when
- * the feature doesn't belong to `tracks` or the track changed since (cleared or thinned).
+ * `tracks`: the full-resolution fix nearest `at` among those the point stands for, and `runs`, the
+ * runs of those within `radius` of `at` (degrees of latitude) as `[first, last]`, or just the
+ * nearest one when none is. Undefined when the feature doesn't belong to `tracks` or the track
+ * changed since (cleared or thinned).
  */
 export function resolveTrackFix(
   tracks: readonly DrawnTrack[] | undefined,
   k: unknown,
   i: unknown,
   at: LngLat,
-): { track: DrawnTrack; fix: number } | undefined {
+  radius = 0,
+): { track: DrawnTrack; fix: number; runs: [number, number][] } | undefined {
   const track = typeof k === "number" ? tracks?.[k] : undefined;
   if (
     !track ||
@@ -521,8 +525,11 @@ export function resolveTrackFix(
   if (track.indices[position] !== i) {
     return undefined;
   }
-  const fix = nearestFix(track.store, track.indices, position, at, usable);
-  return fix < usable ? { track, fix } : undefined;
+  const { nearest, within } = nearestFix(track.store, track.indices, position, at, usable, radius);
+  if (nearest >= usable) {
+    return undefined;
+  }
+  return { track, fix: nearest, runs: within.length > 0 ? within : [[nearest, nearest]] };
 }
 
 /**
@@ -533,4 +540,52 @@ export function resolveTrackFix(
 export function trackFixKey(store: TrackStore, fix: number): string {
   const replacement = fix === store.length - 1 ? store.tailReplacements : -1;
   return `${store.topic}\0${store.version}\0${fix}\0${replacement}`;
+}
+
+/**
+ * Hits under the cursor grouped by topic: topics in the order they first appear (callers pass the
+ * most specific first), each group by receive time. A fix drawn twice (track point and current
+ * marker) or a feature reported twice (tile edges) is listed once.
+ */
+export function groupHitsByTopic<T extends { message: MessageEvent; name?: string }>(
+  hits: readonly T[],
+): T[][] {
+  const seen = new Set<string>();
+  const groups = new Map<string, T[]>();
+  for (const hit of hits) {
+    const { topic, receiveTime } = hit.message;
+    const key = `${topic}\0${receiveTime.sec}\0${receiveTime.nsec}\0${hit.name ?? ""}`;
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    const group = groups.get(topic);
+    if (group) {
+      group.push(hit);
+    } else {
+      groups.set(topic, [hit]);
+    }
+  }
+  return [...groups.values()].map((group) =>
+    group.sort((a, b) => compare(a.message.receiveTime, b.message.receiveTime)),
+  );
+}
+
+/**
+ * Runs of fixes under the cursor (`[first, last]`, from several drawn points, overlapping) merged
+ * into passes: one per visit, so a receiver standing still is one pass and a crossing two.
+ */
+export function fixPasses(
+  runs: readonly (readonly [number, number])[],
+): { first: number; last: number }[] {
+  const passes: { first: number; last: number }[] = [];
+  for (const [first, last] of [...runs].sort((a, b) => a[0] - b[0])) {
+    const pass = passes.at(-1);
+    if (pass && first <= pass.last + 1) {
+      pass.last = Math.max(pass.last, last);
+    } else {
+      passes.push({ first, last });
+    }
+  }
+  return passes;
 }
