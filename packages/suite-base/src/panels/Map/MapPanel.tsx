@@ -12,8 +12,10 @@ import * as _ from "lodash-es";
 import {
   GeoJSONSource,
   LngLatBounds,
+  MapGeoJSONFeature,
   Map as MapLibreMap,
   MapMouseEvent,
+  MercatorCoordinate,
   NavigationControl,
   Popup,
   ScaleControl,
@@ -23,7 +25,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { makeStyles } from "tss-react/mui";
 import { useDebounce } from "use-debounce";
 
-import { filterMap } from "@lichtblick/den/collection";
+import { filterMap, pushAll } from "@lichtblick/den/collection";
 import { useDeepMemo, useLatest } from "@lichtblick/hooks";
 import Logger from "@lichtblick/log";
 import { MessagePath, parseMessagePath } from "@lichtblick/message-path";
@@ -61,7 +63,9 @@ import {
   DataSource,
   DrawnTrack,
   emptyOverlayData,
+  fixPasses,
   geoJsonFeatures,
+  groupHitsByTopic,
   headingFromTrack,
   INTERACTIVE_LAYERS,
   lngLatOf,
@@ -101,9 +105,18 @@ const log = Logger.getLogger(__filename);
 const TRACK_POINT_BUDGET = 50_000;
 
 /** `id` tells hovered things apart: the same fix or feature keeps its popup. */
-type Hit =
-  | { kind: "nav"; id: unknown; message: NavMessage; value?: string }
-  | { kind: "geojson"; id: unknown; message: GeoJsonMessage; name?: string };
+type NavHitStop = { first: NavMessage; last: NavMessage; count: number };
+
+type NavHit = {
+  kind: "nav";
+  id: unknown;
+  message: NavMessage;
+  value?: string;
+  /** The stop `message` belongs to, when the cursor is over more than one of its fixes. */
+  stop?: NavHitStop;
+};
+
+type Hit = NavHit | { kind: "geojson"; id: unknown; message: GeoJsonMessage; name?: string };
 
 type View = Pick<Config, "center" | "zoomLevel" | "bearing" | "pitch">;
 
@@ -111,7 +124,7 @@ function eventTimeSec(event: MessageEvent): number {
   return toSec(event.receiveTime);
 }
 
-function popupContent(hit: Hit): HTMLElement {
+function hitContent(hit: Hit): HTMLElement {
   const root = document.createElement("div");
   root.style.font = "12px/1.4 system-ui, sans-serif";
   const line = (text: string, style?: { bold: boolean }) => {
@@ -126,8 +139,7 @@ function popupContent(hit: Hit): HTMLElement {
     line(hit.name, { bold: true });
   }
   line(hit.message.topic, { bold: hit.kind === "nav" });
-  const stamp = hit.message.receiveTime;
-  line(isAbsoluteTime(stamp) ? formatTime(stamp) : `${formatTimeRaw(stamp)} s`);
+  line(stampText(startOf(hit)));
   if (hit.kind === "nav") {
     const { latitude, longitude, altitude } = hit.message.message;
     line(`${latitude.toFixed(7)}, ${longitude.toFixed(7)}`);
@@ -138,6 +150,97 @@ function popupContent(hit: Hit): HTMLElement {
     if (hit.value != undefined) {
       line(hit.value, { bold: true });
     }
+    if (hit.stop) {
+      line(`here ${stopText(hit.stop)}`);
+    }
+  }
+  return root;
+}
+
+/** Rows listed per topic, and topics listed, when several features are under the cursor. */
+const ROWS_PER_TOPIC = 3;
+const TOPICS_LISTED = 6;
+
+/**
+ * The visit of fixes `first` to `last` when it is a stop (a second or more), not just dense
+ * sampling while passing by.
+ */
+function stopAt(store: TrackStore, first: number, last: number): NavHitStop | undefined {
+  const { time } = store.columns;
+  return time[last]! - time[first]! >= 1
+    ? { first: store.message(first), last: store.message(last), count: last - first + 1 }
+    : undefined;
+}
+
+/** "600 fixes, 9:59": how long the cursor's spot was visited. */
+function stopText({ first, last, count }: NavHitStop): string {
+  const seconds = toSec(last.receiveTime) - toSec(first.receiveTime);
+  const span =
+    seconds < 60
+      ? `${seconds.toFixed(1)} s`
+      : `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, "0")}`;
+  return `${count} fixes, ${span}`;
+}
+
+/** Where a hit is in time: a stop where it starts, so seeking there shows the whole stop. */
+function startOf(hit: Hit): MessageEvent {
+  return (hit.kind === "nav" ? hit.stop?.first : undefined) ?? hit.message;
+}
+
+function stampText(message: MessageEvent): string {
+  const stamp = message.receiveTime;
+  return isAbsoluteTime(stamp) ? formatTime(stamp) : `${formatTimeRaw(stamp)} s`;
+}
+
+/**
+ * One popup for everything under the cursor: a topic heading per group, then a row per hit (time
+ * and its key field). Rows are buttons that `onPick` the hit once the popup is pinned.
+ */
+function hitsContent(
+  groups: readonly Hit[][],
+  onPick: (message: MessageEvent) => void,
+): HTMLElement {
+  const root = document.createElement("div");
+  root.style.font = "12px/1.4 system-ui, sans-serif";
+  const add = (text: string, className?: string) => {
+    const el = document.createElement("div");
+    el.textContent = text;
+    if (className) {
+      el.className = className;
+    }
+    root.appendChild(el);
+  };
+  for (const group of groups.slice(0, TOPICS_LISTED)) {
+    const { topic } = group[0]!.message;
+    const count = group.length;
+    add(count > 1 ? `${topic} (${count})` : topic, "hit-topic");
+    for (const hit of group.slice(0, ROWS_PER_TOPIC)) {
+      const stop = hit.kind === "nav" ? hit.stop : undefined;
+      const start = startOf(hit);
+      const detail =
+        hit.kind === "geojson"
+          ? (hit.name ?? "feature")
+          : stop
+            ? stopText(stop)
+            : (hit.value ?? fixLabel(hit.message));
+      const row = document.createElement("button");
+      row.type = "button";
+      row.className = "hit-row";
+      row.textContent = `${stampText(start)} · ${detail}`;
+      row.addEventListener("click", () => {
+        onPick(start);
+      });
+      root.appendChild(row);
+    }
+    if (count > ROWS_PER_TOPIC) {
+      add(
+        `+${count - ROWS_PER_TOPIC} more, last ${stampText(group[group.length - 1]!.message)}`,
+        "hit-more",
+      );
+    }
+  }
+  if (groups.length > TOPICS_LISTED) {
+    add(`+${groups.length - TOPICS_LISTED} more topics`, "hit-more");
   }
   return root;
 }
@@ -167,6 +270,24 @@ const useStyles = makeStyles()((theme) => ({
       padding: theme.spacing(0.75, 1),
     },
     "& .maplibregl-popup-tip": { display: "none" },
+    // The list of a stack under the cursor: rows become clickable once a click pins it.
+    "& .maplibregl-popup .hit-topic": { fontWeight: 600, marginTop: 2 },
+    "& .maplibregl-popup .hit-more": { color: theme.palette.text.secondary },
+    "& .maplibregl-popup .hit-row": {
+      display: "block",
+      width: "100%",
+      padding: theme.spacing(0, 0.5),
+      border: 0,
+      borderRadius: theme.shape.borderRadius,
+      background: "none",
+      color: "inherit",
+      font: "inherit",
+      textAlign: "left",
+    },
+    "& .maplibregl-popup.pinned .hit-row": { cursor: "pointer" },
+    "& .maplibregl-popup.pinned .hit-row:hover": {
+      backgroundColor: theme.palette.action.hover,
+    },
     // Above the panel's own overlays (legends, toolbar).
     "& .maplibregl-popup": { zIndex: 3 },
     // Theme MapLibre's built-in controls.
@@ -1322,12 +1443,16 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
     const popup = new Popup({
       closeButton: false,
       closeOnClick: false,
+      // Hover must not take focus from wherever the user is typing.
+      focusAfterOpen: false,
       offset: 10,
       maxWidth: "280px",
     });
-    let hovered: Hit | undefined;
+    // What the popup shows; `pinned` once a click on a stack made its rows clickable.
+    let hovered: readonly Hit[] = [];
+    let pinned = false;
 
-    const pick = (event: MapMouseEvent): Hit | undefined => {
+    const pick = (event: MapMouseEvent): Hit[][] => {
       // Most specific first: a track point inside a GeoJSON area should win over the area.
       const priority: string[] = [
         ...INTERACTIVE_LAYERS.current,
@@ -1337,46 +1462,108 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
       const layers = priority.filter((id) => map.getLayer(id) != undefined);
       // A few pixels of slack makes small points easy to hover.
       const { x, y } = event.point;
-      const hits = map.queryRenderedFeatures(
+      const features = map.queryRenderedFeatures(
         [
           [x - 4, y - 4],
           [x + 4, y + 4],
         ],
         { layers },
       );
-      const feature = _.minBy(hits, (hit) => priority.indexOf(hit.layer.id));
-      const index: unknown = feature?.properties.i;
-      if (!feature || typeof index !== "number") {
-        return undefined;
-      }
-      const layerId = feature.layer.id;
-      if (layerId === INTERACTIVE_LAYERS.track) {
-        // The drawn point stands for the fixes around it: show the one under the cursor.
-        const generation: unknown = feature.properties.g;
-        const hit = resolveTrackFix(
-          typeof generation === "number" ? trackGenerations.current.get(generation) : undefined,
-          feature.properties.k,
-          index,
-          [event.lngLat.lng, event.lngLat.lat],
-        );
-        if (!hit) {
-          return undefined;
+      const sorted = _.sortBy(features, (feature) => priority.indexOf(feature.layer.id));
+      // A pixel in Web Mercator units, for the fixes a drawn track point stands for.
+      const at = MercatorCoordinate.fromLngLat(event.lngLat);
+      const edge = MercatorCoordinate.fromLngLat(map.unproject([x + 1, y]));
+      const pixel = Math.hypot(edge.x - at.x, edge.y - at.y);
+      // Drawn points of a track stand for overlapping runs of fixes: merged into passes below.
+      const stacks = new Map<DrawnTrack, { runs: [number, number][]; nearest: number[] }>();
+      const hits: Hit[] = [];
+      for (const feature of sorted) {
+        const index: unknown = feature.properties.i;
+        if (typeof index !== "number") {
+          continue;
         }
-        const { track, fix } = hit;
-        const colored = track.colorScale;
-        const value = colored?.values[fix];
-        return {
-          kind: "nav",
-          // The fix, not the overlay: the popup and preview time stay put across redraws.
-          id: trackFixKey(track.store, fix),
-          message: track.store.message(fix),
-          value:
-            colored && value != undefined && isFinite(value)
-              ? `${Number(value.toPrecision(4))}${colored.unit}`
-              : undefined,
-        };
+        if (feature.layer.id === INTERACTIVE_LAYERS.track) {
+          const generation: unknown = feature.properties.g;
+          const { k } = feature.properties;
+          const generationTracks =
+            typeof generation === "number" ? trackGenerations.current.get(generation) : undefined;
+          const drawn = typeof k === "number" ? generationTracks?.[k] : undefined;
+          // Another point of a stop already found it, end to end (a parked receiver): skip the scan.
+          if (
+            drawn &&
+            stacks.get(drawn)?.runs.some(([a, b]) => a <= index && index <= b) === true
+          ) {
+            continue;
+          }
+          const size: unknown = feature.properties.r;
+          const found = resolveTrackFix(
+            generationTracks,
+            k,
+            index,
+            [event.lngLat.lng, event.lngLat.lat],
+            // Hit where its drawn circle meets the slack box: the box's corners plus the circle.
+            pixel * (6 + (typeof size === "number" ? size : 0)),
+          );
+          if (found) {
+            const stack = stacks.get(found.track) ?? { runs: [], nearest: [] };
+            pushAll(stack.runs, found.runs);
+            stack.nearest.push(found.fix);
+            stacks.set(found.track, stack);
+          }
+        } else {
+          const hit = toHit(feature, index);
+          if (hit) {
+            hits.push(hit);
+          }
+        }
       }
-      if ((INTERACTIVE_LAYERS.current as readonly string[]).includes(layerId)) {
+      const passes = [...stacks].flatMap(([track, stack]) =>
+        fixPasses(stack.runs, stack.nearest).map((pass) => ({ track, pass })),
+      );
+      // By topic: features of one layer come in no particular order, and the list shouldn't jump.
+      const trackHits = _.sortBy(
+        passes.map(({ track, pass }) => trackHit(track, pass)),
+        (hit) => hit.message.topic,
+      );
+      // A current marker is the newest fix of its track: the pass holding it lists it already.
+      const listed = ({ message }: Hit) => {
+        const t = toSec(message.receiveTime);
+        return passes.some(({ track: { store }, pass }) => {
+          const { time } = store.columns;
+          return store.topic === message.topic && time[pass.first]! <= t && t <= time[pass.last]!;
+        });
+      };
+      // Hits other than track ones are current markers, then GeoJSON features (by priority).
+      const [current, geo] = _.partition(
+        _.sortBy(hits, (hit) => hit.message.topic),
+        (hit) => hit.kind === "nav",
+      );
+      return groupHitsByTopic([...current.filter((hit) => !listed(hit)), ...trackHits, ...geo]);
+    };
+
+    const trackHit = (
+      track: DrawnTrack,
+      { fix, first, last }: { fix: number; first: number; last: number },
+    ): NavHit => {
+      const { store, colorScale: colored } = track;
+      const value = colored?.values[fix];
+      const stop = stopAt(store, first, last);
+      return {
+        kind: "nav",
+        // The fix, not the overlay: the popup and preview time stay put across redraws. A stop by
+        // where it starts, which doesn't change as the cursor moves over it.
+        id: trackFixKey(store, stop ? first : fix),
+        message: store.message(fix),
+        value:
+          colored && value != undefined && isFinite(value)
+            ? `${Number(value.toPrecision(4))}${colored.unit}`
+            : undefined,
+        stop,
+      };
+    };
+
+    const toHit = (feature: MapGeoJSONFeature, index: number): Hit | undefined => {
+      if ((INTERACTIVE_LAYERS.current as readonly string[]).includes(feature.layer.id)) {
         const message = currentRef.current[index];
         return message ? { kind: "nav", id: message, message } : undefined;
       }
@@ -1393,12 +1580,30 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
     };
 
     const clear = () => {
-      if (hovered) {
-        hovered = undefined;
+      if (hovered.length > 0) {
+        hovered = [];
+        pinned = false;
+        popup.removeClassName("pinned");
         popup.remove();
         map.getCanvas().style.cursor = "";
         context.setPreviewTime(undefined);
       }
+    };
+
+    const show = (groups: readonly Hit[][], at: MapMouseEvent["lngLat"]) => {
+      const hits = groups.flat();
+      popup.setLngLat(at);
+      // Same hits as shown: keep the DOM, so the popup doesn't flicker as the cursor moves.
+      if (hits.length === hovered.length && hits.every((hit, i) => hit.id === hovered[i]!.id)) {
+        return;
+      }
+      hovered = hits;
+      const content =
+        hits.length === 1
+          ? hitContent(hits[0]!)
+          : hitsContent(groups, (message) => context.seekPlayback?.(message.receiveTime));
+      popup.setDOMContent(content).addTo(map);
+      context.setPreviewTime(eventTimeSec(startOf(hits[0]!)));
     };
 
     const onMove = (event: MapMouseEvent) => {
@@ -1406,36 +1611,57 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
         clear();
         return;
       }
-      const hit = pick(event);
-      if (!hit) {
+      if (pinned) {
+        return;
+      }
+      const groups = pick(event);
+      if (groups.length === 0) {
         clear();
         return;
       }
       map.getCanvas().style.cursor = "pointer";
-      popup.setLngLat(event.lngLat);
-      if (hit.id !== hovered?.id) {
-        hovered = hit;
-        popup.setDOMContent(popupContent(hit)).addTo(map);
-        context.setPreviewTime(eventTimeSec(hit.message));
-      }
+      show(groups, event.lngLat);
     };
     const onClick = (event: MapMouseEvent) => {
       if (measuringRef.current) {
         return;
       }
-      const hit = pick(event);
-      if (hit) {
-        context.seekPlayback?.(hit.message.receiveTime);
+      // Rows of a pinned popup handle their own clicks.
+      if (
+        event.originalEvent.target instanceof Node &&
+        popup.isOpen() &&
+        popup.getElement().contains(event.originalEvent.target)
+      ) {
+        return;
+      }
+      if (pinned) {
+        clear();
+      }
+      const groups = pick(event);
+      const hits = groups.flat();
+      if (hits.length === 1) {
+        context.seekPlayback?.(startOf(hits[0]!).receiveTime);
+      } else if (hits.length > 1) {
+        // A stack: keep its list open so a row can be picked.
+        show(groups, event.lngLat);
+        pinned = true;
+        popup.addClassName("pinned");
+      }
+    };
+    // Leaving the canvas into a pinned popup keeps it.
+    const onLeave = () => {
+      if (!pinned) {
+        clear();
       }
     };
 
     map.on("mousemove", onMove);
     map.on("click", onClick);
-    map.getCanvas().addEventListener("mouseleave", clear);
+    map.getCanvas().addEventListener("mouseleave", onLeave);
     return () => {
       map.off("mousemove", onMove);
       map.off("click", onClick);
-      map.getCanvas().removeEventListener("mouseleave", clear);
+      map.getCanvas().removeEventListener("mouseleave", onLeave);
       popup.remove();
     };
   }, [context, currentRef, geoRef, map]);

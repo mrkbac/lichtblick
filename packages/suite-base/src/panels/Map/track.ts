@@ -186,12 +186,6 @@ export class SampleStore extends ColumnStore<"time" | "value"> {
   }
 }
 
-const mercatorX = (lon: number) => (lon + 180) / 360;
-const mercatorY = (lat: number) => {
-  const s = Math.sin((Math.max(-85.05, Math.min(85.05, lat)) * Math.PI) / 180);
-  return 0.5 - Math.log((1 + s) / (1 - s)) / (4 * Math.PI);
-};
-
 /** Area to draw, in degrees. */
 export type Viewport = { west: number; south: number; east: number; north: number };
 
@@ -364,7 +358,9 @@ function sampleEvenly(
 
 /**
  * The fix between the kept neighbors of `kept[k]` that is closest to `at`, at full resolution,
- * among the first `length` rows.
+ * among the first `length` rows. With `radius` (Web Mercator units, the world is 1 wide), also
+ * the runs of fixes that close to `at`, as `[first, last]` in store order: the stops a drawn
+ * point stands for.
  */
 export function nearestFix(
   store: TrackStore,
@@ -372,28 +368,56 @@ export function nearestFix(
   k: number,
   at: LngLat,
   length = store.length,
-): number {
+  radius = 0,
+): { nearest: number; within: [number, number][] } {
+  // `kept` may be from before the store last changed: stay inside it.
+  const end = Math.min(length, store.length) - 1;
   // Capped: across a part outside the viewport the neighbors can be far apart, and far away.
   const from = Math.max(kept[k]! - 10_000, k > 0 ? kept[k - 1]! + 1 : 0);
-  // `kept` may be from before the store last changed: stay inside it.
-  const to = Math.min(
-    kept[k]! + 10_000,
-    k + 1 < kept.length ? kept[k + 1]! - 1 : Infinity,
-    Math.min(length, store.length) - 1,
-  );
-  const x = mercatorX(at[0]);
-  const y = mercatorY(at[1]);
+  const to = Math.min(kept[k]! + 10_000, k + 1 < kept.length ? kept[k + 1]! - 1 : Infinity, end);
+  // Web Mercator distance near `at`, squared and in degrees of latitude: flat-earth, exact at the
+  // cursor's few pixels and with no projection per fix.
   const { lon, lat } = store.columns;
+  const scale = Math.cos((at[1] * Math.PI) / 180);
+  const distance = (i: number) => {
+    // Periodic in longitude: the cursor can be on another copy of the world (lng beyond ±180).
+    const dLon = lon[i]! - at[0];
+    const dx = (dLon - 360 * Math.round(dLon / 360)) * scale;
+    const dy = lat[i]! - at[1];
+    return dx * dx + dy * dy;
+  };
+  const limit = (radius * 360 * scale) ** 2;
   let best = Math.min(kept[k]!, store.length - 1);
   let bestDistance = Infinity;
+  const within: [number, number][] = [];
   for (let i = from; i <= to; i++) {
-    // Periodic in longitude: the cursor can be on another copy of the world (lng beyond ±180).
-    const dx = mercatorX(lon[i]!) - x;
-    const d = Math.hypot(dx - Math.round(dx), mercatorY(lat[i]!) - y);
+    const d = distance(i);
     if (d < bestDistance) {
       bestDistance = d;
       best = i;
     }
+    if (d <= limit) {
+      const run = within.at(-1);
+      if (run?.[1] === i - 1) {
+        run[1] = i;
+      } else {
+        within.push([i, i]);
+      }
+    }
   }
-  return best;
+  // A stop past the cap or the neighbors (a receiver parked for hours): follow it to its ends, so
+  // one drawn point finds all of it.
+  const first = within[0];
+  if (first?.[0] === from) {
+    while (first[0] > 0 && distance(first[0] - 1) <= limit) {
+      first[0]--;
+    }
+  }
+  const last = within.at(-1);
+  if (last?.[1] === to) {
+    while (last[1] < end && distance(last[1] + 1) <= limit) {
+      last[1]++;
+    }
+  }
+  return { nearest: best, within };
 }

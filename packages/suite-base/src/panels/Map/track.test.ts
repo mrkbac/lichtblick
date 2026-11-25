@@ -228,16 +228,24 @@ describe("nearestFix", () => {
   it("finds the full-resolution fix nearest to the cursor between the kept neighbors", () => {
     const store = storeOf(100, (i) => [i * 1e-3, 0]);
     const kept = Uint32Array.of(0, 50, 99);
-    expect(nearestFix(store, kept, 1, [0.0303, 0])).toBe(30);
+    expect(nearestFix(store, kept, 1, [0.0303, 0]).nearest).toBe(30);
     // Not past the kept neighbors.
-    expect(nearestFix(store, kept, 0, [0.07, 0])).toBe(49);
+    expect(nearestFix(store, kept, 0, [0.07, 0]).nearest).toBe(49);
+  });
+
+  it("lists the runs within the radius, following a long stop past the scan cap", () => {
+    // Parked: 30k fixes on one spot, then moving away; drawn as just the first and last fix.
+    const store = storeOf(30_010, (i) => [i < 30_000 ? 0 : (i - 29_999) * 1e-3, 0]);
+    const kept = Uint32Array.of(0, 30_009);
+    expect(nearestFix(store, kept, 0, [0, 0], store.length, 1e-6).within).toEqual([[0, 29_999]]);
+    expect(nearestFix(store, kept, 0, [5, 0], store.length, 1e-6).within).toEqual([]);
   });
 
   it("finds the fix from another copy of the world", () => {
     const store = storeOf(3, (i) => [170 + i * 5, 0]);
     const kept = Uint32Array.of(0, 2);
     // 177 + 360 and 177 - 360 are 177 on the next and previous copy.
-    expect(nearestFix(store, kept, 1, [537, 0])).toBe(1);
-    expect(nearestFix(store, kept, 1, [-183, 0])).toBe(1);
+    expect(nearestFix(store, kept, 1, [537, 0]).nearest).toBe(1);
+    expect(nearestFix(store, kept, 1, [-183, 0]).nearest).toBe(1);
   });
 });
