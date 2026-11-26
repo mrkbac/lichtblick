@@ -19,6 +19,22 @@ export type SyncFile = {
   readInto(out: Uint8Array, offset: number): number;
 };
 
+/**
+ * Paths the loader opens files by: each file name, or `<n>/<name>` for a later file whose name is
+ * taken, so same-named files from different folders all reach the loader with their extension.
+ */
+export function uniqueFilePaths(names: readonly string[]): string[] {
+  const taken = new Set<string>();
+  return names.map((name) => {
+    let filePath = name;
+    for (let n = 2; taken.has(filePath); n++) {
+      filePath = `${n}/${name}`;
+    }
+    taken.add(filePath);
+    return filePath;
+  });
+}
+
 export type LoaderChannel = {
   id: number;
   schemaId: number | undefined;

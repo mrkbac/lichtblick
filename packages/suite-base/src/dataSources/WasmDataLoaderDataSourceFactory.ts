@@ -6,11 +6,13 @@ import { InstalledDataLoader } from "@lichtblick/suite-base/types/Extensions";
 
 /** Opens files of the type an extension's data loader registered for. */
 export function createWasmDataLoaderSource({
+  extensionId,
   extensionName,
   args,
 }: InstalledDataLoader): LocalFileDataSourceFactory {
   return new LocalFileDataSourceFactory({
-    id: `data-loader:${extensionName}:${args.supportedFileType}`,
+    // The stable id, not the display name, which two extensions may share
+    id: `data-loader:${extensionId}:${args.supportedFileType}`,
     displayName: `${args.supportedFileType} (${extensionName})`,
     supportedFileTypes: [args.supportedFileType],
     initWorker: () =>

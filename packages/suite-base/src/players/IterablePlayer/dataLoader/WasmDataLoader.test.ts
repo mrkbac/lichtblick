@@ -4,7 +4,7 @@
 import fs from "node:fs";
 import path from "node:path";
 
-import { SyncFile, WasmDataLoader } from "./WasmDataLoader";
+import { SyncFile, WasmDataLoader, uniqueFilePaths } from "./WasmDataLoader";
 import { WasmDataLoaderIterableSource } from "./WasmDataLoaderIterableSource";
 
 // Loaders built from fixtures/text_loader with Foxglove's published foxglove_data_loader crate.
@@ -175,6 +175,17 @@ describe.each(Object.entries(FIXTURES))("WasmDataLoader (%s)", (target, module) 
   it("surfaces loader errors", async () => {
     const loader = await load({ "a.txt": "notanumber /a {}\n" }, module);
     expect(() => loader.initialize()).toThrow("invalid digit");
+  });
+});
+
+describe("uniqueFilePaths", () => {
+  it("keeps every file when names repeat", () => {
+    expect(uniqueFilePaths(["a.txt", "b.txt", "a.txt", "a.txt"])).toEqual([
+      "a.txt",
+      "b.txt",
+      "2/a.txt",
+      "3/a.txt",
+    ]);
   });
 });
 

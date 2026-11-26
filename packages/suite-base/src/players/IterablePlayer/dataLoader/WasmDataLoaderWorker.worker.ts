@@ -6,6 +6,7 @@ import * as Comlink from "@foxglove/comlink";
 import { IterableSourceInitializeArgs } from "@lichtblick/suite-base/players/IterablePlayer/IIterableSource";
 import { WorkerIterableSourceWorker } from "@lichtblick/suite-base/players/IterablePlayer/WorkerIterableSourceWorker";
 
+import { uniqueFilePaths } from "./WasmDataLoader";
 import { WasmDataLoaderIterableSource } from "./WasmDataLoaderIterableSource";
 import { BlockCachedFile } from "../rosdb3/BlockCachedFile";
 
@@ -18,9 +19,10 @@ export async function initialize(
   }
   const response = await fetch(args.wasmUrl);
   const wasm = await WebAssembly.compile(await response.arrayBuffer());
+  const paths = uniqueFilePaths(files.map((file) => file.name));
   const source = new WasmDataLoaderIterableSource(
     wasm,
-    new Map(files.map((file) => [file.name, new BlockCachedFile(file)])),
+    new Map(files.map((file, i) => [paths[i]!, new BlockCachedFile(file)])),
   );
   return Comlink.proxy(new WorkerIterableSourceWorker(source));
 }
