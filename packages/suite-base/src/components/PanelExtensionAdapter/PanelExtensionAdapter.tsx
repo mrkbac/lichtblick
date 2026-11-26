@@ -956,7 +956,10 @@ function PanelExtensionAdapter(
 
       // eslint-disable-next-line @lichtblick/no-getters-setters
       set onRender(renderFunction: RenderFn | undefined) {
-        setRenderFn(() => renderFunction);
+        // A stale instance's cleanup (`onRender = undefined`) must not clear the new one's.
+        if (isCurrentInstance) {
+          setRenderFn(() => renderFunction);
+        }
       },
     };
     const onUnmount = initPanel(context);

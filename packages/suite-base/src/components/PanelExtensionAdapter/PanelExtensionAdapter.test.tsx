@@ -1444,6 +1444,47 @@ describe("PanelExtensionAdapter", () => {
     ]);
   });
 
+  it("ignores a late onRender = undefined from a previous panel instance", async () => {
+    // A live source re-inits panels while it starts; the old instance's cleanup used to clear the
+    // new instance's render function, so the panel never rendered another frame.
+    const seen: string[] = [];
+    let current: PanelExtensionContext | undefined;
+    const makeInitPanel = (seenBy: string[]) => (context: PanelExtensionContext) => {
+      current = context;
+      context.onRender = (renderState, done) => {
+        if (renderState.colorScheme) {
+          seenBy.push(renderState.colorScheme);
+        }
+        done();
+      };
+      return () => {
+        queueMicrotask(() => {
+          context.onRender = undefined;
+        });
+      };
+    };
+    const renderAdapter = (initPanel: ReturnType<typeof makeInitPanel>) => (
+      <ThemeProvider isDark>
+        <MockPanelContextProvider>
+          <PanelSetup>
+            <PanelExtensionAdapter config={{}} saveConfig={() => {}} initPanel={initPanel} />
+          </PanelSetup>
+        </MockPanelContextProvider>
+      </ThemeProvider>
+    );
+
+    const { rerender } = render(renderAdapter(makeInitPanel([])));
+    rerender(renderAdapter(makeInitPanel(seen)));
+    await act(async () => undefined);
+    // A later update, without re-initializing the panel
+    act(() => {
+      current?.watch("colorScheme");
+    });
+    await act(async () => undefined);
+
+    expect(seen).toEqual(["dark"]);
+  });
+
   it("does not carry a previous panel instance's advertisements into the next one", async () => {
     const makeInitPanel = (topic: string) => (context: PanelExtensionContext) => {
       context.advertise?.(topic, "some_datatype");
