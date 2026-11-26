@@ -116,6 +116,8 @@ export class McapIterableSource implements ISerializedIterableSource {
   // eviction only discards the heavyweight indexed-reader/parsed-channel state. Closed only in
   // terminate(). Undefined for "file" sources and for remote sources that fail to open.
   #persistentReadable: RemoteFileReadable | undefined;
+  // The earliest chunk and its message indexes, for prefetchStart()
+  #firstChunk: { offset: bigint; length: bigint } | undefined;
   // Decompressed chunks, shared by every reader this source opens (all of them pass it), so
   // playback, preloading, plots and backfill don't each decompress the same chunks. Survives
   // re-hydration like #persistentReadable.
@@ -241,6 +243,14 @@ export class McapIterableSource implements ISerializedIterableSource {
     if (result.status === "indexed") {
       const remote = readable;
       remote.setChunks(result.reader.chunkIndexes);
+      const first = result.reader.chunkIndexes.reduce<McapTypes.ChunkIndex | undefined>(
+        (min, chunk) => (min && min.messageStartTime <= chunk.messageStartTime ? min : chunk),
+        undefined,
+      );
+      this.#firstChunk = first && {
+        offset: first.chunkStartOffset,
+        length: first.chunkLength + first.messageIndexLength,
+      };
       return {
         inner: new McapIndexedIterableSource(result.reader, {
           recordIdPrefix: this.#recordIdPrefix,
@@ -844,6 +854,12 @@ export class McapIterableSource implements ISerializedIterableSource {
     }
     await this.#pool.acquire(this, this.#hydrator);
     this.#pool.release(this);
+  }
+
+  public prefetchStart(): void {
+    if (this.#firstChunk) {
+      this.#persistentReadable?.prefetch([this.#firstChunk], { skim: false });
+    }
   }
 
   public async terminate(): Promise<void> {

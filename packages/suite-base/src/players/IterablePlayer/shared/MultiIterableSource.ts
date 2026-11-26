@@ -182,6 +182,9 @@ export class MultiIterableSource implements ISerializedIterableSource {
             credentials,
             cacheSizeInBytes: perSourceCache,
             readAheadBufferBytes,
+            // Opening a bundle reads every file's header; read-ahead from it would download each
+            // file whether it plays or not. initializeSources prefetches the earliest one instead
+            readAheadFromInitialData: numSources <= 1,
             pool: this.#pool,
           })
         : new this.SourceConstructor({ type: "file", file: entry, pool: this.#pool }),
@@ -249,11 +252,22 @@ export class MultiIterableSource implements ISerializedIterableSource {
     concurrency: number,
   ): Promise<Initialization[]> {
     const semaphore = new Semaphore(concurrency);
+    // The first messages to play come from the earliest source; fetch them while the rest open.
+    // Sources usually open in time order, so this prefetches few besides the earliest
+    let earliest: Time | undefined;
     // Promise.all preserves input order regardless of settle order, so the returned
     // initializations stay aligned with `sources`.
     return await Promise.all(
       sources.map(
-        async (source) => await semaphore.runExclusive(async () => await source.initialize()),
+        async (source) =>
+          await semaphore.runExclusive(async () => {
+            const init = await source.initialize();
+            if (!earliest || compare(init.start, earliest) < 0) {
+              earliest = init.start;
+              source.prefetchStart?.();
+            }
+            return init;
+          }),
       ),
     );
   }

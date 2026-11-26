@@ -246,6 +246,12 @@ export interface IIterableSource<MessageType = unknown> {
   prewarm?: () => Promise<void>;
 
   /**
+   * Optional: download the bytes of the first messages now, so the first read after initialize()
+   * doesn't wait a round trip. For a source that may play first; a no-op where it doesn't apply.
+   */
+  prefetchStart?: () => void;
+
+  /**
    * Optional, for a source comparing recordings (see Initialization.compareSides): move each side
    * by `offsetsSec[i]` seconds. The source reports the new times, with `request` as
    * Initialization.compareRequest, through waitForUpdate().

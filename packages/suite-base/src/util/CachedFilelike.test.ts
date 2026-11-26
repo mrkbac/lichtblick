@@ -106,7 +106,8 @@ describe("CachedFilelike", () => {
     });
 
     // A bundle opens many files and reads each one's header from the initial data; downloading
-    // read-ahead (or the whole file, when it fits the cache) for each of them wastes bandwidth
+    // read-ahead (or the whole file, when it fits the cache) for each of them wastes bandwidth.
+    // A single file keeps the default, reading ahead from its header
     it.each([
       ["whole file fits the cache", 1000],
       ["cache smaller than the file", 50],
@@ -123,6 +124,7 @@ describe("CachedFilelike", () => {
         log,
         cacheSizeInBytes,
         readAheadBufferBytes: 20,
+        readAheadFromInitialData: false,
       });
 
       await expect(cachedFileReader.read(0, 5)).resolves.toEqual(data.slice(0, 5));

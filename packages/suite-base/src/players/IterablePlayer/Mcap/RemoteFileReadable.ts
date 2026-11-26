@@ -22,6 +22,8 @@ export type RemoteFileReadableOptions = {
   cacheSizeInBytes?: number;
   readAheadEnabled?: boolean;
   readAheadBufferBytes?: number;
+  /** See CachedFilelike's option of the same name */
+  readAheadFromInitialData?: boolean;
   /** Cancels the requests that open the file */
   signal?: AbortSignal;
 };
@@ -69,6 +71,7 @@ export class RemoteFileReadable {
       cacheSizeInBytes: this.#cacheSizeInBytes,
       readAheadEnabled: options?.readAheadEnabled,
       readAheadBufferBytes: options?.readAheadBufferBytes,
+      readAheadFromInitialData: options?.readAheadFromInitialData,
     });
 
     const inner: McapTypes.IReadable<ReadOptions> = {
