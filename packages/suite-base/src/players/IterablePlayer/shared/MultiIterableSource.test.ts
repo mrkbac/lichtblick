@@ -147,6 +147,7 @@ describe("MultiIterableSource", () => {
         url: url1,
         cacheSizeInBytes: expect.any(Number),
         readAheadBufferBytes: DEFAULT_READ_AHEAD_BUFFER_BYTES,
+        readAheadFromInitialData: false,
         pool: expect.any(HydratedSourcePool),
       });
       expect(mockSourceConstructor).toHaveBeenNthCalledWith(2, {
@@ -154,9 +155,35 @@ describe("MultiIterableSource", () => {
         url: url2,
         cacheSizeInBytes: expect.any(Number),
         readAheadBufferBytes: DEFAULT_READ_AHEAD_BUFFER_BYTES,
+        readAheadFromInitialData: false,
         pool: expect.any(HydratedSourcePool),
       });
       expect(initializations).toHaveLength(2);
+    });
+    it("prefetches the start of each source that is the earliest so far once it opens", async () => {
+      // Opened in this order: 5 is the earliest so far, then 3; 4 is later than 3
+      const prefetchStart = [5, 3, 4].map((sec) => {
+        const prefetch = vi.fn();
+        mockSourceConstructor.mockImplementationOnce(function () {
+          return {
+            initialize: vi
+              .fn()
+              .mockResolvedValue(
+                InitializationSourceBuilder.initialization({ start: { sec, nsec: 0 } }),
+              ),
+            prefetchStart: prefetch,
+          } as Partial<Mocked<IIterableSource>>;
+        });
+        return prefetch;
+      });
+      const multiSource = new MultiIterableSource(
+        { type: "urls", urls: ["a", "b", "c"] },
+        mockSourceConstructor,
+      );
+
+      await multiSource["loadMultipleSources"]();
+
+      expect(prefetchStart.map((prefetch) => prefetch.mock.calls.length)).toEqual([1, 1, 0]);
     });
     it("should cap default multi-url readAheadBufferBytes at 2 MiB when per-source cache is larger", async () => {
       // GIVEN: a multi-url source whose per-source cache is far above 8 MiB.

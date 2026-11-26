@@ -104,6 +104,40 @@ describe("CachedFilelike", () => {
       await expect(cachedFileReader.read(5, 90)).resolves.toEqual(data.slice(5, 95));
       expect(fetch.mock.calls).toEqual([[10, 80]]);
     });
+
+    // A bundle opens many files and reads each one's header from the initial data; downloading
+    // read-ahead (or the whole file, when it fits the cache) for each of them wastes bandwidth.
+    // A single file keeps the default, reading ahead from its header
+    it.each([
+      ["whole file fits the cache", 1000],
+      ["cache smaller than the file", 50],
+    ])("starts read-ahead only after a real read (%s)", async (_case, cacheSizeInBytes) => {
+      const data = Uint8Array.from({ length: 100 }, (_, i) => i);
+      const fileReader = new InMemoryFileReader(data);
+      fileReader.open = async () => ({
+        size: 100,
+        initialData: [{ offset: 0, data: data.slice(0, 10) }],
+      });
+      const fetch = vi.spyOn(fileReader, "fetch");
+      const cachedFileReader = new CachedFilelike({
+        fileReader,
+        log,
+        cacheSizeInBytes,
+        readAheadBufferBytes: 20,
+        readAheadFromInitialData: false,
+      });
+
+      await expect(cachedFileReader.read(0, 5)).resolves.toEqual(data.slice(0, 5));
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      expect(fetch).not.toHaveBeenCalled();
+
+      // Once reading needs the network, read-ahead continues after it as before
+      await expect(cachedFileReader.read(10, 5)).resolves.toEqual(data.slice(10, 15));
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      expect(Math.max(...fetch.mock.calls.map(([offset, length]) => offset + length))).toBe(
+        cacheSizeInBytes >= 100 ? 100 : 35,
+      );
+    });
   });
 
   it("caches in bounded blocks even when the whole file fits the budget", async () => {

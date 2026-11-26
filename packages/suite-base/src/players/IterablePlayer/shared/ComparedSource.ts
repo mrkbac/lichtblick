@@ -171,6 +171,10 @@ export class ComparedSource<MessageType = Uint8Array> implements IIterableSource
     await this.#source.prewarm?.();
   }
 
+  public prefetchStart(): void {
+    this.#source.prefetchStart?.();
+  }
+
   // Times can't go below zero, so a range that starts before the shifted recording clamps to 0.
   #shift(time: Time, sign = 1n): Time {
     const ns = toNanoSec(time) + sign * this.#offsetNs;

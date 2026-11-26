@@ -62,6 +62,7 @@ export default class CachedFilelike implements Filelike {
   #cacheSizeInBytes: number = Infinity;
   readonly #readAheadEnabled: boolean = true;
   readonly #readAheadBufferBytes: number | undefined;
+  readonly #readAheadFromInitialData: boolean;
   #fileSize?: number;
   #virtualBuffer: VirtualLRUBuffer;
   #log: ILogger;
@@ -98,6 +99,9 @@ export default class CachedFilelike implements Filelike {
     cacheSizeInBytes?: number;
     readAheadEnabled?: boolean;
     readAheadBufferBytes?: number;
+    // False: reads served from the open's initialData don't start read-ahead, only a read that
+    // needs the network does (for files opened in bulk that may never be read)
+    readAheadFromInitialData?: boolean;
     log?: ILogger;
     // eslint-disable-next-line @lichtblick/no-boolean-parameters
     keepReconnectingCallback?: (reconnecting: boolean) => void;
@@ -106,6 +110,7 @@ export default class CachedFilelike implements Filelike {
     this.#cacheSizeInBytes = options.cacheSizeInBytes ?? this.#cacheSizeInBytes;
     this.#readAheadEnabled = options.readAheadEnabled ?? this.#readAheadEnabled;
     this.#readAheadBufferBytes = options.readAheadBufferBytes;
+    this.#readAheadFromInitialData = options.readAheadFromInitialData ?? true;
     this.#keepReconnectingCallback = options.keepReconnectingCallback;
     this.#log = options.log ?? log;
     this.#virtualBuffer = new VirtualLRUBuffer({ size: 0 });
@@ -347,7 +352,9 @@ export default class CachedFilelike implements Filelike {
         return true;
       }
 
-      this.#lastResolvedCallbackEnd = range.end;
+      if (!cached || this.#readAheadFromInitialData || this.#lastResolvedCallbackEnd != undefined) {
+        this.#lastResolvedCallbackEnd = range.end;
+      }
       if (this.#currentConnection) {
         this.#lastMainServeTime = Date.now();
         if (!background && !cached) {
