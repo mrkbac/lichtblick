@@ -219,8 +219,9 @@ export function createMessagePipelineStore({
               playerError = toError(err);
             }
           }
+          let fallbackUrl: string | undefined;
           if (canBuiltinFetchPkgUri) {
-            return await builtinFetch(uri, options);
+            fallbackUrl = uri;
           } else if (
             pkgName &&
             options?.referenceUrl != undefined &&
@@ -232,10 +233,12 @@ export function createMessagePipelineStore({
             // Example:
             //   base URL: https://example.com/<pkgName>/urdf/robot.urdf
             //   resolved: https://example.com/<pkgName>/<pkgPath>
-            const resolvedUrl =
+            fallbackUrl =
               options.referenceUrl.slice(0, options.referenceUrl.lastIndexOf(pkgName)) + pkgPath;
+          }
+          if (fallbackUrl != undefined) {
             try {
-              return await builtinFetch(resolvedUrl, options);
+              return await builtinFetch(fallbackUrl, options);
             } catch (err: unknown) {
               throw playerError ?? err;
             }
