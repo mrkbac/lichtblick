@@ -2,6 +2,25 @@
 
 Highlights from Digitalis, a fork of Lichtblick. Dates follow when changes reached the `licht` branch, in Europe/Berlin time.
 
+## 2026-11-26
+
+- Install a Foxglove file data loader extension to open its recording format through the file picker, drag and drop, or Recents. [#575](https://github.com/mrkbac/lichtblick/pull/575)
+- Audio keeps its original pitch when playback speeds up or slows down. [#583](https://github.com/mrkbac/lichtblick/pull/583)
+- Click overlapping tracks or features on the map to see visits grouped by topic and time, then select a visit to seek there. [#580](https://github.com/mrkbac/lichtblick/pull/580)
+- Remote MCAP bundles defer read-ahead until playback needs it. For 24 synthetic 65 MB files at 50 ms round-trip latency, the reader downloaded **4 MB instead of 34 MB** by the first message. [#586](https://github.com/mrkbac/lichtblick/pull/586)
+- Playback skips damaged MCAP chunks whose index points outside the file and continues with the next readable chunk. [#585](https://github.com/mrkbac/lichtblick/pull/585)
+- The web viewer can load meshes relative to the URDF URL when a connected WebSocket server does not serve model assets. [#588](https://github.com/mrkbac/lichtblick/pull/588)
+
+## 2026-11-25
+
+- Preview attachments in a single remote MCAP. The viewer fetches only the attachment header and data range. [#568](https://github.com/mrkbac/lichtblick/pull/568)
+- Render 16-bit floating-point fields in Foxglove point clouds, grids, and voxel grids. [#572](https://github.com/mrkbac/lichtblick/pull/572)
+- State Transitions can draw a step line with a labeled lane for each distinct value, making it easier to see which state was active and when it changed. [#577](https://github.com/mrkbac/lichtblick/pull/577)
+- Hover over a log row to mark its time in Plot and the playback timeline. Hovering elsewhere highlights the nearest log row. [#578](https://github.com/mrkbac/lichtblick/pull/578)
+- Move a clip’s start and end together by dragging the trim range or nudging it with the arrow keys. [#576](https://github.com/mrkbac/lichtblick/pull/576)
+- Pan the Image panel with two fingers and pinch to zoom around the cursor without zooming the browser page. [#567](https://github.com/mrkbac/lichtblick/pull/567)
+- Open the data-source menu in the title bar to copy a playback link, inspect the source, or download individual files from a remote comparison. [#573](https://github.com/mrkbac/lichtblick/pull/573)
+
 ## 2026-11-24
 
 - Hosted catalogs can include GPS tracks. Search the catalog map by area and highlight a recording’s route before opening it. [#562](https://github.com/mrkbac/lichtblick/pull/562)
