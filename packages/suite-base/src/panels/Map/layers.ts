@@ -5,6 +5,7 @@ import * as _ from "lodash-es";
 import type { LayerSpecification, SourceSpecification, StyleSpecification } from "maplibre-gl";
 
 import { pushAll } from "@lichtblick/den/collection";
+import { proxiedFetch } from "@lichtblick/suite-base/util/httpProxy";
 import { omitUndefined } from "@lichtblick/suite-base/util/omitUndefined";
 
 import type { LngLat } from "./geo";
@@ -501,7 +502,7 @@ export async function fetchVectorStyle(
   url: string,
   signal: AbortSignal,
 ): Promise<StyleSpecification> {
-  const response = await fetch(url, { signal });
+  const response = await proxiedFetch(url, { signal });
   if (!response.ok) {
     throw new Error(`Failed to load style (HTTP ${response.status})`);
   }
