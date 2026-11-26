@@ -9,6 +9,8 @@
 import type { Mock } from "vitest";
 
 import FakePlayer from "@lichtblick/suite-base/components/MessagePipeline/FakePlayer";
+import { TopicAliasingPlayer } from "@lichtblick/suite-base/players/TopicAliasingPlayer/TopicAliasingPlayer";
+import UserScriptPlayer from "@lichtblick/suite-base/players/UserScriptPlayer";
 import { localResourceFolders } from "@lichtblick/suite-base/util/localResourceFolders";
 
 import { createMessagePipelineStore } from "./store";
@@ -125,4 +127,44 @@ it("explains how to grant access to a missing ROS package", async () => {
   await expect(store.getState().public.fetchAsset("package://missing/mesh.stl")).rejects.toThrow(
     'ROS package "missing" or the requested resource was not found. Select its resource folder in Settings and check the resource path.',
   );
+});
+
+describe("package:// assets during recording playback", () => {
+  // Same wrapping as PlayerManager: recordings have no asset service of their own.
+  function playbackPlayer() {
+    return new UserScriptPlayer(new TopicAliasingPlayer(new FakePlayer()), {
+      setUserScriptDiagnostics: vi.fn(),
+      addUserScriptLogs: vi.fn(),
+      setUserScriptRosLib: vi.fn(),
+      setUserScriptTypesLib: vi.fn(),
+    });
+  }
+
+  it("resolves meshes next to a URDF loaded from a URL", async () => {
+    vi.spyOn(localResourceFolders, "fetchAsset").mockResolvedValue(undefined);
+    const fetch = vi.fn().mockResolvedValue(new Response(new Uint8Array([4])));
+    vi.stubGlobal("fetch", fetch);
+    const store = createMessagePipelineStore({
+      promisesToWaitForRef: { current: [] },
+      initialPlayer: playbackPlayer(),
+    });
+    const asset = await store.getState().public.fetchAsset("package://test_robot/meshes/box.stl", {
+      referenceUrl: "https://example.com/test_robot/urdf/robot.urdf",
+    });
+    expect(asset.uri).toBe("https://example.com/test_robot/meshes/box.stl");
+    expect(fetch).toHaveBeenCalledWith("https://example.com/test_robot/meshes/box.stl", {
+      referenceUrl: "https://example.com/test_robot/urdf/robot.urdf",
+    });
+  });
+
+  it("names the missing package instead of a player error", async () => {
+    vi.spyOn(localResourceFolders, "fetchAsset").mockResolvedValue(undefined);
+    const store = createMessagePipelineStore({
+      promisesToWaitForRef: { current: [] },
+      initialPlayer: playbackPlayer(),
+    });
+    await expect(
+      store.getState().public.fetchAsset("package://test_robot/meshes/box.stl"),
+    ).rejects.toThrow('ROS package "test_robot" or the requested resource was not found.');
+  });
 });
