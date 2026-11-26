@@ -28,6 +28,7 @@ import {
 } from "@lichtblick/suite-base/players/types";
 import isDesktopApp from "@lichtblick/suite-base/util/isDesktopApp";
 import { localResourceFolders } from "@lichtblick/suite-base/util/localResourceFolders";
+import { toError } from "@lichtblick/suite-base/util/toError";
 
 import { FramePromise } from "./pauseFrameForPromise";
 import { MessagePipelineContext } from "./types";
@@ -209,17 +210,16 @@ export function createMessagePipelineStore({
           const pkgPath = uri.slice("package://".length);
           const pkgName = pkgPath.split("/")[0];
 
+          // Fall back to the options below if the asset couldn't be loaded through the player.
+          let playerError: Error | undefined;
           if (player?.fetchAsset) {
             try {
               return await player.fetchAsset(uri);
             } catch (err: unknown) {
-              if (canBuiltinFetchPkgUri) {
-                // Fallback to a builtin _fetch_ call if the asset couldn't be loaded through the player.
-                return await builtinFetch(uri, options);
-              }
-              throw err; // Bail out otherwise.
+              playerError = toError(err);
             }
-          } else if (canBuiltinFetchPkgUri) {
+          }
+          if (canBuiltinFetchPkgUri) {
             return await builtinFetch(uri, options);
           } else if (
             pkgName &&
@@ -234,9 +234,13 @@ export function createMessagePipelineStore({
             //   resolved: https://example.com/<pkgName>/<pkgPath>
             const resolvedUrl =
               options.referenceUrl.slice(0, options.referenceUrl.lastIndexOf(pkgName)) + pkgPath;
-            return await builtinFetch(resolvedUrl, options);
+            try {
+              return await builtinFetch(resolvedUrl, options);
+            } catch (err: unknown) {
+              throw playerError ?? err;
+            }
           }
-          throw new Error(i18next.t("appSettings:rosPackageNotFound", { pkgName }));
+          throw playerError ?? new Error(i18next.t("appSettings:rosPackageNotFound", { pkgName }));
         }
 
         // Use a regular fetch for all other protocols

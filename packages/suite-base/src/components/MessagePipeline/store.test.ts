@@ -157,6 +157,40 @@ describe("package:// assets during recording playback", () => {
     });
   });
 
+  it("falls back to the URDF's URL when the player can't serve assets", async () => {
+    vi.spyOn(localResourceFolders, "fetchAsset").mockResolvedValue(undefined);
+    const fetch = vi.fn().mockResolvedValue(new Response(new Uint8Array([4])));
+    vi.stubGlobal("fetch", fetch);
+    const player = Object.assign(new FakePlayer(), {
+      fetchAsset: vi.fn().mockRejectedValue(new Error("assets capability not advertised")),
+    });
+    const store = createMessagePipelineStore({
+      promisesToWaitForRef: { current: [] },
+      initialPlayer: player,
+    });
+    const asset = await store.getState().public.fetchAsset("package://test_robot/meshes/box.stl", {
+      referenceUrl: "https://example.com/test_robot/urdf/robot.urdf",
+    });
+    expect(asset.uri).toBe("https://example.com/test_robot/meshes/box.stl");
+  });
+
+  it("keeps the player's error when the fallback fails too", async () => {
+    vi.spyOn(localResourceFolders, "fetchAsset").mockResolvedValue(undefined);
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(undefined, { status: 404 })));
+    const player = Object.assign(new FakePlayer(), {
+      fetchAsset: vi.fn().mockRejectedValue(new Error("asset not found on server")),
+    });
+    const store = createMessagePipelineStore({
+      promisesToWaitForRef: { current: [] },
+      initialPlayer: player,
+    });
+    await expect(
+      store.getState().public.fetchAsset("package://test_robot/meshes/box.stl", {
+        referenceUrl: "https://example.com/test_robot/urdf/robot.urdf",
+      }),
+    ).rejects.toThrow("asset not found on server");
+  });
+
   it("names the missing package instead of a player error", async () => {
     vi.spyOn(localResourceFolders, "fetchAsset").mockResolvedValue(undefined);
     const store = createMessagePipelineStore({
