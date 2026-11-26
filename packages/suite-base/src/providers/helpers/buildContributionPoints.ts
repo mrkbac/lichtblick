@@ -21,7 +21,7 @@ import {
   RegisteredPanel,
 } from "@lichtblick/suite-base/context/ExtensionCatalogContext";
 import { InstalledTopicConverter } from "@lichtblick/suite-base/players/UserScriptPlayer/topicConverters";
-import { ExtensionInfo } from "@lichtblick/suite-base/types/Extensions";
+import { ExtensionInfo, InstalledDataLoader } from "@lichtblick/suite-base/types/Extensions";
 import { InstalledMessageConverter } from "@lichtblick/suite-base/types/messageConverters";
 
 const log = Logger.getLogger(__filename);
@@ -38,6 +38,7 @@ export async function buildContributionPoints(
   const topicAliasFunctions: ContributionPoints["topicAliasFunctions"] = [];
   const topicConverters: InstalledTopicConverter[] = [];
   const cameraModels: CameraModelsMap = new Map();
+  const dataLoaders: InstalledDataLoader[] = [];
 
   log.debug(`Mounting extension ${extension.qualifiedName}`);
 
@@ -60,8 +61,11 @@ export async function buildContributionPoints(
         ? "test"
         : "development";
 
-  // Typed as both APIs so tsc checks that Foxglove-built extensions can call every method.
-  const ctx: ExtensionContext & Foxglove.ExtensionContext = {
+  // Typed as both APIs so tsc checks that Foxglove-built extensions can call every method,
+  // including the experimental data loader registration.
+  const ctx: ExtensionContext &
+    Foxglove.ExtensionContext &
+    Pick<Foxglove.Experimental.ExtensionContext, "registerDataLoader"> = {
     mode: extensionMode,
 
     registerPanel: (
@@ -144,6 +148,24 @@ export async function buildContributionPoints(
         modelBuilder,
       });
     },
+
+    // Foxglove exposes this on its Experimental.ExtensionContext; same args and WASM interface.
+    registerDataLoader(args: Foxglove.Experimental.RegisterDataLoaderArgs) {
+      // Untrusted input: Foxglove may add loader types this host does not know
+      if ((args.type as string) !== "file") {
+        log.warn(`Extension ${extension.qualifiedName}: unsupported data loader type ${args.type}`);
+        return;
+      }
+      log.debug(
+        `Extension ${extension.qualifiedName} registering data loader: ${args.supportedFileType}`,
+      );
+      dataLoaders.push({
+        extensionId: extension.id,
+        extensionName: extension.displayName || extension.qualifiedName,
+        extensionNamespace: extension.namespace,
+        args,
+      });
+    },
   };
 
   try {
@@ -173,5 +195,6 @@ export async function buildContributionPoints(
     topicConverters,
     panelSettings,
     cameraModels,
+    dataLoaders,
   };
 }

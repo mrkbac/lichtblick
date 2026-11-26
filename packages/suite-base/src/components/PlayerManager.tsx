@@ -26,6 +26,7 @@ import {
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
 } from "react";
 
 import { promiseTimeout } from "@lichtblick/den/async";
@@ -58,6 +59,7 @@ import {
   UserScriptStore,
   useUserScriptState,
 } from "@lichtblick/suite-base/context/UserScriptStateContext";
+import { createWasmDataLoaderSource } from "@lichtblick/suite-base/dataSources/WasmDataLoaderDataSourceFactory";
 import { GlobalVariables } from "@lichtblick/suite-base/hooks/useGlobalVariables";
 import useIndexedDbRecents, {
   RecentRecord,
@@ -149,11 +151,28 @@ const layoutIdSelector = (state: LayoutState) => state.selectedLayout?.id;
 const layoutEditedSelector = (state: LayoutState) => state.selectedLayout?.edited ?? false;
 
 const selectUserScriptActions = (store: UserScriptStore) => store.actions;
+const NO_DATA_LOADERS: ExtensionCatalog["installedDataLoaders"] = [];
+const noSubscription = () => () => {};
 
 export default function PlayerManager(
   props: PropsWithChildren<PlayerManagerProps>,
 ): React.JSX.Element {
-  const { children, playerSources } = props;
+  const { children } = props;
+
+  // Data loaders that extensions registered come after the built-in sources, which keep their
+  // file types
+  const extensionCatalogContext = useContext(ExtensionCatalogContext);
+  const dataLoaders = useSyncExternalStore(
+    extensionCatalogContext?.subscribe ?? noSubscription,
+    () => extensionCatalogContext?.getState().installedDataLoaders ?? NO_DATA_LOADERS,
+  );
+  const playerSources = useMemo(
+    (): readonly IDataSourceFactory[] => [
+      ...props.playerSources,
+      ...dataLoaders.map(createWasmDataLoaderSource),
+    ],
+    [props.playerSources, dataLoaders],
+  );
 
   const userScriptActions = useUserScriptState(selectUserScriptActions);
 
@@ -187,7 +206,6 @@ export default function PlayerManager(
 
   // Update the alias functions when they change. We do not need to re-render the player manager
   // since nothing in the local state has changed.
-  const extensionCatalogContext = useContext(ExtensionCatalogContext);
   useEffect(() => {
     // Stable empty alias functions if we don't have any
     const emptyAliasFunctions: Immutable<TopicAliasFunctions> = [];

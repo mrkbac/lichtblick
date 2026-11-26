@@ -178,6 +178,7 @@ function createExtensionRegistryStore(
         topicAliasFunctions,
         topicConverters,
         cameraModels,
+        dataLoaders,
       }: ContributionPoints,
     ) => {
       // A reinstall (e.g. an update) replaces everything that namespace's old version contributed;
@@ -198,6 +199,7 @@ function createExtensionRegistryStore(
           installedTopicConverters: [...rest.installedTopicConverters, ...topicConverters],
           panelSettings: { ...state.panelSettings, ...panelSettings },
           installedCameraModels: new Map([...rest.installedCameraModels, ...cameraModels]),
+          installedDataLoaders: [...rest.installedDataLoaders, ...dataLoaders],
         };
       });
     };
@@ -222,6 +224,7 @@ function createExtensionRegistryStore(
           topicAliasFunctions,
           topicConverters,
           cameraModels,
+          dataLoaders,
         } = contributionPoints;
         const { raw: unwrappedExtensionSource } = await loader.loadExtension(extension.id);
         const newContributionPoints = await buildContributionPoints(
@@ -234,6 +237,7 @@ function createExtensionRegistryStore(
         pushAll(messageConverters, newContributionPoints.messageConverters);
         pushAll(topicAliasFunctions, newContributionPoints.topicAliasFunctions);
         pushAll(topicConverters, newContributionPoints.topicConverters);
+        pushAll(dataLoaders, newContributionPoints.dataLoaders);
 
         for (const [name, builder] of newContributionPoints.cameraModels) {
           if (cameraModels.has(name)) {
@@ -293,6 +297,7 @@ function createExtensionRegistryStore(
         topicAliasFunctions: [],
         topicConverters: [],
         cameraModels: new Map(),
+        dataLoaders: [],
       };
 
       const processLoader = async (loader: IExtensionLoader) => {
@@ -326,6 +331,7 @@ function createExtensionRegistryStore(
         installedTopicAliasFunctions: contributionPoints.topicAliasFunctions,
         installedTopicConverters: contributionPoints.topicConverters,
         installedCameraModels: contributionPoints.cameraModels,
+        installedDataLoaders: contributionPoints.dataLoaders,
         panelSettings: contributionPoints.panelSettings,
       });
     };
@@ -401,6 +407,7 @@ function createExtensionRegistryStore(
       installedTopicAliasFunctions: [],
       installedTopicConverters: [],
       installedCameraModels: new Map(),
+      installedDataLoaders: [],
       loadedExtensions: new Set<string>(),
       panelSettings: _.merge(
         {},

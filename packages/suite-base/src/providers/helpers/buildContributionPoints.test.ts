@@ -207,6 +207,32 @@ describe("buildContributionPoints", () => {
     logErrorMock.mockRestore();
   });
 
+  it("registers Foxglove data loaders", async () => {
+    const extensionInfo = ExtensionBuilder.extensionInfo();
+    const extensionSource = `
+      module.exports = {
+        activate: (ctx) => {
+          ctx.registerDataLoader({ type: "file", wasmUrl: "data:application/wasm;base64,", supportedFileType: ".txt" });
+        }
+      };
+    `;
+
+    const result = await buildContributionPoints(extensionInfo, extensionSource);
+
+    expect(result.dataLoaders).toEqual([
+      {
+        extensionId: extensionInfo.id,
+        extensionName: extensionInfo.displayName,
+        extensionNamespace: extensionInfo.namespace,
+        args: {
+          type: "file",
+          wasmUrl: "data:application/wasm;base64,",
+          supportedFileType: ".txt",
+        },
+      },
+    ]);
+  });
+
   it("registers topic aliases correctly", async () => {
     const extensionInfo = ExtensionBuilder.extensionInfo();
     const aliasFunction: TopicAliasFunction = vi.fn();

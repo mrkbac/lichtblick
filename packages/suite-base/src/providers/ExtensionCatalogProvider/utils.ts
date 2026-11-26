@@ -28,6 +28,7 @@ type ContributionState = Pick<
   | "installedTopicAliasFunctions"
   | "installedTopicConverters"
   | "installedCameraModels"
+  | "installedDataLoaders"
 >;
 
 export function removeExtensionData({
@@ -51,6 +52,7 @@ export function removeExtensionData({
     installedCameraModels: new Map(
       [...state.installedCameraModels].filter(([, model]) => keep(model)),
     ),
+    installedDataLoaders: state.installedDataLoaders.filter(keep),
   };
 }
 export async function tryInstallSingleLoader(
