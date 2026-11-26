@@ -4,9 +4,16 @@
 import { TopicAliasFunction, ExtensionPanelRegistration, PanelSettings } from "@lichtblick/suite";
 import ExtensionBuilder from "@lichtblick/suite-base/testing/builders/ExtensionBuilder";
 import { InstalledMessageConverter } from "@lichtblick/suite-base/types/messageConverters";
+import sendNotification from "@lichtblick/suite-base/util/sendNotification";
 import { BasicBuilder } from "@lichtblick/test-builders";
 
 import { buildContributionPoints } from "./buildContributionPoints";
+
+// Failed activations are logged and also shown to the user
+function expectNotified(): void {
+  vi.mocked(console.error).mockClear();
+  (sendNotification as unknown as { expectCalledDuringTest: () => void }).expectCalledDuringTest();
+}
 
 describe("buildContributionPoints", () => {
   beforeEach(() => {
@@ -24,6 +31,7 @@ describe("buildContributionPoints", () => {
     expect(result).toHaveProperty("topicAliasFunctions", []);
     expect(result).toHaveProperty("panelSettings", {});
     consoleErrorMock.mockRestore();
+    expectNotified();
   });
 
   it("should register a panel", async () => {
@@ -205,6 +213,7 @@ describe("buildContributionPoints", () => {
     expect(result.messageConverters).toHaveLength(1);
     expect(logErrorMock).toHaveBeenCalled();
     logErrorMock.mockRestore();
+    expectNotified();
   });
 
   it("registers Foxglove data loaders", async () => {
@@ -252,5 +261,55 @@ describe("buildContributionPoints", () => {
     expect(result.topicAliasFunctions[0]!.extensionId).toBe(extensionInfo.id);
     expect(result.topicAliasFunctions[0]!.aliasFunction).toBe(aliasFunction);
     delete (globalThis as any).topicAliasFunction;
+  });
+
+  describe("errors during setup", () => {
+    const setupErrorCases: [string, string][] = [
+      [
+        "activate throws after registering",
+        `ctx.registerMessageConverter({ fromSchemaName: "a", toSchemaName: "b", converter: (m) => m });
+         throw new Error("boom");`,
+      ],
+      ["a registration call throws", `ctx.registerPanel(undefined);`],
+      [
+        "a converter has no fromSchemaName",
+        `ctx.registerMessageConverter({ toSchemaName: "b", converter: (m) => m });`,
+      ],
+      [
+        "a converter has an empty toSchemaName",
+        `ctx.registerMessageConverter({ fromSchemaName: "a", toSchemaName: "", converter: (m) => m });`,
+      ],
+      ["activate rejects", `await Promise.resolve(); throw new Error("boom");`],
+    ];
+
+    it.each(setupErrorCases)("reports to the user when %s", async (_name, body) => {
+      const extensionInfo = ExtensionBuilder.extensionInfo();
+      const extensionSource = `module.exports = { activate: async (ctx) => { ${body} } };`;
+
+      await buildContributionPoints(extensionInfo, extensionSource);
+
+      expect(sendNotification).toHaveBeenCalledWith(
+        expect.stringContaining(extensionInfo.displayName),
+        expect.any(Error),
+        "user",
+        "error",
+      );
+      expectNotified();
+    });
+
+    it("does not register a converter with invalid schema names", async () => {
+      const extensionSource = `module.exports = { activate: (ctx) => {
+        ctx.registerMessageConverter({ toSchemaName: "b", converter: (m) => m });
+      } };`;
+
+      const result = await buildContributionPoints(
+        ExtensionBuilder.extensionInfo(),
+        extensionSource,
+      );
+
+      expect(result.messageConverters).toEqual([]);
+      expect(result.panelSettings).toEqual({});
+      expectNotified();
+    });
   });
 });

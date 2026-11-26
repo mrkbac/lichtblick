@@ -23,6 +23,7 @@ import {
 import { InstalledTopicConverter } from "@lichtblick/suite-base/players/UserScriptPlayer/topicConverters";
 import { ExtensionInfo, InstalledDataLoader } from "@lichtblick/suite-base/types/Extensions";
 import { InstalledMessageConverter } from "@lichtblick/suite-base/types/messageConverters";
+import sendNotification from "@lichtblick/suite-base/util/sendNotification";
 
 const log = Logger.getLogger(__filename);
 
@@ -113,6 +114,13 @@ export async function buildContributionPoints(
       }
       // Foxglove's schema converters are Lichtblick converters plus `type: "schema"`.
       const messageConverter: RegisterMessageConverterArgs<never> = args;
+      // Extensions are untyped JS: without schema names the converter can never match a topic
+      for (const key of ["fromSchemaName", "toSchemaName"] as const) {
+        const value: unknown = messageConverter[key];
+        if (typeof value !== "string" || value === "") {
+          throw new Error(`registerMessageConverter: ${key} must be a non-empty string`);
+        }
+      }
 
       log.debug(
         `Extension ${extension.qualifiedName} registering message converter from: ${messageConverter.fromSchemaName} to: ${messageConverter.toSchemaName}`,
@@ -178,14 +186,24 @@ export async function buildContributionPoints(
     // Extensions export `activate` directly or as `export default { activate }`, and may return a
     // promise (async initialization) that must settle before the extension counts as loaded.
     type Activate = (extensionContext: ExtensionContext) => unknown;
-    const exports = module.exports as { activate?: Activate; default?: { activate?: Activate } };
+    const exports = module.exports as {
+      activate?: Activate;
+      default?: { activate?: Activate };
+    };
     const activate = exports.activate ?? exports.default?.activate;
     if (!activate) {
       throw new Error(`Extension ${extension.qualifiedName} does not export an activate function`);
     }
     await activate(ctx);
   } catch (err: unknown) {
+    // Registrations made before the error stay installed; the user still needs to know.
     log.error(err);
+    sendNotification(
+      `Extension "${extension.displayName || extension.qualifiedName}" failed to activate`,
+      err instanceof Error ? err : new Error(String(err)),
+      "user",
+      "error",
+    );
   }
 
   return {
