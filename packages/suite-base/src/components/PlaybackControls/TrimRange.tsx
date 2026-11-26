@@ -37,6 +37,12 @@ const GRAB_INSET = 4;
 /** Pointer travel before a press on the band counts as a drag instead of a click-to-seek. */
 const DRAG_THRESHOLD_PX = 3;
 
+/** Where `clientX` falls across `el`, from 0 to 1. */
+function fractionAt(el: HTMLElement, clientX: number): number {
+  const rect = el.getBoundingClientRect();
+  return Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
+}
+
 const useStyles = makeStyles()((theme) => ({
   overlay: {
     position: "absolute",
@@ -162,12 +168,8 @@ export function TrimRangeOverlay({ sliderRef, onSeek }: OverlayProps): React.JSX
     if (!editing || !slider) {
       return undefined;
     }
-    const fractionAt = (clientX: number) => {
-      const rect = slider.getBoundingClientRect();
-      return Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
-    };
     const timeAtX = (clientX: number, b: { start: bigint; end: bigint }) =>
-      b.start + BigInt(Math.round(fractionAt(clientX) * Number(b.end - b.start)));
+      b.start + BigInt(Math.round(fractionAt(slider, clientX) * Number(b.end - b.start)));
     const onBand = (ev: PointerEvent): boolean => {
       const b = latestBounds.current;
       const cut = useTrimStore.getState();
@@ -222,7 +224,7 @@ export function TrimRangeOverlay({ sliderRef, onSeek }: OverlayProps): React.JSX
         dragging = false;
         slider.classList.remove(classes.grabbing);
         if (!moved && up.type === "pointerup") {
-          latestOnSeek.current(fractionAt(up.clientX));
+          latestOnSeek.current(fractionAt(slider, up.clientX));
         }
       };
       window.addEventListener("pointermove", onMove);
@@ -249,11 +251,11 @@ export function TrimRangeOverlay({ sliderRef, onSeek }: OverlayProps): React.JSX
   const endPercent = toPercent(end);
 
   const timeAt = (clientX: number): bigint => {
-    const rect = rootRef.current!.getBoundingClientRect();
-    const fraction = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
-    return bounds.start + BigInt(Math.round(fraction * duration));
+    return bounds.start + BigInt(Math.round(fractionAt(rootRef.current!, clientX) * duration));
   };
   const step = BigInt(Math.round(duration / 100));
+  const arrowDelta = (key: string) =>
+    key === "ArrowLeft" ? -step : key === "ArrowRight" ? step : 0n;
 
   const handleProps = (which: "start" | "end") => ({
     role: "slider",
@@ -281,7 +283,7 @@ export function TrimRangeOverlay({ sliderRef, onSeek }: OverlayProps): React.JSX
       }
     },
     onKeyDown: (event: React.KeyboardEvent<HTMLDivElement>) => {
-      const delta = event.key === "ArrowLeft" ? -step : event.key === "ArrowRight" ? step : 0n;
+      const delta = arrowDelta(event.key);
       if (delta === 0n) {
         return;
       }
@@ -312,8 +314,7 @@ export function TrimRangeOverlay({ sliderRef, onSeek }: OverlayProps): React.JSX
           "aria-valuenow": Number(formatSeconds(start - bounds.start)),
           "aria-valuetext": `${formatSeconds(start - bounds.start)} s – ${formatSeconds(end - bounds.start)} s`,
           onKeyDown: (event: React.KeyboardEvent<HTMLDivElement>) => {
-            const delta =
-              event.key === "ArrowLeft" ? -step : event.key === "ArrowRight" ? step : 0n;
+            const delta = arrowDelta(event.key);
             if (delta === 0n) {
               return;
             }

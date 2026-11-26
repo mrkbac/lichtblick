@@ -54,4 +54,19 @@ describe("DataSource", () => {
     expect(screen.getByRole("menuitem", { name: "Download" }).getAttribute("href")).toBe(url);
     expect(screen.getByRole("menuitem", { name: "View data source info" })).toBeTruthy();
   });
+  it("names each download by its file, without the query string", () => {
+    const urls = ["https://example.com/a.mcap?sig=1", "https://example.com/my%20b.mcap"];
+    render(
+      <MockMessagePipelineProvider
+        name="example.mcap"
+        presence={PlayerPresence.PRESENT}
+        urlState={{ sourceId: "remote-file", parameters: { urls } }}
+      >
+        <DataSource />
+      </MockMessagePipelineProvider>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Data source actions" }));
+    expect(screen.getByRole("menuitem", { name: "Download a.mcap" })).toBeTruthy();
+    expect(screen.getByRole("menuitem", { name: "Download my b.mcap" })).toBeTruthy();
+  });
 });

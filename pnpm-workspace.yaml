@@ -21,7 +21,7 @@ overrides:
   # Bundle one copy of each instead of two (both copies shipped in the web build):
   # omgidl-serialization pins cdr 3.5.0, rosbag2 asks for schemas ^1, utif for pako ^1.
   "@foxglove/omgidl-serialization>@foxglove/cdr": 3.5.1
-  "@foxglove/rosbag2>@foxglove/schemas": 2.3.1
+  "@foxglove/rosbag2>@foxglove/schemas": 2.4.0
   # Keep Monaco on the same patched DOMPurify as the application.
   "dompurify@<3.5.0": 3.5.0
   # These parents use the named minimatch API retained in v11 (GHSA-g3hv-75wg-m249).

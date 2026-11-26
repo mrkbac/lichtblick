@@ -106,6 +106,18 @@ describe("useOpenFile", () => {
     expect(selectSource).toHaveBeenCalledWith(source.id, { type: "file", handles: fsHandles });
   });
 
+  it("opens with the first source when an extension's data loader reads the same type", async () => {
+    const builtIn = { id: "built-in", type: "file", supportedFileTypes: [".mcap"] };
+    const loader = { id: "data-loader", type: "file", supportedFileTypes: [".mcap"] };
+    const { result, fsHandles } = setup({
+      sourcesOverride: [builtIn, loader] as IDataSourceFactory[],
+    });
+
+    await result.current();
+
+    expect(selectSource).toHaveBeenCalledWith("built-in", { type: "file", handles: fsHandles });
+  });
+
   it("should show error if multiple file extensions are selected", async () => {
     const { result } = setup({
       filesOverride: [buildFile("mcap", FILE_ACCEPT_TYPE), buildFile("txt", "text/plain")],

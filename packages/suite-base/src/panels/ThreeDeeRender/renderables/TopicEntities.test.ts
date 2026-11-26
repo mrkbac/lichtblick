@@ -184,6 +184,21 @@ describe("TopicEntities batching", () => {
     }
   });
 
+  it("draws cubes of mixed opacity as one mesh of their own, not one batch per opacity", () => {
+    const cubes = Array.from({ length: 50 }, (_, i) => ({
+      pose: pose(i),
+      size: { x: 1, y: 1, z: 1 },
+      color: { r: 0, g: 1, b: 0, a: (i + 1) / 100 },
+    }));
+    topic.addOrUpdateEntity({ ...entity("a", 0), arrows: [], lines: [], cubes }, 0n);
+    topic.startFrame(0n, "map", "map");
+
+    expect(batches().children.filter((child) => child instanceof THREE.InstancedMesh)).toEqual([]);
+    const own = entityDrawables().filter((object) => object instanceof THREE.InstancedMesh);
+    expect(own.map((mesh) => (mesh as THREE.InstancedMesh).count)).toEqual([50]);
+    expect(own[0]!.layers.mask).toBe(1 << LAYER_DEFAULT);
+  });
+
   it("draws a deleted entity's primitives on their own again before the pool reuses them", () => {
     topic.addOrUpdateEntity(entity("a", 0), 0n);
     topic.startFrame(0n, "map", "map");

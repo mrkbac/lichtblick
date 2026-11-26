@@ -18,8 +18,7 @@ import useStyles from "@lichtblick/suite-base/panels/StateTransitions/PathLegend
 import { STATE_TRANSITIONS_BUTTONS } from "@lichtblick/suite-base/panels/StateTransitions/buttons";
 import { DEFAULT_STATE_TRANSITION_PATH } from "@lichtblick/suite-base/panels/StateTransitions/constants";
 import {
-  ROW_HEIGHT_PX,
-  ROW_SPACING,
+  PX_PER_Y_UNIT,
   Y_AXIS_MAX,
 } from "@lichtblick/suite-base/panels/StateTransitions/hooks/constants";
 import { stateTransitionPathDisplayName } from "@lichtblick/suite-base/panels/StateTransitions/shared";
@@ -28,8 +27,6 @@ import {
   StateTransitionPath,
 } from "@lichtblick/suite-base/panels/StateTransitions/types";
 import { useSeriesDrag } from "@lichtblick/suite-base/panels/shared/useSeriesDrag";
-
-const PX_PER_UNIT = ROW_HEIGHT_PX / ROW_SPACING;
 
 /** The series label; dragging it copies the series onto another panel. */
 function SeriesButton({
@@ -110,14 +107,14 @@ export const PathLegend = React.memo(function PathLegend(props: PathLegendProps)
             data-testid={`row-${index}`}
             className={classes.row}
             key={index}
-            style={{ height: (rows[index]?.span ?? 0) * PX_PER_UNIT }}
+            style={{ height: (rows[index]?.span ?? 0) * PX_PER_Y_UNIT }}
           >
             {rows[index]?.lanes?.map((lane) => (
               <span
                 key={lane.label}
                 className={classes.laneLabel}
                 style={{
-                  top: (rows[index]!.top + Y_AXIS_MAX - lane.y) * PX_PER_UNIT,
+                  top: (rows[index]!.top + Y_AXIS_MAX - lane.y) * PX_PER_Y_UNIT,
                   color: laneTextColor(lane.color),
                 }}
               >

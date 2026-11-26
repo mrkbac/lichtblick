@@ -115,7 +115,7 @@ export async function forgetCatalogFolder(slot: string): Promise<void> {
 }
 
 // A handle to a moved file or a detached drive can hang on every call instead of failing
-const HANDLE_TIMEOUT_MS = 3000;
+export const HANDLE_TIMEOUT_MS = 3000;
 
 /** The only file named `name` in a remembered catalog folder the browser still grants. */
 async function findInCatalogFolders(name: string): Promise<FileSystemFileHandle | undefined> {

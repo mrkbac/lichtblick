@@ -3,8 +3,8 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import { act, render } from "@testing-library/react";
-import { PropsWithChildren } from "react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
+import { PropsWithChildren, ReactElement } from "react";
 
 import {
   IDataSourceFactory,
@@ -22,8 +22,9 @@ const storedRecents = vi.hoisted(() => ({
   recentsLoaded: false,
 }));
 
+const enqueueSnackbar = vi.hoisted(() => vi.fn());
 vi.mock("notistack", () => ({
-  useSnackbar: () => ({ enqueueSnackbar: vi.fn(), closeSnackbar: vi.fn() }),
+  useSnackbar: () => ({ enqueueSnackbar, closeSnackbar: vi.fn() }),
 }));
 vi.mock("@lichtblick/suite-base/context/CurrentLayoutContext", () => ({
   useCurrentLayoutSelector: () => undefined,
@@ -127,6 +128,62 @@ describe("PlayerManager", () => {
       expect(selection!.selectedRecordings).toEqual([file]);
     } finally {
       useSourcePick.setState({ pick: undefined });
+      storedRecents.recents = [];
+      storedRecents.recentsLoaded = false;
+      sessionStorage.clear();
+    }
+  });
+
+  it("reopens the last file with a source that appeared after the restore prompt", async () => {
+    // Given - the last file was read by a data loader, which loads with the extensions later
+    const handle = {
+      name: "r.custom",
+      queryPermission: async () => "prompt",
+      requestPermission: async () => "granted",
+      getFile: async () => new File(["a"], "r.custom"),
+    } as unknown as FileSystemFileHandle;
+    storedRecents.recents = [
+      { id: "r1", type: "file", sourceId: "loader", title: "r.custom", handles: [handle] },
+    ];
+    storedRecents.recentsLoaded = true;
+    sessionStorage.setItem(
+      "lichtblick.lastFileSource",
+      '{"sourceId":"loader","title":"r.custom","recentId":"r1"}',
+    );
+    const ok = source("ok", () => undefined);
+    const loader = source("loader", () => undefined);
+    let selection: PlayerSelection | undefined;
+    function Probe() {
+      selection = usePlayerSelection();
+      return <></>;
+    }
+    try {
+      const { rerender } = render(
+        <PlayerManager playerSources={[ok]}>
+          <Probe />
+        </PlayerManager>,
+      );
+      await act(async () => {});
+      const [, options] = enqueueSnackbar.mock.lastCall as [
+        string,
+        { action: (key: number) => ReactElement },
+      ];
+
+      // When - the extensions load, then the user clicks Reopen
+      rerender(
+        <PlayerManager playerSources={[ok, loader]}>
+          <Probe />
+        </PlayerManager>,
+      );
+      render(options.action(1));
+      await act(async () => {
+        fireEvent.click(screen.getByText("Reopen"));
+      });
+
+      // Then
+      expect(selection!.selectedSource).toBe(loader);
+    } finally {
+      enqueueSnackbar.mockClear();
       storedRecents.recents = [];
       storedRecents.recentsLoaded = false;
       sessionStorage.clear();

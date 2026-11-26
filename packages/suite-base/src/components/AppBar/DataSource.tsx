@@ -30,6 +30,7 @@ import WssErrorModal from "@lichtblick/suite-base/components/WssErrorModal";
 import { usePlayerSelection } from "@lichtblick/suite-base/context/PlayerSelectionContext";
 import { useShareLink } from "@lichtblick/suite-base/hooks/useShareLink";
 import { PlayerPresence } from "@lichtblick/suite-base/players/types";
+import { recordingName } from "@lichtblick/suite-base/util/compareSides";
 
 import { EndTimestamp } from "./EndTimestamp";
 
@@ -157,7 +158,7 @@ export function DataSource(): React.JSX.Element {
             >
               {downloadUrls.length === 1
                 ? t("download")
-                : t("downloadFile", { name: url.split("/").pop() ?? url })}
+                : t("downloadFile", { name: recordingName(url) })}
             </MenuItem>
           ))}
           <MenuItem

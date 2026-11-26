@@ -25,19 +25,9 @@ export function useOpenFile(sources: readonly IDataSourceFactory[]): () => Promi
     throw new Error(message);
   };
 
-  const allExtensions = useMemo(() => {
-    return sources.reduce<string[]>((all, source) => {
-      if (!source.supportedFileTypes) {
-        return all;
-      }
-
-      return [...all, ...source.supportedFileTypes];
-    }, []);
-  }, [sources]);
-
   const normalizeExtensionsArray = useMemo(
-    () => normalizeExtensions(allExtensions),
-    [allExtensions],
+    () => normalizeExtensions(sources.flatMap((source) => source.supportedFileTypes ?? [])),
+    [sources],
   );
 
   return useCallback(async () => {
@@ -67,20 +57,20 @@ export function useOpenFile(sources: readonly IDataSourceFactory[]): () => Promi
     );
 
     const uniqueExtensions = new Set(processedFiles.map(({ extension }) => extension));
-    const sourcesFor = (ext: string | undefined) =>
-      sources.filter(
-        (source) =>
-          source.type === "file" &&
-          ext != undefined &&
-          source.supportedFileTypes?.includes(ext) === true,
-      );
-    // Mixed extensions are fine when one source reads all of them (e.g. .csv and .tsv)
-    const [firstSource, ...otherSources] = sourcesFor([...uniqueExtensions][0]);
-    const oneSourceReadsAll =
-      firstSource != undefined &&
-      otherSources.length === 0 &&
-      [...uniqueExtensions].every((ext) => firstSource.supportedFileTypes?.includes(ext) === true);
-    if (uniqueExtensions.size > 1 && !oneSourceReadsAll) {
+    // The first source for a type wins, as with drag and drop: built-in sources come before the
+    // data loaders that extensions register. Mixed extensions are fine when that source reads all
+    // of them (e.g. .csv and .tsv).
+    const [extension] = uniqueExtensions;
+    const source = sources.find(
+      (s) =>
+        s.type === "file" &&
+        extension != undefined &&
+        s.supportedFileTypes?.includes(extension) === true,
+    );
+    if (
+      uniqueExtensions.size > 1 &&
+      ![...uniqueExtensions].every((ext) => source?.supportedFileTypes?.includes(ext) === true)
+    ) {
       throwErrorAndSnackbar(
         `Multiple file extensions detected: ${[...uniqueExtensions].join(
           ", ",
@@ -88,23 +78,13 @@ export function useOpenFile(sources: readonly IDataSourceFactory[]): () => Promi
       );
     }
 
-    const [extension] = uniqueExtensions;
-    const matchingSources = sourcesFor(extension);
-
-    const [source] = matchingSources;
     if (source == undefined) {
       throwErrorAndSnackbar(`Cannot find a source to handle files with extension ${extension}`);
-    }
-
-    if (matchingSources.length > 1) {
-      throwErrorAndSnackbar(
-        `The file extension "${extension}" is not supported. Please select files with the following extensions: ${allExtensions.join(", ")}.`,
-      );
     }
 
     if (source.supportsMultiFile !== true && processedFiles.length > 1) {
       throwErrorAndSnackbar(`Opening multiple ${extension} files at once is not supported.`);
     }
     selectSource(source.id, { type: "file", handles: filesHandle });
-  }, [allExtensions, normalizeExtensionsArray, selectSource, sources]);
+  }, [normalizeExtensionsArray, selectSource, sources]);
 }
