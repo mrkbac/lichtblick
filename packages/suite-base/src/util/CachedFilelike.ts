@@ -347,7 +347,12 @@ export default class CachedFilelike implements Filelike {
         return true;
       }
 
-      this.#lastResolvedCallbackEnd = range.end;
+      // Reads served from data cached before any download (the head and tail fetched at open)
+      // don't start read-ahead: at open each file of a bundle would otherwise download its own
+      // read-ahead (or the whole file) whether it is ever played or not
+      if (!cached || this.#lastResolvedCallbackEnd != undefined) {
+        this.#lastResolvedCallbackEnd = range.end;
+      }
       if (this.#currentConnection) {
         this.#lastMainServeTime = Date.now();
         if (!background && !cached) {
