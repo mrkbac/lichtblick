@@ -673,19 +673,28 @@ export class McapRecoveryScanner {
  * Why the chunk can't be read as its index describes it (it doesn't parse or decompress, fails its
  * CRC, or its message indexes point at anything but its messages), or undefined if it can. Reads
  * and decompresses only this chunk. A failing read (e.g. the network) throws instead: it doesn't
- * make the chunk corrupt.
+ * make the chunk corrupt. An index pointing outside the file does.
  */
 export async function checkChunk(
   readable: McapTypes.IReadable,
   decompressHandlers: McapTypes.DecompressHandlers,
   chunkIndex: McapTypes.ChunkIndex,
 ): Promise<Error | undefined> {
-  const chunkBytes = await readable.read(chunkIndex.chunkStartOffset, chunkIndex.chunkLength);
   const offsets = [...chunkIndex.messageIndexOffsets.values()];
   const indexStart = offsets.reduce<bigint | undefined>(
     (a, b) => (a == undefined || b < a ? b : a),
     undefined,
   );
+  const size = await readable.size();
+  if (
+    chunkIndex.chunkStartOffset + chunkIndex.chunkLength > size ||
+    (indexStart != undefined && indexStart + chunkIndex.messageIndexLength > size)
+  ) {
+    return new Error(
+      `Chunk index at offset ${chunkIndex.chunkStartOffset} points past the end of the file`,
+    );
+  }
+  const chunkBytes = await readable.read(chunkIndex.chunkStartOffset, chunkIndex.chunkLength);
   const indexBytes =
     indexStart == undefined
       ? undefined

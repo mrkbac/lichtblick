@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
+import { crc32 } from "@foxglove/crc";
+
 import {
   BlobReadable,
   ChunkCache,
@@ -449,6 +451,35 @@ describe("McapIterableSource recovery", () => {
 
     // Then it falls back to the chunk before the corrupt one
     expect(values).toEqual([3]);
+  });
+
+  it.each([
+    ["offset", 0],
+    ["length", 8],
+  ])("skips a chunk whose summary %s points past the end of the file", async (_field, shift) => {
+    // Given a finished file whose summary (with a valid CRC) points the 3rd chunk off the file
+    const bytes = await makeMcap({ finish: true });
+    const view = new DataView(bytes.buffer);
+    const target = (await chunkIndexes(bytes))[2]!.chunkStartOffset;
+    const footerCrcAt = bytes.length - 8 - 4;
+    const summaryStart = Number(view.getBigUint64(footerCrcAt - 16, true));
+    // Chunk Index record: opcode, length, start time, end time, chunk start offset, chunk length
+    const fieldAt = 1 + 8 + 8 + 8;
+    let at = summaryStart;
+    while (!(bytes[at] === 0x08 && view.getBigUint64(at + fieldAt, true) === target)) {
+      at++;
+    }
+    view.setBigUint64(at + fieldAt + shift, 1n << 40n, true);
+    view.setUint32(footerCrcAt, crc32(bytes.subarray(summaryStart, footerCrcAt)), true);
+
+    // When
+    const { values, iteratorAlerts } = await openSource(bytes);
+
+    // Then it plays on past the chunk instead of failing
+    expect(values).toEqual([1, 2, 4, 5]);
+    expect(iteratorAlerts).toEqual([
+      expect.objectContaining({ tip: expect.stringMatching(/points past the end of the file/) }),
+    ]);
   });
 
   it("keeps the healthy path free of scans", async () => {
