@@ -16,6 +16,8 @@ import StudioToastProvider from "./components/StudioToastProvider";
 import CurrentLayoutProvider from "./providers/CurrentLayoutProvider";
 import LayoutManagerProvider from "./providers/LayoutManagerProvider";
 
+let mockOrganizationState: { status: string } = { status: "disabled" };
+
 // Mock all the heavy dependencies
 const mockMultiProvider = vi.fn(function ({
   providers,
@@ -87,7 +89,7 @@ vi.mock("@lichtblick/suite-base/IdbLayoutStorage", () => ({
 
 vi.mock("@lichtblick/suite-base/context/OrganizationContext", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@lichtblick/suite-base/context/OrganizationContext")>()),
-  useOrganizationSession: () => ({ status: "disabled" }),
+  useOrganizationSession: () => mockOrganizationState,
 }));
 
 // Mock the LayoutManager to avoid private fields issue
@@ -127,6 +129,7 @@ describe("StudioApp", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockOrganizationState = { status: "disabled" };
 
     // Clear console.error mock to avoid setupTestFramework.ts throwing
     if (typeof (console.error as any).mockClear === "function") {
@@ -163,6 +166,15 @@ describe("StudioApp", () => {
     expect(screen.getByTestId("notification-toast-adapter")).toBeInTheDocument();
     expect(screen.getByTestId("panel-catalog-provider")).toBeInTheDocument();
     expect(screen.getByTestId("workspace")).toBeInTheDocument();
+  });
+
+  it("mounts no layout providers until the organization session is known", () => {
+    // Layouts created on the local namespace meanwhile would be imported as "(local)" copies.
+    mockOrganizationState = { status: "loading" };
+    renderWithContext();
+
+    expect(screen.queryByTestId("multi-provider")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("workspace")).not.toBeInTheDocument();
   });
 
   it("should pass deepLinks to Workspace component", () => {

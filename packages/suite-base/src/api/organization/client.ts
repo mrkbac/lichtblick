@@ -32,8 +32,13 @@ export type SessionResult =
   | { status: "authenticated"; session: Schemas["CurrentSession"] }
   | { status: "unauthenticated"; oidc: Schemas["OidcConfiguration"] | null };
 
+const SESSION_TIMEOUT_MS = 5000;
+
 export async function fetchCurrentSession(client: OrganizationApiClient): Promise<SessionResult> {
-  const { data, error, response } = await client.GET("/v1/me");
+  // The app waits for this before loading layouts, so a hung server must not block startup.
+  const { data, error, response } = await client.GET("/v1/me", {
+    signal: AbortSignal.timeout(SESSION_TIMEOUT_MS),
+  });
   if (data) {
     return { status: "authenticated", session: cleanSession(data) };
   }
