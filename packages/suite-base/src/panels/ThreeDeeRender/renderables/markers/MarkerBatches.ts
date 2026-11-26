@@ -388,13 +388,17 @@ export class MarkerBatches extends THREE.Object3D {
     mesh.updateMatrix();
     instancesMatrix.multiplyMatrices(parent, mesh.matrix);
     const outlineShape = outline ? shape.edges : undefined;
-    // An invisible instance still draws its outline on its own, so it keeps the mesh unbatched
+    // An invisible instance still draws its outline on its own, so it keeps the mesh unbatched.
+    // Batches are per opacity: instances of mixed opacity stay one mesh rather than one batch each.
     let batched = mesh.visible && count > 0 && instanceColor != undefined && opacities != undefined;
+    const opacity = batched ? opacities!.getX(0) : 0;
     for (let i = 0; batched && i < count; i++) {
       mesh.getMatrixAt(i, tempMatrix);
       tempMatrix.premultiply(instancesMatrix);
-      const opacity = opacities!.getX(i);
-      batched = opacity > 0 && this.#batchAt(shape.geometry, outlineShape, opacity) != undefined;
+      batched =
+        opacity > 0 &&
+        opacities!.getX(i) === opacity &&
+        this.#batchAt(shape.geometry, outlineShape, opacity) != undefined;
     }
     setPickOnly(mesh, { pickOnly: batched });
     if (outline) {
@@ -406,7 +410,7 @@ export class MarkerBatches extends THREE.Object3D {
     for (let i = 0; i < count; i++) {
       mesh.getMatrixAt(i, tempMatrix);
       tempMatrix.premultiply(instancesMatrix);
-      const batch = this.#batchAt(shape.geometry, outlineShape, opacities!.getX(i))!;
+      const batch = this.#batchAt(shape.geometry, outlineShape, opacity)!;
       this.#push(batch, tempColor.fromBufferAttribute(instanceColor!, i), {
         outlined: outline?.visible === true,
       });

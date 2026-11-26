@@ -3,8 +3,8 @@
 
 export const ROW_SPACING = 9;
 export const ROW_MARGIN = ROW_SPACING / 4;
-/** Height of a bar row, in px: one y unit is ROW_HEIGHT_PX / ROW_SPACING px. */
-export const ROW_HEIGHT_PX = 64;
+/** Pixels per y unit: a bar row (ROW_SPACING units) is 64 px tall. */
+export const PX_PER_Y_UNIT = 64 / ROW_SPACING;
 /** The y axis ends here, so the first row's bar sits below its legend button. */
 export const Y_AXIS_MAX = -3;
 export const DEFAULT_X_END_TIME = 1;

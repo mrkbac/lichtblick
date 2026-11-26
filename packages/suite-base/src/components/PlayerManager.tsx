@@ -33,7 +33,10 @@ import { promiseTimeout } from "@lichtblick/den/async";
 import { useLatest, useMountedState } from "@lichtblick/hooks";
 import Logger from "@lichtblick/log";
 import { Immutable } from "@lichtblick/suite";
-import { relinkFileHandle } from "@lichtblick/suite-base/components/Catalog/indexFolder";
+import {
+  HANDLE_TIMEOUT_MS,
+  relinkFileHandle,
+} from "@lichtblick/suite-base/components/Catalog/indexFolder";
 import { CompareProvider } from "@lichtblick/suite-base/components/Compare/CompareContext";
 import { MessagePipelineProvider } from "@lichtblick/suite-base/components/MessagePipeline";
 import {
@@ -654,6 +657,8 @@ export default function PlayerManager(
   );
 
   // After a reload, reopen the file this tab had open. The URL takes precedence (ds=...).
+  // Reads the latest openSource: a data loader's source shows up once extensions have loaded.
+  const openSourceRef = useLatest(openSource);
   const restoredLastFile = useRef(false);
   useEffect(() => {
     if (!recentsLoaded || restoredLastFile.current) {
@@ -688,7 +693,9 @@ export default function PlayerManager(
           typeof h === "string"
             ? "granted"
             : // A dead handle can hang: ask with a click, which relinks or says why it can't
-              await promiseTimeout(h.queryPermission({ mode: "read" }), 3000).catch(() => "prompt"),
+              await promiseTimeout(h.queryPermission({ mode: "read" }), HANDLE_TIMEOUT_MS).catch(
+                () => "prompt",
+              ),
         ),
       );
       // The user opened or closed a source meanwhile: don't override that with the restore
@@ -696,7 +703,7 @@ export default function PlayerManager(
         return;
       }
       if (permissions.every((p) => p === "granted")) {
-        void openSource(recent.sourceId, recentArgs(recent));
+        void openSourceRef.current(recent.sourceId, recentArgs(recent));
         return;
       }
       // requestPermission needs a user gesture, so ask with a click
@@ -708,7 +715,7 @@ export default function PlayerManager(
             color="inherit"
             onClick={() => {
               closeSnackbar(key);
-              void openSource(recent.sourceId, recentArgs(recent));
+              void openSourceRef.current(recent.sourceId, recentArgs(recent));
             }}
           >
             Reopen
@@ -716,7 +723,7 @@ export default function PlayerManager(
         ),
       });
     })();
-  }, [recentsLoaded, recents, openSource, enqueueSnackbar, closeSnackbar]);
+  }, [recentsLoaded, recents, openSourceRef, enqueueSnackbar, closeSnackbar]);
 
   const closeSource = useCallback(() => {
     selectionSeq.current++;

@@ -496,11 +496,10 @@ export function headingFromTrack(track: TrackStore, end: number, to: LngLat): nu
 }
 
 /**
- * The fix under the cursor for a track point feature (`k`, `i` from `trackFeatures`) drawn from
- * `tracks`: the full-resolution fix nearest `at` among those the point stands for, and `runs`, the
- * runs of those within `radius` of `at` (degrees of latitude) as `[first, last]`, or just the
- * nearest one when none is. Undefined when the feature doesn't belong to `tracks` or the track
- * changed since (cleared or thinned).
+ * The fixes under the cursor for a track point feature (`k`, `i` from `trackFeatures`) drawn from
+ * `tracks`: `runs`, the runs of the full-resolution fixes the point stands for within `radius` of
+ * `at` (degrees of latitude) as `[first, last]`, or just the nearest one when none is. Undefined
+ * when the feature doesn't belong to `tracks` or the track changed since (cleared or thinned).
  */
 export function resolveTrackFix(
   tracks: readonly DrawnTrack[] | undefined,
@@ -508,7 +507,7 @@ export function resolveTrackFix(
   i: unknown,
   at: LngLat,
   radius = 0,
-): { track: DrawnTrack; fix: number; runs: [number, number][] } | undefined {
+): { track: DrawnTrack; runs: [number, number][] } | undefined {
   const track = typeof k === "number" ? tracks?.[k] : undefined;
   if (
     !track ||
@@ -529,7 +528,7 @@ export function resolveTrackFix(
   if (nearest >= usable) {
     return undefined;
   }
-  return { track, fix: nearest, runs: within.length > 0 ? within : [[nearest, nearest]] };
+  return { track, runs: within.length > 0 ? within : [[nearest, nearest]] };
 }
 
 /**

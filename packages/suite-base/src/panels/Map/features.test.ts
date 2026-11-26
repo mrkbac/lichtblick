@@ -179,12 +179,6 @@ describe("resolveTrackFix", () => {
     [4, 0],
   ];
 
-  it("finds the full-resolution fix under the cursor", () => {
-    const tracks = [drawn(storeOf(points))];
-    expect(resolveTrackFix(tracks, 0, 2, [1.1, 0])?.fix).toBe(1);
-    expect(resolveTrackFix(tracks, 0, 4, [4, 0])?.fix).toBe(4);
-  });
-
   it("lists the runs of fixes the point stands for within the radius", () => {
     const tracks = [drawn(storeOf(points))];
     // Point 2 stands for fixes 1-3.
@@ -193,6 +187,7 @@ describe("resolveTrackFix", () => {
     // None that close: the nearest one, as without a radius.
     expect(resolveTrackFix(tracks, 0, 2, [1.6, 0], 0.1)?.runs).toEqual([[2, 2]]);
     expect(resolveTrackFix(tracks, 0, 2, [1.1, 0])?.runs).toEqual([[1, 1]]);
+    expect(resolveTrackFix(tracks, 0, 4, [4, 0])?.runs).toEqual([[4, 4]]);
   });
 
   it("rejects features that aren't from these tracks", () => {
@@ -207,7 +202,7 @@ describe("resolveTrackFix", () => {
   it("rejects rows appended after the overlay was built", () => {
     const store = storeOf(points);
     const tracks = [{ ...drawn(store), length: 3, indices: Uint32Array.of(0, 2) }];
-    expect(resolveTrackFix(tracks, 0, 2, [4, 0])?.fix).toBe(2);
+    expect(resolveTrackFix(tracks, 0, 2, [4, 0])?.runs).toEqual([[2, 2]]);
     expect(resolveTrackFix([{ ...tracks[0]!, indices: Uint32Array.of(0, 4) }], 0, 4, [4, 0])).toBe(
       undefined,
     );
@@ -230,7 +225,7 @@ describe("resolveTrackFix", () => {
     }
     const track = { ...drawn(store), indices: Uint32Array.from([...Array(store.length).keys()]) };
     const last = store.length - 1;
-    expect(resolveTrackFix([track], 0, last, [99, 0])?.fix).toBe(last);
+    expect(resolveTrackFix([track], 0, last, [99, 0])?.runs).toEqual([[last, last]]);
     push(5);
     push(6);
     expect(store.tailReplacements).toBeGreaterThan(track.tailReplacements);

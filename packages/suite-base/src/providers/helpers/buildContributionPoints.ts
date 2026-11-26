@@ -24,6 +24,7 @@ import { InstalledTopicConverter } from "@lichtblick/suite-base/players/UserScri
 import { ExtensionInfo, InstalledDataLoader } from "@lichtblick/suite-base/types/Extensions";
 import { InstalledMessageConverter } from "@lichtblick/suite-base/types/messageConverters";
 import sendNotification from "@lichtblick/suite-base/util/sendNotification";
+import { toError } from "@lichtblick/suite-base/util/toError";
 
 const log = Logger.getLogger(__filename);
 
@@ -40,6 +41,7 @@ export async function buildContributionPoints(
   const topicConverters: InstalledTopicConverter[] = [];
   const cameraModels: CameraModelsMap = new Map();
   const dataLoaders: InstalledDataLoader[] = [];
+  const extensionName = extension.displayName || extension.qualifiedName;
 
   log.debug(`Mounting extension ${extension.qualifiedName}`);
 
@@ -169,7 +171,7 @@ export async function buildContributionPoints(
       );
       dataLoaders.push({
         extensionId: extension.id,
-        extensionName: extension.displayName || extension.qualifiedName,
+        extensionName,
         extensionNamespace: extension.namespace,
         args,
       });
@@ -199,8 +201,8 @@ export async function buildContributionPoints(
     // Registrations made before the error stay installed; the user still needs to know.
     log.error(err);
     sendNotification(
-      `Extension "${extension.displayName || extension.qualifiedName}" failed to activate`,
-      err instanceof Error ? err : new Error(String(err)),
+      `Extension "${extensionName}" failed to activate`,
+      toError(err),
       "user",
       "error",
     );

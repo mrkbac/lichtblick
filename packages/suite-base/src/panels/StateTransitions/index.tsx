@@ -53,10 +53,7 @@ import {
   EMPTY_TOPICS,
   STATE_TRANSITION_PLUGINS,
 } from "@lichtblick/suite-base/panels/StateTransitions/constants";
-import {
-  ROW_HEIGHT_PX,
-  ROW_SPACING,
-} from "@lichtblick/suite-base/panels/StateTransitions/hooks/constants";
+import { PX_PER_Y_UNIT } from "@lichtblick/suite-base/panels/StateTransitions/hooks/constants";
 import useChartScalesAndBounds from "@lichtblick/suite-base/panels/StateTransitions/hooks/useChartScalesAndBounds";
 import { useDecodedMessageRange } from "@lichtblick/suite-base/panels/StateTransitions/hooks/useDecodedMessageRange";
 import { usePanelSettings } from "@lichtblick/suite-base/panels/StateTransitions/hooks/usePanelSettings";
@@ -178,7 +175,7 @@ function StateTransitions(props: StateTransitionPanelProps) {
       theme.palette.mode,
     );
 
-  const rowsHeight = rows.reduce((sum, row) => sum + row.span, 0) * (ROW_HEIGHT_PX / ROW_SPACING);
+  const rowsHeight = rows.reduce((sum, row) => sum + row.span, 0) * PX_PER_Y_UNIT;
   const height = Math.max(80, rowsHeight + X_AXIS_HEIGHT_PX);
 
   const { yScale, xScale, databounds, width, sizeRef } = useChartScalesAndBounds(
