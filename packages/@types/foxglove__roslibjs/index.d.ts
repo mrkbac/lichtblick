@@ -102,10 +102,8 @@ declare module "@foxglove/roslibjs" {
 }
 
 declare module "@foxglove/roslibjs/src/core/SocketAdapter" {
-  import type { Ros } from "@foxglove/roslibjs";
-
   /** The socket event handlers roslib attaches to the sockets it opens. */
-  export default function SocketAdapter(client: Ros): {
+  export default function SocketAdapter(client: unknown): {
     onopen: (event: unknown) => void;
     onclose: (event: unknown) => void;
     onerror: (event: unknown) => void;
