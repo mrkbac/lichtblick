@@ -113,34 +113,23 @@ export function lastMatchingTopic(
   return msgEvents.findLast((msgEvent) => msgEvent.topic === topic);
 }
 
-type SeriesCurrentAction<T> =
-  | { type: "reset-current"; series: SeriesConfigKey }
-  | { type: "append-current"; series: SeriesConfigKey; items: T[] };
+type SeriesCurrentAction<T> = { type: "append-current"; series: SeriesConfigKey; items: T[] };
 
 /**
- * Iterates over each series, optionally pushing a reset-current action when a seek occurred,
- * then appending the items returned by `getItems`. Returns whether any series produced items.
- *
- * When a range source is available (e.g. file/bag topics), a seek always triggers a reset because
- * the range subscription will reload the full history. When no range source exists (e.g. UserScript
- * output topics), the reset is skipped entirely because the accumulated data cannot be reloaded
- * and the existing points remain valid regardless of seek direction.
+ * Appends the items returned by `getItems` to each series. Returns whether any series produced
+ * items. Only used without a range source (e.g. UserScript output topics): the accumulated data
+ * can't be reloaded, so a seek doesn't reset it here.
  *
  * Shared by TimestampDatasetsBuilder and CustomDatasetsBuilder for current-frame y-series
  * processing.
  */
 export function buildCurrentSeriesActions<TItem>(
   series: Immutable<Array<{ config: Immutable<SeriesItem> }>>,
-  options: { didSeek: boolean; hasRangeSource: boolean },
   getItems: (config: Immutable<SeriesItem>) => TItem[],
 ): { actions: SeriesCurrentAction<TItem>[]; datasetsChanged: boolean } {
   let datasetsChanged = false;
   const actions: SeriesCurrentAction<TItem>[] = [];
-  const shouldReset = options.didSeek && options.hasRangeSource;
   for (const s of series) {
-    if (shouldReset) {
-      actions.push({ type: "reset-current", series: s.config.key });
-    }
     const items = getItems(s.config);
     datasetsChanged ||= items.length > 0;
     actions.push({ type: "append-current", series: s.config.key, items });

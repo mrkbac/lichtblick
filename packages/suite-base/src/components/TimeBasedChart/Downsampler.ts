@@ -5,7 +5,6 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { iterateObjects } from "@lichtblick/suite-base/components/Chart/datasets";
 import { RpcScales } from "@lichtblick/suite-base/components/Chart/types";
 import { grey } from "@lichtblick/suite-base/util/toolsColorScheme";
 
@@ -77,11 +76,13 @@ export class Downsampler {
           ? sortedStateWindow(dataset.data as { x: number }[], view)
           : { start: 0, end: dataset.data.length };
       const downsampled = downsampleStates(
-        iterateObjects(dataset.data, start, end),
+        dataset.data,
         view,
         // Per dataset: a shared split would leave each of many rows a few hundred points and
         // grey out stretches that fit the chart's width. The width still caps each row.
         MAX_POINTS,
+        start,
+        end,
       );
       // A merged stretch stays at the y of the point before it (a step row has several), else at
       // the row's first y. Gaps (y = NaN) don't count.

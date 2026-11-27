@@ -112,7 +112,7 @@ export class PointColumns {
         if (i < mark) {
           movedMark = write + 1;
         }
-        this.#moveRow(i, write++);
+        this.copyRow(i, write++);
       }
     };
     let lastBucket = Number.NaN;
@@ -200,16 +200,19 @@ export class PointColumns {
   }
 
   /**
-   * Halve rows [start, length) by dropping every other value row; the first and the last value
-   * row stay, and each run of gaps (NaN in x, y or an `extra` column) between kept rows stays as
-   * one gap row. Rows of `extra` columns move the same way. Returns
-   * the number of rows removed.
+   * Halve rows [start, length) by pairing up value rows and keeping the one of each pair that is
+   * further from the previous kept value, so one-sample spikes survive repeated halving. The first
+   * and the last value row stay, and each run of gaps (NaN in x, y or an `extra` column) between
+   * kept rows stays as one gap row. Rows of `extra` columns move the same way; the first `extra`
+   * column, if any, holds the plotted values compared instead of y. Returns the number of rows
+   * removed.
    */
   public halve(start: number, extra: readonly Float64Array[] = []): number {
     const end = this.length;
     if (end - start <= 2) {
       return 0;
     }
+    const plotted = extra[0] ?? this.y;
     const isGap = (row: number) =>
       Number.isNaN(this.x[row]!) ||
       Number.isNaN(this.y[row]!) ||
@@ -223,23 +226,48 @@ export class PointColumns {
       for (const column of extra) {
         column[write] = column[row]!;
       }
-      this.#moveRow(row, write++);
+      this.copyRow(row, write++);
     };
     // A run of gaps (NaN) becomes one gap row, kept only between kept rows: lines still break
     // where the data does, and gaps can't grow past the kept values.
     let gapRow = -1;
-    let finite = 0;
+    let lastKept = Number.NaN;
+    const keep = (row: number) => {
+      if (gapRow >= 0 && write > start) {
+        move(gapRow);
+      }
+      gapRow = -1;
+      lastKept = plotted[row]!;
+      move(row);
+    };
+    // the first row of the open pair, and the first gap after it
+    let pending = -1;
+    let pendingGap = -1;
     for (let read = start; read < end; read++) {
       if (isGap(read)) {
-        gapRow = gapRow < 0 ? read : gapRow;
-        continue;
-      }
-      if (finite++ % 2 === 0 || read === lastFinite) {
-        if (gapRow >= 0 && write > start) {
-          move(gapRow);
+        if (pending >= 0) {
+          pendingGap = pendingGap < 0 ? read : pendingGap;
+        } else {
+          gapRow = gapRow < 0 ? read : gapRow;
         }
-        gapRow = -1;
-        move(read);
+      } else if (write === start || (pending < 0 && read === lastFinite)) {
+        keep(read);
+      } else if (pending < 0) {
+        pending = read;
+        pendingGap = -1;
+      } else {
+        const first = pending;
+        pending = -1;
+        if (
+          read !== lastFinite &&
+          Math.abs(plotted[first]! - lastKept) >= Math.abs(plotted[read]! - lastKept)
+        ) {
+          keep(first);
+          gapRow = pendingGap;
+        } else {
+          gapRow = gapRow < 0 ? pendingGap : gapRow;
+          keep(read);
+        }
       }
     }
     if (gapRow >= 0 && write > start) {
@@ -257,7 +285,8 @@ export class PointColumns {
     }
   }
 
-  #moveRow(from: number, to: number): void {
+  /** Overwrite row `to` with row `from` */
+  public copyRow(from: number, to: number): void {
     this.x[to] = this.x[from]!;
     this.y[to] = this.y[from]!;
     this.#receiveSec[to] = this.#receiveSec[from]!;
