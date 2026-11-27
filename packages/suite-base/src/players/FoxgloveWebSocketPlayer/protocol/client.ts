@@ -292,6 +292,7 @@ export class FoxgloveClient {
   }
 
   #send(message: ClientJsonMessage): void {
-    this.#ws.send(JSON.stringify(message));
+    // Typed string | undefined, but an object always serializes
+    this.#ws.send(JSON.stringify(message) ?? "");
   }
 }
