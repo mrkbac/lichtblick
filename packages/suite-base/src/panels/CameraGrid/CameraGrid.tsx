@@ -68,10 +68,13 @@ const useStyles = makeStyles()((theme) => ({
     // Outlines of neighbouring tiles meet in the 1px gap as a single divider line.
     outline: `1px solid ${theme.palette.divider}`,
     cursor: "zoom-in",
-    "&:focus-visible": {
-      outline: `2px solid ${theme.palette.primary.main}`,
-      outlineOffset: -2,
-      zIndex: 1,
+    // Drawn over the canvas: an inset outline would be under it
+    "&:focus-visible::after": {
+      content: '""',
+      position: "absolute",
+      inset: 0,
+      border: `2px solid ${theme.palette.primary.main}`,
+      pointerEvents: "none",
     },
   },
   maximized: {
