@@ -50,7 +50,6 @@ export class CustomDatasetsBuilder implements IDatasetsBuilder {
 
   #pendingDispatch: Immutable<UpdateDataAction>[] = [];
 
-  #lastSeekTime = 0;
   /** The messages of the last state handled, so a repeated state adds nothing */
   #lastMessages?: NonNullable<Immutable<PlayerState>["activeData"]>["messages"];
 
@@ -89,9 +88,6 @@ export class CustomDatasetsBuilder implements IDatasetsBuilder {
       return;
     }
 
-    const didSeek = activeData.lastSeekTime !== this.#lastSeekTime;
-    this.#lastSeekTime = activeData.lastSeekTime;
-
     let datasetsChanged = false;
 
     // The same state can be handled again (a config change, another panel's subscription change):
@@ -118,7 +114,6 @@ export class CustomDatasetsBuilder implements IDatasetsBuilder {
 
       const { actions: seriesActions, datasetsChanged: seriesChanged } = buildCurrentSeriesActions(
         this.#series,
-        { didSeek, hasRangeSource: this.#hasRangeSource },
         (config) => readSeriesItems(msgEvents, config),
       );
       pushAll(this.#pendingDispatch, seriesActions);

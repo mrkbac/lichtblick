@@ -103,6 +103,10 @@ export class PlotCoordinator extends EventEmitter<PlotCoordinatorEventTypes> {
   private datasetRange?: Bounds1D;
   private followRange?: number;
   private interactionBounds?: Bounds;
+  /** Whether an interaction since the last reset moved y; until then y stays fitted to the data */
+  private yInteracted = false;
+  /** Current wheel zoom mode, sent to the renderer */
+  private zoomMode: ZoomMode = "x";
   private lastSeekTime = NaN;
   /** Normalized series from latest config */
   private series: Immutable<SeriesItem[]> = [];
@@ -369,6 +373,7 @@ export class PlotCoordinator extends EventEmitter<PlotCoordinatorEventTypes> {
     if (analysis?.mode !== this.analysis?.mode) {
       // Zoom on a time axis means nothing on a frequency or value axis, and vice versa
       this.interactionBounds = undefined;
+      this.yInteracted = false;
       this.shouldResetY = true;
     }
     this.analysis = analysis;
@@ -393,6 +398,7 @@ export class PlotCoordinator extends EventEmitter<PlotCoordinatorEventTypes> {
     const defaultZoomMode: ZoomMode = isPathXAxis ? "xy" : "x";
     if (defaultZoomMode !== this.defaultZoomMode) {
       this.defaultZoomMode = defaultZoomMode;
+      this.zoomMode = defaultZoomMode;
       this.updateAction.zoomMode = defaultZoomMode;
     }
     this.updateAction.equalAxes = isPathXAxis && config.axisScales === "equal";
@@ -640,6 +646,7 @@ export class PlotCoordinator extends EventEmitter<PlotCoordinatorEventTypes> {
     // Synced time bounds pick the analyzed window; the zoom of a spectrum or histogram stays
     if (!this.analysis) {
       this.interactionBounds = undefined;
+      this.yInteracted = false;
     }
     if (bounds == undefined && !this.analysis) {
       // This happens when "reset view" is clicked in a different panel or otherwise cleared the global bounds
@@ -649,6 +656,7 @@ export class PlotCoordinator extends EventEmitter<PlotCoordinatorEventTypes> {
   }
 
   public setZoomMode(mode: ZoomMode): void {
+    this.zoomMode = mode;
     this.updateAction.zoomMode = mode;
     this.queueDispatchRender();
   }
@@ -668,6 +676,7 @@ export class PlotCoordinator extends EventEmitter<PlotCoordinatorEventTypes> {
       return;
     }
     this.interactionBounds = bounds;
+    this.yInteracted ||= mode !== "x";
     if (this.shouldSync && mode !== "y" && !this.analysis) {
       this.emit("timeseriesBounds", bounds.x);
     }
@@ -676,6 +685,7 @@ export class PlotCoordinator extends EventEmitter<PlotCoordinatorEventTypes> {
 
   public resetBounds(): void {
     this.interactionBounds = undefined;
+    this.yInteracted = false;
     // Resetting a spectrum or histogram zoom keeps the synced time window it analyzes
     if (!this.analysis) {
       this.globalBounds = undefined;
@@ -694,6 +704,8 @@ export class PlotCoordinator extends EventEmitter<PlotCoordinatorEventTypes> {
   public addInteractionEvent(ev: InteractionEvent): void {
     this.updateAction.interactionEvents ??= [];
     this.updateAction.interactionEvents.push(ev);
+    // panning moves both axes; a wheel zoom only the axes of its mode
+    this.yInteracted ||= ev.type !== "wheel" || (ev.zoomMode ?? this.zoomMode) !== "x";
     this.queueDispatchRender();
   }
 
@@ -889,7 +901,8 @@ export class PlotCoordinator extends EventEmitter<PlotCoordinatorEventTypes> {
 
     // The viewport has changed from some render interactions so we need to consider new datasets
     const x = this.getXBounds();
-    const y = this.interactionBounds?.y ?? this.configBounds.y;
+    // Unless y was zoomed or panned, the builder fits y to the data in view
+    const y = (this.yInteracted ? this.interactionBounds?.y : undefined) ?? this.configBounds.y;
     const analysis = this.getAnalysis();
     if (
       !_.isEqual(this.viewport.bounds.x, x) ||
