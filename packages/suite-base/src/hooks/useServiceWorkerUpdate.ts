@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 
 import Logger from "@lichtblick/log";
 import type { PlayerState } from "@lichtblick/suite-base/players/types";
+import sendNotification from "@lichtblick/suite-base/util/sendNotification";
 
 const log = Logger.getLogger(__filename);
 
@@ -157,14 +158,54 @@ export function applyServiceWorkerUpdate(worker: ServiceWorker): void {
 const STALE_RELOAD_KEY = "staleChunkReloadAt";
 const STALE_RELOAD_COOLDOWN_MS = 30_000;
 
+/** Set while an offline failure waits for the `online` event, so it is reported once. */
+let waitingForOnline = false;
+
+/** Offline, or the host can't be reached: `navigator.onLine` alone misses a dead network. */
+async function isOffline(url: string): Promise<boolean> {
+  if (!navigator.onLine) {
+    return true;
+  }
+  try {
+    // HEAD skips the service worker's caches (they only answer GET): this asks the host
+    await fetch(url, { method: "HEAD", cache: "no-store" });
+    return false;
+  } catch {
+    return true;
+  }
+}
+
 /**
  * A lazy chunk failed to load, most likely because a newer deploy replaced this build's files.
  * Switch to the newest version: activate the updated service worker if there is one (that reloads
- * this window), else reload. Does nothing if it already tried recently, so a chunk that fails for
- * another reason (offline, still missing after the reload) can't cause a reload loop.
+ * this window), else reload. Does nothing if it already tried recently, so a chunk that still fails
+ * after the reload can't cause a reload loop.
+ * When `failedUrl` (the file that failed) can't be fetched because the app is offline, a reload
+ * would fail the same way: it shows a notice instead and tries again once back online.
  * Returns whether it started a reload.
  */
-export async function reloadToLatestVersion(): Promise<boolean> {
+export async function reloadToLatestVersion(failedUrl?: string): Promise<boolean> {
+  if (waitingForOnline) {
+    return false;
+  }
+  if (failedUrl != undefined && (await isOffline(failedUrl))) {
+    waitingForOnline = true;
+    sendNotification(
+      "You're offline",
+      "Part of the app couldn't be downloaded. It reloads when you're back online.",
+      "app",
+      "warn",
+    );
+    window.addEventListener(
+      "online",
+      () => {
+        waitingForOnline = false;
+        void reloadToLatestVersion(failedUrl);
+      },
+      { once: true },
+    );
+    return false;
+  }
   // The cooldown must survive the reload, or a chunk that fails on every boot reloads forever.
   // Where storage is blocked (it throws), don't reload automatically at all.
   try {
@@ -390,5 +431,6 @@ export function resetServiceWorkerUpdateStateForTests(): void {
   updateRequestedHere = false;
   controllerChangedElsewhere = false;
   updateInFlight = false;
+  waitingForOnline = false;
   pendingResumeSource = undefined;
 }

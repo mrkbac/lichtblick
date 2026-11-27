@@ -148,7 +148,7 @@ export async function main(): Promise<void> {
       const target = event.target;
       if (target instanceof HTMLScriptElement && new URL(target.src).origin === location.origin) {
         log.warn("Script failed to load, switching to the latest version", target.src);
-        void reloadToLatestVersion();
+        void reloadToLatestVersion(target.src);
       }
     },
     true,

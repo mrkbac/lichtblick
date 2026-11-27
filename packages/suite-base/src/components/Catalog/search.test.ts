@@ -133,6 +133,20 @@ describe("filterRecordings", () => {
     expect(parsePeriod("yesterday")).toBeUndefined();
   });
 
+  it("accepts only instants with an explicit offset outside the period forms", () => {
+    expect(parsePeriod("2026-11-27T08:30:00.5Z", "UTC")).toEqual({
+      start: Date.UTC(2026, 10, 27, 8, 30, 0, 500),
+      end: Date.UTC(2026, 10, 27, 8, 30, 0, 500),
+      endInclusive: true,
+    });
+    expect(parsePeriod("2026-11-27T09:30+01:00", "UTC")?.start).toBe(Date.UTC(2026, 10, 27, 8, 30));
+    // Date.parse would guess these, in the browser's zone instead of the app's
+    expect(parsePeriod("5", "UTC")).toBeUndefined();
+    expect(parsePeriod("12", "UTC")).toBeUndefined();
+    expect(parsePeriod("2026/11/27", "UTC")).toBeUndefined();
+    expect(parsePeriod("2026-11-27T08:30:00.5", "UTC")).toBeUndefined();
+  });
+
   it.each([
     ["", ["a", "b", "c", "d"]],
     ["DRIVE", ["a"]],

@@ -114,6 +114,27 @@ describe("CurrentLayoutLocalStorageSyncAdapter", () => {
     expect(flushPendingLayoutSave()).toBe(false); // nothing left
   });
 
+  it("writes a pending edit when the page is hidden for a reload or close", async () => {
+    const { rerender } = renderComponent();
+    const modifiedData = { ...mockLayoutData, modified: true };
+    (useCurrentLayoutSelector as Mock).mockImplementation((selector) =>
+      selector === selectLayoutData ? modifiedData : mockLayoutId,
+    );
+    await act(async () => {
+      rerender();
+    });
+    expect(mockLayoutManager.updateLayout).not.toHaveBeenCalled();
+
+    await act(async () => {
+      window.dispatchEvent(new Event("pagehide"));
+    });
+
+    expect(mockLayoutManager.updateLayout).toHaveBeenCalledWith({
+      id: mockLayoutId,
+      data: modifiedData,
+    });
+  });
+
   it("saves the edit even when localStorage is full", async () => {
     vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
       throw new DOMException("full", "QuotaExceededError");

@@ -46,6 +46,22 @@ describe("useSessionStorageValue", () => {
     window.removeEventListener("storage", storageEventSpy);
   });
 
+  it("reads as unset and keeps working where storage access throws", () => {
+    const blocked = () => {
+      throw new DOMException("blocked", "SecurityError");
+    };
+    vi.spyOn(Storage.prototype, "getItem").mockImplementation(blocked);
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(blocked);
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    const { result } = renderHook(() => useSessionStorageValue("blocked-key"));
+    expect(result.current[0]).toBeUndefined();
+    act(() => {
+      result.current[1]("value");
+    });
+    expect(result.current[0]).toBeUndefined();
+  });
+
   it("should return undefined when no value exists in session storage", () => {
     // Given
     const testKey = "existing-key";

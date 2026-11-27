@@ -677,11 +677,12 @@ export default function PlayerManager(
     if (!lastFile || params.has("ds") || params.has("catalog")) {
       return;
     }
-    const recent = recents.find((r) =>
-      lastFile.recentId != undefined
-        ? r.id === lastFile.recentId
-        : r.type === "file" && r.sourceId === lastFile.sourceId && r.title === lastFile.title,
-    );
+    // By title when the id is gone: another tab re-opened the same file and stored its own id
+    const recent =
+      recents.find((r) => lastFile.recentId != undefined && r.id === lastFile.recentId) ??
+      recents.find(
+        (r) => r.type === "file" && r.sourceId === lastFile.sourceId && r.title === lastFile.title,
+      );
     if (recent?.type !== "file") {
       return;
     }

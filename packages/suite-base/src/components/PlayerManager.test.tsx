@@ -134,6 +134,43 @@ describe("PlayerManager", () => {
     }
   });
 
+  it("reopens the last file by title when another tab stored it under another id", async () => {
+    const file = new File(["a"], "r.bag");
+    const handle = {
+      name: "r.bag",
+      queryPermission: async () => "granted",
+      getFile: async () => file,
+    } as unknown as FileSystemFileHandle;
+    storedRecents.recents = [
+      { id: "from-other-tab", type: "file", sourceId: "ok", title: "r.bag", handles: [handle] },
+    ];
+    storedRecents.recentsLoaded = true;
+    sessionStorage.setItem(
+      "lichtblick.lastFileSource",
+      '{"sourceId":"ok","title":"r.bag","recentId":"this-tab"}',
+    );
+    const ok = source("ok", () => undefined);
+    let selection: PlayerSelection | undefined;
+    function Probe() {
+      selection = usePlayerSelection();
+      return <></>;
+    }
+    try {
+      render(
+        <PlayerManager playerSources={[ok]}>
+          <Probe />
+        </PlayerManager>,
+      );
+      await act(async () => {});
+      expect(selection!.selectedSource).toBe(ok);
+      expect(selection!.selectedRecordings).toEqual([file]);
+    } finally {
+      storedRecents.recents = [];
+      storedRecents.recentsLoaded = false;
+      sessionStorage.clear();
+    }
+  });
+
   it("reopens the last file with a source that appeared after the restore prompt", async () => {
     // Given - the last file was read by a data loader, which loads with the extensions later
     const handle = {

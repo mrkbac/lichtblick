@@ -16,10 +16,6 @@ import { fileURLToPath as _nodeFileURLToPath, pathToFileURL as _nodePathToFileUR
 import type { RspackArgv } from "./RspackArgv.ts";
 
 /**
- * Transpiles TypeScript/TSX with Rspack's built-in SWC loader (type checking runs separately with
- * `pnpm typecheck`). `refresh` enables React Fast Refresh for the dev server.
- */
-/**
  * Dev-server overlay filter (`devServer.client.overlay.runtimeErrors`) that hides known false
  * positives.
  *
@@ -72,6 +68,10 @@ function decoderSrcAliases(): Record<string, string> {
   );
 }
 
+/**
+ * Transpiles TypeScript/TSX with Rspack's built-in SWC loader (type checking runs separately with
+ * `pnpm typecheck`). `refresh` enables React Fast Refresh for the dev server.
+ */
 export function swcRule({
   isDev,
   refresh = false,

@@ -32,6 +32,8 @@ async function write(layoutId: string, history: HistorySnapshot): Promise<void> 
   );
   const steps = new Set(mine.map((entry) => entry.savedAt));
   const tx = await store.readwrite();
+  // A failed get/put aborts the transaction and rejects `done` too, unawaited: handle it here
+  tx.transaction.done.catch(() => {});
   const saved = (await tx.get(layoutId)) as HistorySnapshot | undefined;
   const others = (saved?.entries ?? []).filter(
     (entry: SavedEntry) => entry.tab !== TAB && !steps.has(entry.savedAt),

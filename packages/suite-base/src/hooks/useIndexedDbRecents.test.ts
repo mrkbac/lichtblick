@@ -234,6 +234,39 @@ describe("useIndexedDbRecents", () => {
     reloaded.unmount();
   });
 
+  it("stores the id it returns when another tab already stored the same recent", async () => {
+    const tabA = renderHook(() => useIndexedDbRecents());
+    const tabB = renderHook(() => useIndexedDbRecents());
+    await waitFor(() => {
+      expect(tabA.result.current.recentsLoaded).toBe(true);
+      expect(tabB.result.current.recentsLoaded).toBe(true);
+    });
+    let idB = "";
+    await act(async () => {
+      idB = tabB.result.current.addRecent(connection("ws://both-tabs"));
+      await tabB.result.current.save();
+    });
+    // Tab A hasn't seen tab B's record, so it picks a new id; that id must reach storage
+    let idA = "";
+    await act(async () => {
+      idA = tabA.result.current.addRecent(connection("ws://both-tabs"));
+      await tabA.result.current.save();
+    });
+    expect(idA).not.toBe(idB);
+    tabA.unmount();
+    tabB.unmount();
+
+    const reloaded = renderHook(() => useIndexedDbRecents());
+    await waitFor(() => {
+      expect(
+        reloaded.result.current.recents
+          .filter((r) => r.title === "ws://both-tabs")
+          .map((r) => r.id),
+      ).toEqual([idA]);
+    });
+    reloaded.unmount();
+  });
+
   it("identifies a connection by its arguments, not its display name", () => {
     const recent = (extra: Record<string, string>) => ({
       type: "connection" as const,
