@@ -615,38 +615,71 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
 
   // The full track comes from the recorded range. GeoJSON is deliberately not ranged: each
   // message is a complete scene that replaces the previous one.
+  // Reads are kept per topic: showing or hiding one topic must not drop the others' trails, which
+  // on a live source (no range to read again) are gone for good.
+  const navReadsRef = useRef({ context, reads: new Map<string, () => void>() });
   useLayoutEffect(() => {
-    tracksRef.current = new Map();
-    setTracks({ stores: tracksRef.current });
-    rangeTopicsRef.current = new Set();
-    const unsubscribes = navTopics.map((topic) =>
-      context.unstable_subscribeMessageRange({
-        topic: topic.name,
-        convertTo: topic.schemaName,
-        onNewRangeIterator: async (iterator) => {
-          // A new iterator replaces the topic's data (e.g. an edited user script); drop the old.
-          tracksRef.current.get(topic.name)?.clear();
-          scheduleTrackFlush("recorded");
-          rangeTopicsRef.current.add(topic.name);
-          for await (const batch of iterator) {
-            const valid = expandLocationFixes(batch).filter(
-              (event): event is NavMessage => isValidMapMessage(event) && !isGeoJSONMessage(event),
-            );
-            if (valid.length > 0) {
-              appendTrack(valid, "recorded");
-            }
-          }
-        },
-      }),
-    );
-    return () => {
-      clearTimeout(flushTimer.current);
-      flushTimer.current = undefined;
-      for (const unsubscribe of unsubscribes) {
+    if (navReadsRef.current.context !== context) {
+      for (const unsubscribe of navReadsRef.current.reads.values()) {
         unsubscribe();
       }
-    };
+      navReadsRef.current = { context, reads: new Map() };
+    }
+    const { reads } = navReadsRef.current;
+    const wanted = new Map(navTopics.map((topic) => [`${topic.name}\n${topic.schemaName}`, topic]));
+    let removed = false;
+    for (const [key, unsubscribe] of reads) {
+      if (!wanted.has(key)) {
+        unsubscribe();
+        reads.delete(key);
+        const name = key.slice(0, key.indexOf("\n"));
+        tracksRef.current.delete(name);
+        rangeTopicsRef.current.delete(name);
+        removed = true;
+      }
+    }
+    if (removed) {
+      setTracks({ stores: tracksRef.current });
+    }
+    for (const [key, topic] of wanted) {
+      if (reads.has(key)) {
+        continue;
+      }
+      reads.set(
+        key,
+        context.unstable_subscribeMessageRange({
+          topic: topic.name,
+          convertTo: topic.schemaName,
+          onNewRangeIterator: async (iterator) => {
+            // A new iterator replaces the topic's data (e.g. an edited user script); drop the old.
+            tracksRef.current.get(topic.name)?.clear();
+            scheduleTrackFlush("recorded");
+            rangeTopicsRef.current.add(topic.name);
+            for await (const batch of iterator) {
+              const valid = expandLocationFixes(batch).filter(
+                (event): event is NavMessage =>
+                  isValidMapMessage(event) && !isGeoJSONMessage(event),
+              );
+              if (valid.length > 0) {
+                appendTrack(valid, "recorded");
+              }
+            }
+          },
+        }),
+      );
+    }
   }, [appendTrack, context, navTopics, scheduleTrackFlush]);
+  useLayoutEffect(
+    () => () => {
+      clearTimeout(flushTimer.current);
+      flushTimer.current = undefined;
+      for (const unsubscribe of navReadsRef.current.reads.values()) {
+        unsubscribe();
+      }
+      navReadsRef.current.reads.clear();
+    },
+    [],
+  );
 
   // Batched like the track: each flush recolors the whole track.
   const sampleTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
@@ -688,35 +721,75 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
     [],
   );
 
-  // Recorded values for "color by message path".
+  // Recorded values for "color by message path", read per topic: changing one path re-reads only
+  // its topic, and the other paths keep their (on live sources irrecoverable) samples.
+  const pathReadsRef = useRef({ context, reads: new Map<string, () => void>() });
   useLayoutEffect(() => {
-    samplesRef.current = new Map();
-    setPathSamples({ stores: samplesRef.current });
-    pathRangeTopicsRef.current = new Set();
-    const byTopic = Map.groupBy(colorPaths, ({ parsed }) => parsed.topicName);
-    const unsubscribes = [...byTopic].map(([topic, paths]) =>
-      context.unstable_subscribeMessageRange({
-        topic,
-        onNewRangeIterator: async (iterator) => {
-          for (const { path } of paths) {
-            samplesRef.current.get(path)?.clear();
-          }
-          setPathSamples({ stores: samplesRef.current });
-          pathRangeTopicsRef.current.add(topic);
-          for await (const batch of iterator) {
-            appendPathSamples(batch, paths, "recorded");
-          }
-        },
-      }),
-    );
-    return () => {
-      clearTimeout(sampleTimer.current);
-      sampleTimer.current = undefined;
-      for (const unsubscribe of unsubscribes) {
+    if (pathReadsRef.current.context !== context) {
+      for (const unsubscribe of pathReadsRef.current.reads.values()) {
         unsubscribe();
       }
-    };
+      pathReadsRef.current = { context, reads: new Map() };
+    }
+    const { reads } = pathReadsRef.current;
+    const byTopic = Map.groupBy(colorPaths, ({ parsed }) => parsed.topicName);
+    // A topic's key is its paths: a changed path list reads the topic again
+    const keyOf = (topic: string, paths: readonly { path: string }[]) =>
+      [topic, ...paths.map(({ path }) => path).sort()].join("\n");
+    const wanted = new Map(
+      [...byTopic].map(([topic, paths]) => [keyOf(topic, paths), { topic, paths }]),
+    );
+    const wantedPaths = new Set(colorPaths.map(({ path }) => path));
+    let removed = false;
+    for (const [key, unsubscribe] of reads) {
+      if (!wanted.has(key)) {
+        unsubscribe();
+        reads.delete(key);
+        pathRangeTopicsRef.current.delete(key.slice(0, key.indexOf("\n")));
+      }
+    }
+    for (const path of samplesRef.current.keys()) {
+      if (!wantedPaths.has(path)) {
+        samplesRef.current.delete(path);
+        removed = true;
+      }
+    }
+    if (removed) {
+      setPathSamples({ stores: samplesRef.current });
+    }
+    for (const [key, { topic, paths }] of wanted) {
+      if (reads.has(key)) {
+        continue;
+      }
+      reads.set(
+        key,
+        context.unstable_subscribeMessageRange({
+          topic,
+          onNewRangeIterator: async (iterator) => {
+            for (const { path } of paths) {
+              samplesRef.current.get(path)?.clear();
+            }
+            setPathSamples({ stores: samplesRef.current });
+            pathRangeTopicsRef.current.add(topic);
+            for await (const batch of iterator) {
+              appendPathSamples(batch, paths, "recorded");
+            }
+          },
+        }),
+      );
+    }
   }, [appendPathSamples, colorPaths, context]);
+  useLayoutEffect(
+    () => () => {
+      clearTimeout(sampleTimer.current);
+      sampleTimer.current = undefined;
+      for (const unsubscribe of pathReadsRef.current.reads.values()) {
+        unsubscribe();
+      }
+      pathReadsRef.current.reads.clear();
+    },
+    [],
+  );
 
   useLayoutEffect(() => {
     context.watch("topics");
