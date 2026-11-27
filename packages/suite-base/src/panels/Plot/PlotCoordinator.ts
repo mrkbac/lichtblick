@@ -17,6 +17,7 @@ import { Immutable, Time } from "@lichtblick/suite";
 import { simpleGetMessagePathDataItems } from "@lichtblick/suite-base/components/MessagePathSyntax/simpleGetMessagePathDataItems";
 import { stringifyMessagePath } from "@lichtblick/suite-base/components/MessagePathSyntax/stringifyRosPath";
 import { fillInGlobalVariablesInPath } from "@lichtblick/suite-base/components/MessagePathSyntax/useCachedGetMessagePathDataItems";
+import { EarlierWindows } from "@lichtblick/suite-base/components/PanelExtensionAdapter/EarlierWindows";
 import { UseSubscribeMessageRange } from "@lichtblick/suite-base/components/PanelExtensionAdapter/useSubscribeMessageRange";
 import { Bounds1D } from "@lichtblick/suite-base/components/TimeBasedChart/types";
 import { GlobalVariables } from "@lichtblick/suite-base/hooks/useGlobalVariables";
@@ -27,6 +28,7 @@ import { getContrastColor, getLineColor } from "@lichtblick/suite-base/util/plot
 import { OffscreenCanvasRenderer } from "./OffscreenCanvasRenderer";
 import {
   CsvDataset,
+  EarlierRange,
   IDatasetsBuilder,
   PlotAnalysis,
   SeriesConfigKey,
@@ -1051,15 +1053,23 @@ export class PlotCoordinator extends EventEmitter<PlotCoordinatorEventTypes> {
     // recreate all subscriptions.
     const entry: RangeSubscription = { cancel: () => {}, seriesKeys, active: false };
 
-    entry.cancel = this.subscribeMessageRange({
+    let cancelled = false;
+    const cancel = this.subscribeMessageRange({
       topic,
       // Builders put each batch in at its receive time (series) or pair rows by it (custom x-axis)
       playheadFirst: true,
       onNewRangeIterator: async (batchIterator) => {
         entry.active = true;
         let isReset = true;
+        const earlier = new EarlierWindows<EarlierRange>(
+          () => ({ actions: [] }),
+          (range) => {
+            this.datasetsBuilder.prependMessageRange?.(range);
+            this.queueDispatchDownsample();
+          },
+        );
         for await (const batch of batchIterator) {
-          if (this.isDestroyed()) {
+          if (cancelled || this.isDestroyed()) {
             return;
           }
           const startTime = this.startTime;
@@ -1068,14 +1078,21 @@ export class PlotCoordinator extends EventEmitter<PlotCoordinatorEventTypes> {
           }
           this.datasetsBuilder.handleMessageRange?.(
             batch,
-            { isReset, seriesKeys, readsXAxis },
+            { isReset, seriesKeys, readsXAxis, earlier: earlier.place(batch) },
             startTime,
           );
           isReset = false;
           this.queueDispatchDownsample();
         }
+        if (!cancelled && !this.isDestroyed()) {
+          earlier.flush();
+        }
       },
     });
+    entry.cancel = () => {
+      cancelled = true;
+      cancel();
+    };
     return entry;
   }
 }

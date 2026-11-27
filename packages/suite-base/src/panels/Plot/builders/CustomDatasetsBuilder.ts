@@ -24,6 +24,7 @@ import {
 } from "./CustomDatasetsBuilderImpl";
 import {
   CsvDataset,
+  EarlierRange,
   GetViewportDatasetsResult,
   HandlePlayerStateResult,
   IDatasetsBuilder,
@@ -31,7 +32,7 @@ import {
   SeriesItem,
   Viewport,
 } from "./IDatasetsBuilder";
-import { buildCurrentSeriesActions, buildFullSeriesActions } from "./utils";
+import { buildCurrentSeriesActions, buildFullSeriesActions, mergeAppends } from "./utils";
 import { resolveChartDatum } from "../utils/datum";
 
 type CustomDatasetsSeriesItem = {
@@ -156,6 +157,7 @@ export class CustomDatasetsBuilder implements IDatasetsBuilder {
       return;
     }
 
+    const into = options.earlier?.actions ?? this.#pendingDispatch;
     const isXBatch = options.readsXAxis !== false && topic === this.#xParsedPath?.topicName;
 
     if (isXBatch) {
@@ -167,7 +169,7 @@ export class CustomDatasetsBuilder implements IDatasetsBuilder {
         const pathItems = readMessagePathItems(messages, this.#xParsedPath);
         if (pathItems.length > 0) {
           this.#xFullBounds = computeBounds(this.#xFullBounds, pathItems);
-          this.#pendingDispatch.push({ type: "append-full-x", items: pathItems });
+          into.push({ type: "append-full-x", items: pathItems });
         }
       }
       // Series on the x-axis topic read the same batch below.
@@ -176,7 +178,11 @@ export class CustomDatasetsBuilder implements IDatasetsBuilder {
     const actions = buildFullSeriesActions(this.#series, topic, options, (config) =>
       readSeriesItems(messages, config),
     );
-    pushAll(this.#pendingDispatch, actions);
+    pushAll(into, actions);
+  }
+
+  public prependMessageRange(earlier: EarlierRange): void {
+    pushAll(this.#pendingDispatch, mergeAppends(earlier.actions as Immutable<UpdateDataAction>[]));
   }
 
   public setXPath(path: Immutable<MessagePath> | undefined): void {

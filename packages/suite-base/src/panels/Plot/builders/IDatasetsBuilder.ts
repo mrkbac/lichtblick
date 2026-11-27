@@ -98,7 +98,16 @@ export type MessageRangeOptions = {
   seriesKeys?: ReadonlySet<SeriesConfigKey>;
   /** Whether this read also feeds the panel's x-axis path; defaults to true */
   readsXAxis?: boolean;
+  /** Collect the batch here instead of applying it: it belongs to an earlier window */
+  earlier?: EarlierRange;
 };
+
+/**
+ * A window of history earlier than what a playhead-first read loaded. handleMessageRange collects
+ * the window's batches here and prependMessageRange puts them in front together: inserting each
+ * batch in front on its own moved every loaded row per batch.
+ */
+export type EarlierRange = { actions: object[] };
 
 export type GetViewportDatasetsResult = {
   /**
@@ -147,6 +156,9 @@ interface IDatasetsBuilder {
     options: MessageRangeOptions,
     startTime?: Immutable<Time>,
   ): void;
+
+  /** Puts a window collected through `options.earlier` in front of the data loaded so far */
+  prependMessageRange?(earlier: EarlierRange): void;
 
   setSeries(series: Immutable<SeriesItem[]>): void;
 

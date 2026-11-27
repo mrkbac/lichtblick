@@ -18,6 +18,7 @@ import { getTimestampForMessage } from "@lichtblick/suite-base/util/time";
 
 import {
   CsvDataset,
+  EarlierRange,
   GetViewportDatasetsResult,
   HandlePlayerStateResult,
   IDatasetsBuilder,
@@ -30,7 +31,7 @@ import type {
   TimestampDatasetsBuilderImpl,
   UpdateDataAction,
 } from "./TimestampDatasetsBuilderImpl";
-import { buildCurrentSeriesActions, buildFullSeriesActions } from "./utils";
+import { buildCurrentSeriesActions, buildFullSeriesActions, mergeAppends } from "./utils";
 import { resolveChartDatum } from "../utils/datum";
 import { getSeriesTimestamp } from "../utils/seriesTimestamp";
 
@@ -206,7 +207,11 @@ export class TimestampDatasetsBuilder implements IDatasetsBuilder {
     const actions = buildFullSeriesActions(this.#series, topic, options, (config) =>
       readMessagePathItems(messages, config, startTime),
     );
-    pushAll(this.#pendingDispatch, actions);
+    pushAll(options.earlier?.actions ?? this.#pendingDispatch, actions);
+  }
+
+  public prependMessageRange(earlier: EarlierRange): void {
+    pushAll(this.#pendingDispatch, mergeAppends(earlier.actions as Immutable<UpdateDataAction>[]));
   }
 
   public setSeries(series: Immutable<SeriesItem[]>): void {

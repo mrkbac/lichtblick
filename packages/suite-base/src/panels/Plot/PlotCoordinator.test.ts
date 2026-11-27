@@ -21,7 +21,12 @@ import { BasicBuilder } from "@lichtblick/test-builders";
 
 import { OffscreenCanvasRenderer } from "./OffscreenCanvasRenderer";
 import { PlotCoordinator } from "./PlotCoordinator";
-import { IDatasetsBuilder, SeriesConfigKey, SeriesItem } from "./builders/IDatasetsBuilder";
+import {
+  IDatasetsBuilder,
+  MessageRangeOptions,
+  SeriesConfigKey,
+  SeriesItem,
+} from "./builders/IDatasetsBuilder";
 import { pathToSubscribePayload } from "./utils/subscription";
 
 vi.mock("./OffscreenCanvasRenderer");
@@ -704,6 +709,49 @@ describe("PlotCoordinator", () => {
       expect(mockSubscribeMessageRange).toHaveBeenCalledWith(
         expect.objectContaining({ topic: "/foo" }),
       );
+    });
+
+    it("collects each earlier window of a playhead-first read and puts it in front once", async () => {
+      // GIVEN a read delivering later history first, then an earlier window in two batches
+      const at = (sec: number) => [{ topic: "/foo", receiveTime: { sec, nsec: 0 } }];
+      const handleMessageRange = vi.fn();
+      const prependMessageRange = vi.fn();
+      datasetsBuilder.handleMessageRange = handleMessageRange;
+      datasetsBuilder.prependMessageRange = prependMessageRange;
+      mockSubscribeMessageRange.mockImplementation(
+        ({
+          onNewRangeIterator,
+        }: {
+          onNewRangeIterator: (iter: AsyncIterable<unknown>) => Promise<void>;
+        }) => {
+          void onNewRangeIterator(
+            (async function* () {
+              yield at(5);
+              yield at(1);
+              yield at(2);
+            })(),
+          );
+          return vi.fn();
+        },
+      );
+
+      // WHEN the read runs to its end
+      plotCoordinator["seriesKeysByTopic"] = new Map([["/foo", new Set(["0" as SeriesConfigKey])]]);
+      plotCoordinator.handlePlayerState(
+        PlayerBuilder.playerState({ activeData: PlayerBuilder.activeData() }),
+      );
+
+      // THEN both earlier batches go into one window, put in front once
+      await vi.waitFor(() => {
+        expect(prependMessageRange).toHaveBeenCalledTimes(1);
+      });
+      const [later, first, second] = handleMessageRange.mock.calls.map(
+        (call) => (call[1] as MessageRangeOptions).earlier,
+      );
+      expect(later).toBeUndefined();
+      expect(first).toBeDefined();
+      expect(second).toBe(first);
+      expect(prependMessageRange).toHaveBeenCalledWith(first);
     });
 
     describe("adding and removing series on a plotted topic", () => {
