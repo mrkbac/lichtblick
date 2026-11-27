@@ -5,22 +5,21 @@ import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 
 import Stack from "@lichtblick/suite-base/components/Stack";
+import { useAppTimeFormat } from "@lichtblick/suite-base/hooks/useAppTimeFormat";
 
 import { filterRecordings } from "./search";
 import { CatalogRecording } from "./types";
 
-function startOfToday(): string {
-  const now = new Date();
-  const pad = (n: number) => String(n).padStart(2, "0");
-  // No time zone suffix, so it parses as local midnight.
-  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T00:00`;
+/** Today's date (YYYY-MM-DD) in `timezone`; `since:` reads it as that day's start there. */
+function today(timezone: string | undefined): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: timezone }).format(new Date());
 }
 
 const FILTERS = [
   { label: "filterCamera", term: () => "has:image" },
   { label: "filterGps", term: () => "has:gps" },
   { label: "filterLidar", term: () => "has:pointcloud" },
-  { label: "filterToday", term: () => `since:${startOfToday()}` },
+  { label: "filterToday", term: (timezone?: string) => `since:${today(timezone)}` },
   { label: "filterLong", term: () => "duration>5m" },
   { label: "filterProblems", term: () => "status:error|nosummary" },
 ] as const;
@@ -47,6 +46,7 @@ type Props = {
  */
 export function QuickFilters({ recordings, query, onQueryChange }: Props): React.JSX.Element {
   const { t } = useTranslation("catalog");
+  const { timeZone } = useAppTimeFormat();
   const active = terms(query);
   const available = useMemo(
     () => [
@@ -57,10 +57,10 @@ export function QuickFilters({ recordings, query, onQueryChange }: Props): React
       ...FILTERS.map((filter) => ({
         key: filter.label,
         label: t(filter.label),
-        term: filter.term(),
-      })).filter(({ term }) => filterRecordings(recordings, term).length > 0),
+        term: filter.term(timeZone),
+      })).filter(({ term }) => filterRecordings(recordings, term, timeZone).length > 0),
     ],
-    [recordings, t],
+    [recordings, t, timeZone],
   );
   return (
     <Stack direction="row" gap={1} flexWrap="wrap">

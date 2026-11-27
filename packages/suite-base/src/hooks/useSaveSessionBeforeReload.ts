@@ -12,12 +12,40 @@ import {
 } from "@lichtblick/suite-base/hooks/useServiceWorkerUpdate";
 import { updateUrl } from "@lichtblick/suite-base/hooks/useStateToURLSynchronization";
 import { isRecordingSource } from "@lichtblick/suite-base/players/constants";
-import delay from "@lichtblick/suite-base/util/delay";
+import type { ILayoutManager } from "@lichtblick/suite-base/services/ILayoutManager";
 
 /** An update must never hang on a stuck save */
 const MAX_SAVE_WAIT_MS = 3000;
 /** A flushed edit that starts no write (e.g. the first one after a layout loads) can't hold it up */
 const MAX_WRITE_START_MS = 1000;
+
+/**
+ * Resolves once `done()` holds, checked on each busy change, or after `timeoutMs`. Event-driven:
+ * timers in a background tab are throttled to a second or more, which would stall the reload.
+ */
+async function waitForLayoutManager(
+  layoutManager: ILayoutManager,
+  isDone: () => boolean,
+  timeoutMs: number,
+): Promise<void> {
+  if (isDone() || timeoutMs <= 0) {
+    return;
+  }
+  await new Promise<void>((resolve) => {
+    const done = () => {
+      clearTimeout(timer);
+      layoutManager.off("busychange", onChange);
+      resolve();
+    };
+    const onChange = () => {
+      if (isDone()) {
+        done();
+      }
+    };
+    const timer = setTimeout(done, timeoutMs);
+    layoutManager.on("busychange", onChange);
+  });
+}
 
 /**
  * Before an update reloads this window, save what the reload would otherwise lose: the last layout
@@ -34,15 +62,17 @@ export function useSaveSessionBeforeReload(): void {
         const deadline = Date.now() + MAX_SAVE_WAIT_MS;
         // No fixed wait for the debounce: timers in a background tab run late
         if (flushPendingLayoutSave()) {
-          // the flushed edit starts its write once React renders it
-          const startDeadline = Date.now() + MAX_WRITE_START_MS;
-          while (!layoutManager.isBusy() && Date.now() < startDeadline) {
-            await delay(20);
-          }
+          await waitForLayoutManager(
+            layoutManager,
+            () => layoutManager.isBusy(),
+            MAX_WRITE_START_MS,
+          );
         }
-        while (layoutManager.isBusy() && Date.now() < deadline) {
-          await delay(50);
-        }
+        await waitForLayoutManager(
+          layoutManager,
+          () => !layoutManager.isBusy(),
+          deadline - Date.now(),
+        );
         // read last: playback kept going while the layout saved
         const { playerState } = getMessagePipeline();
         const activeData = playerState.activeData;

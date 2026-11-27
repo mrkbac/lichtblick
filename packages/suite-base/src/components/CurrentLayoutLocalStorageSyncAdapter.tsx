@@ -9,7 +9,6 @@ import { useEffect, useRef } from "react";
 import { useDebouncedCallback } from "use-debounce";
 
 import Log from "@lichtblick/log";
-import { LOCAL_STORAGE_STUDIO_LAYOUT_KEY } from "@lichtblick/suite-base/constants/browserStorageKeys";
 import {
   LayoutData,
   LayoutID,
@@ -31,14 +30,6 @@ function selectLayoutLoading(state: LayoutState): boolean | undefined {
 }
 
 type OwnedLayout = { id: LayoutID; data: LayoutData };
-
-function storeLayoutData(data: LayoutData): void {
-  const serialized = JSON.stringify(data);
-  if (serialized == undefined) {
-    throw new Error("Failed to serialize layout data");
-  }
-  localStorage.setItem(LOCAL_STORAGE_STUDIO_LAYOUT_KEY, serialized);
-}
 
 const log = Log.getLogger(__filename);
 
@@ -84,7 +75,6 @@ export function CurrentLayoutLocalStorageSyncAdapter(): React.JSX.Element {
     async ({ id, data }: OwnedLayout) => {
       // Callers fire and forget (`void save(...)`), so nothing may reject.
       try {
-        storeLayoutData(data);
         if (skipSaveFor.current === id) {
           skipSaveFor.current = undefined;
           return;
@@ -121,13 +111,6 @@ export function CurrentLayoutLocalStorageSyncAdapter(): React.JSX.Element {
       // The layout present on mount is already stored.
       mounted.current = true;
       prevId.current = layout?.id;
-      if (layout) {
-        try {
-          storeLayoutData(layout.data);
-        } catch (error) {
-          log.error(error);
-        }
-      }
       return;
     }
     if (layout?.id !== prevId.current) {

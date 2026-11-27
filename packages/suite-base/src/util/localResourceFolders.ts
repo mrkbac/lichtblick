@@ -5,6 +5,7 @@ import i18next from "i18next";
 import Logger from "@lichtblick/log";
 import { Asset } from "@lichtblick/suite-base/components/PanelExtensionAdapter/types";
 import { createKeyValueStore, KeyValueStore } from "@lichtblick/suite-base/util/idbKeyValueStore";
+import { randomUUID } from "@lichtblick/suite-base/util/randomUUID";
 
 const log = Logger.getLogger(__filename);
 const FOLDERS_KEY = "folders";
@@ -187,7 +188,7 @@ export class LocalResourceFolders {
       return;
     }
     const folder: ResourceFolder = {
-      id: existing?.id ?? crypto.randomUUID(),
+      id: existing?.id ?? randomUUID(),
       name: handle.name,
       handle,
       packages,

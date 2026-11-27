@@ -116,6 +116,8 @@ export async function forgetCatalogFolder(slot: string): Promise<void> {
 
 // A handle to a moved file or a detached drive can hang on every call instead of failing
 export const HANDLE_TIMEOUT_MS = 3000;
+/** Walking a whole folder: long enough for a big local tree, bounded for a detached drive */
+const LIST_TIMEOUT_MS = 30_000;
 
 /** The only file named `name` in a remembered catalog folder the browser still grants. */
 async function findInCatalogFolders(name: string): Promise<FileSystemFileHandle | undefined> {
@@ -128,7 +130,8 @@ async function findInCatalogFolders(name: string): Promise<FileSystemFileHandle 
       ) {
         continue;
       }
-      const matches = (await listDirectory(dir)).filter((f) => f.path.split("/").at(-1) === name);
+      const files = await promiseTimeout(listDirectory(dir), LIST_TIMEOUT_MS);
+      const matches = files.filter((f) => f.path.split("/").at(-1) === name);
       if (matches.length === 1) {
         return matches[0]!.handle;
       }

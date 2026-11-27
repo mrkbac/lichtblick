@@ -9,6 +9,7 @@ import {
   type HistorySnapshot,
 } from "@lichtblick/suite-base/providers/CurrentLayoutProvider/layoutHistory";
 import { createKeyValueStore } from "@lichtblick/suite-base/util/idbKeyValueStore";
+import { randomUUID } from "@lichtblick/suite-base/util/randomUUID";
 
 const log = Log.getLogger(__filename);
 
@@ -17,7 +18,7 @@ const SAVE_THROTTLE_MS = 1000;
 
 const store = createKeyValueStore("lichtblick-layout-history", "history");
 /** Saved steps carry the tab that wrote them, so a write keeps only other tabs' steps. */
-const TAB = crypto.randomUUID();
+const TAB = randomUUID();
 type SavedEntry = HistoryEntry & { tab?: string };
 
 /**

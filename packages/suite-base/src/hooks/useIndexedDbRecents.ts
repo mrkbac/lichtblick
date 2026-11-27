@@ -8,7 +8,6 @@
 import * as _ from "lodash-es";
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
 
-import { pushAll } from "@lichtblick/den/collection";
 import { useAsync } from "@lichtblick/hooks";
 import Logger from "@lichtblick/log";
 import { createKeyValueStore } from "@lichtblick/suite-base/util/idbKeyValueStore";
@@ -115,6 +114,35 @@ export function isSameRecent(a: UnsavedRecentRecord, b: UnsavedRecentRecord): bo
   );
 }
 
+/** A change to the recents list, replayed onto the stored list when it is saved. */
+type RecentsChange = (records: RecentRecord[]) => RecentRecord[];
+
+/** Newest first: drop older duplicates and evict unpinned records beyond MAX_RECENTS. */
+function normalizeRecents(records: readonly RecentRecord[]): RecentRecord[] {
+  let unpinnedCount = 0;
+  return _.uniqWith(records, isSameRecent).filter(
+    (recent) => recent.pinned === true || ++unpinnedCount <= MAX_RECENTS,
+  );
+}
+
+function applyChanges(records: RecentRecord[], changes: readonly RecentsChange[]): RecentRecord[] {
+  return normalizeRecents(changes.reduce((list, change) => change(list), records));
+}
+
+function migrateStored(records: (RecentRecord & OldRecentRecord)[] | undefined): RecentRecord[] {
+  for (const record of records ?? []) {
+    if (record.type === "file" && record.handle) {
+      // We don't have access to the file handles so we can't verify if the files still exist
+      record.handles = [record.handle];
+    }
+  }
+  return records ?? [];
+}
+
+/**
+ * Recents shared by all tabs. Each edit is kept as a change and replayed onto the stored list in
+ * one transaction, so a tab never overwrites what another tab added, pinned or removed meanwhile.
+ */
 function useIndexedDbRecents(): IRecentsStore {
   const {
     value: initialRecents,
@@ -125,100 +153,97 @@ function useIndexedDbRecents(): IRecentsStore {
   const [recents, setRecents] = useState<RecentRecord[]>([]);
   const [recentsLoaded, setRecentsLoaded] = useState(false);
 
-  // Track new recents in a ref and update the state after persisting
-  const newRecentsRef = useRef<RecentRecord[]>([]);
+  // The list shown now: the last loaded or saved list plus the changes not saved yet
+  const recentsRef = useRef<RecentRecord[]>([]);
+  const unsavedRef = useRef<RecentsChange[]>([]);
+  const writingRef = useRef<Promise<void>>(Promise.resolve());
 
   const save = useCallback(async () => {
-    // We don't save until we've loaded our existing recents. This ensures we include stored recents when we save
-    if (loading) {
+    // The stored list is read with each write, but not before it was loaded once: a failed load
+    // means the store can't be read, and writing would replace all of it with this session's.
+    if (loading || loadError != undefined) {
       return;
     }
-
-    // Records are kept newest first; drop older duplicates and evict beyond MAX_RECENTS
-    let unpinnedCount = 0;
-    const recentsToSave = _.uniqWith(newRecentsRef.current, isSameRecent).filter(
-      (recent) => recent.pinned === true || ++unpinnedCount <= MAX_RECENTS,
-    );
-    newRecentsRef.current = recentsToSave;
-
-    setRecents(recentsToSave);
-    // The stored recents couldn't be read: writing would replace all of them with this session's
-    if (loadError != undefined) {
-      return;
-    }
-    IDB_STORE.set(IDB_KEY, recentsToSave).catch((err: unknown) => {
-      log.error(err);
-    });
+    writingRef.current = writingRef.current
+      .then(async () => {
+        const changes = unsavedRef.current.splice(0);
+        if (changes.length === 0) {
+          return;
+        }
+        const store = await IDB_STORE.readwrite();
+        const stored = migrateStored(
+          (await store.get(IDB_KEY)) as (RecentRecord & OldRecentRecord)[] | undefined,
+        );
+        const saved = applyChanges(stored, changes);
+        await store.put(saved, IDB_KEY);
+        recentsRef.current = applyChanges(saved, unsavedRef.current);
+        setRecents(recentsRef.current);
+      })
+      .catch((err: unknown) => {
+        log.error(err);
+      });
+    await writingRef.current;
   }, [loading, loadError]);
 
-  // Set the first load records from the store to the state
+  // Show the stored recents once loaded, with any change made before that
   useLayoutEffect(() => {
     if (loading) {
       return;
     }
-
-    const haveUnsavedRecents = newRecentsRef.current.length > 0;
-
-    if (initialRecents) {
-      for (const initialRecent of initialRecents) {
-        if (initialRecent.type === "file" && initialRecent.handle) {
-          // We don't have access to the file handles so we can't verify if the files still exist
-          initialRecent.handles = [initialRecent.handle];
-        }
-      }
-
-      pushAll(newRecentsRef.current, initialRecents);
-    }
-
-    if (haveUnsavedRecents) {
-      void save();
-    } else {
-      // No new recents by the time we loaded our initial recents so we don't need to save
-      // Normally a save invokes set - but since we don't need to save we set here
-      setRecents(newRecentsRef.current);
-    }
+    recentsRef.current = applyChanges(migrateStored(initialRecents), unsavedRef.current);
+    setRecents(recentsRef.current);
     setRecentsLoaded(true);
+    void save();
   }, [loading, initialRecents, save]);
+
+  const change = useCallback(
+    (recentsChange: RecentsChange) => {
+      unsavedRef.current.push(recentsChange);
+      recentsRef.current = applyChanges(recentsRef.current, [recentsChange]);
+      setRecents(recentsRef.current);
+      void save();
+    },
+    [save],
+  );
 
   const addRecent = useCallback(
     (record: UnsavedRecentRecord) => {
       // Re-opening an existing record keeps its id and pin
-      const existing = newRecentsRef.current.find((recent) => isSameRecent(recent, record));
-      const fullRecord: RecentRecord = {
-        ...record,
-        id: existing?.id ?? randomUUID(),
-        pinned: existing?.pinned,
-        lastOpened: Date.now(),
-      };
-      newRecentsRef.current.unshift(fullRecord);
-      void save();
-      return fullRecord.id;
+      const id =
+        recentsRef.current.find((recent) => isSameRecent(recent, record))?.id ?? randomUUID();
+      change((list) => {
+        const existing = list.find((recent) => isSameRecent(recent, record));
+        return [
+          { ...record, id: existing?.id ?? id, pinned: existing?.pinned, lastOpened: Date.now() },
+          ...list,
+        ];
+      });
+      return id;
     },
-    [save],
+    [change],
   );
 
   const removeRecent = useCallback(
     (id: string) => {
-      newRecentsRef.current = newRecentsRef.current.filter((recent) => recent.id !== id);
-      void save();
+      change((list) => list.filter((recent) => recent.id !== id));
     },
-    [save],
+    [change],
   );
 
   const togglePinRecent = useCallback(
     (id: string) => {
-      newRecentsRef.current = newRecentsRef.current.map((recent) =>
-        recent.id === id ? { ...recent, pinned: recent.pinned !== true } : recent,
+      change((list) =>
+        list.map((recent) =>
+          recent.id === id ? { ...recent, pinned: recent.pinned !== true } : recent,
+        ),
       );
-      void save();
     },
-    [save],
+    [change],
   );
 
   const clearRecents = useCallback(() => {
-    newRecentsRef.current = newRecentsRef.current.filter((recent) => recent.pinned === true);
-    void save();
-  }, [save]);
+    change((list) => list.filter((recent) => recent.pinned === true));
+  }, [change]);
 
   return useMemo<IRecentsStore>(
     () => ({

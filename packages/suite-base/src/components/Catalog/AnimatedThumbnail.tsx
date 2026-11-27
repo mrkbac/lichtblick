@@ -25,9 +25,10 @@ const useStyles = makeStyles()((theme) => ({
   },
 }));
 
-// Clips shown in several places at once (a row and its popover) are read once. Recent clips are
-// kept so scrolling back doesn't read them again; the oldest are dropped past the limit.
-const CLIP_CACHE_LIMIT = 200;
+// Clips shown in several places at once (a row and its popover) are read once. The most recently
+// shown clips are kept so scrolling back doesn't read them again. Each is up to ~120 JPEG frames
+// (1-2 MB), and the cache outlives the catalog dialog, so it stays small.
+const CLIP_CACHE_LIMIT = 24;
 const clips = new Map<string, Promise<PreviewFrame[] | undefined>>();
 
 async function clipFor(recording: CatalogRecording): Promise<PreviewFrame[] | undefined> {
@@ -37,7 +38,11 @@ async function clipFor(recording: CatalogRecording): Promise<PreviewFrame[] | un
   }
   const key = `${recording.previewKey}|${recording.previewTopics?.[0]}`;
   let clip = clips.get(key);
-  if (!clip) {
+  if (clip) {
+    // Most recently shown last, so eviction drops the least recently shown
+    clips.delete(key);
+    clips.set(key, clip);
+  } else {
     clip = readCachedPreview(recording).catch((err: unknown) => {
       console.warn("Catalog preview cache read failed", err);
       return undefined;

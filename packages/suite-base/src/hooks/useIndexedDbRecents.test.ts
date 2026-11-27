@@ -45,12 +45,11 @@ describe("useIndexedDbRecents", () => {
       });
 
       // The hook saves once its initial load finishes; wait for that, then for the write to commit
-      // (fake-indexeddb completes requests on macrotasks)
       await waitFor(() => {
-        expect(result.current.recents).toHaveLength(1);
+        expect(result.current.recentsLoaded).toBe(true);
       });
       await act(async () => {
-        await new Promise((resolve) => setTimeout(resolve, 0));
+        await result.current.save();
       });
 
       unmount();
@@ -61,8 +60,8 @@ describe("useIndexedDbRecents", () => {
       const { result, unmount } = renderHook(() => useIndexedDbRecents());
       expect(result.current.recents).toEqual([]);
 
-      await act(async () => {
-        await Promise.resolve();
+      await waitFor(() => {
+        expect(result.current.recentsLoaded).toBe(true);
       });
 
       expect(result.current.recents).toEqual([
@@ -187,6 +186,52 @@ describe("useIndexedDbRecents", () => {
     // The shared file is still one handle, so it is opened once
     expect(recent.handles[0]).toBe(recent.handles[2]);
     unmount();
+  });
+
+  it("keeps what another tab added, pinned or removed meanwhile", async () => {
+    const tabA = renderHook(() => useIndexedDbRecents());
+    const tabB = renderHook(() => useIndexedDbRecents());
+    await waitFor(() => {
+      expect(tabA.result.current.recentsLoaded).toBe(true);
+      expect(tabB.result.current.recentsLoaded).toBe(true);
+    });
+    await act(async () => {
+      for (const recent of tabA.result.current.recents) {
+        tabA.result.current.removeRecent(recent.id);
+      }
+      await tabA.result.current.save();
+    });
+
+    let pinned = "";
+    await act(async () => {
+      pinned = tabA.result.current.addRecent(connection("ws://pinned-in-a"));
+      tabA.result.current.togglePinRecent(pinned);
+      tabA.result.current.addRecent(connection("ws://from-a"));
+      await tabA.result.current.save();
+    });
+    // Tab B still shows the list from before tab A's edits
+    await act(async () => {
+      tabB.result.current.addRecent(connection("ws://from-b"));
+      await tabB.result.current.save();
+    });
+
+    expect(tabB.result.current.recents.map((r) => [r.title, r.pinned === true])).toEqual([
+      ["ws://from-b", false],
+      ["ws://from-a", false],
+      ["ws://pinned-in-a", true],
+    ]);
+    tabA.unmount();
+    tabB.unmount();
+
+    const reloaded = renderHook(() => useIndexedDbRecents());
+    await waitFor(() => {
+      expect(reloaded.result.current.recents.map((r) => r.title)).toEqual([
+        "ws://from-b",
+        "ws://from-a",
+        "ws://pinned-in-a",
+      ]);
+    });
+    reloaded.unmount();
   });
 
   it("identifies a connection by its arguments, not its display name", () => {

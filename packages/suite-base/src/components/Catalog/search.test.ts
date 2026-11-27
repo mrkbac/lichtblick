@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MPL-2.0
 
-import { filterRecordings } from "./search";
+import { filterRecordings, parsePeriod } from "./search";
 import { CatalogRecording } from "./types";
 
 const day = (iso: string) => ({ sec: Date.parse(iso) / 1000, nsec: 0 });
@@ -55,6 +55,37 @@ describe("filterRecordings", () => {
     expect(liveIds("machine:other")).toEqual([]);
     expect(liveIds("machine=robot.local:8765")).toEqual(["e"]);
     expect(liveIds("machine=robot.local")).toEqual([]);
+  });
+
+  it("reads since/until dates as whole periods in the app time zone", () => {
+    const recording = (id: string, iso: string): CatalogRecording => ({
+      id,
+      name: id,
+      source: { type: "remote-file", url: `https://example.com/${id}.mcap` },
+      start: day(iso),
+      end: day(iso),
+    });
+    // 23:30 on Nov 27 in Los Angeles, already Nov 28 in UTC
+    const lateEvening = recording("late", "2026-11-28T07:30:00Z");
+    const lateIds = (query: string, timezone?: string) =>
+      filterRecordings([lateEvening], query, timezone).map((r) => r.id);
+
+    expect(lateIds("until:2026-11-27", "America/Los_Angeles")).toEqual(["late"]);
+    expect(lateIds("since:2026-11-28", "America/Los_Angeles")).toEqual([]);
+    expect(lateIds("since:2026-11-28", "UTC")).toEqual(["late"]);
+    expect(lateIds("until:2026-11", "America/Los_Angeles")).toEqual(["late"]);
+    expect(lateIds("since:2026", "America/Los_Angeles")).toEqual(["late"]);
+    expect(lateIds("until:2026-11-27T23:00", "America/Los_Angeles")).toEqual([]);
+    expect(lateIds("until:2026-11-28T07:30:00Z")).toEqual(["late"]);
+  });
+
+  it("finds the whole span a date names", () => {
+    expect(parsePeriod("2026-12", "UTC")).toEqual({
+      start: Date.UTC(2026, 11, 1),
+      end: Date.UTC(2027, 0, 1) - 1,
+    });
+    expect(parsePeriod("2026-02-30", "UTC")).toBeUndefined();
+    expect(parsePeriod("yesterday")).toBeUndefined();
   });
 
   it.each([

@@ -14,6 +14,9 @@
 //   found at http://www.apache.org/licenses/LICENSE-2.0
 //   You may not use this file except in compliance with the License.
 
+/** How long a download may take to start reading its Blob before the URL is revoked */
+const REVOKE_AFTER_MS = 60_000;
+
 // extra boundary added for jest testing, since jsdom's Blob doesn't support .text()
 export function downloadTextFile(text: string, fileName: string): void {
   downloadFiles([{ blob: new Blob([text]), fileName }]);
@@ -35,11 +38,12 @@ export function downloadFiles(files: { blob: Blob; fileName: string }[]): void {
     return url;
   });
 
-  // remove the link after triggering download
-  window.requestAnimationFrame(() => {
-    body.removeChild(link);
-    urls.forEach((url) => {
+  body.removeChild(link);
+  // The download reads the Blob after the click returns, for a while with a large file. A timer,
+  // not requestAnimationFrame: that never fires in a hidden tab, which would keep the Blob forever.
+  setTimeout(() => {
+    for (const url of urls) {
       URL.revokeObjectURL(url);
-    });
-  });
+    }
+  }, REVOKE_AFTER_MS);
 }

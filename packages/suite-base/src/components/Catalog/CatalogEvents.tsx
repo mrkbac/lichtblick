@@ -8,6 +8,7 @@ import { useTranslation } from "react-i18next";
 import { makeStyles } from "tss-react/mui";
 
 import Stack from "@lichtblick/suite-base/components/Stack";
+import { useAppTimeFormat } from "@lichtblick/suite-base/hooks/useAppTimeFormat";
 import { format, formatDurationCompact } from "@lichtblick/suite-base/util/formatTime";
 import { isAbsoluteTime } from "@lichtblick/suite-base/util/time";
 
@@ -19,8 +20,8 @@ const useStyles = makeStyles()((theme) => ({
   row: { position: "absolute", top: 0, width: "100%", height: 54, gap: theme.spacing(2) },
 }));
 
-export function formatCatalogTime(time: Time): string {
-  return isAbsoluteTime(time) ? format(time) : formatDurationCompact(time);
+export function formatCatalogTime(time: Time, timezone?: string): string {
+  return isAbsoluteTime(time) ? format(time, timezone) : formatDurationCompact(time);
 }
 
 export function CatalogEvents({
@@ -35,6 +36,7 @@ export function CatalogEvents({
   onSelect: (id: string) => void;
 }): React.JSX.Element {
   const { t } = useTranslation("catalog");
+  const { timeZone } = useAppTimeFormat();
   const { classes } = useStyles();
   const scroll = useRef<HTMLDivElement>(null);
   const events = useMemo(() => {
@@ -90,10 +92,10 @@ export function CatalogEvents({
                   slotProps={{ primary: { noWrap: true }, secondary: { noWrap: true } }}
                 />
                 <Typography variant="body2" color="textSecondary">
-                  {formatCatalogTime(event.start)}
+                  {formatCatalogTime(event.start, timeZone)}
                   {event.end &&
                     compare(event.start, event.end) !== 0 &&
-                    ` – ${formatCatalogTime(event.end)}`}
+                    ` – ${formatCatalogTime(event.end, timeZone)}`}
                 </Typography>
               </ListItemButton>
             );

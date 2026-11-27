@@ -10,6 +10,7 @@ module.exports = {
     "link-target": require("./link-target"),
     "lodash-imports": require("./lodash-imports"),
     "no-boolean-parameters": require("./no-boolean-parameters"),
+    "no-crypto-random-uuid": require("./no-crypto-random-uuid"),
     "no-getters-setters": require("./no-getters-setters"),
     "no-object-url": require("./no-object-url"),
     "no-push-spread": require("./no-push-spread"),
