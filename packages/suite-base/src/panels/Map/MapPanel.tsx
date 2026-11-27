@@ -29,6 +29,7 @@ import { useDeepMemo, useLatest } from "@lichtblick/hooks";
 import Logger from "@lichtblick/log";
 import { MessagePath, parseMessagePath } from "@lichtblick/message-path";
 import { MessageEvent, SettingsTreeAction, Topic } from "@lichtblick/suite";
+import { AppSetting } from "@lichtblick/suite-base/AppSetting";
 import { simpleGetMessagePathDataItems } from "@lichtblick/suite-base/components/MessagePathSyntax/simpleGetMessagePathDataItems";
 import { OVERLAY_TOOLBAR_BUTTON_SIZE } from "@lichtblick/suite-base/components/OverlayToolbar";
 import { BuiltinPanelExtensionContext } from "@lichtblick/suite-base/components/PanelExtensionAdapter";
@@ -121,7 +122,7 @@ function popupRoot(): HTMLElement {
   return root;
 }
 
-function hitContent(hit: Hit): HTMLElement {
+function hitContent(hit: Hit, timezone: string | undefined): HTMLElement {
   const root = popupRoot();
   const line = (text: string, style?: { bold: boolean }) => {
     const el = document.createElement("div");
@@ -135,7 +136,7 @@ function hitContent(hit: Hit): HTMLElement {
     line(hit.name, { bold: true });
   }
   line(hit.message.topic, { bold: hit.kind === "nav" });
-  line(stampText(hit.message));
+  line(stampText(hit.message, timezone));
   if (hit.kind === "nav") {
     const { latitude, longitude, altitude } = hit.message.message;
     line(`${latitude.toFixed(7)}, ${longitude.toFixed(7)}`);
@@ -154,9 +155,10 @@ function hitContent(hit: Hit): HTMLElement {
 const ROWS_PER_TOPIC = 3;
 const TOPICS_LISTED = 6;
 
-function stampText(message: MessageEvent): string {
+/** In the app's time zone setting, like the other panels; undefined is the system's */
+function stampText(message: MessageEvent, timezone: string | undefined): string {
   const stamp = message.receiveTime;
-  return isAbsoluteTime(stamp) ? formatTime(stamp) : `${formatTimeRaw(stamp)} s`;
+  return isAbsoluteTime(stamp) ? formatTime(stamp, timezone) : `${formatTimeRaw(stamp)} s`;
 }
 
 /**
@@ -166,6 +168,7 @@ function stampText(message: MessageEvent): string {
 function hitsContent(
   groups: readonly Hit[][],
   onPick: (message: MessageEvent) => void,
+  timezone: string | undefined,
 ): HTMLElement {
   const root = popupRoot();
   const add = (text: string, className?: string) => {
@@ -186,7 +189,7 @@ function hitsContent(
       const row = document.createElement("button");
       row.type = "button";
       row.className = "hit-row";
-      row.textContent = `${stampText(hit.message)} · ${detail}`;
+      row.textContent = `${stampText(hit.message, timezone)} · ${detail}`;
       row.addEventListener("click", () => {
         onPick(hit.message);
       });
@@ -194,7 +197,7 @@ function hitsContent(
     }
     if (count > ROWS_PER_TOPIC) {
       add(
-        `+${count - ROWS_PER_TOPIC} more, last ${stampText(group[group.length - 1]!.message)}`,
+        `+${count - ROWS_PER_TOPIC} more, last ${stampText(group[group.length - 1]!.message, timezone)}`,
         "hit-more",
       );
     }
@@ -562,6 +565,8 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
     [colorPathNames],
   );
   const colorPathsRef = useLatest(colorPaths);
+  // The app time zone setting, read when a popup is built
+  const timezoneRef = useRef<string | undefined>(undefined);
 
   useEffect(() => {
     const subscribed = new Set(enabledTopics.map((topic) => topic.name));
@@ -724,9 +729,14 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
     context.watch("previewTime");
     context.watch("colorScheme");
     context.watch("didSeek");
+    context.subscribeAppSettings([AppSetting.TIMEZONE]);
 
     context.onRender = (renderState, done) => {
       setRenderDone(() => done);
+      if (renderState.appSettings) {
+        const timezone = renderState.appSettings.get(AppSetting.TIMEZONE);
+        timezoneRef.current = typeof timezone === "string" ? timezone : undefined;
+      }
       setPreviewTime(renderState.previewTime);
 
       if (renderState.topics) {
@@ -1551,8 +1561,12 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
       hovered = hits;
       const content =
         hits.length === 1
-          ? hitContent(hits[0]!)
-          : hitsContent(groups, (message) => context.seekPlayback?.(message.receiveTime));
+          ? hitContent(hits[0]!, timezoneRef.current)
+          : hitsContent(
+              groups,
+              (message) => context.seekPlayback?.(message.receiveTime),
+              timezoneRef.current,
+            );
       popup.setDOMContent(content).addTo(map);
       context.setPreviewTime(eventTimeSec(hits[0]!.message));
     };
