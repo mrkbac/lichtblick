@@ -8,10 +8,11 @@
 import { MessageDefinition } from "@foxglove/message-definition";
 import { MessageWriter as Ros1MessageWriter } from "@foxglove/rosmsg-serialization";
 import { MessageWriter as Ros2MessageWriter } from "@foxglove/rosmsg2-serialization";
-import { Channel, ClientChannel, Service } from "@foxglove/ws-protocol";
 
 import { ParsedChannel } from "@lichtblick/mcap-support";
 import type { RecorderChannel } from "@lichtblick/suite-base/players/liveHistory/liveRecorder.worker";
+
+import { Channel, ClientChannel, Service } from "./protocol/protocol";
 
 export type ResolvedChannel = {
   channel: Channel;

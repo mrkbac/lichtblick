@@ -618,7 +618,8 @@
     },
     {
       "files": [
-        "packages/suite-base/src/players/UserScriptPlayer/transformerWorker/typescript/userUtils/**"
+        "packages/suite-base/src/players/UserScriptPlayer/transformerWorker/typescript/userUtils/**",
+        "packages/suite-base/src/players/FoxgloveWebSocketPlayer/protocol/**"
       ],
       "rules": {
         "@lichtblick/license-header": "off"
