@@ -49,8 +49,11 @@ export type TopicSelection = Map<string, SubscribePayload>;
 // current time, which topics and datatypes are available, and so on.
 // For more details, see the types below.
 
+/** Options of {@link Player.getBatchIterator} */
 export type BatchIteratorOptions = {
+  /** Inclusive start, in log time; the source's start when omitted */
   start?: Time;
+  /** Inclusive end, in log time; the source's end when omitted */
   end?: Time;
   /**
    * Read the whole history around the playhead first, then window by window earlier and later
@@ -59,6 +62,12 @@ export type BatchIteratorOptions = {
    * which also meets this. Ignored for reads of part of the recording (start or end set).
    */
   playheadFirst?: boolean;
+  /**
+   * Live sources only, opt-in: read what the player keeps of the session (its live history) up to
+   * the newest message delivered to panels, instead of returning undefined. Off by default because
+   * most range readers take "has a range" to mean "is a complete recording".
+   */
+  liveHistory?: boolean;
 };
 
 export interface Player {

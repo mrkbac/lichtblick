@@ -229,6 +229,37 @@ describe("FoxgloveWebSocketPlayer live history", () => {
     expect(values(0)).toEqual([10, 11, 12]);
   });
 
+  it("reads a topic's live history up to what panels got, only when asked to", async () => {
+    const read = async (options?: Parameters<typeof player.getBatchIterator>[1]) => {
+      const iterator = player.getBatchIterator("/a", options);
+      if (!iterator) {
+        return undefined;
+      }
+      const secs: number[] = [];
+      for await (const result of iterator) {
+        if (result.type === "message-event") {
+          secs.push(result.msgEvent.receiveTime.sec);
+        }
+      }
+      return secs;
+    };
+    // Range readers that take a range for a complete recording don't get one
+    expect(player.getBatchIterator("/a")).toBeUndefined();
+    expect(await read({ liveHistory: true })).toEqual([10, 11, 12]);
+    expect(await read({ liveHistory: true, start: { sec: 11, nsec: 0 } })).toEqual([11, 12]);
+
+    // Received while paused, not delivered yet: it reaches panels as a live frame later
+    player.pausePlayback();
+    await flush();
+    vi.useFakeTimers();
+    try {
+      await tick(13, 13);
+    } finally {
+      vi.useRealTimers();
+    }
+    expect(await read({ liveHistory: true })).toEqual([10, 11, 12]);
+  });
+
   it("freezes on pause while reception continues", async () => {
     player.pausePlayback();
     await flush();

@@ -70,6 +70,18 @@ describe("LiveHistoryBuffer", () => {
     expect(buffer.startTime(fromSec(105))).toEqual(fromSec(100));
   });
 
+  it("returns one topic's messages in [start, end]", () => {
+    const buffer = new LiveHistoryBuffer({ windowNs: 100n * SEC, maxBytes: 1e9 });
+    [1, 2, 3, 4, 5].forEach((t) => {
+      buffer.add(msg("/a", t));
+      buffer.add(msg("/b", t));
+    });
+    expect(times(buffer.messages("/a"))).toEqual([1, 2, 3, 4, 5]);
+    expect(times(buffer.messages("/a", fromSec(2), fromSec(4)))).toEqual([2, 3, 4]);
+    expect(times(buffer.messages("/b", undefined, fromSec(1)))).toEqual([1]);
+    expect(buffer.messages("/c")).toEqual([]);
+  });
+
   it("returns messages in (after, upTo]", () => {
     const buffer = new LiveHistoryBuffer({
       windowNs: 100n * SEC,
