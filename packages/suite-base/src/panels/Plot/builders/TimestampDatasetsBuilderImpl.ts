@@ -658,7 +658,10 @@ export class TimestampDatasetsBuilderImpl {
   #appendCurrent(series: Series, item: Immutable<DataItem>): void {
     const { points } = series;
     const gap = Number.isNaN(item.y);
-    if (series.headInputs >= 2) {
+    if (gap) {
+      // A gap ends the open group as it is: its newest row stays, so the line reaches it
+      series.headInputs = 0;
+    } else if (series.headInputs >= 2) {
       // Derived values consume the samples being replaced first, so modifiers see every sample
       const ys = this.#getY(series);
       const newest = points.length - 1;
@@ -676,7 +679,7 @@ export class TimestampDatasetsBuilderImpl {
         if (current) {
           current.upTo = newest;
         }
-        if (!gap && series.headInputs < series.keepEvery) {
+        if (series.headInputs < series.keepEvery) {
           points.set(newest, item);
           series.headInputs++;
           return;

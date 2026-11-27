@@ -149,24 +149,82 @@ export class PathSampleColumns {
   /**
    * `earlier`'s samples followed by `later`'s (all after them), thinned again to fit `later`'s
    * budget: for history read around the playhead first, whose earlier windows come last. Samples
-   * already merged stay merged; with tracked changes, changes either side had forgotten stay
-   * forgotten (`hasAllChanges`).
+   * already merged stay merged, and new samples are thinned as `later` would. With tracked changes,
+   * the changes of both are kept apart, and changes either side had forgotten stay forgotten
+   * (`hasAllChanges`).
    */
   public static concat(earlier: PathSampleColumns, later: PathSampleColumns): PathSampleColumns {
     const merged = new PathSampleColumns(later.maxSamples);
+    merged.#copyFrom([earlier, later]);
     if (later.#trackChanges || earlier.#trackChanges) {
-      merged.trackChanges();
-    }
-    for (const source of [earlier, later]) {
-      for (let i = 0; i < source.#length; i++) {
-        merged.push(source.at(i)!);
-        if (source.isMixed(i)) {
-          merged.#setMixed(merged.#length - 1);
+      merged.#trackChanges = true;
+      if (earlier.#changes || later.#changes) {
+        // Merged samples on a side: its changes are only exact in its record
+        const changes = new PathSampleColumns(later.maxSamples);
+        changes.#isChangesRecord = true;
+        changes.#level = 2;
+        changes.#copyFrom([earlier.changes(), later.changes()]);
+        changes.#forgotChanges = earlier.changes().startsWithContext();
+        if (changes.#length > changes.maxSamples) {
+          changes.#dropPass();
         }
+        if (changes.#length > changes.maxSamples) {
+          changes.#thin();
+        }
+        merged.#changes = changes;
       }
+    }
+    // New samples arrive after `later`'s, thinned the same way
+    merged.#level = later.#level;
+    merged.#stride = later.#stride;
+    merged.#sinceKept = later.#sinceKept;
+    merged.#provisional = later.#provisional;
+    if (merged.#length > merged.maxSamples) {
+      merged.#thin();
     }
     merged.#lostChanges = !(earlier.hasAllChanges() && later.hasAllChanges());
     return merged;
+  }
+
+  /** Takes the samples of `sources` in order, as they are (merged ones stay marked). */
+  #copyFrom(sources: readonly PathSampleColumns[]): void {
+    let total = this.#length;
+    for (const source of sources) {
+      total += source.#length;
+    }
+    const capacity = Math.max(INITIAL_CAPACITY, total + 1);
+    if (capacity * STRIDE > this.#data.length) {
+      const grown = new Uint32Array(capacity * STRIDE);
+      grown.set(this.#data);
+      this.#data = grown;
+      if (this.#numbers) {
+        const numbers = new Float64Array(capacity);
+        numbers.set(this.#numbers);
+        this.#numbers = numbers;
+      }
+    }
+    for (const source of sources) {
+      const remap = new Map<number, number>();
+      const at = this.#length;
+      this.#data.set(source.#data.subarray(0, source.#length * STRIDE), at * STRIDE);
+      for (let i = 0; i < source.#length; i++) {
+        const word = source.#data[i * STRIDE + 4]!;
+        const index = word & NUMBER;
+        if (index === NUMBER) {
+          this.#numbers ??= new Float64Array(this.#data.length / STRIDE);
+          this.#numbers[at + i] = source.#numbers![i]!;
+          continue;
+        }
+        let mapped = remap.get(index);
+        if (mapped == undefined) {
+          const { value, constantName, count } = source.#values[index]!;
+          mapped = this.#lookUpValueIndex(value, constantName, count);
+          remap.set(index, mapped);
+        }
+        this.#data[(at + i) * STRIDE + 4] = word >= MIXED ? mapped + MIXED : mapped;
+      }
+      this.#length += source.#length;
+    }
   }
 
   public size(): number {
@@ -473,15 +531,7 @@ export class PathSampleColumns {
 
     while (this.#level < 2 && this.#length > target) {
       this.#level++;
-      const n = this.#length;
-      let kept = 1;
-      for (let i = 1; i < n; i++) {
-        if (i === n - 1 || !this.#canDrop(kept - 1, i, i + 1)) {
-          this.#move(kept, i);
-          kept++;
-        }
-      }
-      this.#length = kept;
+      this.#dropPass();
     }
 
     if (this.#length > target && this.#trackChanges && !this.#changes) {
@@ -518,6 +568,19 @@ export class PathSampleColumns {
     }
     this.#length = kept;
     this.#compactValues();
+  }
+
+  /** Drops the samples the current level can do without (see #canDrop). */
+  #dropPass(): void {
+    const n = this.#length;
+    let kept = 1;
+    for (let i = 1; i < n; i++) {
+      if (i === n - 1 || !this.#canDrop(kept - 1, i, i + 1)) {
+        this.#move(kept, i);
+        kept++;
+      }
+    }
+    this.#length = kept;
   }
 
   /** Forgets values no kept sample uses, so a stream of distinct values can't grow the table. */

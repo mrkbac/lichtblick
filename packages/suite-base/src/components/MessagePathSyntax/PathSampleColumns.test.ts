@@ -65,6 +65,53 @@ describe("PathSampleColumns", () => {
     expect(PathSampleColumns.concat(earlier, thinned).hasAllChanges()).toBe(false);
   });
 
+  it("concatenates the change records of merged columns, so condition matches stay exact", () => {
+    // GIVEN an earlier window dense enough to merge samples, with its changes tracked
+    // 35 runs (the first 6 two samples long): more than fit unmerged (30), and all of them fit
+    // the changes record (40)
+    const earlier = new PathSampleColumns(40);
+    earlier.trackChanges();
+    let sec = 0;
+    for (let run = 0; run < 35; run++) {
+      for (let repeat = run < 6 ? 2 : 1; repeat > 0; repeat--) {
+        earlier.push(sample(sec++, run));
+      }
+    }
+    expect(earlier.changes()).not.toBe(earlier);
+    expect(earlier.hasAllChanges()).toBe(true);
+    const later = new PathSampleColumns(40);
+    later.trackChanges();
+    later.push(sample(2_000, 1));
+
+    // WHEN it is put in front of the later history
+    const merged = PathSampleColumns.concat(earlier, later);
+
+    // THEN the changes come from the record, without merged samples, and still claim exactness
+    const changes = merged.changes();
+    expect(changes).not.toBe(merged);
+    expect(Array.from({ length: changes.size() }, (_, i) => changes.isMixed(i))).not.toContain(
+      true,
+    );
+    expect(merged.hasAllChanges()).toBe(true);
+    expect(changes.size()).toBe(earlier.changes().size() + 1);
+    // and new samples keep merging at `later`'s level
+    expect(merged.size()).toBeLessThanOrEqual(merged.maxSamples);
+  });
+
+  it("keeps merged and plain-number samples when concatenating", () => {
+    const earlier = new PathSampleColumns(8);
+    for (let sec = 0; sec < 40; sec++) {
+      earlier.push(sample(sec, sec % 3 === 0 ? "a" : sec));
+    }
+    const later = PathSampleColumns.from([sample(100, "b"), sample(101, 2.5)]);
+    const merged = PathSampleColumns.concat(earlier, later);
+    const expected = [...earlier.toArray(), ...later.toArray()];
+    expect(merged.toArray()).toEqual(expected);
+    for (let i = 0; i < earlier.size(); i++) {
+      expect(merged.isMixed(i)).toBe(earlier.isMixed(i));
+    }
+  });
+
   it("keeps signed and full unsigned 32-bit seconds", () => {
     const stamps = [
       { sec: -1, nsec: 5 },

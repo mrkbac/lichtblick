@@ -9,6 +9,11 @@ import { MessageEvent } from "@lichtblick/suite";
  * For a consumer of a playhead-first range read (see BuiltinRangeOptions.playheadFirst) whose
  * store can only append: collects each window of history earlier than what it loaded in a store
  * of its own, and puts it in front once the window ends.
+ *
+ * Trade-off: an earlier window shows only once it is read to its end. Windows double in size (see
+ * playheadWindows), so the last one can be up to half the recording. Putting part of a window in
+ * front early would need the rest of it inserted between that part and the loaded history, which
+ * stores that can only prepend (State Transitions, Map) can't do.
  */
 export class EarlierWindows<T> {
   readonly #create: () => T;
