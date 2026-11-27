@@ -1107,7 +1107,7 @@ describe("ExtensionCatalogProvider", () => {
       });
 
       // Then
-      expect(global.fetch).toHaveBeenCalledWith(url);
+      expect(global.fetch).toHaveBeenCalledWith(url, {});
       expect(downloaded).toEqual(bytes);
     });
   });

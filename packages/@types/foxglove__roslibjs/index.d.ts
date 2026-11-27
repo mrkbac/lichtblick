@@ -7,12 +7,16 @@
 
 declare module "@foxglove/roslibjs" {
   type RosOptions = {
-    url: string;
-    transportLibrary: "workersocket";
+    /** Connects right away when given */
+    url?: string;
+    transportLibrary: "workersocket" | "websocket";
   };
 
   class Ros {
     public constructor(options: RosOptions);
+
+    /** The connection; set it before connecting to supply your own socket. */
+    public socket: unknown;
 
     public on(eventName: "connection", cb: () => void): void;
     public on(eventName: "close", cb: () => void): void;
@@ -95,4 +99,14 @@ declare module "@foxglove/roslibjs" {
   }
 
   export { Ros, Topic, Service };
+}
+
+declare module "@foxglove/roslibjs/src/core/SocketAdapter" {
+  /** The socket event handlers roslib attaches to the sockets it opens. */
+  export default function SocketAdapter(client: unknown): {
+    onopen: (event: unknown) => void;
+    onclose: (event: unknown) => void;
+    onerror: (event: unknown) => void;
+    onmessage: (event: { data: unknown }) => void;
+  };
 }

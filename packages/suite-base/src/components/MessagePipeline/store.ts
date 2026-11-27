@@ -26,6 +26,7 @@ import {
   PlayerState,
   SubscribePayload,
 } from "@lichtblick/suite-base/players/types";
+import { proxiedFetch } from "@lichtblick/suite-base/util/httpProxy";
 import isDesktopApp from "@lichtblick/suite-base/util/isDesktopApp";
 import { localResourceFolders } from "@lichtblick/suite-base/util/localResourceFolders";
 import { toError } from "@lichtblick/suite-base/util/toError";
@@ -579,7 +580,7 @@ export function reducer(
 }
 
 async function builtinFetch(url: string, opts?: { signal?: AbortSignal }) {
-  const response = await fetch(url, opts);
+  const response = await proxiedFetch(url, opts);
   if (!response.ok) {
     const errMsg = response.statusText;
     throw new Error(`Error ${response.status}${errMsg ? ` (${errMsg})` : ``}`);

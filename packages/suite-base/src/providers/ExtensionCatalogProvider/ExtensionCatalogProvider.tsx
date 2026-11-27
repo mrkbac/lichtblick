@@ -34,6 +34,7 @@ import { ExtensionInfo } from "@lichtblick/suite-base/types/Extensions";
 import { InstalledMessageConverter } from "@lichtblick/suite-base/types/messageConverters";
 import { cloudiniMessageConverter } from "@lichtblick/suite-base/util/cloudini";
 import { dracoMessageConverters } from "@lichtblick/suite-base/util/draco";
+import { proxiedFetch } from "@lichtblick/suite-base/util/httpProxy";
 import isDesktopApp from "@lichtblick/suite-base/util/isDesktopApp";
 
 const log = Logger.getLogger(__filename);
@@ -93,7 +94,7 @@ function createExtensionRegistryStore(
     };
 
     const downloadExtension = async (url: string) => {
-      const res = await fetch(url);
+      const res = await proxiedFetch(url);
       return new Uint8Array(await res.arrayBuffer());
     };
 

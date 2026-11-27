@@ -1,7 +1,9 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import { fromUrl } from "geotiff";
+import { fromCustomClient } from "geotiff";
+
+import { proxiedFetch } from "@lichtblick/suite-base/util/httpProxy";
 
 import { LngLat, utmToLngLat, webMercatorToLngLat } from "./geo";
 import type { ImageOverlay } from "./layers";
@@ -73,9 +75,23 @@ function toRgba(
   return rgba;
 }
 
+// geotiff's own fetch client, but through proxiedFetch so http:// files work on the https site.
+const proxiedClient = (url: string): Parameters<typeof fromCustomClient>[0] => ({
+  url,
+  request: async (init) => {
+    const response = await proxiedFetch(url, init);
+    return {
+      ok: response.ok,
+      status: response.status,
+      getHeader: (name) => response.headers.get(name) ?? undefined,
+      getData: async () => await response.arrayBuffer(),
+    };
+  },
+});
+
 /** Decode a georeferenced GeoTIFF into an image the map can place by its four corners. */
 export async function loadGeoTiff(url: string, signal: AbortSignal): Promise<ImageOverlay> {
-  const tiff = await fromUrl(url, {}, signal);
+  const tiff = await fromCustomClient(proxiedClient(url), {}, signal);
   const image = await tiff.getImage();
   const keys = image.getGeoKeys() ?? {};
   const epsg = Number(keys.ProjectedCSTypeGeoKey ?? keys.GeographicTypeGeoKey ?? 4326);

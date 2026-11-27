@@ -86,6 +86,7 @@ import {
   SourceParams,
   validateSourceUrl,
 } from "./layers";
+import { transformRequest } from "./maplibre";
 import { forgetSavedSources, loadSavedSources, rememberSource } from "./savedSources";
 import {
   fixLabel,
@@ -883,6 +884,7 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
     const initial = viewRef.current;
     const instance = new MapLibreMap({
       container,
+      transformRequest,
       style: { version: 8, sources: {}, layers: [] },
       center: initial.center ? [initial.center.lon, initial.center.lat] : [0, 20],
       zoom: initial.zoomLevel ?? (initial.center ? 16 : 1.5),

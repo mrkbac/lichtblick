@@ -241,12 +241,13 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
     let disposed = false;
     let instance: SharedMap | undefined;
     void Promise.all([import("@lichtblick/suite-base/panels/Map/maplibre"), import("./SharedMap")])
-      .then(([{ Map }, { SharedMap }]) => {
+      .then(([{ Map, transformRequest }, { SharedMap }]) => {
         if (disposed) {
           return;
         }
         const map = new Map({
           container: mapContainer,
+          transformRequest,
           style: { version: 8, sources: {}, layers: [], projection: { type: "mercator" } },
           interactive: false,
           attributionControl: false,

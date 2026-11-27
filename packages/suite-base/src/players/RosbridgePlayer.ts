@@ -15,6 +15,7 @@
 //   You may not use this file except in compliance with the License.
 
 import roslib from "@foxglove/roslibjs";
+import SocketAdapter from "@foxglove/roslibjs/src/core/SocketAdapter";
 import { parse as parseMessageDefinition } from "@foxglove/rosmsg";
 import { MessageReader as ROS1MessageReader } from "@foxglove/rosmsg-serialization";
 import { Time, fromMillis, toSec } from "@foxglove/rostime";
@@ -26,6 +27,9 @@ import { filterMap } from "@lichtblick/den/collection";
 import Log from "@lichtblick/log";
 import { createRos2CdrDeserializer } from "@lichtblick/mcap-support";
 import { ParameterValue } from "@lichtblick/suite";
+import ExtensionProxySocket, {
+  needsExtensionProxy,
+} from "@lichtblick/suite-base/players/FoxgloveWebSocketPlayer/ExtensionProxySocket";
 import {
   LIVE_QUEUE_MAX_BYTES,
   LiveMessageQueue,
@@ -102,6 +106,14 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 // showing simulated time, so current time from Date.now() is always used instead. Also doesn't yet
 // support raw ROS messages; instead we use the CBOR compression provided by roslibjs, which
 // unmarshalls into plain JS objects.
+// A worker can't reach the proxy extension, so a ws:// URL the https page can't open runs on the
+// main thread through it, with the handlers roslib would attach to its own socket.
+function proxiedRos(url: string): roslib.Ros {
+  const ros = new roslib.Ros({ transportLibrary: "websocket" });
+  ros.socket = Object.assign(new ExtensionProxySocket(url), SocketAdapter(ros));
+  return ros;
+}
+
 export default class RosbridgePlayer implements Player {
   #url: string; // WebSocket URL.
   #rosClient?: roslib.Ros; // The roslibjs client when we're connected.
@@ -177,7 +189,9 @@ export default class RosbridgePlayer implements Player {
     log.info(`Opening connection to ${this.#url}`);
 
     // `workersocket` will open the actual WebSocket connection in a WebWorker.
-    const rosClient = new roslib.Ros({ url: this.#url, transportLibrary: "workersocket" });
+    const rosClient = needsExtensionProxy(this.#url)
+      ? proxiedRos(this.#url)
+      : new roslib.Ros({ url: this.#url, transportLibrary: "workersocket" });
     this.#latestClient = rosClient;
 
     rosClient.on("connection", () => {
