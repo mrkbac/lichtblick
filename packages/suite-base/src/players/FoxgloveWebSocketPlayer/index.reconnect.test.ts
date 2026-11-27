@@ -153,11 +153,13 @@ describe("FoxgloveWebSocketPlayer reconnect", () => {
 
   it("doesn't resubscribe a topic dropped during the outage", async () => {
     player.setSubscriptions([{ topic: "/foo" }]);
+    await Promise.resolve(); // subscriptions go out once per task
     expect(ws.sentOps().map(({ op }) => op)).toContain("subscribe");
     close();
     player.setSubscriptions([]);
     await vi.advanceTimersByTimeAsync(3_000);
     connect();
+    await Promise.resolve();
     expect(ws.sentOps().map(({ op }) => op)).not.toContain("subscribe");
   });
 
@@ -175,6 +177,42 @@ describe("FoxgloveWebSocketPlayer reconnect", () => {
     const capabilities = lastState?.capabilities ?? [];
     expect(capabilities.length).toBeGreaterThan(0);
     expect(new Set(capabilities).size).toBe(capabilities.length);
+  });
+
+  it("rejects a service call the server reports as failed", async () => {
+    const call = player.callService("/svc", {});
+    ws.receive(
+      JSON.stringify({ op: "serviceCallFailure", serviceId: 7, callId: 1, message: "no server" }),
+    );
+    await expect(call).rejects.toThrow("no server");
+  });
+
+  it("clears a status the server removes", async () => {
+    ws.receive(JSON.stringify({ op: "status", level: 1, message: "Low battery", id: "battery" }));
+    (console.warn as ReturnType<typeof vi.fn>).mockClear(); // the status is logged as a warning
+    await vi.advanceTimersByTimeAsync(100);
+    expect(lastState?.alerts?.map((alert) => alert.message)).toContain("Low battery");
+
+    ws.receive(JSON.stringify({ op: "removeStatus", statusIds: ["battery"] }));
+    await vi.advanceTimersByTimeAsync(100);
+    expect(lastState?.alerts?.map((alert) => alert.message)).not.toContain("Low battery");
+  });
+
+  it("handles a repeated serverInfo on the same connection", async () => {
+    ws.receive(
+      JSON.stringify({
+        op: "serverInfo",
+        name: "test",
+        sessionId: "session",
+        capabilities: ["clientPublish", "services", "assets"],
+        supportedEncodings: ["json"],
+      }),
+    );
+    await vi.advanceTimersByTimeAsync(100);
+    const capabilities = lastState?.capabilities ?? [];
+    expect(new Set(capabilities).size).toBe(capabilities.length);
+    // The channel advertised before it keeps its schema
+    expect(lastState?.activeData?.datatypes.has("S")).toBe(true);
   });
 
   it("retries an asset whose fetch failed", async () => {
