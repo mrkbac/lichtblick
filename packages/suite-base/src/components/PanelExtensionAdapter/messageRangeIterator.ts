@@ -9,6 +9,8 @@ import Logger from "@lichtblick/log";
 import { MessageEvent, Subscription } from "@lichtblick/suite";
 import { CreateMessageRangeIteratorParams } from "@lichtblick/suite-base/components/PanelExtensionAdapter";
 
+import { collateTopicSchemaConversions, convertMessage } from "./messageProcessing";
+
 const log = Logger.getLogger(__filename);
 
 // Target interval for batching messages: 16ms aligns with a 60Hz update rate.
@@ -46,11 +48,6 @@ export function createMessageRangeIterator(params: CreateMessageRangeIteratorPar
         const subscription: Subscription = convertTo
           ? { topic, preload: true, convertTo }
           : { topic, preload: true };
-
-        // Import necessary functions for message processing
-        const { convertMessage, collateTopicSchemaConversions } = await import(
-          "./messageProcessing"
-        );
 
         const collatedConversions = collateTopicSchemaConversions(
           [subscription],

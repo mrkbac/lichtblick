@@ -26,6 +26,7 @@ export type ResolvedService = {
   parsedResponse: ParsedChannel;
   requestMessageWriter: MessageWriter;
   requestMsgEncoding: string;
+  responseMsgEncoding: string;
 };
 export type MessageDefinitionMap = Map<string, MessageDefinition>;
 export type FromWorkerMessage =

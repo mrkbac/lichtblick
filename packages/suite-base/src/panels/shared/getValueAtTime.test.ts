@@ -110,4 +110,19 @@ describe("getValueAtTime", () => {
       constantName: undefined,
     });
   });
+
+  it("should find the latest point at or before time in rows out of x order", () => {
+    // Given header stamps that arrived out of order
+    const data = [
+      buildDatum({ x: 5, value: "RUNNING" }),
+      buildDatum({ x: 20, value: "DONE" }),
+      buildDatum({ x: 1, value: "IDLE" }),
+      buildDatum({ x: 8, value: "PAUSED" }),
+    ];
+
+    // When / Then
+    expect(getValueAtTime(data, 10)?.value).toBe("PAUSED");
+    expect(getValueAtTime(data, 3)?.value).toBe("IDLE");
+    expect(getValueAtTime(data, 0)).toBeUndefined();
+  });
 });

@@ -151,4 +151,16 @@ describe("registerScript", () => {
     const result = registerScript({ projectCode: undefined, scriptCode: "exports.foo = 1;" });
     expect(result.error).toMatch(/default export a function/);
   });
+
+  it("doesn't keep running the previous script after a failed registration", () => {
+    registerScript({
+      projectCode: undefined,
+      scriptCode: "exports.default = () => ({ from: 'previous' });",
+    });
+    registerScript({ projectCode: undefined, scriptCode: "throw new Error('broken');" });
+
+    const [output] = processMessages({ messages: [{ message: {} }], globalVariables: {} });
+    expect(output?.message).toBeUndefined();
+    expect(output?.userScriptDiagnostics[0]?.message).toMatch(/failed to register/);
+  });
 });

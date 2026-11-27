@@ -40,6 +40,14 @@ export const MIN_STALE_SEC = 1;
 export const STALE_PERIODS = 5;
 const SMOOTHING = 0.3;
 export const HISTORY_LENGTH = 60;
+/** Samples the learned rate is the median of */
+const PEAK_WINDOW = 5;
+
+function median(values: readonly number[]): number {
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = sorted.length >> 1;
+  return sorted.length % 2 === 1 ? sorted[mid]! : (sorted[mid - 1]! + sorted[mid]!) / 2;
+}
 
 export type RateSample = {
   count: number;
@@ -81,14 +89,22 @@ export function sampleLiveRates(
     const delta = Math.max(0, stat.numMessages - last.count);
     const instant = delta / seconds;
     const hz = last.hz == undefined ? instant : last.hz + SMOOTHING * (instant - last.hz);
+    const history = [...last.history.slice(1 - HISTORY_LENGTH), instant];
+    // The expectation learns from a rolling median: a tick catching one message more (timer
+    // drift against the publisher, a stalled main thread, a burst on connect) must not raise it
+    // for the rest of the session and mark a steady topic slow
+    const steadyHz =
+      history.length >= PEAK_WINDOW ? median(history.slice(-PEAK_WINDOW)) : undefined;
     next.set(topic, {
       count: stat.numMessages,
       timeMs: nowMs,
       hz,
       peakHz:
-        stat.numMessages >= MIN_MESSAGES_TO_LEARN ? Math.max(last.peakHz ?? 0, hz) : last.peakHz,
+        stat.numMessages >= MIN_MESSAGES_TO_LEARN && steadyHz != undefined
+          ? Math.max(last.peakHz ?? 0, steadyHz)
+          : last.peakHz,
       lastMessageMs: delta > 0 ? nowMs : last.lastMessageMs,
-      history: [...last.history.slice(1 - HISTORY_LENGTH), instant],
+      history,
     });
   }
   return next;

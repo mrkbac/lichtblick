@@ -5,8 +5,6 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { iterateObjects } from "@lichtblick/suite-base/components/Chart/datasets";
-
 import { downsampleStates } from "./downsampleStates";
 import { ChartDatum as Datum } from "./types";
 
@@ -30,17 +28,35 @@ describe("downsampleStates", () => {
 
   const secondInterval = (100 / 3) * 2;
 
+  it("keeps the nearest point on each side of the kept range in rows out of x order", () => {
+    // in (header stamps, out of order): in-view points first, then far points on both sides
+    const data = createData([
+      [10, A],
+      [60, B],
+      [-60, B],
+      [-80, A],
+      [170, A],
+      [200, B],
+    ]);
+
+    // the in-view points stay, and the nearest outside point on each side is kept
+    expect(downsampleStates(data, bounds, numPoints)).toEqual([
+      { x: -60, index: 2 },
+      { x: 10, index: 0 },
+      { x: 60, index: 1 },
+      { x: 150, index: 4 },
+    ]);
+  });
+
   it("leaves one center point intact", () => {
     // in:  A--|-B-|--A
     // out: A--|-B-|--A
     const result = downsampleStates(
-      iterateObjects(
-        createData([
-          [0, A],
-          [50, B],
-          [100, A],
-        ]),
-      ),
+      createData([
+        [0, A],
+        [50, B],
+        [100, A],
+      ]),
       bounds,
       numPoints,
     );
@@ -55,14 +71,12 @@ describe("downsampleStates", () => {
     // in:  A--|-BA|--A
     // out: A--|-##|--A
     const result = downsampleStates(
-      iterateObjects(
-        createData([
-          [0, A],
-          [50, B],
-          [51, A],
-          [100, A],
-        ]),
-      ),
+      createData([
+        [0, A],
+        [50, B],
+        [51, A],
+        [100, A],
+      ]),
       bounds,
       numPoints,
     );
@@ -78,15 +92,13 @@ describe("downsampleStates", () => {
     // in:  A--|AAA|--A
     // out: A--|A--|--A
     const result = downsampleStates(
-      iterateObjects(
-        createData([
-          [0, A],
-          [49, A],
-          [50, A],
-          [51, A],
-          [100, A],
-        ]),
-      ),
+      createData([
+        [0, A],
+        [49, A],
+        [50, A],
+        [51, A],
+        [100, A],
+      ]),
       bounds,
       numPoints,
     );
@@ -106,7 +118,7 @@ describe("downsampleStates", () => {
       { x: 100, y: 0, label: A },
     ];
 
-    expect(downsampleStates(iterateObjects(gapData), bounds, numPoints)).toEqual([
+    expect(downsampleStates(gapData, bounds, numPoints)).toEqual([
       { x: 50, index: 0 },
       { x: 50.1, index: 1 },
       { x: 50.2, index: 2 },
@@ -121,7 +133,7 @@ describe("downsampleStates", () => {
       { x: 50.04, y: Number.NaN },
     ];
 
-    expect(downsampleStates(iterateObjects(gapData), bounds, numPoints)).toEqual([
+    expect(downsampleStates(gapData, bounds, numPoints)).toEqual([
       { x: 50, index: undefined, states: [A, B] },
       { x: 50.04, index: 1 },
       { x: 50.04, index: 2 },
@@ -137,7 +149,7 @@ describe("downsampleStates", () => {
       { x: 100, y: 0, label: B },
     ];
 
-    const result = downsampleStates(iterateObjects(data), bounds, numPoints);
+    const result = downsampleStates(data, bounds, numPoints);
     expect(result[0]).toEqual({ x: 50, index: undefined, states: [A, B] });
   });
 
@@ -148,7 +160,7 @@ describe("downsampleStates", () => {
       { x: 50.02, y: Number.NaN },
     ];
 
-    expect(downsampleStates(iterateObjects(data), bounds, numPoints)).toEqual([
+    expect(downsampleStates(data, bounds, numPoints)).toEqual([
       { x: 50, index: 0 },
       { x: 50.01, index: 1 },
       { x: 50.02, index: 2 },
@@ -159,7 +171,7 @@ describe("downsampleStates", () => {
     const data: Datum[] = Array.from({ length: 10_000 }, (_, i) =>
       i % 2 === 0 ? { x: i / 100, y: 0, label: A } : { x: i / 100, y: Number.NaN },
     );
-    const result = downsampleStates(iterateObjects(data), bounds);
+    const result = downsampleStates(data, bounds);
     expect(result.length).toBeLessThan(500);
     // Still in x order, and the row still ends in a gap.
     expect(result.map((p) => p.x)).toEqual([...result.map((p) => p.x)].sort((a, b) => a - b));

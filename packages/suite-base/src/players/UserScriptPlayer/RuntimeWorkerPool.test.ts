@@ -3,7 +3,7 @@
 import MockUserScriptPlayerWorker from "@lichtblick/suite-base/players/UserScriptPlayer/MockUserScriptPlayerWorker";
 import delay from "@lichtblick/suite-base/util/delay";
 
-import { RuntimeWorkerPool } from "./RuntimeWorkerPool";
+import { RUNTIME_WORKER_IDLE_MS, RuntimeWorkerPool } from "./RuntimeWorkerPool";
 
 function setup() {
   const workers: MockUserScriptPlayerWorker[] = [];
@@ -24,6 +24,25 @@ describe("RuntimeWorkerPool", () => {
     expect(pool.acquire(() => {})).toBe(a);
     expect(workers).toHaveLength(2);
     expect(pool.size()).toBe(2);
+  });
+
+  it("closes a worker that stays idle", async () => {
+    vi.useFakeTimers();
+    onTestFinished(() => {
+      vi.useRealTimers();
+    });
+    const { pool, workers } = setup();
+    const a = pool.acquire(() => {});
+    const b = pool.acquire(() => {});
+    pool.release(a);
+    pool.release(b);
+    // Taken again before the timeout: kept
+    expect(pool.acquire(() => {})).toBe(b);
+    await vi.advanceTimersByTimeAsync(RUNTIME_WORKER_IDLE_MS);
+
+    expect(pool.size()).toBe(1);
+    expect(workers.map((worker) => worker.closed)).toEqual([true, false]);
+    expect(pool.acquire(() => {})).not.toBe(a);
   });
 
   it("closes every worker, idle or in use, on dispose", async () => {

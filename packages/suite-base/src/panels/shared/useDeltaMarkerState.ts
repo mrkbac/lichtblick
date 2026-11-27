@@ -22,7 +22,7 @@ export type UseDeltaMarkerStateResult = {
 
 export type DeltaMarkerSlotReservation = {
   slot: "a" | "b";
-  generation: number;
+  /** Unique per reservation; resets clear the pending reservations, so stale tokens never match */
   token: number;
 };
 
@@ -30,7 +30,6 @@ function useDeltaMarkerState({ resetKey }: UseDeltaMarkerStateProps): UseDeltaMa
   const [active, setActive] = useState(false);
   const [markerA, setMarkerA] = useState<DeltaMarker | undefined>(undefined);
   const [markerB, setMarkerB] = useState<DeltaMarker | undefined>(undefined);
-  const generationRef = useRef(0);
   const nextReservationTokenRef = useRef(0);
   const pendingReservationsRef = useRef(
     new Map<DeltaMarkerSlotReservation["slot"], DeltaMarkerSlotReservation>(),
@@ -39,14 +38,12 @@ function useDeltaMarkerState({ resetKey }: UseDeltaMarkerStateProps): UseDeltaMa
   const [prevResetKey, setPrevResetKey] = useState(resetKey);
   if (prevResetKey !== resetKey) {
     setPrevResetKey(resetKey);
-    generationRef.current += 1;
     pendingReservationsRef.current.clear();
     setMarkerA(undefined);
     setMarkerB(undefined);
   }
 
   const toggleActive = useCallback(() => {
-    generationRef.current += 1;
     pendingReservationsRef.current.clear();
     setActive((prevActive) => !prevActive);
     setMarkerA(undefined);
@@ -74,7 +71,6 @@ function useDeltaMarkerState({ resetKey }: UseDeltaMarkerStateProps): UseDeltaMa
     }
     const reservation = {
       slot,
-      generation: generationRef.current,
       token: nextReservationTokenRef.current++,
     };
     pendingReservations.set(slot, reservation);
@@ -82,11 +78,7 @@ function useDeltaMarkerState({ resetKey }: UseDeltaMarkerStateProps): UseDeltaMa
   }, [markerA, markerB]);
 
   const setMarker = useCallback((reservation: DeltaMarkerSlotReservation, marker: DeltaMarker) => {
-    const currentReservation = pendingReservationsRef.current.get(reservation.slot);
-    if (
-      reservation.generation !== generationRef.current ||
-      currentReservation?.token !== reservation.token
-    ) {
+    if (pendingReservationsRef.current.get(reservation.slot)?.token !== reservation.token) {
       return;
     }
 

@@ -293,6 +293,8 @@ export default class UserScriptPlayer implements Player {
   // The store tracks alerts for individual user scripts
   // a script may set its own alert or clear its alert
   #alertStore = new Map<string, PlayerAlert>();
+  // Last merged child + script alerts, reused while unchanged so consumers don't re-render per frame
+  #mergedAlerts?: PlayerAlert[];
 
   // Last message per delivered topic, to rerun an edited user script (the first one too) on its
   // possibly new inputs. These are the messages panels and the message pipeline hold anyway, so it
@@ -1318,7 +1320,13 @@ export default class UserScriptPlayer implements Player {
       // if neither child or parent have alerts we do nothing
       let alerts = this.#playerState.alerts;
       if (this.#alertStore.size > 0) {
-        alerts = (alerts ?? []).concat(Array.from(this.#alertStore.values()));
+        const merged = (alerts ?? []).concat(Array.from(this.#alertStore.values()));
+        const last = this.#mergedAlerts;
+        alerts =
+          last?.length === merged.length && merged.every((alert, i) => alert === last[i])
+            ? last
+            : merged;
+        this.#mergedAlerts = alerts;
       }
 
       const playerState: PlayerState = {

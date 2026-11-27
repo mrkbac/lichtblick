@@ -17,6 +17,8 @@ import {
   pointStyle,
   DECAY_HISTORY_LIMITS,
   RenderObjectHistory,
+  placeScans,
+  type ScanEntry,
   PointsRenderable,
   DECAY_LIMITED,
   keepDecayingTopics,
@@ -164,8 +166,7 @@ const tempFieldReaders: PointCloudFieldReaders = {
 };
 
 type PointCloudUserData = ChildUserData & {
-  /** Undefined once a newer decay entry exists (see releaseMessage) */
-  pointCloud: PointCloud | PointCloud2 | undefined;
+  pointCloud: PointCloud | PointCloud2;
   originalMessage: Record<string, RosValue> | undefined;
 };
 
@@ -177,17 +178,8 @@ class PointCloudRenderable extends PointsRenderable<PointCloudUserData> {
     return this.userData.originalMessage ?? {};
   }
 
-  public releaseMessage(): void {
-    this.userData.pointCloud = undefined;
-    this.userData.originalMessage = undefined;
-    this.decoded = undefined;
-  }
-
   public override instanceDetails(instanceId: number): Record<string, RosValue> | undefined {
     const pointCloud = this.userData.pointCloud;
-    if (!pointCloud) {
-      return undefined; // an older decay entry: only its geometry is kept
-    }
     const data = pointCloud.data;
     const stride = getStride(pointCloud);
     const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
@@ -208,7 +200,8 @@ class PointCloudRenderable extends PointsRenderable<PointCloudUserData> {
 
 export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUserData> {
   public override pickable = false; // Picking happens on child renderables
-  #pointsHistory: RenderObjectHistory<PointCloudRenderable>;
+  /** The latest scan, drawn and picked as a regular renderable */
+  #latest: ScanEntry<PointCloudRenderable>;
   #stixelsHistory: RenderObjectHistory<StixelsRenderable>;
   /**
    * With a decay time, scans older than the latest accumulate here. The latest stays a regular
@@ -243,16 +236,12 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
       geometry,
     );
     points.setStyle(pointStyle(userData.settings));
-    this.#pointsHistory = new RenderObjectHistory({
-      initial: {
-        messageTime: userData.messageTime,
-        receiveTime: userData.receiveTime,
-        renderable: points,
-      },
-      parentRenderable: this,
-      renderer,
-      limits: DECAY_HISTORY_LIMITS,
-    });
+    this.#latest = {
+      messageTime: userData.messageTime,
+      receiveTime: userData.receiveTime,
+      frameId: userData.frameId,
+      renderable: points,
+    };
     this.add(points);
 
     const stixelGeometry = createStixelGeometry(
@@ -262,7 +251,6 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
     const stixels = new StixelsRenderable(
       topic,
       {
-        frameId: "",
         pose: getPose(userData.latestPointCloud),
         topic,
       },
@@ -273,6 +261,7 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
       initial: {
         messageTime: userData.messageTime,
         receiveTime: userData.receiveTime,
+        frameId: userData.frameId,
         renderable: stixels,
       },
       parentRenderable: this,
@@ -286,7 +275,7 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
   public override dispose(): void {
     this.userData.latestOriginalMessage = undefined;
     this.userData.stixelMaterial.dispose();
-    this.#pointsHistory.dispose();
+    this.#latest.renderable.dispose();
     this.#stixelsHistory.dispose();
     this.#decayRing?.dispose();
     this.#scratch?.dispose();
@@ -380,9 +369,8 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
     this.#decayRing?.recolor(paint, { hideUnpainted: hide });
     this.#stixelsHistory.forEach((entry) => {
       const { renderable } = entry;
-      const { frameId, pose } = renderable.userData;
       renderable.recolor((positions, colors, count, painted) => {
-        paint({ ...entry, frameId, pose }, positions, colors, count, painted);
+        paint({ ...entry, pose: renderable.userData.pose }, positions, colors, count, painted);
       });
       if (hide) {
         renderable.updateCameraFallback({ hide });
@@ -414,12 +402,9 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
     const prevIsDecay = prevSettings.decayTime > 0;
     this.userData.settings = settings;
 
-    const pointsHistory = this.#pointsHistory;
     const stixelsHistory = this.#stixelsHistory;
     const style = pointStyle(settings);
-    pointsHistory.forEach((entry) => {
-      entry.renderable.setStyle(style);
-    });
+    this.#latest.renderable.setStyle(style);
     this.#decayRing?.setStyle(style, { preserveColors: true });
     this.#updateStixelMaterial(settings);
 
@@ -454,10 +439,11 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
         stixelsHistory.removeOlderRecord(this.userData.recordId);
       }
     }
-    const latestPointsEntry = pointsHistory.latest();
+    const latestPointsEntry = this.#latest;
     latestPointsEntry.receiveTime = receiveTime;
     latestPointsEntry.messageTime = messageTime;
     latestPointsEntry.recordId = this.userData.recordId;
+    latestPointsEntry.frameId = this.userData.frameId;
     latestPointsEntry.renderable.userData.pose = getPose(pointCloud);
     latestPointsEntry.renderable.userData.pointCloud = pointCloud;
     latestPointsEntry.renderable.userData.originalMessage = originalMessage;
@@ -479,7 +465,7 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
     latestStixelEntry.messageTime = messageTime;
     latestStixelEntry.recordId = this.userData.recordId;
     latestStixelEntry.renderable.userData.pose = latestPointsEntry.renderable.userData.pose;
-    latestStixelEntry.renderable.userData.frameId = this.userData.frameId;
+    latestStixelEntry.frameId = this.userData.frameId;
     if (settings.stixelsEnabled) {
       latestStixelEntry.renderable.geometry.resize(pointCount * 2);
     } else {
@@ -581,25 +567,31 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
         this.#latestCameraFrame,
       );
     }
-    this.#pointsHistory.updateHistoryFromCurrentTime(currentTime);
-    const poseOptions = { skipLatest: this.userData.historyOnly };
-    let posesResolved = this.#pointsHistory.updatePoses(
-      currentTime,
-      renderFrameId,
-      fixedFrameId,
-      poseOptions,
-    );
+    // A history-only layer has no latest scan until playback supplies one
+    const historyOnly = this.userData.historyOnly === true;
+    let posesResolved =
+      historyOnly ||
+      placeScans(
+        this.renderer,
+        this.userData.settingsPath,
+        [this.#latest],
+        currentTime,
+        renderFrameId,
+        fixedFrameId,
+      );
     posesResolved =
       this.#updateDecayRing(currentTime, renderFrameId, fixedFrameId) && posesResolved;
-    this.#pointsHistory.forEach((entry) => {
-      entry.renderable.syncPoints();
-    });
+    this.#latest.renderable.syncPoints();
+    // The read-back burst after a seek is over: don't keep its largest scan's buffers
+    this.#scratch?.dispose();
+    this.#scratch = undefined;
     if (this.userData.settings.stixelsEnabled) {
       this.#stixelsHistory.setMaxPoints(stixelMaxVertices(this.userData.settings));
       this.#stixelsHistory.updateHistoryFromCurrentTime(currentTime);
       posesResolved =
-        this.#stixelsHistory.updatePoses(currentTime, renderFrameId, fixedFrameId, poseOptions) &&
-        posesResolved;
+        this.#stixelsHistory.updatePoses(currentTime, renderFrameId, fixedFrameId, {
+          skipLatest: historyOnly,
+        }) && posesResolved;
     }
     if (posesResolved) {
       this.renderer.settings.errors.remove(this.userData.settingsPath, MISSING_TRANSFORM);
@@ -612,7 +604,7 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
     recordId: string | undefined,
   ): boolean {
     const latest = this.userData;
-    if (latest.historyOnly === true || !this.#pointsHistory.latest().renderable.decoded) {
+    if (latest.historyOnly === true || !this.#latest.renderable.decoded) {
       return false;
     }
     return isSameRecord(
@@ -633,14 +625,13 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
     receiveTime: bigint,
   ): void {
     const messageTime = toNanoSec(getTimestamp(pointCloud));
-    const pointsHistory = this.#pointsHistory;
     const stixelsHistory = this.#stixelsHistory;
     const stixelMaterial = this.userData.stixelMaterial;
     const topic = this.userData.topic;
 
     // The latest scan moves into the decay ring; updatePointCloud() then decodes the new message
     // into the latest renderable's buffers
-    const latest = pointsHistory.latest();
+    const latest = this.#latest;
     const latestCount = latest.renderable.decoded ? latest.renderable.geometry.drawRange.count : 0;
     if (latestCount > 0) {
       const { position, color } = latest.renderable.geometry.attributes;
@@ -649,7 +640,7 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
           receiveTime: latest.receiveTime,
           messageTime: latest.messageTime,
           recordId: latest.recordId,
-          frameId: this.userData.frameId,
+          frameId: latest.frameId,
           pose: latest.renderable.userData.pose,
         },
         (position!.array as Float32Array).subarray(0, latestCount * 3),
@@ -664,14 +655,18 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
       const stixels = new StixelsRenderable(
         topic,
         {
-          frameId: "",
           pose: getPose(pointCloud),
           topic,
         },
         stixelGeometry,
         stixelMaterial,
       );
-      stixelsHistory.addHistoryEntry({ receiveTime, messageTime, renderable: stixels });
+      stixelsHistory.addHistoryEntry({
+        receiveTime,
+        messageTime,
+        frameId: this.renderer.normalizeFrameId(getFrameId(pointCloud)),
+        renderable: stixels,
+      });
       this.add(stixels);
     }
   }
@@ -779,7 +774,6 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
     const stixels = new StixelsRenderable(
       this.userData.topic,
       {
-        frameId,
         pose: getPose(pointCloud),
         topic: this.userData.topic,
       },
@@ -806,6 +800,7 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
       receiveTime,
       messageTime,
       recordId,
+      frameId,
       renderable: stixels,
     });
   }
@@ -842,7 +837,7 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
       this.userData,
       ring,
       decayMaxPoints(this.userData.settings),
-      this.#pointsHistory.latest().renderable.geometry.drawRange.count,
+      this.#latest.renderable.geometry.drawRange.count,
       currentTime,
       renderFrameId,
       fixedFrameId,
@@ -851,9 +846,9 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
 
   #invalidError = (message: string): void => {
     this.renderer.settings.errors.addToTopic(this.userData.topic, INVALID_POINTCLOUD, message);
-    const lastEntry = this.#pointsHistory.latest();
-    lastEntry.renderable.geometry.resize(0);
-    lastEntry.renderable.decoded = undefined;
+    const latest = this.#latest.renderable;
+    latest.geometry.resize(0);
+    latest.decoded = undefined;
   };
 
   /** Whether the last validated cloud had a tolerated problem */
@@ -1334,10 +1329,7 @@ export class PointClouds extends SceneExtension<PointCloudHistoryRenderable> {
     renderFrameId: string,
     fixedFrameId: string,
   ): void {
-    // Do not call super.startFrame() since we handle updatePose() manually.
-    // Instead of updating the pose for each Renderable in this.renderables, we
-    // update the pose of each THREE.Points object in the pointsHistory of each
-    // renderable
+    // Not super.startFrame(): each renderable places its own scans, which can differ in frame
 
     this.#flushWaitingScans();
     for (const [topic, renderable] of this.renderables) {
@@ -1691,10 +1683,16 @@ function writeColor(
 }
 
 let colorValueScratchArray = new Float64Array(0);
-/** Reused per-point color value buffer; only valid until the next call */
+/**
+ * Reused per-point color value buffer; only valid until the next call. Grows with headroom and
+ * shrinks once clouds get much smaller, so one huge cloud doesn't pin its size for good.
+ */
 function colorValueScratch(pointCount: number): Float64Array {
-  if (colorValueScratchArray.length < pointCount) {
-    colorValueScratchArray = new Float64Array(pointCount);
+  const capacity = colorValueScratchArray.length;
+  if (capacity < pointCount) {
+    colorValueScratchArray = new Float64Array(Math.max(pointCount, Math.ceil(capacity * 1.5)));
+  } else if (capacity > 65_536 && pointCount * 4 < capacity) {
+    colorValueScratchArray = new Float64Array(Math.ceil(pointCount * 1.5));
   }
   return colorValueScratchArray;
 }
@@ -1825,12 +1823,7 @@ function createStixelGeometry(topic: string, usage: THREE.Usage): DynamicBufferG
   return geometry;
 }
 
-type StixelsUserData = ChildUserData & {
-  /** The scan's frame, used when painting with a camera */
-  frameId: string;
-};
-
-class StixelsRenderable extends Renderable<StixelsUserData, /*TRenderer=*/ undefined> {
+class StixelsRenderable extends Renderable<ChildUserData, /*TRenderer=*/ undefined> {
   #stixels: THREE.LineSegments<DynamicBufferGeometry, THREE.LineBasicMaterial>;
   public readonly geometry: DynamicBufferGeometry;
   #cameraOriginalColors: Uint8Array | undefined;
@@ -1839,7 +1832,7 @@ class StixelsRenderable extends Renderable<StixelsUserData, /*TRenderer=*/ undef
 
   public constructor(
     name: string,
-    userData: StixelsUserData,
+    userData: ChildUserData,
     geometry: DynamicBufferGeometry,
     material: THREE.LineBasicMaterial,
   ) {
@@ -1854,10 +1847,6 @@ class StixelsRenderable extends Renderable<StixelsUserData, /*TRenderer=*/ undef
     stixels.name = `${userData.topic}:PointCloud:stixels`;
     this.#stixels = stixels;
     this.add(stixels);
-  }
-
-  public releaseMessage(): void {
-    // Holds no message data.
   }
 
   public override dispose(): void {

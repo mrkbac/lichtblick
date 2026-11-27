@@ -213,6 +213,15 @@ function initRenderStateBuilder(): BuildRenderStateFn {
     prevSeekTime = activeData?.lastSeekTime;
     if (didSeek) {
       lastMessageByTopic.clear();
+    } else if (conversionsChanged) {
+      // Topics the panel no longer subscribes to: live sources never seek, so without this a panel
+      // cycling through image or cloud topics keeps one full message of each for the session
+      const subscribed = new Set(subscriptions.map(({ topic }) => topic));
+      for (const topic of lastMessageByTopic.keys()) {
+        if (!subscribed.has(topic)) {
+          lastMessageByTopic.delete(topic);
+        }
+      }
     }
 
     if (watchedFields.has("didSeek")) {

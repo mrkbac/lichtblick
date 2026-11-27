@@ -7,7 +7,7 @@
 
 import * as _ from "lodash-es";
 
-import { Point } from "@lichtblick/suite-base/components/Chart/datasets";
+import { ObjectData } from "@lichtblick/suite-base/components/Chart/types";
 
 import { calculateIntervals } from "./downsample";
 import type { PlotViewport } from "./types";
@@ -83,12 +83,14 @@ export function sortedStateWindow(
  * to the user that there is more detail.
  *
  * The `maxPoints` parameter works identically to the way it does in
- * `downsampleTimeseriesColumns`.
+ * `downsampleTimeseriesColumns`. Only rows [start, end) of `data` are read.
  */
 export function downsampleStates(
-  points: Iterable<Point>,
+  data: Readonly<ObjectData>,
   view: PlotViewport,
   maxPoints?: number,
+  start = 0,
+  end = data.length,
 ): StatePoint[] {
   const { pixelPerXValue } = calculateIntervals(view, 2, maxPoints);
   const xValuePerPixel = 1 / pixelPerXValue;
@@ -101,7 +103,9 @@ export function downsampleStates(
   // Points outside this buffer window are dropped.
   const { minX, maxX } = keptXRange(view);
 
-  let firstPastBounds: number | undefined = undefined;
+  // The nearest point on each side of the kept range. Rows needn't be sorted by x (header stamps).
+  let before: StatePoint | undefined;
+  let after: StatePoint | undefined;
 
   /**
    * Conclude the current interval, producing one or more StatePoint.
@@ -150,26 +154,23 @@ export function downsampleStates(
   // The pixel of the last gap pushed. One gap per pixel is drawn exactly; more fold in.
   let lastGapPixel: number | undefined;
 
-  for (const datum of points) {
-    const { index, label, x } = datum;
+  for (let index = start; index < end; index++) {
+    const datum = data[index];
+    if (datum == undefined) {
+      continue;
+    }
+    const { label, x } = datum;
 
-    // track the first point before our bounds
-    if (datum.x < minX) {
-      const point = {
-        index,
-        x,
-      };
-      if (indices.length === 0) {
-        indices.push(point);
-      } else {
-        indices[0] = point;
+    if (x < minX) {
+      if (before == undefined || x >= before.x) {
+        before = { x, index };
       }
       continue;
     }
-
-    // track the first point outside of our bounds
-    if (datum.x > maxX) {
-      firstPastBounds = index;
+    if (x > maxX) {
+      if (after == undefined || x < after.x) {
+        after = { x, index };
+      }
       continue;
     }
 
@@ -233,11 +234,11 @@ export function downsampleStates(
     finishInterval();
   }
 
-  if (firstPastBounds != undefined) {
-    indices.push({
-      x: maxX,
-      index: firstPastBounds,
-    });
+  if (before) {
+    indices.unshift(before);
+  }
+  if (after) {
+    indices.push({ x: maxX, index: after.index });
   }
 
   return indices;

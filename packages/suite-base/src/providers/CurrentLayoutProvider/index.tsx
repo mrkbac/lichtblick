@@ -95,26 +95,26 @@ export default function CurrentLayoutProvider({
     layoutStateListeners.current.delete(listener);
   }, []);
 
-  const [layoutState, setLayoutStateInternal] = useState<LayoutState>({
-    selectedLayout: undefined,
-  });
-  const layoutStateRef = useRef(layoutState);
+  // A ref, not state: consumers subscribe through the listeners, so re-rendering the provider on
+  // every layout edit would only cost time
+  const layoutStateRef = useRef<LayoutState>({ selectedLayout: undefined });
   const [incompatibleLayoutVersionError, setIncompatibleLayoutVersionError] = useState(false);
   const setLayoutState = useCallback((newState: LayoutState) => {
     const layoutVersion = newState.selectedLayout?.data?.version;
-    if (layoutVersion != undefined && layoutVersion > MAX_SUPPORTED_LAYOUT_VERSION) {
+    // A layout from a newer build can't be shown: select none, so nothing stays loading
+    const state =
+      layoutVersion != undefined && layoutVersion > MAX_SUPPORTED_LAYOUT_VERSION
+        ? { selectedLayout: undefined }
+        : newState;
+    if (state !== newState) {
       setIncompatibleLayoutVersionError(true);
-      setLayoutStateInternal({ selectedLayout: undefined });
-      return;
     }
 
-    setLayoutStateInternal(newState);
-
     // listeners rely on being able to getCurrentLayoutState() inside effects that may run before we re-render
-    layoutStateRef.current = newState;
+    layoutStateRef.current = state;
 
     for (const listener of [...layoutStateListeners.current]) {
-      listener(newState);
+      listener(state);
     }
   }, []);
 
