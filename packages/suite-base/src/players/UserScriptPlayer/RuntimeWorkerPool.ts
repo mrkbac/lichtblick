@@ -16,13 +16,18 @@ export type RuntimeWorker = {
 type Entry = RuntimeWorker & {
   port: MessagePort;
   onError: (message: string) => void;
+  idleTimer?: ReturnType<typeof setTimeout>;
 };
+
+/** An idle worker is kept this long for the next registration (e.g. a re-registered edit), then closed. */
+export const RUNTIME_WORKER_IDLE_MS = 30_000;
 
 const ignoreError = () => {};
 
 /**
  * Owns every user script runtime worker. Workers are handed out with acquire(), go back to the
- * idle list with release(), and dispose() closes all of them, idle or not. Nothing else creates
+ * idle list with release() and close after RUNTIME_WORKER_IDLE_MS unused; dispose() closes all of
+ * them, idle or not. Nothing else creates
  * runtime workers, so closing the pool is enough to free them.
  */
 export class RuntimeWorkerPool {
@@ -46,6 +51,7 @@ export class RuntimeWorkerPool {
       throw new Error("RuntimeWorkerPool was disposed");
     }
     const entry = this.#idle.pop() ?? this.#spawn();
+    clearTimeout(entry.idleTimer);
     entry.onError = onError;
     return entry;
   }
@@ -57,17 +63,26 @@ export class RuntimeWorkerPool {
     }
     entry.onError = ignoreError;
     this.#idle.push(entry);
+    entry.idleTimer = setTimeout(() => {
+      this.#idle = this.#idle.filter((idle) => idle !== entry);
+      this.#close(entry);
+    }, RUNTIME_WORKER_IDLE_MS);
   }
 
   /** Close every worker. The pool can't be used afterwards. */
   public dispose(): void {
     this.#disposed = true;
     for (const entry of this.#all) {
-      entry.rpc.close().catch(ignoreError);
-      entry.port.close();
+      this.#close(entry);
     }
-    this.#all.clear();
     this.#idle = [];
+  }
+
+  #close(entry: Entry): void {
+    clearTimeout(entry.idleTimer);
+    entry.rpc.close().catch(ignoreError);
+    entry.port.close();
+    this.#all.delete(entry);
   }
 
   #spawn(): Entry {
