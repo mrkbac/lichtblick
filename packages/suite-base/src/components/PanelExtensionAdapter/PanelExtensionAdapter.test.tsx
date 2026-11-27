@@ -39,7 +39,7 @@ import { BuiltinPanelExtensionContext } from "./types";
 // Message range reads, so tests can see which ones are open. A stable callback, like the real hook.
 const mockRange = vi.hoisted(() => {
   const cancel = vi.fn();
-  return { cancel, subscribe: vi.fn(() => cancel) };
+  return { cancel, subscribe: vi.fn((_args: { topic: string }) => cancel) };
 });
 vi.mock("./useSubscribeMessageRange", () => ({
   useSubscribeMessageRange: () => mockRange.subscribe,
