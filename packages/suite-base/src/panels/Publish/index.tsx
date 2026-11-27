@@ -126,7 +126,11 @@ function Publish(props: Props) {
 
   const canAdvertise = capabilities.includes(PLAYER_CAPABILITIES.advertise);
   const isConfigured = Boolean(config.topicName && config.datatype);
-  const canPublish = canAdvertise && isConfigured && parsed.value != undefined && !formInvalid;
+  // The publisher follows the target after the debounce: until then it would send the new message
+  // on the old topic with the old schema
+  const targetSettled = debouncedTarget === target;
+  const canPublish =
+    canAdvertise && isConfigured && targetSettled && parsed.value != undefined && !formInvalid;
 
   const onPublishClicked = useCallbackWithToast(() => {
     if (!canPublish) {
@@ -150,7 +154,7 @@ function Publish(props: Props) {
     }
   }, [parsed.value]);
   const publishRepeated = useCallbackWithToast(() => {
-    if (!latestMessage.current) {
+    if (!latestMessage.current || !targetSettled) {
       return;
     }
     try {
@@ -159,7 +163,7 @@ function Publish(props: Props) {
       setRepeating(false);
       throw err;
     }
-  }, [publish]);
+  }, [publish, targetSettled]);
   const rate = config.publishRate ?? defaultConfig.publishRate ?? 1;
   // Stops on disconnect: some players keep the advertise capability while reconnecting
   const canRepeat = canAdvertise && isConfigured && rate > 0 && presence === PlayerPresence.PRESENT;

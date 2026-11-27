@@ -166,6 +166,12 @@ export class WatchStore {
       }
       this.#dirty.add(row.id);
     }
+    // A topic no row reads any more: its last message (maybe a large image or cloud) goes
+    for (const topic of this.#lastByTopic.keys()) {
+      if (!this.#rowsByTopic.has(topic)) {
+        this.#lastByTopic.delete(topic);
+      }
+    }
   }
 
   public addMessages(events: readonly MessageEvent[]): void {

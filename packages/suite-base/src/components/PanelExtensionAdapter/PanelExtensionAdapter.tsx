@@ -321,8 +321,15 @@ function PanelExtensionAdapter(
   // hidden frames are queued, so they are delivered even if no new frame follows (e.g. a static
   // scene, or a source that went quiet).
   const [heldRetry, setHeldRetry] = useState(0);
+  // An update that arrived while the panel was rendering, rendered once it is done
+  const skippedRenderRef = useRef(false);
   const retryIfHeld = useCallback(() => {
-    if ((deliverHeldRef.current && undelivered.hasHeld()) || hiddenFrames.hasPending()) {
+    if (
+      skippedRenderRef.current ||
+      (deliverHeldRef.current && undelivered.hasHeld()) ||
+      hiddenFrames.hasPending()
+    ) {
+      skippedRenderRef.current = false;
       setHeldRetry((n) => n + 1);
     }
   }, [deliverHeldRef, hiddenFrames, undelivered]);
@@ -388,6 +395,14 @@ function PanelExtensionAdapter(
       ? undelivered.frameFor(pipelineFrame, subscribedTopics)
       : pipelineFrame;
 
+    // Before building the state: building commits what it hands out (variables, preview time,
+    // seek), so a state built and then not rendered would be lost until something else changes
+    if (renderingRef.current) {
+      setSlowRender(true);
+      skippedRenderRef.current = true;
+      return;
+    }
+
     const renderState = buildRenderState({
       appSettings,
       colorScheme,
@@ -410,11 +425,6 @@ function PanelExtensionAdapter(
       return;
     }
 
-    if (renderingRef.current) {
-      setSlowRender(true);
-      return;
-    }
-
     // Clear any conversions that were forced.
     forceConversion.clear();
 
@@ -427,22 +437,30 @@ function PanelExtensionAdapter(
 
     // tell the panel to render and lockout future renders until rendering is complete
     renderingRef.current = true;
+    // An object: TypeScript doesn't see the done callback set it before the catch reads it
+    const render = { done: false };
     try {
       setError(undefined);
-      let doneCalled = false;
       renderFn(renderState, () => {
         // ignore any additional done calls from the panel
-        if (doneCalled) {
+        if (render.done) {
           log.warn(`${panelId} called render done function twice`);
           return;
         }
-        doneCalled = true;
+        render.done = true;
         resumeFrame();
         renderingRef.current = false;
         retryIfHeld();
       });
     } catch (e: unknown) {
       setError(toError(e));
+      // A render that threw never calls done: release the frame, or every panel waits for the
+      // frame timeout
+      if (!render.done) {
+        render.done = true;
+        resumeFrame();
+        renderingRef.current = false;
+      }
     }
   }, [
     appSettings,
