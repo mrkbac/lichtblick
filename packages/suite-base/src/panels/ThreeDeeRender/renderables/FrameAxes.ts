@@ -184,7 +184,7 @@ export class FrameAxes extends SceneExtension<FrameAxisRenderable> {
     renderer.on("transformTreeUpdated", this.#handleTransformTreeUpdated);
     renderer.on("variablesChange", this.#handleVariablesChange);
     // Capture phase: while adjusting, arrows must not also seek playback (global arrow keys)
-    window.addEventListener("keydown", this.#handleKeyDown, { capture: true });
+    this.#ownerWindow().addEventListener("keydown", this.#handleKeyDown, { capture: true });
 
     this.#defaultRenderableSettings = { ...DEFAULT_SETTINGS, ...defaultRenderableSettings };
     this.#offsets = parseTransformOffsets(renderer.variables.get(TRANSFORM_OFFSETS_VARIABLE));
@@ -194,7 +194,7 @@ export class FrameAxes extends SceneExtension<FrameAxisRenderable> {
   public override dispose(): void {
     this.renderer.off("transformTreeUpdated", this.#handleTransformTreeUpdated);
     this.renderer.off("variablesChange", this.#handleVariablesChange);
-    window.removeEventListener("keydown", this.#handleKeyDown, { capture: true });
+    this.#ownerWindow().removeEventListener("keydown", this.#handleKeyDown, { capture: true });
     // Its trailing call would update the settings of a disposed renderer (and keep it alive)
     this.#throttledUpdateSettingsTree.cancel();
     this.#lineMaterial.dispose();
@@ -910,6 +910,11 @@ export class FrameAxes extends SceneExtension<FrameAxisRenderable> {
     }
   };
 
+  // A popped-out panel lives in its own window; its keys never reach the main one
+  #ownerWindow(): Window {
+    return this.renderer.gl.domElement.ownerDocument.defaultView ?? window;
+  }
+
   #handleKeyDown = (event: KeyboardEvent): void => {
     const target = event.target as HTMLElement | null;
     // Only the panel under the pointer reacts; focus alone would let two panels handle one key
@@ -917,8 +922,8 @@ export class FrameAxes extends SceneExtension<FrameAxisRenderable> {
     if (
       !forThisPanel ||
       event.defaultPrevented ||
-      target instanceof HTMLInputElement ||
-      target instanceof HTMLTextAreaElement ||
+      target?.tagName === "INPUT" ||
+      target?.tagName === "TEXTAREA" ||
       target?.isContentEditable === true
     ) {
       return;

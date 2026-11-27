@@ -262,7 +262,7 @@ export class MeasurementTool extends SceneExtension<Renderable, MeasurementToolE
       this.#handlePointerDown,
       { capture: true },
     );
-    window.addEventListener("keydown", this.#handleKeyDown);
+    this.#ownerWindow().addEventListener("keydown", this.#handleKeyDown);
     this.dispatchEvent({ type: "foxglove.measure-start" });
     this.#emitChange();
   }
@@ -955,7 +955,7 @@ export class MeasurementTool extends SceneExtension<Renderable, MeasurementToolE
       this.#handlePointerDown,
       { capture: true },
     );
-    window.removeEventListener("keydown", this.#handleKeyDown);
+    this.#ownerWindow().removeEventListener("keydown", this.#handleKeyDown);
     this.#dragListeners?.abort();
     this.#drag = undefined;
     this.renderer.gl.domElement.style.cursor = "";
@@ -1084,6 +1084,11 @@ export class MeasurementTool extends SceneExtension<Renderable, MeasurementToolE
     }
   }
 
+  // A popped-out panel lives in its own window; its keys never reach the main one
+  #ownerWindow(): Window {
+    return this.renderer.gl.domElement.ownerDocument.defaultView ?? window;
+  }
+
   #handleKeyDown = (event: KeyboardEvent): void => {
     const target = event.target as HTMLElement | null;
     // Only react to keys meant for this panel: pointer over it or focus inside it
@@ -1095,8 +1100,8 @@ export class MeasurementTool extends SceneExtension<Renderable, MeasurementToolE
       return;
     }
     if (
-      target instanceof HTMLInputElement ||
-      target instanceof HTMLTextAreaElement ||
+      target?.tagName === "INPUT" ||
+      target?.tagName === "TEXTAREA" ||
       target?.isContentEditable === true
     ) {
       return;

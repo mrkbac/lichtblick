@@ -19,9 +19,16 @@ describe("DynamicBufferGeometry", () => {
     expect(geometry.attributes.position).toBe(grown);
     expect(geometry.drawRange.count).toBe(140_000);
 
-    geometry.resize(30_000); // under a quarter
-    expect(capacity(geometry)).toBe(45_000);
-    geometry.resize(0); // small buffers are kept
-    expect(capacity(geometry)).toBe(45_000);
+    // A cloud that is sometimes empty keeps its buffers
+    for (let i = 0; i < 100; i++) {
+      geometry.resize(i % 2 === 0 ? 0 : 140_000);
+    }
+    expect(geometry.attributes.position).toBe(grown);
+
+    // A cloud that stays much smaller shrinks, but not below the minimum
+    for (let i = 0; i < 30; i++) {
+      geometry.resize(30_000);
+    }
+    expect(capacity(geometry)).toBe(65_536);
   });
 });

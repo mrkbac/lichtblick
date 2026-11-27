@@ -113,6 +113,8 @@ class LaserScanHistoryRenderable extends Renderable<LaserScanHistoryUserData> {
   #decayRing: DecayPointRing | undefined;
   /** Decodes scans older than the latest before they are copied into the ring */
   #scratch: DynamicBufferGeometry | undefined;
+  // Whether a read-back scan used #scratch since the last frame
+  #scratchUsed = false;
 
   public constructor(topic: string, renderer: Renderer, userData: LaserScanHistoryUserData) {
     super(topic, renderer, userData);
@@ -231,6 +233,7 @@ class LaserScanHistoryRenderable extends Renderable<LaserScanHistoryUserData> {
       return;
     }
     this.#scratch ??= createGeometry(`${this.userData.topic}:older`, THREE.StaticDrawUsage);
+    this.#scratchUsed = true;
     decodeLaserScan(laserScan, settings, this.#scratch);
     const { position, color } = this.#scratch.attributes;
     const count = laserScan.ranges.length;
@@ -272,9 +275,12 @@ class LaserScanHistoryRenderable extends Renderable<LaserScanHistoryUserData> {
         fixedFrameId,
       );
     this.#latest.renderable.syncPoints();
-    // The read-back burst after a seek is over: don't keep its largest scan's buffers
-    this.#scratch?.dispose();
-    this.#scratch = undefined;
+    // A frame with no read-back scan ends the burst after a seek: don't keep its buffers
+    if (!this.#scratchUsed) {
+      this.#scratch?.dispose();
+      this.#scratch = undefined;
+    }
+    this.#scratchUsed = false;
     resolved = this.#updateDecayRing(currentTime, renderFrameId, fixedFrameId) && resolved;
     if (resolved) {
       this.renderer.settings.errors.remove(this.userData.settingsPath, MISSING_TRANSFORM);

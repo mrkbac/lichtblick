@@ -11,6 +11,7 @@ import * as THREE from "three/webgpu";
 
 import { SettingsTreeAction } from "@lichtblick/suite";
 import { DynamicBufferGeometry } from "@lichtblick/suite-base/panels/ThreeDeeRender/DynamicBufferGeometry";
+import { ElasticCapacity } from "@lichtblick/suite-base/panels/ThreeDeeRender/ElasticCapacity";
 import {
   createGeometry,
   pointCloudColorEncoding,
@@ -210,6 +211,8 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
   #decayRing: DecayPointRing | undefined;
   /** Decodes scans older than the latest before they are copied into the ring */
   #scratch: DynamicBufferGeometry | undefined;
+  // Whether a read-back scan used #scratch since the last frame
+  #scratchUsed = false;
   #latestUnpaintedColors: Uint8Array | undefined;
   #latestPaintedPoints: Uint8Array | undefined;
   #latestCameraFrame: PointCloudCameraFrame | undefined;
@@ -582,9 +585,12 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
     posesResolved =
       this.#updateDecayRing(currentTime, renderFrameId, fixedFrameId) && posesResolved;
     this.#latest.renderable.syncPoints();
-    // The read-back burst after a seek is over: don't keep its largest scan's buffers
-    this.#scratch?.dispose();
-    this.#scratch = undefined;
+    // A frame with no read-back scan ends the burst after a seek: don't keep its buffers
+    if (!this.#scratchUsed) {
+      this.#scratch?.dispose();
+      this.#scratch = undefined;
+    }
+    this.#scratchUsed = false;
     if (this.userData.settings.stixelsEnabled) {
       this.#stixelsHistory.setMaxPoints(stixelMaxVertices(this.userData.settings));
       this.#stixelsHistory.updateHistoryFromCurrentTime(currentTime);
@@ -707,6 +713,7 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
     const messageTime = toNanoSec(getTimestamp(pointCloud));
     const count = Math.trunc(pointCloud.data.length / getStride(pointCloud));
     this.#scratch ??= createGeometry(`${this.userData.topic}:older`, THREE.StaticDrawUsage);
+    this.#scratchUsed = true;
     this.#scratch.resize(count);
     const { position, color } = this.#scratch.attributes;
     const positions = (position!.array as Float32Array).subarray(0, count * 3);
@@ -1683,16 +1690,13 @@ function writeColor(
 }
 
 let colorValueScratchArray = new Float64Array(0);
-/**
- * Reused per-point color value buffer; only valid until the next call. Grows with headroom and
- * shrinks once clouds get much smaller, so one huge cloud doesn't pin its size for good.
- */
+// Shared by every topic: sizes take turns, so it only shrinks once clouds stay small.
+const colorValueScratchCapacity = new ElasticCapacity(65_536);
+/** Reused per-point color value buffer; only valid until the next call. */
 function colorValueScratch(pointCount: number): Float64Array {
-  const capacity = colorValueScratchArray.length;
-  if (capacity < pointCount) {
-    colorValueScratchArray = new Float64Array(Math.max(pointCount, Math.ceil(capacity * 1.5)));
-  } else if (capacity > 65_536 && pointCount * 4 < capacity) {
-    colorValueScratchArray = new Float64Array(Math.ceil(pointCount * 1.5));
+  const capacity = colorValueScratchCapacity.fit(pointCount);
+  if (capacity != undefined) {
+    colorValueScratchArray = new Float64Array(capacity);
   }
   return colorValueScratchArray;
 }
