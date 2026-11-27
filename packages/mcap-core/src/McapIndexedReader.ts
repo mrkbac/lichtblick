@@ -121,6 +121,8 @@ export class McapIndexedReader<TReadOptions = unknown> {
 
   #messageStartTime: bigint | undefined;
   #messageEndTime: bigint | undefined;
+  /** Chunk indexes sorted for a forward read, and the running max of their end times; built on use */
+  #chunksByTime: { chunks: ChunkIndex[]; maxEnd: bigint[] } | undefined;
   #attachmentStartTime: bigint | undefined;
   #attachmentEndTime: bigint | undefined;
 
@@ -174,6 +176,7 @@ export class McapIndexedReader<TReadOptions = unknown> {
     // Loops, not push(...): a spread of a long list overflows the call stack. Each input is
     // copied first, so passing this reader's own arrays doesn't loop forever.
     for (const chunk of Array.from(added.chunkIndexes ?? [])) {
+      this.#chunksByTime = undefined;
       this.#chunkIndexes.push(chunk);
       this.#addChunkTimes(chunk);
     }
@@ -198,11 +201,41 @@ export class McapIndexedReader<TReadOptions = unknown> {
   /** Replaces the chunk indexes (e.g. to drop corrupt chunks), and the message time range with them */
   public setChunkIndexes(chunkIndexes: readonly ChunkIndex[]): void {
     this.#chunkIndexes = [...chunkIndexes];
+    this.#chunksByTime = undefined;
     this.#messageStartTime = undefined;
     this.#messageEndTime = undefined;
     for (const chunk of chunkIndexes) {
       this.#addChunkTimes(chunk);
     }
+  }
+
+  /**
+   * The chunks with messages in [start, end], in forward read order (start time, then file offset).
+   * O(log n + chunks near the range) after the first call, which sorts the index once: callers that
+   * look up many small windows (skimming) otherwise scan every chunk of a long file each time.
+   */
+  public chunksInTimeRange(start: bigint, end: bigint): ChunkIndex[] {
+    if (!this.#chunksByTime) {
+      const chunks = [...this.#chunkIndexes];
+      sortChunksForRead(chunks, false);
+      const maxEnd: bigint[] = [];
+      for (const chunk of chunks) {
+        const prev = maxEnd[maxEnd.length - 1];
+        maxEnd.push(prev != undefined && prev > chunk.messageEndTime ? prev : chunk.messageEndTime);
+      }
+      this.#chunksByTime = { chunks, maxEnd };
+    }
+    const { chunks, maxEnd } = this.#chunksByTime;
+    // Before `from`, no chunk ends at or after `start`; from `to` on, every chunk starts after `end`
+    const from = firstIndex(maxEnd.length, (i) => maxEnd[i]! >= start);
+    const to = firstIndex(chunks.length, (i) => chunks[i]!.messageStartTime > end);
+    const result: ChunkIndex[] = [];
+    for (let i = from; i < to; i++) {
+      if (chunks[i]!.messageEndTime >= start) {
+        result.push(chunks[i]!);
+      }
+    }
+    return result;
   }
 
   #addChunkTimes(chunk: ChunkIndex): void {
@@ -542,15 +575,12 @@ export class McapIndexedReader<TReadOptions = unknown> {
 
     let chunksOrdered = true;
     let prevChunkEndTime: bigint | undefined;
-    const chunksInRange: ChunkIndex[] = [];
-    for (const chunkIndex of this.chunkIndexes) {
-      if (chunkIndex.messageStartTime <= endingAt && chunkIndex.messageEndTime >= startingAt) {
-        chunksInRange.push(chunkIndex);
-        if (chunksOrdered && prevChunkEndTime != undefined) {
-          chunksOrdered = chunkIndex.messageStartTime >= prevChunkEndTime;
-        }
-        prevChunkEndTime = chunkIndex.messageEndTime;
+    const chunksInRange = this.chunksInTimeRange(startingAt, endingAt);
+    for (const chunkIndex of chunksInRange) {
+      if (chunksOrdered && prevChunkEndTime != undefined) {
+        chunksOrdered = chunkIndex.messageStartTime >= prevChunkEndTime;
       }
+      prevChunkEndTime = chunkIndex.messageEndTime;
     }
     // In the order the read reaches them, so cursors join the heap only once they can hold the
     // next message: a long read of a file with many chunks (playback from the start, every seek)
@@ -974,6 +1004,21 @@ function sortChunksForRead(chunks: ChunkIndex[], reverse: boolean): void {
   if (chunks.some((chunk, i) => i > 0 && compare(chunks[i - 1]!, chunk) > 0)) {
     chunks.sort(compare);
   }
+}
+
+/** The first index in [0, length) where `test` holds, given it holds for a suffix; else `length` */
+function firstIndex(length: number, test: (i: number) => boolean): number {
+  let lo = 0;
+  let hi = length;
+  while (lo < hi) {
+    const mid = (lo + hi) >>> 1;
+    if (test(mid)) {
+      hi = mid;
+    } else {
+      lo = mid + 1;
+    }
+  }
+  return lo;
 }
 
 function compareBigInt(a: bigint, b: bigint): number {
