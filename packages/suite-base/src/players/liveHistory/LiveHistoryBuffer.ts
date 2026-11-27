@@ -191,7 +191,7 @@ export class LiveHistoryBuffer {
 
   /** Messages received in (`after`, `upTo`], in order. */
   public range(after: Time, upTo: Time): MessageEvent[] {
-    return this.#messages.slice(this.#upperBound(after), this.#upperBound(upTo));
+    return this.#messages.slice(this.#bound(after), this.#bound(upTo));
   }
 
   /**
@@ -199,7 +199,7 @@ export class LiveHistoryBuffer {
    * received at the same time as `last` but added after it are included.
    */
   public rangeAfter(last: MessageEvent, upTo: Time): MessageEvent[] {
-    let start = this.#upperBound(last.receiveTime);
+    let start = this.#bound(last.receiveTime);
     for (let i = start - 1; i >= this.#head; i--) {
       const msg = this.#messages[i]!;
       if (msg === last) {
@@ -210,7 +210,7 @@ export class LiveHistoryBuffer {
       }
       start = i;
     }
-    return this.#messages.slice(start, this.#upperBound(upTo));
+    return this.#messages.slice(start, this.#bound(upTo));
   }
 
   /**
@@ -247,7 +247,7 @@ export class LiveHistoryBuffer {
     // walk back only to the block start and take what's still missing from its checkpoint, which
     // costs at most that same walk to bring up to date. A lone seek walks as before, so checkpoints
     // are only built when later seeks will reuse them.
-    const end = this.#upperBound(at);
+    const end = this.#bound(at);
     // The block of the last message at or before `at`, so a seek at a block boundary walks the
     // block that ends there instead of the empty one after it.
     const block = Math.floor(Math.max(this.#seqOf(end) - 1, 0) / CHECKPOINT_INTERVAL);
@@ -428,8 +428,8 @@ export class LiveHistoryBuffer {
    * when omitted), oldest first. The messages themselves, not copies.
    */
   public messages(topic: string, start?: Time, end?: Time): MessageEvent[] {
-    const from = start ? this.#lowerBound(start) : this.#head;
-    const to = end ? this.#upperBound(end) : this.#messages.length;
+    const from = start ? this.#bound(start, "atOrAfter") : this.#head;
+    const to = end ? this.#bound(end) : this.#messages.length;
     const result: MessageEvent[] = [];
     for (let i = from; i < to; i++) {
       const msg = this.#messages[i]!;
@@ -440,28 +440,14 @@ export class LiveHistoryBuffer {
     return result;
   }
 
-  /** Index of the first retained message received at or after `time`. */
-  #lowerBound(time: Time): number {
+  /** Index of the first retained message received after `time` (or at or after it) */
+  #bound(time: Time, from: "after" | "atOrAfter" = "after"): number {
     let lo = this.#head;
     let hi = this.#messages.length;
     while (lo < hi) {
       const mid = (lo + hi) >>> 1;
-      if (compare(this.#messages[mid]!.receiveTime, time) < 0) {
-        lo = mid + 1;
-      } else {
-        hi = mid;
-      }
-    }
-    return lo;
-  }
-
-  /** Index of the first retained message received after `time`. */
-  #upperBound(time: Time): number {
-    let lo = this.#head;
-    let hi = this.#messages.length;
-    while (lo < hi) {
-      const mid = (lo + hi) >>> 1;
-      if (compare(this.#messages[mid]!.receiveTime, time) <= 0) {
+      const order = compare(this.#messages[mid]!.receiveTime, time);
+      if (order < 0 || (order === 0 && from === "after")) {
         lo = mid + 1;
       } else {
         hi = mid;
