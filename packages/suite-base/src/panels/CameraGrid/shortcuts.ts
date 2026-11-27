@@ -2,15 +2,22 @@
 
 import { KeyboardShortcut } from "@lichtblick/suite-base/util/keyboardShortcuts";
 
-/** Keys are bound by the panel's onKeyDown; gestures are display only (handled by each tile). */
+/** Escape is bound by the panel's onKeyDown, the other keys by the focused tile's; gestures are display only. */
 export const CAMERA_GRID_SHORTCUTS = [
   { id: "cameraGrid.restore", titleKey: "restoreCameraGrid", keys: [{ key: "Escape" }] },
   { id: "cameraGrid.zoom", titleKey: "cameraGridZoom", keys: [], mouse: [{ action: "scroll" }] },
-  { id: "cameraGrid.pan", titleKey: "cameraGridPan", keys: [], mouse: [{ action: "drag" }] },
+  { id: "cameraGrid.zoomIn", titleKey: "cameraGridZoomIn", keys: [{ key: "+" }, { key: "=" }] },
+  { id: "cameraGrid.zoomOut", titleKey: "cameraGridZoomOut", keys: [{ key: "-" }] },
+  {
+    id: "cameraGrid.pan",
+    titleKey: "cameraGridPan",
+    keys: [{ key: "ArrowLeft" }, { key: "ArrowRight" }, { key: "ArrowUp" }, { key: "ArrowDown" }],
+    mouse: [{ action: "drag" }],
+  },
   {
     id: "cameraGrid.resetOrMaximize",
     titleKey: "cameraGridResetOrMaximize",
-    keys: [],
+    keys: [{ key: "Enter" }],
     mouse: [{ action: "double-click" }],
   },
   {
