@@ -14,7 +14,7 @@ import Log from "@lichtblick/log";
 import { Time, MessageEvent } from "@lichtblick/suite";
 import { Range } from "@lichtblick/suite-base/util/ranges";
 
-import { CachingIterableSource } from "./CachingIterableSource";
+import { CACHE_ITEM_OVERHEAD_BYTES, CachingIterableSource } from "./CachingIterableSource";
 import {
   GetBackfillMessagesArgs,
   IIterableSource,
@@ -97,6 +97,7 @@ class BufferedIterableSource<MessageType = unknown>
     this.#minReadAheadDuration = opt.minReadAheadDuration ?? DEFAULT_MIN_READ_AHEAD_DURATION;
     this.#source = new CachingIterableSource<MessageType>(source, {
       maxTotalSize: opt.maxCacheSizeBytes,
+      itemOverheadBytes: CACHE_ITEM_OVERHEAD_BYTES,
     });
 
     if (compare(this.#readAheadDuration, this.#minReadAheadDuration) < 0) {
