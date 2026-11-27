@@ -7,7 +7,7 @@
 
 import { Immutable } from "@lichtblick/suite";
 import { applySamplingGuardToSubscription } from "@lichtblick/suite-base/players/samplingGuard";
-import { InternalSubscribePayload, SubscribePayload } from "@lichtblick/suite-base/players/types";
+import { InternalSubscribePayload } from "@lichtblick/suite-base/players/types";
 
 /**
  * Merge two SubscribePayloads, using either all of the fields or the union of
