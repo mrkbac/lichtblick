@@ -77,6 +77,20 @@ describe("filterRecordings", () => {
     expect(lateIds("since:2026", "America/Los_Angeles")).toEqual(["late"]);
     expect(lateIds("until:2026-11-27T23:00", "America/Los_Angeles")).toEqual([]);
     expect(lateIds("until:2026-11-28T07:30:00Z")).toEqual(["late"]);
+    // An explicit instant is inclusive, and nothing after it is
+    const atInstant = {
+      ...lateEvening,
+      id: "at",
+      start: { sec: Date.UTC(2026, 10, 27) / 1000, nsec: 0 },
+    };
+    const justAfter = {
+      ...atInstant,
+      id: "after",
+      start: { sec: Date.UTC(2026, 10, 27) / 1000, nsec: 500_000 },
+    };
+    expect(
+      filterRecordings([atInstant, justAfter], "until:2026-11-27T00:00:00Z").map((r) => r.id),
+    ).toEqual(["at"]);
     // The last fraction of a day still belongs to it
     const lastMoment = {
       ...lateEvening,
@@ -90,14 +104,20 @@ describe("filterRecordings", () => {
     expect(parsePeriod("2026-12", "UTC")).toEqual({
       start: Date.UTC(2026, 11, 1),
       end: Date.UTC(2027, 0, 1),
+      endInclusive: false,
     });
     // Single-digit minutes and seconds keep their value
     expect(parsePeriod("2026-11-27T08:05", "UTC")).toEqual({
       start: Date.UTC(2026, 10, 27, 8, 5),
       end: Date.UTC(2026, 10, 27, 8, 6),
+      endInclusive: false,
     });
     // 02:00 doesn't exist on this day in Los Angeles: the minute ends where the clock resumes
     expect(parsePeriod("2026-03-08T01:59", "America/Los_Angeles")?.end).toBe(
+      Date.parse("2026-03-08T10:00:00Z"),
+    );
+    // 02:30 doesn't exist either: the clock resumes at 03:00 local, not 03:30
+    expect(parsePeriod("2026-03-08T02:29", "America/Los_Angeles")?.end).toBe(
       Date.parse("2026-03-08T10:00:00Z"),
     );
     // 01:30 happens twice: the first one

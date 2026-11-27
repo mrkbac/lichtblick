@@ -205,3 +205,22 @@ describe("formatTime.getValidatedTimeAndMethodFromString", () => {
     });
   });
 });
+
+describe("instantOfWallTime", () => {
+  const LA = "America/Los_Angeles";
+  it("resolves a normal wall time", () => {
+    expect(formatTime.instantOfWallTime(Date.UTC(2026, 5, 1, 12), LA)).toBe(
+      Date.parse("2026-06-01T19:00:00Z"),
+    );
+  });
+  it("takes the first of a repeated hour", () => {
+    expect(formatTime.instantOfWallTime(Date.UTC(2026, 10, 1, 1, 30), LA)).toBe(
+      Date.parse("2026-11-01T08:30:00Z"),
+    );
+  });
+  it("takes where the clock resumes for a skipped time", () => {
+    expect(formatTime.instantOfWallTime(Date.UTC(2026, 2, 8, 2, 30), LA)).toBe(
+      Date.parse("2026-03-08T10:00:00Z"),
+    );
+  });
+});
