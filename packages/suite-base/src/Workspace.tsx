@@ -236,10 +236,6 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
   const filesToOpen = useElectronFilesToOpen();
 
   useEffect(() => {
-    handleFilesRef.current = handleFiles;
-  }, [handleFiles]);
-
-  useEffect(() => {
     if (filesToOpen && filesToOpen.length > 0) {
       void handleFilesRef.current(Array.from(filesToOpen));
     }

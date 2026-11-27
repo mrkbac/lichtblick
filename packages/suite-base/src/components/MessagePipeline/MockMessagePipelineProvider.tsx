@@ -49,7 +49,6 @@ import { RosDatatypes } from "@lichtblick/suite-base/types/RosDatatypes";
 
 import { ContextInternal } from "./index";
 import { MessagePipelineInternalState, MessagePipelineStateAction, reducer } from "./store";
-import { makeSubscriptionMemoizer } from "./subscriptions";
 
 const NO_DATATYPES = new Map();
 
@@ -327,14 +326,12 @@ export default function MockMessagePipelineProvider(
         player: undefined,
         dispatch,
         reset,
-        subscriptionMemoizer: makeSubscriptionMemoizer(),
         publishersById: {},
         allPublishers: [],
         subscriptionsById: new Map(),
         subscriptionGeneration: 0,
         subscriptionsByGeneration: new Map(),
         subscriberIdsByTopic: new Map(),
-        newTopicsBySubscriberId: new Map(),
         lastMessageEventByTopic: new Map(),
         lastCapabilities: [...initialPublicState.playerState.capabilities],
         public: {
