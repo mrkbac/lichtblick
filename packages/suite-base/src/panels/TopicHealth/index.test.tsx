@@ -12,6 +12,27 @@ import { composeStories } from "storybook-react-rsbuild";
 
 import * as stories from "./index.stories";
 
+// jsdom has no layout, so render every row
+vi.mock("@tanstack/react-virtual", () => ({
+  useVirtualizer: ({
+    count,
+    getItemKey,
+  }: {
+    count: number;
+    getItemKey: (i: number) => string;
+  }) => ({
+    getVirtualItems: () =>
+      Array.from({ length: count }, (_, index) => ({
+        index,
+        key: getItemKey(index),
+        start: 0,
+        end: 0,
+      })),
+    getTotalSize: () => 0,
+    measureElement: () => {},
+  }),
+}));
+
 const { Recording, CountsOnly } = composeStories(stories);
 
 describe("TopicHealth", () => {

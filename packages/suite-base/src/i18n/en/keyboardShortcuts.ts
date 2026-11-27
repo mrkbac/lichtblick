@@ -129,6 +129,8 @@ export const keyboardShortcuts = {
   // Other panels
   restoreCameraGrid: "Restore grid from maximized camera",
   cameraGridZoom: "Zoom a camera at the cursor",
+  cameraGridZoomIn: "Zoom in on the focused camera",
+  cameraGridZoomOut: "Zoom out of the focused camera",
   cameraGridPan: "Pan a zoomed camera",
   cameraGridResetOrMaximize: "Reset a zoomed camera, otherwise maximize it or restore the grid",
   cameraGridDropTopics: "Add image topics from the topic list",
