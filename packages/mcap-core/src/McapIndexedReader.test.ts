@@ -1792,4 +1792,37 @@ describe("McapIndexedReader", () => {
     reader.appendIndex({ chunkIndexes: reader.chunkIndexes });
     expect(reader.chunkIndexes).toHaveLength(6);
   });
+
+  it("finds the chunks in a time range, also overlapping and out of file order", async () => {
+    const buffer = new TempBuffer();
+    const writer = new McapWriter({ writable: buffer });
+    await writer.start({ profile: "", library: "" });
+    await writer.end();
+    const reader = await McapIndexedReader.Initialize({ readable: makeReadable(buffer.get()) });
+    const chunk = (start: number, end: number, offset: number) =>
+      ({
+        messageStartTime: BigInt(start),
+        messageEndTime: BigInt(end),
+        chunkStartOffset: BigInt(offset),
+      }) as TypedMcapRecords["ChunkIndex"];
+    // A long chunk spanning later short ones, and one written out of time order
+    const long = chunk(0, 100, 1);
+    const a = chunk(10, 19, 2);
+    const c = chunk(30, 39, 3);
+    const b = chunk(20, 29, 4);
+    reader.setChunkIndexes([long, a, c, b]);
+    const offsets = (start: number, end: number) =>
+      reader.chunksInTimeRange(BigInt(start), BigInt(end)).map((x) => x.chunkStartOffset);
+
+    expect(offsets(0, 200)).toEqual([1n, 2n, 4n, 3n]);
+    expect(offsets(25, 25)).toEqual([1n, 4n]);
+    expect(offsets(19, 20)).toEqual([1n, 2n, 4n]);
+    expect(offsets(101, 200)).toEqual([]);
+
+    // The lookup follows changes to the index
+    reader.appendIndex({ chunkIndexes: [chunk(150, 160, 5)] });
+    expect(offsets(101, 200)).toEqual([5n]);
+    reader.setChunkIndexes([a]);
+    expect(offsets(0, 200)).toEqual([2n]);
+  });
 });
