@@ -202,6 +202,8 @@ class Reader implements AsyncIterableIterator<Readonly<ReadResult>> {
   #catchUp?: { iterator: AsyncIterator<Readonly<ReadResult>>; abort: AbortController };
   /** A late joiner ignores the shared read's messages up to here: its catch-up has them */
   #dropThrough?: Time;
+  /** Connections it got an alert from: one per connection keeps a failing topic from filling it */
+  readonly #alerted = new Set<number>();
   readonly #onPull: () => void;
   readonly #onLeave: (reader: Reader) => void;
 
@@ -217,6 +219,16 @@ class Reader implements AsyncIterableIterator<Readonly<ReadResult>> {
   }
 
   public push(result: Readonly<ReadResult>): void {
+    // The pass's stamps say nothing about this reader's topic
+    if (result.type === "stamp") {
+      return;
+    }
+    if (result.type === "alert") {
+      if (this.#alerted.has(result.connectionId)) {
+        return;
+      }
+      this.#alerted.add(result.connectionId);
+    }
     if (
       this.#dropThrough &&
       result.type === "message-event" &&
@@ -258,6 +270,11 @@ class Reader implements AsyncIterableIterator<Readonly<ReadResult>> {
     this.#dropThrough = undefined;
   }
 
+  /** The time up to which its catch-up delivers everything (while in the window it joined) */
+  public caughtUpThrough(): Time | undefined {
+    return this.#dropThrough;
+  }
+
   public isCatchingUp(): boolean {
     return this.#catchUp != undefined;
   }
@@ -265,11 +282,12 @@ class Reader implements AsyncIterableIterator<Readonly<ReadResult>> {
   /**
    * While catching up its queue filled: drop the queue and go on with `readFrom(time of its first
    * queued message)` after the catch-up, so the shared read never waits for it. The queue holds
-   * every message of its topic from that time on, so nothing is lost or delivered twice.
+   * every message of its topic from that time on, so nothing is lost or delivered twice. Returns
+   * whether it detached: without a queued message it stays with the shared read.
    */
   public detachQueue(
     readFrom: (start: Time, signal: AbortSignal) => AsyncIterator<Readonly<ReadResult>>,
-  ): void {
+  ): boolean {
     let first: Time | undefined;
     for (let i = 0; i < this.#queue.size(); i++) {
       const result = this.#queue.at(i);
@@ -279,12 +297,13 @@ class Reader implements AsyncIterableIterator<Readonly<ReadResult>> {
       }
     }
     if (!first) {
-      return;
+      return false;
     }
     this.#queue.clear();
     this.#queuedBytes = 0;
     const abort = new AbortController();
     this.detach(readFrom(first, abort.signal), 0, abort);
+    return true;
   }
 
   /** Goes on with `own`, skipping its first `skip` messages; the queue is empty */
@@ -311,7 +330,8 @@ class Reader implements AsyncIterableIterator<Readonly<ReadResult>> {
   }
 
   async #pull(): Promise<IteratorResult<Readonly<ReadResult>>> {
-    while (this.#catchUp && !this.#ended) {
+    // The shared read may end first: the catch-up still delivers what it missed (return() drops it)
+    while (this.#catchUp) {
       const catchUp = this.#catchUp;
       const result = await new Promise<IteratorResult<Readonly<ReadResult>>>((resolve, reject) => {
         this.#cancelPull = () => {
@@ -449,13 +469,15 @@ class SharedRead {
     const current = this.#windows[this.#windowIndex];
     // The windows read already, then the current one up to where the shared read is
     const missed = this.#windows.slice(0, this.#windowIndex);
-    if (position) {
-      missed.push({ start: current?.start, end: position });
+    // Once the window's source read is done (before the next window starts), all of it
+    const through = this.#windowDone ? current?.end : position;
+    if (position || this.#windowDone) {
+      missed.push({ start: current?.start, end: through });
     }
     if (missed.length > 0) {
       const abort = new AbortController();
       try {
-        reader.catchUp(readWindows(this.#readRange, topic, missed, abort.signal), position, abort);
+        reader.catchUp(readWindows(this.#readRange, topic, missed, abort.signal), through, abort);
       } catch (error: unknown) {
         this.#readers.delete(reader);
         reader.end(error);
@@ -471,6 +493,8 @@ class SharedRead {
   }
 
   #ended = false;
+  /** Whether the current window's source read is done */
+  #windowDone = false;
   #restart = false;
   /** Read through a method: joinLate sets it during the awaits, which narrowing can't see */
   #restartRequested(): boolean {
@@ -510,6 +534,7 @@ class SharedRead {
   async #runWindow(span: Range): Promise<void> {
     this.#position = undefined;
     this.#atPosition.clear();
+    this.#windowDone = false;
     for (const reader of this.#readers) {
       reader.windowStarted();
     }
@@ -561,11 +586,14 @@ class SharedRead {
             for (const reader of this.#readers) {
               if (reader.waiting) {
                 this.#detach(reader);
-              } else if (reader.isCatchingUp() && reader.isFull()) {
-                this.#readers.delete(reader);
+              } else if (
+                reader.isCatchingUp() &&
+                reader.isFull() &&
                 reader.detachQueue((from, signal) =>
                   readWindows(this.#readRange, reader.topic, this.#windowsFrom(from), signal),
-                );
+                )
+              ) {
+                this.#readers.delete(reader);
               }
             }
             if (!this.#readers.values().some((reader) => reader.isFull())) {
@@ -595,15 +623,30 @@ class SharedRead {
       start = this.#position ?? span.start;
       delivered = new Map(this.#atPosition);
     }
+    this.#windowDone = true;
   }
 
   /** Continues `reader` with its own read from where the shared read is */
   #detach(reader: Reader): void {
     const position = this.#position;
+    let windows = this.#windowsFrom(position);
+    let skip = position ? (this.#atPosition.get(reader.topic) ?? 0) : 0;
+    const through = reader.caughtUpThrough();
+    if (through && (!position || compare(through, position) >= 0)) {
+      // Its catch-up delivers everything up to `through`, the shared read nothing: go on after it
+      const current = this.#windows[this.#windowIndex];
+      const rest = this.#windows.slice(this.#windowIndex + 1);
+      const from = fromNanoSec(toNanoSec(through) + 1n);
+      windows =
+        current?.end && compare(from, current.end) > 0
+          ? rest
+          : [{ start: from, end: current?.end }, ...rest];
+      skip = 0;
+    }
     let own: AsyncIterator<Readonly<ReadResult>>;
     const abort = new AbortController();
     try {
-      own = readWindows(this.#readRange, reader.topic, this.#windowsFrom(position), abort.signal);
+      own = readWindows(this.#readRange, reader.topic, windows, abort.signal);
     } catch (error: unknown) {
       // Its waiting pull gets the error instead of waiting forever
       this.#readers.delete(reader);
@@ -611,6 +654,6 @@ class SharedRead {
       return;
     }
     this.#readers.delete(reader);
-    reader.detach(own, position ? (this.#atPosition.get(reader.topic) ?? 0) : 0, abort);
+    reader.detach(own, skip, abort);
   }
 }

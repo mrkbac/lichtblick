@@ -360,6 +360,109 @@ describe("SharedRangeReads", () => {
     ]);
   });
 
+  describe("late joiners", () => {
+    /** A source over `recording` (inclusive ranges); `onEnd` runs when a read of `topics` ends */
+    function recordingSource(
+      recording: readonly Readonly<IteratorResult>[],
+      gate?: { topics: string; sec: number; open: Promise<void> },
+      onEnd?: (topics: string) => void,
+    ) {
+      return new SharedRangeReads(async function* (topics, range) {
+        const key = [...topics.keys()].join();
+        try {
+          for (const result of recording) {
+            if (result.type === "message-event") {
+              const { topic, receiveTime } = result.msgEvent;
+              if (
+                !topics.has(topic) ||
+                (range.start && compare(receiveTime, range.start) < 0) ||
+                (range.end && compare(receiveTime, range.end) > 0)
+              ) {
+                continue;
+              }
+              if (gate && key === gate.topics && receiveTime.sec === gate.sec) {
+                await gate.open;
+              }
+            }
+            yield result;
+          }
+        } finally {
+          onEnd?.(key);
+        }
+      });
+    }
+    const events = (topic: string, secs: number[]): IteratorResult[] =>
+      secs.map((sec) => ({ type: "message-event", msgEvent: message(topic, sec) }));
+    const range = (n: number) => Array.from({ length: n }, (_, i) => i);
+
+    it("doesn't deliver its catch-up twice when it falls behind and reads on its own", async () => {
+      // "a" stops pulling, so the pass waits for room with its queue full, past the 4096th message
+      const recording = range(5000).flatMap((sec) => [
+        ...events("a", [sec]),
+        ...events("b", [sec]),
+      ]);
+      const shared = recordingSource(recording);
+      const a = shared.read("a", {});
+      expect((await a.next()).done).toBe(false);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      // Joins late, catches up to where the pass waits, then waits itself and reads on its own
+      const b = await collect(shared.read("b", {}));
+      expect(b).toEqual(range(5000).map((sec) => `b${sec}`));
+      expect(await collect(a)).toHaveLength(4999);
+    });
+
+    it("ends after its catch-up when the pass fills it with alerts only", async () => {
+      // An undecodable topic: an alert for each of its messages, after "b" has no more messages
+      const recording = [
+        ...events("b", [0, 1]),
+        ...range(5000).flatMap((sec): IteratorResult[] => [
+          ...events("a", [sec]),
+          {
+            type: "alert",
+            connectionId: 1,
+            alert: { severity: "error", message: "can't decode" },
+          },
+        ]),
+      ];
+      const open = Promise.withResolvers<void>();
+      const shared = recordingSource(recording, { topics: "a", sec: 2, open: open.promise });
+      const a = collect(shared.read("a", {}));
+      await new Promise((resolve) => setTimeout(resolve, 20));
+
+      // Joins while the pass waits at 2 s and reads its catch-up only once the pass is done
+      const b = shared.read("b", {});
+      const first = await b.next();
+      open.resolve();
+      expect(await a).toHaveLength(5000);
+      const rest = await collect(b);
+      expect(first.value).toMatchObject({ msgEvent: { topic: "b" } });
+      expect(rest).toEqual(["b1"]);
+    });
+
+    it.each(range(8))(
+      "gets a window's tail when it joins %i microtasks after the window's source read ended",
+      async (ticks) => {
+        const recording = [...events("a", [0, 1, 2]), ...events("b", [0, 1, 2, 3])];
+        let b: Promise<string[]> | undefined;
+        const shared = recordingSource(recording, undefined, (topics) => {
+          if (topics !== "a" || b) {
+            return;
+          }
+          b = (async () => {
+            for (let i = 0; i < ticks; i++) {
+              await Promise.resolve();
+            }
+            return await collect(shared.read("b", {}));
+          })();
+        });
+
+        expect(await collect(shared.read("a", {}))).toEqual(["a0", "a1", "a2"]);
+        expect(await b).toEqual(["b0", "b1", "b2", "b3"]);
+      },
+    );
+  });
+
   describe("playhead first", () => {
     const S = 1_000_000_000n;
     const sec = (n: bigint) => ({ sec: Number(n / S), nsec: Number(n % S) });
