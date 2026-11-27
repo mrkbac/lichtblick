@@ -636,6 +636,46 @@ describe("IterablePlayer", () => {
     await player.isClosed;
   });
 
+  it("seeking back to the current time cancels a pending seek", async () => {
+    const source = new TestSource();
+    const player = new IterablePlayer({ source, enablePreload: false, sourceId: "test" });
+    const states: PlayerState[] = [];
+    player.setSubscriptions([{ topic: BasicBuilder.string() }]);
+    player.setListener(async (state) => {
+      states.push(state);
+    });
+    // Initialized and idle at the start
+    await vi.waitFor(() => {
+      expect(states.at(-1)?.activeData?.currentTime).toBeDefined();
+      expect(states).toHaveLength(4);
+    });
+    const initial = states.at(-1)?.activeData;
+    const current = initial!.currentTime;
+
+    // Seek emits stamp the time; a later clock tells the winning seek's emit apart
+    const seekClock = (initial?.lastSeekTime ?? 0) + 1000;
+    const now = vi.spyOn(Date, "now").mockReturnValue(seekClock);
+    // While the seek away is loading, the user seeks back to where playback still is
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    const originalMethod = source.getBackfillMessages;
+    source.getBackfillMessages = async function (args) {
+      source.getBackfillMessages = originalMethod;
+      player.seekPlayback(current);
+      return await originalMethod.call(source, args);
+    };
+    player.seekPlayback({ sec: 0, nsec: 500_000_000 });
+
+    // The seek that wins emits a new seek time
+    await vi.waitFor(() => {
+      expect(states.at(-1)?.activeData?.lastSeekTime).toBe(seekClock);
+    });
+    expect(states.at(-1)?.activeData?.currentTime).toEqual(current);
+    now.mockRestore();
+
+    player.close();
+    await player.isClosed;
+  });
+
   it("while playing, seek keeps the cursor parked until the seek emit is released", async () => {
     const source = new TestSource();
     const topic = BasicBuilder.string();

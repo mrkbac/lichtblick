@@ -24,6 +24,9 @@ import {
   SKIM_TAIL_NS,
 } from "./IIterableSource";
 
+/** Heap per cached item besides its payload (see #size); measured ~450 bytes in V8 */
+export const CACHE_ITEM_OVERHEAD_BYTES = 450;
+
 const log = Log.getLogger(__filename);
 
 /**
@@ -194,6 +197,13 @@ type Options = {
   maxBlockSize?: number;
   /** Required: the cache evicts blocks to stay under it */
   maxTotalSize: number;
+  /**
+   * Bytes counted per cached item besides its payload, so the budget tracks heap: the cache tuple,
+   * result and message event objects, two Time objects and the payload's own ArrayBuffer. Payload
+   * alone let small messages use several times the budget (570 MB of heap for 64 MB of 64-byte
+   * payloads). Default 0 counts payload bytes only.
+   */
+  itemOverheadBytes?: number;
 };
 
 interface EventTypes {
@@ -256,12 +266,15 @@ class CachingIterableSource<MessageType = unknown>
   #candidatesStale = true;
   #readHeadBlock?: CacheBlock<MessageType>;
 
+  readonly #itemOverheadBytes: number;
+
   public constructor(source: IIterableSource<MessageType>, opt: Options) {
     super();
 
     this.#source = source;
     this.#budget = new ByteBudget(opt.maxTotalSize);
     this.#maxBlockSizeBytes = opt.maxBlockSize ?? 52428800; // 50MB
+    this.#itemOverheadBytes = opt.itemOverheadBytes ?? 0;
   }
 
   public async initialize(): Promise<Initialization> {
@@ -502,7 +515,7 @@ class CachingIterableSource<MessageType = unknown>
             // is inclusive we only update the end time once we've moved to the next time
             if (receiveTimeNs > lastTime) {
               // Write the pending messages; we've read up to this receive time
-              CachingIterableSource.#StorePending(block, pendingIterResults);
+              this.#storePending(block, pendingIterResults);
               block.end = subtract(receiveTime, { sec: 0, nsec: 1 });
               lastTime = receiveTimeNs;
               this.#markLoadedRangesDirty();
@@ -519,8 +532,7 @@ class CachingIterableSource<MessageType = unknown>
             block = undefined;
           }
 
-          const sizeInBytes =
-            iterResult.type === "message-event" ? iterResult.msgEvent.sizeInBytes : 0;
+          const sizeInBytes = this.#size(iterResult);
           if (this.#maybePurgeCache(block, sizeInBytes)) {
             this.#markLoadedRangesDirty();
           }
@@ -544,7 +556,7 @@ class CachingIterableSource<MessageType = unknown>
           block.end = sourceReadEnd;
           // May now touch the next block, joining the read head's chain
           this.#candidatesStale = true;
-          CachingIterableSource.#StorePending(block, pendingIterResults);
+          this.#storePending(block, pendingIterResults);
           this.#markLoadedRangesDirty();
         } else {
           // We don't have a block after finishing our source. This can happen if the last
@@ -565,7 +577,7 @@ class CachingIterableSource<MessageType = unknown>
         // A consumer that stops early (e.g. a seek) leaves results that were counted, not stored
         if (!stored) {
           for (const [, item] of pendingIterResults) {
-            this.#budget.release(item.type === "message-event" ? item.msgEvent.sizeInBytes : 0);
+            this.#budget.release(this.#size(item));
           }
         }
       }
@@ -622,7 +634,7 @@ class CachingIterableSource<MessageType = unknown>
       start,
       end,
       items,
-      size: CachingIterableSource.#SumSizes(items),
+      size: this.#sumSizes(items),
       lastAccess: Date.now(),
       topics,
       skimInterval,
@@ -635,10 +647,10 @@ class CachingIterableSource<MessageType = unknown>
   }
 
   /** Moves the pending results (counted in #budget already) into block */
-  static #StorePending<T>(block: CacheBlock<T>, pending: CacheItem<T>[]): void {
+  #storePending(block: CacheBlock<MessageType>, pending: CacheItem<MessageType>[]): void {
     for (const item of pending) {
       block.items.push(item);
-      block.size += CachingIterableSource.#Size(item[1]);
+      block.size += this.#size(item[1]);
     }
     pending.length = 0;
     block.lastAccess = Date.now();
@@ -874,7 +886,7 @@ class CachingIterableSource<MessageType = unknown>
     let bytes = 0;
     for (const [, result] of block.items) {
       if (!CachingIterableSource.#Wanted(result, want)) {
-        bytes += CachingIterableSource.#Size(result);
+        bytes += this.#size(result);
       }
     }
     this.#unwantedBytesCache.set(block.items, { want, count: block.items.length, bytes });
@@ -1020,7 +1032,7 @@ class CachingIterableSource<MessageType = unknown>
         block.items = block.items.filter(([, result]) =>
           CachingIterableSource.#Wanted(result, want),
         );
-        const size = CachingIterableSource.#SumSizes(block.items);
+        const size = this.#sumSizes(block.items);
         this.#budget.release(block.size - size);
         block.size = size;
       }
@@ -1113,7 +1125,7 @@ class CachingIterableSource<MessageType = unknown>
         0,
         _.sortedLastIndexBy<readonly [bigint, unknown]>(merged, [timeNs, undefined], ([t]) => t),
       );
-      const size = CachingIterableSource.#SumSizes(items);
+      const size = this.#sumSizes(items);
       mergedSize -= size;
       let filled = block;
       blockFilled = timeNs >= toNanoSec(block.end);
@@ -1177,7 +1189,7 @@ class CachingIterableSource<MessageType = unknown>
             break;
           }
           merged.push(item);
-          mergedSize += CachingIterableSource.#Size(item[1]);
+          mergedSize += this.#size(item[1]);
           if (!filter || CachingIterableSource.#Wanted(item[1], want)) {
             yield item[1];
           }
@@ -1195,7 +1207,7 @@ class CachingIterableSource<MessageType = unknown>
           }
         }
 
-        const size = CachingIterableSource.#Size(result);
+        const size = this.#size(result);
         if (this.#maybePurgeCache(block, size)) {
           this.#markLoadedRangesDirty();
         }
@@ -1239,7 +1251,7 @@ class CachingIterableSource<MessageType = unknown>
       id: this.#nextBlockId++,
       end: subtract(at, { sec: 0, nsec: 1 }),
       items,
-      size: CachingIterableSource.#SumSizes(items),
+      size: this.#sumSizes(items),
     };
     block.start = at;
     block.size -= head.size;
@@ -1274,12 +1286,15 @@ class CachingIterableSource<MessageType = unknown>
     return result.type !== "message-event" || want.has(result.msgEvent.topic);
   }
 
-  static #Size(result: IteratorResult): number {
-    return result.type === "message-event" ? result.msgEvent.sizeInBytes : 0;
+  /** Bytes an item counts against the budget, see Options.itemOverheadBytes */
+  #size(result: IteratorResult): number {
+    return (
+      this.#itemOverheadBytes + (result.type === "message-event" ? result.msgEvent.sizeInBytes : 0)
+    );
   }
 
-  static #SumSizes(items: readonly CacheItem<unknown>[]): number {
-    return _.sumBy(items, ([, result]) => CachingIterableSource.#Size(result));
+  #sumSizes(items: readonly CacheItem<unknown>[]): number {
+    return _.sumBy(items, ([, result]) => this.#size(result));
   }
 
   static #FindStartCacheItemIndex(items: [bigint, IteratorResult][], key: bigint) {

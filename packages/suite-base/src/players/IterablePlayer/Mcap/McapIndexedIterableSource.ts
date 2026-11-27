@@ -513,6 +513,7 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
         skimNs,
         topicNames,
         consumptionType,
+        args.abort,
       );
       return;
     }
@@ -543,6 +544,7 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
     skimNs: bigint,
     topicNames: string[],
     consumptionType: MessageIteratorArgs["consumptionType"],
+    abort: AbortSignal | undefined,
   ): AsyncIterableIterator<Readonly<IteratorResult<Uint8Array>>> {
     const windowBounds = (windowStart: bigint) => {
       const windowEnd = windowStart + skimNs - 1n < endNs ? windowStart + skimNs - 1n : endNs;
@@ -556,6 +558,9 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
     let nextPrefetchWindow = startNs;
 
     for (let windowStart = startNs; windowStart <= endNs; windowStart += skimNs) {
+      if (abort?.aborted === true) {
+        return;
+      }
       const { windowEnd, tailStart } = windowBounds(windowStart);
 
       if (this.#prefetch) {
@@ -584,6 +589,7 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
       const messages: McapTypes.Message[] = [];
       const seen = new Set<string>();
       for await (const message of this.#readMessages({
+        abort,
         startingAt: tailStart,
         endingAt: windowEnd,
         topics: topicNames,
@@ -597,7 +603,7 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
 
       const missing = new Set(topicNames.filter((topic) => !seen.has(topic)));
       if (missing.size > 0 && tailStart > windowStart) {
-        messages.push(...(await this.#latestBefore(missing, windowStart, tailStart - 1n)));
+        messages.push(...(await this.#latestBefore(missing, windowStart, tailStart - 1n, abort)));
       }
 
       messages.sort((a, b) => (a.logTime < b.logTime ? -1 : a.logTime > b.logTime ? 1 : 0));
@@ -620,15 +626,16 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
     topics: Set<string>,
     start: bigint,
     end: bigint,
+    abort?: AbortSignal,
   ): Promise<McapTypes.Message[]> {
     const messages: McapTypes.Message[] = [];
     // Again for the topics still missing if a read dropped a corrupt chunk meanwhile: it may have
     // been the latest chunk of a topic that has an earlier one. Drops are bounded, so this ends.
     for (let missing = topics, chunkIndexes; missing.size > 0; ) {
       chunkIndexes = this.#reader.chunkIndexes;
-      const found = await this.#latestInChunks(missing, start, end, messages);
+      const found = await this.#latestInChunks(missing, start, end, messages, abort);
       missing = new Set([...missing].filter((topic) => !found.has(topic)));
-      if (this.#reader.chunkIndexes === chunkIndexes) {
+      if (this.#reader.chunkIndexes === chunkIndexes || abort?.aborted === true) {
         break;
       }
     }
@@ -641,6 +648,7 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
     start: bigint,
     end: bigint,
     messages: McapTypes.Message[],
+    abort?: AbortSignal,
   ): Promise<Set<string>> {
     const latestChunkByTopic = this.#latestChunkByTopic(topics, start, end);
 
@@ -652,8 +660,12 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
     const allFound = new Set<string>();
     for (const [chunk, chunkTopics] of topicsByChunk) {
       const found = new Set<string>();
+      // From `start`, not the chunk's start: chunks overlap in time, so the topic's latest message
+      // can be in an earlier chunk that ends later than the message. The reverse read stops at the
+      // first hit and reads chunks only as it reaches them.
       for await (const message of this.#readMessages({
-        startingAt: chunk.messageStartTime > start ? chunk.messageStartTime : start,
+        abort,
+        startingAt: start,
         endingAt: chunk.messageEndTime < end ? chunk.messageEndTime : end,
         topics: chunkTopics,
         reverse: true,
@@ -762,11 +774,11 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
   public async getBackfillMessages(
     args: GetBackfillMessagesArgs,
   ): Promise<MessageEvent<Uint8Array>[]> {
-    const { topics, time } = args;
+    const { topics, time, abortSignal } = args;
     const end = toNanoSec(time);
     // The topics are read one after the other; fetch each one's latest chunks (and the chunks
     // spanning `time`, which every topic's reverse read looks at first) at once up front
-    if (this.#prefetch) {
+    if (this.#prefetch && abortSignal?.aborted !== true) {
       const topicNames = new Set(topics.keys());
       const channels = new Set<number>();
       for (const [id, { channel }] of this.#channelInfoById) {
@@ -782,10 +794,15 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
 
     const messages: MessageEvent<Uint8Array>[] = [];
     for (const topic of topics.keys()) {
+      // A newer seek replaced this one: its messages would be dropped anyway
+      if (abortSignal?.aborted === true) {
+        break;
+      }
       // NOTE: An iterator is made for each topic to get the latest message on that topic.
       // An single iterator for all the topics could result in iterating through many
       // irrelevant messages to get to an older message on a topic.
       for await (const message of this.#readMessages({
+        abort: abortSignal,
         // Explicit: a live reader's default lower bound is the start when it was opened
         startingAt: 0n,
         endingAt: end,
