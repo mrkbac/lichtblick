@@ -160,6 +160,9 @@ interface IDatasetsBuilder {
 
   getViewportDatasets(viewport: Immutable<Viewport>): Promise<GetViewportDatasetsResult>;
 
+  /** Frees its worker, if it has one; the builder isn't used afterwards */
+  destroy?(): void;
+
   /**
    * Optional: the plotted value at `x` of each series whose y is computed across samples (stream
    * modifiers, moving average), by config index. The legend shows it instead of the raw value.

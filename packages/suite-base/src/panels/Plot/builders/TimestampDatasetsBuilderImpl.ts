@@ -261,7 +261,7 @@ function downsampleInto(
     const y = ys[i]!;
     if (Number.isNaN(y)) {
       hasNaN = true;
-    } else if (needBounds && i >= firstInView) {
+    } else if (needBounds && i >= firstInView && Number.isFinite(y)) {
       yMin = y < yMin ? y : yMin;
       yMax = y > yMax ? y : yMax;
     }

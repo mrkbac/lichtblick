@@ -16,7 +16,6 @@
 
 import { ChartDataset } from "chart.js";
 
-import { iterateObjects } from "@lichtblick/suite-base/components/Chart/datasets";
 import type { ObjectData } from "@lichtblick/suite-base/components/Chart/types";
 
 import { Bounds } from "./types";
@@ -28,7 +27,11 @@ export function getBounds(data: ChartDataset<"scatter", ObjectData>[]): Bounds |
   let yMax: number | undefined;
 
   for (const dataset of data) {
-    for (const item of iterateObjects(dataset.data)) {
+    // A plain loop: this runs over every point on scale changes, without an object per point
+    for (const item of dataset.data) {
+      if (item == undefined) {
+        continue;
+      }
       if (!isNaN(item.x)) {
         xMin = Math.min(xMin ?? item.x, item.x);
         xMax = Math.max(xMax ?? item.x, item.x);

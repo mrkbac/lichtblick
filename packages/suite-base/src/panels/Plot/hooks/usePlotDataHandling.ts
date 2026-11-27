@@ -35,6 +35,8 @@ const usePlotDataHandling = (
         throw new Error(`unsupported mode: ${xAxisVal}`);
     }
   }, [xAxisVal]);
+  // A replaced or unmounted builder frees its worker (and its columns) now, not at some later GC
+  useEffect(() => () => datasetsBuilder.destroy?.(), [datasetsBuilder]);
 
   useEffect(() => {
     if (
