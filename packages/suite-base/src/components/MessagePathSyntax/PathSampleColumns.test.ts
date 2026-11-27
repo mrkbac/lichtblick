@@ -45,6 +45,26 @@ describe("PathSampleColumns", () => {
     expect(columns.changes()).toBe(columns);
   });
 
+  it("concatenates earlier samples in front, thinned to the later one's budget", () => {
+    const earlier = PathSampleColumns.from([0, 1, 2].map((sec) => sample(sec, sec)));
+    const later = new PathSampleColumns(8);
+    for (let sec = 3; sec < 6; sec++) {
+      later.push(sample(sec, sec));
+    }
+    const merged = PathSampleColumns.concat(earlier, later);
+    expect(merged.toArray().map((s) => s.receiveTime.sec)).toEqual([0, 1, 2, 3, 4, 5]);
+    expect(merged.maxSamples).toBe(8);
+    expect(merged.hasAllChanges()).toBe(true);
+
+    // Merged samples on either side: the result can't claim to have every change
+    const thinned = new PathSampleColumns(4);
+    for (let sec = 10; sec < 30; sec++) {
+      thinned.push(sample(sec, sec));
+    }
+    expect(thinned.hasAllChanges()).toBe(false);
+    expect(PathSampleColumns.concat(earlier, thinned).hasAllChanges()).toBe(false);
+  });
+
   it("keeps signed and full unsigned 32-bit seconds", () => {
     const stamps = [
       { sec: -1, nsec: 5 },

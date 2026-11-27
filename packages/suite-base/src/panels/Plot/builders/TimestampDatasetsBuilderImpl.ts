@@ -805,6 +805,9 @@ export class TimestampDatasetsBuilderImpl {
           // Batches are mostly already in order: merge instead of re-sorting everything
           const sorted = action.items.toSorted(compareDatum);
           this.#invalidate(series, points.insert(0, sorted, oldFullLength));
+        } else if (oldFullLength > 0 && action.items[0]!.x < points.x[oldFullLength - 1]!) {
+          // Earlier history (read around the playhead first): in order itself, merged into place
+          this.#invalidate(series, points.insert(0, action.items, oldFullLength));
         } else {
           points.insert(oldFullLength, action.items);
         }

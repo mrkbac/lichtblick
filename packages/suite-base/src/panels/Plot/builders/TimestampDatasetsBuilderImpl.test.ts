@@ -324,6 +324,18 @@ describe("TimestampDatasetsBuilderImpl", () => {
     expect(builder.getCsvData()[0]!.data.map((item) => item.value)).toEqual([0, 2, 6]);
   });
 
+  it("puts earlier history read around the playhead first in front, and later after", () => {
+    // GIVEN receive-time batches around the playhead, then an earlier and a later window
+    const builder = build([seriesItem("0")]);
+    for (const batch of [[5, 6], [7], [2, 3], [4], [8, 9], [0, 1]]) {
+      builder.applyAction({ type: "append-full", series: key, items: items(batch) });
+    }
+
+    // THEN the rows are in time order
+    const data = builder.getCsvData()[0]!.data;
+    expect(data.map((item) => item.x)).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
+  });
+
   it("merges out-of-order header stamp batches into sorted order", () => {
     // GIVEN header stamp batches that overlap and arrive out of order
     const builder = build([seriesItem("0", { timestampMethod: "headerStamp" })]);

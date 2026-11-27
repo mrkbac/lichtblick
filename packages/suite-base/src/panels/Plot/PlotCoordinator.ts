@@ -1040,6 +1040,8 @@ export class PlotCoordinator extends EventEmitter<PlotCoordinatorEventTypes> {
 
     entry.cancel = this.subscribeMessageRange({
       topic,
+      // Builders put each batch in at its receive time (series) or pair rows by it (custom x-axis)
+      playheadFirst: true,
       onNewRangeIterator: async (batchIterator) => {
         entry.active = true;
         let isReset = true;

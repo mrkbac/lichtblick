@@ -124,9 +124,9 @@ describe("useDecodedMessageRange", () => {
     const path = `${topic}.field`;
     const { result } = renderHook(() => useDecodedMessageRange([topic], [path]));
 
-    const batches = Array.from({ length: 20 }, () => [
-      MessageEventBuilder.messageEvent({ topic }),
-      MessageEventBuilder.messageEvent({ topic }),
+    const batches = Array.from({ length: 20 }, (_, sec) => [
+      MessageEventBuilder.messageEvent({ topic, receiveTime: { sec, nsec: 0 } }),
+      MessageEventBuilder.messageEvent({ topic, receiveTime: { sec, nsec: 1 } }),
     ]);
     await act(async () => {
       await rangeArgs(topic).onNewRangeIterator(
@@ -142,6 +142,25 @@ describe("useDecodedMessageRange", () => {
 
     expect(mockDecode).toHaveBeenCalledTimes(40);
     expect(valuesOf(result.current, path)).toEqual(batches.flat().map(keyOf));
+  });
+
+  it("reads around the playhead first and puts earlier windows in front", async () => {
+    const topic = PlayerBuilder.topic().name;
+    const path = `${topic}.field`;
+    const { result } = renderHook(() => useDecodedMessageRange([topic], [path]));
+    expect(rangeArgs(topic)).toEqual(expect.objectContaining({ playheadFirst: true }));
+
+    const at = (sec: number) =>
+      MessageEventBuilder.messageEvent({ topic, receiveTime: { sec, nsec: 0 } });
+    // Around the playhead, an earlier window in two batches, a later one, then the earliest
+    const batches = [[at(5), at(6)], [at(3)], [at(4)], [at(7), at(8)], [at(1), at(2)]];
+    await act(async () => {
+      await simulateBatches(topic, batches);
+    });
+
+    expect(valuesOf(result.current, path)).toEqual(
+      [1, 2, 3, 4, 5, 6, 7, 8].map((sec) => keyOf(at(sec))),
+    );
   });
 
   it("replaces a topic's data when a new range iterator is provided", async () => {
