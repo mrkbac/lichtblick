@@ -311,4 +311,51 @@ describe("SharedRangeReads", () => {
     await stillPulling;
     await dense.return?.();
   });
+
+  it("lets a read that starts during a pass join it, reading only what it missed on its own", async () => {
+    const reads: { topics: string[]; start?: number; end?: number }[] = [];
+    let release!: () => void;
+    let gate = new Promise<void>((resolve) => (release = resolve));
+    const shared = new SharedRangeReads(async function* (topics, range) {
+      reads.push({ topics: [...topics.keys()], start: range.start?.sec, end: range.end?.sec });
+      for (const msgEvent of messages) {
+        if (
+          !topics.has(msgEvent.topic) ||
+          (range.start && msgEvent.receiveTime.sec < range.start.sec) ||
+          (range.end && msgEvent.receiveTime.sec > range.end.sec)
+        ) {
+          continue;
+        }
+        // The first pass stops after its second second until released
+        if (topics.size === 1 && topics.has("a") && !range.end && msgEvent.receiveTime.sec === 2) {
+          await gate;
+        }
+        yield { type: "message-event", msgEvent };
+      }
+    });
+
+    const a = shared.read("a", {});
+    const aSeen: string[] = [];
+    for (let i = 0; i < 2; i++) {
+      const next = await a.next();
+      if (next.done !== true && next.value.type === "message-event") {
+        aSeen.push(`a${next.value.msgEvent.receiveTime.sec}`);
+      }
+    }
+    // The pass is at second 1 and waits: a second read starts now
+    const b = collect(shared.read("b", {}));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    release();
+    gate = Promise.resolve();
+    const aRest = await collect(a);
+
+    expect([...aSeen, ...aRest]).toEqual(["a0", "a1", "a2", "a3"]);
+    expect(await b).toEqual(["b0", "b1", "b2", "b3"]);
+    // One pass for "a", a catch-up of "b" up to where the pass was, and the pass going on with both
+    expect(reads).toEqual([
+      { topics: ["a"], start: undefined, end: undefined },
+      { topics: ["b"], start: undefined, end: 1 },
+      { topics: ["a", "b"], start: 1, end: undefined },
+    ]);
+  });
 });
