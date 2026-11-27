@@ -7,12 +7,9 @@
 
 import * as THREE from "three";
 
+import { ElasticCapacity } from "./ElasticCapacity";
 import { MAX_SET_POINTS } from "./renderables/pointClouds/PointRaster";
 
-/** Regrowth headroom, so a slowly growing count doesn't reallocate on every new maximum */
-const GROWTH = 1.5;
-/** Shrink once the count uses less than 1/SHRINK_BELOW of the capacity (hysteresis vs. GROWTH) */
-const SHRINK_BELOW = 4;
 /** Capacities below this many items are never shrunk; not worth a reallocation */
 const MIN_SHRINK_CAPACITY = 65_536;
 
@@ -23,7 +20,8 @@ export class DynamicBufferGeometry extends THREE.BufferGeometry {
 
   #attributeConstructors = new Map<string, TypedArrayConstructor<THREE.TypedArray>>();
   #usage: THREE.Usage;
-  #itemCapacity = 0;
+  // Headroom never pushes a point set past what the point raster can address
+  #capacity = new ElasticCapacity(MIN_SHRINK_CAPACITY, MAX_SET_POINTS);
 
   public constructor(usage: THREE.Usage = THREE.DynamicDrawUsage) {
     super();
@@ -44,7 +42,7 @@ export class DynamicBufferGeometry extends THREE.BufferGeometry {
     // eslint-disable-next-line @lichtblick/no-boolean-parameters
     normalized?: boolean,
   ): THREE.BufferGeometry {
-    const data = new arrayConstructor(this.#itemCapacity * itemSize);
+    const data = new arrayConstructor(this.#capacity.capacity * itemSize);
     const attribute = new THREE.BufferAttribute(data, itemSize, normalized);
     attribute.setUsage(this.#usage);
     this.#attributeConstructors.set(name, arrayConstructor);
@@ -53,23 +51,13 @@ export class DynamicBufferGeometry extends THREE.BufferGeometry {
 
   /**
    * Sets the draw range to `itemCount`, reallocating (without keeping the contents) when it doesn't
-   * fit or uses a small share of a large capacity. The first allocation is exact, since most
-   * geometries are filled once; regrowth adds headroom.
+   * fit or has used a small share of a large capacity for a while (see ElasticCapacity).
    */
   public resize(itemCount: number): void {
     this.setDrawRange(0, itemCount);
 
-    const capacity = this.#itemCapacity;
-    let newCapacity: number;
-    if (itemCount > capacity) {
-      // Headroom never pushes a point set past what the point raster can address
-      newCapacity =
-        capacity === 0
-          ? itemCount
-          : Math.max(itemCount, Math.min(Math.ceil(capacity * GROWTH), MAX_SET_POINTS));
-    } else if (capacity > MIN_SHRINK_CAPACITY && itemCount * SHRINK_BELOW < capacity) {
-      newCapacity = Math.ceil(itemCount * GROWTH);
-    } else {
+    const newCapacity = this.#capacity.fit(itemCount);
+    if (newCapacity == undefined) {
       return;
     }
 
@@ -85,7 +73,5 @@ export class DynamicBufferGeometry extends THREE.BufferGeometry {
       newAttrib.setUsage(this.#usage);
       this.setAttribute(attributeName, newAttrib);
     }
-
-    this.#itemCapacity = newCapacity;
   }
 }

@@ -87,7 +87,8 @@ const tempQuaternion = new THREE.Quaternion();
 export class Images extends SceneExtension<ImageRenderable> {
   public static extensionId = "foxglove.Images";
   /* All known camera info topics */
-  #cameraInfoTopics = new Set<string>();
+  // Sorted, so the first match is stable
+  #cameraInfoTopics: string[] = [];
 
   /**
    * A bi-directional mapping between cameraInfo topics and image topics. This
@@ -291,15 +292,16 @@ export class Images extends SceneExtension<ImageRenderable> {
    * Update cameraInfoTopics cache with latest set of camera info messages
    */
   #handleTopicsChanged = () => {
-    this.#cameraInfoTopics = new Set();
+    const topics = new Set<string>();
     for (const topic of this.renderer.topics ?? []) {
       if (
         topicIsConvertibleToSchema(topic, CAMERA_INFO_DATATYPES) ||
         topicIsConvertibleToSchema(topic, CAMERA_CALIBRATION_DATATYPES)
       ) {
-        this.#cameraInfoTopics.add(topic.name);
+        topics.add(topic.name);
       }
     }
+    this.#cameraInfoTopics = [...topics].sort();
   };
 
   public override settingsNodes(): SettingsTreeEntry[] {
@@ -410,7 +412,7 @@ export class Images extends SceneExtension<ImageRenderable> {
 
   #pointCloudCalibrationTopic(imageTopic: string): string | undefined {
     const config: Partial<LayerSettingsImage> | undefined = this.renderer.config.topics[imageTopic];
-    const topics = [...this.#cameraInfoTopics].sort();
+    const topics = this.#cameraInfoTopics;
     const namespace = getTopicMatchPrefix(imageTopic);
     const parent = namespace == undefined ? undefined : getTopicMatchPrefix(namespace.slice(0, -1));
     return (
@@ -428,7 +430,7 @@ export class Images extends SceneExtension<ImageRenderable> {
     const prefix = getTopicMatchPrefix(imageTopic);
     return prefix == undefined
       ? undefined
-      : [...this.#cameraInfoTopics].sort().find((topic) => topic.startsWith(prefix));
+      : this.#cameraInfoTopics.find((topic) => topic.startsWith(prefix));
   }
 
   public pointCloudCameraFrame(
