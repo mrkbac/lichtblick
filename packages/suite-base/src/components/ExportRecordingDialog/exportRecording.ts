@@ -184,7 +184,10 @@ export async function openExportOutput(fileName: string): Promise<ExportOutput |
       },
     },
     close: async () => {
-      downloadFiles([{ blob: new Blob(parts), fileName }]);
+      const blob = new Blob(parts);
+      // The Blob has its own copy: drop the parts so the file isn't held twice
+      parts.length = 0;
+      downloadFiles([{ blob, fileName }]);
     },
     abort: async () => {
       parts.length = 0;

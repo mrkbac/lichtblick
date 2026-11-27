@@ -36,11 +36,14 @@ function isMcap(name: string): boolean {
 export async function listDirectory(
   dir: FileSystemDirectoryHandle,
   prefix = "",
+  /** Stops the walk between entries (an outstanding native read still finishes) */
+  signal?: AbortSignal,
 ): Promise<FolderFile[]> {
   const files: FolderFile[] = [];
   for await (const entry of dir.values()) {
+    signal?.throwIfAborted();
     if (entry.kind === "directory") {
-      pushAll(files, await listDirectory(entry, `${prefix}${entry.name}/`));
+      pushAll(files, await listDirectory(entry, `${prefix}${entry.name}/`, signal));
     } else if (isMcap(entry.name)) {
       files.push({
         path: `${prefix}${entry.name}`,
@@ -116,6 +119,8 @@ export async function forgetCatalogFolder(slot: string): Promise<void> {
 
 // A handle to a moved file or a detached drive can hang on every call instead of failing
 export const HANDLE_TIMEOUT_MS = 3000;
+/** Walking a whole folder: long enough for a big local tree, bounded for a detached drive */
+const LIST_TIMEOUT_MS = 30_000;
 
 /** The only file named `name` in a remembered catalog folder the browser still grants. */
 async function findInCatalogFolders(name: string): Promise<FileSystemFileHandle | undefined> {
@@ -128,7 +133,15 @@ async function findInCatalogFolders(name: string): Promise<FileSystemFileHandle 
       ) {
         continue;
       }
-      const matches = (await listDirectory(dir)).filter((f) => f.path.split("/").at(-1) === name);
+      const walk = new AbortController();
+      const files = await promiseTimeout(
+        listDirectory(dir, "", walk.signal),
+        LIST_TIMEOUT_MS,
+      ).finally(() => {
+        // Stop a walk the timeout gave up on, so it doesn't run on beside the next folder's
+        walk.abort();
+      });
+      const matches = files.filter((f) => f.path.split("/").at(-1) === name);
       if (matches.length === 1) {
         return matches[0]!.handle;
       }

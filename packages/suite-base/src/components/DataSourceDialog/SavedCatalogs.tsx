@@ -22,6 +22,7 @@ import { useCatalogFolder } from "@lichtblick/suite-base/components/Catalog/useC
 import { useCatalogUrl } from "@lichtblick/suite-base/components/Catalog/useCatalogUrl";
 import Stack from "@lichtblick/suite-base/components/Stack";
 import { useWorkspaceActions } from "@lichtblick/suite-base/context/Workspace/useWorkspaceActions";
+import { randomUUID } from "@lichtblick/suite-base/util/randomUUID";
 
 type SavedCatalog = {
   id: string;
@@ -168,7 +169,7 @@ export function SavedCatalogs({
         <Button
           size="small"
           onClick={() => {
-            const id = crypto.randomUUID();
+            const id = randomUUID();
             setSources((previous) => [...previous, { id, kind: "local" }]);
             select(id);
           }}

@@ -5,6 +5,7 @@ import * as _ from "lodash-es";
 
 import * as Foxglove from "@lichtblick/suite-base/panels/ThreeDeeRender/foxglove";
 import * as Ros from "@lichtblick/suite-base/panels/ThreeDeeRender/ros";
+import { guessTimezone, timezoneOffsetMinutes } from "@lichtblick/suite-base/util/formatTime";
 import { COMPRESSED_VIDEO_DATATYPES } from "@lichtblick/suite-base/util/foxgloveSchemas";
 
 import { CatalogRecording } from "./types";
@@ -93,7 +94,71 @@ function anyOf(needle: string, predicate: (value: string) => Predicate | undefin
   return (r: CatalogRecording) => predicates.some((p) => p!(r));
 }
 
-function filterPredicate(key: string, op: string, value: string): Predicate | undefined {
+const PERIOD = /^(\d{4})(?:-(\d{1,2})(?:-(\d{1,2})(?:T(\d{1,2}):(\d{2})(?::(\d{2}))?)?)?)?$/;
+
+/**
+ * The first instant whose wall-clock time in `timezone` is `wall` (wall-clock fields as UTC ms):
+ * the first of the two in a repeated hour, and where the clock resumes in a skipped one.
+ */
+function instantAtWall(wall: number, timezone: string): number {
+  const offsetMs = (ms: number) => timezoneOffsetMinutes(timezone, new Date(ms)) * 60_000;
+  // The offsets a day before and after cover both sides of a DST change
+  const candidates = [-DAY_MS, DAY_MS].map((shift) => wall - offsetMs(wall + shift));
+  const exact = candidates.filter((ms) => ms + offsetMs(ms) === wall);
+  return exact.length > 0 ? Math.min(...exact) : Math.max(...candidates);
+}
+
+const DAY_MS = 86_400_000;
+
+/**
+ * The span a date names, in ms, end exclusive: `2026` is the whole year, `2026-11-27` the whole
+ * day and `2026-11-27T08:30` that minute, as wall time in `timezone`. A time with an explicit
+ * offset (`…Z`, `…+01:00`) is that instant.
+ */
+export function parsePeriod(
+  value: string,
+  timezone?: string,
+): { start: number; end: number } | undefined {
+  const m = PERIOD.exec(value);
+  if (!m) {
+    const ms = Date.parse(value);
+    return Number.isNaN(ms) ? undefined : { start: ms, end: ms + 1 };
+  }
+  const fields = (m.slice(1) as (string | undefined)[]).map((field) =>
+    field == undefined ? undefined : Number(field),
+  );
+  const [year = 0, month = 1, day = 1, hour = 0, minute = 0, second = 0] = fields;
+  const parts = [year, month - 1, day, hour, minute, second] as const;
+  const wall = Date.UTC(...parts);
+  // Date.UTC rolls over fields out of range (Feb 30 is Mar 2): reject those dates
+  const date = new Date(wall);
+  const actual = [
+    date.getUTCFullYear(),
+    date.getUTCMonth(),
+    date.getUTCDate(),
+    date.getUTCHours(),
+    date.getUTCMinutes(),
+    date.getUTCSeconds(),
+  ];
+  if (actual.some((field, i) => field !== parts[i])) {
+    return undefined;
+  }
+  // The next period starts one unit of the last field given later; here rolling over is wanted
+  const next: number[] = [...parts];
+  next[fields.findLastIndex((field) => field != undefined)]! += 1;
+  const tz = timezone ?? guessTimezone();
+  return {
+    start: instantAtWall(wall, tz),
+    end: instantAtWall(Date.UTC(next[0]!, next[1], next[2], next[3], next[4], next[5]), tz),
+  };
+}
+
+function filterPredicate(
+  key: string,
+  op: string,
+  value: string,
+  timezone: string | undefined,
+): Predicate | undefined {
   const needle = value.toLowerCase();
   switch (key) {
     case "topic":
@@ -111,13 +176,14 @@ function filterPredicate(key: string, op: string, value: string): Predicate | un
           : undefined;
     case "since":
     case "until": {
-      const ms = Date.parse(value);
-      if (Number.isNaN(ms) || op !== ":") {
+      const period = op === ":" ? parsePeriod(value, timezone) : undefined;
+      if (!period) {
         return undefined;
       }
+      // `until:2026-11-27` keeps recordings from any instant of that day
       return key === "since"
-        ? (r) => r.end != undefined && toSec(r.end) * 1000 >= ms
-        : (r) => r.start != undefined && toSec(r.start) * 1000 <= ms;
+        ? (r) => r.end != undefined && toSec(r.end) * 1000 >= period.start
+        : (r) => r.start != undefined && toSec(r.start) * 1000 < period.end;
     }
     case "duration": {
       const sec = parseAmount(value, DURATION_UNITS);
@@ -145,12 +211,14 @@ function filterPredicate(key: string, op: string, value: string): Predicate | un
 export function filterRecordings(
   recordings: readonly CatalogRecording[],
   query: string,
+  /** Wall-clock dates in the query are in this zone (the app setting); default: the system's */
+  timezone?: string,
 ): CatalogRecording[] {
   const predicates: Predicate[] = [];
   for (const term of query.trim().split(/\s+/).filter(Boolean)) {
     const match = /^([a-z]+)([:<>=])(.+)$/i.exec(term);
     const predicate = match
-      ? filterPredicate(match[1]!.toLowerCase(), match[2]!, match[3]!)
+      ? filterPredicate(match[1]!.toLowerCase(), match[2]!, match[3]!, timezone)
       : undefined;
     if (predicate) {
       predicates.push(predicate);

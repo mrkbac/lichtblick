@@ -6,6 +6,7 @@
  */
 export function randomUUID(): string {
   if (globalThis.isSecureContext) {
+    // oxlint-disable-next-line @lichtblick/no-crypto-random-uuid -- guarded by isSecureContext
     return crypto.randomUUID();
   }
   const bytes = crypto.getRandomValues(new Uint8Array(16));

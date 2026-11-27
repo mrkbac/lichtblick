@@ -165,11 +165,17 @@ const STALE_RELOAD_COOLDOWN_MS = 30_000;
  * Returns whether it started a reload.
  */
 export async function reloadToLatestVersion(): Promise<boolean> {
-  const lastAttempt = Number(sessionStorage.getItem(STALE_RELOAD_KEY) ?? 0);
-  if (updateInFlight || Date.now() - lastAttempt < STALE_RELOAD_COOLDOWN_MS) {
+  // The cooldown must survive the reload, or a chunk that fails on every boot reloads forever.
+  // Where storage is blocked (it throws), don't reload automatically at all.
+  try {
+    const lastAttempt = Number(sessionStorage.getItem(STALE_RELOAD_KEY) ?? 0);
+    if (updateInFlight || Date.now() - lastAttempt < STALE_RELOAD_COOLDOWN_MS) {
+      return false;
+    }
+    sessionStorage.setItem(STALE_RELOAD_KEY, String(Date.now()));
+  } catch {
     return false;
   }
-  sessionStorage.setItem(STALE_RELOAD_KEY, String(Date.now()));
   updateInFlight = true;
   await saveSessionBeforeReload();
 
@@ -182,12 +188,16 @@ export async function reloadToLatestVersion(): Promise<boolean> {
     ? (await container?.getRegistration().catch(() => undefined))?.waiting
     : undefined;
   if (container && waiting) {
-    container.addEventListener("controllerchange", () => {
-      // not if the worker went redundant meanwhile and another window updated later
-      if (updateRequestedHere) {
-        reloadPage();
-      }
-    });
+    container.addEventListener(
+      "controllerchange",
+      () => {
+        // not if the worker went redundant meanwhile and another window updated later
+        if (updateRequestedHere) {
+          reloadPage();
+        }
+      },
+      { once: true },
+    );
     applyServiceWorkerUpdate(waiting);
   } else {
     reloadPage();
@@ -272,6 +282,10 @@ export function useServiceWorkerUpdate(): ServiceWorkerUpdate | undefined {
       return;
     }
 
+    // Removes every listener this effect added, including ones added after it was cleaned up
+    const listeners = new AbortController();
+    const { signal } = listeners;
+
     let reloading = false;
     const onControllerChange = () => {
       if (!updateRequestedHere) {
@@ -283,7 +297,7 @@ export function useServiceWorkerUpdate(): ServiceWorkerUpdate | undefined {
         reloadPage();
       }
     };
-    container.addEventListener("controllerchange", onControllerChange);
+    container.addEventListener("controllerchange", onControllerChange, { signal });
 
     let registration: ServiceWorkerRegistration | undefined;
     // no `active` worker means the very first install, which is not an update
@@ -293,7 +307,7 @@ export function useServiceWorkerUpdate(): ServiceWorkerUpdate | undefined {
       }
     };
     const watch = (worker: ServiceWorker | null) => {
-      worker?.addEventListener("statechange", check);
+      worker?.addEventListener("statechange", check, { signal });
     };
     const onUpdateFound = () => {
       watch(registration?.installing ?? null);
@@ -303,21 +317,20 @@ export function useServiceWorkerUpdate(): ServiceWorkerUpdate | undefined {
       .getRegistration()
       .then((reg) => {
         registration = reg;
-        if (!reg) {
+        if (!reg || signal.aborted) {
           return;
         }
         check();
         // an update may already be installing if updatefound fired before this lookup resolved
         watch(reg.installing);
-        reg.addEventListener("updatefound", onUpdateFound);
+        reg.addEventListener("updatefound", onUpdateFound, { signal });
       })
       .catch((error: unknown) => {
         log.warn("Service worker registration lookup failed", error);
       });
 
     return () => {
-      container.removeEventListener("controllerchange", onControllerChange);
-      registration?.removeEventListener("updatefound", onUpdateFound);
+      listeners.abort();
     };
   }, []);
 

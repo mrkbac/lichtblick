@@ -33,13 +33,13 @@ const useStyles = makeStyles()((theme) => ({
 }));
 
 /** The start as a date, or "–" when it is unknown or not a wall-clock time (e.g. sim time). */
-export function formatStart(r: CatalogRecording): string {
-  return r.start && isAbsoluteTime(r.start) ? format(r.start) : "–";
+export function formatStart(r: CatalogRecording, timezone?: string): string {
+  return r.start && isAbsoluteTime(r.start) ? format(r.start, timezone) : "–";
 }
 
 /** "start · duration · size", leaving out what isn't known. */
-export function recordingCaption(r: CatalogRecording): string {
-  const start = formatStart(r);
+export function recordingCaption(r: CatalogRecording, timezone?: string): string {
+  const start = formatStart(r, timezone);
   return [
     start !== "–" ? start : undefined,
     r.start && r.end ? formatDurationCompact(subtract(r.end, r.start)) : undefined,

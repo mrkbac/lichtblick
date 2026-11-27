@@ -266,6 +266,7 @@
     "@lichtblick/no-getters-setters": "error",
     "@lichtblick/no-push-spread": "error",
     "@lichtblick/no-object-url": "error",
+    "@lichtblick/no-crypto-random-uuid": "error",
     "@lichtblick/link-target": "error",
     "@lichtblick/lodash-imports": "error",
     "tss-unused-classes/unused-classes": "error"

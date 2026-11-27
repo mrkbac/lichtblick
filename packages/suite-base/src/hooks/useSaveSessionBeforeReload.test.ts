@@ -10,6 +10,13 @@ import { useSaveSessionBeforeReload } from "./useSaveSessionBeforeReload";
 import { takeResumePlayback } from "./useServiceWorkerUpdate";
 
 let busy = false;
+const busyListeners = new Set<() => void>();
+function toggleBusy() {
+  busy = !busy;
+  busyListeners.forEach((listener) => {
+    listener();
+  });
+}
 let saveSession: (() => Promise<string | undefined>) | undefined;
 
 vi.mock("@lichtblick/suite-base/hooks/useServiceWorkerUpdate", async (importOriginal) => ({
@@ -22,7 +29,7 @@ vi.mock("@lichtblick/suite-base/hooks/useServiceWorkerUpdate", async (importOrig
 // an edit was pending; its write starts only once React renders it, later than any fixed delay
 const flushPendingLayoutSave = vi.fn(() => {
   setTimeout(() => {
-    busy = true;
+    toggleBusy(); // starts writing
   }, 200);
   return true;
 });
@@ -30,7 +37,11 @@ vi.mock("@lichtblick/suite-base/components/CurrentLayoutLocalStorageSyncAdapter"
   flushPendingLayoutSave: () => flushPendingLayoutSave(),
 }));
 vi.mock("@lichtblick/suite-base/context/LayoutManagerContext", () => ({
-  useLayoutManager: () => ({ isBusy: () => busy }),
+  useLayoutManager: () => ({
+    isBusy: () => busy,
+    on: (_event: string, listener: () => void) => busyListeners.add(listener),
+    off: (_event: string, listener: () => void) => busyListeners.delete(listener),
+  }),
 }));
 vi.mock("@lichtblick/suite-base/components/MessagePipeline", () => ({
   useMessagePipelineGetter: () => () => ({
@@ -61,9 +72,9 @@ describe("useSaveSessionBeforeReload", () => {
     expect(saved).toBe(false); // waiting for the flushed write to start
     await vi.advanceTimersByTimeAsync(1000);
     expect(saved).toBe(false); // the layout manager is still writing the flushed edit
-    busy = false;
-    await vi.advanceTimersByTimeAsync(100);
-    expect(saved).toBe(true);
+    toggleBusy(); // done writing
+    await vi.advanceTimersByTimeAsync(0);
+    expect(saved).toBe(true); // at once, not on the next timer tick
     expect(new URL(window.location.href).searchParams.get("time")).toBe(
       "1970-01-01T00:00:12.345000000Z",
     );

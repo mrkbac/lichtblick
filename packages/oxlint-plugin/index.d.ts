@@ -11,6 +11,7 @@ type RuleName =
   | "lodash-imports"
   | "no-boolean-parameters"
   | "no-getters-setters"
+  | "no-crypto-random-uuid"
   | "no-object-url"
   | "no-push-spread"
   | "no-return-promise-resolve"

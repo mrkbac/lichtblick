@@ -56,6 +56,8 @@ import {
   usePlayerSelection,
 } from "@lichtblick/suite-base/context/PlayerSelectionContext";
 import { useWorkspaceActions } from "@lichtblick/suite-base/context/Workspace/useWorkspaceActions";
+import { useAppTimeFormat } from "@lichtblick/suite-base/hooks/useAppTimeFormat";
+import { randomUUID } from "@lichtblick/suite-base/util/randomUUID";
 import { splitRecentTitle } from "@lichtblick/suite-base/util/recentSources";
 
 // Number of recents listed on the All tab, unless searching
@@ -96,6 +98,7 @@ export default function Start({ ref }: { ref?: React.Ref<StartHandle> }): React.
   } = usePlayerSelection();
   const { classes } = useStyles();
   const { t } = useTranslation("openDialog");
+  const { timeZone } = useAppTimeFormat();
   const { dialogActions } = useWorkspaceActions();
   const folder = useCatalogFolder();
 
@@ -130,7 +133,7 @@ export default function Start({ ref }: { ref?: React.Ref<StartHandle> }): React.
   };
   const openCatalog = (url: string) => {
     const existing = sources.find((source) => source.kind === "remote" && source.url === url);
-    const id = existing?.id ?? crypto.randomUUID();
+    const id = existing?.id ?? randomUUID();
     setSources((previous) =>
       existing
         ? previous.map((source) => (source.id === id ? { ...source, hidden: false } : source))
@@ -176,9 +179,9 @@ export default function Start({ ref }: { ref?: React.Ref<StartHandle> }): React.
         source: { type: "remote-file", url: recent.title },
       }),
     );
-    const matches = new Set(filterRecordings(asRecordings, query).map((r) => r.id));
+    const matches = new Set(filterRecordings(asRecordings, query, timeZone).map((r) => r.id));
     return byKind.filter((recent) => matches.has(recent.id));
-  }, [recentSources, kind, query, catalogByName, view]);
+  }, [recentSources, kind, query, catalogByName, view, timeZone]);
 
   const searching = query.trim() !== "" || kind !== "all";
   const visibleRecents =
@@ -195,7 +198,7 @@ export default function Start({ ref }: { ref?: React.Ref<StartHandle> }): React.
   const topRecent = showRecents && query.trim() !== "" ? visibleRecents[0] : undefined;
   const topRecording =
     !topRecent && showOverview && query.trim() !== ""
-      ? sortRecordings(filterRecordings(folder.recordings, query), catalogSort)[0]
+      ? sortRecordings(filterRecordings(folder.recordings, query, timeZone), catalogSort)[0]
       : undefined;
   const topMatch = topRecent
     ? (topRecent.name ?? splitRecentTitle(topRecent.title).primary)
@@ -305,7 +308,7 @@ export default function Start({ ref }: { ref?: React.Ref<StartHandle> }): React.
               const match = catalogMatch(recent, catalogByName);
               // A recent the catalog knows reads like a catalog row: start, duration and size.
               const summary = [
-                match ? recordingCaption(match) : "",
+                match ? recordingCaption(match, timeZone) : "",
                 match?.topics ? t("topicCount", { count: match.topics.length }) : "",
               ]
                 .filter(Boolean)

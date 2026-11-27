@@ -35,6 +35,10 @@ vi.mock("@lichtblick/suite-base/context/Workspace/useWorkspaceActions", () => ({
   useWorkspaceActions: vi.fn(),
 }));
 
+vi.mock("@lichtblick/suite-base/hooks/useAppTimeFormat", () => ({
+  useAppTimeFormat: () => ({ timeZone: undefined }),
+}));
+
 vi.mock("@lichtblick/suite-base/components/DataSourceDialog/DontShowThisAgainCheckbox", () => ({
   __esModule: true,
   default: () => <div />,

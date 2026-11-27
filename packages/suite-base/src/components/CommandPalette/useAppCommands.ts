@@ -246,8 +246,11 @@ export function useAppCommands(): {
 
   const presence = useMessagePipeline(selectPlayerPresence);
   const isPlaying = useMessagePipeline(selectIsPlaying);
-  const startTime = useMessagePipeline(selectStartTime);
-  const endTime = useMessagePipeline(selectEndTime);
+  // Only whether there is a range: a live source moves its end every frame, and the commands read
+  // the range when they run instead of being rebuilt for each move
+  const hasRange = useMessagePipeline(
+    (ctx) => selectStartTime(ctx) != undefined && selectEndTime(ctx) != undefined,
+  );
   const topics = useMessagePipeline(selectTopics);
   const play = useMessagePipeline(selectStartPlayback);
   const pause = useMessagePipeline(selectPausePlayback);
@@ -655,7 +658,11 @@ export function useAppCommands(): {
         run: isPlaying ? pause : play,
       });
     }
-    if (hasPlayer && seek && startTime && endTime) {
+    const range = () => {
+      const activeData = getPipeline().playerState.activeData;
+      return activeData ? { start: activeData.startTime, end: activeData.endTime } : undefined;
+    };
+    if (hasPlayer && seek && hasRange) {
       push(
         t("groupPlayback"),
         {
@@ -663,14 +670,20 @@ export function useAppCommands(): {
           title: t("seekToStart"),
           keywords: ["beginning"],
           run: () => {
-            seek(startTime);
+            const start = range()?.start;
+            if (start) {
+              seek(start);
+            }
           },
         },
         {
           id: "playback.end",
           title: t("seekToEnd"),
           run: () => {
-            seek(endTime);
+            const end = range()?.end;
+            if (end) {
+              seek(end);
+            }
           },
         },
       );
@@ -797,7 +810,7 @@ export function useAppCommands(): {
     addPanel,
     showCompare,
     dialogActions,
-    endTime,
+    hasRange,
     exportLayout,
     importLayout,
     isPlaying,
@@ -831,7 +844,6 @@ export function useAppCommands(): {
     showShortcuts,
     toggleColorScheme,
     sidebarActions,
-    startTime,
     t,
     templateCommands,
     topics,
@@ -839,10 +851,11 @@ export function useAppCommands(): {
 
   const queryCommands = useCallback(
     (query: string): Command[] => {
-      if (presence !== PlayerPresence.PRESENT || !seek || !startTime || !endTime) {
+      const activeData = getPipeline().playerState.activeData;
+      if (presence !== PlayerPresence.PRESENT || !seek || !activeData) {
         return [];
       }
-      const current = getPipeline().playerState.activeData?.currentTime;
+      const { startTime, endTime, currentTime: current } = activeData;
       const target = parseSeekInput(query, {
         start: startTime,
         end: endTime,
@@ -852,7 +865,7 @@ export function useAppCommands(): {
         return [];
       }
       const offsetFromStart = toSec(subtract(target.time, startTime));
-      const delta = current ? toSec(subtract(target.time, current)) : 0;
+      const delta = toSec(subtract(target.time, current));
       const seekTime: Time = target.time;
       return [
         {
@@ -865,12 +878,22 @@ export function useAppCommands(): {
           detail: `${formatOffset(offsetFromStart)} · ${formatTimeRaw(seekTime)}`,
           group: t("groupPlayback"),
           run: () => {
-            seek(seekTime);
+            // The palette keeps results while the query is unchanged: resolve the target
+            // against the range as it is now (a live end moves on)
+            const now = getPipeline().playerState.activeData;
+            const latest = now
+              ? parseSeekInput(query, {
+                  start: now.startTime,
+                  end: now.endTime,
+                  current: now.currentTime,
+                })
+              : undefined;
+            seek(latest?.time ?? seekTime);
           },
         },
       ];
     },
-    [endTime, getPipeline, presence, seek, startTime, t],
+    [getPipeline, presence, seek, t],
   );
 
   return { commands, queryCommands };

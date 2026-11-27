@@ -12,7 +12,6 @@ import {
   selectLayoutData,
   selectLayoutId,
 } from "@lichtblick/suite-base/components/CurrentLayoutLocalStorageSyncAdapter";
-import { LOCAL_STORAGE_STUDIO_LAYOUT_KEY } from "@lichtblick/suite-base/constants/browserStorageKeys";
 import {
   LayoutData,
   useCurrentLayoutActions,
@@ -67,7 +66,11 @@ describe("CurrentLayoutLocalStorageSyncAdapter", () => {
       return undefined;
     });
     (useLayoutManager as Mock).mockReturnValue(mockLayoutManager);
-    localStorage.clear();
+  });
+
+  afterEach(() => {
+    // Only spies (vi.spyOn); the module mocks stay
+    vi.restoreAllMocks();
   });
 
   function renderComponent() {
@@ -87,20 +90,6 @@ describe("CurrentLayoutLocalStorageSyncAdapter", () => {
     };
   }
 
-  it("saves layout data to localStorage when it changes", async () => {
-    // Given
-    renderComponent();
-
-    // When
-    await act(async () => {
-      await new Promise((r) => setTimeout(r, 300)); // Wait for debounce
-    });
-
-    // Then
-    const storedData = localStorage.getItem(LOCAL_STORAGE_STUDIO_LAYOUT_KEY);
-    expect(storedData).toBe(JSON.stringify(mockLayoutData));
-  });
-
   it("writes a pending edit at once when flushed, without waiting for the debounce", async () => {
     const { rerender } = renderComponent();
     const modifiedData = { ...mockLayoutData, modified: true };
@@ -110,9 +99,7 @@ describe("CurrentLayoutLocalStorageSyncAdapter", () => {
     await act(async () => {
       rerender();
     });
-    expect(localStorage.getItem(LOCAL_STORAGE_STUDIO_LAYOUT_KEY)).toBe(
-      JSON.stringify(mockLayoutData),
-    );
+    expect(mockLayoutManager.updateLayout).not.toHaveBeenCalled();
 
     let pending = false;
     await act(async () => {
@@ -120,10 +107,33 @@ describe("CurrentLayoutLocalStorageSyncAdapter", () => {
     });
 
     expect(pending).toBe(true);
-    expect(localStorage.getItem(LOCAL_STORAGE_STUDIO_LAYOUT_KEY)).toBe(
-      JSON.stringify(modifiedData),
-    );
+    expect(mockLayoutManager.updateLayout).toHaveBeenCalledWith({
+      id: mockLayoutId,
+      data: modifiedData,
+    });
     expect(flushPendingLayoutSave()).toBe(false); // nothing left
+  });
+
+  it("saves the edit even when localStorage is full", async () => {
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new DOMException("full", "QuotaExceededError");
+    });
+    const { rerender } = renderComponent();
+    const modifiedData = { ...mockLayoutData, modified: true };
+    (useCurrentLayoutSelector as Mock).mockImplementation((selector) =>
+      selector === selectLayoutData ? modifiedData : mockLayoutId,
+    );
+    await act(async () => {
+      rerender();
+    });
+    await act(async () => {
+      flushPendingLayoutSave();
+    });
+
+    expect(mockLayoutManager.updateLayout).toHaveBeenCalledWith({
+      id: mockLayoutId,
+      data: modifiedData,
+    });
   });
 
   it("sends new layout data to layoutManager after initial load", async () => {

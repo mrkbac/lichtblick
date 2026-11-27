@@ -29,6 +29,7 @@ import { makeStyles } from "tss-react/mui";
 
 import { formatByteSize } from "@lichtblick/den/format";
 import Stack from "@lichtblick/suite-base/components/Stack";
+import { useAppTimeFormat } from "@lichtblick/suite-base/hooks/useAppTimeFormat";
 import { formatDurationCompact } from "@lichtblick/suite-base/util/formatTime";
 import { formatTimeAgo } from "@lichtblick/suite-base/util/recentSources";
 
@@ -250,6 +251,7 @@ export default function Catalog({
 }: Props): React.JSX.Element {
   const { classes, cx } = useStyles();
   const { t, i18n } = useTranslation("catalog");
+  const { timeZone } = useAppTimeFormat();
   const { recordings, progress, error, open } = folder;
 
   const [selectedId, setSelectedId] = useState<string>();
@@ -270,18 +272,31 @@ export default function Catalog({
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const shown = useMemo(() => {
-    const matching = filterRecordings(recordings, browsingGroups ? "" : query).filter((r) => {
-      if (groupSection && group != undefined && groupName(r, groupSection) !== group) {
-        return false;
-      }
-      if (!area || section !== "recordings") {
-        return true;
-      }
-      const bounds = trackBounds(pickTrack(r.tracks, gpsTopic)?.points ?? []);
-      return bounds != undefined && boundsIntersect(bounds, area);
-    });
+    const matching = filterRecordings(recordings, browsingGroups ? "" : query, timeZone).filter(
+      (r) => {
+        if (groupSection && group != undefined && groupName(r, groupSection) !== group) {
+          return false;
+        }
+        if (!area || section !== "recordings") {
+          return true;
+        }
+        const bounds = trackBounds(pickTrack(r.tracks, gpsTopic)?.points ?? []);
+        return bounds != undefined && boundsIntersect(bounds, area);
+      },
+    );
     return sortRecordings(matching, sort);
-  }, [recordings, query, sort, area, gpsTopic, group, groupSection, section, browsingGroups]);
+  }, [
+    recordings,
+    query,
+    sort,
+    area,
+    gpsTopic,
+    group,
+    groupSection,
+    section,
+    browsingGroups,
+    timeZone,
+  ]);
 
   const groups = useMemo(() => {
     const counts = new Map<string, number>();
@@ -664,7 +679,7 @@ export default function Catalog({
                   )}
                 </Stack>
                 <Typography variant="caption" noWrap color="textSecondary">
-                  {recordingCaption(r)}
+                  {recordingCaption(r, timeZone)}
                 </Typography>
               </ButtonBase>
             ))}
@@ -676,8 +691,12 @@ export default function Catalog({
                 {sortLabel("start", t("start"))}
                 {range && (
                   <Stack direction="row" justifyContent="space-between" gap={1}>
-                    <Typography variant="caption">{formatCatalogTime(range.start)}</Typography>
-                    <Typography variant="caption">{formatCatalogTime(range.end)}</Typography>
+                    <Typography variant="caption">
+                      {formatCatalogTime(range.start, timeZone)}
+                    </Typography>
+                    <Typography variant="caption">
+                      {formatCatalogTime(range.end, timeZone)}
+                    </Typography>
                   </Stack>
                 )}
               </div>
@@ -726,7 +745,7 @@ export default function Catalog({
                         <Typography noWrap variant="body2" title={r.name}>
                           {r.name}
                         </Typography>
-                        <Tooltip title={recordingCaption(r)}>
+                        <Tooltip title={recordingCaption(r, timeZone)}>
                           <div className={classes.timelineTrack}>
                             <div className={classes.timelineBar} style={timelineBar(r, range)} />
                           </div>
@@ -788,7 +807,7 @@ export default function Catalog({
                         )}
                       </Stack>
                       <Typography variant="body2" noWrap>
-                        {formatStart(r)}
+                        {formatStart(r, timeZone)}
                       </Typography>
                       <Typography variant="body2" className={classes.numeric}>
                         {r.start && r.end ? formatDurationCompact(subtract(r.end, r.start)) : "–"}

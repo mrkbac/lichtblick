@@ -6,7 +6,6 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 // Local storage keys
-export const LOCAL_STORAGE_STUDIO_LAYOUT_KEY = "studio.layout";
 export const LOCAL_STORAGE_PROFILE_DATA = "studio.profile-data";
 export const LOCAL_STORAGE_APP_CONFIGURATION = "studio.app-configuration.";
 export const LOCAL_STORAGE_PANEL_LOGS_HEIGHT = "studio.panel-logs-height";
