@@ -640,13 +640,15 @@ describe("IterablePlayer", () => {
     const source = new TestSource();
     const player = new IterablePlayer({ source, enablePreload: false, sourceId: "test" });
     const states: PlayerState[] = [];
-    const store = new PlayerStateStore(4);
     player.setSubscriptions([{ topic: BasicBuilder.string() }]);
     player.setListener(async (state) => {
       states.push(state);
-      await store.add(state);
     });
-    await store.done;
+    // Initialized and idle at the start
+    await vi.waitFor(() => {
+      expect(states.at(-1)?.activeData?.currentTime).toBeDefined();
+      expect(states).toHaveLength(4);
+    });
     const initial = states.at(-1)?.activeData;
     const current = initial!.currentTime;
 
