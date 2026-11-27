@@ -150,11 +150,6 @@ export type HistoryRenderable = THREE.Object3D & {
   dispose(): void;
   /** Its draw count is this entry's share of {@link HistoryLimits.maxPoints}. */
   readonly geometry: THREE.BufferGeometry;
-  /**
-   * Called once a newer entry is pushed. Drops the message this entry was built from, so a decay
-   * history holds only GPU geometry, not one raw message per entry.
-   */
-  releaseMessage(): void;
 };
 
 /** Required caps on a decay history; the decay time alone does not bound a fast or dense topic. */
@@ -358,18 +353,67 @@ export function updateDecayRing(
   return true;
 }
 
-type HistoryEntry<TRenderable extends HistoryRenderable> = {
+/** A scan's renderable with the times and frame it is placed by */
+export type ScanEntry<TRenderable extends THREE.Object3D> = {
   recordId?: string;
   receiveTime: bigint;
   messageTime: bigint;
+  /** The scan's own frame, which can differ between the scans of one topic */
+  frameId: string;
   renderable: TRenderable;
 };
 
 /**
- * Class that handles lifecycle of 3d object history over the decay time
- * This class encapsulates the functionality of showing the history of an object within a specified decay time.
- * Meant to be extensible for all kinds of renderables that need to show old points over decay time.
- * See LaserScansRenderable and PointCloudsRenderable for examples.
+ * Places each entry at its scan's pose. Returns whether all transforms resolved, else adds the
+ * MISSING_TRANSFORM error for the first that didn't; the caller clears it once everything sharing
+ * `settingsPath` resolves.
+ */
+export function placeScans(
+  renderer: Renderer,
+  settingsPath: readonly string[],
+  entries: Iterable<ScanEntry<THREE.Object3D>>,
+  currentTime: bigint,
+  renderFrameId: string,
+  fixedFrameId: string,
+): boolean {
+  let missing: ScanEntry<THREE.Object3D> | undefined;
+  for (const entry of entries) {
+    const placed = updatePose(
+      entry.renderable,
+      renderer.transformTree,
+      renderFrameId,
+      fixedFrameId,
+      entry.frameId,
+      currentTime,
+      entry.messageTime,
+    );
+    if (!placed) {
+      missing ??= entry;
+    }
+  }
+  if (missing == undefined) {
+    return true;
+  }
+  renderer.settings.errors.add(
+    settingsPath,
+    MISSING_TRANSFORM,
+    missingTransformMessage(
+      renderer.transformTree,
+      renderFrameId,
+      fixedFrameId,
+      missing.frameId,
+      currentTime,
+      missing.messageTime,
+    ),
+  );
+  return false;
+}
+
+type HistoryEntry<TRenderable extends HistoryRenderable> = ScanEntry<TRenderable>;
+
+/**
+ * One renderable per scan over the decay time, for stixels (points keep only the latest scan as a
+ * renderable and copy older ones into a {@link DecayPointRing}).
  */
 export class RenderObjectHistory<TRenderable extends HistoryRenderable> {
   #history: HistoryEntry<TRenderable>[];
@@ -400,7 +444,6 @@ export class RenderObjectHistory<TRenderable extends HistoryRenderable> {
   }
 
   public addHistoryEntry(entry: HistoryEntry<TRenderable>): void {
-    this.latest().renderable.releaseMessage();
     this.#history.push(entry);
     this.#evictOldest(this.#history.length - this.#limits.maxEntries);
   }
@@ -434,7 +477,6 @@ export class RenderObjectHistory<TRenderable extends HistoryRenderable> {
 
   /** Adds an entry older than the latest one (read back after a seek), in time order */
   public insertOlderEntry(entry: HistoryEntry<TRenderable>): void {
-    entry.renderable.releaseMessage();
     let at = this.#history.length - 1; // the latest stays last
     while (at > 0 && this.#history[at - 1]!.receiveTime > entry.receiveTime) {
       at--;
@@ -489,8 +531,8 @@ export class RenderObjectHistory<TRenderable extends HistoryRenderable> {
   }
 
   /**
-   * Returns whether every entry found its transform. Adds the MISSING_TRANSFORM error when one
-   * doesn't; the caller clears it once all histories sharing its settings path resolve.
+   * See {@link placeScans}. History-only layers skip the latest slot, empty until playback supplies
+   * a scan.
    */
   public updatePoses(
     currentTime: bigint,
@@ -498,40 +540,14 @@ export class RenderObjectHistory<TRenderable extends HistoryRenderable> {
     fixedFrameId: string,
     { skipLatest = false }: { skipLatest?: boolean } = {},
   ): boolean {
-    // History-only layers have an empty latest slot until playback supplies a scan.
-    let hadTfError = false;
-    const count = this.#history.length - (skipLatest ? 1 : 0);
-    for (let i = 0; i < count; i++) {
-      const entry = this.#history[i]!;
-      const srcTime = entry.messageTime;
-      const frameId = this.#parentRenderable.userData.frameId;
-      const updated = updatePose(
-        entry.renderable,
-        this.#renderer.transformTree,
-        renderFrameId,
-        fixedFrameId,
-        frameId,
-        currentTime,
-        srcTime,
-      );
-      if (!updated && !hadTfError) {
-        const message = missingTransformMessage(
-          this.#renderer.transformTree,
-          renderFrameId,
-          fixedFrameId,
-          frameId,
-          currentTime,
-          srcTime,
-        );
-        this.#renderer.settings.errors.add(
-          this.#parentRenderable.userData.settingsPath,
-          MISSING_TRANSFORM,
-          message,
-        );
-        hadTfError = true;
-      }
-    }
-    return !hadTfError;
+    return placeScans(
+      this.#renderer,
+      this.#parentRenderable.userData.settingsPath,
+      skipLatest ? this.#history.slice(0, -1) : this.#history,
+      currentTime,
+      renderFrameId,
+      fixedFrameId,
+    );
   }
 
   public latest(): HistoryEntry<TRenderable> {
