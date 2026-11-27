@@ -36,6 +36,15 @@ import ThemeProvider from "@lichtblick/suite-base/theme/ThemeProvider";
 import PanelExtensionAdapter from "./PanelExtensionAdapter";
 import { BuiltinPanelExtensionContext } from "./types";
 
+// Message range reads, so tests can see which ones are open. A stable callback, like the real hook.
+const mockRange = vi.hoisted(() => {
+  const cancel = vi.fn();
+  return { cancel, subscribe: vi.fn(() => cancel) };
+});
+vi.mock("./useSubscribeMessageRange", () => ({
+  useSubscribeMessageRange: () => mockRange.subscribe,
+}));
+
 describe("PanelExtensionAdapter", () => {
   it("should call initPanel", async () => {
     expect.assertions(1);
@@ -712,6 +721,65 @@ describe("PanelExtensionAdapter", () => {
 
     await act(async () => undefined);
     await sig.promise;
+  });
+
+  it("resolves converters for sampling against the topics when the panel subscribes", async () => {
+    // A live source: the topic arrives after the panel context was made
+    let context: PanelExtensionContext | undefined;
+    const initPanel = (ctx: PanelExtensionContext) => {
+      context = ctx;
+    };
+    const setSubscriptions = vi.fn();
+    const messageConverters = [
+      {
+        fromSchemaName: "src",
+        toSchemaName: "dst",
+        supportsLatestPerRenderTick: true,
+        converter: () => ({}),
+      },
+    ];
+    const capabilities: string[] = [];
+    const config = {};
+    const saveConfig = () => {};
+    const renderAdapter = (fixture: Fixture) => (
+      <ThemeProvider isDark>
+        <MockPanelContextProvider>
+          <PanelSetup fixture={fixture}>
+            <PanelExtensionAdapter config={config} saveConfig={saveConfig} initPanel={initPanel} />
+          </PanelSetup>
+        </MockPanelContextProvider>
+      </ThemeProvider>
+    );
+    const { rerender } = render(
+      renderAdapter({ topics: [], messageConverters, setSubscriptions, capabilities }),
+    );
+    await act(async () => undefined);
+    const firstContext = context;
+    rerender(
+      renderAdapter({
+        topics: [{ name: "/test", schemaName: "src" }],
+        messageConverters,
+        setSubscriptions,
+        capabilities,
+      }),
+    );
+    await act(async () => undefined);
+    // Same panel instance, so the old context still had no topics
+    expect(context).toBe(firstContext);
+
+    act(() => {
+      context!.subscribe([
+        { topic: "/test", convertTo: "dst", sampling: { mode: "latest-per-render-tick" } },
+      ]);
+    });
+    expect(setSubscriptions.mock.calls.at(-1)?.[1]).toEqual([
+      {
+        topic: "/test",
+        preloadType: "partial",
+        samplingRequest: { mode: "latest-per-render-tick" },
+        samplingAuthorized: true,
+      },
+    ]);
   });
 
   it("should apply sampling for native subscriptions", async () => {
@@ -1483,6 +1551,99 @@ describe("PanelExtensionAdapter", () => {
     await act(async () => undefined);
 
     expect(seen).toEqual(["dark"]);
+  });
+
+  it("cancels a previous instance's message ranges and ignores its later calls", async () => {
+    mockRange.subscribe.mockClear();
+    mockRange.cancel.mockClear();
+    const saveConfig = vi.fn();
+    const contexts: PanelExtensionContext[] = [];
+    const makeInitPanel = (topic: string) => (context: PanelExtensionContext) => {
+      contexts.push(context);
+      context.unstable_subscribeMessageRange({ topic, onNewRangeIterator: async () => {} });
+    };
+    const renderAdapter = (initPanel: ReturnType<typeof makeInitPanel>) => (
+      <ThemeProvider isDark>
+        <MockPanelContextProvider>
+          <PanelSetup>
+            <PanelExtensionAdapter config={{}} saveConfig={saveConfig} initPanel={initPanel} />
+          </PanelSetup>
+        </MockPanelContextProvider>
+      </ThemeProvider>
+    );
+
+    const { rerender } = render(renderAdapter(makeInitPanel("old")));
+    await act(async () => undefined);
+    expect(mockRange.cancel).not.toHaveBeenCalled();
+    // Re-initialized, e.g. when extension settings load after the layout
+    rerender(renderAdapter(makeInitPanel("new")));
+    await act(async () => undefined);
+    expect(mockRange.subscribe.mock.calls.map(([args]) => args.topic)).toEqual(["old", "new"]);
+    expect(mockRange.cancel).toHaveBeenCalledTimes(1);
+
+    // A late call from the old instance changes nothing
+    const old = contexts[0]!;
+    act(() => {
+      old.saveState({ stale: true });
+      old.unstable_subscribeMessageRange({ topic: "late", onNewRangeIterator: async () => {} });
+    });
+    expect(saveConfig).not.toHaveBeenCalled();
+    expect(mockRange.subscribe).toHaveBeenCalledTimes(2);
+  });
+
+  it("ignores a late render done from a previous panel instance", async () => {
+    // Every render holds its done callback, like a panel that is still drawing
+    const dones: Record<string, (() => void)[]> = { old: [], new: [] };
+    const makeInitPanel = (name: string) => (context: PanelExtensionContext) => {
+      context.watch("currentFrame");
+      context.subscribe([{ topic: "x" }]);
+      context.onRender = (_renderState, done) => {
+        dones[name]!.push(done);
+      };
+    };
+    const message = (value: number): MessageEvent =>
+      MessageEventBuilder.messageEvent({ topic: "x", message: value, schemaName: "foo" });
+    const fixtures = [1, 2, 3].map(
+      (value): Fixture => ({
+        topics: [{ name: "x", schemaName: "foo" }],
+        frame: { x: [message(value)] },
+      }),
+    );
+    const config = {};
+    const saveConfig = () => {};
+    const renderAdapter = (initPanel: ReturnType<typeof makeInitPanel>, fixture: Fixture) => (
+      <ThemeProvider isDark>
+        <MockPanelContextProvider>
+          <PanelSetup fixture={fixture} pauseFrame={() => () => {}}>
+            <PanelExtensionAdapter config={config} saveConfig={saveConfig} initPanel={initPanel} />
+          </PanelSetup>
+        </MockPanelContextProvider>
+      </ThemeProvider>
+    );
+
+    const oldInit = makeInitPanel("old");
+    const newInit = makeInitPanel("new");
+    const { rerender } = render(renderAdapter(oldInit, fixtures[0]!));
+    await act(async () => undefined);
+    expect(dones.old!.length).toBeGreaterThan(0);
+    rerender(renderAdapter(newInit, fixtures[0]!));
+    await act(async () => undefined);
+    expect(dones.new).toHaveLength(1);
+
+    // The old instance finishes its render while the new one is still rendering
+    act(() => {
+      dones.old!.at(-1)!();
+    });
+    rerender(renderAdapter(newInit, fixtures[1]!));
+    await act(async () => undefined);
+    // Still rendering: the new frame doesn't start another render
+    expect(dones.new).toHaveLength(1);
+    act(() => {
+      dones.new![0]!();
+    });
+    rerender(renderAdapter(newInit, fixtures[2]!));
+    await act(async () => undefined);
+    expect(dones.new).toHaveLength(2);
   });
 
   it("does not carry a previous panel instance's advertisements into the next one", async () => {
