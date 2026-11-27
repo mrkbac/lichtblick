@@ -20,7 +20,8 @@ import {
   updateDecayRing,
   isSameRecord,
   pointStyle,
-  RenderObjectHistory,
+  placeScans,
+  type ScanEntry,
 } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/pointExtensionUtils";
 import {
   DEFAULT_POINT_SETTINGS,
@@ -76,16 +77,12 @@ const ALL_LASERSCAN_DATATYPES = new Set<string>([
   ...ROS_LASERSCAN_DATATYPES,
 ]);
 
-const EMPTY_RANGES = new Float32Array(0);
 const INVALID_LASERSCAN = "INVALID_LASERSCAN";
 
 const tempColor = { r: 0, g: 0, b: 0, a: 0 };
 
 type LaserScanUserData = ChildUserData & {
-  /** The scan's frame, set with each scan for the decay history */
-  frameId: string;
-  /** Undefined once a newer decay entry exists (see releaseMessage) */
-  laserScan: NormalizedLaserScan | undefined;
+  laserScan: NormalizedLaserScan;
   originalMessage: Record<string, RosValue> | undefined;
 };
 
@@ -94,16 +91,8 @@ class LaserScanRenderable extends PointsRenderable<LaserScanUserData> {
     return this.userData.originalMessage ?? {};
   }
 
-  public releaseMessage(): void {
-    this.userData.laserScan = undefined;
-    this.userData.originalMessage = undefined;
-  }
-
   public override instanceDetails(instanceId: number): Record<string, RosValue> | undefined {
     const laserScan = this.userData.laserScan;
-    if (!laserScan) {
-      return undefined;
-    }
     const range =
       instanceId >= 0 && instanceId < laserScan.ranges.length
         ? laserScan.ranges[instanceId]
@@ -118,7 +107,8 @@ class LaserScanRenderable extends PointsRenderable<LaserScanUserData> {
 
 class LaserScanHistoryRenderable extends Renderable<LaserScanHistoryUserData> {
   public override pickable = false; // Picking happens on child renderables
-  #pointsHistory: RenderObjectHistory<LaserScanRenderable>;
+  /** The latest scan, drawn and picked as a regular renderable */
+  #latest: ScanEntry<LaserScanRenderable>;
   /** With a decay time, scans older than the latest accumulate here */
   #decayRing: DecayPointRing | undefined;
   /** Decodes scans older than the latest before they are copied into the ring */
@@ -132,7 +122,6 @@ class LaserScanHistoryRenderable extends Renderable<LaserScanHistoryUserData> {
     const points = new LaserScanRenderable(
       topic,
       {
-        frameId: "",
         pose: userData.latestLaserScan.pose,
         topic,
         laserScan: userData.latestLaserScan,
@@ -141,21 +130,17 @@ class LaserScanHistoryRenderable extends Renderable<LaserScanHistoryUserData> {
       geometry,
     );
 
-    this.#pointsHistory = new RenderObjectHistory({
-      initial: {
-        messageTime: userData.receiveTime,
-        receiveTime: userData.receiveTime,
-        renderable: points,
-      },
-      parentRenderable: this,
-      renderer,
-      limits: DECAY_HISTORY_LIMITS,
-    });
+    this.#latest = {
+      messageTime: userData.messageTime,
+      receiveTime: userData.receiveTime,
+      frameId: userData.frameId,
+      renderable: points,
+    };
     this.add(points);
   }
   public override dispose(): void {
     this.userData.latestOriginalMessage = undefined;
-    this.#pointsHistory.dispose();
+    this.#latest.renderable.dispose();
     this.#decayRing?.dispose();
     this.#scratch?.dispose();
     this.renderer.settings.errors.remove(this.userData.settingsPath, DECAY_LIMITED);
@@ -183,8 +168,7 @@ class LaserScanHistoryRenderable extends Renderable<LaserScanHistoryUserData> {
     }
     this.renderer.settings.errors.removeFromTopic(this.userData.topic, INVALID_LASERSCAN);
 
-    const pointsHistory = this.#pointsHistory;
-    const latestEntry = pointsHistory.latest();
+    const latestEntry = this.#latest;
     const latest = latestEntry.renderable;
     const style = pointStyle(settings);
     latest.setStyle(style);
@@ -198,7 +182,7 @@ class LaserScanHistoryRenderable extends Renderable<LaserScanHistoryUserData> {
       laserScan === latest.userData.laserScan ||
       isSameRecord(
         { recordId: this.userData.recordId, receiveTime, messageTime, payload: laserScan.ranges },
-        { ...latestEntry, payload: latest.userData.laserScan?.ranges ?? EMPTY_RANGES },
+        { ...latestEntry, payload: latest.userData.laserScan.ranges },
       );
     if (settings.decayTime > 0 && previousCount > 0 && !sameScan) {
       const { position, color } = latest.geometry.attributes;
@@ -207,7 +191,7 @@ class LaserScanHistoryRenderable extends Renderable<LaserScanHistoryUserData> {
           receiveTime: latestEntry.receiveTime,
           messageTime: latestEntry.messageTime,
           recordId: latestEntry.recordId,
-          frameId: latest.userData.frameId,
+          frameId: latestEntry.frameId,
           pose: latest.userData.pose,
         },
         (position!.array as Float32Array).subarray(0, previousCount * 3),
@@ -221,7 +205,7 @@ class LaserScanHistoryRenderable extends Renderable<LaserScanHistoryUserData> {
     latestEntry.receiveTime = receiveTime;
     latestEntry.messageTime = messageTime;
     latestEntry.recordId = this.userData.recordId;
-    latest.userData.frameId = this.userData.frameId;
+    latestEntry.frameId = this.userData.frameId;
     latest.userData.pose = laserScan.pose;
     latest.userData.laserScan = laserScan;
     latest.userData.originalMessage = originalMessage;
@@ -272,17 +256,25 @@ class LaserScanHistoryRenderable extends Renderable<LaserScanHistoryUserData> {
   }
 
   public invalidateLastEntry() {
-    const lastEntry = this.#pointsHistory.latest();
-    lastEntry.renderable.geometry.resize(0);
+    this.#latest.renderable.geometry.resize(0);
   }
 
   public startFrame(currentTime: bigint, renderFrameId: string, fixedFrameId: string): void {
-    let resolved = this.#pointsHistory.updatePoses(currentTime, renderFrameId, fixedFrameId, {
-      skipLatest: this.userData.historyOnly,
-    });
-    this.#pointsHistory.forEach((entry) => {
-      entry.renderable.syncPoints();
-    });
+    // A history-only layer has no latest scan until playback supplies one
+    let resolved =
+      this.userData.historyOnly === true ||
+      placeScans(
+        this.renderer,
+        this.userData.settingsPath,
+        [this.#latest],
+        currentTime,
+        renderFrameId,
+        fixedFrameId,
+      );
+    this.#latest.renderable.syncPoints();
+    // The read-back burst after a seek is over: don't keep its largest scan's buffers
+    this.#scratch?.dispose();
+    this.#scratch = undefined;
     resolved = this.#updateDecayRing(currentTime, renderFrameId, fixedFrameId) && resolved;
     if (resolved) {
       this.renderer.settings.errors.remove(this.userData.settingsPath, MISSING_TRANSFORM);
@@ -307,7 +299,7 @@ class LaserScanHistoryRenderable extends Renderable<LaserScanHistoryUserData> {
       this.userData,
       ring,
       DECAY_HISTORY_LIMITS.maxPoints,
-      this.#pointsHistory.latest().renderable.geometry.drawRange.count,
+      this.#latest.renderable.geometry.drawRange.count,
       currentTime,
       renderFrameId,
       fixedFrameId,
@@ -366,10 +358,7 @@ export class LaserScans extends SceneExtension<LaserScanHistoryRenderable> {
     renderFrameId: string,
     fixedFrameId: string,
   ): void {
-    // Do not call super.startFrame() since we handle updatePose() manually.
-    // Instead of updating the pose for each Renderable in this.renderables, we
-    // update the pose of each THREE.Points object in the pointsHistory of each
-    // renderable
+    // Not super.startFrame(): each renderable places its own scans, which can differ in frame
 
     for (const [topic, renderable] of this.renderables) {
       if (!renderable.userData.settings.visible) {
