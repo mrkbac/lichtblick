@@ -38,7 +38,9 @@ function isStreamModifier(part: MessagePathPart): boolean {
   return part.type === "modifier" && part.args.length === 0 && STREAM_MODIFIERS.includes(part.name);
 }
 
-// Caches invalid paths (undefined) too, so they aren't re-parsed on every call
+// Caches invalid paths (undefined) too, so they aren't re-parsed on every call. Bounded: typing in
+// a path input parses every prefix, and a session can see many paths.
+const CACHE_LIMIT = 5000;
 const CacheMessagePath = new Map<string, MessagePath | undefined>();
 
 const parseMessagePath = (path: string): MessagePath | undefined => {
@@ -47,6 +49,10 @@ const parseMessagePath = (path: string): MessagePath | undefined => {
   }
   const result = parseUncached(path);
   CacheMessagePath.set(path, result);
+  if (CacheMessagePath.size > CACHE_LIMIT) {
+    // ponytail: drops the oldest entry, not the least recently used; fine for typing and panels
+    CacheMessagePath.delete(CacheMessagePath.keys().next().value!);
+  }
   return result;
 };
 

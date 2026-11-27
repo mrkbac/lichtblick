@@ -33,7 +33,7 @@ export type OperatorType = "==" | "!=" | "<=" | ">=" | "<" | ">";
 export type MessagePathFilter = {
   type: "filter";
   path: string[];
-  value?: number | string | bigint | { variableName: string; startLoc: number };
+  value?: number | string | bigint | boolean | { variableName: string; startLoc: number };
   nameLoc: number;
   valueLoc: number;
   repr: string; // the original string representation of the filter

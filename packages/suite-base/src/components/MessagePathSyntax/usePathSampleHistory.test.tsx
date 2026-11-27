@@ -126,6 +126,30 @@ describe("usePathSampleHistory", () => {
     expect(values()).toEqual([3]);
   });
 
+  it("keeps the history of a variable path when another variable changes", () => {
+    const { send, values, hook } = setup(10, "/state{mode>$min}.mode");
+    act(() => {
+      hook.result.current.setGlobalVariables({ min: 0 });
+    });
+    send(message(1, 1), message(2, 2));
+
+    act(() => {
+      hook.result.current.setGlobalVariables({ selected: "other" });
+    });
+    send(message(3, 3));
+    expect(values()).toEqual([1, 2, 3]);
+  });
+
+  it("filters by a boolean variable", () => {
+    const { send, values, hook } = setup(10, "/state{mode==$on}.mode");
+    act(() => {
+      hook.result.current.setGlobalVariables({ on: true });
+    });
+    send(message(0, 1), message(1, 2));
+    // `mode == true` holds for 1 only; the other message has no value
+    expect(values()).toEqual([undefined, 1]);
+  });
+
   it("rejects an unbounded history", () => {
     expect(() => setup(Infinity)).toThrow(RangeError);
   });

@@ -42,10 +42,20 @@ export function subscribePayloadFromMessagePath(
     return payload;
   }
 
+  // A filter on the message itself (`/topic{mode==2}.state`) reads its own field too
+  const fields = new Set([firstField.name]);
+  for (const element of parsedPath.messagePath) {
+    if (element === firstField) {
+      break;
+    }
+    if (element.type === "filter" && element.path[0] != undefined) {
+      fields.add(element.path[0]);
+    }
+  }
   const payload: SubscribePayload = {
     topic: parsedPath.topicName,
     preloadType: preloadType ?? "partial",
-    fields: [firstField.name],
+    fields: [...fields],
   };
   if (samplingRequest) {
     payload.samplingRequest = samplingRequest;

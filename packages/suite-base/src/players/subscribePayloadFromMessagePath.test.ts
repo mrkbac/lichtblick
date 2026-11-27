@@ -37,6 +37,12 @@ describe("subscribePayloadFromMessagePath", () => {
 
   it("handles complex paths", () => {
     const result = subscribePayloadFromMessagePath("topic{x==1}.field[:].subfield");
-    expect(result).toEqual({ topic: "topic", fields: ["field"], preloadType: "partial" });
+    // The filter reads `x` of the message, so it must survive slicing
+    expect(result).toEqual({ topic: "topic", fields: ["field", "x"], preloadType: "partial" });
+    expect(subscribePayloadFromMessagePath("topic{a.b==1}{c==$v}.field{d==2}.e")).toEqual({
+      topic: "topic",
+      fields: ["field", "a", "c"],
+      preloadType: "partial",
+    });
   });
 });
