@@ -14,6 +14,13 @@ const post: (message: FromWorkerMessage, transfer: Transferable[]) => void = sel
 // message. A batch is posted once the messages already queued here have been handled.
 let batch: unknown[] = [];
 let transfer: ArrayBuffer[] = [];
+let batchBytes = 0;
+/**
+ * A batch is posted early once it holds this much: a burst (e.g. a backlog after a reconnect)
+ * becomes several tasks on the main thread, which can render between them.
+ */
+export const MAX_BATCH_BYTES = 4 * 1024 * 1024;
+export const MAX_BATCH_MESSAGES = 2000;
 let flushTimer: ReturnType<typeof setTimeout> | undefined;
 
 function flush(): void {
@@ -23,6 +30,7 @@ function flush(): void {
     post({ type: "messages", data: batch }, transfer);
     batch = [];
     transfer = [];
+    batchBytes = 0;
   }
 }
 
@@ -60,8 +68,15 @@ self.onmessage = (event: MessageEvent<ToWorkerMessage>) => {
           batch.push(wsEvent.data);
           if (wsEvent.data instanceof ArrayBuffer) {
             transfer.push(wsEvent.data);
+            batchBytes += wsEvent.data.byteLength;
+          } else if (typeof wsEvent.data === "string") {
+            batchBytes += wsEvent.data.length;
           }
-          flushTimer ??= setTimeout(flush, 0);
+          if (batchBytes >= MAX_BATCH_BYTES || batch.length >= MAX_BATCH_MESSAGES) {
+            flush();
+          } else {
+            flushTimer ??= setTimeout(flush, 0);
+          }
         };
       } catch (err: unknown) {
         // try-catch is needed to catch `Mixed Content` errors in Chrome, where the client
@@ -83,7 +98,11 @@ self.onmessage = (event: MessageEvent<ToWorkerMessage>) => {
       ws?.close();
       break;
     case "data":
-      ws?.send(data as string | BufferSource);
+      // send() throws on a socket that is still connecting, which would end this worker; the
+      // player only sends once the server has introduced itself, so this is a late or early send.
+      if (ws?.readyState === WebSocket.OPEN) {
+        ws.send(data as string | BufferSource);
+      }
       break;
   }
 };

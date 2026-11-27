@@ -49,6 +49,7 @@ export function transformEntries(
  * Rolling history of live messages: everything received during the last `windowNs`, bounded by
  * `maxBytes`. For every topic the last message that fell out of the window is kept as a seed, so
  * latched and rarely published topics (static transforms, maps) are still there after a seek.
+ * Seeds count toward `maxBytes`; over it, seeds of topics nobody requests go first.
  *
  * Messages must be added in receive-time order; a clock that runs backwards needs `clear()`.
  */
@@ -58,9 +59,18 @@ export class LiveHistoryBuffer {
   #messages: MessageEvent[] = [];
   /** Index of the oldest retained message; dropped entries before it are compacted lazily. */
   #head = 0;
+  /** Retained messages and seeds */
   #bytes = 0;
   /** Per topic and seed key, the last evicted message and its sequence number. */
   #seeds = new Map<string, Map<string, Seed>>();
+  /** How many seed keys hold each seed message; a transform message seeds one key per frame. */
+  #seedRefs = new Map<MessageEvent, number>();
+  /** Topics panels request; seeds of others are dropped first when over the memory cap. */
+  #requestedTopics: ReadonlySet<string> = new Set();
+  /** Per topic, the sequence numbers of its messages, for `messages()`; built on first use. */
+  #topicSeqs = new Map<string, number[]>();
+  /** Messages before this sequence number are in `#topicSeqs`. */
+  #indexedSeq = 0;
   /** Sequence number of the message at `#head`: how many messages were ever evicted. */
   #headSeq = 0;
   /**
@@ -100,6 +110,11 @@ export class LiveHistoryBuffer {
   public setMaxBytes(maxBytes: number): void {
     this.#maxBytes = maxBytes;
     this.trim(undefined);
+  }
+
+  /** The topics panels request now; see the class comment. */
+  public setRequestedTopics(topics: ReadonlySet<string>): void {
+    this.#requestedTopics = topics;
   }
 
   public windowNs(): bigint {
@@ -147,6 +162,9 @@ export class LiveHistoryBuffer {
     }
     let evictedForTime = false;
     let evictedForCap = false;
+    if (this.#bytes > this.#maxBytes) {
+      this.#dropUnrequestedSeeds();
+    }
     while (this.#head < this.#messages.length) {
       const oldest = this.#messages[this.#head]!;
       if (cutoffNs != undefined && toNanoSec(oldest.receiveTime) < cutoffNs) {
@@ -330,6 +348,9 @@ export class LiveHistoryBuffer {
     this.#head = 0;
     this.#bytes = 0;
     this.#seeds.clear();
+    this.#seedRefs.clear();
+    this.#topicSeqs.clear();
+    this.#indexedSeq = this.#headSeq;
     this.#checkpoints.clear();
     this.#checkpointsValidFrom = Infinity;
     this.#noCheckpointsBeforeSeq = 0;
@@ -343,14 +364,43 @@ export class LiveHistoryBuffer {
     const seed: Seed = { event: msg, seq: this.#headSeq };
     this.#head++;
     this.#headSeq++;
-    this.#bytes -= msg.sizeInBytes;
+    // Its bytes stay counted: it becomes a seed, releasing the seeds it replaces
     let seeds = this.#seeds.get(msg.topic);
     if (!seeds) {
       seeds = new Map();
       this.#seeds.set(msg.topic, seeds);
     }
     for (const key of seedKeys(msg)) {
+      const replaced = seeds.get(key);
+      if (replaced) {
+        this.#releaseSeed(replaced.event);
+      }
       seeds.set(key, seed);
+      this.#seedRefs.set(msg, (this.#seedRefs.get(msg) ?? 0) + 1);
+    }
+    if (!this.#seedRefs.has(msg)) {
+      this.#bytes -= msg.sizeInBytes; // a transform message without transforms seeds nothing
+    }
+  }
+
+  #releaseSeed(event: MessageEvent): void {
+    const refs = (this.#seedRefs.get(event) ?? 1) - 1;
+    if (refs > 0) {
+      this.#seedRefs.set(event, refs);
+    } else {
+      this.#seedRefs.delete(event);
+      this.#bytes -= event.sizeInBytes;
+    }
+  }
+
+  #dropUnrequestedSeeds(): void {
+    for (const [topic, seeds] of this.#seeds) {
+      if (!this.#requestedTopics.has(topic)) {
+        for (const { event } of seeds.values()) {
+          this.#releaseSeed(event);
+        }
+        this.#seeds.delete(topic);
+      }
     }
   }
 
@@ -428,14 +478,32 @@ export class LiveHistoryBuffer {
    * when omitted), oldest first. The messages themselves, not copies.
    */
   public messages(topic: string, start?: Time, end?: Time): MessageEvent[] {
-    const from = start ? this.#bound(start, "atOrAfter") : this.#head;
-    const to = end ? this.#bound(end) : this.#messages.length;
-    const result: MessageEvent[] = [];
-    for (let i = from; i < to; i++) {
-      const msg = this.#messages[i]!;
-      if (msg.topic === topic) {
-        result.push(msg);
+    // Index what arrived since the last call, and forget evicted messages
+    const endSeq = this.#seqOf(this.#messages.length);
+    for (let seq = Math.max(this.#indexedSeq, this.#headSeq); seq < endSeq; seq++) {
+      const msgTopic = this.#messages[this.#indexOf(seq)]!.topic;
+      let seqs = this.#topicSeqs.get(msgTopic);
+      if (!seqs) {
+        seqs = [];
+        this.#topicSeqs.set(msgTopic, seqs);
       }
+      seqs.push(seq);
+    }
+    this.#indexedSeq = endSeq;
+    for (const [indexed, seqs] of this.#topicSeqs) {
+      const evicted = lowerBound(seqs, this.#headSeq);
+      if (evicted === seqs.length) {
+        this.#topicSeqs.delete(indexed);
+      } else if (evicted > 0) {
+        seqs.splice(0, evicted);
+      }
+    }
+    const seqs = this.#topicSeqs.get(topic) ?? [];
+    const fromSeq = this.#seqOf(start ? this.#bound(start, "atOrAfter") : this.#head);
+    const toSeq = this.#seqOf(end ? this.#bound(end) : this.#messages.length);
+    const result: MessageEvent[] = [];
+    for (let i = lowerBound(seqs, fromSeq); i < seqs.length && seqs[i]! < toSeq; i++) {
+      result.push(this.#messages[this.#indexOf(seqs[i]!)]!);
     }
     return result;
   }
@@ -501,6 +569,21 @@ function checkpointSize({ whole, frames }: Checkpoint): number {
 }
 
 type Seed = { event: MessageEvent; seq: number };
+
+/** Index of the first of the ascending `values` that is at least `value` */
+function lowerBound(values: readonly number[], value: number): number {
+  let lo = 0;
+  let hi = values.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >>> 1;
+    if (values[mid]! < value) {
+      lo = mid + 1;
+    } else {
+      hi = mid;
+    }
+  }
+  return lo;
+}
 
 /** Receive-time order, ties in arrival order. */
 function byTimeThenSeq(

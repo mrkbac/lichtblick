@@ -137,6 +137,21 @@ describe("FoxgloveClient", () => {
     expect(handlers.message).toHaveBeenCalledWith(7, 123n, new Uint8Array([1, 2, 3]));
   });
 
+  it("reports a truncated message data frame as an error", () => {
+    const { handlers, receive } = setup();
+    receive(new Uint8Array([BinaryOpcode.MESSAGE_DATA, 7, 0, 0, 0, 1]).buffer);
+    expect(handlers.message).not.toHaveBeenCalled();
+    expect(handlers.error).toHaveBeenCalledWith(expect.any(Error));
+  });
+
+  it("detaches from its socket on dispose, reporting the given close right away", () => {
+    const { client, handlers, receive } = setup();
+    client.dispose({ code: 1006 });
+    expect(handlers.close).toHaveBeenCalledWith({ code: 1006 });
+    receive(JSON.stringify({ op: "status", level: 0, message: "late" }));
+    expect(handlers.status).not.toHaveBeenCalled();
+  });
+
   it("ignores ops and opcodes from newer servers", () => {
     const { handlers, receive } = setup();
     receive(JSON.stringify({ op: "somethingNew" }));

@@ -117,9 +117,9 @@ describe("LiveHistoryBuffer", () => {
       buffer.add(msg("/a", t));
     }
     expect(buffer.sizeBytes()).toBeLessThanOrEqual(50);
-    expect(buffer.size()).toBe(5);
+    expect(buffer.size()).toBe(4); // and the seed
     expect(buffer.capLimited()).toBe(true);
-    expect(buffer.startTime(fromSec(10))).toEqual({ sec: 5, nsec: 1 }); // after the last evicted
+    expect(buffer.startTime(fromSec(10))).toEqual({ sec: 6, nsec: 1 }); // after the last evicted
   });
 
   it("clears the cap warning once the window, not memory, limits the history", () => {
@@ -438,7 +438,59 @@ describe("LiveHistoryBuffer.setMaxBytes", () => {
       buffer.add(msg("/a", t));
     }
     buffer.setMaxBytes(30); // no trim with a clock needed
-    expect(buffer.size()).toBe(3);
+    expect(buffer.size()).toBe(2); // and the seed
     expect(buffer.capLimited()).toBe(true);
+  });
+});
+
+describe("LiveHistoryBuffer seeds", () => {
+  it("count toward the memory cap, once per seed message", () => {
+    const buffer = new LiveHistoryBuffer({ windowNs: 2n * SEC, maxBytes: 1e9 });
+    buffer.setRequestedTopics(new Set(["/tf", "/a"]));
+    buffer.add(tf(1, "a", "b"));
+    buffer.add(msg("/a", 1, {}, 100));
+    buffer.add(msg("/a", 10)); // both earlier ones are now seeds
+    expect(buffer.size()).toBe(1);
+    expect(buffer.sizeBytes()).toBe(10 + 10 + 100);
+
+    buffer.add(tf(11, "a")); // replaces frame a only: the first transform still seeds b
+    buffer.add(msg("/a", 20)); // evicts both: the /a seed is replaced, frame b's stays
+    expect(buffer.sizeBytes()).toBe(10 + 10 + 10 + 10);
+  });
+
+  it("of topics nobody requests go first when over the cap", () => {
+    const buffer = new LiveHistoryBuffer({ windowNs: 2n * SEC, maxBytes: 1e9 });
+    buffer.setRequestedTopics(new Set(["/a"]));
+    buffer.add(msg("/map", 1, {}, 100));
+    buffer.add(msg("/a", 2));
+    buffer.add(msg("/a", 10));
+    expect(buffer.sizeBytes()).toBe(100 + 10 + 10);
+
+    buffer.setMaxBytes(30);
+    expect(buffer.sizeBytes()).toBe(20);
+    expect(buffer.size()).toBe(1); // nothing retained had to go
+    expect(buffer.backfill(fromSec(10), new Set(["/a", "/map"])).map((m) => m.topic)).toEqual([
+      "/a",
+    ]);
+  });
+});
+
+describe("LiveHistoryBuffer.messages", () => {
+  it("reads one topic's messages through an index that follows additions and evictions", () => {
+    const buffer = new LiveHistoryBuffer({ windowNs: 5n * SEC, maxBytes: 1e9 });
+    for (let t = 1; t <= 4; t++) {
+      buffer.add(msg(t % 2 === 0 ? "/even" : "/odd", t));
+    }
+    const secs = (messages: MessageEvent[]) => messages.map((m) => m.receiveTime.sec);
+    expect(secs(buffer.messages("/even"))).toEqual([2, 4]);
+    for (let t = 5; t <= 10; t++) {
+      buffer.add(msg(t % 2 === 0 ? "/even" : "/odd", t)); // 1–4 fall out of the window
+    }
+    expect(secs(buffer.messages("/even"))).toEqual([6, 8, 10]);
+    expect(secs(buffer.messages("/odd", fromSec(7), fromSec(9)))).toEqual([7, 9]);
+    expect(buffer.messages("/none")).toEqual([]);
+    buffer.clear();
+    buffer.add(msg("/even", 20));
+    expect(secs(buffer.messages("/even"))).toEqual([20]);
   });
 });

@@ -30,6 +30,7 @@ import { ParameterValue } from "@lichtblick/suite";
 import ExtensionProxySocket, {
   needsExtensionProxy,
 } from "@lichtblick/suite-base/players/FoxgloveWebSocketPlayer/ExtensionProxySocket";
+import { reconnectDelayMs } from "@lichtblick/suite-base/players/LiveConnectionBackend";
 import {
   LIVE_QUEUE_MAX_BYTES,
   LiveMessageQueue,
@@ -98,6 +99,12 @@ function isClockMessage(topic: string, msg: unknown): msg is { clock: Time } {
   return topic === "/clock" && maybeClockMsg.clock != undefined && !isNaN(maybeClockMsg.clock.sec);
 }
 
+/**
+ * The topics poll (every 3 s while the window is shown) unanswered this long: the link is dead,
+ * reconnect. A dead mobile link can leave the socket open for minutes before the browser notices.
+ */
+export const ROSBRIDGE_DEAD_LINK_MS = 30_000;
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value != undefined;
 }
@@ -118,6 +125,10 @@ export default class RosbridgePlayer implements Player {
   #url: string; // WebSocket URL.
   #rosClient?: roslib.Ros; // The roslibjs client when we're connected.
   #latestClient?: roslib.Ros; // The newest roslibjs client, connected or still connecting.
+  /** Ends the current connection now, as if it had closed, and reconnects. */
+  #dropConnection?: () => void;
+  /** Reconnects since the last successful connection, for the backoff. */
+  #reconnectAttempts = 0;
   #id: string = randomUUID(); // Unique ID for this player.
   #isRefreshing = false; // True if currently refreshing the node graph.
   /** Rejecters of requests in flight on the current connection, failed when it closes. */
@@ -197,22 +208,6 @@ export default class RosbridgePlayer implements Player {
       : new roslib.Ros({ url: this.#url, transportLibrary: "workersocket" });
     this.#latestClient = rosClient;
 
-    rosClient.on("connection", () => {
-      log.info(`Connected to ${this.#url}`);
-      if (this.#closed) {
-        // Closed while connecting: drop the socket and its worker
-        rosClient.close();
-        return;
-      }
-      this.#presence = PlayerPresence.PRESENT;
-      this.#alerts.removeAlert("rosbridge:connection-failed");
-      this.#alerts.removeAlert("rosbridge:error");
-      this.#rosClient = rosClient;
-
-      this.#setupPublishers();
-      void this.#requestTopics({ forceUpdate: true });
-    });
-
     rosClient.on("error", (err) => {
       if (err) {
         this.#alerts.addAlert("rosbridge:error", {
@@ -224,7 +219,13 @@ export default class RosbridgePlayer implements Player {
       }
     });
 
-    rosClient.on("close", () => {
+    // Once per client: a dropped connection's socket may still report its close much later
+    let handledClose = false;
+    const onClose = () => {
+      if (handledClose) {
+        return;
+      }
+      handledClose = true;
       this.#presence = PlayerPresence.RECONNECTING;
 
       this.#cancelTopicsPoll();
@@ -257,7 +258,26 @@ export default class RosbridgePlayer implements Player {
       this.#emitState();
 
       // Try connecting again.
-      setTimeout(this.#open, 3000);
+      setTimeout(this.#open, reconnectDelayMs(this.#reconnectAttempts++));
+    };
+    rosClient.on("close", onClose);
+
+    rosClient.on("connection", () => {
+      log.info(`Connected to ${this.#url}`);
+      if (this.#closed) {
+        // Closed while connecting: drop the socket and its worker
+        rosClient.close();
+        return;
+      }
+      this.#presence = PlayerPresence.PRESENT;
+      this.#alerts.removeAlert("rosbridge:connection-failed");
+      this.#alerts.removeAlert("rosbridge:error");
+      this.#rosClient = rosClient;
+      this.#dropConnection = onClose;
+      this.#reconnectAttempts = 0;
+
+      this.#setupPublishers();
+      void this.#requestTopics({ forceUpdate: true });
     });
   };
 
@@ -283,6 +303,14 @@ export default class RosbridgePlayer implements Player {
 
       this.#emitState();
     }, 5000);
+    const deadLinkTimeout = setTimeout(() => {
+      if (this.#isCurrentClient(rosClient)) {
+        log.warn(
+          `No answer from ${this.#url} for ${ROSBRIDGE_DEAD_LINK_MS / 1000} s, reconnecting`,
+        );
+        this.#dropConnection?.();
+      }
+    }, ROSBRIDGE_DEAD_LINK_MS);
 
     try {
       const result = await new Promise<{
@@ -294,6 +322,10 @@ export default class RosbridgePlayer implements Player {
       });
 
       clearTimeout(topicsStallWarningTimeout);
+      clearTimeout(deadLinkTimeout);
+      if (!this.#isCurrentClient(rosClient)) {
+        return; // an answer from a closed or replaced connection
+      }
       this.#alerts.removeAlert("topicsAndRawTypesTimeout");
 
       const topicsMissingDatatypes: string[] = [];
@@ -408,6 +440,10 @@ export default class RosbridgePlayer implements Player {
     } catch (error) {
       log.error(error);
       clearTimeout(topicsStallWarningTimeout);
+      clearTimeout(deadLinkTimeout);
+      if (!this.#isCurrentClient(rosClient)) {
+        return;
+      }
       this.#alerts.removeAlert("topicsAndRawTypesTimeout");
 
       this.#alerts.addAlert("requestTopics:error", {

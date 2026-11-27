@@ -16,7 +16,9 @@
 
 import { Time } from "@foxglove/rostime";
 
-import RosbridgePlayer from "@lichtblick/suite-base/players/RosbridgePlayer";
+import RosbridgePlayer, {
+  ROSBRIDGE_DEAD_LINK_MS,
+} from "@lichtblick/suite-base/players/RosbridgePlayer";
 
 const headerMessage = ({
   seq,
@@ -290,6 +292,61 @@ describe("RosbridgePlayer", () => {
     second.setup({ types: ["rosgraph_msgs/Log"] });
     await vi.advanceTimersByTimeAsync(0);
     expect(second.nodeRequests).toBe(1);
+  });
+
+  it("ignores a topics answer from a connection that was replaced", async () => {
+    vi.useFakeTimers();
+    onTestFinished(() => {
+      vi.useRealTimers();
+    });
+    let topics: string[] | undefined;
+    player.setListener(async (state) => {
+      topics = state.activeData?.topics.map(({ name }) => name);
+    });
+    const first = workerInstance;
+    first.holdTopics = true;
+    first.setup({ types: ["rosgraph_msgs/Log"] });
+    first.emitClose?.();
+    (console.error as ReturnType<typeof vi.fn>).mockClear(); // the expected "Connection failed" alert
+    await vi.advanceTimersByTimeAsync(1_000); // first reconnect delay
+    const second = workerInstance;
+    expect(second).not.toBe(first);
+    second.setup({ topics: ["/new"], types: ["rosgraph_msgs/Log"], typedefs: [HEADER_TYPEDEF] });
+    await vi.advanceTimersByTimeAsync(200);
+    expect(topics).toEqual(["/new"]);
+
+    first.advertise({
+      topics: ["/stale"],
+      types: ["rosgraph_msgs/Log"],
+      typedefs: [HEADER_TYPEDEF],
+    });
+    first.settleTopics?.();
+    await vi.advanceTimersByTimeAsync(200);
+    expect(topics).toEqual(["/new"]);
+  });
+
+  it("reconnects when the topics poll goes unanswered on a dead link", async () => {
+    vi.useFakeTimers();
+    onTestFinished(() => {
+      vi.useRealTimers();
+    });
+    const first = workerInstance;
+    first.holdTopics = true;
+    first.setup({ types: ["rosgraph_msgs/Log"] });
+    await vi.advanceTimersByTimeAsync(ROSBRIDGE_DEAD_LINK_MS - 1);
+    expect(workerInstance).toBe(first);
+    await vi.advanceTimersByTimeAsync(1);
+    (console.warn as ReturnType<typeof vi.fn>).mockClear(); // "no answer, reconnecting"
+    (console.error as ReturnType<typeof vi.fn>).mockClear(); // the expected "Connection failed" alert
+    expect(first.closed).toBe(true);
+    await vi.advanceTimersByTimeAsync(1_000); // first reconnect delay
+    expect(workerInstance).not.toBe(first);
+
+    // The dead socket reporting its close later doesn't start another connection
+    const second = workerInstance;
+    first.emitClose?.();
+    await vi.advanceTimersByTimeAsync(20_000);
+    expect(workerInstance).toBe(second);
   });
 
   it("looks up a large graph's services a few at a time", async () => {

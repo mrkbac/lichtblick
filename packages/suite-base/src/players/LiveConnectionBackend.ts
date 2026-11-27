@@ -11,3 +11,15 @@ export interface LiveConnectionBackend {
   open(address: string, protocols: string[]): IWebSocket;
   dispose?(): void;
 }
+
+const RECONNECT_MIN_MS = 1000;
+const RECONNECT_MAX_MS = 15_000;
+
+/**
+ * Wait before reconnect attempt `attempt` (0 for the first after a drop): 1 s, doubling up to 15 s,
+ * each cut by a random share of up to half, so clients that dropped together don't retry together.
+ */
+export function reconnectDelayMs(attempt: number, random: () => number = Math.random): number {
+  const ceiling = Math.min(RECONNECT_MAX_MS, RECONNECT_MIN_MS * 2 ** attempt);
+  return Math.round(ceiling * (1 - random() / 2));
+}
