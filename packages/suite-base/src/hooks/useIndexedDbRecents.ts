@@ -172,6 +172,8 @@ function useIndexedDbRecents(): IRecentsStore {
           return;
         }
         const store = await IDB_STORE.readwrite();
+        // A failed get/put aborts the transaction and rejects `done` too, unawaited: handle it here
+        store.transaction.done.catch(() => {});
         const stored = migrateStored(
           (await store.get(IDB_KEY)) as (RecentRecord & OldRecentRecord)[] | undefined,
         );
@@ -211,15 +213,14 @@ function useIndexedDbRecents(): IRecentsStore {
 
   const addRecent = useCallback(
     (record: UnsavedRecentRecord) => {
-      // Re-opening an existing record keeps its id and pin
+      // Re-opening an existing record keeps its id and pin. The stored record takes this id even
+      // when another tab stored the same recent under its own id, so the id the caller keeps
+      // (current recent, reopen after reload) is the one in storage.
       const id =
         recentsRef.current.find((recent) => isSameRecent(recent, record))?.id ?? randomUUID();
       change((list) => {
         const existing = list.find((recent) => isSameRecent(recent, record));
-        return [
-          { ...record, id: existing?.id ?? id, pinned: existing?.pinned, lastOpened: Date.now() },
-          ...list,
-        ];
+        return [{ ...record, id, pinned: existing?.pinned, lastOpened: Date.now() }, ...list];
       });
       return id;
     },

@@ -40,8 +40,8 @@ let flushDebouncedLayout: (() => boolean) | undefined;
 
 /**
  * Starts saving a debounced layout edit now instead of after the debounce (see
- * useSaveSessionBeforeReload). Returns whether an edit was pending. Its write is async:
- * LayoutManager.isBusy() reports it.
+ * useSaveSessionBeforeReload; `pagehide` does the same). Returns whether an edit was pending. Its
+ * write is async: LayoutManager.isBusy() reports it.
  */
 export function flushPendingLayoutSave(): boolean {
   return flushDebouncedLayout?.() ?? false;
@@ -97,7 +97,10 @@ export function CurrentLayoutLocalStorageSyncAdapter(): React.JSX.Element {
       return pending;
     };
     flushDebouncedLayout = flush;
+    // A reload or tab close right after an edit must not drop it (layout history flushes here too)
+    window.addEventListener("pagehide", flush);
     return () => {
+      window.removeEventListener("pagehide", flush);
       if (flushDebouncedLayout === flush) {
         flushDebouncedLayout = undefined;
       }

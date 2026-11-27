@@ -98,6 +98,7 @@ function anyOf(needle: string, predicate: (value: string) => Predicate | undefin
   return (r: CatalogRecording) => predicates.some((p) => p!(r));
 }
 
+const INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2})$/i;
 const PERIOD = /^(\d{4})(?:-(\d{1,2})(?:-(\d{1,2})(?:T(\d{1,2}):(\d{2})(?::(\d{2}))?)?)?)?$/;
 
 /**
@@ -112,6 +113,11 @@ export function parsePeriod(
 ): { start: number; end: number; endInclusive: boolean } | undefined {
   const m = PERIOD.exec(value);
   if (!m) {
+    // Only an instant with an explicit offset: anything else Date.parse reads in the browser's zone
+    // (not `timezone`) or guesses (`5` is May 2001)
+    if (!INSTANT.test(value)) {
+      return undefined;
+    }
     const ms = Date.parse(value);
     return Number.isNaN(ms) ? undefined : { start: ms, end: ms, endInclusive: true };
   }

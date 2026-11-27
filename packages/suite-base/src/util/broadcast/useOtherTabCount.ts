@@ -3,14 +3,14 @@
 
 import { useEffect, useState } from "react";
 
+import { randomUUID } from "@lichtblick/suite-base/util/randomUUID";
+
 const LOCK_PREFIX = "lichtblick-tab:";
 const PRESENCE_CHANNEL_NAME = "lichtblick-tab-presence";
 // A closed or crashed tab sends nothing; polling picks it up.
 const POLL_INTERVAL_MS = 3000;
 // One id per tab: every mount in this tab shares it, so several toggles in one tab count as one.
-// Not crypto.randomUUID(): it only exists in secure contexts and this runs at import.
-const randomId = () => Math.random().toString(36).slice(2) + Date.now().toString(36);
-const TAB_ID = randomId();
+const TAB_ID = randomUUID();
 
 /**
  * Number of other Lichtblick tabs (same origin) that are using this hook right now.
@@ -30,7 +30,7 @@ export function useOtherTabCount(): number | undefined {
       return;
     }
 
-    const ownName = `${LOCK_PREFIX}${TAB_ID}:${randomId()}`;
+    const ownName = `${LOCK_PREFIX}${TAB_ID}:${randomUUID()}`;
     const channel = new BroadcastChannel(PRESENCE_CHANNEL_NAME);
     let active = true;
 

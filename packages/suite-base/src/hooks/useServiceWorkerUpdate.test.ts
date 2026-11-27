@@ -5,6 +5,8 @@
 
 import type { Mock } from "vitest";
 
+import sendNotification from "@lichtblick/suite-base/util/sendNotification";
+
 import {
   checkForServiceWorkerUpdate,
   resetServiceWorkerUpdateStateForTests,
@@ -139,6 +141,47 @@ describe("reloadToLatestVersion", () => {
     await reloadToLatestVersion();
     await expect(reloadToLatestVersion()).resolves.toBe(false);
     expect(reload).toHaveBeenCalledTimes(1);
+  });
+
+  describe("when the failed file can't be fetched", () => {
+    const CHUNK = "https://app.example/chunk.abc123.js";
+    let fetchMock: Mock;
+    beforeEach(() => {
+      fetchMock = vi.fn(async () => {
+        throw new TypeError("Failed to fetch");
+      });
+      vi.stubGlobal("fetch", fetchMock);
+    });
+    afterEach(() => {
+      vi.unstubAllGlobals();
+    });
+
+    it("shows an offline notice instead of reloading, and retries once online", async () => {
+      mockRegistration(undefined);
+      await expect(reloadToLatestVersion(CHUNK)).resolves.toBe(false);
+      // Every later failure while offline (30 s apart or not) waits for the same retry
+      sessionStorage.clear();
+      await expect(reloadToLatestVersion(CHUNK)).resolves.toBe(false);
+      expect(reload).not.toHaveBeenCalled();
+      expect(fetchMock).toHaveBeenCalledWith(CHUNK, { method: "HEAD", cache: "no-store" });
+      sendNotification.expectCalledDuringTest();
+
+      fetchMock.mockResolvedValue(new Response(undefined, { status: 200 }));
+      window.dispatchEvent(new Event("online"));
+      await vi.waitFor(() => {
+        expect(reload).toHaveBeenCalledTimes(1);
+      });
+    });
+
+    it("doesn't fetch while the browser reports offline", async () => {
+      mockRegistration(undefined);
+      vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);
+      await expect(reloadToLatestVersion(CHUNK)).resolves.toBe(false);
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect(reload).not.toHaveBeenCalled();
+      sendNotification.expectCalledDuringTest();
+      vi.restoreAllMocks();
+    });
   });
 });
 
