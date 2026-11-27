@@ -42,6 +42,7 @@ import {
 import { hasTransformerErrors } from "@lichtblick/suite-base/players/UserScriptPlayer/utils";
 import { isRecordingSource } from "@lichtblick/suite-base/players/constants";
 import {
+  BatchIteratorOptions,
   AdvertiseOptions,
   BlockCache,
   MessageBlock,
@@ -1419,7 +1420,7 @@ export default class UserScriptPlayer implements Player {
 
   public getBatchIterator(
     topic: string,
-    options?: { start?: Time; end?: Time },
+    options?: BatchIteratorOptions,
   ): AsyncIterableIterator<Readonly<IIterableSourceIteratorResult>> | undefined {
     const registration = this.#outputTopicRegistrations.get(topic);
     if (!registration) {

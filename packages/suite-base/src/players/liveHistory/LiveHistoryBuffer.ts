@@ -423,6 +423,38 @@ export class LiveHistoryBuffer {
     return state;
   }
 
+  /**
+   * The retained messages of `topic` received in [start, end] (both inclusive; the whole history
+   * when omitted), oldest first. The messages themselves, not copies.
+   */
+  public messages(topic: string, start?: Time, end?: Time): MessageEvent[] {
+    const from = start ? this.#lowerBound(start) : this.#head;
+    const to = end ? this.#upperBound(end) : this.#messages.length;
+    const result: MessageEvent[] = [];
+    for (let i = from; i < to; i++) {
+      const msg = this.#messages[i]!;
+      if (msg.topic === topic) {
+        result.push(msg);
+      }
+    }
+    return result;
+  }
+
+  /** Index of the first retained message received at or after `time`. */
+  #lowerBound(time: Time): number {
+    let lo = this.#head;
+    let hi = this.#messages.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >>> 1;
+      if (compare(this.#messages[mid]!.receiveTime, time) < 0) {
+        lo = mid + 1;
+      } else {
+        hi = mid;
+      }
+    }
+    return lo;
+  }
+
   /** Index of the first retained message received after `time`. */
   #upperBound(time: Time): number {
     let lo = this.#head;

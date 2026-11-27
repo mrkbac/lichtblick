@@ -49,6 +49,20 @@ export type TopicSelection = Map<string, SubscribePayload>;
 // current time, which topics and datatypes are available, and so on.
 // For more details, see the types below.
 
+/** Options of {@link Player.getBatchIterator} */
+export type BatchIteratorOptions = {
+  /** Inclusive start, in log time; the source's start when omitted */
+  start?: Time;
+  /** Inclusive end, in log time; the source's end when omitted */
+  end?: Time;
+  /**
+   * Live sources only, opt-in: read what the player keeps of the session (its live history) up to
+   * the newest message delivered to panels, instead of returning undefined. Off by default because
+   * most range readers take "has a range" to mean "is a complete recording".
+   */
+  liveHistory?: boolean;
+};
+
 export interface Player {
   // The main way to get information out the player is to set a listener. This listener will be
   // called whenever the PlayerState changes, so that we can render the new state to the UI. Users
@@ -87,7 +101,7 @@ export interface Player {
   // Create a batch iterator for streaming messages. Available for data source players that support message iteration.
   getBatchIterator: (
     topic: string,
-    options?: { start?: Time; end?: Time },
+    options?: BatchIteratorOptions,
   ) => AsyncIterableIterator<Readonly<IteratorResult>> | undefined;
   /**
    * Inspect topics in one pass without decoding; returned events omit message payloads. Returns

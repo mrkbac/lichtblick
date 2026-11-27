@@ -29,6 +29,7 @@ import { PLAYER_CAPABILITIES } from "@lichtblick/suite-base/players/constants";
 import { applySamplingGuardToSubscriptions } from "@lichtblick/suite-base/players/samplingGuard";
 import { sameTopicSelection } from "@lichtblick/suite-base/players/subscriptionEquality";
 import {
+  BatchIteratorOptions,
   Player,
   PlayerPresence,
   PlayerState,
@@ -583,7 +584,7 @@ export class IterablePlayer implements Player {
 
   public getBatchIterator(
     topic: string,
-    options?: { start?: Time; end?: Time },
+    options?: BatchIteratorOptions,
   ): AsyncIterableIterator<Readonly<IteratorResult>> | undefined {
     if (!this.#messageRangeSource) {
       return undefined;
