@@ -83,7 +83,13 @@ class RangeAccumulator {
       merged = merged.filter((message) => !removed.has(message.topic));
       this.#removed = new Set();
     }
-    const batches = [...this.#pending.values()];
+    // Read around the playhead first, a topic's messages since the last flush can hold an earlier
+    // window after a later one
+    const batches = [...this.#pending.values()].map((messages) =>
+      messages.every((m, i) => i === 0 || compare(messages[i - 1]!.receiveTime, m.receiveTime) <= 0)
+        ? messages
+        : messages.toSorted((a, b) => compare(a.receiveTime, b.receiveTime)),
+    );
     for (const topic of this.#pending.keys()) {
       this.#pending.set(topic, []);
     }
@@ -194,6 +200,8 @@ export function useLogMessages(topics: readonly string[]): {
       const cancelRange = subscribeMessageRange({
         topic,
         rethrowErrors: true,
+        // The lines around the playhead, where the list scrolls to, show first
+        playheadFirst: true,
         onNewRangeIterator: async (iterator) => {
           acc.reset(topic);
           setLoadingTopics((prev) => new Set(prev).add(topic));

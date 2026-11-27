@@ -1,7 +1,6 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import { compare, Time } from "@foxglove/rostime";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { useLatest } from "@lichtblick/hooks";
@@ -9,6 +8,7 @@ import { parseMessagePath } from "@lichtblick/message-path";
 import { PathSampleColumns } from "@lichtblick/suite-base/components/MessagePathSyntax/PathSampleColumns";
 import { useCachedGetMessagePathDataItems } from "@lichtblick/suite-base/components/MessagePathSyntax/useCachedGetMessagePathDataItems";
 import { useSubscribeMessageRange } from "@lichtblick/suite-base/components/PanelExtensionAdapter";
+import { EarlierWindows } from "@lichtblick/suite-base/components/PanelExtensionAdapter/EarlierWindows";
 import useGlobalVariables from "@lichtblick/suite-base/hooks/useGlobalVariables";
 import { MAX_SAMPLES_PER_PATH } from "@lichtblick/suite-base/panels/StateTransitions/constants";
 
@@ -105,48 +105,24 @@ export function useDecodedMessageRange(
           publish();
           // History before what `acc` has (read around the playhead first) is collected per window
           // and put in front once its window ends.
-          let loaded: { first: Time; last: Time } | undefined;
-          let earlier:
-            | { first: Time; last: Time; samples: Record<string, PathSampleColumns> }
-            | undefined;
-          const prependEarlier = () => {
-            if (!earlier || !loaded) {
-              return;
-            }
-            for (const path of request.paths) {
-              const before = earlier.samples[path];
-              const after = acc[path];
-              if (before && after) {
-                acc[path] = PathSampleColumns.concat(before, after);
+          const earlier = new EarlierWindows<Record<string, PathSampleColumns>>(
+            () => ({}),
+            (samples) => {
+              for (const path of request.paths) {
+                const before = samples[path];
+                const after = acc[path];
+                if (before && after) {
+                  acc[path] = PathSampleColumns.concat(before, after);
+                }
               }
-            }
-            loaded.first = earlier.first;
-            earlier = undefined;
-          };
+            },
+          );
           for await (const batch of batchIterator) {
             // The resolver can already be the next render's, before this effect cancels us.
             if (cancelled || request.paths.some((path) => !pathsRef.current.includes(path))) {
               return;
             }
-            const first = batch[0]?.receiveTime;
-            const last = batch.at(-1)?.receiveTime;
-            if (!first || !last) {
-              continue;
-            }
-            let into = acc;
-            if (!loaded || compare(first, loaded.last) >= 0) {
-              prependEarlier();
-              loaded ??= { first, last };
-              loaded.last = last;
-            } else {
-              if (!earlier || compare(first, earlier.last) < 0) {
-                // An earlier window starts
-                prependEarlier();
-                earlier = { first, last, samples: {} };
-              }
-              earlier.last = last;
-              into = earlier.samples;
-            }
+            const into = earlier.place(batch) ?? acc;
             for (const path of request.paths) {
               const out = (into[path] ??= new PathSampleColumns(MAX_SAMPLES_PER_PATH));
               if (changesPathsRef.current.includes(path)) {
@@ -166,7 +142,7 @@ export function useDecodedMessageRange(
             }, FLUSH_INTERVAL_MS);
           }
           if (!cancelled) {
-            prependEarlier();
+            earlier.flush();
             publish();
           }
         },

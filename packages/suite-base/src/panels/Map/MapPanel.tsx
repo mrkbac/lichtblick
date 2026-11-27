@@ -33,6 +33,7 @@ import { AppSetting } from "@lichtblick/suite-base/AppSetting";
 import { simpleGetMessagePathDataItems } from "@lichtblick/suite-base/components/MessagePathSyntax/simpleGetMessagePathDataItems";
 import { OVERLAY_TOOLBAR_BUTTON_SIZE } from "@lichtblick/suite-base/components/OverlayToolbar";
 import { BuiltinPanelExtensionContext } from "@lichtblick/suite-base/components/PanelExtensionAdapter";
+import { EarlierWindows } from "@lichtblick/suite-base/components/PanelExtensionAdapter/EarlierWindows";
 import { PANEL_FLOATING_TOOLBAR_HEIGHT } from "@lichtblick/suite-base/components/PanelToolbar/constants";
 import { addTopicsDrop } from "@lichtblick/suite-base/panels/shared/pathDrop";
 import ThemeProvider from "@lichtblick/suite-base/theme/ThemeProvider";
@@ -604,12 +605,16 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
     );
   }, []);
   const appendTrack = useCallback(
-    (messages: readonly NavMessage[], source: DataSource) => {
+    (
+      messages: readonly NavMessage[],
+      source: DataSource,
+      stores: Map<string, TrackStore> = tracksRef.current,
+    ) => {
       for (const message of messages) {
-        let store = tracksRef.current.get(message.topic);
+        let store = stores.get(message.topic);
         if (!store) {
           store = new TrackStore(message.topic);
-          tracksRef.current.set(message.topic, store);
+          stores.set(message.topic, store);
         }
         store.push(message);
       }
@@ -655,20 +660,39 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
         context.unstable_subscribeMessageRange({
           topic: topic.name,
           convertTo: topic.schemaName,
+          // Around the playhead first, so the track where the user looks shows at once
+          playheadFirst: true,
           onNewRangeIterator: async (iterator) => {
             // A new iterator replaces the topic's data (e.g. an edited user script); drop the old.
             tracksRef.current.get(topic.name)?.clear();
             scheduleTrackFlush("recorded");
             rangeTopicsRef.current.add(topic.name);
+            const earlier = new EarlierWindows<Map<string, TrackStore>>(
+              () => new Map(),
+              (stores) => {
+                for (const [name, before] of stores) {
+                  let store = tracksRef.current.get(name);
+                  if (!store) {
+                    store = new TrackStore(name);
+                    tracksRef.current.set(name, store);
+                  }
+                  store.prepend(before);
+                  store.schemaName ||= before.schemaName;
+                }
+                scheduleTrackFlush("recorded");
+              },
+            );
             for await (const batch of iterator) {
+              const into = earlier.place(batch);
               const valid = expandLocationFixes(batch).filter(
                 (event): event is NavMessage =>
                   isValidMapMessage(event) && !isGeoJSONMessage(event),
               );
               if (valid.length > 0) {
-                appendTrack(valid, "recorded");
+                appendTrack(valid, "recorded", into);
               }
             }
+            earlier.flush();
           },
         }),
       );
@@ -693,6 +717,7 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
       messages: readonly MessageEvent[],
       paths: readonly { path: string; parsed: MessagePath }[],
       source: DataSource,
+      stores: Map<string, SampleStore> = samplesRef.current,
     ) => {
       let added = false;
       for (const { path, parsed } of paths) {
@@ -701,10 +726,10 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
             (item): item is number | bigint => typeof item === "number" || typeof item === "bigint",
           );
           if (value != undefined) {
-            let store = samplesRef.current.get(path);
+            let store = stores.get(path);
             if (!store) {
               store = new SampleStore();
-              samplesRef.current.set(path, store);
+              stores.set(path, store);
             }
             store.push(eventTimeSec(message), Number(value));
             added = true;
@@ -770,15 +795,31 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
         key,
         context.unstable_subscribeMessageRange({
           topic,
+          playheadFirst: true,
           onNewRangeIterator: async (iterator) => {
             for (const { path } of paths) {
               samplesRef.current.get(path)?.clear();
             }
             setPathSamples({ stores: samplesRef.current });
             pathRangeTopicsRef.current.add(topic);
+            const earlier = new EarlierWindows<Map<string, SampleStore>>(
+              () => new Map(),
+              (stores) => {
+                for (const [path, before] of stores) {
+                  let store = samplesRef.current.get(path);
+                  if (!store) {
+                    store = new SampleStore();
+                    samplesRef.current.set(path, store);
+                  }
+                  store.prepend(before);
+                }
+                setPathSamples({ stores: samplesRef.current });
+              },
+            );
             for await (const batch of iterator) {
-              appendPathSamples(batch, paths, "recorded");
+              appendPathSamples(batch, paths, "recorded", earlier.place(batch));
             }
+            earlier.flush();
           },
         }),
       );

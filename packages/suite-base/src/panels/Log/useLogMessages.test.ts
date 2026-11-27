@@ -157,6 +157,31 @@ describe("useLogMessages", () => {
     expect(messages()).toEqual(["/a@1", "/b@2", "/a@3", "/b@3", "/b@4", "/a@5"]);
   });
 
+  it("reads around the playhead first and keeps earlier windows in order", async () => {
+    const subscribe = withRange();
+    const { result } = renderHook(() => useLogMessages(TOPICS));
+    expect(subscribe).toHaveBeenCalledWith(expect.objectContaining({ playheadFirst: true }));
+
+    await act(async () => {
+      // One flush gets the playhead window, an earlier and a later one
+      rangeIterators.get("/a")!([event(5, "/a"), event(6, "/a")]);
+      rangeIterators.get("/a")!([event(3, "/a")]);
+      rangeIterators.get("/a")!([event(7, "/a")]);
+      await vi.runAllTimersAsync();
+    });
+    await act(async () => {
+      rangeIterators.get("/a")!([event(1, "/a")]);
+      await vi.runAllTimersAsync();
+    });
+    expect(result.current.items.map((m) => m.message)).toEqual([
+      "/a@1",
+      "/a@3",
+      "/a@5",
+      "/a@6",
+      "/a@7",
+    ]);
+  });
+
   it("stops loading and reports the error when reading fails, and can retry", async () => {
     const subscribe = withRange();
     const { result } = renderHook(() => useLogMessages(SINGLE_TOPIC));

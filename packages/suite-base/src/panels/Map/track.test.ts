@@ -252,3 +252,23 @@ describe("nearestFix", () => {
     expect(nearestFix(store, kept, 1, [-183, 0]).nearest).toBe(1);
   });
 });
+
+describe("ColumnStore.prepend", () => {
+  it("puts earlier rows in front, thinned to the store's stride", () => {
+    const later = new SampleStore(4);
+    for (let t = 10; t < 16; t++) {
+      later.push(t, t); // past the limit: thinned to every other row
+    }
+    const earlier = new SampleStore(4);
+    for (let t = 0; t < 4; t++) {
+      earlier.push(t, t);
+    }
+    later.prepend(earlier);
+    const times = Array.from(later.columns.time.subarray(0, later.length));
+    // The limit plus the oldest row at most: the next push halves as usual
+    expect(times.length).toBeLessThanOrEqual(5);
+    expect(times).toEqual([...times].sort((a, b) => a - b));
+    expect(times[0]).toBe(0);
+    expect(times.at(-1)).toBe(15);
+  });
+});
