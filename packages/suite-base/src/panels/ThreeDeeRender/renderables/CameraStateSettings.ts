@@ -65,6 +65,8 @@ export class CameraStateSettings extends SceneExtension implements ICameraHandle
   public unfollowPoseSnapshot: Pose | undefined;
 
   #controls: OrbitControls;
+  /** Removes this camera's own listeners on the canvas, see dispose() */
+  readonly #canvasListeners: AbortController;
   #isUpdatingCameraState = false;
   #canvas: HTMLCanvasElement;
 
@@ -100,6 +102,8 @@ export class CameraStateSettings extends SceneExtension implements ICameraHandle
     // Trackpad: two-finger scroll pans like a drag and Alt+scroll orbits like a right-drag. Pinch
     // and mouse wheels fall through to OrbitControls' zoom. Registered before OrbitControls (and
     // in the capture phase) so it can claim the event first.
+    // From the canvas's window: a popout's canvas takes only that window's signals
+    this.#canvasListeners = new (canvas.ownerDocument.defaultView ?? window).AbortController();
     const isTrackpadPan = makeTrackpadScrollDetector();
     canvas.addEventListener(
       "wheel",
@@ -120,7 +124,7 @@ export class CameraStateSettings extends SceneExtension implements ICameraHandle
           this.#controls.pan(-event.deltaX, -event.deltaY);
         }
       },
-      { capture: true, passive: false },
+      { capture: true, passive: false, signal: this.#canvasListeners.signal },
     );
 
     this.#controls = new OrbitControls(this.#perspectiveCamera, this.#canvas);
@@ -157,16 +161,25 @@ export class CameraStateSettings extends SceneExtension implements ICameraHandle
     });
 
     // Screen space panning when holding Alt key
-    canvas.addEventListener("keydown", (event) => {
-      if (event.altKey) {
-        this.#controls.screenSpacePanning = true;
-      }
-    });
-    canvas.addEventListener("keyup", (event) => {
-      if (!event.altKey) {
-        this.#controls.screenSpacePanning = false;
-      }
-    });
+    const { signal } = this.#canvasListeners;
+    canvas.addEventListener(
+      "keydown",
+      (event) => {
+        if (event.altKey) {
+          this.#controls.screenSpacePanning = true;
+        }
+      },
+      { signal },
+    );
+    canvas.addEventListener(
+      "keyup",
+      (event) => {
+        if (!event.altKey) {
+          this.#controls.screenSpacePanning = false;
+        }
+      },
+      { signal },
+    );
 
     // Make the canvas able to receive keyboard events and setup WASD controls
     canvas.tabIndex = 1000;
@@ -176,6 +189,9 @@ export class CameraStateSettings extends SceneExtension implements ICameraHandle
   }
 
   public override dispose(): void {
+    // A new renderer reuses this canvas: the old wheel listener (capture phase, first in line)
+    // would swallow its trackpad scrolls and keep this renderer alive
+    this.#canvasListeners.abort();
     this.#controls.dispose();
     this.#commitCameraState.cancel();
     // for camera settings

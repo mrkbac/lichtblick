@@ -604,25 +604,33 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
 
   // Subscribed topics drawn with a decay time by a layer that takes read-back history (not e.g.
   // Velodyne scans), the layer, and how far back their history reaches in ns
-  const decayTopics: (TransformTopic & { decayNs: bigint; ingest: DecayHistoryIngest })[] = [];
-  const historyLayers: DecayHistoryIngest[] = [];
-  for (const extension of renderer?.sceneExtensions.values() ?? []) {
-    if (isDecayHistoryIngest(extension)) {
-      historyLayers.push(extension);
+  // Memoized: the panel renders every frame, and this looks up every subscription's schema
+  const decayTopics = useMemo(() => {
+    const result: (TransformTopic & { decayNs: bigint; ingest: DecayHistoryIngest })[] = [];
+    const historyLayers: DecayHistoryIngest[] = [];
+    for (const extension of renderer?.sceneExtensions.values() ?? []) {
+      if (isDecayHistoryIngest(extension)) {
+        historyLayers.push(extension);
+      }
     }
-  }
-  for (const { topic, convertTo } of topicsToSubscribe ?? []) {
-    const decayTime = pointDecayTime(config.topics[topic]);
-    const schema = convertTo ?? topics?.find((candidate) => candidate.name === topic)?.schemaName;
-    const ingest = historyLayers.find(
-      (layer) => schema != undefined && layer.historySchemas.has(schema),
-    );
-    if (decayTime > 0 && ingest) {
-      decayTopics.push({ topic, convertTo, decayNs: BigInt(Math.round(decayTime * 1e9)), ingest });
+    const schemaByTopic = new Map(topics?.map(({ name, schemaName }) => [name, schemaName]));
+    for (const { topic, convertTo } of topicsToSubscribe ?? []) {
+      const decayTime = pointDecayTime(config.topics[topic]);
+      const schema = convertTo ?? schemaByTopic.get(topic);
+      const ingest = historyLayers.find(
+        (layer) => schema != undefined && layer.historySchemas.has(schema),
+      );
+      if (decayTime > 0 && ingest) {
+        result.push({ topic, convertTo, decayNs: BigInt(Math.round(decayTime * 1e9)), ingest });
+      }
     }
-  }
+    return result;
+  }, [config.topics, renderer, topics, topicsToSubscribe]);
   const decayTopicsRef = useLatest(decayTopics);
-  const decayKey = decayTopics.map((d) => `${d.topic} ${d.convertTo} ${d.decayNs}`).join("\n");
+  const decayKey = useMemo(
+    () => decayTopics.map((d) => `${d.topic} ${d.convertTo} ${d.decayNs}`).join("\n"),
+    [decayTopics],
+  );
 
   // A seek empties the decay histories: read each decayed topic's window before the new time again.
   // The layers decode each batch straight into the history (never through the renderer's message
