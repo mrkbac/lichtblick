@@ -5,30 +5,9 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import * as _ from "lodash-es";
-
 import { Immutable } from "@lichtblick/suite";
 import { applySamplingGuardToSubscription } from "@lichtblick/suite-base/players/samplingGuard";
 import { InternalSubscribePayload, SubscribePayload } from "@lichtblick/suite-base/players/types";
-
-/**
- * Create a deep equal memoized identify function. Used for stabilizing the subscription payloads we
- * send on to the player.
- *
- * Note that this has unlimited cache size so it should be managed by some containing scope.
- */
-export function makeSubscriptionMemoizer(): (val: SubscribePayload) => SubscribePayload {
-  // Linear scan over every distinct payload seen; fine for the handful of subscriptions per panel
-  const seen: SubscribePayload[] = [];
-  return (val) => {
-    const existing = seen.find((item) => _.isEqual(item, val));
-    if (existing) {
-      return existing;
-    }
-    seen.push(val);
-    return val;
-  };
-}
 
 /**
  * Merge two SubscribePayloads, using either all of the fields or the union of
