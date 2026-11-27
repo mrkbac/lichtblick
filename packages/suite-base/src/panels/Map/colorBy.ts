@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MPL-2.0
 
-import { upperBound } from "@lichtblick/suite-base/util/sortedSearch";
+import { lowerBound, upperBound } from "@lichtblick/suite-base/util/sortedSearch";
 
 import { haversineMeters, Units } from "./geo";
 import { SampleStore, TrackStore } from "./track";
@@ -66,24 +66,73 @@ const speedCache = new WeakMap<
 
 /** For each fix, the latest sample at or before it (NaN if none). */
 export function sampleAt(samples: SampleStore | undefined, track: TrackStore): Float64Array {
-  const values = new Float64Array(track.length).fill(NaN);
   if (!samples) {
-    return values;
+    return new Float64Array(track.length).fill(NaN);
   }
   const { time, value } = samples.columns;
+  const trackTime = track.columns.time;
+  // Each flush only appends: redo the fixes from the newest cached one (it may have been replaced
+  // in place) and from the first fix at or after the samples that changed, keep the rest.
+  const cached = sampleCache.get(track);
+  let start = 0;
+  if (
+    cached?.samples === samples &&
+    cached.trackVersion === track.version &&
+    cached.samplesVersion === samples.version &&
+    cached.length <= track.length &&
+    cached.samplesLength <= samples.length
+  ) {
+    start = Math.max(0, cached.length - 1);
+    const samplesChanged =
+      samples.length !== cached.samplesLength ||
+      samples.tailReplacements !== cached.samplesTailReplacements;
+    // From the newest cached sample's time: it may have been replaced by a later one
+    if (samplesChanged && cached.samplesTailTime != undefined) {
+      start = Math.min(start, lowerBound(trackTime, 0, cached.length, cached.samplesTailTime));
+    }
+  }
+  // One buffer per track, grown by doubling: a flush doesn't allocate the whole track again
+  let buffer = cached?.buffer ?? new Float64Array(0);
+  if (buffer.length < track.length) {
+    const grown = new Float64Array(Math.max(16, track.length * 2));
+    grown.set(buffer.subarray(0, start));
+    buffer = grown;
+  }
   // Both are sorted by time: walk them together.
-  let j = -1;
-  for (let i = 0; i < track.length; i++) {
-    const t = track.columns.time[i]!;
+  let j = start < track.length ? upperBound(time, 0, samples.length, trackTime[start]!) - 1 : 0;
+  for (let i = start; i < track.length; i++) {
+    const t = trackTime[i]!;
     while (j + 1 < samples.length && time[j + 1]! <= t) {
       j++;
     }
-    if (j >= 0) {
-      values[i] = value[j]!;
-    }
+    buffer[i] = j >= 0 ? value[j]! : NaN;
   }
-  return values;
+  sampleCache.set(track, {
+    samples,
+    trackVersion: track.version,
+    samplesVersion: samples.version,
+    samplesLength: samples.length,
+    samplesTailReplacements: samples.tailReplacements,
+    samplesTailTime: samples.length > 0 ? time[samples.length - 1] : undefined,
+    length: track.length,
+    buffer,
+  });
+  return buffer.subarray(0, track.length);
 }
+
+const sampleCache = new WeakMap<
+  TrackStore,
+  {
+    samples: SampleStore;
+    trackVersion: number;
+    samplesVersion: number;
+    samplesLength: number;
+    samplesTailReplacements: number;
+    samplesTailTime: number | undefined;
+    length: number;
+    buffer: Float64Array;
+  }
+>();
 
 /**
  * Color scale range: the given bounds, or the 2nd–98th percentile of the values so a few outliers

@@ -42,6 +42,39 @@ describe("colorBy", () => {
     expect([...sampleAt(undefined, fixes)]).toEqual([NaN, NaN, NaN, NaN, NaN]);
   });
 
+  it("updates sample lookups incrementally as the track and the samples grow", () => {
+    const fixStore = new TrackStore("/fix");
+    // A small limit, so the samples get thinned (version change) and replace their newest row
+    const samples = new SampleStore(8);
+    const naive = () =>
+      Array.from({ length: fixStore.length }, (_, i) => {
+        const t = fixStore.columns.time[i]!;
+        let found = NaN;
+        for (let j = 0; j < samples.length && samples.columns.time[j]! <= t; j++) {
+          found = samples.columns.value[j]!;
+        }
+        return found;
+      });
+    let time = 0;
+    for (let step = 0; step < 40; step++) {
+      // Fixes every 0.1 s; samples every 0.25 s, arriving a little after the fixes they cover
+      for (let k = 0; k < 3; k++) {
+        time += 0.1;
+        fixStore.push({
+          topic: "/fix",
+          schemaName: "sensor_msgs/NavSatFix",
+          receiveTime: { sec: Math.floor(time), nsec: Math.round((time % 1) * 1e9) },
+          sizeInBytes: 0,
+          message: { longitude: 0, latitude: 0 },
+        });
+      }
+      if (step % 2 === 0) {
+        samples.push(time - 0.15, step);
+      }
+      expect([...sampleAt(samples, fixStore)]).toEqual(naive());
+    }
+  });
+
   it("derives a robust range unless bounds are given", () => {
     const values = [...Array.from({ length: 100 }, (_, i) => i), 10_000, NaN];
     expect(valueRange(values, undefined, undefined)).toEqual([2, 98]);

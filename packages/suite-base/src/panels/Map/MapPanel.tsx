@@ -98,7 +98,16 @@ import {
   isValidMapMessage,
   expandLocationFixes,
 } from "./support";
-import { SampleStore, thinTrack, thinViewCovers, thinViewFor, ThinView, TrackStore } from "./track";
+import {
+  extendThinnedTrack,
+  SampleStore,
+  thinTrack,
+  ThinnedTrack,
+  thinViewCovers,
+  thinViewFor,
+  ThinView,
+  TrackStore,
+} from "./track";
 
 const log = Logger.getLogger(__filename);
 
@@ -1276,6 +1285,13 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
     };
   }, [map]);
 
+  // Each topic's last thinning: a live flush that only appended fixes thins just those
+  const thinCache = useRef(
+    new WeakMap<
+      TrackStore,
+      { version: number; view: ThinView; minPixels: number; budget: number; result: ThinnedTrack }
+    >(),
+  );
   const thinned = useMemo(() => {
     if (!thinView) {
       return [];
@@ -1291,13 +1307,31 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
       // Points overlap heavily at half their radius apart; lines only need a pixel.
       const minPixels =
         history === "line" ? 1 : Math.max(1, (style.pointSize ?? DEFAULT_POINT_SIZE) / 2);
+      const options = { ...thinView, minPixels, budget };
+      const cached = thinCache.current.get(store);
+      const result =
+        cached?.version === store.version &&
+        cached.view === thinView &&
+        cached.minPixels === minPixels &&
+        cached.budget === budget &&
+        cached.result.length <= store.length
+          ? extendThinnedTrack(store, cached.result, options)
+          : thinTrack(store, options);
+      thinCache.current.set(store, {
+        version: store.version,
+        view: thinView,
+        minPixels,
+        budget,
+        result,
+      });
       return {
         store,
         style,
         version: store.version,
         length: store.length,
         tailReplacements: store.tailReplacements,
-        ...thinTrack(store, { ...thinView, minPixels, budget }),
+        indices: result.indices,
+        runs: result.runs,
       };
     });
   }, [config.topicStyles, thinView, visibleTracks]);

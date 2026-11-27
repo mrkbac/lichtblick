@@ -226,19 +226,118 @@ export function thinViewCovers(previous: ThinView, zoom: number, bounds: Viewpor
   );
 }
 
+/** Fixes to draw, from `thinTrack`. */
+export type ThinnedTrack = {
+  indices: Uint32Array;
+  runs: number[];
+  /** Spacing the fixes were kept at, in degrees of longitude; undefined for an even sample. */
+  minDistance?: number;
+  /** Rows of the store that were thinned. */
+  length: number;
+};
+
+type ThinOptions = { zoom: number; minPixels: number; budget: number; viewport?: Viewport };
+
 /**
  * Indices of the fixes to draw: inside the viewport (and one beyond, so lines leave it), at
  * least `minPixels` apart at `zoom`, and at most about `budget` of them (the spacing grows until
  * they fit). `runs` holds the positions in `indices` where a new line starts, after a part of
  * the track outside the viewport.
  */
-export function thinTrack(
+export function thinTrack(store: TrackStore, options: ThinOptions): ThinnedTrack {
+  // MapLibre's world is 512 px wide at zoom 0.
+  // Spacing is for the zoom at the map center; a tilted map is magnified near the camera, where
+  // points (drawn at a fixed pixel size) can show the spacing. Lines are thinned at 1 px.
+  // In degrees of longitude. Locally a degree of latitude is 1/cos(lat) as long on a Mercator map,
+  // so distances need no projection (no log or sin per fix).
+  let minDistance = (options.minPixels / (512 * 2 ** options.zoom)) * 360;
+  let previousCount = Infinity;
+  for (;;) {
+    const indices: number[] = [];
+    const runs: number[] = [];
+    thinPass(
+      store,
+      { viewport: options.viewport, minDistance, from: 0, afterGap: true },
+      indices,
+      runs,
+    );
+    if (indices.length <= options.budget) {
+      return { indices: Uint32Array.from(indices), runs, minDistance, length: store.length };
+    }
+    // Run ends are kept at any spacing: when they alone exceed the budget (a track zigzagging
+    // across the viewport edge), take an even sample instead.
+    if (minDistance > 360 || indices.length > previousCount * 0.9) {
+      return { ...sampleEvenly(indices, runs, options.budget), length: store.length };
+    }
+    previousCount = indices.length;
+    // Kept points shrink roughly in proportion to the spacing; overshoot a little.
+    minDistance *= Math.max(1.25, (indices.length / options.budget) * 1.1);
+  }
+}
+
+/**
+ * `previous` (thinned with the same options) for the rows appended to the store since, at the
+ * same spacing: only the new rows are visited, so a live track costs O(new fixes) per update
+ * instead of O(track). Thins the whole track again once the budget is exceeded.
+ */
+export function extendThinnedTrack(
   store: TrackStore,
-  options: { zoom: number; minPixels: number; budget: number; viewport?: Viewport },
-): { indices: Uint32Array; runs: number[] } {
+  previous: ThinnedTrack,
+  options: ThinOptions,
+): ThinnedTrack {
+  if (previous.minDistance == undefined || previous.length === 0) {
+    return thinTrack(store, options);
+  }
+  const indices = Array.from(previous.indices);
+  const runs = [...previous.runs];
+  // The last row was kept as the end of its run (or skipped in a gap). With rows after it, it may
+  // not be an end any more: visit it again, from the state before it.
+  const last = previous.length - 1;
+  let afterGap = true;
+  if (indices.at(-1) === last) {
+    indices.pop();
+    if (runs.at(-1) === indices.length) {
+      runs.pop();
+    } else {
+      afterGap = false;
+    }
+  }
+  thinPass(
+    store,
+    { viewport: options.viewport, minDistance: previous.minDistance, from: last, afterGap },
+    indices,
+    runs,
+  );
+  if (indices.length > options.budget) {
+    return thinTrack(store, options);
+  }
+  return {
+    indices: Uint32Array.from(indices),
+    runs,
+    minDistance: previous.minDistance,
+    length: store.length,
+  };
+}
+
+/**
+ * Appends the fixes from row `from` on that are kept at `minDistance` to `indices` (and the starts
+ * of new runs to `runs`). `afterGap` tells whether row `from` follows a part outside the viewport;
+ * otherwise the last of `indices` is the fix kept before it.
+ */
+function thinPass(
+  store: TrackStore,
+  {
+    viewport: v,
+    minDistance,
+    from,
+    afterGap,
+  }: { viewport: Viewport | undefined; minDistance: number; from: number; afterGap: boolean },
+  indices: number[],
+  runs: number[],
+): void {
+  let gap = afterGap;
   const { lon, lat } = store.columns;
   const n = store.length;
-  const v = options.viewport;
   const inView = (i: number) =>
     v == undefined ||
     (lon[i]! >= v.west && lon[i]! <= v.east && lat[i]! >= v.south && lat[i]! <= v.north);
@@ -250,56 +349,34 @@ export function thinTrack(
       Math.max(lon[i]!, lon[i + 1]!) >= v.west &&
       Math.min(lat[i]!, lat[i + 1]!) <= v.north &&
       Math.max(lat[i]!, lat[i + 1]!) >= v.south);
-  // MapLibre's world is 512 px wide at zoom 0.
-  // Spacing is for the zoom at the map center; a tilted map is magnified near the camera, where
-  // points (drawn at a fixed pixel size) can show the spacing. Lines are thinned at 1 px.
-  // In degrees of longitude. Locally a degree of latitude is 1/cos(lat) as long on a Mercator map,
-  // so distances need no projection (no log or sin per fix).
-  let minDistance = (options.minPixels / (512 * 2 ** options.zoom)) * 360;
-  let previousCount = Infinity;
-  for (;;) {
-    const minSquared = minDistance * minDistance;
-    const indices: number[] = [];
-    const runs: number[] = [];
-    let gap = true;
-    let lastLon = 0;
-    let lastLat = 0;
-    let latScale = 1;
-    let segmentBefore = false;
-    for (let i = 0; i < n; i++) {
-      const segmentAfter = i + 1 < n && segmentInView(i);
-      if (!segmentBefore && !segmentAfter && !inView(i)) {
-        gap = true;
-      } else {
-        const x = lon[i]!;
-        const y = lat[i]!;
-        const dx = x - lastLon;
-        const dy = (y - lastLat) * latScale;
-        // The ends of each run are always kept, so the track meets the viewport edge.
-        if (gap || !segmentAfter || dx * dx + dy * dy >= minSquared) {
-          if (gap) {
-            runs.push(indices.length);
-            gap = false;
-          }
-          indices.push(i);
-          lastLon = x;
-          lastLat = y;
-          latScale = 1 / Math.cos((Math.max(-85, Math.min(85, y)) * Math.PI) / 180);
+  const minSquared = minDistance * minDistance;
+  const kept = indices.at(-1);
+  let lastLon = gap || kept == undefined ? 0 : lon[kept]!;
+  let lastLat = gap || kept == undefined ? 0 : lat[kept]!;
+  let latScale = 1 / Math.cos((Math.max(-85, Math.min(85, lastLat)) * Math.PI) / 180);
+  let segmentBefore = from > 0 && from < n && segmentInView(from - 1);
+  for (let i = from; i < n; i++) {
+    const segmentAfter = i + 1 < n && segmentInView(i);
+    if (!segmentBefore && !segmentAfter && !inView(i)) {
+      gap = true;
+    } else {
+      const x = lon[i]!;
+      const y = lat[i]!;
+      const dx = x - lastLon;
+      const dy = (y - lastLat) * latScale;
+      // The ends of each run are always kept, so the track meets the viewport edge.
+      if (gap || !segmentAfter || dx * dx + dy * dy >= minSquared) {
+        if (gap) {
+          runs.push(indices.length);
+          gap = false;
         }
+        indices.push(i);
+        lastLon = x;
+        lastLat = y;
+        latScale = 1 / Math.cos((Math.max(-85, Math.min(85, y)) * Math.PI) / 180);
       }
-      segmentBefore = segmentAfter;
     }
-    if (indices.length <= options.budget) {
-      return { indices: Uint32Array.from(indices), runs };
-    }
-    // Run ends are kept at any spacing: when they alone exceed the budget (a track zigzagging
-    // across the viewport edge), take an even sample instead.
-    if (minDistance > 360 || indices.length > previousCount * 0.9) {
-      return sampleEvenly(indices, runs, options.budget);
-    }
-    previousCount = indices.length;
-    // Kept points shrink roughly in proportion to the spacing; overshoot a little.
-    minDistance *= Math.max(1.25, (indices.length / options.budget) * 1.1);
+    segmentBefore = segmentAfter;
   }
 }
 
