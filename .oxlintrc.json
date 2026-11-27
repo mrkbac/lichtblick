@@ -266,7 +266,13 @@
     "@lichtblick/no-getters-setters": "error",
     "@lichtblick/no-push-spread": "error",
     "@lichtblick/no-object-url": "error",
-    "@lichtblick/no-crypto-random-uuid": "error",
+    "no-restricted-properties": [
+      "error",
+      {
+        "property": "randomUUID",
+        "message": "crypto.randomUUID() throws outside secure contexts (plain HTTP). Use randomUUID() from @lichtblick/suite-base/util/randomUUID."
+      }
+    ],
     "@lichtblick/link-target": "error",
     "@lichtblick/lodash-imports": "error",
     "tss-unused-classes/unused-classes": "error"

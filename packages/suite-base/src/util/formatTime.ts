@@ -64,6 +64,35 @@ export function timezoneOffsetMinutes(timezone: string, date = new Date()): numb
   return Math.round((asUtc - Math.floor(date.getTime() / 1000) * 1000) / 60_000);
 }
 
+/**
+ * The first instant whose wall-clock time in `timezone` is `wall` (wall-clock fields as UTC ms):
+ * the first of the two in a repeated hour, and where the clock resumes when `wall` falls in a
+ * skipped one (e.g. 02:30 on a spring-forward night is 03:00).
+ */
+export function instantOfWallTime(wall: number, timezone: string): number {
+  const wallAt = (ms: number) => ms + timezoneOffsetMinutes(timezone, new Date(ms)) * 60_000;
+  // The offsets a day before and after cover both sides of a DST change
+  const candidates = [-DAY_MS, DAY_MS].map(
+    (shift) => wall - timezoneOffsetMinutes(timezone, new Date(wall + shift)) * 60_000,
+  );
+  const exact = candidates.filter((ms) => wallAt(ms) === wall);
+  if (exact.length > 0) {
+    return Math.min(...exact);
+  }
+  // Skipped: search the first instant whose wall time has passed `wall`
+  let before = Math.min(...candidates);
+  let after = Math.max(...candidates);
+  while (after - before > 1) {
+    const mid = Math.floor((before + after) / 2);
+    if (wallAt(mid) >= wall) {
+      after = mid;
+    } else {
+      before = mid;
+    }
+  }
+  return after;
+}
+
 /** h:mm:ss with unpadded hours, plus .SSS when `withMillis` is set. */
 export function formatHms(
   totalMs: number,
@@ -171,12 +200,9 @@ export function parseTimeStr(str: string, timezone?: string): Time | undefined {
   ) {
     return undefined;
   }
-  const tz = timezone ?? guessTimezone();
-  // Resolve the offset at the guessed instant, then again in case it crossed a DST change.
-  let ms = wallMs - timezoneOffsetMinutes(tz, new Date(wallMs)) * 60_000;
-  ms = wallMs - timezoneOffsetMinutes(tz, new Date(ms)) * 60_000;
-  const result = fromDate(new Date(ms));
-  if (result.sec <= 0 || result.nsec < 0) {
+  const result = fromDate(new Date(instantOfWallTime(wallMs, timezone ?? guessTimezone())));
+  // The epoch itself is a valid time (e.g. sim time, or `since:1970-01-01` in UTC)
+  if (result.sec < 0 || result.nsec < 0 || Number.isNaN(result.sec)) {
     return undefined;
   }
   return result;

@@ -138,6 +138,9 @@ describe("formatTime.parseTimeStr", () => {
 
   it("rejects out-of-range fields instead of rolling them over", () => {
     expect(formatTime.parseTimeStr("2018-02-31 1:00:00.000 PM", "UTC")).toBeUndefined();
+    // The epoch is valid; times before it are not
+    expect(formatTime.parseTimeStr("1970-01-01 00:00:00", "UTC")).toEqual({ sec: 0, nsec: 0 });
+    expect(formatTime.parseTimeStr("1969-12-31 23:59:59", "UTC")).toBeUndefined();
     expect(formatTime.parseTimeStr("2018-13-01 1:00:00.000 PM", "UTC")).toBeUndefined();
     expect(formatTime.parseTimeStr("2018-01-01 25:00:00", "UTC")).toBeUndefined();
   });
@@ -203,5 +206,24 @@ describe("formatTime.getValidatedTimeAndMethodFromString", () => {
       time: { nsec: 0, sec: 1577914210 },
       method: "TOD",
     });
+  });
+});
+
+describe("instantOfWallTime", () => {
+  const LA = "America/Los_Angeles";
+  it("resolves a normal wall time", () => {
+    expect(formatTime.instantOfWallTime(Date.UTC(2026, 5, 1, 12), LA)).toBe(
+      Date.parse("2026-06-01T19:00:00Z"),
+    );
+  });
+  it("takes the first of a repeated hour", () => {
+    expect(formatTime.instantOfWallTime(Date.UTC(2026, 10, 1, 1, 30), LA)).toBe(
+      Date.parse("2026-11-01T08:30:00Z"),
+    );
+  });
+  it("takes where the clock resumes for a skipped time", () => {
+    expect(formatTime.instantOfWallTime(Date.UTC(2026, 2, 8, 2, 30), LA)).toBe(
+      Date.parse("2026-03-08T10:00:00Z"),
+    );
   });
 });
