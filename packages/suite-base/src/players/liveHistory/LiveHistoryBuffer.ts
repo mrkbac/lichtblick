@@ -3,6 +3,7 @@
 import { compare, fromNanoSec, Time, toNanoSec } from "@foxglove/rostime";
 
 import { MessageEvent } from "@lichtblick/suite-base/players/types";
+import { lowerBound } from "@lichtblick/suite-base/util/sortedSearch";
 
 /** Seed key for topics whose messages replace each other as a whole. */
 const WHOLE_MESSAGE = "";
@@ -491,7 +492,7 @@ export class LiveHistoryBuffer {
     }
     this.#indexedSeq = endSeq;
     for (const [indexed, seqs] of this.#topicSeqs) {
-      const evicted = lowerBound(seqs, this.#headSeq);
+      const evicted = lowerBound(seqs, 0, seqs.length, this.#headSeq);
       if (evicted === seqs.length) {
         this.#topicSeqs.delete(indexed);
       } else if (evicted > 0) {
@@ -502,7 +503,11 @@ export class LiveHistoryBuffer {
     const fromSeq = this.#seqOf(start ? this.#bound(start, "atOrAfter") : this.#head);
     const toSeq = this.#seqOf(end ? this.#bound(end) : this.#messages.length);
     const result: MessageEvent[] = [];
-    for (let i = lowerBound(seqs, fromSeq); i < seqs.length && seqs[i]! < toSeq; i++) {
+    for (
+      let i = lowerBound(seqs, 0, seqs.length, fromSeq);
+      i < seqs.length && seqs[i]! < toSeq;
+      i++
+    ) {
       result.push(this.#messages[this.#indexOf(seqs[i]!)]!);
     }
     return result;
@@ -569,21 +574,6 @@ function checkpointSize({ whole, frames }: Checkpoint): number {
 }
 
 type Seed = { event: MessageEvent; seq: number };
-
-/** Index of the first of the ascending `values` that is at least `value` */
-function lowerBound(values: readonly number[], value: number): number {
-  let lo = 0;
-  let hi = values.length;
-  while (lo < hi) {
-    const mid = (lo + hi) >>> 1;
-    if (values[mid]! < value) {
-      lo = mid + 1;
-    } else {
-      hi = mid;
-    }
-  }
-  return lo;
-}
 
 /** Receive-time order, ties in arrival order. */
 function byTimeThenSeq(
