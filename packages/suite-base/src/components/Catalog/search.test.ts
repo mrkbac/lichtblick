@@ -125,6 +125,11 @@ describe("filterRecordings", () => {
       Date.parse("2026-11-01T08:30:00Z"),
     );
     expect(parsePeriod("2026-02-30", "UTC")).toBeUndefined();
+    expect(parsePeriod("1970-01-01", "UTC")).toEqual({
+      start: 0,
+      end: Date.UTC(1970, 0, 2),
+      endInclusive: false,
+    });
     expect(parsePeriod("yesterday")).toBeUndefined();
   });
 

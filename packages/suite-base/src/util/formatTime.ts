@@ -201,7 +201,8 @@ export function parseTimeStr(str: string, timezone?: string): Time | undefined {
     return undefined;
   }
   const result = fromDate(new Date(instantOfWallTime(wallMs, timezone ?? guessTimezone())));
-  if (result.sec <= 0 || result.nsec < 0) {
+  // The epoch itself is a valid time (e.g. sim time, or `since:1970-01-01` in UTC)
+  if (result.sec < 0 || result.nsec < 0 || Number.isNaN(result.sec)) {
     return undefined;
   }
   return result;

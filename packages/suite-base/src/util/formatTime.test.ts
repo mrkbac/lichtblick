@@ -138,6 +138,9 @@ describe("formatTime.parseTimeStr", () => {
 
   it("rejects out-of-range fields instead of rolling them over", () => {
     expect(formatTime.parseTimeStr("2018-02-31 1:00:00.000 PM", "UTC")).toBeUndefined();
+    // The epoch is valid; times before it are not
+    expect(formatTime.parseTimeStr("1970-01-01 00:00:00", "UTC")).toEqual({ sec: 0, nsec: 0 });
+    expect(formatTime.parseTimeStr("1969-12-31 23:59:59", "UTC")).toBeUndefined();
     expect(formatTime.parseTimeStr("2018-13-01 1:00:00.000 PM", "UTC")).toBeUndefined();
     expect(formatTime.parseTimeStr("2018-01-01 25:00:00", "UTC")).toBeUndefined();
   });
