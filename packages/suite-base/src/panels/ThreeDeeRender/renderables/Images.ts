@@ -136,6 +136,9 @@ export class Images extends SceneExtension<ImageRenderable> {
 
   public override removeAllRenderables(): void {
     this.#recentPointCloudFrames.clear();
+    // After a seek a depth cloud must not be colored with an image from before the seek (it can
+    // be later than the new time), and the images (MBs each) go
+    this.#latestColorImageByTopic.clear();
     super.removeAllRenderables();
   }
 

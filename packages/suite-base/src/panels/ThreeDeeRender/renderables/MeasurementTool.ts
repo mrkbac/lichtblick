@@ -197,6 +197,8 @@ export class MeasurementTool extends SceneExtension<Renderable, MeasurementToolE
   #cursor = new THREE.Vector2();
   #cursorDirty = false;
   #drag?: { item: Measurement; index: number };
+  /** Ends a vertex drag's window listeners, also when measuring stops mid-drag */
+  #dragListeners?: AbortController;
   #dragCursor = new THREE.Vector2();
   #dragPending = false;
   /** The last drag snap; the profile is resampled once it has landed */
@@ -954,6 +956,8 @@ export class MeasurementTool extends SceneExtension<Renderable, MeasurementToolE
       { capture: true },
     );
     window.removeEventListener("keydown", this.#handleKeyDown);
+    this.#dragListeners?.abort();
+    this.#drag = undefined;
     this.renderer.gl.domElement.style.cursor = "";
   }
 
@@ -1045,8 +1049,12 @@ export class MeasurementTool extends SceneExtension<Renderable, MeasurementToolE
       this.#dragPending = true;
       this.renderer.queueAnimationFrame();
     };
+    this.#dragListeners?.abort();
+    const ownerWindow = canvas.ownerDocument.defaultView ?? window;
+    // From the canvas's window: a popout's window takes only its own signals
+    const listeners = (this.#dragListeners = new ownerWindow.AbortController());
     const onUp = () => {
-      window.removeEventListener("pointermove", onMove);
+      listeners.abort();
       // A release between frames must not leave the vertex one move behind
       if (this.#dragPending) {
         this.#snapDrag();
@@ -1060,8 +1068,12 @@ export class MeasurementTool extends SceneExtension<Renderable, MeasurementToolE
         }
       });
     };
-    window.addEventListener("pointermove", onMove);
-    window.addEventListener("pointerup", onUp, { once: true });
+    // The canvas's own window (a popout has another), and a cancelled touch or pen ends the drag
+    // too, or the drag state stays set and hover stops working
+    const { signal } = listeners;
+    ownerWindow.addEventListener("pointermove", onMove, { signal });
+    ownerWindow.addEventListener("pointerup", onUp, { signal });
+    ownerWindow.addEventListener("pointercancel", onUp, { signal });
   };
 
   #snapDrag(): void {

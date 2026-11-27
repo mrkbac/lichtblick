@@ -421,6 +421,9 @@ export class Urdfs extends SceneExtension<UrdfRenderable> {
   }
 
   public override removeAllRenderables(): void {
+    // After a seek the joint states arrive again, older than the ones kept: they must not be
+    // rejected as out of order, or the robot stays in its later pose
+    this.#jointStates.clear();
     // Re-add coordinate frames and transforms since the scene has been cleared
     this.#refreshTransforms();
   }
