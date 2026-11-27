@@ -518,4 +518,35 @@ describe("createMessageRangeIterator", () => {
     // Should not yield any batches since it was cancelled before starting
     expect(batches).toHaveLength(0);
   });
+
+  it("splits playhead-first batches where a window before or after what came so far starts", async () => {
+    // Windows: [5, 6] around the playhead, [3, 4] before it, [7, 8] after, [1, 2] before
+    const secs = [5, 6, 3, 4, 7, 8, 1, 2];
+    const rawBatchIterator = createMockRawBatchIterator(
+      secs.map((sec) => ({
+        type: "message-event",
+        msgEvent: MessageEventBuilder.messageEvent({
+          topic: mockTopic,
+          receiveTime: { sec, nsec: 0 },
+        }),
+      })),
+    );
+    const { iterable } = createMessageRangeIterator({
+      topic: mockTopic,
+      rawBatchIterator,
+      sortedTopics: mockSortedTopics,
+      messageConverters: mockMessageConverters,
+      playheadFirst: true,
+    });
+    const batches: number[][] = [];
+    for await (const batch of iterable) {
+      batches.push(batch.map((event) => event.receiveTime.sec));
+    }
+    expect(batches).toEqual([
+      [5, 6],
+      [3, 4],
+      [7, 8],
+      [1, 2],
+    ]);
+  });
 });

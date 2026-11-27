@@ -12,6 +12,7 @@ import { Immutable, MessageEvent, Metadata, ParameterValue } from "@lichtblick/s
 import { BuiltinPanelExtensionContext } from "@lichtblick/suite-base/components/PanelExtensionAdapter";
 import { IteratorResult } from "@lichtblick/suite-base/players/IterablePlayer/IIterableSource";
 import {
+  BatchIteratorOptions,
   AdvertiseOptions,
   PlayerState,
   PublishPayload,
@@ -47,7 +48,7 @@ export type MessagePipelineContext = Immutable<{
   pauseFrame: (name: string) => ResumeFrame;
   getBatchIterator: (
     topic: string,
-    options?: { start?: Time; end?: Time },
+    options?: BatchIteratorOptions,
   ) => AsyncIterableIterator<Readonly<IteratorResult>> | undefined;
   /**
    * Inspect topics in one pass without decoding; returned events omit message payloads. Returns

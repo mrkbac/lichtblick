@@ -49,6 +49,18 @@ export type TopicSelection = Map<string, SubscribePayload>;
 // current time, which topics and datatypes are available, and so on.
 // For more details, see the types below.
 
+export type BatchIteratorOptions = {
+  start?: Time;
+  end?: Time;
+  /**
+   * Read the whole history around the playhead first, then window by window earlier and later
+   * history: each window in receive-time order, and each entirely before or entirely after all
+   * messages delivered before it. Players that can't read this way read in receive-time order,
+   * which also meets this. Ignored for reads of part of the recording (start or end set).
+   */
+  playheadFirst?: boolean;
+};
+
 export interface Player {
   // The main way to get information out the player is to set a listener. This listener will be
   // called whenever the PlayerState changes, so that we can render the new state to the UI. Users
@@ -87,7 +99,7 @@ export interface Player {
   // Create a batch iterator for streaming messages. Available for data source players that support message iteration.
   getBatchIterator: (
     topic: string,
-    options?: { start?: Time; end?: Time },
+    options?: BatchIteratorOptions,
   ) => AsyncIterableIterator<Readonly<IteratorResult>> | undefined;
   /**
    * Inspect topics in one pass without decoding; returned events omit message payloads. Returns

@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
+import { compare } from "@foxglove/rostime";
 import { setFlagsFromString } from "node:v8";
 import { runInNewContext } from "node:vm";
 
@@ -8,7 +9,7 @@ import { MessageEvent } from "@lichtblick/suite";
 import { TopicSelection } from "@lichtblick/suite-base/players/types";
 
 import { IteratorResult } from "./IIterableSource";
-import { SharedRangeReads } from "./SharedRangeReads";
+import { playheadWindows, SharedRangeReads } from "./SharedRangeReads";
 
 function message(topic: string, sec: number): MessageEvent {
   return {
@@ -357,5 +358,202 @@ describe("SharedRangeReads", () => {
       { topics: ["b"], start: undefined, end: 1 },
       { topics: ["a", "b"], start: 1, end: undefined },
     ]);
+  });
+
+  describe("playhead first", () => {
+    const S = 1_000_000_000n;
+    const sec = (n: bigint) => ({ sec: Number(n / S), nsec: Number(n % S) });
+    const ns = (time: { sec: number; nsec: number } | undefined, fallback: bigint) =>
+      time ? BigInt(time.sec) * S + BigInt(time.nsec) : fallback;
+
+    it.each([
+      [0n, 100n, 50n],
+      [0n, 100n, 0n],
+      [0n, 100n, 100n],
+      [0n, 3600n, 1000n],
+      [10n, 15n, 12n],
+    ])(
+      "windows of [%i s, %i s] around %i s cover it once, around, then before and after",
+      (start, end, playhead) => {
+        const windows = playheadWindows({
+          start: sec(start * S),
+          end: sec(end * S),
+          playhead: sec(playhead * S),
+        });
+        const spans = windows.map((w) => [ns(w.start, start * S), ns(w.end, end * S)] as const);
+        // Sorted by time they tile [start, end] without gaps or overlaps
+        const sorted = spans.toSorted((x, y) => (x[0] < y[0] ? -1 : 1));
+        expect(sorted[0]![0]).toBe(start * S);
+        expect(sorted.at(-1)![1]).toBe(end * S);
+        for (let i = 1; i < sorted.length; i++) {
+          expect(sorted[i]![0]).toBe(sorted[i - 1]![1] + 1n);
+        }
+        // The first window holds the playhead; each next one is right before or right after those
+        // read so far, and the open ends are the recording's first and last windows
+        const [first, ...rest] = spans;
+        expect(first![0] <= playhead * S && playhead * S <= first![1]).toBe(true);
+        let [lo, hi] = first!;
+        for (const [from, to] of rest) {
+          expect(to === lo - 1n || from === hi + 1n).toBe(true);
+          lo = from < lo ? from : lo;
+          hi = to > hi ? to : hi;
+        }
+        expect(windows.filter((w) => !w.start)).toHaveLength(1);
+        expect(windows.filter((w) => !w.end)).toHaveLength(1);
+      },
+    );
+
+    it("alternates earlier and later windows, each side doubling", () => {
+      const windows = playheadWindows({
+        start: sec(0n),
+        end: sec(640n * S),
+        playhead: sec(320n * S),
+      });
+      const spans = windows.map((w) => [(ns(w.start, 0n) + S - 1n) / S, ns(w.end, 640n * S) / S]);
+      expect(spans).toEqual([
+        [310n, 330n],
+        [290n, 309n],
+        [331n, 350n],
+        [250n, 289n],
+        [351n, 390n],
+        [170n, 249n],
+        [391n, 470n],
+        [10n, 169n],
+        [471n, 630n],
+        [0n, 9n],
+        [631n, 640n],
+      ]);
+    });
+
+    const many = Array.from({ length: 100 }, (_, i) => i).flatMap((t) =>
+      ["a", "b"].map((topic) => message(topic, t)),
+    );
+
+    function setupPlayhead({ gateAt }: { gateAt?: number } = {}) {
+      const reads: { topics: string[]; start?: number; end?: number }[] = [];
+      const gate = Promise.withResolvers<void>();
+      let gated = false;
+      const shared = new SharedRangeReads(
+        async function* (topics, range) {
+          reads.push({ topics: [...topics.keys()], start: range.start?.sec, end: range.end?.sec });
+          for (const msgEvent of many) {
+            const t = msgEvent.receiveTime.sec;
+            if (
+              !topics.has(msgEvent.topic) ||
+              (range.start && compare(msgEvent.receiveTime, range.start) < 0) ||
+              (range.end && compare(msgEvent.receiveTime, range.end) > 0)
+            ) {
+              continue;
+            }
+            if (t === gateAt && !gated && topics.size === 1 && topics.has("a")) {
+              gated = true;
+              await gate.promise;
+            }
+            yield { type: "message-event", msgEvent };
+          }
+        },
+        () => ({
+          start: { sec: 0, nsec: 0 },
+          end: { sec: 99, nsec: 0 },
+          playhead: { sec: 50, nsec: 0 },
+        }),
+      );
+      const windows = playheadWindows({
+        start: { sec: 0, nsec: 0 },
+        end: { sec: 99, nsec: 0 },
+        playhead: { sec: 50, nsec: 0 },
+      });
+      const windowOf = (t: number) =>
+        windows.findIndex(
+          ({ start, end }) =>
+            (!start || compare(start, { sec: t, nsec: 0 }) <= 0) &&
+            (!end || compare({ sec: t, nsec: 0 }, end) <= 0),
+        );
+      /** Delivered every second once, window by window, each window in time order */
+      const expectPlayheadOrder = (seen: string[], topic: string) => {
+        const times = seen.map((s) => Number(s.slice(topic.length)));
+        expect(times.toSorted((x, y) => x - y)).toEqual(Array.from({ length: 100 }, (_, i) => i));
+        for (let i = 1; i < times.length; i++) {
+          const [w0, w1] = [windowOf(times[i - 1]!), windowOf(times[i]!)];
+          expect(w1 > w0 || (w1 === w0 && times[i]! > times[i - 1]!)).toBe(true);
+        }
+        expect(windowOf(times[0]!)).toBe(0);
+      };
+      return { shared, reads, gate, expectPlayheadOrder, windows };
+    }
+
+    it("reads around the playhead first, then earlier and later windows, in one pass", async () => {
+      const { shared, reads, expectPlayheadOrder, windows } = setupPlayhead();
+      const [a, b] = await Promise.all([
+        collect(shared.read("a", {}, { playheadFirst: true })),
+        collect(shared.read("b", {}, { playheadFirst: true })),
+      ]);
+      expectPlayheadOrder(a, "a");
+      expectPlayheadOrder(b, "b");
+      // One source read per window, each for both topics
+      expect(reads).toHaveLength(windows.length);
+      expect(reads.every(({ topics }) => topics.join() === "a,b")).toBe(true);
+    });
+
+    // The pass waits at the start of the second window, or in its middle
+    it.each([
+      [20, 21],
+      [30, 31],
+    ])(
+      "gives a late joiner everything once: what the pass read, then the pass (waits at %i s)",
+      async (gateAt, readFirst) => {
+        const { shared, gate, expectPlayheadOrder } = setupPlayhead({ gateAt });
+        const a = shared.read("a", {}, { playheadFirst: true });
+        const aSeen: string[] = [];
+        // Read the playhead window (40 s to 60 s) and the next one up to where the pass waits
+        for (;;) {
+          const next = await a.next();
+          if (next.done === true) {
+            break;
+          }
+          if (next.value.type === "message-event") {
+            aSeen.push(`a${next.value.msgEvent.receiveTime.sec}`);
+            if (aSeen.length === readFirst) {
+              break;
+            }
+          }
+        }
+        const b = collect(shared.read("b", {}, { playheadFirst: true }));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        gate.resolve();
+        const aRest = await collect(a);
+        expectPlayheadOrder([...aSeen, ...aRest], "a");
+        expectPlayheadOrder(await b, "b");
+      },
+    );
+
+    it("reads ascending readers in their own pass, in time order", async () => {
+      const { shared, reads, expectPlayheadOrder } = setupPlayhead();
+      const [ascending, playhead] = await Promise.all([
+        collect(shared.read("a", {})),
+        collect(shared.read("b", {}, { playheadFirst: true })),
+      ]);
+      expect(ascending).toEqual(Array.from({ length: 100 }, (_, i) => `a${i}`));
+      expectPlayheadOrder(playhead, "b");
+      expect(reads.filter(({ topics }) => topics.includes("a"))).toEqual([
+        { topics: ["a"], start: undefined, end: undefined },
+      ]);
+    });
+
+    it("reads in time order when the player has no playhead", async () => {
+      const shared = new SharedRangeReads(async function* (topics) {
+        for (const msgEvent of messages) {
+          if (topics.has(msgEvent.topic)) {
+            yield { type: "message-event", msgEvent };
+          }
+        }
+      });
+      expect(await collect(shared.read("a", {}, { playheadFirst: true }))).toEqual([
+        "a0",
+        "a1",
+        "a2",
+        "a3",
+      ]);
+    });
   });
 });

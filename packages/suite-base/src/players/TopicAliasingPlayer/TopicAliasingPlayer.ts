@@ -13,6 +13,7 @@ import type { IWritable } from "@lichtblick/mcap-core";
 import { Immutable, Metadata, MessageEvent, ParameterValue } from "@lichtblick/suite";
 import { GlobalVariables } from "@lichtblick/suite-base/hooks/useGlobalVariables";
 import {
+  BatchIteratorOptions,
   AdvertiseOptions,
   Player,
   PlayerState,
@@ -89,7 +90,7 @@ export class TopicAliasingPlayer implements Player {
 
   public getBatchIterator(
     topic: string,
-    options?: { start?: Time; end?: Time },
+    options?: BatchIteratorOptions,
   ): AsyncIterableIterator<Readonly<IteratorResult>> | undefined {
     return this.#player.getBatchIterator(topic, options);
   }
