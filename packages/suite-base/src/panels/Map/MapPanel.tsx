@@ -34,6 +34,10 @@ import { simpleGetMessagePathDataItems } from "@lichtblick/suite-base/components
 import { OVERLAY_TOOLBAR_BUTTON_SIZE } from "@lichtblick/suite-base/components/OverlayToolbar";
 import { BuiltinPanelExtensionContext } from "@lichtblick/suite-base/components/PanelExtensionAdapter";
 import { EarlierWindows } from "@lichtblick/suite-base/components/PanelExtensionAdapter/EarlierWindows";
+import {
+  LiveHistoryRead,
+  takeLive,
+} from "@lichtblick/suite-base/components/PanelExtensionAdapter/LiveHistoryRead";
 import { PANEL_FLOATING_TOOLBAR_HEIGHT } from "@lichtblick/suite-base/components/PanelToolbar/constants";
 import { addTopicsDrop } from "@lichtblick/suite-base/panels/shared/pathDrop";
 import ThemeProvider from "@lichtblick/suite-base/theme/ThemeProvider";
@@ -408,6 +412,9 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
   const overlayData = useRef(emptyOverlayData());
   const measuringRef = useRef(false);
   const rangeTopicsRef = useRef(new Set<string>());
+  // Live topics whose session history is being read: their live frames wait for it
+  const liveTrackReadsRef = useRef(new Map<string, LiveHistoryRead<NavMessage>>());
+  const liveSampleReadsRef = useRef(new Map<string, LiveHistoryRead>());
   // Values of "color by message path" expressions over time, by path string.
   const samplesRef = useRef(new Map<string, SampleStore>());
   const [pathSamples, setPathSamples] = useState({ stores: samplesRef.current });
@@ -645,6 +652,7 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
         const name = key.slice(0, key.indexOf("\n"));
         tracksRef.current.delete(name);
         rangeTopicsRef.current.delete(name);
+        liveTrackReadsRef.current.delete(name);
         removed = true;
       }
     }
@@ -662,11 +670,18 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
           convertTo: topic.schemaName,
           // Around the playhead first, so the track where the user looks shows at once
           playheadFirst: true,
-          onNewRangeIterator: async (iterator) => {
+          // A live source's trail starts with what the session kept, not when the panel opened
+          liveHistory: true,
+          onNewRangeIterator: async (iterator, info) => {
             // A new iterator replaces the topic's data (e.g. an edited user script); drop the old.
             tracksRef.current.get(topic.name)?.clear();
             scheduleTrackFlush("recorded");
-            rangeTopicsRef.current.add(topic.name);
+            const live = info?.liveHistory === true ? new LiveHistoryRead<NavMessage>() : undefined;
+            if (live) {
+              liveTrackReadsRef.current.set(topic.name, live);
+            } else {
+              rangeTopicsRef.current.add(topic.name);
+            }
             const earlier = new EarlierWindows<Map<string, TrackStore>>(
               () => new Map(),
               (stores) => {
@@ -683,6 +698,7 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
               },
             );
             for await (const batch of iterator) {
+              live?.read(batch);
               const into = earlier.place(batch);
               const valid = expandLocationFixes(batch).filter(
                 (event): event is NavMessage =>
@@ -693,6 +709,13 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
               }
             }
             earlier.flush();
+            if (live && liveTrackReadsRef.current.get(topic.name) === live) {
+              liveTrackReadsRef.current.delete(topic.name);
+              const after = live.end();
+              if (after.length > 0) {
+                appendTrack(after, "live");
+              }
+            }
           },
         }),
       );
@@ -776,6 +799,7 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
         unsubscribe();
         reads.delete(key);
         pathRangeTopicsRef.current.delete(key.slice(0, key.indexOf("\n")));
+        liveSampleReadsRef.current.delete(key.slice(0, key.indexOf("\n")));
       }
     }
     for (const path of samplesRef.current.keys()) {
@@ -796,12 +820,18 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
         context.unstable_subscribeMessageRange({
           topic,
           playheadFirst: true,
-          onNewRangeIterator: async (iterator) => {
+          liveHistory: true,
+          onNewRangeIterator: async (iterator, info) => {
             for (const { path } of paths) {
               samplesRef.current.get(path)?.clear();
             }
             setPathSamples({ stores: samplesRef.current });
-            pathRangeTopicsRef.current.add(topic);
+            const live = info?.liveHistory === true ? new LiveHistoryRead() : undefined;
+            if (live) {
+              liveSampleReadsRef.current.set(topic, live);
+            } else {
+              pathRangeTopicsRef.current.add(topic);
+            }
             const earlier = new EarlierWindows<Map<string, SampleStore>>(
               () => new Map(),
               (stores) => {
@@ -817,9 +847,14 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
               },
             );
             for await (const batch of iterator) {
+              live?.read(batch);
               appendPathSamples(batch, paths, "recorded", earlier.place(batch));
             }
             earlier.flush();
+            if (live && liveSampleReadsRef.current.get(topic) === live) {
+              liveSampleReadsRef.current.delete(topic);
+              appendPathSamples(live.end(), paths, "live");
+            }
           },
         }),
       );
@@ -861,9 +896,12 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
       }
 
       // Live sources have no recorded range: collect "color by" values as they arrive.
-      const livePathMessages = renderState.currentFrame?.filter(
-        (m) => !pathRangeTopicsRef.current.has(m.topic),
-      );
+      const livePathMessages =
+        renderState.currentFrame &&
+        takeLive(
+          renderState.currentFrame.filter((m) => !pathRangeTopicsRef.current.has(m.topic)),
+          liveSampleReadsRef.current,
+        );
       if (livePathMessages && livePathMessages.length > 0 && colorPathsRef.current.length > 0) {
         appendPathSamples(livePathMessages, colorPathsRef.current, "live");
       }
@@ -885,7 +923,10 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
         // Only replace topics present in this frame; other topics keep their last position.
         setCurrentNav((prev) => new Map([...prev, ...Map.groupBy(nav, (m) => m.topic)]));
         // Live sources have no recorded range: build the track from what arrives.
-        const live = nav.filter((m) => !rangeTopicsRef.current.has(m.topic));
+        const live = takeLive(
+          nav.filter((m) => !rangeTopicsRef.current.has(m.topic)),
+          liveTrackReadsRef.current,
+        );
         if (live.length > 0) {
           appendTrack(live, "live");
         }

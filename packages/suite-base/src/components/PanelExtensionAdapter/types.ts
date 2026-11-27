@@ -115,9 +115,7 @@ export type BuiltinPanelExtensionContext = {
    * `PanelExtensionContext.unstable_subscribeMessageRange`, with options only built-in panels use
    * (see BuiltinRangeOptions).
    */
-  unstable_subscribeMessageRange: (
-    args: SubscribeMessageRangeArgs & BuiltinRangeOptions,
-  ) => () => void;
+  unstable_subscribeMessageRange: (args: BuiltinRangeArgs) => () => void;
 } & Omit<PanelExtensionContext, "updatePanelSettingsEditor" | "unstable_subscribeMessageRange">;
 
 /**
@@ -148,7 +146,28 @@ export type BuiltinRangeOptions = {
    * messages sorted puts each batch in at its time. Without it, batches come in receive-time order.
    */
   playheadFirst?: boolean;
+  /**
+   * On a live source, read what the player keeps of the session (see
+   * BatchIteratorOptions.liveHistory) when it has no recorded range. `onNewRangeIterator` is told
+   * so: live frames then go on after the history (see LiveHistoryRead).
+   */
+  liveHistory?: boolean;
 };
+
+/** What a built-in panel's range iterator reads */
+export type RangeIteratorInfo = {
+  /** The session's live history so far, not a recording: later messages come as live frames */
+  liveHistory: boolean;
+};
+
+/** `subscribeMessageRange` arguments of built-in panels */
+export type BuiltinRangeArgs = Omit<SubscribeMessageRangeArgs, "onNewRangeIterator"> &
+  BuiltinRangeOptions & {
+    onNewRangeIterator: (
+      batchIterator: Parameters<SubscribeMessageRangeArgs["onNewRangeIterator"]>[0],
+      info?: RangeIteratorInfo,
+    ) => Promise<void>;
+  };
 
 export type CreateMessageRangeIteratorParams = {
   topic: string;
