@@ -115,6 +115,17 @@ describe("TimestampDatasetsBuilder", () => {
       expect(await storedXs(builder)).toEqual([1, 2]);
     });
 
+    it("doesn't append a state's messages again when the same state is handled twice", async () => {
+      const builder = new TimestampDatasetsBuilder();
+      builder.setSeries(buildSeriesItems([{ value: "/foo.val" }]));
+      const state = buildPlayerState({ messages: [1, 2].map(buildFooMessage) });
+      builder.handlePlayerState(state);
+      // e.g. a config change, or another panel changing its subscriptions
+      builder.handlePlayerState(state);
+
+      expect(await storedXs(builder)).toEqual([1, 2]);
+    });
+
     it("skips messages replayed after seeking back in the history", async () => {
       // Given points up to 3 s
       const builder = new TimestampDatasetsBuilder();

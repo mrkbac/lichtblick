@@ -59,6 +59,8 @@ export class TimestampDatasetsBuilder implements IDatasetsBuilder {
   #pendingDispatch: Immutable<UpdateDataAction>[] = [];
 
   #lastSeekTime = 0;
+  /** The messages of the last state handled, so a repeated state adds nothing */
+  #lastMessages?: NonNullable<Immutable<PlayerState>["activeData"]>["messages"];
 
   #startTime: Immutable<Time> | undefined;
 
@@ -74,14 +76,21 @@ export class TimestampDatasetsBuilder implements IDatasetsBuilder {
   // True once handleMessageRange has been called — indicates a range-capable source (file/bag).
   // When true, handlePlayerState skips append-current since the full history comes from the range.
   #hasRangeSource = false;
+  readonly #dispose: () => void;
 
   public constructor() {
     const worker = new Worker(new URL("./TimestampDatasetsBuilderImpl.worker", import.meta.url));
     const { remote, dispose } =
       ComlinkWrap<Comlink.RemoteObject<TimestampDatasetsBuilderImpl>>(worker);
     this.#datasetsBuilderRemote = remote;
+    this.#dispose = dispose;
+    registry.register(this, dispose, this);
+  }
 
-    registry.register(this, dispose);
+  /** Ends the worker now; the registry only does it once garbage collection gets to it */
+  public destroy(): void {
+    registry.unregister(this);
+    this.#dispose();
   }
 
   public handlePlayerState(state: Immutable<PlayerState>): HandlePlayerStateResult | undefined {
@@ -103,7 +112,10 @@ export class TimestampDatasetsBuilder implements IDatasetsBuilder {
     }
     this.#startTime = activeData.startTime;
 
-    let msgEvents = activeData.messages;
+    // The same state can be handled again (a config change, another panel's subscription change):
+    // its messages are appended already
+    let msgEvents = activeData.messages === this.#lastMessages ? [] : activeData.messages;
+    this.#lastMessages = activeData.messages;
     let datasetsChanged = false;
     if (!this.#hasRangeSource) {
       if (didSeek) {

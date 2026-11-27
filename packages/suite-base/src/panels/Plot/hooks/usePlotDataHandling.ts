@@ -12,6 +12,7 @@ import { UsePlotDataHandling } from "@lichtblick/suite-base/panels/Plot/types";
 import { PlotConfig } from "@lichtblick/suite-base/panels/Plot/utils/config";
 import { getLineColor } from "@lichtblick/suite-base/util/plotColors";
 
+import type { IDatasetsBuilder } from "../builders/IDatasetsBuilder";
 import { IndexDatasetsBuilder } from "../builders/IndexDatasetsBuilder";
 import { TimestampDatasetsBuilder } from "../builders/TimestampDatasetsBuilder";
 
@@ -35,6 +36,8 @@ const usePlotDataHandling = (
         throw new Error(`unsupported mode: ${xAxisVal}`);
     }
   }, [xAxisVal]);
+  // A replaced or unmounted builder frees its worker (and its columns) now, not at some later GC
+  useEffect(() => () => (datasetsBuilder as IDatasetsBuilder).destroy?.(), [datasetsBuilder]);
 
   useEffect(() => {
     if (
