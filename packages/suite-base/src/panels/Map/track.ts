@@ -87,6 +87,21 @@ export class ColumnStore<K extends string> {
     if (earlier.length === 0) {
       return;
     }
+    // Halve this store until the earlier rows fit next to it at its stride, so both sides share
+    // one resolution instead of the earlier rows being squeezed into what room is left
+    const rowsAt = (stride: number) =>
+      Math.ceil(earlier.length / Math.max(1, stride / earlier.#stride));
+    while (
+      this.length - (this.#tailIsExtra ? 1 : 0) > 1 &&
+      rowsAt(this.#stride) > this.limit - this.length
+    ) {
+      if (!this.#tailIsExtra && this.length % 2 === 0) {
+        // The newest row falls off the new stride: keep it as the extra newest row
+        this.#tailIsExtra = true;
+        this.#sinceKept += this.#stride;
+      }
+      this.#halve();
+    }
     const room = Math.max(1, this.limit - this.length);
     const step = Math.max(
       Math.max(1, this.#stride / earlier.#stride),
@@ -114,17 +129,23 @@ export class ColumnStore<K extends string> {
 
   #halve(): void {
     this.version++;
-    // Keep rows 0, 2, 4, ...; the next kept row follows a full new stride after the last one.
-    const kept = Math.ceil(this.length / 2);
+    // Keep rows 0, 2, 4, ... (and an extra newest row); the next kept row follows a full new stride
+    // after the last one.
+    const extra = this.#tailIsExtra ? 1 : 0;
+    const rows = this.length - extra;
+    const kept = Math.ceil(rows / 2);
     for (const key of this.#keys) {
       const column = this.columns[key];
       for (let i = 1; i < kept; i++) {
         column[i] = column[2 * i]!;
       }
+      if (extra) {
+        column[kept] = column[rows]!;
+      }
     }
-    this.#sinceKept += this.length % 2 === 0 ? this.#stride : 0;
+    this.#sinceKept += rows % 2 === 0 ? this.#stride : 0;
     this.#stride *= 2;
-    this.length = kept;
+    this.length = kept + extra;
   }
 
   #allocate(capacity: number): Record<K, ColumnArray> {
