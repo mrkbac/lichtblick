@@ -128,6 +128,8 @@ export class PathSampleColumns {
   #isChangesRecord = false;
   #forgotChanges = false;
   #startedTrackingLate = false;
+  /** Made from columns that had lost changes already (see concat) */
+  #lostChanges = false;
 
   public constructor(maxSamples: number) {
     if (!Number.isInteger(maxSamples) || maxSamples < 4) {
@@ -142,6 +144,29 @@ export class PathSampleColumns {
       columns.push(sample);
     }
     return columns;
+  }
+
+  /**
+   * `earlier`'s samples followed by `later`'s (all after them), thinned again to fit `later`'s
+   * budget: for history read around the playhead first, whose earlier windows come last. Samples
+   * already merged stay merged; with tracked changes, changes either side had forgotten stay
+   * forgotten (`hasAllChanges`).
+   */
+  public static concat(earlier: PathSampleColumns, later: PathSampleColumns): PathSampleColumns {
+    const merged = new PathSampleColumns(later.maxSamples);
+    if (later.#trackChanges || earlier.#trackChanges) {
+      merged.trackChanges();
+    }
+    for (const source of [earlier, later]) {
+      for (let i = 0; i < source.#length; i++) {
+        merged.push(source.at(i)!);
+        if (source.isMixed(i)) {
+          merged.#setMixed(merged.#length - 1);
+        }
+      }
+    }
+    merged.#lostChanges = !(earlier.hasAllChanges() && later.hasAllChanges());
+    return merged;
   }
 
   public size(): number {
@@ -176,6 +201,9 @@ export class PathSampleColumns {
 
   /** Whether the retained history still records all value changes. */
   public hasAllChanges(): boolean {
+    if (this.#lostChanges) {
+      return false;
+    }
     return this.#changes
       ? !this.#startedTrackingLate && !this.#changes.#forgotChanges
       : this.#level < 3;

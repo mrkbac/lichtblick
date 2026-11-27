@@ -12,7 +12,7 @@ import {
 } from "@lichtblick/suite-base/context/ExtensionCatalogContext";
 
 import { createMessageRangeIterator } from "./messageRangeIterator";
-import { BuiltinRangeOptions, MessageConverterAlertHandler } from "./types";
+import { BuiltinRangeArgs, MessageConverterAlertHandler } from "./types";
 
 const log = Logger.getLogger(__filename);
 
@@ -20,11 +20,10 @@ const selectInstalledMessageConverters = (state: ExtensionCatalog) =>
   state.installedMessageConverters;
 
 export type UseSubscribeMessageRange = (
-  args: SubscribeMessageRangeArgs &
-    BuiltinRangeOptions & {
-      /** Deprecated Foxglove name of `onNewRangeIterator`, still passed by older Foxglove extensions */
-      onReset?: SubscribeMessageRangeArgs["onNewRangeIterator"];
-    },
+  args: BuiltinRangeArgs & {
+    /** Deprecated Foxglove name of `onNewRangeIterator`, still passed by older Foxglove extensions */
+    onReset?: SubscribeMessageRangeArgs["onNewRangeIterator"];
+  },
 ) => () => void;
 
 /**
@@ -69,10 +68,16 @@ export function useSubscribeMessageRange(
       onReset,
       rethrowErrors,
       playheadFirst,
+      liveHistory = false,
     }) => {
       const { sortedTopics, getBatchIterator } = getMessagePipelineContext();
 
-      const rawBatchIterator = getBatchIterator(topic, { start, end, playheadFirst });
+      // A recording if there is one, else (when asked) the live session's history
+      let rawBatchIterator = getBatchIterator(topic, { start, end, playheadFirst });
+      const fromLiveHistory = !rawBatchIterator && liveHistory;
+      if (fromLiveHistory) {
+        rawBatchIterator = getBatchIterator(topic, { start, end, liveHistory: true });
+      }
       if (!rawBatchIterator) {
         return () => {};
       }
@@ -88,8 +93,10 @@ export function useSubscribeMessageRange(
         playheadFirst,
       });
 
+      // Only panels that asked for the live history are told where the iterator reads from
+      const info = liveHistory ? ([{ liveHistory: fromLiveHistory }] as const) : ([] as const);
       // oxlint-disable-next-line typescript/no-unnecessary-condition -- untyped extensions may omit it
-      (onNewRangeIterator ?? onReset)?.(messageEventIterable).catch((err: unknown) => {
+      (onNewRangeIterator ?? onReset)?.(messageEventIterable, ...info).catch((err: unknown) => {
         log.error("Error in useSubscribeMessageRange onNewRangeIterator:", err);
       });
 

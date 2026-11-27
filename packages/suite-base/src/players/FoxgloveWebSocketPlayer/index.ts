@@ -28,6 +28,7 @@ import { parseChannel } from "@lichtblick/mcap-support";
 import { ParameterValue } from "@lichtblick/suite";
 import { Asset } from "@lichtblick/suite-base/components/PanelExtensionAdapter";
 import { APP_CONFIG } from "@lichtblick/suite-base/constants/config";
+import type { IteratorResult } from "@lichtblick/suite-base/players/IterablePlayer/IIterableSource";
 import type { LiveConnectionBackend } from "@lichtblick/suite-base/players/LiveConnectionBackend";
 import {
   LIVE_QUEUE_MAX_BYTES,
@@ -48,6 +49,7 @@ import {
 import { supportsLiveRecording } from "@lichtblick/suite-base/players/liveHistory/liveRecordings";
 import { MessageSizeEstimator } from "@lichtblick/suite-base/players/messageMemoryEstimation";
 import {
+  BatchIteratorOptions,
   AdvertiseOptions,
   MessageEvent,
   Player,
@@ -1816,9 +1818,28 @@ export default class FoxgloveWebSocketPlayer implements Player {
     );
   }
 
-  public getBatchIterator(): undefined {
-    // FoxgloveWebSocketPlayer does not support batch iteration
-    return undefined;
+  /**
+   * Only with `liveHistory`: the session's history of `topic` as kept in memory, up to the newest
+   * message delivered to panels (later ones reach them as live frames, so nothing comes twice).
+   * Undefined without it, when the server controls playback (it keeps no history then) or before
+   * anything was delivered.
+   */
+  public getBatchIterator(
+    topic: string,
+    options?: BatchIteratorOptions,
+  ): AsyncIterableIterator<Readonly<IteratorResult>> | undefined {
+    const delivered = this.#lastDelivered?.receiveTime;
+    if (options?.liveHistory !== true || this.#serverControlsPlayback || !delivered) {
+      return undefined;
+    }
+    const end = options.end && isLessThan(options.end, delivered) ? options.end : delivered;
+    // Taken now: the history keeps changing while the reader consumes it
+    const messages = this.#history.messages(topic, options.start, end);
+    return (async function* () {
+      for (const msgEvent of messages) {
+        yield { type: "message-event" as const, msgEvent };
+      }
+    })();
   }
 
   // Return the current time

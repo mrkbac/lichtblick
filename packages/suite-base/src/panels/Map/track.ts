@@ -77,6 +77,41 @@ export class ColumnStore<K extends string> {
     return this.length++;
   }
 
+  /**
+   * Put the rows of `earlier` (all before this store's first row) in front of this store's rows,
+   * for history read backwards from the playhead. They are thinned to at least this store's
+   * stride, and further to fit the limit: older history loses resolution first, and this store's
+   * rows (and its newest one) stay as they are.
+   */
+  public prepend(earlier: ColumnStore<K>): void {
+    if (earlier.length === 0) {
+      return;
+    }
+    const room = Math.max(1, this.limit - this.length);
+    const step = Math.max(
+      Math.max(1, this.#stride / earlier.#stride),
+      Math.ceil(earlier.length / room),
+    );
+    const added = Math.ceil(earlier.length / step);
+    const total = added + this.length;
+    let capacity = this.columns[this.#keys[0]!].length;
+    while (capacity < total) {
+      capacity *= 2;
+    }
+    const next = this.#allocate(capacity);
+    for (const key of this.#keys) {
+      const from = earlier.columns[key];
+      const to = next[key];
+      for (let i = 0; i < added; i++) {
+        to[i] = from[i * step]!;
+      }
+      to.set(this.columns[key].subarray(0, this.length), added);
+    }
+    Object.assign(this.columns, next);
+    this.length = total;
+    this.version++;
+  }
+
   #halve(): void {
     this.version++;
     // Keep rows 0, 2, 4, ...; the next kept row follows a full new stride after the last one.

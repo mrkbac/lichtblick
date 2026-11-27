@@ -8,6 +8,7 @@ import { parseMessagePath } from "@lichtblick/message-path";
 import { PathSampleColumns } from "@lichtblick/suite-base/components/MessagePathSyntax/PathSampleColumns";
 import { useCachedGetMessagePathDataItems } from "@lichtblick/suite-base/components/MessagePathSyntax/useCachedGetMessagePathDataItems";
 import { useSubscribeMessageRange } from "@lichtblick/suite-base/components/PanelExtensionAdapter";
+import { EarlierWindows } from "@lichtblick/suite-base/components/PanelExtensionAdapter/EarlierWindows";
 import useGlobalVariables from "@lichtblick/suite-base/hooks/useGlobalVariables";
 import { MAX_SAMPLES_PER_PATH } from "@lichtblick/suite-base/panels/StateTransitions/constants";
 
@@ -95,19 +96,35 @@ export function useDecodedMessageRange(
       let cancelled = false;
       const cancel = subscribeMessageRange({
         topic,
+        playheadFirst: true,
         onNewRangeIterator: async (batchIterator) => {
           // A new iterator replaces the topic's data (e.g. an edited user script).
           for (const path of request.paths) {
             acc[path] = new PathSampleColumns(MAX_SAMPLES_PER_PATH);
           }
           publish();
+          // History before what `acc` has (read around the playhead first) is collected per window
+          // and put in front once its window ends.
+          const earlier = new EarlierWindows<Record<string, PathSampleColumns>>(
+            () => ({}),
+            (samples) => {
+              for (const path of request.paths) {
+                const before = samples[path];
+                const after = acc[path];
+                if (before && after) {
+                  acc[path] = PathSampleColumns.concat(before, after);
+                }
+              }
+            },
+          );
           for await (const batch of batchIterator) {
             // The resolver can already be the next render's, before this effect cancels us.
             if (cancelled || request.paths.some((path) => !pathsRef.current.includes(path))) {
               return;
             }
+            const into = earlier.place(batch) ?? acc;
             for (const path of request.paths) {
-              const out = (acc[path] ??= new PathSampleColumns(MAX_SAMPLES_PER_PATH));
+              const out = (into[path] ??= new PathSampleColumns(MAX_SAMPLES_PER_PATH));
               if (changesPathsRef.current.includes(path)) {
                 out.trackChanges();
               }
@@ -125,6 +142,7 @@ export function useDecodedMessageRange(
             }, FLUSH_INTERVAL_MS);
           }
           if (!cancelled) {
+            earlier.flush();
             publish();
           }
         },

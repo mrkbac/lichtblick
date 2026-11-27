@@ -104,6 +104,34 @@ describe("useSubscribeMessageRange", () => {
     expect(onReset).toHaveBeenCalledWith(mockIterable);
   });
 
+  it("reads a live session's history when asked and there is no recording, and says so", () => {
+    const mockIterable: AsyncIterable<MessageEvent[]> = { [Symbol.asyncIterator]: vi.fn() };
+    mockCreateMessageRangeIterator.mockReturnValue({ iterable: mockIterable, cancel: vi.fn() });
+    const history = { [Symbol.asyncIterator]: vi.fn() };
+    const mockGetBatchIterator = vi.fn((_topic: string, options?: { liveHistory?: boolean }) =>
+      options?.liveHistory === true ? history : undefined,
+    );
+    mockUseMessagePipelineGetter.mockReturnValue(
+      vi.fn().mockReturnValue({ sortedTopics: [], getBatchIterator: mockGetBatchIterator }),
+    );
+    const onNewRangeIterator = vi.fn().mockResolvedValue(undefined);
+    const { result } = renderHook(() => useSubscribeMessageRange());
+
+    act(() => {
+      result.current({ topic: "/a", liveHistory: true, onNewRangeIterator });
+    });
+
+    expect(mockGetBatchIterator).toHaveBeenLastCalledWith("/a", {
+      start: undefined,
+      end: undefined,
+      liveHistory: true,
+    });
+    expect(mockCreateMessageRangeIterator).toHaveBeenCalledWith(
+      expect.objectContaining({ rawBatchIterator: history }),
+    );
+    expect(onNewRangeIterator).toHaveBeenCalledWith(mockIterable, { liveHistory: true });
+  });
+
   it("calls onNewRangeIterator with the iterable when batch iterator is available", () => {
     // Given
     const topic = BasicBuilder.string();
