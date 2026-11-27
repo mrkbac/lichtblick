@@ -23,6 +23,7 @@ import {
 } from "./pointExtensionUtils";
 import type { BaseUserData } from "../Renderable";
 import type { Renderer } from "../Renderer";
+import { makePose, Transform, TransformTree } from "../transforms";
 
 type SettingsTreeFieldWithOptions = SettingsTreeField & {
   options: { label: string; value: string };
@@ -157,7 +158,7 @@ describe("RenderObjectHistory", () => {
   type Params = ConstructorParameters<typeof RenderObjectHistory>[0];
   let live = 0;
 
-  function entry(time: bigint, points: number) {
+  function entry(time: bigint, points: number, frameId = "base") {
     live++;
     const geometry = new THREE.BufferGeometry();
     geometry.setDrawRange(0, points);
@@ -166,20 +167,20 @@ describe("RenderObjectHistory", () => {
       dispose: vi.fn(() => {
         live--;
       }),
-      releaseMessage: vi.fn(),
     });
-    return { receiveTime: time, messageTime: time, renderable };
+    renderable.userData.pose = makePose();
+    return { receiveTime: time, messageTime: time, frameId, renderable };
   }
 
-  function makeHistory(limits: HistoryLimits, decayTime = 1000) {
+  function makeHistory(limits: HistoryLimits, decayTime = 1000, renderer = {} as Renderer) {
     live = 0;
     const parentRenderable = Object.assign(new THREE.Object3D(), {
-      userData: { settings: { decayTime } },
+      userData: { settings: { decayTime }, settingsPath: ["topics", "/s"] },
     }) as unknown as Params["parentRenderable"];
     const history = new RenderObjectHistory({
       initial: entry(0n, 1),
       parentRenderable,
-      renderer: {} as Renderer,
+      renderer,
       limits,
     });
     return history;
@@ -220,14 +221,26 @@ describe("RenderObjectHistory", () => {
     expect(history.latest().receiveTime).toBe(100n);
   });
 
-  it("releases the message of every entry but the latest", () => {
-    const history = makeHistory({ maxEntries: 100, maxPoints: Infinity });
-    const first = entry(1n, 1);
-    const second = entry(2n, 1);
-    history.addHistoryEntry(first);
-    history.addHistoryEntry(second);
-    expect(first.renderable.releaseMessage).toHaveBeenCalledTimes(1);
-    expect(second.renderable.releaseMessage).not.toHaveBeenCalled();
+  it("places each entry in its own scan's frame, not the latest one's", () => {
+    const transformTree = new TransformTree();
+    transformTree.addTransform("a", "map", 0n, Transform.Identity().setPosition([1, 0, 0]));
+    transformTree.addTransform("b", "map", 0n, Transform.Identity().setPosition([2, 0, 0]));
+    const errors = { add: vi.fn() };
+    const renderer = { transformTree, settings: { errors } } as unknown as Renderer;
+    const history = makeHistory({ maxEntries: 100, maxPoints: Infinity }, 1000, renderer);
+    const older = entry(1n, 1, "a");
+    const latest = entry(2n, 1, "b");
+    history.addHistoryEntry(older);
+    history.addHistoryEntry(latest);
+
+    expect(history.updatePoses(2n, "map", "map", { skipLatest: true })).toBe(false); // initial "base"
+    expect(older.renderable.position.x).toBe(1);
+    expect(latest.renderable.position.x).toBe(0); // skipped
+    expect(errors.add).toHaveBeenCalledTimes(1);
+
+    history.clearHistory(); // keeps only the latest
+    expect(history.updatePoses(2n, "map", "map")).toBe(true);
+    expect(latest.renderable.position.x).toBe(2);
   });
 
   it("disposes everything on dispose", () => {

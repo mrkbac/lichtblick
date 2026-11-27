@@ -71,4 +71,23 @@ describe("HiddenFrames", () => {
     expect(hidden.take(b, 2)).toBe(b);
     expect(batch).not.toBe(b);
   });
+
+  it("keeps only the latest message per sampled topic, in receive-time order", () => {
+    const hidden = new HiddenFrames();
+    hidden.setSampledTopics(new Set(["s"]));
+    const at = (topic: string, sec: number) =>
+      MessageEventBuilder.messageEvent({ topic, receiveTime: { sec, nsec: 0 } });
+    hidden.take(undefined, 0);
+    const frames = [[at("s", 1), at("a", 1)], [at("s", 2)], [at("s", 3), at("a", 4)]];
+    for (const f of frames) {
+      hidden.add(f, { visible: false });
+    }
+    const batch = hidden.take(frames[2], HIDDEN_RENDER_INTERVAL_MS);
+    expect(batch?.map((m) => [m.topic, m.receiveTime.sec])).toEqual([
+      ["a", 1],
+      ["s", 3],
+      ["a", 4],
+    ]);
+    expect(hidden.hasPending()).toBe(false);
+  });
 });

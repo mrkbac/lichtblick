@@ -170,12 +170,11 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
         )
       : undefined;
     const reverse = args.reverse === true;
-    const candidates = reader.chunkIndexes
+    const candidates = reader
+      .chunksInTimeRange(start, end)
       .filter(
         (chunk) =>
-          chunk.messageStartTime <= end &&
-          chunk.messageEndTime >= start &&
-          (!channels || [...chunk.messageIndexOffsets.keys()].some((id) => channels.has(id))),
+          !channels || [...chunk.messageIndexOffsets.keys()].some((id) => channels.has(id)),
       )
       .sort((a, b) =>
         reverse
@@ -692,10 +691,7 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
     end: bigint,
   ): Map<string, McapTypes.ChunkIndex> {
     const latestChunkByTopic = new Map<string, McapTypes.ChunkIndex>();
-    for (const chunk of this.#reader.chunkIndexes) {
-      if (chunk.messageStartTime > end || chunk.messageEndTime < start) {
-        continue;
-      }
+    for (const chunk of this.#reader.chunksInTimeRange(start, end)) {
       for (const channelId of chunk.messageIndexOffsets.keys()) {
         const topic = this.#channelInfoById.get(channelId)?.channel.topic;
         if (topic == undefined || !topics.has(topic)) {
@@ -723,10 +719,7 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
   ): McapTypes.ChunkIndex[] {
     const chunks = new Set<McapTypes.ChunkIndex>();
     const latest = this.#latestChunkByTopic(topics, windowStart, windowEnd);
-    for (const chunk of this.#reader.chunkIndexes) {
-      if (chunk.messageStartTime > windowEnd || chunk.messageEndTime < windowStart) {
-        continue;
-      }
+    for (const chunk of this.#reader.chunksInTimeRange(windowStart, windowEnd)) {
       if (chunk.messageEndTime >= tailStart) {
         chunks.add(chunk);
         continue;

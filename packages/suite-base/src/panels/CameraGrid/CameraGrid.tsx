@@ -31,6 +31,16 @@ import { CameraGridConfig, DEFAULT_CONFIG, TileConfig } from "./types";
 
 const DEFAULT_ASPECT = 4 / 3;
 
+/** Zoom per +/- key press, and pan per arrow key press in CSS pixels. */
+const KEY_ZOOM_FACTOR = 1.25;
+const KEY_PAN_PX = 40;
+const KEY_PAN_DIRECTIONS: Record<string, [number, number] | undefined> = {
+  ArrowLeft: [-1, 0],
+  ArrowRight: [1, 0],
+  ArrowUp: [0, -1],
+  ArrowDown: [0, 1],
+};
+
 /** Wheel zoom per pixel of scroll (and per line, for mice that scroll by lines). */
 const ZOOM_PER_PIXEL = 0.002;
 const ZOOM_PER_LINE = 0.05;
@@ -58,6 +68,14 @@ const useStyles = makeStyles()((theme) => ({
     // Outlines of neighbouring tiles meet in the 1px gap as a single divider line.
     outline: `1px solid ${theme.palette.divider}`,
     cursor: "zoom-in",
+    // Drawn over the canvas: an inset outline would be under it
+    "&:focus-visible::after": {
+      content: '""',
+      position: "absolute",
+      inset: 0,
+      border: `2px solid ${theme.palette.primary.main}`,
+      pointerEvents: "none",
+    },
   },
   maximized: {
     cursor: "zoom-out",
@@ -126,7 +144,7 @@ type TileProps = {
   onToggleMaximize: (topic: string) => void;
 };
 
-function Tile({
+export function Tile({
   tile,
   renderer,
   showLabels,
@@ -179,15 +197,48 @@ function Tile({
 
   const dragRef = useRef<{ x: number; y: number } | undefined>(undefined);
 
+  // Double-click or Enter first resets a zoomed tile, then maximizes it.
+  const resetOrMaximize = () => {
+    if (!renderer.resetView(tile.topic)) {
+      onToggleMaximize(tile.topic);
+    }
+  };
+
   return (
     <div
       ref={tileElementRef}
       className={cx(classes.tile, { [classes.maximized]: maximized })}
-      onDoubleClick={() => {
-        // Double-click first resets a zoomed tile, then maximizes it.
-        if (!renderer.resetView(tile.topic)) {
-          onToggleMaximize(tile.topic);
+      role="button"
+      tabIndex={0}
+      aria-label={tile.topic}
+      aria-pressed={maximized}
+      aria-keyshortcuts="Enter + - ArrowLeft ArrowRight ArrowUp ArrowDown"
+      onDoubleClick={resetOrMaximize}
+      onKeyDown={(event) => {
+        const element = event.currentTarget;
+        const centerX = element.clientWidth / 2;
+        const centerY = element.clientHeight / 2;
+        switch (findShortcut(CAMERA_GRID_SHORTCUTS, event)?.id) {
+          case "cameraGrid.resetOrMaximize":
+            resetOrMaximize();
+            break;
+          case "cameraGrid.zoomIn":
+            renderer.zoomAt(tile.topic, KEY_ZOOM_FACTOR, centerX, centerY);
+            break;
+          case "cameraGrid.zoomOut":
+            renderer.zoomAt(tile.topic, 1 / KEY_ZOOM_FACTOR, centerX, centerY);
+            break;
+          case "cameraGrid.pan": {
+            // Arrows move the view, so the image moves the other way
+            const [dx, dy] = KEY_PAN_DIRECTIONS[event.key] ?? [0, 0];
+            renderer.panBy(tile.topic, -dx * KEY_PAN_PX, -dy * KEY_PAN_PX);
+            break;
+          }
+          default:
+            return;
         }
+        event.preventDefault();
+        event.stopPropagation();
       }}
       onPointerDown={(event) => {
         if (event.button === 0 && renderer.isZoomed(tile.topic)) {

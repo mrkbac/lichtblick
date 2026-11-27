@@ -948,6 +948,37 @@ describe("PlotCoordinator", () => {
       expect(listener).toHaveBeenCalledWith(bounds.x);
     });
 
+    it("fits y to the data in view after an x-only wheel zoom, and keeps a panned y", async () => {
+      // GIVEN the renderer reports the y fit from before the zoom
+      const bounds: Bounds = { x: { min: 2, max: 3 }, y: { min: -10, max: 10 } };
+      (renderer.update as Mock).mockResolvedValue(bounds);
+      const wheel = {
+        type: "wheel",
+        deltaY: -100,
+        clientX: 1,
+        clientY: 1,
+        boundingClientRect: { top: 0, left: 0 },
+      } as const;
+
+      // WHEN zooming x only
+      plotCoordinator.addInteractionEvent(wheel);
+      await plotCoordinator["dispatchRender"]();
+
+      // THEN downsampling uses the new x range but leaves y to the builder
+      expect(plotCoordinator["viewport"].bounds).toEqual({ x: bounds.x, y: {} });
+
+      // WHEN panning
+      plotCoordinator.addInteractionEvent({ type: "panend" });
+      await plotCoordinator["dispatchRender"]();
+
+      // THEN the panned y range is used, until the view is reset
+      expect(plotCoordinator["viewport"].bounds.y).toEqual(bounds.y);
+      plotCoordinator.resetBounds();
+      plotCoordinator.addInteractionEvent({ ...wheel, zoomMode: "x" });
+      await plotCoordinator["dispatchRender"]();
+      expect(plotCoordinator["viewport"].bounds.y).toEqual({});
+    });
+
     it("should not emit 'timeseriesBounds' if shouldSync is false", async () => {
       const listener = vi.fn();
 

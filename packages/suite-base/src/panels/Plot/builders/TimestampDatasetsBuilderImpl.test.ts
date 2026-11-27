@@ -91,6 +91,33 @@ describe("TimestampDatasetsBuilderImpl", () => {
       );
     });
 
+    it("keeps one-sample spikes through repeated thinning", () => {
+      // GIVEN a flat signal with single-sample spikes, early (halved many times) and late
+      // (folded into a row while thinning is active)
+      const builder = new TimestampDatasetsBuilderImpl(100);
+      builder.applyAction({ type: "update-series-config", seriesItems: [seriesItem("0")] });
+      const spikes = new Map([
+        [777, 5],
+        [15_555, -7],
+        [19_998, 3],
+      ]);
+      for (let i = 0; i < 20_000; i += 100) {
+        builder.applyAction({
+          type: "append-current",
+          series: key,
+          items: items(range(i, i + 100), (x) => spikes.get(x) ?? 0),
+        });
+      }
+
+      // THEN every spike is still plotted, within budget, and the newest sample too
+      const data = builder.getCsvData()[0]!.data;
+      expect(data.length).toBeLessThanOrEqual(100);
+      expect(data.filter((item) => item.y !== 0).map((item) => [item.x, item.y])).toEqual(
+        [...spikes].map(([x, y]) => [x, y]),
+      );
+      expect(data.at(-1)!.x).toBe(19_999);
+    });
+
     it("thins the busiest series and leaves sparse ones intact", () => {
       // GIVEN a fast and a slow series sharing a budget of 1000 rows
       const builder = new TimestampDatasetsBuilderImpl(500);

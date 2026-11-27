@@ -6,7 +6,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { compare, fromSec, toSec } from "@foxglove/rostime";
+import { compare, fromSec, type Time, toSec } from "@foxglove/rostime";
 import * as _ from "lodash-es";
 import type { Mock, MockInstance } from "vitest";
 
@@ -1608,7 +1608,7 @@ describe("IterablePlayer", () => {
     await player.isClosed;
   });
 
-  it("skims at high speed, takes larger steps while the source can't keep up and smaller ones once it does", async () => {
+  it("skims at high speed, takes larger steps while the source can't keep up and smaller ones once it does, without a reset per step", async () => {
     // A source that first needs 100ms per skim update while 50x at 30 updates/s needs one every
     // 33ms, then keeps up again
     let slow = true;
@@ -1638,7 +1638,9 @@ describe("IterablePlayer", () => {
     const player = new IterablePlayer({ source, enablePreload: false, sourceId: "test" });
     player.setSubscriptions([{ topic: defaultTopic }]);
     const present = Promise.withResolvers<void>();
+    let currentTime: Time | undefined;
     player.setListener(async (state) => {
+      currentTime = state.activeData?.currentTime ?? currentTime;
       if (state.presence === PlayerPresence.PRESENT) {
         present.resolve();
       }
@@ -1659,14 +1661,20 @@ describe("IterablePlayer", () => {
     expect(dropped).toBeGreaterThanOrEqual(50 / 15);
     expect(dropped).toBeLessThanOrEqual(50 / 5);
 
-    // Once the source keeps up again, it takes more updates again
+    // Once the source keeps up again, it takes more updates again, but a step up waits for three
+    // checks in a row (9s) before it resets the iterator and drops what was read ahead ...
     slow = false;
-    await new Promise((resolve) => setTimeout(resolve, 5000));
-    expect(skimSec().at(-1)!).toBeLessThan(dropped);
+    await new Promise((resolve) => setTimeout(resolve, 7000));
+    expect(skimSec().at(-1)!).toBeGreaterThanOrEqual(dropped);
+    // ... or for the next reset
+    player.seekPlayback({ sec: currentTime!.sec - 1, nsec: currentTime!.nsec });
+    await vi.waitFor(() => {
+      expect(skimSec().at(-1)!).toBeLessThan(dropped);
+    });
 
     player.close();
     await player.isClosed;
-  }, 15_000);
+  }, 20_000);
 
   it("should allow changing subscriptions when player in start-play state", async () => {
     const source = new TestSource();

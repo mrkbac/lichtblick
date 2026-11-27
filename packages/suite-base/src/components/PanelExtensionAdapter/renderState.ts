@@ -296,6 +296,10 @@ function initRenderStateBuilder(): BuildRenderStateFn {
       updateRenderStateField("services", sortedServices ?? [], renderState.services, shouldRender);
     }
 
+    // This build's frame, and the topics whose last message it already converted with the current
+    // config: a forced conversion adds to that frame instead of replacing it.
+    const frameBefore = renderState.currentFrame;
+    const convertedTopics = new Set<string>();
     if (watchedFields.has("currentFrame")) {
       if (currentFrame && currentFrame !== prevCurrentFrame) {
         // If we have a new frame, emit that frame and process all messages on that frame.
@@ -308,6 +312,7 @@ function initRenderStateBuilder(): BuildRenderStateFn {
 
           convert(messageEvent, topicSchemaConverters, postProcessedFrame, getVariables);
           lastMessageByTopic.set(messageEvent.topic, messageEvent);
+          convertedTopics.add(messageEvent.topic);
         }
         renderState.currentFrame = postProcessedFrame;
         shouldRender.value = true;
@@ -326,6 +331,7 @@ function initRenderStateBuilder(): BuildRenderStateFn {
         const postProcessedFrame: MessageEvent[] = [];
         for (const messageEvent of lastMessageByTopic.values()) {
           convert(messageEvent, topicSchemaConverters, postProcessedFrame, getVariables);
+          convertedTopics.add(messageEvent.topic);
         }
         renderState.currentFrame = postProcessedFrame;
         shouldRender.value = true;
@@ -465,12 +471,13 @@ function initRenderStateBuilder(): BuildRenderStateFn {
     }
 
     if (forceConversion.size > 0) {
-      const postProcessedFrame: MessageEvent[] = [];
+      const postProcessedFrame: MessageEvent[] =
+        renderState.currentFrame !== frameBefore ? [...(renderState.currentFrame ?? [])] : [];
 
       for (const topic of forceConversion) {
         const messageEvent = lastMessageByTopic.get(topic);
 
-        if (messageEvent == undefined) {
+        if (messageEvent == undefined || convertedTopics.has(topic)) {
           continue;
         }
 

@@ -10,6 +10,7 @@ import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
 import KeyboardArrowRightIcon from "@mui/icons-material/KeyboardArrowRight";
 import SearchIcon from "@mui/icons-material/Search";
 import { IconButton, InputBase, Tooltip } from "@mui/material";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { produce } from "immer";
 import * as _ from "lodash-es";
 import { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
@@ -52,6 +53,7 @@ import { isRecordingSource } from "@lichtblick/suite-base/players/constants";
 import { Topic, TopicStats } from "@lichtblick/suite-base/players/types";
 import { usePanelSettingsTreeUpdate } from "@lichtblick/suite-base/providers/PanelStateContextProvider";
 import { SaveConfig } from "@lichtblick/suite-base/types/panels";
+import { LiveTopicRates } from "@lichtblick/suite-base/util/LiveTopicRates";
 import { omitUndefined } from "@lichtblick/suite-base/util/omitUndefined";
 import { toError } from "@lichtblick/suite-base/util/toError";
 
@@ -276,10 +278,25 @@ function TopicHealthTable({ config, saveConfig }: Props): React.JSX.Element {
     });
   }, [getPipeline]);
   useEffect(() => {
+    // The same rates Data Source Info shows; started over for a new player
+    let tracker = new LiveTopicRates();
+    let trackedPlayerId: string | undefined;
     const tick = () => {
       if (!isRecording) {
-        const { activeData } = getPipeline().playerState;
-        liveRef.current = sampleLiveRates(liveRef.current, activeData?.topicStats, Date.now());
+        const { activeData, playerId } = getPipeline().playerState;
+        if (playerId !== trackedPlayerId) {
+          trackedPlayerId = playerId;
+          tracker = new LiveTopicRates();
+          liveRef.current = new Map();
+        }
+        const stats = activeData?.topicStats;
+        const nowMs = Date.now();
+        liveRef.current = sampleLiveRates(
+          liveRef.current,
+          stats,
+          nowMs,
+          stats ? tracker.update(nowMs, stats) : new Map(),
+        );
       }
       if (visibleRef.current) {
         publish();
@@ -484,6 +501,23 @@ function TopicHealthTable({ config, saveConfig }: Props): React.JSX.Element {
     );
   }, [collapsed, config.sortByStatus, rows, visibleTopics]);
 
+  // Only the rows in view are rendered: a source with hundreds of topics updates every second
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const virtualizer = useVirtualizer({
+    count: treeRows.length,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: () => 26,
+    overscan: 10,
+    getItemKey: (index) => {
+      const row = treeRows[index]!;
+      return row.kind === "namespace" ? `ns:${row.path}` : row.topic.name;
+    },
+    measureElement: (element) => element.getBoundingClientRect().height,
+  });
+  const virtualRows = virtualizer.getVirtualItems();
+  const padTop = virtualRows[0]?.start ?? 0;
+  const padBottom = virtualizer.getTotalSize() - (virtualRows.at(-1)?.end ?? 0);
+
   const openTopic = (name: string) => {
     openSiblingPanel({
       panelType: "RawMessages",
@@ -546,7 +580,7 @@ function TopicHealthTable({ config, saveConfig }: Props): React.JSX.Element {
         ))}
         {scanError != undefined && <span className={classes.error}>{scanError}</span>}
       </div>
-      <div className={classes.root}>
+      <div className={classes.root} ref={scrollRef}>
         {topics.length === 0 ? (
           <EmptyState>Waiting for topics…</EmptyState>
         ) : (
@@ -570,7 +604,9 @@ function TopicHealthTable({ config, saveConfig }: Props): React.JSX.Element {
               </tr>
             </thead>
             <tbody>
-              {treeRows.map((treeRow) => {
+              {padTop > 0 && <tr aria-hidden style={{ height: padTop }} />}
+              {virtualRows.map((item) => {
+                const treeRow = treeRows[item.index]!;
                 if (treeRow.kind === "namespace") {
                   const isCollapsed = collapsed.has(treeRow.path);
                   const problems = treeRow.topics.filter((topic) => {
@@ -578,7 +614,12 @@ function TopicHealthTable({ config, saveConfig }: Props): React.JSX.Element {
                     return status === "slow" || status === "stale";
                   }).length;
                   return (
-                    <tr key={`ns:${treeRow.path}`} className={classes.namespace}>
+                    <tr
+                      key={item.key}
+                      ref={virtualizer.measureElement}
+                      data-index={item.index}
+                      className={classes.namespace}
+                    >
                       <td colSpan={99} style={{ paddingLeft: 4 + treeRow.depth * 16 }}>
                         <button
                           type="button"
@@ -607,7 +648,7 @@ function TopicHealthTable({ config, saveConfig }: Props): React.JSX.Element {
                 const deep = config.topics[row.topic.name]?.deepStats === true;
                 const timing = row.inspection?.timing;
                 return (
-                  <tr key={row.topic.name}>
+                  <tr key={item.key} ref={virtualizer.measureElement} data-index={item.index}>
                     <td style={{ paddingLeft: 4 + treeRow.depth * 16 }}>
                       <span
                         className={cx(classes.dot, classes[row.status])}
@@ -723,6 +764,7 @@ function TopicHealthTable({ config, saveConfig }: Props): React.JSX.Element {
                   </tr>
                 );
               })}
+              {padBottom > 0 && <tr aria-hidden style={{ height: padBottom }} />}
             </tbody>
           </table>
         )}

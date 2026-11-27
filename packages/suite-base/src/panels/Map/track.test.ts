@@ -1,7 +1,10 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
+import * as _ from "lodash-es";
+
 import {
+  extendThinnedTrack,
   nearestFix,
   SampleStore,
   thinTrack,
@@ -117,6 +120,55 @@ describe("thinTrack", () => {
       0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29,
     ]);
     expect(twoParts.runs).toEqual([0, 11]);
+  });
+});
+
+describe("extendThinnedTrack", () => {
+  it("thins appended fixes like thinning the whole track, also across the viewport edge", () => {
+    // A wandering track that leaves and re-enters the viewport, appended a few fixes at a time
+    const position = (i: number): [number, number] => [
+      Math.sin(i / 17) * 0.02 + i * 0.0001,
+      Math.cos(i / 23) * 0.02,
+    ];
+    const options = {
+      zoom: 16,
+      minPixels: 2,
+      budget: 1e6,
+      viewport: { west: -0.01, east: 0.03, south: -0.01, north: 0.01 },
+    };
+    const store = new TrackStore("/fix");
+    let thinned = thinTrack(store, options);
+    const mismatches: number[] = [];
+    for (let i = 0; i < 600; i++) {
+      const [longitude, latitude] = position(i);
+      store.push({
+        topic: "/fix",
+        schemaName: "sensor_msgs/NavSatFix",
+        receiveTime: { sec: 1_700_000_000 + i, nsec: 0 },
+        sizeInBytes: 0,
+        message: { longitude, latitude },
+      });
+      if (i % 7 === 0 || i === 599) {
+        thinned = extendThinnedTrack(store, thinned, options);
+        const full = thinTrack(store, options);
+        if (!_.isEqual([...thinned.indices, ...thinned.runs], [...full.indices, ...full.runs])) {
+          mismatches.push(i);
+        }
+      }
+    }
+    expect(mismatches).toEqual([]);
+    expect(thinned.runs.length).toBeGreaterThan(1);
+  });
+
+  it("thins the whole track again once the budget is exceeded", () => {
+    const store = storeOf(100, (i) => [i * 0.001, 0]);
+    const options = { zoom: 18, minPixels: 1, budget: 100 };
+    const first = thinTrack(store, options);
+    const more = storeOf(300, (i) => [i * 0.001, 0]);
+    const extended = extendThinnedTrack(more, first, options);
+    expect(extended.indices.length).toBeLessThanOrEqual(100);
+    expect(extended.length).toBe(300);
+    expect(extended.indices.at(-1)).toBe(299);
   });
 });
 

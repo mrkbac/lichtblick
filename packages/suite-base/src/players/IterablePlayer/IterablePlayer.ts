@@ -87,6 +87,9 @@ const SKIM_MIN_ACHIEVED_SPEED = 0.8;
 // within 0.95 / 0.8, so on its own it doesn't fall below SKIM_MIN_ACHIEVED_SPEED and step back down.
 const SKIM_RECOVERED_SPEED = 0.95;
 const SKIM_STEP_UP = 1.15;
+// A step up resets the playback iterator, which drops what skim read ahead, so it waits until this
+// many checks in a row kept up (or a reset for another reason, e.g. a seek). A step down applies at once.
+const SKIM_STEP_UP_CHECKS = 3;
 
 // Amount to wait until panels have had the chance to subscribe to topics before
 // we start playback
@@ -390,16 +393,35 @@ export class IterablePlayer implements Player {
 
   // Skim interval of the current playback iterator; the iterator is reset when speed changes it
   #playbackSkimInterval: Time | undefined;
+  // Skim updates per second of the current playback iterator
+  #playbackSkimUpdatesPerSec = SKIM_UPDATES_PER_SEC;
+  // Checks in a row that kept up since the iterator was made
+  #skimKeptUpChecks = 0;
   // Lowered when the source can't deliver skim updates in time (e.g. a slow remote file)
   #skimUpdatesPerSec = SKIM_UPDATES_PER_SEC;
   // Wall clock and playback time at the start of the current keep-up check
   #skimCheck: { wallMs: number; time: Time } | undefined;
 
-  #skimInterval(): Time | undefined {
+  #skimInterval(updatesPerSec = this.#skimUpdatesPerSec): Time | undefined {
     if (this.#speed < SKIM_MIN_SPEED) {
       return undefined;
     }
-    return fromNanoSec(BigInt(Math.round((this.#speed * 1e9) / this.#skimUpdatesPerSec)));
+    return fromNanoSec(BigInt(Math.round((this.#speed * 1e9) / updatesPerSec)));
+  }
+
+  /** Whether the playback iterator's skim interval is out of date and worth a reset */
+  #skimIntervalChanged(): boolean {
+    const stepUpPending =
+      this.#skimUpdatesPerSec > this.#playbackSkimUpdatesPerSec &&
+      this.#skimKeptUpChecks < SKIM_STEP_UP_CHECKS;
+    const updatesPerSec = stepUpPending ? this.#playbackSkimUpdatesPerSec : this.#skimUpdatesPerSec;
+    return !_.isEqual(this.#playbackSkimInterval, this.#skimInterval(updatesPerSec));
+  }
+
+  #startSkim(): void {
+    this.#playbackSkimInterval = this.#skimInterval();
+    this.#playbackSkimUpdatesPerSec = this.#skimUpdatesPerSec;
+    this.#skimKeptUpChecks = 0;
   }
 
   /**
@@ -423,13 +445,16 @@ export class IterablePlayer implements Player {
     const playedSec = Number(toNanoSec(this.#currentTime) - toNanoSec(this.#skimCheck.time)) / 1e9;
     const achieved = playedSec / (wallSec * this.#speed);
     this.#skimCheck = { wallMs: now, time: this.#currentTime };
+    // From the iterator's rate: that is what was measured, and a pending step up stays one step
+    const current = this.#playbackSkimUpdatesPerSec;
     if (achieved < SKIM_MIN_ACHIEVED_SPEED) {
-      this.#skimUpdatesPerSec = Math.max(1, Math.floor(this.#skimUpdatesPerSec * achieved));
+      this.#skimUpdatesPerSec = Math.max(1, Math.floor(current * achieved));
+      this.#skimKeptUpChecks = 0;
     } else if (achieved >= SKIM_RECOVERED_SPEED) {
-      this.#skimUpdatesPerSec = Math.min(
-        SKIM_UPDATES_PER_SEC,
-        Math.ceil(this.#skimUpdatesPerSec * SKIM_STEP_UP),
-      );
+      this.#skimUpdatesPerSec = Math.min(SKIM_UPDATES_PER_SEC, Math.ceil(current * SKIM_STEP_UP));
+      this.#skimKeptUpChecks++;
+    } else {
+      this.#skimKeptUpChecks = 0;
     }
   }
 
@@ -976,7 +1001,7 @@ export class IterablePlayer implements Player {
     this.#lastStamp = undefined;
 
     log.debug("Initializing forward iterator from", next);
-    this.#playbackSkimInterval = this.#skimInterval();
+    this.#startSkim();
     this.#playbackTopics = this.#allTopics;
     this.#playbackIterator = this.#bufferedSource.messageIterator({
       topics: this.#allTopics,
@@ -1044,7 +1069,7 @@ export class IterablePlayer implements Player {
     }
 
     log.debug("Initializing forward iterator from", this.#start);
-    this.#playbackSkimInterval = this.#skimInterval();
+    this.#startSkim();
     this.#playbackTopics = this.#allTopics;
     this.#playbackIterator = this.#bufferedSource.messageIterator({
       topics: this.#allTopics,
@@ -1579,10 +1604,7 @@ export class IterablePlayer implements Player {
         this.#adaptSkimRate();
 
         // If subscriptions or the skim interval changed, update to the new subscriptions
-        if (
-          this.#allTopics !== allTopics ||
-          !_.isEqual(this.#playbackSkimInterval, this.#skimInterval())
-        ) {
+        if (this.#allTopics !== allTopics || this.#skimIntervalChanged()) {
           // Discard any last message event since the new iterator will repeat it
           this.#lastMessageEvent = undefined;
 

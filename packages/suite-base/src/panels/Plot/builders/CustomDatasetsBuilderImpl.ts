@@ -60,11 +60,6 @@ type ResetSeriesFullAction = {
   series: SeriesConfigKey;
 };
 
-type ResetSeriesCurrentAction = {
-  type: "reset-current";
-  series: SeriesConfigKey;
-};
-
 type ResetCurrentXAction = {
   type: "reset-current-x";
 };
@@ -103,7 +98,6 @@ type UpdateSeriesConfigAction = {
 export type UpdateDataAction =
   | UpdateSeriesConfigAction
   | ResetSeriesFullAction
-  | ResetSeriesCurrentAction
   | ResetCurrentXAction
   | ResetFullXAction
   | UpdateCurrentXAction
@@ -527,14 +521,6 @@ export class CustomDatasetsBuilderImpl {
         this.#x.fullLength = 0;
         this.#unpairFrom(undefined);
         break;
-      case "reset-current": {
-        const series = this.#seriesByKey.get(action.series);
-        if (series) {
-          series.points.truncate(series.fullLength);
-          series.pairedUpTo = Math.min(series.pairedUpTo, series.fullLength);
-        }
-        break;
-      }
       case "reset-full": {
         const series = this.#seriesByKey.get(action.series);
         if (series) {

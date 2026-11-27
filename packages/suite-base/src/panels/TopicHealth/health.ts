@@ -7,6 +7,7 @@
 import { Time, toSec } from "@foxglove/rostime";
 
 import { TopicStats } from "@lichtblick/suite-base/players/types";
+import { LiveRate } from "@lichtblick/suite-base/util/LiveTopicRates";
 
 export type TopicHealthStatus = "ok" | "slow" | "stale" | "unmeasured";
 
@@ -38,7 +39,6 @@ export const DEFAULT_CONFIG: TopicHealthConfig = {
 const MIN_MESSAGES_TO_LEARN = 10;
 export const MIN_STALE_SEC = 1;
 export const STALE_PERIODS = 5;
-const SMOOTHING = 0.3;
 export const HISTORY_LENGTH = 60;
 /** Samples the learned rate is the median of */
 const PEAK_WINDOW = 5;
@@ -52,7 +52,7 @@ function median(values: readonly number[]): number {
 export type RateSample = {
   count: number;
   timeMs: number;
-  /** Smoothed rate; decays towards zero while a topic is silent. */
+  /** Rate over the recent window, as Data Source Info shows it; 0 once the topic is stale. */
   hz?: number;
   /** Highest smoothed rate seen, used as the automatic expectation. */
   peakHz?: number;
@@ -62,11 +62,16 @@ export type RateSample = {
   history: number[];
 };
 
-/** Samples cumulative live counts; call on a fixed interval, never per message. */
+/**
+ * Samples cumulative live counts; call on a fixed interval, never per message. Rates come from
+ * `rates` (LiveTopicRates), so every panel shows the same Hz; this adds the history and the learned
+ * expectation.
+ */
 export function sampleLiveRates(
   previous: ReadonlyMap<string, RateSample>,
   stats: ReadonlyMap<string, TopicStats> | undefined,
   nowMs: number,
+  rates: ReadonlyMap<string, LiveRate>,
 ): Map<string, RateSample> {
   const next = new Map<string, RateSample>();
   for (const [topic, stat] of stats ?? []) {
@@ -87,9 +92,8 @@ export function sampleLiveRates(
     }
     // A player reset (reconnect) makes counts go backwards; treat it as a fresh start.
     const delta = Math.max(0, stat.numMessages - last.count);
-    const instant = delta / seconds;
-    const hz = last.hz == undefined ? instant : last.hz + SMOOTHING * (instant - last.hz);
-    const history = [...last.history.slice(1 - HISTORY_LENGTH), instant];
+    const hz = rates.get(topic)?.hz;
+    const history = [...last.history.slice(1 - HISTORY_LENGTH), hz ?? 0];
     // The expectation learns from a rolling median: a tick catching one message more (timer
     // drift against the publisher, a stalled main thread, a burst on connect) must not raise it
     // for the rest of the session and mark a steady topic slow

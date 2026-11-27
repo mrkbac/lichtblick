@@ -126,7 +126,6 @@ export class TimestampDatasetsBuilder implements IDatasetsBuilder {
     if (!this.#hasRangeSource && msgEvents.length > 0) {
       const { actions: seriesActions, datasetsChanged: seriesChanged } = buildCurrentSeriesActions(
         this.#series,
-        { didSeek, hasRangeSource: this.#hasRangeSource },
         (config) => readMessagePathItems(msgEvents, config, activeData.startTime),
       );
       pushAll(this.#pendingDispatch, seriesActions);

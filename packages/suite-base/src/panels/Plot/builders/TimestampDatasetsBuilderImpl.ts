@@ -67,7 +67,7 @@ type Series = {
   derived?: Derived;
   /** Current rows keep one in `keepEvery` samples; doubles each time they are halved */
   keepEvery: number;
-  /** Samples folded into the newest current row so far */
+  /** Samples in the open group of current rows (see #appendCurrent); 0 when none is open */
   headInputs: number;
   /** Recomputing the current values lost inputs already removed by thinning. */
   currentApproximate: boolean;
@@ -650,32 +650,44 @@ export class TimestampDatasetsBuilderImpl {
   }
 
   /**
-   * Append a current row, or with `keepEvery` > 1 overwrite the newest row until it has folded in
-   * `keepEvery` samples, so the newest sample is always plotted. Gaps (NaN) are never folded.
+   * Append a current row. With `keepEvery` > 1, every `keepEvery` samples fold into one row: while
+   * a group is open, its second-to-last row holds the sample furthest from the row before it (so
+   * one-sample spikes survive) and its last row the newest sample, which is always plotted. A
+   * finished group keeps the more extreme of the two. Gaps (NaN) are never folded.
    */
   #appendCurrent(series: Series, item: Immutable<DataItem>): void {
     const { points } = series;
-    const last = points.length - 1;
-    if (
-      series.headInputs < series.keepEvery &&
-      last > series.fullLength &&
-      !Number.isNaN(item.y) &&
-      !Number.isNaN(points.y[last]!)
-    ) {
-      // Derived values consume the sample being replaced first, so modifiers see every sample
-      if (isDerivedSeries(series.config)) {
-        this.#getY(series);
+    const gap = Number.isNaN(item.y);
+    if (series.headInputs >= 2) {
+      // Derived values consume the samples being replaced first, so modifiers see every sample
+      const ys = this.#getY(series);
+      const newest = points.length - 1;
+      const extreme = newest - 1;
+      const ref = ys[Math.max(extreme - 1, 0)]!;
+      if (Number.isNaN(ys[extreme]!) || Number.isNaN(ys[newest]!)) {
+        // a derived gap: leave both rows as they are
+        series.headInputs = 0;
+      } else {
+        if (Math.abs(ys[newest]! - ref) >= Math.abs(ys[extreme]! - ref)) {
+          points.copyRow(newest, extreme);
+          ys[extreme] = ys[newest]!;
+        }
+        const current = series.derived?.current;
+        if (current) {
+          current.upTo = newest;
+        }
+        if (!gap && series.headInputs < series.keepEvery) {
+          points.set(newest, item);
+          series.headInputs++;
+          return;
+        }
+        points.truncate(newest);
+        series.headInputs = 0;
       }
-      const current = series.derived?.current;
-      points.set(last, item);
-      if (current) {
-        current.upTo = last;
-      }
-      series.headInputs++;
-    } else {
-      points.push(item);
-      series.headInputs = 1;
     }
+    const grow = series.headInputs > 0 && series.headInputs < series.keepEvery;
+    points.push(item);
+    series.headInputs = gap ? 0 : grow ? series.headInputs + 1 : 1;
   }
 
   /**
@@ -711,8 +723,8 @@ export class TimestampDatasetsBuilderImpl {
         break;
       }
       largest.keepEvery *= 2;
-      // the newest row stays as it is; the next sample starts a new one
-      largest.headInputs = largest.keepEvery;
+      // the next sample starts a new group
+      largest.headInputs = 0;
       total -= removed;
       thinned = true;
     }
@@ -780,6 +792,7 @@ export class TimestampDatasetsBuilderImpl {
         }
         if (split > 0) {
           points.insert(fullLength, items.slice(0, split), points.length);
+          series.headInputs = 0;
           if (series.derived) {
             series.derived.current = undefined;
           }
@@ -816,6 +829,7 @@ export class TimestampDatasetsBuilderImpl {
           series.derived.current = undefined;
         }
         series.fullLength = oldFullLength + action.items.length;
+        series.headInputs = 0;
 
         // trim current data to remove values present in the full data
         const fullLength = series.fullLength;

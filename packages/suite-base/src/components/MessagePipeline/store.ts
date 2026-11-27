@@ -13,10 +13,7 @@ import { shallow } from "zustand/shallow";
 
 import { Condvar } from "@lichtblick/den/async";
 import { Immutable, MessageEvent } from "@lichtblick/suite";
-import {
-  makeSubscriptionMemoizer,
-  mergeSubscriptions,
-} from "@lichtblick/suite-base/components/MessagePipeline/subscriptions";
+import { mergeSubscriptions } from "@lichtblick/suite-base/components/MessagePipeline/subscriptions";
 import { isRecordingSource, PLAYER_CAPABILITIES } from "@lichtblick/suite-base/players/constants";
 import { subscriptionCovers } from "@lichtblick/suite-base/players/subscriptionEquality";
 import {
@@ -64,7 +61,6 @@ export type MessagePipelineInternalState = {
   /** used to keep track of whether we need to update public.startPlayback/playUntil/etc. */
   lastCapabilities: string[];
   /** Preserves reference equality of subscriptions to minimize player subscription churn. */
-  subscriptionMemoizer: (sub: SubscribePayload) => SubscribePayload;
   subscriptionsById: Map<string, Immutable<SubscribePayload[]>>;
   /** Numbers each change of `public.subscriptions`; the player gets it with them. */
   subscriptionGeneration: number;
@@ -124,12 +120,10 @@ export function createMessagePipelineStore({
     player: initialPlayer,
     publishersById: {},
     allPublishers: [],
-    subscriptionMemoizer: makeSubscriptionMemoizer(),
     subscriptionsById: new Map(),
     subscriptionGeneration: 0,
     subscriptionsByGeneration: new Map(),
     subscriberIdsByTopic: new Map(),
-    newTopicsBySubscriberId: new Map(),
     lastMessageEventByTopic: new Map(),
     lastCapabilities: [],
 
@@ -142,11 +136,9 @@ export function createMessagePipelineStore({
         ...prev,
         publishersById: {},
         allPublishers: [],
-        subscriptionMemoizer: makeSubscriptionMemoizer(),
         subscriptionsById: new Map(),
         subscriptionsByGeneration: new Map(),
         subscriberIdsByTopic: new Map(),
-        newTopicsBySubscriberId: new Map(),
         lastMessageEventByTopic: new Map(),
         lastCapabilities: [],
         public: {

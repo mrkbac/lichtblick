@@ -800,7 +800,6 @@ describe("fillInGlobalVariablesInPath", () => {
     });
   });
 
-  // This test captures current behavior, but in the future we might want to add support for boolean values.
   // Like the literal `{bar==true}`
   it("fills in boolean values", () => {
     expect(

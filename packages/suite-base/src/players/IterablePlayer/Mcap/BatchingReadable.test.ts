@@ -183,27 +183,6 @@ describe("BatchingReadable", () => {
     expect(dataB).toEqual(expectedBytes(bOffset, 50n));
   });
 
-  it("should honor a custom gapThresholdBytes option that prevents merging", async () => {
-    // Given
-    const inner = makeMockInner();
-    const readable = new BatchingReadable(inner, { gapThresholdBytes: 8n });
-    // Read A ends at offset 4; B is 9 bytes away, which exceeds the custom
-    // threshold of 8 (but would be merged under the default threshold).
-    const bOffset = 13n;
-
-    // When
-    const promiseA = readable.read(0n, 4n);
-    const promiseB = readable.read(bOffset, 4n);
-    const [dataA, dataB] = await Promise.all([promiseA, promiseB]);
-
-    // Then
-    expect(inner.read).toHaveBeenCalledTimes(2);
-    expect(inner.read).toHaveBeenCalledWith(0n, 4n, { background: false });
-    expect(inner.read).toHaveBeenCalledWith(bOffset, 4n, { background: false });
-    expect(dataA).toEqual(expectedBytes(0n, 4n));
-    expect(dataB).toEqual(expectedBytes(bOffset, 4n));
-  });
-
   it("should coalesce overlapping reads into one inner.read and slice each range correctly", async () => {
     // Given
     const inner = makeMockInner();
@@ -278,26 +257,25 @@ describe("BatchingReadable", () => {
     expect(dataB).toEqual(expectedBytes(200n, 100n));
   });
 
-  it("should not merge reads whose combined span would exceed maxCoalescedBytes", async () => {
-    // Given a small max span; the two reads are within the gap threshold but
-    // together span more bytes than the cap allows.
-    const inner = makeMockInner();
-    const readable = new BatchingReadable(inner, { maxCoalescedBytes: 150n });
-    // Read A ends at 100; B starts at 120 (gap 20 < default 64 KiB threshold),
-    // but the merged span [0, 220) = 220 bytes exceeds the 150-byte cap.
-    const bOffset = 120n;
+  it("should not merge reads whose combined span would exceed the 4 MiB cap", async () => {
+    // Given two reads within the gap threshold whose merged span exceeds the cap
+    const inner = makeMockInner(2n ** 40n);
+    const readable = new BatchingReadable(inner);
+    const size = 3n * 1024n * 1024n;
+    const bOffset = size + 100n;
 
     // When
-    const promiseA = readable.read(0n, 100n);
-    const promiseB = readable.read(bOffset, 100n);
-    const [dataA, dataB] = await Promise.all([promiseA, promiseB]);
+    const [dataA, dataB] = await Promise.all([
+      readable.read(0n, size),
+      readable.read(bOffset, size),
+    ]);
 
     // Then
     expect(inner.read).toHaveBeenCalledTimes(2);
-    expect(inner.read).toHaveBeenCalledWith(0n, 100n, { background: false });
-    expect(inner.read).toHaveBeenCalledWith(bOffset, 100n, { background: false });
-    expect(dataA).toEqual(expectedBytes(0n, 100n));
-    expect(dataB).toEqual(expectedBytes(bOffset, 100n));
+    expect(inner.read).toHaveBeenCalledWith(0n, size, { background: false });
+    expect(inner.read).toHaveBeenCalledWith(bOffset, size, { background: false });
+    expect(dataA).toEqual(expectedBytes(0n, size));
+    expect(dataB).toEqual(expectedBytes(bOffset, size));
   });
 
   it("should resolve copies that do not retain the full merged buffer", async () => {

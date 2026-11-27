@@ -25,22 +25,15 @@ type PendingRead = {
  * Coalesces read() calls that arrive within the same microtask tick into fewer,
  * larger reads against the wrapped readable, reducing HTTP Range requests for
  * MCAP files with many small chunks. Reads are merged when the gap between them
- * is smaller than `gapThresholdBytes`, up to a merged span of `maxCoalescedBytes`.
+ * is smaller than BATCH_GAP_THRESHOLD_BYTES, up to a merged span of BATCH_MAX_COALESCED_BYTES.
  */
 export class BatchingReadable implements McapTypes.IReadable<ReadOptions> {
   readonly #inner: McapTypes.IReadable<ReadOptions>;
-  readonly #gapThresholdBytes: bigint;
-  readonly #maxCoalescedBytes: bigint;
   readonly #pending: PendingRead[] = [];
   #scheduled = false;
 
-  public constructor(
-    inner: McapTypes.IReadable<ReadOptions>,
-    options?: { gapThresholdBytes?: bigint; maxCoalescedBytes?: bigint },
-  ) {
+  public constructor(inner: McapTypes.IReadable<ReadOptions>) {
     this.#inner = inner;
-    this.#gapThresholdBytes = options?.gapThresholdBytes ?? BATCH_GAP_THRESHOLD_BYTES;
-    this.#maxCoalescedBytes = options?.maxCoalescedBytes ?? BATCH_MAX_COALESCED_BYTES;
   }
 
   public async size(): Promise<bigint> {
@@ -92,8 +85,8 @@ export class BatchingReadable implements McapTypes.IReadable<ReadOptions> {
       if (
         current != undefined &&
         current.members[0]!.signal === read.signal &&
-        read.offset <= current.end + this.#gapThresholdBytes &&
-        mergedEnd - current.start <= this.#maxCoalescedBytes
+        read.offset <= current.end + BATCH_GAP_THRESHOLD_BYTES &&
+        mergedEnd - current.start <= BATCH_MAX_COALESCED_BYTES
       ) {
         current.end = mergedEnd;
         current.members.push(read);

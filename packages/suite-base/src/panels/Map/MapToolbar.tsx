@@ -123,6 +123,12 @@ const useStyles = makeStyles()((theme) => ({
     padding: theme.spacing(0.25, 1),
     pointerEvents: "auto",
     cursor: "copy",
+    border: 0,
+    color: "inherit",
+    textAlign: "left",
+    "&:focus-visible": {
+      outline: `2px solid ${theme.palette.primary.main}`,
+    },
     fontFamily: customTypography.fontMonospace,
     fontSize: theme.typography.caption.fontSize,
     fontVariantNumeric: "tabular-nums",
@@ -323,7 +329,16 @@ function summarize(
   }
 }
 
-function CursorCoordinates({ map, units }: { map: MapLibreMap; units: Units }) {
+/** How long the cursor rests before the readout adds the terrain slope. */
+const SLOPE_REST_MS = 150;
+
+export function CursorCoordinates({
+  map,
+  units,
+}: {
+  map: MapLibreMap;
+  units: Units;
+}): React.JSX.Element | null {
   const [cursor, setCursor] = useState<{
     lngLat: LngLat;
     elevation?: number;
@@ -333,19 +348,33 @@ function CursorCoordinates({ map, units }: { map: MapLibreMap; units: Units }) {
   const { classes } = useStyles();
 
   useEffect(() => {
+    // One update per frame however fast the mouse moves; the slope (4 more terrain queries) only
+    // once the cursor rests.
+    let latest: LngLat | undefined;
+    let frame: number | undefined;
+    let restTimer: ReturnType<typeof setTimeout> | undefined;
+    const elevationAt = (point: LngLat) => groundElevation(map, point);
     const onMove = (event: MapMouseEvent) => {
-      const lngLat: LngLat = [event.lngLat.lng, event.lngLat.lat];
-      const elevationAt = (point: LngLat) => groundElevation(map, point);
-      setCursor({
-        lngLat,
-        elevation: elevationAt(lngLat),
-        slope: terrainSlope(lngLat, elevationAt),
+      latest = [event.lngLat.lng, event.lngLat.lat];
+      frame ??= requestAnimationFrame(() => {
+        frame = undefined;
+        const lngLat = latest!;
+        setCursor({ lngLat, elevation: elevationAt(lngLat) });
+        clearTimeout(restTimer);
+        restTimer = setTimeout(() => {
+          const slope = terrainSlope(lngLat, elevationAt);
+          setCursor((current) => (current?.lngLat === lngLat ? { ...current, slope } : current));
+        }, SLOPE_REST_MS);
       });
     };
     // Keep the last position when the pointer leaves, so the readout can be clicked to copy.
     map.on("mousemove", onMove);
     return () => {
       map.off("mousemove", onMove);
+      if (frame != undefined) {
+        cancelAnimationFrame(frame);
+      }
+      clearTimeout(restTimer);
     };
   }, [map]);
 
@@ -357,8 +386,10 @@ function CursorCoordinates({ map, units }: { map: MapLibreMap; units: Units }) {
   const elevation =
     cursor.elevation == undefined ? undefined : formatElevation(cursor.elevation, units);
   return (
-    <Tooltip title={copied ? "Copied" : "Click to copy"}>
+    <Tooltip describeChild title={copied ? "Copied" : "Click to copy"}>
       <Paper
+        component="button"
+        type="button"
         className={classes.coordinates}
         onClick={() => {
           void navigator.clipboard.writeText(text).then(() => {
