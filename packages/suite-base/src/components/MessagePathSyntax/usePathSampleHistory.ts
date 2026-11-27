@@ -16,7 +16,7 @@ import { PathSampleColumns } from "./PathSampleColumns";
 
 /** The values of the `$variables` a path uses; "" when it uses none */
 function variablesKeyOf(path: string, variables: Readonly<Record<string, unknown>>): string {
-  const names = path.match(/\$\w*/g);
+  const names = path.match(/\$[\w-]*/g);
   return names ? (JSON.stringify(names.map((name) => variables[name.slice(1)])) ?? "") : "";
 }
 
