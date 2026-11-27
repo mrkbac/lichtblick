@@ -7,17 +7,26 @@ import { filterMap } from "@lichtblick/den/collection";
 import { useLatest, useShallowMemo } from "@lichtblick/hooks";
 import { parseMessagePath } from "@lichtblick/message-path";
 import { useMessageReducer } from "@lichtblick/suite-base/PanelAPI/useMessageReducer";
-import { useCachedGetMessagePathDataItems } from "@lichtblick/suite-base/components/MessagePathSyntax/useCachedGetMessagePathDataItems";
-import useGlobalVariables from "@lichtblick/suite-base/hooks/useGlobalVariables";
+import {
+  fillInGlobalVariablesInPath,
+  useCachedGetMessagePathDataItems,
+} from "@lichtblick/suite-base/components/MessagePathSyntax/useCachedGetMessagePathDataItems";
+import useGlobalVariables, {
+  GlobalVariables,
+} from "@lichtblick/suite-base/hooks/useGlobalVariables";
 import { subscribePayloadFromMessagePath } from "@lichtblick/suite-base/players/subscribePayloadFromMessagePath";
 import { MessageEvent } from "@lichtblick/suite-base/players/types";
 
 import { PathSampleColumns } from "./PathSampleColumns";
 
-/** The values of the `$variables` a path uses; "" when it uses none */
-function variablesKeyOf(path: string, variables: Readonly<Record<string, unknown>>): string {
-  const names = path.match(/\$[\w-]*/g);
-  return names ? (JSON.stringify(names.map((name) => variables[name.slice(1)])) ?? "") : "";
+/** The path with its `$variables` filled in: changes only when a variable the path uses does */
+function variablesKeyOf(path: string, variables: GlobalVariables): string {
+  const parsed = path.includes("$") ? parseMessagePath(path) : undefined;
+  return parsed
+    ? (JSON.stringify(fillInGlobalVariablesInPath(parsed, variables), (_key, value: unknown) =>
+        typeof value === "bigint" ? value.toString() : value,
+      ) ?? "")
+    : "";
 }
 
 export type PathSampleHistoryByPath = Readonly<Record<string, PathSampleColumns>>;

@@ -140,6 +140,17 @@ describe("usePathSampleHistory", () => {
     expect(values()).toEqual([1, 2, 3]);
   });
 
+  it("keeps the history when a variable named only inside a quoted literal changes", () => {
+    const { send, values, hook } = setup(10, "/state{mode!='$min'}.mode");
+    send(message(1, 1), message(2, 2));
+
+    act(() => {
+      hook.result.current.setGlobalVariables({ min: 5 });
+    });
+    send(message(3, 3));
+    expect(values()).toEqual([1, 2, 3]);
+  });
+
   it("filters by a boolean variable", () => {
     const { send, values, hook } = setup(10, "/state{mode==$on}.mode");
     act(() => {
