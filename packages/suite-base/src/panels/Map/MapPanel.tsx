@@ -5,7 +5,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { toSec } from "@foxglove/rostime";
+import { fromNanoSec, toNanoSec, toSec } from "@foxglove/rostime";
 import { Chip, alpha } from "@mui/material";
 import type { FeatureCollection } from "geojson";
 import * as _ from "lodash-es";
@@ -98,6 +98,7 @@ import {
   expandLocationFixes,
 } from "./support";
 import { SampleStore, thinTrack, thinViewCovers, thinViewFor, ThinView, TrackStore } from "./track";
+import { playheadWindows } from "./trackReads";
 
 const log = Logger.getLogger(__filename);
 
@@ -617,13 +618,106 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
   // message is a complete scene that replaces the previous one.
   // Reads are kept per topic: showing or hiding one topic must not drop the others' trails, which
   // on a live source (no range to read again) are gone for good.
-  const navReadsRef = useRef({ context, reads: new Map<string, () => void>() });
+  // The recording's range, once known, and the playhead: reads start around it (see below)
+  const recordingRangeRef = useRef<{ start: bigint; end: bigint } | undefined>(undefined);
+  const [rangeKnown, setRangeKnown] = useState(false);
+  const currentTimeRef = useRef<bigint | undefined>(undefined);
+
+  /**
+   * Reads a topic's recorded track window by window: around the playhead first, so the track where
+   * the user looks shows at once, then backwards (prepended) and forwards (appended). Returns a
+   * function that stops it.
+   */
+  const readTrack = useCallback(
+    (topic: { name: string; schemaName: string }): (() => void) => {
+      if (!rangeKnown) {
+        return () => {};
+      }
+      // From the range as it is when (re)starting: a new data source has another one
+      const planWindows = () => {
+        const range = recordingRangeRef.current;
+        return range
+          ? playheadWindows(range.start, range.end, currentTimeRef.current ?? range.start)
+          : [];
+      };
+      let windows = planWindows();
+      let generation = 0;
+      let unsubscribe = () => {};
+      const readWindow = (index: number, current: number) => {
+        const span = windows[index];
+        if (!span || current !== generation) {
+          return;
+        }
+        let started = false;
+        unsubscribe = context.unstable_subscribeMessageRange({
+          topic: topic.name,
+          convertTo: topic.schemaName,
+          start: fromNanoSec(span.start),
+          end: fromNanoSec(span.end),
+          onNewRangeIterator: async (iterator) => {
+            if (started) {
+              // The source changed (e.g. an edited user script): read the topic again
+              unsubscribe();
+              tracksRef.current.get(topic.name)?.clear();
+              scheduleTrackFlush("recorded");
+              windows = planWindows();
+              readWindow(0, ++generation);
+              return;
+            }
+            started = true;
+            rangeTopicsRef.current.add(topic.name);
+            const earlier = span.direction === "before" ? new TrackStore(topic.name) : undefined;
+            for await (const batch of iterator) {
+              if (current !== generation) {
+                return;
+              }
+              const valid = expandLocationFixes(batch).filter(
+                (event): event is NavMessage =>
+                  isValidMapMessage(event) && !isGeoJSONMessage(event),
+              );
+              if (earlier) {
+                for (const event of valid) {
+                  earlier.push(event);
+                }
+              } else if (valid.length > 0) {
+                appendTrack(valid, "recorded");
+              }
+            }
+            if (current !== generation) {
+              return;
+            }
+            if (earlier && earlier.length > 0) {
+              let store = tracksRef.current.get(topic.name);
+              if (!store) {
+                store = new TrackStore(topic.name);
+                tracksRef.current.set(topic.name, store);
+              }
+              store.prepend(earlier);
+              store.schemaName ||= earlier.schemaName;
+              scheduleTrackFlush("recorded");
+            }
+            unsubscribe();
+            readWindow(index + 1, current);
+          },
+        });
+      };
+      readWindow(0, generation);
+      return () => {
+        generation++;
+        unsubscribe();
+      };
+    },
+    [appendTrack, context, rangeKnown, scheduleTrackFlush],
+  );
+
+  const navReadsRef = useRef({ context, readTrack, reads: new Map<string, () => void>() });
   useLayoutEffect(() => {
-    if (navReadsRef.current.context !== context) {
+    if (navReadsRef.current.context !== context || navReadsRef.current.readTrack !== readTrack) {
+      // A new context, or the recording's range became known: read every topic again
       for (const unsubscribe of navReadsRef.current.reads.values()) {
         unsubscribe();
       }
-      navReadsRef.current = { context, reads: new Map() };
+      navReadsRef.current = { context, readTrack, reads: new Map() };
     }
     const { reads } = navReadsRef.current;
     const wanted = new Map(navTopics.map((topic) => [`${topic.name}\n${topic.schemaName}`, topic]));
@@ -645,30 +739,9 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
       if (reads.has(key)) {
         continue;
       }
-      reads.set(
-        key,
-        context.unstable_subscribeMessageRange({
-          topic: topic.name,
-          convertTo: topic.schemaName,
-          onNewRangeIterator: async (iterator) => {
-            // A new iterator replaces the topic's data (e.g. an edited user script); drop the old.
-            tracksRef.current.get(topic.name)?.clear();
-            scheduleTrackFlush("recorded");
-            rangeTopicsRef.current.add(topic.name);
-            for await (const batch of iterator) {
-              const valid = expandLocationFixes(batch).filter(
-                (event): event is NavMessage =>
-                  isValidMapMessage(event) && !isGeoJSONMessage(event),
-              );
-              if (valid.length > 0) {
-                appendTrack(valid, "recorded");
-              }
-            }
-          },
-        }),
-      );
+      reads.set(key, readTrack(topic));
     }
-  }, [appendTrack, context, navTopics, scheduleTrackFlush]);
+  }, [context, navTopics, readTrack]);
   useLayoutEffect(
     () => () => {
       clearTimeout(flushTimer.current);
@@ -797,9 +870,21 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
     context.watch("previewTime");
     context.watch("colorScheme");
     context.watch("didSeek");
+    context.watch("currentTime");
+    context.watch("startTime");
+    context.watch("endTime");
 
     context.onRender = (renderState, done) => {
       setRenderDone(() => done);
+      if (renderState.currentTime) {
+        currentTimeRef.current = toNanoSec(renderState.currentTime);
+      }
+      const { startTime, endTime } = renderState;
+      if (startTime && endTime) {
+        // A ref: a live source's end moves every frame, and reads only need it when they start
+        recordingRangeRef.current = { start: toNanoSec(startTime), end: toNanoSec(endTime) };
+        setRangeKnown(true);
+      }
       setPreviewTime(renderState.previewTime);
 
       if (renderState.topics) {
