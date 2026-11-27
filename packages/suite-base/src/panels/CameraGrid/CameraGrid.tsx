@@ -225,10 +225,17 @@ export function Tile({
           case "cameraGrid.zoomIn":
             renderer.zoomAt(tile.topic, KEY_ZOOM_FACTOR, centerX, centerY);
             break;
+          // Unzoomed, minus and arrows do nothing here: leave them to the playback shortcuts
           case "cameraGrid.zoomOut":
+            if (!renderer.isZoomed(tile.topic)) {
+              return;
+            }
             renderer.zoomAt(tile.topic, 1 / KEY_ZOOM_FACTOR, centerX, centerY);
             break;
           case "cameraGrid.pan": {
+            if (!renderer.isZoomed(tile.topic)) {
+              return;
+            }
             // Arrows move the view, so the image moves the other way
             const [dx, dy] = KEY_PAN_DIRECTIONS[event.key] ?? [0, 0];
             renderer.panBy(tile.topic, -dx * KEY_PAN_PX, -dy * KEY_PAN_PX);
