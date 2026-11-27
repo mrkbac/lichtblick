@@ -381,12 +381,15 @@ export default React.memo<MessagePathInputBaseProps>(function MessagePathInput(
       result[i] = topicNamesAutocompleteItems[i];
     }
 
+    // Keys are a quoted topic name followed by its field path (see structureAllItemsByPath), so
+    // they are matched by prefix instead of parsing each of them (often tens of thousands)
+    const prefixes = validTopics?.map(quoteTopicNameIfNeeded);
+    const ofValidTopic = (key: string) =>
+      prefixes == undefined ||
+      prefixes.some((prefix) => key.startsWith(prefix) && ".[{".includes(key[prefix.length]!));
     let index = topicCount;
     for (const key of structureItemsByPath.keys()) {
-      if (
-        validTopics == undefined ||
-        validTopics.includes(parseMessagePath(key)?.topicName ?? "")
-      ) {
+      if (ofValidTopic(key)) {
         result[index++] = key;
       }
     }

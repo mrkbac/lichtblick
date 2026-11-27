@@ -14,6 +14,12 @@ import { MessageEvent } from "@lichtblick/suite-base/players/types";
 
 import { PathSampleColumns } from "./PathSampleColumns";
 
+/** The values of the `$variables` a path uses; "" when it uses none */
+function variablesKeyOf(path: string, variables: Readonly<Record<string, unknown>>): string {
+  const names = path.match(/\$\w*/g);
+  return names ? (JSON.stringify(names.map((name) => variables[name.slice(1)])) ?? "") : "";
+}
+
 export type PathSampleHistoryByPath = Readonly<Record<string, PathSampleColumns>>;
 
 /**
@@ -56,12 +62,9 @@ export function usePathSampleHistory(
   // when any topic appears. New messages use the latest one; the history is kept.
   const decodeRef = useLatest(useCachedGetMessagePathDataItems(memoizedPaths));
 
-  // Paths using `$variables` resolve differently once variables change; their old samples would
-  // mix two filters, so they start over. Other paths keep their history.
+  // A path using `$variables` resolves differently once one of its variables changes; its old
+  // samples would mix two filters, so it starts over. Other paths keep their history.
   const { globalVariables } = useGlobalVariables();
-  const variablesKey = memoizedPaths.some((path) => path.includes("$"))
-    ? (JSON.stringify(globalVariables) ?? "")
-    : "";
   const bufferKeysRef = useRef(new Map<string, string>());
 
   const restore = useCallback(
@@ -69,14 +72,14 @@ export function usePathSampleHistory(
       const next: Record<string, PathSampleColumns> = {};
       const keys = bufferKeysRef.current;
       for (const path of topicByPath.keys()) {
-        const key = path.includes("$") ? variablesKey : "";
+        const key = variablesKeyOf(path, globalVariables);
         const prevBuffer = keys.get(path) === key ? prev?.[path] : undefined;
         keys.set(path, key);
         next[path] = prevBuffer ?? new PathSampleColumns(maxSamples);
       }
       return next;
     },
-    [topicByPath, maxSamples, variablesKey],
+    [topicByPath, maxSamples, globalVariables],
   );
 
   const addMessages = useCallback(

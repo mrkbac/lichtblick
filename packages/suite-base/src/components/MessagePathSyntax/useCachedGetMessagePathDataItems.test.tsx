@@ -801,7 +801,8 @@ describe("fillInGlobalVariablesInPath", () => {
   });
 
   // This test captures current behavior, but in the future we might want to add support for boolean values.
-  it("does not fill in boolean values", () => {
+  // Like the literal `{bar==true}`
+  it("fills in boolean values", () => {
     expect(
       fillInGlobalVariablesInPath(
         {
@@ -829,7 +830,7 @@ describe("fillInGlobalVariablesInPath", () => {
         {
           type: "filter",
           path: ["bar"],
-          value: undefined,
+          value: true,
           nameLoc: 0,
           valueLoc: 0,
           repr: "",

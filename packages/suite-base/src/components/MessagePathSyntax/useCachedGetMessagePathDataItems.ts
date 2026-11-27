@@ -211,7 +211,11 @@ export function fillInGlobalVariablesInPath(
       } else if (messagePathPart.type === "filter" && typeof messagePathPart.value === "object") {
         let value;
         const variable = globalVariables[messagePathPart.value.variableName];
-        if (typeof variable === "number" || typeof variable === "string") {
+        if (
+          typeof variable === "number" ||
+          typeof variable === "string" ||
+          typeof variable === "boolean"
+        ) {
           value = variable;
         }
         return { ...messagePathPart, value };
