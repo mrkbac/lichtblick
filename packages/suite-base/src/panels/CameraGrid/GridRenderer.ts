@@ -74,17 +74,30 @@ type VideoState = {
 /** Longest a tile goes without a paint while its decoder works through a backlog. */
 const MAX_PAINT_INTERVAL_MS = 100;
 
-/** Queues a video frame, dropping everything a keyframe makes unnecessary. */
+/**
+ * Frames a tile queues at most. A hidden tile (another one maximized, an inactive tab) doesn't
+ * decode, and a stream with keyframes only at its start would otherwise queue without bound.
+ */
+export const MAX_QUEUED_VIDEO_FRAMES = 600;
+
+/**
+ * Queues a video frame, dropping everything a keyframe makes unnecessary. Returns false when the
+ * queue was full and dropped instead: decoding must then restart at the next keyframe.
+ */
 export function enqueueVideoFrame(
   queue: Immutable<MessageEvent>[],
   event: Immutable<MessageEvent>,
-): void {
+): boolean {
   // Normalized because JSON-encoded messages carry `data` as a number array.
   const { format, data } = normalizeCompressedVideo(event.message as PartialMessage<never>);
   if (isVideoKeyframe(format, data)) {
     queue.length = 0;
+  } else if (queue.length >= MAX_QUEUED_VIDEO_FRAMES) {
+    queue.length = 0;
+    return false;
   }
   queue.push(event);
+  return true;
 }
 
 type TileState = {
@@ -158,7 +171,9 @@ export class GridRenderer {
       }
       if (imageKind(event.schemaName) === "video") {
         tile.video ??= { queue: [], waitingForKeyframe: true, epoch: 0, lastPaint: 0 };
-        enqueueVideoFrame(tile.video.queue, event);
+        if (!enqueueVideoFrame(tile.video.queue, event)) {
+          resetVideo(tile.video);
+        }
       } else {
         tile.latest = event;
       }
