@@ -9,9 +9,11 @@ describe("parseTimestampStr", () => {
     expect(parseTimestampStr("1633046400")).toEqual({ sec: 1633046400, nsec: 0 });
   });
 
-  it("should start in 01/01/1970 at 01:00:01", () => {
+  it("starts at the epoch, like the numeric form `0` does", () => {
     expect(parseTimestampStr("1970-01-01 00:00:01")).toEqual({ sec: 1, nsec: 0 });
-    expect(parseTimestampStr("1970-01-01 00:00:00")).toBeUndefined();
+    expect(parseTimestampStr("1970-01-01 00:00:00")).toEqual({ sec: 0, nsec: 0 });
+    expect(parseTimestampStr("0")).toEqual({ sec: 0, nsec: 0 });
+    expect(parseTimestampStr("1969-12-31 23:59:59")).toBeUndefined();
   });
 
   describe("parse valid date strings and return Unix timestamps in seconds", () => {
