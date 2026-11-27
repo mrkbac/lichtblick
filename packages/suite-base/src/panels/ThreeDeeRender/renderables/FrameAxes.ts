@@ -195,6 +195,8 @@ export class FrameAxes extends SceneExtension<FrameAxisRenderable> {
     this.renderer.off("transformTreeUpdated", this.#handleTransformTreeUpdated);
     this.renderer.off("variablesChange", this.#handleVariablesChange);
     window.removeEventListener("keydown", this.#handleKeyDown, { capture: true });
+    // Its trailing call would update the settings of a disposed renderer (and keep it alive)
+    this.#throttledUpdateSettingsTree.cancel();
     this.#lineMaterial.dispose();
     this.#linePickingMaterial.dispose();
     super.dispose();

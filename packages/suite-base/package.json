@@ -72,7 +72,6 @@
     "@foxglove/velodyne-cloud": "1.0.1",
     "@foxglove/wasm-bz2": "0.3.0",
     "@foxglove/wasm-lz4": "1.0.2",
-    "@foxglove/ws-protocol": "0.8.0",
     "@foxglove/xmlrpc": "1.4.0",
     "@lichtblick/den": "workspace:*",
     "@lichtblick/hooks": "workspace:*",

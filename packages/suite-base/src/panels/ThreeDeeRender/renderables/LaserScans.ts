@@ -56,6 +56,8 @@ type NormalizedLaserScan = {
   end_angle: number;
   range_min: number;
   range_max: number;
+  /** ROS scans give the beam spacing; others spread the beams evenly from start to end */
+  angle_increment?: number;
   ranges: Float32Array;
   intensities: Float32Array;
 };
@@ -578,9 +580,17 @@ function decodeLaserScan(
 
   // Ranges to points in the scan plane; out-of-range returns are NaN, which is never drawn
   const { start_angle: angleMin, range_min: rangeMin, range_max: rangeMax } = laserScan;
-  // A single beam is at the start angle (and would divide 0 by 0)
+  // The beam spacing a ROS scan states: its beam count need not fit (angle_max - angle_min)
+  // exactly, e.g. when it is rounded up. A single beam is at the start angle (and would divide
+  // 0 by 0).
   const angleIncrement =
-    ranges.length > 1 ? (laserScan.end_angle - angleMin) / (ranges.length - 1) : 0;
+    laserScan.angle_increment != undefined &&
+    Number.isFinite(laserScan.angle_increment) &&
+    laserScan.angle_increment !== 0
+      ? laserScan.angle_increment
+      : ranges.length > 1
+        ? (laserScan.end_angle - angleMin) / (ranges.length - 1)
+        : 0;
   for (let i = 0; i < ranges.length; i++) {
     const range = ranges[i]!;
     const inRange = range >= rangeMin && range <= rangeMax;
@@ -631,6 +641,7 @@ function normalizeRosLaserScan(message: PartialMessage<RosLaserScan>): Normalize
     end_angle: message.angle_max ?? 0,
     range_min: message.range_min ?? -Infinity,
     range_max: message.range_max ?? Infinity,
+    angle_increment: message.angle_increment,
     ranges: normalizeFloat32Array(message.ranges),
     intensities: normalizeFloat32Array(message.intensities),
   };

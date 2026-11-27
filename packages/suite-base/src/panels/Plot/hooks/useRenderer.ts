@@ -35,6 +35,7 @@ const useRenderer = (
     return () => {
       canvasDiv.removeChild(canvas);
       setRenderer(undefined);
+      newRenderer.destroy();
     };
   }, [canvasDiv, theme]);
 

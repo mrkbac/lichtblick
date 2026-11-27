@@ -8,7 +8,7 @@ import { PlayerState } from "@lichtblick/suite-base/players/types";
 
 import { PROXY_MISSING_REASON } from "./ExtensionProxySocket";
 import FoxgloveWebSocketPlayer from "./index";
-import { decodePlaybackState, encodePlaybackControlRequest } from "./playbackControl";
+import { encodePlaybackControlRequest, parseBinaryMessage } from "./protocol/protocol";
 
 class MockWebSocket {
   public static lastInstance: MockWebSocket | undefined;
@@ -293,17 +293,21 @@ describe("FoxgloveWebSocketPlayer playback control", () => {
 
   it("sends a uuid request id and decodes an empty one", () => {
     player.pausePlayback();
-    const request = ws.send.mock.calls[0]![0] as ArrayBuffer;
-    const requestId = new TextDecoder().decode(new Uint8Array(request, 19));
+    const request = ws.send.mock.calls[0]![0] as Uint8Array;
+    const requestId = new TextDecoder().decode(request.subarray(19));
     expect(requestId).toHaveLength(36);
     expect(
-      decodePlaybackState(
-        playbackStateMessage({
-          status: 0,
-          timeNs: 0n,
-          speed: 1,
-          didSeek: false,
-        }),
+      (
+        parseBinaryMessage(
+          new Uint8Array(
+            playbackStateMessage({
+              status: 0,
+              timeNs: 0n,
+              speed: 1,
+              didSeek: false,
+            }),
+          ),
+        ) as { requestId: string }
       ).requestId,
     ).toBe("");
   });
@@ -321,8 +325,9 @@ describe("Foxglove live connection backend", () => {
     });
     try {
       expect(open).toHaveBeenCalledWith("ws://example:8765", [
-        "foxglove.websocket.v1",
+        "foxglove.sdk.v1.1",
         "foxglove.sdk.v1",
+        "foxglove.websocket.v1",
       ]);
       open.mock.results[0]!.value.onclose?.({ code: 1006, reason: "" });
       vi.advanceTimersByTime(3000);

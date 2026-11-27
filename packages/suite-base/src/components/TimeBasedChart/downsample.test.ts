@@ -39,6 +39,27 @@ describe("downsampleTimeseriesColumns", () => {
     bounds: { x: { min: 0, max: 100 }, y: { min: 0, max: 100 } },
   };
 
+  it("keeps an interval's spikes when it starts with a gap", () => {
+    // All in one pixel interval: the gap, then a spike and a dip
+    const ys = [Number.NaN, 1, 100, 1, -50, 1];
+    const result = timeseries(
+      ys.map((y, i) => ({ x: 20 + i * 0.01, y })),
+      { ...bounds, bounds: { x: { min: 0, max: 100 }, y: { min: -50, max: 100 } } },
+    );
+    expect(result).toContain(0); // the gap
+    expect(result).toContain(2); // the spike
+    expect(result).toContain(4); // the dip
+  });
+
+  it("keeps spikes when an infinite value makes the y range infinite", () => {
+    const ys = [0, 50, 0, -50, 0];
+    const result = timeseries(
+      ys.map((y, i) => ({ x: 20 + i * 0.01, y })),
+      { ...bounds, bounds: { x: { min: 0, max: 100 }, y: { min: -50, max: Infinity } } },
+    );
+    expect(result).toEqual(expect.arrayContaining([1, 3]));
+  });
+
   it("merges nearby points", () => {
     const result = timeseries(
       [
@@ -101,6 +122,24 @@ describe("downsampleTimeseriesColumns", () => {
 });
 
 describe("downsampleScatter", () => {
+  it("keeps one point per pixel for data far from the origin", () => {
+    const view = {
+      width: 100,
+      height: 100,
+      bounds: { x: { min: 11.5, max: 11.501 }, y: { min: 48.1, max: 48.101 } },
+    };
+    // Two points in the same pixel, one a pixel away
+    const result = scatter(
+      [
+        { x: 11.5, y: 48.1 },
+        { x: 11.500001, y: 48.100001 },
+        { x: 11.50002, y: 48.1 },
+      ],
+      view,
+    );
+    expect(result).toEqual([0, 2]);
+  });
+
   const bounds = {
     width: 100,
     height: 100,

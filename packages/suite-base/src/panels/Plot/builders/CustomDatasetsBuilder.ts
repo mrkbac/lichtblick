@@ -51,6 +51,8 @@ export class CustomDatasetsBuilder implements IDatasetsBuilder {
   #pendingDispatch: Immutable<UpdateDataAction>[] = [];
 
   #lastSeekTime = 0;
+  /** The messages of the last state handled, so a repeated state adds nothing */
+  #lastMessages?: NonNullable<Immutable<PlayerState>["activeData"]>["messages"];
 
   #series: Immutable<CustomDatasetsSeriesItem[]> = [];
 
@@ -63,13 +65,22 @@ export class CustomDatasetsBuilder implements IDatasetsBuilder {
     return this.#xParsedPath;
   }
 
+  readonly #dispose: () => void;
+
   public constructor() {
     const worker = new Worker(new URL("./CustomDatasetsBuilderImpl.worker", import.meta.url));
     const { remote, dispose } =
       ComlinkWrap<Comlink.RemoteObject<CustomDatasetsBuilderImpl>>(worker);
 
     this.#datasetsBuilderRemote = remote;
-    registry.register(this, dispose);
+    this.#dispose = dispose;
+    registry.register(this, dispose, this);
+  }
+
+  /** Ends the worker now; the registry only does it once garbage collection gets to it */
+  public destroy(): void {
+    registry.unregister(this);
+    this.#dispose();
   }
 
   public handlePlayerState(state: Immutable<PlayerState>): HandlePlayerStateResult | undefined {
@@ -83,7 +94,10 @@ export class CustomDatasetsBuilder implements IDatasetsBuilder {
 
     let datasetsChanged = false;
 
-    const msgEvents = activeData.messages;
+    // The same state can be handled again (a config change, another panel's subscription change):
+    // its messages are appended already
+    const msgEvents = activeData.messages === this.#lastMessages ? [] : activeData.messages;
+    this.#lastMessages = activeData.messages;
     if (!this.#hasRangeSource && msgEvents.length > 0) {
       // Read the x-axis values.
       // No reset on seek: without a range source, accumulated x-axis data is irrecoverable

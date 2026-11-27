@@ -1166,19 +1166,21 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
         colors32.fill(colors32[0]!);
       }
     } else {
-      // Read each color value once, tracking the auto min/max in the same pass. Comparisons
-      // (unlike Math.min/max) skip NaN, so one invalid point can't turn the whole cloud black.
+      // Read each color value once, tracking the auto min/max in the same pass. Only finite
+      // values count, so one NaN or ±Infinity can't give every point the same color.
       const values = colorValueScratch(pointCount);
       let minColorValue = Number.POSITIVE_INFINITY;
       let maxColorValue = Number.NEGATIVE_INFINITY;
       for (let i = 0; i < pointCount; i++) {
         const value = packedColorReader(view, i * pointStep);
         values[i] = value;
-        if (value < minColorValue) {
-          minColorValue = value;
-        }
-        if (value > maxColorValue) {
-          maxColorValue = value;
+        if (Number.isFinite(value)) {
+          if (value < minColorValue) {
+            minColorValue = value;
+          }
+          if (value > maxColorValue) {
+            maxColorValue = value;
+          }
         }
       }
       minColorValue = settings.minValue ?? minColorValue;
@@ -1444,12 +1446,18 @@ export class PointClouds extends SceneExtension<PointCloudHistoryRenderable> {
   ): PointCloudHistoryRenderable {
     // Update the mapping of topic to point cloud field names if necessary
     let fields = this.#fieldsByTopic.get(topic);
-    // filter count to compare only supported fields
-    const numSupportedFields = pointCloud.fields.reduce((numSupported, field) => {
-      return numSupported + (isSupportedField(field) ? 1 : 0);
-    }, 0);
+    // Compare the supported fields by name, without allocating per message: another recording on
+    // the same topic can have as many fields with other names (x,y,z,intensity vs x,y,z,rgb)
+    let numSupportedFields = 0;
+    let sameFields = fields != undefined;
+    for (const field of pointCloud.fields) {
+      if (isSupportedField(field)) {
+        sameFields &&= fields?.[numSupportedFields] === field.name;
+        numSupportedFields++;
+      }
+    }
     let fieldsForTopicUpdated = false;
-    if (fields?.length !== numSupportedFields) {
+    if (!sameFields || fields?.length !== numSupportedFields) {
       // Omit fields with count != 1 (only applies to ros pointclouds)
       // can't use filterMap here because of incompatible types
       fields = pointCloud.fields.filter(isSupportedField).map((field) => field.name);

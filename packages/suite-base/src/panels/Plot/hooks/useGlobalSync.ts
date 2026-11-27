@@ -11,7 +11,10 @@ import {
 } from "@lichtblick/suite-base/context/TimelineInteractionStateContext";
 import { PlotCoordinator } from "@lichtblick/suite-base/panels/Plot/PlotCoordinator";
 
-const selectGlobalBounds = (store: TimelineInteractionStateStore) => store.globalBounds;
+// Only bounds a user zoomed or panned to: TimeBasedChart (State Transitions) also publishes its
+// automatic data range, which would reset this plot's zoom on every redraw
+const selectGlobalBounds = (store: TimelineInteractionStateStore) =>
+  store.globalBounds?.userInteraction === false ? undefined : store.globalBounds;
 const selectSetGlobalBounds = (store: TimelineInteractionStateStore) => store.setGlobalBounds;
 
 const useGlobalSync = (

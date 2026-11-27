@@ -467,8 +467,9 @@ export class IterablePlayer implements Player {
       return;
     }
 
-    // We are already at this time, no need to reset seeking
-    if (this.#currentTime && compare(this.#currentTime, targetTime) === 0) {
+    // We are already at this time, no need to reset seeking. Not while another seek is pending:
+    // seeking back to where playback still is must cancel it.
+    if (!this.#seekTarget && this.#currentTime && compare(this.#currentTime, targetTime) === 0) {
       log.debug(`Ignoring seek, already at this time`);
       return;
     }
@@ -627,8 +628,8 @@ export class IterablePlayer implements Player {
 
   /** Request the state to switch to newState */
   #setState(newState: IterablePlayerState) {
-    // nothing should override closing the player
-    if (this.#nextState === "close") {
+    // nothing should override closing the player, also once closing has started
+    if (this.#isClosing()) {
       return;
     }
     // A pending seek or iterator reset reads #isPlaying when done and goes on to play or idle
@@ -670,8 +671,7 @@ export class IterablePlayer implements Player {
         // we will need to make a new one.
         if (state !== "idle" && state !== "play" && this.#playbackIterator) {
           log.debug("Ending playback iterator because next state is not IDLE or PLAY");
-          await this.#playbackIterator.return?.();
-          this.#playbackIterator = undefined;
+          await this.#endPlaybackIterator();
         }
 
         switch (state) {
@@ -961,9 +961,7 @@ export class IterablePlayer implements Player {
         : add(this.#currentTime, { sec: 0, nsec: 1 });
 
     log.debug("Ending previous iterator");
-    await this.#playbackIterator?.return?.();
-
-    // set the playIterator to the seek time
+    await this.#endPlaybackIterator();
     await this.#bufferImpl.stopProducer();
     this.#lastStamp = undefined;
 
@@ -976,6 +974,25 @@ export class IterablePlayer implements Player {
       consumptionType: "partial",
       skimInterval: this.#playbackSkimInterval,
     });
+  }
+
+  /**
+   * Ends the playback iterator. Ending an async generator waits for a next() still in flight (from
+   * a tick a state change interrupted), which a stalled read (a remote file still loading) would
+   * hold until the data arrives; stopping the producer first aborts that read and settles it.
+   */
+  async #endPlaybackIterator(): Promise<void> {
+    const iterator = this.#playbackIterator;
+    const reading = this.#pendingNext?.iterator === iterator;
+    this.#playbackIterator = undefined;
+    this.#pendingNext = undefined;
+    if (!iterator) {
+      return;
+    }
+    if (reading) {
+      await this.#bufferImpl.stopProducer();
+    }
+    await iterator.return?.();
   }
 
   async #stateResetPlaybackIterator() {

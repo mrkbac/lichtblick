@@ -422,9 +422,6 @@ importers:
       '@foxglove/wasm-lz4':
         specifier: 1.0.2
         version: 1.0.2
-      '@foxglove/ws-protocol':
-        specifier: 0.8.0
-        version: 0.8.0
       '@foxglove/xmlrpc':
         specifier: 1.4.0
         version: 1.4.0
@@ -1970,9 +1967,6 @@ packages:
 
   '@foxglove/wasm-zstd@1.0.1':
     resolution: {integrity: sha512-hqKTO45Sl+kSq9SDqM9xi5L+GncjFEZIJgYEkGTlpJXTfhy1Gf+a+3epWMcE0tLUKmzM77dtu8snape/J+7ueQ==}
-
-  '@foxglove/ws-protocol@0.8.0':
-    resolution: {integrity: sha512-Wh3dlmgoCr3D9D8c3Wk2GXvyMiftScItFT6LKK1apJZagElod2PQBPdyVN/GXATOvavKhw97eMGrcDTU7vekVw==}
 
   '@foxglove/xmlrpc@1.4.0':
     resolution: {integrity: sha512-DeVRciMYcU053vaJQT/hokhq/BLGqtdYcEFcb6z6+fcVh+p60u/eDIFof94Q6tE/6cWGHxtCAGnmWRzPIuavMg==}
@@ -9066,14 +9060,6 @@ snapshots:
   '@foxglove/wasm-lz4@1.0.2': {}
 
   '@foxglove/wasm-zstd@1.0.1': {}
-
-  '@foxglove/ws-protocol@0.8.0':
-    dependencies:
-      debug: 4.4.3(supports-color@10.2.2)
-      eventemitter3: 5.0.4
-      tslib: 2.9.1
-    transitivePeerDependencies:
-      - supports-color
 
   '@foxglove/xmlrpc@1.4.0':
     dependencies:

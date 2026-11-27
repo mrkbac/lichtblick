@@ -18,21 +18,6 @@ import {
   Time,
   toNanoSec,
 } from "@foxglove/rostime";
-import {
-  ChannelId,
-  FoxgloveClient,
-  ServerCapability,
-  SubscriptionId,
-  ServiceCallPayload,
-  ServiceCallRequest,
-  ServiceCallResponse,
-  Parameter,
-  StatusLevel,
-  FetchAssetStatus,
-  FetchAssetResponse,
-  BinaryOpcode,
-  IWebSocket,
-} from "@foxglove/ws-protocol";
 import * as _ from "lodash-es";
 
 import { debouncePromise } from "@lichtblick/den/async";
@@ -92,15 +77,22 @@ import {
   ZERO_TIME,
 } from "./constants";
 import { dataTypeToFullName, statusLevelToAlertSeverity } from "./helpers";
+import { FoxgloveClient, FoxgloveClientHandlers } from "./protocol/client";
 import {
-  decodePlaybackState,
-  encodePlaybackControlRequest,
-  isPlaybackStateMessage,
-  PLAYBACK_CONTROL_CAPABILITY,
-  PlaybackServerInfo,
+  ChannelId,
+  FetchAssetResponse,
+  FetchAssetStatus,
+  IWebSocket,
+  Parameter,
   PlaybackState,
   PlaybackStatus,
-} from "./playbackControl";
+  ServerCapability,
+  ServiceCallPayload,
+  ServiceCallResponse,
+  StatusLevel,
+  SUBPROTOCOLS,
+  SubscriptionId,
+} from "./protocol/protocol";
 import {
   MessageWriter,
   MessageDefinitionMap,
@@ -134,6 +126,25 @@ const secToNs = (sec: number) => BigInt(Math.round(sec * 1e9));
 /** Chrome-only (`performance.memory`); undefined elsewhere. */
 const readHeapUsage = (): HeapUsage | undefined =>
   (performance as { memory?: HeapUsage } | undefined)?.memory;
+
+/** `handlers`, each doing nothing once `isCurrent()` is false (a replaced or closed socket) */
+function whileCurrent(
+  isCurrent: () => boolean,
+  handlers: FoxgloveClientHandlers,
+): FoxgloveClientHandlers {
+  const guarded = {} as Record<string, (...args: unknown[]) => void>;
+  for (const [name, handler] of Object.entries(handlers) as [
+    string,
+    (...args: unknown[]) => void,
+  ][]) {
+    guarded[name] = (...args) => {
+      if (isCurrent()) {
+        handler(...args);
+      }
+    };
+  }
+  return guarded as FoxgloveClientHandlers;
+}
 
 export default class FoxgloveWebSocketPlayer implements Player {
   readonly #sourceId: string;
@@ -174,6 +185,10 @@ export default class FoxgloveWebSocketPlayer implements Player {
   #serverPublishesTime = false;
   /* The raw socket, kept to send playback control requests the client library doesn't know about */
   #ws?: IWebSocket;
+  /** Topics panels subscribed to, connected or not */
+  #requestedTopics = new Set<string>();
+  /** Id of the newest playback control request; replies to older ones are ignored */
+  #playbackRequestId = "";
   /* Flag indicating if the server advertises the `playbackControl` capability */
   #serverControlsPlayback = false;
   #isPlaying = true;
@@ -222,7 +237,7 @@ export default class FoxgloveWebSocketPlayer implements Player {
   #serviceCallEncoding?: string;
   #servicesByName = new Map<string, ResolvedService>();
   #serviceResponseCbs = new Map<
-    ServiceCallRequest["callId"],
+    ServiceCallPayload["callId"],
     { resolve: (response: ServiceCallResponse) => void; reject: (error: Error) => void }
   >();
   /** Last publishers requested via setPublishers, re-advertised after a reconnect. */
@@ -275,11 +290,10 @@ export default class FoxgloveWebSocketPlayer implements Player {
     }
     log.info(`Opening connection to ${this.#url}`);
 
-    const subprotocols = [FoxgloveClient.SUPPORTED_SUBPROTOCOL, "foxglove.sdk.v1"];
+    const subprotocols = SUBPROTOCOLS;
 
     const ws = this.#transport.open(this.#url, subprotocols);
     this.#ws = ws;
-    this.#client = new FoxgloveClient({ ws });
 
     // Set a timeout to abort the connection if we are still not connected by then.
     // This will abort hanging connection attempts that can for whatever reason not
@@ -288,746 +302,772 @@ export default class FoxgloveWebSocketPlayer implements Player {
       this.#client?.close();
     }, 10000);
 
-    // FoxgloveClient emits an error for opcodes it doesn't know, so intercept playback state
-    // messages before they reach it.
-    const clientOnMessage = ws.onmessage;
-    ws.onmessage = (event: { data: unknown }) => {
-      if (this.#closed || this.#ws !== ws) {
-        return;
-      }
-      const { data } = event;
-      if (isPlaybackStateMessage(data)) {
-        if (this.#serverControlsPlayback) {
-          this.#handlePlaybackState(decodePlaybackState(data));
-        }
-        return;
-      }
-      clientOnMessage?.(event);
-    };
-
-    this.#client.on("open", () => {
-      if (this.#closed) {
-        return;
-      }
-      if (this.#connectionAttemptTimeout != undefined) {
-        clearTimeout(this.#connectionAttemptTimeout);
-      }
-      this.#presence = PlayerPresence.PRESENT;
-      this.#resetSessionState();
-      this.#playerCapabilities = []; // serverInfo re-adds what this connection supports
-      this.#connectedAtMs = Date.now();
-      this.#stopRecording();
-      this.#recorderUnavailable = false; // a new connection tries recording again
-      this.#alerts.clear();
-      this.#dropConnectionState();
-
-      // Re-assign members that are emitted as player state
-      this.#profile = undefined;
-      this.#publishedTopics = undefined;
-      this.#subscribedTopics = undefined;
-      this.#advertisedServices = undefined;
-      this.#serviceTypes = new Map();
-      this.#datatypes = new Map();
-      this.#parameters = new Map();
-    });
-
     // Browsers reject a mixed-content socket with an error before closing it: Chrome and Firefox
     // say "insecure" ("An insecure WebSocket connection may not be initiated…", "The operation is
     // insecure."); Safari's error carries no message. Chrome and Firefox also fail unreachable
     // servers without a message, so a bare error only means "blocked" in other browsers.
     let opened = false;
     let blockedAsMixedContent = false;
-    this.#client.on("open", () => {
-      opened = true;
-    });
-    this.#client.on("error", (err) => {
-      log.error(err);
-      if (opened || this.#transport !== webSocketBackend || !isMixedContentWs(this.#url)) {
-        return;
-      }
-      const message = (err as unknown as undefined | { message?: unknown })?.message;
-      // FoxgloveClient turns an error event without payload into Error("WebSocket error")
-      blockedAsMixedContent =
-        typeof message === "string" && message !== OPAQUE_SOCKET_ERROR
-          ? /insecure/i.test(message)
-          : !/\b(Chrome|Chromium|Firefox)\//.test(navigator.userAgent);
-    });
 
-    // Note: We've observed closed being called not only when an already open connection is closed
-    // but also when a new connection fails to open
-    //
-    // Note: We explicitly avoid clearing state like start/end times, datatypes, etc to preserve
-    // this during a disconnect event. Any necessary state clearing is handled once a new connection
-    // is established
-    this.#client.on("close", (event) => {
-      if (this.#closed || this.#ws !== ws) {
-        return;
-      }
-      log.info("Connection closed:", event);
-      const close = event as { retryable?: boolean; reason?: string } | undefined;
-      const terminal = close?.retryable === false;
-      this.#presence = terminal ? PlayerPresence.ERROR : PlayerPresence.RECONNECTING;
-      this.#stopRecording();
-      this.#connectedAtMs = undefined;
+    // A late event from a replaced socket must not touch this connection's state
+    const current = () => !this.#closed && this.#ws === ws;
 
-      if (this.#getParameterInterval != undefined) {
-        clearInterval(this.#getParameterInterval);
-        this.#getParameterInterval = undefined;
-      }
-      if (this.#connectionAttemptTimeout != undefined) {
-        clearTimeout(this.#connectionAttemptTimeout);
-      }
-
-      this.#ws = undefined;
-      this.#client = undefined;
-      this.#serverControlsPlayback = false;
-      this.#dropConnectionState();
-
-      if (
-        this.#transport === webSocketBackend &&
-        close?.reason === PROXY_MISSING_REASON &&
-        !terminal
-      ) {
-        // No extension: try the browser's own connection first. It works when the site may load
-        // insecure content, and Chrome may first ask for local network access. Only explain the
-        // block if that fails too.
-        this.#emitState();
-        this.#openTimeout = setTimeout(this.#open, 0);
-        return;
-      }
-      if (terminal) {
-        this.#alerts.addAlert("ws:connection-failed", {
-          severity: "error",
-          message: close.reason ?? "Connection failed",
-        });
-      } else if (blockedAsMixedContent) {
-        this.#alerts.addAlert("ws:connection-failed", {
-          severity: "error",
-          message: "Your browser blocked ws:// from this https page",
-          tip: `Browsers only allow unencrypted ws:// connections from an https page to localhost. Install the Digitalis proxy extension (chrome-extension/ in the repository), allow "Insecure content" in this site's settings, or serve ${this.#url} over wss://. Then reload the page.`,
-          guide: { type: "wsMixedContent", url: this.#url },
-        });
-      } else {
-        this.#alerts.addAlert("ws:connection-failed", {
-          severity: "error",
-          message: "Connection failed",
-          tip: `Check that the WebSocket server at ${
-            this.#url
-          } is reachable and supports protocol version one of: ${subprotocols.join(", ")}.`,
-        });
-      }
-
-      this.#emitState();
-      if (!terminal) {
-        this.#openTimeout = setTimeout(this.#open, 3000);
-      }
-    });
-
-    this.#client.on("serverInfo", (event) => {
-      if (!Array.isArray(event.capabilities)) {
-        this.#alerts.addAlert("ws:invalid-capabilities", {
-          severity: "warn",
-          message: `Server sent an invalid or missing capabilities field: '${event.capabilities}'`,
-        });
-      }
-
-      const newSessionId = event.sessionId ?? randomUUID();
-      if (this.#id !== newSessionId) {
-        this.#resetSessionState();
-      }
-
-      this.#id = newSessionId;
-      this.#name = `${this.#url}\n${event.name}`;
-      this.#serverName = event.name;
-      this.#serverCapabilities = Array.isArray(event.capabilities) ? event.capabilities : [];
-      this.#serverPublishesTime = this.#serverCapabilities.includes(ServerCapability.time);
-      this.#supportedEncodings = event.supportedEncodings;
-      this.#datatypes = new Map();
-
-      // If the server publishes the time we clear any existing clockTime we might have and let the
-      // server override
-      if (this.#serverPublishesTime) {
-        this.#clockTime = undefined;
-      }
-
-      const maybeRosDistro = event.metadata?.["ROS_DISTRO"];
-      if (maybeRosDistro) {
-        const rosDistro = maybeRosDistro;
-        const isRos1 = ["melodic", "noetic"].includes(rosDistro);
-        this.#profile = isRos1 ? "ros1" : "ros2";
-
-        // Add common ROS message definitions
-        const rosDataTypes = isRos1 ? CommonRosTypes.ros1 : ros2CommonDatatypes(rosDistro);
-
-        this.#updateDataTypes(new Map(Object.entries(rosDataTypes)));
-      }
-
-      if (event.capabilities.includes(ServerCapability.clientPublish)) {
-        this.#playerCapabilities = this.#playerCapabilities.concat(PLAYER_CAPABILITIES.advertise);
-        this.#setupPublishers();
-      }
-      if (event.capabilities.includes(ServerCapability.services)) {
-        this.#serviceCallEncoding = event.supportedEncodings?.find((e) =>
-          SUPPORTED_SERVICE_ENCODINGS.includes(e),
-        );
-
-        const alertId = "callService:unsupportedEncoding";
-        if (this.#serviceCallEncoding) {
-          this.#playerCapabilities = this.#playerCapabilities.concat(
-            PLAYER_CAPABILITIES.callServices,
-          );
-          this.#alerts.removeAlert(alertId);
-        } else {
-          this.#alerts.addAlert(alertId, {
-            severity: "warn",
-            message: `Calling services is disabled as no compatible encoding could be found. \
-            The server supports [${event.supportedEncodings?.join(", ")}], \
-            but Studio only supports [${SUPPORTED_SERVICE_ENCODINGS.join(", ")}]`,
-          });
-        }
-      }
-
-      if (event.capabilities.includes(ServerCapability.parameters)) {
-        this.#playerCapabilities = this.#playerCapabilities.concat(
-          PLAYER_CAPABILITIES.getParameters,
-          PLAYER_CAPABILITIES.setParameters,
-        );
-
-        // Periodically request all available parameters.
-        this.#getParameterInterval = setInterval(() => {
-          this.#client?.getParameters([], GET_ALL_PARAMS_REQUEST_ID);
-        }, GET_ALL_PARAMS_PERIOD_MS);
-
-        this.#client?.getParameters([], GET_ALL_PARAMS_REQUEST_ID);
-      }
-
-      if (event.capabilities.includes(ServerCapability.connectionGraph)) {
-        this.#client?.subscribeConnectionGraph();
-      }
-
-      if (event.capabilities.includes(ServerCapability.assets)) {
-        this.#playerCapabilities = this.#playerCapabilities.concat(PLAYER_CAPABILITIES.assets);
-      }
-
-      const { dataStartTime, dataEndTime } = event as PlaybackServerInfo;
-      const wasControllingPlayback = this.#serverControlsPlayback;
-      this.#dropPlaybackCapabilities();
-      this.#serverControlsPlayback =
-        event.capabilities.includes(PLAYBACK_CONTROL_CAPABILITY) &&
-        dataStartTime != undefined &&
-        dataEndTime != undefined &&
-        compare(dataStartTime, dataEndTime) <= 0;
-      if (this.#serverControlsPlayback) {
-        this.#clearHistory();
-        this.#startTime = dataStartTime;
-        this.#endTime = dataEndTime;
-        this.#clockTime ??= dataStartTime;
-        this.#playerCapabilities = this.#playerCapabilities.concat(
-          PLAYER_CAPABILITIES.playbackControl,
-          PLAYER_CAPABILITIES.setSpeed,
-        );
-      } else {
-        if (wasControllingPlayback) {
-          this.#startTime = undefined;
-          this.#endTime = undefined;
-        }
-        this.#playerCapabilities = this.#playerCapabilities.concat(
-          PLAYER_CAPABILITIES.playbackControl,
-          PLAYER_CAPABILITIES.setSpeed,
-          PLAYER_CAPABILITIES.liveHistory,
-        );
-      }
-
-      this.#emitState();
-    });
-
-    this.#client.on("status", (event) => {
-      const msg = `FoxgloveWebSocket: ${event.message}`;
-      if (event.level === StatusLevel.INFO) {
-        log.info(msg);
-      } else if (event.level === StatusLevel.WARNING) {
-        log.warn(msg);
-      } else {
-        log.error(msg);
-      }
-
-      const alert: PlayerAlert = {
-        message: event.message,
-        severity: statusLevelToAlertSeverity(event.level),
-      };
-
-      if (event.message === "Send buffer limit reached") {
-        alert.tip =
-          "Server is dropping messages to the client. Check if you are subscribing to large or frequent topics or adjust your server send buffer limit.";
-      }
-
-      this.#alerts.addAlert(event.message, alert);
-      this.#emitState();
-    });
-
-    this.#client.on("advertise", (newChannels) => {
-      for (const channel of newChannels) {
-        let parsedChannel;
-        let schema;
-        try {
-          let schemaEncoding;
-          let schemaData;
-          if (
-            SELF_DESCRIBING_ENCODINGS.has(channel.encoding) &&
-            (channel.schemaEncoding == undefined || channel.schemaEncoding === "jsonschema")
-          ) {
-            schemaEncoding = "jsonschema";
-            schemaData = textEncoder.encode(channel.schema);
-          } else if (
-            SELF_DESCRIBING_ENCODINGS.has(channel.encoding) &&
-            channel.schemaEncoding === ""
-          ) {
-            schemaEncoding = "";
-            schemaData = new Uint8Array();
-          } else if (
-            channel.encoding === "capnproto" &&
-            (channel.schemaEncoding == undefined || channel.schemaEncoding === "capnproto")
-          ) {
-            schemaEncoding = "capnproto";
-            schemaData = Uint8Array.fromBase64(channel.schema);
-          } else if (
-            channel.encoding === "protobuf" &&
-            (channel.schemaEncoding == undefined || channel.schemaEncoding === "protobuf")
-          ) {
-            schemaEncoding = "protobuf";
-            schemaData = Uint8Array.fromBase64(channel.schema);
-          } else if (
-            channel.encoding === "flatbuffer" &&
-            (channel.schemaEncoding == undefined || channel.schemaEncoding === "flatbuffer")
-          ) {
-            schemaEncoding = "flatbuffer";
-            schemaData = Uint8Array.fromBase64(channel.schema);
-          } else if (
-            channel.encoding === "ros1" &&
-            (channel.schemaEncoding == undefined || channel.schemaEncoding === "ros1msg")
-          ) {
-            schemaEncoding = "ros1msg";
-            schemaData = textEncoder.encode(channel.schema);
-          } else if (
-            channel.encoding === "cdr" &&
-            (channel.schemaEncoding == undefined ||
-              ["ros2idl", "ros2msg", "omgidl"].includes(channel.schemaEncoding))
-          ) {
-            schemaEncoding = channel.schemaEncoding ?? "ros2msg";
-            schemaData = textEncoder.encode(channel.schema);
-          } else {
-            const msg = channel.schemaEncoding
-              ? `Unsupported combination of message / schema encoding: (${channel.encoding} / ${channel.schemaEncoding})`
-              : `Unsupported message encoding ${channel.encoding}`;
-            throw new Error(msg);
+    this.#client = new FoxgloveClient({
+      ws,
+      handlers: whileCurrent(current, {
+        open: () => {
+          opened = true;
+          if (this.#connectionAttemptTimeout != undefined) {
+            clearTimeout(this.#connectionAttemptTimeout);
           }
-          schema = { name: channel.schemaName, encoding: schemaEncoding, data: schemaData };
-          parsedChannel = parseChannel({ messageEncoding: channel.encoding, schema });
-        } catch (error) {
-          this.#unsupportedChannelIds.add(channel.id);
-          this.#alerts.addAlert(`schema:${channel.topic}`, {
-            severity: "error",
-            message: `Failed to parse channel schema on ${channel.topic}`,
-            error: toError(error),
-          });
-          this.#emitState();
-          continue;
-        }
-        const existingChannel = this.#channelsByTopic.get(channel.topic);
-        if (existingChannel && !_.isEqual(channel, existingChannel.channel)) {
-          this.#alerts.addAlert(`duplicate-topic:${channel.topic}`, {
-            severity: "error",
-            message: `Multiple channels advertise the same topic: ${channel.topic} (${existingChannel.channel.id} and ${channel.id})`,
-          });
-          this.#emitState();
-          continue;
-        }
-        const resolvedChannel = {
-          channel,
-          parsedChannel,
-          record: { topic: channel.topic, messageEncoding: channel.encoding, schema },
-        };
-        this.#channelsById.set(channel.id, resolvedChannel);
-        this.#channelsByTopic.set(channel.topic, resolvedChannel);
-      }
-      this.#updateTopicsAndDatatypes();
-      this.#emitState();
-      this.#processUnresolvedSubscriptions();
-    });
+          this.#presence = PlayerPresence.PRESENT;
+          this.#resetSessionState();
+          this.#playerCapabilities = []; // serverInfo re-adds what this connection supports
+          this.#connectedAtMs = Date.now();
+          this.#stopRecording();
+          this.#recorderUnavailable = false; // a new connection tries recording again
+          this.#alerts.clear();
+          this.#dropConnectionState();
 
-    this.#client.on("unadvertise", (removedChannels) => {
-      for (const id of removedChannels) {
-        const chanInfo = this.#channelsById.get(id);
-        if (!chanInfo) {
-          if (!this.#unsupportedChannelIds.delete(id)) {
-            this.#alerts.addAlert(`unadvertise:${id}`, {
-              severity: "error",
-              message: `Server unadvertised channel ${id} that was not advertised`,
-            });
+          // Re-assign members that are emitted as player state
+          this.#profile = undefined;
+          this.#publishedTopics = undefined;
+          this.#subscribedTopics = undefined;
+          this.#advertisedServices = undefined;
+          this.#serviceTypes = new Map();
+          this.#datatypes = new Map();
+          this.#parameters = new Map();
+        },
+
+        error: (err) => {
+          log.error(err);
+          if (opened || this.#transport !== webSocketBackend || !isMixedContentWs(this.#url)) {
+            return;
+          }
+          const message = (err as unknown as undefined | { message?: unknown })?.message;
+          // FoxgloveClient turns an error event without payload into Error("WebSocket error")
+          blockedAsMixedContent =
+            typeof message === "string" && message !== OPAQUE_SOCKET_ERROR
+              ? /insecure/i.test(message)
+              : !/\b(Chrome|Chromium|Firefox)\//.test(navigator.userAgent);
+        },
+
+        // Note: We've observed closed being called not only when an already open connection is closed
+        // but also when a new connection fails to open
+        //
+        // Note: We explicitly avoid clearing state like start/end times, datatypes, etc to preserve
+        // this during a disconnect event. Any necessary state clearing is handled once a new connection
+        // is established
+        close: (event) => {
+          log.info("Connection closed:", event);
+          const close = event as { retryable?: boolean; reason?: string } | undefined;
+          const terminal = close?.retryable === false;
+          this.#presence = terminal ? PlayerPresence.ERROR : PlayerPresence.RECONNECTING;
+          this.#stopRecording();
+          this.#connectedAtMs = undefined;
+
+          if (this.#getParameterInterval != undefined) {
+            clearInterval(this.#getParameterInterval);
+            this.#getParameterInterval = undefined;
+          }
+          if (this.#connectionAttemptTimeout != undefined) {
+            clearTimeout(this.#connectionAttemptTimeout);
+          }
+
+          this.#ws = undefined;
+          this.#client = undefined;
+          this.#serverControlsPlayback = false;
+          this.#dropConnectionState();
+
+          if (
+            this.#transport === webSocketBackend &&
+            close?.reason === PROXY_MISSING_REASON &&
+            !terminal
+          ) {
+            // No extension: try the browser's own connection first. It works when the site may load
+            // insecure content, and Chrome may first ask for local network access. Only explain the
+            // block if that fails too.
             this.#emitState();
+            this.#openTimeout = setTimeout(this.#open, 0);
+            return;
           }
-          continue;
-        }
-        for (const [subId, { channel }] of this.#resolvedSubscriptionsById) {
-          if (channel.id === id) {
-            this.#resolvedSubscriptionsById.delete(subId);
-            this.#resolvedSubscriptionsByTopic.delete(channel.topic);
-            // No unsubscribe: unadvertising a channel ends its subscriptions on the server, which
-            // answers an unsubscribe for one with a "did not exist" warning.
-            this.#unresolvedSubscriptions.add(channel.topic);
+          if (terminal) {
+            this.#alerts.addAlert("ws:connection-failed", {
+              severity: "error",
+              message: close.reason ?? "Connection failed",
+            });
+          } else if (blockedAsMixedContent) {
+            this.#alerts.addAlert("ws:connection-failed", {
+              severity: "error",
+              message: "Your browser blocked ws:// from this https page",
+              tip: `Browsers only allow unencrypted ws:// connections from an https page to localhost. Install the Digitalis proxy extension (chrome-extension/ in the repository), allow "Insecure content" in this site's settings, or serve ${this.#url} over wss://. Then reload the page.`,
+              guide: { type: "wsMixedContent", url: this.#url },
+            });
+          } else {
+            this.#alerts.addAlert("ws:connection-failed", {
+              severity: "error",
+              message: "Connection failed",
+              tip: `Check that the WebSocket server at ${
+                this.#url
+              } is reachable and supports protocol version one of: ${subprotocols.join(", ")}.`,
+            });
           }
-        }
-        this.#channelsById.delete(id);
-        this.#channelsByTopic.delete(chanInfo.channel.topic);
-      }
-      this.#updateTopicsAndDatatypes();
-      this.#emitState();
-    });
 
-    this.#client.on("message", ({ subscriptionId, data }) => {
-      const chanInfo = this.#resolvedSubscriptionsById.get(subscriptionId);
-      if (!chanInfo) {
-        const wasRecentlyCanceled = this.#recentlyCanceledSubscriptions.has(subscriptionId);
-        if (!wasRecentlyCanceled) {
-          this.#alerts.addAlert(`message-missing-subscription:${subscriptionId}`, {
-            severity: "warn",
-            message: `Received message on unknown subscription id: ${subscriptionId}. This might be a WebSocket server bug.`,
-          });
           this.#emitState();
-        }
-        return;
-      }
-
-      try {
-        this.#receivedBytes += data.byteLength;
-        const receiveTime = this.#getCurrentTime();
-        const topic = chanInfo.channel.topic;
-        const deserializedMessage = chanInfo.parsedChannel.deserialize(data);
-
-        const msgSizeEstimate = this.#messageSizes.estimate(
-          topic,
-          data.byteLength,
-          deserializedMessage,
-        );
-
-        // The history also keeps the received bytes (for export and recording), so count both.
-        const sizeInBytes = this.#serverControlsPlayback
-          ? Math.max(data.byteLength, msgSizeEstimate)
-          : msgSizeEstimate + data.byteLength;
-        const msgEvent: MessageEvent = {
-          topic,
-          receiveTime,
-          message: deserializedMessage,
-          sizeInBytes,
-          schemaName: chanInfo.channel.schemaName,
-        };
-        if (!this.#serverControlsPlayback) {
-          this.#history.add(msgEvent);
-          const raw = new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
-          this.#rawByMessage.set(msgEvent, { data: raw, channel: chanInfo });
-          this.#recordingFor()?.record(chanInfo.record, receiveTime, raw);
-        }
-        // While reviewing history, new messages only go into the history.
-        if (this.#historyCursor == undefined) {
-          this.#parsedMessages.push(msgEvent);
-        }
-
-        // Update the message count for this topic
-        let stats = this.#topicsStats.get(topic);
-        if (!stats) {
-          stats = { numMessages: 0 };
-          this.#topicsStats.set(topic, stats);
-        }
-        stats.numMessages++;
-        this.#topicsStatsChanged = true;
-      } catch (error) {
-        this.#alerts.addAlert(`message:${chanInfo.channel.topic}`, {
-          severity: "error",
-          message: `Failed to parse message on ${chanInfo.channel.topic}`,
-          error: toError(error),
-        });
-      }
-      this.#emitLiveData();
-    });
-
-    this.#client.on("time", ({ timestamp }) => {
-      if (!this.#serverPublishesTime) {
-        return;
-      }
-
-      const time = fromNanoSec(timestamp);
-      this.#lastClockWallMs = Date.now();
-      const clockReset = this.#clockTime != undefined && isLessThan(time, this.#clockTime);
-      if (clockReset) {
-        this.#numTimeSeeks++;
-        this.#parsedMessages.clear();
-        // The clock was reset (e.g. a simulation or bag restarted): the history no longer fits.
-        if (!this.#serverControlsPlayback) {
-          this.#clearHistory();
-          this.#startTime = undefined;
-          if (!this.#isPlaying) {
-            this.#historyCursor = time; // stay paused, at the new clock
+          if (!terminal) {
+            this.#openTimeout = setTimeout(this.#open, 3000);
           }
-        }
-      }
+        },
 
-      // Override any previous start/end time when we set a clockTime for the first time which means
-      // we've received the first "time" event and know the server controlled time.
-      if (!this.#clockTime && !this.#serverControlsPlayback) {
-        this.#startTime = time;
-        this.#endTime = time;
-      }
+        serverInfo: (event) => {
+          if (!Array.isArray(event.capabilities)) {
+            this.#alerts.addAlert("ws:invalid-capabilities", {
+              severity: "warn",
+              message: `Server sent an invalid or missing capabilities field: '${event.capabilities}'`,
+            });
+          }
 
-      this.#clockTime = time;
-      if (clockReset) {
-        this.#emitState();
-      } else {
-        this.#emitLiveData();
-      }
-    });
+          const newSessionId = event.sessionId ?? randomUUID();
+          if (this.#id !== newSessionId) {
+            this.#resetSessionState();
+          }
 
-    this.#client.on("parameterValues", ({ parameters, id }) => {
-      const mappedParameters = parameters.map((param) => {
-        return param.type === "byte_array" && typeof param.value === "string"
-          ? {
-              ...param,
-              value: Uint8Array.fromBase64(param.value),
+          this.#id = newSessionId;
+          this.#name = `${this.#url}\n${event.name}`;
+          this.#serverName = event.name;
+          this.#serverCapabilities = Array.isArray(event.capabilities) ? event.capabilities : [];
+          this.#serverPublishesTime = this.#serverCapabilities.includes(ServerCapability.time);
+          this.#supportedEncodings = event.supportedEncodings;
+          // A repeated serverInfo on the same connection replaces what the previous one set up
+          this.#playerCapabilities = [];
+          if (this.#getParameterInterval != undefined) {
+            clearInterval(this.#getParameterInterval);
+            this.#getParameterInterval = undefined;
+          }
+          this.#datatypes = new Map();
+          // Channels advertised before it keep their types
+          for (const { parsedChannel } of this.#channelsById.values()) {
+            this.#updateDataTypes(parsedChannel.datatypes);
+          }
+
+          // If the server publishes the time we clear any existing clockTime we might have and let the
+          // server override
+          if (this.#serverPublishesTime) {
+            this.#clockTime = undefined;
+          }
+
+          const maybeRosDistro = event.metadata?.["ROS_DISTRO"];
+          if (maybeRosDistro) {
+            const rosDistro = maybeRosDistro;
+            const isRos1 = ["melodic", "noetic"].includes(rosDistro);
+            this.#profile = isRos1 ? "ros1" : "ros2";
+
+            // Add common ROS message definitions
+            const rosDataTypes = isRos1 ? CommonRosTypes.ros1 : ros2CommonDatatypes(rosDistro);
+
+            this.#updateDataTypes(new Map(Object.entries(rosDataTypes)));
+          }
+
+          if (event.capabilities.includes(ServerCapability.clientPublish)) {
+            this.#playerCapabilities = this.#playerCapabilities.concat(
+              PLAYER_CAPABILITIES.advertise,
+            );
+            this.#setupPublishers();
+          }
+          if (event.capabilities.includes(ServerCapability.services)) {
+            this.#serviceCallEncoding = event.supportedEncodings?.find((e) =>
+              SUPPORTED_SERVICE_ENCODINGS.includes(e),
+            );
+
+            const alertId = "callService:unsupportedEncoding";
+            if (this.#serviceCallEncoding) {
+              this.#playerCapabilities = this.#playerCapabilities.concat(
+                PLAYER_CAPABILITIES.callServices,
+              );
+              this.#alerts.removeAlert(alertId);
+            } else {
+              this.#alerts.addAlert(alertId, {
+                severity: "warn",
+                message: `Calling services is disabled as no compatible encoding could be found. \
+                The server supports [${event.supportedEncodings?.join(", ")}], \
+                but Studio only supports [${SUPPORTED_SERVICE_ENCODINGS.join(", ")}]`,
+              });
             }
-          : param;
-      });
-      const parameterTypesMap = new Map(parameters.map((p) => [p.name, p.type] as const));
+          }
 
-      const newParameters = mappedParameters.filter((param) => !this.#parameters.has(param.name));
+          if (event.capabilities.includes(ServerCapability.parameters)) {
+            this.#playerCapabilities = this.#playerCapabilities.concat(
+              PLAYER_CAPABILITIES.getParameters,
+              PLAYER_CAPABILITIES.setParameters,
+            );
 
-      if (id === GET_ALL_PARAMS_REQUEST_ID) {
-        // Reset params
-        this.#parameters = new Map(mappedParameters.map((param) => [param.name, param.value]));
-        this.#parameterTypeByName = parameterTypesMap;
-      } else {
-        // Update params
-        const updatedParameters = new Map(this.#parameters);
-        mappedParameters.forEach((param) => updatedParameters.set(param.name, param.value));
-        this.#parameters = updatedParameters;
-        for (const [paramName, paramType] of parameterTypesMap) {
-          this.#parameterTypeByName.set(paramName, paramType);
-        }
-      }
+            // Periodically request all available parameters.
+            this.#getParameterInterval = setInterval(() => {
+              this.#client?.getParameters([], GET_ALL_PARAMS_REQUEST_ID);
+            }, GET_ALL_PARAMS_PERIOD_MS);
 
-      this.#emitState();
+            this.#client?.getParameters([], GET_ALL_PARAMS_REQUEST_ID);
+          }
 
-      if (
-        newParameters.length > 0 &&
-        this.#serverCapabilities.includes(ServerCapability.parametersSubscribe)
-      ) {
-        // Subscribe to value updates of new parameters
-        this.#client?.subscribeParameterUpdates(newParameters.map((p) => p.name));
-      }
-    });
+          if (event.capabilities.includes(ServerCapability.connectionGraph)) {
+            this.#client?.subscribeConnectionGraph();
+          }
 
-    this.#client.on("advertiseServices", (services) => {
-      if (!this.#serviceCallEncoding) {
-        return;
-      }
+          if (event.capabilities.includes(ServerCapability.assets)) {
+            this.#playerCapabilities = this.#playerCapabilities.concat(PLAYER_CAPABILITIES.assets);
+          }
 
-      let defaultSchemaEncoding = "";
-      if (this.#serviceCallEncoding === "json") {
-        defaultSchemaEncoding = "jsonschema";
-      } else if (this.#serviceCallEncoding === "ros1") {
-        defaultSchemaEncoding = "ros1msg";
-      } else if (this.#serviceCallEncoding === "cdr") {
-        defaultSchemaEncoding = "ros2msg";
-      }
-
-      const serviceTypes = new Map(this.#serviceTypes);
-      for (const service of services) {
-        const serviceAlertId = `service:${service.id}`;
-        // If not explicitly given, derive request / response type name from the service type
-        // (according to ROS convention).
-        const requestType = service.request?.schemaName ?? `${service.type}_Request`;
-        const responseType = service.response?.schemaName ?? `${service.type}_Response`;
-        const requestMsgEncoding = service.request?.encoding ?? this.#serviceCallEncoding;
-        const responseMsgEncoding = service.response?.encoding ?? this.#serviceCallEncoding;
-
-        // Note: The `requestSchema` and `responseSchema` fields are deprecated in @foxglove/ws-protocol.
-        // However, they are still required for compatibility with Foxglove Bridge.
-        // We are temporarily reintroducing support for these fields to avoid blocking users.
-        // This usage should be removed once Foxglove Bridge transitions away from these deprecated fields.
-        try {
-          if (
-            // eslint-disable-next-line @typescript-eslint/no-deprecated
-            (service.request == undefined && service.requestSchema == undefined) ||
-            // eslint-disable-next-line @typescript-eslint/no-deprecated
-            (service.response == undefined && service.responseSchema == undefined)
-          ) {
-            throw new Error("Invalid service definition, at least one required field is missing");
-          } else if (
-            !defaultSchemaEncoding &&
-            (service.request == undefined || service.response == undefined)
-          ) {
-            throw new Error("Cannot determine service request or response schema encoding");
-          } else if (!SUPPORTED_SERVICE_ENCODINGS.includes(requestMsgEncoding)) {
-            const supportedEncodingsStr = SUPPORTED_SERVICE_ENCODINGS.join(", ");
-            throw new Error(
-              `Unsupported service request message encoding. ${requestMsgEncoding} not in list of supported encodings [${supportedEncodingsStr}]`,
+          const { dataStartTime, dataEndTime } = event;
+          const wasControllingPlayback = this.#serverControlsPlayback;
+          this.#dropPlaybackCapabilities();
+          this.#serverControlsPlayback =
+            event.capabilities.includes(ServerCapability.playbackControl) &&
+            dataStartTime != undefined &&
+            dataEndTime != undefined &&
+            compare(dataStartTime, dataEndTime) <= 0;
+          if (this.#serverControlsPlayback) {
+            this.#clearHistory();
+            this.#startTime = dataStartTime;
+            this.#endTime = dataEndTime;
+            this.#clockTime ??= dataStartTime;
+            this.#playerCapabilities = this.#playerCapabilities.concat(
+              PLAYER_CAPABILITIES.playbackControl,
+              PLAYER_CAPABILITIES.setSpeed,
+            );
+          } else {
+            if (wasControllingPlayback) {
+              this.#startTime = undefined;
+              this.#endTime = undefined;
+            }
+            this.#playerCapabilities = this.#playerCapabilities.concat(
+              PLAYER_CAPABILITIES.playbackControl,
+              PLAYER_CAPABILITIES.setSpeed,
+              PLAYER_CAPABILITIES.liveHistory,
             );
           }
 
-          const parseChannelOptions = { allowEmptySchema: true };
-          const parsedRequest = parseChannel(
-            {
-              messageEncoding: requestMsgEncoding,
-              schema: {
-                name: requestType,
-                encoding: service.request?.schemaEncoding ?? defaultSchemaEncoding,
-                // eslint-disable-next-line @typescript-eslint/no-deprecated
-                data: textEncoder.encode(service.request?.schema ?? service.requestSchema),
-              },
-            },
-            parseChannelOptions,
-          );
-          const parsedResponse = parseChannel(
-            {
-              messageEncoding: responseMsgEncoding,
-              schema: {
-                name: responseType,
-                encoding: service.response?.schemaEncoding ?? defaultSchemaEncoding,
-                // eslint-disable-next-line @typescript-eslint/no-deprecated
-                data: textEncoder.encode(service.response?.schema ?? service.responseSchema),
-              },
-            },
-            parseChannelOptions,
-          );
-          const requestMsgDef = rosDatatypesToMessageDefinition(
-            parsedRequest.datatypes,
-            requestType,
-          );
-          let requestMessageWriter: MessageWriter | undefined;
-          if (requestMsgEncoding === "ros1") {
-            requestMessageWriter = new Ros1MessageWriter(requestMsgDef);
-          } else if (requestMsgEncoding === "cdr") {
-            requestMessageWriter = new Ros2MessageWriter(requestMsgDef);
-          } else if (requestMsgEncoding === "json") {
-            requestMessageWriter = new JsonMessageWriter();
-          }
-          if (!requestMessageWriter) {
-            // Should never go here as we sanity-checked the encoding already above
-            throw new Error(`Unsupported service request message encoding ${requestMsgEncoding}`);
+          this.#emitState();
+        },
+
+        status: (event) => {
+          const msg = `FoxgloveWebSocket: ${event.message}`;
+          if (event.level === StatusLevel.INFO) {
+            log.info(msg);
+          } else if (event.level === StatusLevel.WARNING) {
+            log.warn(msg);
+          } else {
+            log.error(msg);
           }
 
-          // Add type definitions for service response and request
-          this.#updateDataTypes(parsedRequest.datatypes);
-          this.#updateDataTypes(parsedResponse.datatypes);
-
-          const resolvedService: ResolvedService = {
-            service,
-            parsedResponse,
-            requestMessageWriter,
-            requestMsgEncoding,
+          const alert: PlayerAlert = {
+            message: event.message,
+            severity: statusLevelToAlertSeverity(event.level),
           };
-          this.#servicesByName.set(service.name, resolvedService);
-          serviceTypes.set(service.name, {
-            type: service.type,
-            requestSchemaName: requestType,
-            responseSchemaName: responseType,
-          });
-          this.#alerts.removeAlert(serviceAlertId);
 
-          // Issue a warning to users if the service relies on deprecated fields (`requestSchema` or `responseSchema`).
-          // This highlights the need for migration, as these fields will be removed in future versions.
+          if (event.message === "Send buffer limit reached") {
+            alert.tip =
+              "Server is dropping messages to the client. Check if you are subscribing to large or frequent topics or adjust your server send buffer limit.";
+          }
 
-          // eslint-disable-next-line @typescript-eslint/no-deprecated
-          if (service.requestSchema || service.responseSchema) {
-            this.#alerts.addAlert(serviceAlertId, {
-              severity: "warn",
-              message: `Service ${service.name}`,
-              error: new Error(
-                `requestSchema and responseSchema are deprecated and will not be supported in future versions of ${APP_CONFIG.productName}`,
-              ),
+          // By id when the server gives one, so removeStatus can clear it; ids and values in the
+          // text would otherwise make every repeat a new alert
+          this.#alerts.addAlert(`status:${event.id ?? event.message}`, alert);
+          this.#emitState();
+        },
+
+        advertise: (newChannels) => {
+          for (const channel of newChannels) {
+            let parsedChannel;
+            let schema;
+            try {
+              let schemaEncoding;
+              let schemaData;
+              if (
+                SELF_DESCRIBING_ENCODINGS.has(channel.encoding) &&
+                (channel.schemaEncoding == undefined || channel.schemaEncoding === "jsonschema")
+              ) {
+                schemaEncoding = "jsonschema";
+                schemaData = textEncoder.encode(channel.schema);
+              } else if (
+                SELF_DESCRIBING_ENCODINGS.has(channel.encoding) &&
+                channel.schemaEncoding === ""
+              ) {
+                schemaEncoding = "";
+                schemaData = new Uint8Array();
+              } else if (
+                channel.encoding === "capnproto" &&
+                (channel.schemaEncoding == undefined || channel.schemaEncoding === "capnproto")
+              ) {
+                schemaEncoding = "capnproto";
+                schemaData = Uint8Array.fromBase64(channel.schema);
+              } else if (
+                channel.encoding === "protobuf" &&
+                (channel.schemaEncoding == undefined || channel.schemaEncoding === "protobuf")
+              ) {
+                schemaEncoding = "protobuf";
+                schemaData = Uint8Array.fromBase64(channel.schema);
+              } else if (
+                channel.encoding === "flatbuffer" &&
+                (channel.schemaEncoding == undefined || channel.schemaEncoding === "flatbuffer")
+              ) {
+                schemaEncoding = "flatbuffer";
+                schemaData = Uint8Array.fromBase64(channel.schema);
+              } else if (
+                channel.encoding === "ros1" &&
+                (channel.schemaEncoding == undefined || channel.schemaEncoding === "ros1msg")
+              ) {
+                schemaEncoding = "ros1msg";
+                schemaData = textEncoder.encode(channel.schema);
+              } else if (
+                channel.encoding === "cdr" &&
+                (channel.schemaEncoding == undefined ||
+                  ["ros2idl", "ros2msg", "omgidl"].includes(channel.schemaEncoding))
+              ) {
+                schemaEncoding = channel.schemaEncoding ?? "ros2msg";
+                schemaData = textEncoder.encode(channel.schema);
+              } else {
+                const msg = channel.schemaEncoding
+                  ? `Unsupported combination of message / schema encoding: (${channel.encoding} / ${channel.schemaEncoding})`
+                  : `Unsupported message encoding ${channel.encoding}`;
+                throw new Error(msg);
+              }
+              schema = { name: channel.schemaName, encoding: schemaEncoding, data: schemaData };
+              parsedChannel = parseChannel({ messageEncoding: channel.encoding, schema });
+            } catch (error) {
+              this.#unsupportedChannelIds.add(channel.id);
+              this.#alerts.addAlert(`schema:${channel.topic}`, {
+                severity: "error",
+                message: `Failed to parse channel schema on ${channel.topic}`,
+                error: toError(error),
+              });
+              this.#emitState();
+              continue;
+            }
+            const existingChannel = this.#channelsByTopic.get(channel.topic);
+            if (existingChannel && !_.isEqual(channel, existingChannel.channel)) {
+              this.#alerts.addAlert(`duplicate-topic:${channel.topic}`, {
+                severity: "error",
+                message: `Multiple channels advertise the same topic: ${channel.topic} (${existingChannel.channel.id} and ${channel.id})`,
+              });
+              this.#emitState();
+              continue;
+            }
+            const resolvedChannel = {
+              channel,
+              parsedChannel,
+              record: { topic: channel.topic, messageEncoding: channel.encoding, schema },
+            };
+            this.#channelsById.set(channel.id, resolvedChannel);
+            this.#channelsByTopic.set(channel.topic, resolvedChannel);
+          }
+          this.#updateTopicsAndDatatypes();
+          this.#emitState();
+          this.#processUnresolvedSubscriptions();
+        },
+
+        unadvertise: (removedChannels) => {
+          for (const id of removedChannels) {
+            const chanInfo = this.#channelsById.get(id);
+            if (!chanInfo) {
+              if (!this.#unsupportedChannelIds.delete(id)) {
+                this.#alerts.addAlert(`unadvertise:${id}`, {
+                  severity: "error",
+                  message: `Server unadvertised channel ${id} that was not advertised`,
+                });
+                this.#emitState();
+              }
+              continue;
+            }
+            for (const [subId, { channel }] of this.#resolvedSubscriptionsById) {
+              if (channel.id === id) {
+                this.#resolvedSubscriptionsById.delete(subId);
+                this.#resolvedSubscriptionsByTopic.delete(channel.topic);
+                // No unsubscribe: unadvertising a channel ends its subscriptions on the server, which
+                // answers an unsubscribe for one with a "did not exist" warning.
+                this.#unresolvedSubscriptions.add(channel.topic);
+              }
+            }
+            this.#channelsById.delete(id);
+            this.#channelsByTopic.delete(chanInfo.channel.topic);
+          }
+          this.#updateTopicsAndDatatypes();
+          this.#emitState();
+        },
+
+        message: (subscriptionId, timestamp, data) => {
+          const chanInfo = this.#resolvedSubscriptionsById.get(subscriptionId);
+          if (!chanInfo) {
+            const wasRecentlyCanceled = this.#recentlyCanceledSubscriptions.has(subscriptionId);
+            if (!wasRecentlyCanceled) {
+              this.#alerts.addAlert(`message-missing-subscription:${subscriptionId}`, {
+                severity: "warn",
+                message: `Received message on unknown subscription id: ${subscriptionId}. This might be a WebSocket server bug.`,
+              });
+              this.#emitState();
+            }
+            return;
+          }
+
+          try {
+            this.#receivedBytes += data.byteLength;
+            const receiveTime = this.#getCurrentTime();
+            const topic = chanInfo.channel.topic;
+            const deserializedMessage = chanInfo.parsedChannel.deserialize(data);
+
+            const msgSizeEstimate = this.#messageSizes.estimate(
+              topic,
+              data.byteLength,
+              deserializedMessage,
+            );
+
+            // The history also keeps the received bytes (for export and recording), so count both.
+            const sizeInBytes = this.#serverControlsPlayback
+              ? Math.max(data.byteLength, msgSizeEstimate)
+              : msgSizeEstimate + data.byteLength;
+            const msgEvent: MessageEvent = {
+              topic,
+              receiveTime,
+              // The server's log time for the message (e.g. when it was recorded or published)
+              publishTime: fromNanoSec(timestamp),
+              message: deserializedMessage,
+              sizeInBytes,
+              schemaName: chanInfo.channel.schemaName,
+            };
+            if (!this.#serverControlsPlayback) {
+              this.#history.add(msgEvent);
+              this.#rawByMessage.set(msgEvent, { data, channel: chanInfo });
+              this.#recordingFor()?.record(chanInfo.record, receiveTime, data);
+            }
+            // While reviewing history, new messages only go into the history.
+            if (this.#historyCursor == undefined) {
+              this.#parsedMessages.push(msgEvent);
+            }
+
+            // Update the message count for this topic
+            let stats = this.#topicsStats.get(topic);
+            if (!stats) {
+              stats = { numMessages: 0 };
+              this.#topicsStats.set(topic, stats);
+            }
+            stats.numMessages++;
+            this.#topicsStatsChanged = true;
+          } catch (error) {
+            this.#alerts.addAlert(`message:${chanInfo.channel.topic}`, {
+              severity: "error",
+              message: `Failed to parse message on ${chanInfo.channel.topic}`,
+              error: toError(error),
             });
           }
-        } catch (error) {
-          this.#alerts.addAlert(serviceAlertId, {
-            severity: "error",
-            message: `Failed to parse service ${service.name}`,
-            error: toError(error),
+          this.#emitLiveData();
+        },
+
+        time: (timestamp) => {
+          if (!this.#serverPublishesTime) {
+            return;
+          }
+
+          const time = fromNanoSec(timestamp);
+          this.#lastClockWallMs = Date.now();
+          const clockReset = this.#clockTime != undefined && isLessThan(time, this.#clockTime);
+          if (clockReset) {
+            this.#numTimeSeeks++;
+            this.#parsedMessages.clear();
+            // The clock was reset (e.g. a simulation or bag restarted): the history no longer fits.
+            if (!this.#serverControlsPlayback) {
+              this.#clearHistory();
+              this.#startTime = undefined;
+              if (!this.#isPlaying) {
+                this.#historyCursor = time; // stay paused, at the new clock
+              }
+            }
+          }
+
+          // Override any previous start/end time when we set a clockTime for the first time which means
+          // we've received the first "time" event and know the server controlled time.
+          if (!this.#clockTime && !this.#serverControlsPlayback) {
+            this.#startTime = time;
+            this.#endTime = time;
+          }
+
+          this.#clockTime = time;
+          if (clockReset) {
+            this.#emitState();
+          } else {
+            this.#emitLiveData();
+          }
+        },
+
+        parameterValues: ({ parameters, id }) => {
+          const mappedParameters = parameters.map((param) => {
+            return param.type === "byte_array" && typeof param.value === "string"
+              ? {
+                  ...param,
+                  value: Uint8Array.fromBase64(param.value),
+                }
+              : param;
           });
-        }
-      }
-      this.#serviceTypes = serviceTypes;
-      this.#emitState();
-    });
+          const parameterTypesMap = new Map(parameters.map((p) => [p.name, p.type] as const));
 
-    this.#client.on("unadvertiseServices", (serviceIds) => {
-      let needsStateUpdate = false;
-      for (const serviceId of serviceIds) {
-        const service = [...this.#servicesByName.values()].find(
-          (srv) => srv.service.id === serviceId,
-        );
-        if (service) {
-          this.#servicesByName.delete(service.service.name);
-          this.#serviceTypes = new Map(this.#serviceTypes);
-          this.#serviceTypes.delete(service.service.name);
-          needsStateUpdate = true;
-        }
-        const serviceAlertId = `service:${serviceId}`;
-        needsStateUpdate = this.#alerts.removeAlert(serviceAlertId) || needsStateUpdate;
-      }
-      if (needsStateUpdate) {
-        this.#emitState();
-      }
-    });
+          const newParameters = mappedParameters.filter(
+            (param) => !this.#parameters.has(param.name),
+          );
 
-    this.#client.on("serviceCallResponse", (response) => {
-      const responseCallback = this.#serviceResponseCbs.get(response.callId)?.resolve;
-      if (!responseCallback) {
-        this.#alerts.addAlert(`callService:${response.callId}`, {
-          severity: "error",
-          message: `Received a response for a service for which no callback was registered`,
-        });
-        return;
-      }
-      responseCallback(response);
-      this.#serviceResponseCbs.delete(response.callId);
-    });
+          if (id === GET_ALL_PARAMS_REQUEST_ID) {
+            // Reset params
+            this.#parameters = new Map(mappedParameters.map((param) => [param.name, param.value]));
+            this.#parameterTypeByName = parameterTypesMap;
+          } else {
+            // Update params
+            const updatedParameters = new Map(this.#parameters);
+            mappedParameters.forEach((param) => updatedParameters.set(param.name, param.value));
+            this.#parameters = updatedParameters;
+            for (const [paramName, paramType] of parameterTypesMap) {
+              this.#parameterTypeByName.set(paramName, paramType);
+            }
+          }
 
-    this.#client.on("connectionGraphUpdate", (event) => {
-      if (event.publishedTopics.length > 0 || event.removedTopics.length > 0) {
-        const newMap = new Map<string, Set<string>>(this.#publishedTopics ?? new Map());
-        for (const { name, publisherIds } of event.publishedTopics) {
-          newMap.set(name, new Set(publisherIds));
-        }
-        event.removedTopics.forEach((topic) => newMap.delete(topic));
-        this.#publishedTopics = newMap;
-      }
-      if (event.subscribedTopics.length > 0 || event.removedTopics.length > 0) {
-        const newMap = new Map<string, Set<string>>(this.#subscribedTopics ?? new Map());
-        for (const { name, subscriberIds } of event.subscribedTopics) {
-          newMap.set(name, new Set(subscriberIds));
-        }
-        event.removedTopics.forEach((topic) => newMap.delete(topic));
-        this.#subscribedTopics = newMap;
-      }
-      if (event.advertisedServices.length > 0 || event.removedServices.length > 0) {
-        const newMap = new Map<string, Set<string>>(this.#advertisedServices ?? new Map());
-        for (const { name, providerIds } of event.advertisedServices) {
-          newMap.set(name, new Set(providerIds));
-        }
-        event.removedServices.forEach((service) => newMap.delete(service));
-        this.#advertisedServices = newMap;
-      }
+          this.#emitState();
 
-      this.#emitState();
-    });
+          if (
+            newParameters.length > 0 &&
+            this.#serverCapabilities.includes(ServerCapability.parametersSubscribe)
+          ) {
+            // Subscribe to value updates of new parameters
+            this.#client?.subscribeParameterUpdates(newParameters.map((p) => p.name));
+          }
+        },
 
-    this.#client.on("fetchAssetResponse", (response) => {
-      const responseCallback = this.#fetchAssetRequests.get(response.requestId);
-      if (!responseCallback) {
-        throw Error(
-          `Received a response for a fetch asset request for which no callback was registered`,
-        );
-      }
-      responseCallback(response);
-      this.#fetchAssetRequests.delete(response.requestId);
+        advertiseServices: (services) => {
+          if (!this.#serviceCallEncoding) {
+            return;
+          }
+
+          let defaultSchemaEncoding = "";
+          if (this.#serviceCallEncoding === "json") {
+            defaultSchemaEncoding = "jsonschema";
+          } else if (this.#serviceCallEncoding === "ros1") {
+            defaultSchemaEncoding = "ros1msg";
+          } else if (this.#serviceCallEncoding === "cdr") {
+            defaultSchemaEncoding = "ros2msg";
+          }
+
+          const serviceTypes = new Map(this.#serviceTypes);
+          for (const service of services) {
+            const serviceAlertId = `service:${service.id}`;
+            // If not explicitly given, derive request / response type name from the service type
+            // (according to ROS convention).
+            const requestType = service.request?.schemaName ?? `${service.type}_Request`;
+            const responseType = service.response?.schemaName ?? `${service.type}_Response`;
+            const requestMsgEncoding = service.request?.encoding ?? this.#serviceCallEncoding;
+            const responseMsgEncoding = service.response?.encoding ?? this.#serviceCallEncoding;
+
+            // Note: The `requestSchema` and `responseSchema` fields are deprecated in the protocol.
+            // However, they are still required for compatibility with Foxglove Bridge.
+            // We are temporarily reintroducing support for these fields to avoid blocking users.
+            // This usage should be removed once Foxglove Bridge transitions away from these deprecated fields.
+            try {
+              if (
+                // eslint-disable-next-line @typescript-eslint/no-deprecated
+                (service.request == undefined && service.requestSchema == undefined) ||
+                // eslint-disable-next-line @typescript-eslint/no-deprecated
+                (service.response == undefined && service.responseSchema == undefined)
+              ) {
+                throw new Error(
+                  "Invalid service definition, at least one required field is missing",
+                );
+              } else if (
+                !defaultSchemaEncoding &&
+                (service.request == undefined || service.response == undefined)
+              ) {
+                throw new Error("Cannot determine service request or response schema encoding");
+              } else if (!SUPPORTED_SERVICE_ENCODINGS.includes(requestMsgEncoding)) {
+                const supportedEncodingsStr = SUPPORTED_SERVICE_ENCODINGS.join(", ");
+                throw new Error(
+                  `Unsupported service request message encoding. ${requestMsgEncoding} not in list of supported encodings [${supportedEncodingsStr}]`,
+                );
+              }
+
+              const parseChannelOptions = { allowEmptySchema: true };
+              const parsedRequest = parseChannel(
+                {
+                  messageEncoding: requestMsgEncoding,
+                  schema: {
+                    name: requestType,
+                    encoding: service.request?.schemaEncoding ?? defaultSchemaEncoding,
+                    // eslint-disable-next-line @typescript-eslint/no-deprecated
+                    data: textEncoder.encode(service.request?.schema ?? service.requestSchema),
+                  },
+                },
+                parseChannelOptions,
+              );
+              const parsedResponse = parseChannel(
+                {
+                  messageEncoding: responseMsgEncoding,
+                  schema: {
+                    name: responseType,
+                    encoding: service.response?.schemaEncoding ?? defaultSchemaEncoding,
+                    // eslint-disable-next-line @typescript-eslint/no-deprecated
+                    data: textEncoder.encode(service.response?.schema ?? service.responseSchema),
+                  },
+                },
+                parseChannelOptions,
+              );
+              const requestMsgDef = rosDatatypesToMessageDefinition(
+                parsedRequest.datatypes,
+                requestType,
+              );
+              let requestMessageWriter: MessageWriter | undefined;
+              if (requestMsgEncoding === "ros1") {
+                requestMessageWriter = new Ros1MessageWriter(requestMsgDef);
+              } else if (requestMsgEncoding === "cdr") {
+                requestMessageWriter = new Ros2MessageWriter(requestMsgDef);
+              } else if (requestMsgEncoding === "json") {
+                requestMessageWriter = new JsonMessageWriter();
+              }
+              if (!requestMessageWriter) {
+                // Should never go here as we sanity-checked the encoding already above
+                throw new Error(
+                  `Unsupported service request message encoding ${requestMsgEncoding}`,
+                );
+              }
+
+              // Add type definitions for service response and request
+              this.#updateDataTypes(parsedRequest.datatypes);
+              this.#updateDataTypes(parsedResponse.datatypes);
+
+              const resolvedService: ResolvedService = {
+                service,
+                parsedResponse,
+                requestMessageWriter,
+                requestMsgEncoding,
+              };
+              this.#servicesByName.set(service.name, resolvedService);
+              serviceTypes.set(service.name, {
+                type: service.type,
+                requestSchemaName: requestType,
+                responseSchemaName: responseType,
+              });
+              this.#alerts.removeAlert(serviceAlertId);
+
+              // Issue a warning to users if the service relies on deprecated fields (`requestSchema` or `responseSchema`).
+              // This highlights the need for migration, as these fields will be removed in future versions.
+
+              // eslint-disable-next-line @typescript-eslint/no-deprecated
+              if (service.requestSchema || service.responseSchema) {
+                this.#alerts.addAlert(serviceAlertId, {
+                  severity: "warn",
+                  message: `Service ${service.name}`,
+                  error: new Error(
+                    `requestSchema and responseSchema are deprecated and will not be supported in future versions of ${APP_CONFIG.productName}`,
+                  ),
+                });
+              }
+            } catch (error) {
+              this.#alerts.addAlert(serviceAlertId, {
+                severity: "error",
+                message: `Failed to parse service ${service.name}`,
+                error: toError(error),
+              });
+            }
+          }
+          this.#serviceTypes = serviceTypes;
+          this.#emitState();
+        },
+
+        unadvertiseServices: (serviceIds) => {
+          let needsStateUpdate = false;
+          for (const serviceId of serviceIds) {
+            const service = [...this.#servicesByName.values()].find(
+              (srv) => srv.service.id === serviceId,
+            );
+            if (service) {
+              this.#servicesByName.delete(service.service.name);
+              this.#serviceTypes = new Map(this.#serviceTypes);
+              this.#serviceTypes.delete(service.service.name);
+              needsStateUpdate = true;
+            }
+            const serviceAlertId = `service:${serviceId}`;
+            needsStateUpdate = this.#alerts.removeAlert(serviceAlertId) || needsStateUpdate;
+          }
+          if (needsStateUpdate) {
+            this.#emitState();
+          }
+        },
+
+        serviceCallResponse: (response) => {
+          const responseCallback = this.#serviceResponseCbs.get(response.callId)?.resolve;
+          if (!responseCallback) {
+            this.#alerts.addAlert(`callService:${response.callId}`, {
+              severity: "error",
+              message: `Received a response for a service for which no callback was registered`,
+            });
+            return;
+          }
+          responseCallback(response);
+          this.#serviceResponseCbs.delete(response.callId);
+        },
+
+        connectionGraphUpdate: (event) => {
+          if (event.publishedTopics.length > 0 || event.removedTopics.length > 0) {
+            const newMap = new Map<string, Set<string>>(this.#publishedTopics ?? new Map());
+            for (const { name, publisherIds } of event.publishedTopics) {
+              newMap.set(name, new Set(publisherIds));
+            }
+            event.removedTopics.forEach((topic) => newMap.delete(topic));
+            this.#publishedTopics = newMap;
+          }
+          if (event.subscribedTopics.length > 0 || event.removedTopics.length > 0) {
+            const newMap = new Map<string, Set<string>>(this.#subscribedTopics ?? new Map());
+            for (const { name, subscriberIds } of event.subscribedTopics) {
+              newMap.set(name, new Set(subscriberIds));
+            }
+            event.removedTopics.forEach((topic) => newMap.delete(topic));
+            this.#subscribedTopics = newMap;
+          }
+          if (event.advertisedServices.length > 0 || event.removedServices.length > 0) {
+            const newMap = new Map<string, Set<string>>(this.#advertisedServices ?? new Map());
+            for (const { name, providerIds } of event.advertisedServices) {
+              newMap.set(name, new Set(providerIds));
+            }
+            event.removedServices.forEach((service) => newMap.delete(service));
+            this.#advertisedServices = newMap;
+          }
+
+          this.#emitState();
+        },
+
+        fetchAssetResponse: (response) => {
+          const responseCallback = this.#fetchAssetRequests.get(response.requestId);
+          if (!responseCallback) {
+            // e.g. a late answer to a request the last disconnect already failed
+            log.warn(`Fetch asset response for unknown request ${response.requestId}`);
+            return;
+          }
+          responseCallback(response);
+          this.#fetchAssetRequests.delete(response.requestId);
+        },
+
+        serviceCallFailure: ({ callId, message }) => {
+          this.#serviceResponseCbs.get(callId)?.reject(new Error(message));
+          this.#serviceResponseCbs.delete(callId);
+        },
+
+        removeStatus: ({ statusIds }) => {
+          let removed = false;
+          for (const id of statusIds) {
+            removed = this.#alerts.removeAlert(`status:${id}`) || removed;
+          }
+          if (removed) {
+            this.#emitState();
+          }
+        },
+
+        playbackState: (state) => {
+          if (this.#serverControlsPlayback) {
+            this.#handlePlaybackState(state);
+          }
+        },
+      }),
     });
   };
 
@@ -1174,6 +1214,7 @@ export default class FoxgloveWebSocketPlayer implements Player {
 
   public setSubscriptions(subscriptions: SubscribePayload[]): void {
     const newTopics = new Set(subscriptions.map(({ topic }) => topic));
+    this.#requestedTopics = newTopics;
 
     if (!this.#client || this.#closed) {
       // Remember requested subscriptions so we can retry subscribing when
@@ -1298,8 +1339,9 @@ export default class FoxgloveWebSocketPlayer implements Player {
       randomUUID(),
     );
 
-    // Pre-actively update our parameter map, such that a change is detected if our update failed
-    this.#parameters.set(key, value);
+    // Pre-actively update our parameter map, such that a change is detected if our update failed.
+    // A new map: consumers compare it by reference.
+    this.#parameters = new Map(this.#parameters).set(key, value);
     this.#emitState();
   }
 
@@ -1355,11 +1397,9 @@ export default class FoxgloveWebSocketPlayer implements Player {
       serviceId: service.id,
       callId: ++this.#nextServiceCallId,
       encoding: requestMsgEncoding,
-      data: new DataView(new Uint8Array().buffer),
+      // Its own bytes only: a writer may return a view into a larger buffer
+      data: requestMessageWriter.writeMessage(request),
     };
-
-    const message = requestMessageWriter.writeMessage(request);
-    serviceCallRequest.data = new DataView(message.buffer);
     this.#client.sendServiceCallRequest(serviceCallRequest);
 
     return await new Promise<Record<string, unknown>>((resolve, reject) => {
@@ -1486,7 +1526,9 @@ export default class FoxgloveWebSocketPlayer implements Player {
     const target = isLessThan(time, start) ? start : isGreaterThan(time, latest) ? latest : time;
     this.#numTimeSeeks++;
     this.#parsedMessages.clear();
-    const topics = new Set(this.#resolvedSubscriptionsByTopic.keys());
+    // What panels asked for, not what this connection resolved: after a disconnect (or a node's
+    // topic going away) the history still holds those topics' messages
+    const topics = this.#requestedTopics;
     const backfill = this.#history.backfill(target, topics);
     // Seeking past what panels have seen (e.g. Live after a pause): also hand them the messages
     // that arrived meanwhile, so accumulating panels (plots, logs) have no gap.
@@ -1880,24 +1922,31 @@ export default class FoxgloveWebSocketPlayer implements Player {
     if (!this.#serverControlsPlayback || !this.#client) {
       return;
     }
-    this.#ws?.send(
-      encodePlaybackControlRequest({
-        play: this.#isPlaying,
-        speed: this.#speed,
-        seekTimeNs,
-        requestId: randomUUID(),
-      }),
-    );
+    this.#playbackRequestId = randomUUID();
+    this.#client.sendPlaybackControlRequest({
+      play: this.#isPlaying,
+      speed: this.#speed,
+      seekTimeNs,
+      requestId: this.#playbackRequestId,
+    });
     this.#emitState();
   }
 
   #handlePlaybackState(state: PlaybackState): void {
+    // A reply to an earlier request (the server echoes its id) is superseded by the newest one
+    if (state.requestId !== "" && state.requestId !== this.#playbackRequestId) {
+      return;
+    }
     if (state.didSeek) {
       this.#numTimeSeeks++;
       this.#parsedMessages.clear();
     }
     this.#clockTime = fromNanoSec(state.currentTimeNs);
-    this.#isPlaying = state.status === PlaybackStatus.Playing;
+    // Buffering keeps playing once data is there; Ended stops at the end like a recording
+    this.#isPlaying =
+      state.status === PlaybackStatus.Playing || state.status === PlaybackStatus.Buffering;
+    this.#presence =
+      state.status === PlaybackStatus.Buffering ? PlayerPresence.BUFFERING : PlayerPresence.PRESENT;
     if (Number.isFinite(state.speed)) {
       this.#speed = state.speed;
     }
@@ -1944,7 +1993,6 @@ export default class FoxgloveWebSocketPlayer implements Player {
   #failPendingAssetRequests(reason: string): void {
     for (const [requestId, callback] of this.#fetchAssetRequests) {
       callback({
-        op: BinaryOpcode.FETCH_ASSET_RESPONSE,
         status: FetchAssetStatus.ERROR,
         requestId,
         error: reason,

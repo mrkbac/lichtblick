@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: MPL-2.0
 
-import type { IWebSocket } from "@foxglove/ws-protocol";
-
+import type { IWebSocket } from "@lichtblick/suite-base/players/FoxgloveWebSocketPlayer/protocol/protocol";
 import type { LiveConnectionBackend } from "@lichtblick/suite-base/players/LiveConnectionBackend";
 import WorkerMessageSocket from "@lichtblick/suite-base/players/WorkerMessageSocket";
 

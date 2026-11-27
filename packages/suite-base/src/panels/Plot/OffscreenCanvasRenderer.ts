@@ -36,6 +36,7 @@ export class OffscreenCanvasRenderer {
   #remote: Promise<Comlink.RemoteObject<ChartRenderer>>;
 
   #theme: Theme;
+  readonly #dispose: () => void;
 
   public constructor(canvas: OffscreenCanvas, theme: Theme) {
     this.#theme = theme;
@@ -59,7 +60,14 @@ export class OffscreenCanvasRenderer {
       ),
     );
 
-    registry.register(this, dispose);
+    this.#dispose = dispose;
+    registry.register(this, dispose, this);
+  }
+
+  /** Ends the worker now; the registry only does it once garbage collection gets to it */
+  public destroy(): void {
+    registry.unregister(this);
+    this.#dispose();
   }
 
   public async update(action: Immutable<UpdateAction>): Promise<Bounds | undefined> {

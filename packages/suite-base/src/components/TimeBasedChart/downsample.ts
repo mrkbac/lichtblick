@@ -41,9 +41,12 @@ export function calculateIntervals(
   // We then calculate the number of intervals based on the number of points we
   // decided on
   const numIntervals = Math.trunc(numPoints / pointsPerInterval);
+  // An infinite or empty y range (e.g. an Infinity sample in view) would put every value in one
+  // pixel bucket and drop all spikes: bucket by value units instead
+  const yRange = bounds.y.max - bounds.y.min;
   return {
     pixelPerXValue: numIntervals / (bounds.x.max - bounds.x.min),
-    pixelPerYValue: height / (bounds.y.max - bounds.y.min),
+    pixelPerYValue: Number.isFinite(yRange) && yRange !== 0 ? height / yRange : 1,
   };
 }
 
@@ -119,6 +122,14 @@ export function downsampleTimeseriesColumns(
   };
 
   for (let i = start; i < end; i++) {
+    if (Number.isNaN(ys[i])) {
+      // A gap is a point of its own: comparisons with NaN would keep an interval from tracking
+      // its min and max. The next value starts a new interval.
+      finishInterval();
+      indices.push(i);
+      lastI = -1;
+      continue;
+    }
     const x = Math.trunc(xs[i]! * pixelPerXValue);
     const y = Math.trunc(ys[i]! * pixelPerYValue);
     if (lastI < 0 || x !== intX) {
@@ -160,12 +171,12 @@ export function downsampleScatter(
   const pixelsPerValue = (pixels: number, range: number) => (range !== 0 ? pixels / range : 0);
   const pixelPerXValue = pixelsPerValue(width, bounds.x.max - bounds.x.min);
   const pixelPerYValue = pixelsPerValue(height, bounds.y.max - bounds.y.min);
-  const pixelPerRow = width;
+  // Pixels relative to the view, so the locators stay small for data far from 0 (e.g. lat/lon);
+  // absolute ones turned the lookup into a slow dictionary
+  const pixelPerRow = width + 1;
 
   const indices: number[] = [];
-
-  // downsampling tracks a sparse array of x/y locations
-  const sparse: boolean[] = [];
+  const taken = new Set<number>();
 
   for (let i = start; i < end; i++) {
     const dx = xs[i]!;
@@ -176,15 +187,15 @@ export function downsampleScatter(
       continue;
     }
 
-    const x = Math.round(dx * pixelPerXValue);
-    const y = Math.round(ys[i]! * pixelPerYValue);
+    const x = Math.round((dx - bounds.x.min) * pixelPerXValue);
+    const y = Math.round((ys[i]! - bounds.y.min) * pixelPerYValue);
 
     // the locator is the x/y pixel value as one number
     const locator = y * pixelPerRow + x;
-    if (sparse[locator] === true) {
+    if (taken.has(locator)) {
       continue;
     }
-    sparse[locator] = true;
+    taken.add(locator);
     indices.push(i);
   }
 
