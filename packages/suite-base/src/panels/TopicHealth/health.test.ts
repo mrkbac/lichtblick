@@ -36,13 +36,28 @@ describe("sampleLiveRates", () => {
 
     samples = sampleLiveRates(samples, stats(15), 2000);
     expect(samples.get("/a")!.hz).toBeCloseTo(5 + 0.3 * (10 - 5));
-    expect(samples.get("/a")!.peakHz).toBeCloseTo(6.5);
+    // Not learned from fewer samples than the median window
+    expect(samples.get("/a")!.peakHz).toBeUndefined();
 
     samples = sampleLiveRates(samples, stats(15), 3000);
     expect(samples.get("/a")!.hz).toBeCloseTo(6.5 * 0.7);
-    expect(samples.get("/a")!.peakHz).toBeCloseTo(6.5);
     expect(samples.get("/a")!.lastMessageMs).toBe(2000);
     expect(samples.get("/a")!.history).toEqual([5, 10, 0]);
+  });
+
+  it("learns a steady topic's rate despite ticks that catch one message more", () => {
+    // A 1 Hz topic sampled by a drifting 1 s timer: now and then a tick holds two messages
+    let count = 0;
+    let samples = sampleLiveRates(new Map(), stats(count), 0);
+    for (let i = 1; i <= 120; i++) {
+      count += i % 7 === 0 ? 2 : i % 7 === 1 ? 0 : 1;
+      samples = sampleLiveRates(samples, stats(count), i * 1000);
+    }
+    const sample = samples.get("/a")!;
+    expect(sample.peakHz).toBe(1);
+    expect(
+      topicStatus({ rateHz: sample.hz, expectedHz: sample.peakHz, tolerancePercent: 20 }),
+    ).toBe("ok");
   });
 
   it("bounds history and treats a counter reset as silence instead of a negative rate", () => {

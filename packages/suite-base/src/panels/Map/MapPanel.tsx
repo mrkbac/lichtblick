@@ -29,6 +29,7 @@ import { useDeepMemo, useLatest } from "@lichtblick/hooks";
 import Logger from "@lichtblick/log";
 import { MessagePath, parseMessagePath } from "@lichtblick/message-path";
 import { MessageEvent, SettingsTreeAction, Topic } from "@lichtblick/suite";
+import { AppSetting } from "@lichtblick/suite-base/AppSetting";
 import { simpleGetMessagePathDataItems } from "@lichtblick/suite-base/components/MessagePathSyntax/simpleGetMessagePathDataItems";
 import { OVERLAY_TOOLBAR_BUTTON_SIZE } from "@lichtblick/suite-base/components/OverlayToolbar";
 import { BuiltinPanelExtensionContext } from "@lichtblick/suite-base/components/PanelExtensionAdapter";
@@ -121,7 +122,7 @@ function popupRoot(): HTMLElement {
   return root;
 }
 
-function hitContent(hit: Hit): HTMLElement {
+function hitContent(hit: Hit, timezone: string | undefined): HTMLElement {
   const root = popupRoot();
   const line = (text: string, style?: { bold: boolean }) => {
     const el = document.createElement("div");
@@ -135,7 +136,7 @@ function hitContent(hit: Hit): HTMLElement {
     line(hit.name, { bold: true });
   }
   line(hit.message.topic, { bold: hit.kind === "nav" });
-  line(stampText(hit.message));
+  line(stampText(hit.message, timezone));
   if (hit.kind === "nav") {
     const { latitude, longitude, altitude } = hit.message.message;
     line(`${latitude.toFixed(7)}, ${longitude.toFixed(7)}`);
@@ -154,9 +155,10 @@ function hitContent(hit: Hit): HTMLElement {
 const ROWS_PER_TOPIC = 3;
 const TOPICS_LISTED = 6;
 
-function stampText(message: MessageEvent): string {
+/** In the app's time zone setting, like the other panels; undefined is the system's */
+function stampText(message: MessageEvent, timezone: string | undefined): string {
   const stamp = message.receiveTime;
-  return isAbsoluteTime(stamp) ? formatTime(stamp) : `${formatTimeRaw(stamp)} s`;
+  return isAbsoluteTime(stamp) ? formatTime(stamp, timezone) : `${formatTimeRaw(stamp)} s`;
 }
 
 /**
@@ -166,6 +168,7 @@ function stampText(message: MessageEvent): string {
 function hitsContent(
   groups: readonly Hit[][],
   onPick: (message: MessageEvent) => void,
+  timezone: string | undefined,
 ): HTMLElement {
   const root = popupRoot();
   const add = (text: string, className?: string) => {
@@ -186,7 +189,7 @@ function hitsContent(
       const row = document.createElement("button");
       row.type = "button";
       row.className = "hit-row";
-      row.textContent = `${stampText(hit.message)} · ${detail}`;
+      row.textContent = `${stampText(hit.message, timezone)} · ${detail}`;
       row.addEventListener("click", () => {
         onPick(hit.message);
       });
@@ -194,7 +197,7 @@ function hitsContent(
     }
     if (count > ROWS_PER_TOPIC) {
       add(
-        `+${count - ROWS_PER_TOPIC} more, last ${stampText(group[group.length - 1]!.message)}`,
+        `+${count - ROWS_PER_TOPIC} more, last ${stampText(group[group.length - 1]!.message, timezone)}`,
         "hit-more",
       );
     }
@@ -562,6 +565,8 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
     [colorPathNames],
   );
   const colorPathsRef = useLatest(colorPaths);
+  // The app time zone setting, read when a popup is built
+  const timezoneRef = useRef<string | undefined>(undefined);
 
   useEffect(() => {
     const subscribed = new Set(enabledTopics.map((topic) => topic.name));
@@ -615,38 +620,71 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
 
   // The full track comes from the recorded range. GeoJSON is deliberately not ranged: each
   // message is a complete scene that replaces the previous one.
+  // Reads are kept per topic: showing or hiding one topic must not drop the others' trails, which
+  // on a live source (no range to read again) are gone for good.
+  const navReadsRef = useRef({ context, reads: new Map<string, () => void>() });
   useLayoutEffect(() => {
-    tracksRef.current = new Map();
-    setTracks({ stores: tracksRef.current });
-    rangeTopicsRef.current = new Set();
-    const unsubscribes = navTopics.map((topic) =>
-      context.unstable_subscribeMessageRange({
-        topic: topic.name,
-        convertTo: topic.schemaName,
-        onNewRangeIterator: async (iterator) => {
-          // A new iterator replaces the topic's data (e.g. an edited user script); drop the old.
-          tracksRef.current.get(topic.name)?.clear();
-          scheduleTrackFlush("recorded");
-          rangeTopicsRef.current.add(topic.name);
-          for await (const batch of iterator) {
-            const valid = expandLocationFixes(batch).filter(
-              (event): event is NavMessage => isValidMapMessage(event) && !isGeoJSONMessage(event),
-            );
-            if (valid.length > 0) {
-              appendTrack(valid, "recorded");
-            }
-          }
-        },
-      }),
-    );
-    return () => {
-      clearTimeout(flushTimer.current);
-      flushTimer.current = undefined;
-      for (const unsubscribe of unsubscribes) {
+    if (navReadsRef.current.context !== context) {
+      for (const unsubscribe of navReadsRef.current.reads.values()) {
         unsubscribe();
       }
-    };
+      navReadsRef.current = { context, reads: new Map() };
+    }
+    const { reads } = navReadsRef.current;
+    const wanted = new Map(navTopics.map((topic) => [`${topic.name}\n${topic.schemaName}`, topic]));
+    let removed = false;
+    for (const [key, unsubscribe] of reads) {
+      if (!wanted.has(key)) {
+        unsubscribe();
+        reads.delete(key);
+        const name = key.slice(0, key.indexOf("\n"));
+        tracksRef.current.delete(name);
+        rangeTopicsRef.current.delete(name);
+        removed = true;
+      }
+    }
+    if (removed) {
+      setTracks({ stores: tracksRef.current });
+    }
+    for (const [key, topic] of wanted) {
+      if (reads.has(key)) {
+        continue;
+      }
+      reads.set(
+        key,
+        context.unstable_subscribeMessageRange({
+          topic: topic.name,
+          convertTo: topic.schemaName,
+          onNewRangeIterator: async (iterator) => {
+            // A new iterator replaces the topic's data (e.g. an edited user script); drop the old.
+            tracksRef.current.get(topic.name)?.clear();
+            scheduleTrackFlush("recorded");
+            rangeTopicsRef.current.add(topic.name);
+            for await (const batch of iterator) {
+              const valid = expandLocationFixes(batch).filter(
+                (event): event is NavMessage =>
+                  isValidMapMessage(event) && !isGeoJSONMessage(event),
+              );
+              if (valid.length > 0) {
+                appendTrack(valid, "recorded");
+              }
+            }
+          },
+        }),
+      );
+    }
   }, [appendTrack, context, navTopics, scheduleTrackFlush]);
+  useLayoutEffect(
+    () => () => {
+      clearTimeout(flushTimer.current);
+      flushTimer.current = undefined;
+      for (const unsubscribe of navReadsRef.current.reads.values()) {
+        unsubscribe();
+      }
+      navReadsRef.current.reads.clear();
+    },
+    [],
+  );
 
   // Batched like the track: each flush recolors the whole track.
   const sampleTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
@@ -688,35 +726,75 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
     [],
   );
 
-  // Recorded values for "color by message path".
+  // Recorded values for "color by message path", read per topic: changing one path re-reads only
+  // its topic, and the other paths keep their (on live sources irrecoverable) samples.
+  const pathReadsRef = useRef({ context, reads: new Map<string, () => void>() });
   useLayoutEffect(() => {
-    samplesRef.current = new Map();
-    setPathSamples({ stores: samplesRef.current });
-    pathRangeTopicsRef.current = new Set();
-    const byTopic = Map.groupBy(colorPaths, ({ parsed }) => parsed.topicName);
-    const unsubscribes = [...byTopic].map(([topic, paths]) =>
-      context.unstable_subscribeMessageRange({
-        topic,
-        onNewRangeIterator: async (iterator) => {
-          for (const { path } of paths) {
-            samplesRef.current.get(path)?.clear();
-          }
-          setPathSamples({ stores: samplesRef.current });
-          pathRangeTopicsRef.current.add(topic);
-          for await (const batch of iterator) {
-            appendPathSamples(batch, paths, "recorded");
-          }
-        },
-      }),
-    );
-    return () => {
-      clearTimeout(sampleTimer.current);
-      sampleTimer.current = undefined;
-      for (const unsubscribe of unsubscribes) {
+    if (pathReadsRef.current.context !== context) {
+      for (const unsubscribe of pathReadsRef.current.reads.values()) {
         unsubscribe();
       }
-    };
+      pathReadsRef.current = { context, reads: new Map() };
+    }
+    const { reads } = pathReadsRef.current;
+    const byTopic = Map.groupBy(colorPaths, ({ parsed }) => parsed.topicName);
+    // A topic's key is its paths: a changed path list reads the topic again
+    const keyOf = (topic: string, paths: readonly { path: string }[]) =>
+      [topic, ...paths.map(({ path }) => path).sort()].join("\n");
+    const wanted = new Map(
+      [...byTopic].map(([topic, paths]) => [keyOf(topic, paths), { topic, paths }]),
+    );
+    const wantedPaths = new Set(colorPaths.map(({ path }) => path));
+    let removed = false;
+    for (const [key, unsubscribe] of reads) {
+      if (!wanted.has(key)) {
+        unsubscribe();
+        reads.delete(key);
+        pathRangeTopicsRef.current.delete(key.slice(0, key.indexOf("\n")));
+      }
+    }
+    for (const path of samplesRef.current.keys()) {
+      if (!wantedPaths.has(path)) {
+        samplesRef.current.delete(path);
+        removed = true;
+      }
+    }
+    if (removed) {
+      setPathSamples({ stores: samplesRef.current });
+    }
+    for (const [key, { topic, paths }] of wanted) {
+      if (reads.has(key)) {
+        continue;
+      }
+      reads.set(
+        key,
+        context.unstable_subscribeMessageRange({
+          topic,
+          onNewRangeIterator: async (iterator) => {
+            for (const { path } of paths) {
+              samplesRef.current.get(path)?.clear();
+            }
+            setPathSamples({ stores: samplesRef.current });
+            pathRangeTopicsRef.current.add(topic);
+            for await (const batch of iterator) {
+              appendPathSamples(batch, paths, "recorded");
+            }
+          },
+        }),
+      );
+    }
   }, [appendPathSamples, colorPaths, context]);
+  useLayoutEffect(
+    () => () => {
+      clearTimeout(sampleTimer.current);
+      sampleTimer.current = undefined;
+      for (const unsubscribe of pathReadsRef.current.reads.values()) {
+        unsubscribe();
+      }
+      pathReadsRef.current.reads.clear();
+    },
+    [],
+  );
 
   useLayoutEffect(() => {
     context.watch("topics");
@@ -724,9 +802,14 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
     context.watch("previewTime");
     context.watch("colorScheme");
     context.watch("didSeek");
+    context.subscribeAppSettings([AppSetting.TIMEZONE]);
 
     context.onRender = (renderState, done) => {
       setRenderDone(() => done);
+      if (renderState.appSettings) {
+        const timezone = renderState.appSettings.get(AppSetting.TIMEZONE);
+        timezoneRef.current = typeof timezone === "string" ? timezone : undefined;
+      }
       setPreviewTime(renderState.previewTime);
 
       if (renderState.topics) {
@@ -1551,8 +1634,12 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
       hovered = hits;
       const content =
         hits.length === 1
-          ? hitContent(hits[0]!)
-          : hitsContent(groups, (message) => context.seekPlayback?.(message.receiveTime));
+          ? hitContent(hits[0]!, timezoneRef.current)
+          : hitsContent(
+              groups,
+              (message) => context.seekPlayback?.(message.receiveTime),
+              timezoneRef.current,
+            );
       popup.setDOMContent(content).addTo(map);
       context.setPreviewTime(eventTimeSec(hits[0]!.message));
     };

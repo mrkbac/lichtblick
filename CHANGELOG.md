@@ -2,6 +2,19 @@
 
 Highlights from Digitalis, a fork of Lichtblick. Dates follow when changes reached the `licht` branch, in Europe/Berlin time.
 
+## 2026-11-27
+
+- In a benchmark with one million latitude/longitude points, scatter plot downsampling fell from **325 ms to 30 ms**. [#596](https://github.com/mrkbac/lichtblick/pull/596)
+- Plots preserve spikes next to gaps in the data. Changing another panel’s subscriptions no longer introduces false zero deltas or gaps in live derivatives. [#596](https://github.com/mrkbac/lichtblick/pull/596)
+- Connect to Foxglove WebSocket servers that advertise shared schemas through SDK protocol v1.1. Subscribing to many topics at once now takes a single subscription message. [#595](https://github.com/mrkbac/lichtblick/pull/595)
+- Use the Digitalis Chrome proxy to load plain HTTP map tiles, styles, PMTiles archives, and GeoTIFF overlays in the HTTPS viewer. [#591](https://github.com/mrkbac/lichtblick/pull/591)
+- The Chrome proxy also connects the HTTPS viewer to plain WebSocket Rosbridge servers and loads robot meshes and textures from plain HTTP servers. [#591](https://github.com/mrkbac/lichtblick/pull/591)
+- Seek or close a remote recording even when a read has stalled. Scrubbing an MCAP cancels obsolete reads and can recover a low-rate topic’s last message from overlapping chunks. [#594](https://github.com/mrkbac/lichtblick/pull/594)
+- Seeking backward restores the robot’s recorded joint pose and clears stale camera colors from depth clouds. [#597](https://github.com/mrkbac/lichtblick/pull/597)
+- Message-path filters now match top-level fields and accept boolean variables. Editing an unrelated variable preserves live plot history. [#593](https://github.com/mrkbac/lichtblick/pull/593)
+- Live GPS tracks and positions keep updating when the data source reinitializes the Map panel. [#590](https://github.com/mrkbac/lichtblick/pull/590)
+- Hidden Camera Grid tiles drop queued video after 600 frames and resume at the next keyframe, bounding memory use on long-running streams. [#602](https://github.com/mrkbac/lichtblick/pull/602)
+
 ## 2026-11-26
 
 - Install a Foxglove file data loader extension to open its recording format through the file picker, drag and drop, or Recents. [#575](https://github.com/mrkbac/lichtblick/pull/575)

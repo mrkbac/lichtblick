@@ -203,6 +203,7 @@ export default class RosbridgePlayer implements Player {
       }
       this.#presence = PlayerPresence.PRESENT;
       this.#alerts.removeAlert("rosbridge:connection-failed");
+      this.#alerts.removeAlert("rosbridge:error");
       this.#rosClient = rosClient;
 
       this.#setupPublishers();
@@ -543,14 +544,18 @@ export default class RosbridgePlayer implements Player {
       void this.#requestTopics();
     }
 
-    // Subscribe to additional topics used by RosbridgePlayer itself
-    this.#addInternalSubscriptions(subscriptions);
-
+    // Only what panels asked for reaches them: /clock (subscribed for the player's own clock)
+    // can arrive at up to 1 kHz
     this.#parsedTopics = new Set(subscriptions.map(({ topic }) => topic));
+
+    // Subscribe to additional topics used by RosbridgePlayer itself; on a copy, so the caller's
+    // list stays as it passed it
+    const withInternal = [...subscriptions];
+    this.#addInternalSubscriptions(withInternal);
 
     // See what topics we actually can subscribe to.
     const availableTopicsByTopicName = _.keyBy(this.#providerTopics ?? [], ({ name }) => name);
-    const topicNames = subscriptions
+    const topicNames = withInternal
       .map(({ topic }) => topic)
       .filter((topicName) => availableTopicsByTopicName[topicName]);
 
@@ -619,7 +624,6 @@ export default class RosbridgePlayer implements Player {
               this.#providerTopicsStats.set(topicName, stats);
             }
             stats.numMessages++;
-            this.#topicsStatsChanged = true;
             this.#topicsStatsChanged = true;
           }
         } catch (error) {

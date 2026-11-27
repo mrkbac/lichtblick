@@ -103,6 +103,11 @@ export const registerScript = ({
 }): RegistrationOutput => {
   const userScriptLogs: UserScriptLog[] = [];
   const userScriptDiagnostics: Diagnostic[] = [];
+  // Workers are pooled: if this script fails to register, the previous script's callback must
+  // not keep running on this script's inputs and publishing on its output topic
+  nodeCallback = () => {
+    throw new Error("The script failed to register; fix the error shown when it was loaded.");
+  };
   (self as { log?: unknown }).log = function (...args: unknown[]) {
     // recursively check that args do not contain a function declaration
     if (containsFuncDeclaration(args)) {
