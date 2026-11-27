@@ -3,7 +3,7 @@
 
 import { Immutable, MessageEvent } from "@lichtblick/suite";
 
-import { GridRenderer, enqueueVideoFrame } from "./GridRenderer";
+import { GridRenderer, MAX_QUEUED_VIDEO_FRAMES, enqueueVideoFrame } from "./GridRenderer";
 
 const KEY = new Uint8Array([0, 0, 0, 1, 0x65, 0x88, 0x84, 0x21]); // H.264 IDR
 const DELTA = new Uint8Array([0, 0, 0, 1, 0x61, 0x88, 0x84, 0x21]);
@@ -32,6 +32,21 @@ describe("enqueueVideoFrame", () => {
 
     // Then all of them are queued in order
     expect(queue).toEqual([d1, d2]);
+  });
+
+  it("drops a full queue instead of growing without bound", () => {
+    // Given a tile that isn't decoding (hidden) and a stream without new keyframes
+    const queue: Immutable<MessageEvent>[] = [frame(KEY)];
+    for (let i = 1; i < MAX_QUEUED_VIDEO_FRAMES; i++) {
+      expect(enqueueVideoFrame(queue, frame(DELTA))).toBe(true);
+    }
+
+    // When one more delta frame arrives
+    const kept = enqueueVideoFrame(queue, frame(DELTA));
+
+    // Then the backlog is dropped and decoding has to restart at the next keyframe
+    expect(kept).toBe(false);
+    expect(queue).toEqual([]);
   });
 
   it("drops everything queued before a keyframe", () => {
