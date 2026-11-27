@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import { compare, Time } from "@foxglove/rostime";
+import { compare, fromNanoSec, Time, toNanoSec } from "@foxglove/rostime";
 
 import { VecQueue } from "@lichtblick/den/collection";
 import { TopicSelection } from "@lichtblick/suite-base/players/types";
@@ -10,6 +10,9 @@ import { toError } from "@lichtblick/suite-base/util/toError";
 import { IteratorResult as ReadResult } from "./IIterableSource";
 
 type Range = { start?: Time; end?: Time };
+
+/** The recording's bounds and the playhead, where a playhead-first pass starts */
+type Playhead = { start: Time; end: Time; playhead: Time };
 
 type ReadRange = (
   topics: TopicSelection,
@@ -23,6 +26,72 @@ const MAX_QUEUED_BYTES = 16 * 1024 * 1024;
 /** How long a range read waits for others over the same range to join it */
 const GATHER_MS = 10;
 
+/** Smallest window a playhead-first pass reads around the playhead */
+const MIN_WINDOW_NS = 20_000_000_000n;
+
+/**
+ * The windows a playhead-first pass reads, in order: one around the playhead (max(20 s, 1/32 of the
+ * recording)), then alternately the window before what was read and the one after it, each side's
+ * windows doubling, until they reach the recording's start and end. Together they cover the
+ * recording exactly once; ends are inclusive. The first and last windows are open (no start or
+ * end), so nothing before or after the bounds known now is missed.
+ */
+export function playheadWindows({ start, end, playhead }: Playhead): Range[] {
+  const first = toNanoSec(start);
+  const last = toNanoSec(end);
+  if (last <= first) {
+    return [{}];
+  }
+  let size = (last - first) / 32n;
+  if (size < MIN_WINDOW_NS) {
+    size = MIN_WINDOW_NS;
+  }
+  const at = toNanoSec(playhead);
+  const clamp = (ns: bigint) => (ns < first ? first : ns > last ? last : ns);
+  let lo = clamp(at - size / 2n);
+  let hi = clamp(at + size / 2n);
+  const spans: [bigint, bigint][] = [[lo, hi]];
+  while (lo > first || hi < last) {
+    if (lo > first) {
+      const to = lo - 1n;
+      lo = clamp(to - size + 1n);
+      spans.push([lo, to]);
+    }
+    if (hi < last) {
+      const from = hi + 1n;
+      hi = clamp(from + size - 1n);
+      spans.push([from, hi]);
+    }
+    size *= 2n;
+  }
+  return spans.map(([from, to]) => ({
+    start: from === first ? undefined : fromNanoSec(from),
+    end: to === last ? undefined : fromNanoSec(to),
+  }));
+}
+
+/** Reads `windows` one after another */
+function readWindows(
+  readRange: ReadRange,
+  topic: string,
+  windows: readonly Range[],
+  signal: AbortSignal,
+): AsyncIterableIterator<Readonly<ReadResult>> {
+  const topics = new Map([[topic, { topic }]]);
+  if (windows.length === 1) {
+    // Opened now: an error opening it reaches the caller right away
+    return readRange(topics, windows[0]!, signal);
+  }
+  return (async function* () {
+    for (const span of windows) {
+      if (signal.aborted) {
+        return;
+      }
+      yield* readRange(topics, span, signal);
+    }
+  })();
+}
+
 /**
  * Reads of single topics' whole history (Plot, Log, Map…) share one read of all their topics: one
  * pass over the recording instead of one per topic, so a chunk is read and decompressed once and a
@@ -30,19 +99,31 @@ const GATHER_MS = 10;
  * new pass; a read that starts while a pass is running joins it (reading only the part the pass
  * already went past on its own). Reads of part of the recording (e.g. stepping to the next
  * message) start right away on their own.
+ *
+ * A playhead-first read gets the history around the playhead first, then window by window earlier
+ * and later history (see playheadWindows): each window in time order, and each window entirely
+ * before or entirely after everything delivered before it. Playhead-first and ascending reads
+ * gather in separate passes: an ascending reader in a playhead-first pass would have to hold
+ * everything read before the recording's start comes, about the whole topic.
  */
 export class SharedRangeReads {
   readonly #readRange: ReadRange;
-  /** The shared read still gathering readers */
-  #gathering?: SharedRead;
-  /** The shared read running now, which a new whole-history read joins */
-  #running?: SharedRead;
+  readonly #playhead: () => Playhead | undefined;
+  /** Per order, the shared read still gathering readers */
+  readonly #gathering = new Map<boolean, SharedRead>();
+  /** Per order, the shared read running now, which a new whole-history read joins */
+  readonly #running = new Map<boolean, SharedRead>();
 
-  public constructor(readRange: ReadRange) {
+  public constructor(readRange: ReadRange, playhead: () => Playhead | undefined = () => undefined) {
     this.#readRange = readRange;
+    this.#playhead = playhead;
   }
 
-  public read(topic: string, range: Range): AsyncIterableIterator<Readonly<ReadResult>> {
+  public read(
+    topic: string,
+    range: Range,
+    { playheadFirst = false }: { playheadFirst?: boolean } = {},
+  ): AsyncIterableIterator<Readonly<ReadResult>> {
     if (range.start || range.end) {
       const abort = new AbortController();
       const reader = new Reader(
@@ -56,22 +137,29 @@ export class SharedRangeReads {
     // Joins a shared read on its first pull: an iterator that is never read can't hold up others
     let reader: Reader | undefined;
     let closed = false;
+    const order = playheadFirst;
     const join = () => {
-      if (this.#gathering) {
-        return this.#gathering.join(topic);
+      const gathering = this.#gathering.get(order);
+      if (gathering) {
+        return gathering.join(topic);
       }
-      const running = this.#running;
+      const running = this.#running.get(order);
       if (running?.isJoinable() === true) {
         return running.joinLate(topic);
       }
-      const newShared = new SharedRead(this.#readRange, range);
-      this.#gathering = newShared;
+      // The playhead as it is when the pass starts
+      const plan = () => {
+        const playhead = playheadFirst ? this.#playhead() : undefined;
+        return playhead ? playheadWindows(playhead) : [range];
+      };
+      const newShared = new SharedRead(this.#readRange, plan);
+      this.#gathering.set(order, newShared);
       setTimeout(() => {
-        this.#gathering = undefined;
-        this.#running = newShared;
+        this.#gathering.delete(order);
+        this.#running.set(order, newShared);
         void newShared.run().finally(() => {
-          if (this.#running === newShared) {
-            this.#running = undefined;
+          if (this.#running.get(order) === newShared) {
+            this.#running.delete(order);
           }
         });
       }, GATHER_MS);
@@ -152,14 +240,22 @@ class Reader implements AsyncIterableIterator<Readonly<ReadResult>> {
     this.#ready = undefined;
   }
 
-  /** Delivers `iterator` (up to and including `through`) before what the shared read pushes */
+  /**
+   * Delivers `iterator` before what the shared read pushes; it reads the shared read's current
+   * window up to and including `through`
+   */
   public catchUp(
     iterator: AsyncIterator<Readonly<ReadResult>>,
-    through: Time,
+    through: Time | undefined,
     abort: AbortController,
   ): void {
     this.#catchUp = { iterator, abort };
     this.#dropThrough = through;
+  }
+
+  /** The shared read starts its next window, which the catch-up doesn't read */
+  public windowStarted(): void {
+    this.#dropThrough = undefined;
   }
 
   public isCatchingUp(): boolean {
@@ -293,7 +389,10 @@ class Reader implements AsyncIterableIterator<Readonly<ReadResult>> {
 
 class SharedRead {
   readonly #readRange: ReadRange;
-  readonly #range: Range;
+  readonly #plan: () => Range[];
+  /** The windows it reads, in order, and the one it reads now */
+  #windows: Range[] = [];
+  #windowIndex = 0;
   readonly #readers = new Set<Reader>();
   readonly #abort = new AbortController();
   #running = false;
@@ -302,9 +401,21 @@ class SharedRead {
   #position?: Time;
   readonly #atPosition = new Map<string, number>();
 
-  public constructor(readRange: ReadRange, range: Range) {
+  public constructor(readRange: ReadRange, plan: () => Range[]) {
     this.#readRange = readRange;
-    this.#range = range;
+    this.#plan = plan;
+  }
+
+  /** The windows from `time` (in one of them) on: the current window from there, then the rest */
+  #windowsFrom(time: Time | undefined): Range[] {
+    if (!time) {
+      return this.#windows.slice(this.#windowIndex);
+    }
+    const index = this.#windows.findIndex(
+      ({ start, end }) =>
+        (!start || compare(start, time) <= 0) && (!end || compare(time, end) <= 0),
+    );
+    return [{ start: time, end: this.#windows[index]?.end }, ...this.#windows.slice(index + 1)];
   }
 
   public join(topic: string): Reader {
@@ -335,18 +446,16 @@ class SharedRead {
   public joinLate(topic: string): Reader {
     const reader = this.join(topic);
     const position = this.#position;
+    const current = this.#windows[this.#windowIndex];
+    // The windows read already, then the current one up to where the shared read is
+    const missed = this.#windows.slice(0, this.#windowIndex);
     if (position) {
+      missed.push({ start: current?.start, end: position });
+    }
+    if (missed.length > 0) {
       const abort = new AbortController();
       try {
-        reader.catchUp(
-          this.#readRange(
-            new Map([[topic, { topic }]]),
-            { start: this.#range.start, end: position },
-            abort.signal,
-          ),
-          position,
-          abort,
-        );
+        reader.catchUp(readWindows(this.#readRange, topic, missed, abort.signal), position, abort);
       } catch (error: unknown) {
         this.#readers.delete(reader);
         reader.end(error);
@@ -376,93 +485,14 @@ class SharedRead {
     if (this.#readers.size === 0) {
       return;
     }
+    this.#windows = this.#plan();
     this.#running = true;
-    let start = this.#range.start;
-    // Messages at the restart position the shared read delivered already, per topic
-    let delivered = new Map<string, number>();
     try {
-      for (;;) {
-        this.#restart = false;
-        this.#topics = new Map(
-          [...this.#readers].map((reader) => [reader.topic, { topic: reader.topic }]),
-        );
-        const iteration = (this.#iteration = new AbortController());
-        const onAbort = () => {
-          iteration.abort();
-        };
-        this.#abort.signal.addEventListener("abort", onAbort);
-        try {
-          for await (const result of this.#readRange(
-            this.#topics,
-            { start, end: this.#range.end },
-            iteration.signal,
-          )) {
-            if (this.#restartRequested()) {
-              break;
-            }
-            if (result.type === "message-event") {
-              const { topic, receiveTime } = result.msgEvent;
-              const already = delivered.get(topic) ?? 0;
-              if (already > 0 && this.#position && compare(receiveTime, this.#position) === 0) {
-                delivered.set(topic, already - 1);
-                continue;
-              }
-              if (!this.#position || compare(receiveTime, this.#position) !== 0) {
-                this.#position = receiveTime;
-                this.#atPosition.clear();
-              }
-              this.#atPosition.set(topic, (this.#atPosition.get(topic) ?? 0) + 1);
-            }
-            for (const reader of this.#readers) {
-              if (result.type !== "message-event" || result.msgEvent.topic === reader.topic) {
-                reader.push(result);
-              }
-            }
-            // The slowest reader sets the pace, so what waits for it stays bounded. A consumer may
-            // wait on one reader before it empties another (e.g. merging inputs by time): readers
-            // waiting while the read waits for room go on with their own read instead of blocking
-            // each other. A late joiner still catching up goes on with its own read too.
-            while (this.#readers.values().some((reader) => reader.isFull())) {
-              for (const reader of this.#readers) {
-                if (reader.waiting) {
-                  this.#detach(reader);
-                } else if (reader.isCatchingUp() && reader.isFull()) {
-                  this.#readers.delete(reader);
-                  reader.detachQueue((from, signal) =>
-                    this.#readRange(
-                      new Map([[reader.topic, { topic: reader.topic }]]),
-                      { start: from, end: this.#range.end },
-                      signal,
-                    ),
-                  );
-                }
-              }
-              if (!this.#readers.values().some((reader) => reader.isFull())) {
-                break;
-              }
-              await new Promise<void>((resolve) => {
-                this.#pulled = resolve;
-              });
-              this.#pulled = undefined;
-            }
-            if (this.#readers.size === 0) {
-              break;
-            }
-          }
-        } catch (error: unknown) {
-          // Aborted to restart with another topic: go on below
-          if (!this.#restartRequested()) {
-            throw error;
-          }
-        } finally {
-          this.#abort.signal.removeEventListener("abort", onAbort);
-        }
-        if (!this.#restartRequested() || this.#readers.size === 0 || this.#abort.signal.aborted) {
+      for (this.#windowIndex = 0; this.#windowIndex < this.#windows.length; this.#windowIndex++) {
+        await this.#runWindow(this.#windows[this.#windowIndex]!);
+        if (this.#readers.size === 0 || this.#abort.signal.aborted) {
           break;
         }
-        // Restart where the shared read is; skip what it delivered at that time already
-        start = this.#position ?? this.#range.start;
-        delivered = new Map(this.#atPosition);
       }
       this.#ended = true;
       for (const reader of this.#readers) {
@@ -476,17 +506,104 @@ class SharedRead {
     }
   }
 
+  /** Reads one window for all readers, restarting where it is when a reader with a new topic joins */
+  async #runWindow(span: Range): Promise<void> {
+    this.#position = undefined;
+    this.#atPosition.clear();
+    for (const reader of this.#readers) {
+      reader.windowStarted();
+    }
+    let start = span.start;
+    // Messages at the restart position the shared read delivered already, per topic
+    let delivered = new Map<string, number>();
+    for (;;) {
+      this.#restart = false;
+      this.#topics = new Map(
+        [...this.#readers].map((reader) => [reader.topic, { topic: reader.topic }]),
+      );
+      const iteration = (this.#iteration = new AbortController());
+      const onAbort = () => {
+        iteration.abort();
+      };
+      this.#abort.signal.addEventListener("abort", onAbort);
+      try {
+        for await (const result of this.#readRange(
+          this.#topics,
+          { start, end: span.end },
+          iteration.signal,
+        )) {
+          if (this.#restartRequested()) {
+            break;
+          }
+          if (result.type === "message-event") {
+            const { topic, receiveTime } = result.msgEvent;
+            const already = delivered.get(topic) ?? 0;
+            if (already > 0 && this.#position && compare(receiveTime, this.#position) === 0) {
+              delivered.set(topic, already - 1);
+              continue;
+            }
+            if (!this.#position || compare(receiveTime, this.#position) !== 0) {
+              this.#position = receiveTime;
+              this.#atPosition.clear();
+            }
+            this.#atPosition.set(topic, (this.#atPosition.get(topic) ?? 0) + 1);
+          }
+          for (const reader of this.#readers) {
+            if (result.type !== "message-event" || result.msgEvent.topic === reader.topic) {
+              reader.push(result);
+            }
+          }
+          // The slowest reader sets the pace, so what waits for it stays bounded. A consumer may
+          // wait on one reader before it empties another (e.g. merging inputs by time): readers
+          // waiting while the read waits for room go on with their own read instead of blocking
+          // each other. A late joiner still catching up goes on with its own read too.
+          while (this.#readers.values().some((reader) => reader.isFull())) {
+            for (const reader of this.#readers) {
+              if (reader.waiting) {
+                this.#detach(reader);
+              } else if (reader.isCatchingUp() && reader.isFull()) {
+                this.#readers.delete(reader);
+                reader.detachQueue((from, signal) =>
+                  readWindows(this.#readRange, reader.topic, this.#windowsFrom(from), signal),
+                );
+              }
+            }
+            if (!this.#readers.values().some((reader) => reader.isFull())) {
+              break;
+            }
+            await new Promise<void>((resolve) => {
+              this.#pulled = resolve;
+            });
+            this.#pulled = undefined;
+          }
+          if (this.#readers.size === 0) {
+            break;
+          }
+        }
+      } catch (error: unknown) {
+        // Aborted to restart with another topic: go on below
+        if (!this.#restartRequested()) {
+          throw error;
+        }
+      } finally {
+        this.#abort.signal.removeEventListener("abort", onAbort);
+      }
+      if (!this.#restartRequested() || this.#readers.size === 0 || this.#abort.signal.aborted) {
+        break;
+      }
+      // Restart where the shared read is; skip what it delivered at that time already
+      start = this.#position ?? span.start;
+      delivered = new Map(this.#atPosition);
+    }
+  }
+
   /** Continues `reader` with its own read from where the shared read is */
   #detach(reader: Reader): void {
     const position = this.#position;
     let own: AsyncIterator<Readonly<ReadResult>>;
     const abort = new AbortController();
     try {
-      own = this.#readRange(
-        new Map([[reader.topic, { topic: reader.topic }]]),
-        { start: position ?? this.#range.start, end: this.#range.end },
-        abort.signal,
-      );
+      own = readWindows(this.#readRange, reader.topic, this.#windowsFrom(position), abort.signal);
     } catch (error: unknown) {
       // Its waiting pull gets the error instead of waiting forever
       this.#readers.delete(reader);

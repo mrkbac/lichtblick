@@ -112,11 +112,11 @@ export type BuiltinPanelExtensionContext = {
   unstable_setAlert?: (alertId: string, alert: Immutable<PlayerAlert> | undefined) => void;
 
   /**
-   * `PanelExtensionContext.unstable_subscribeMessageRange`, where built-in panels can also ask for
-   * read errors to reach their iterator instead of the range just ending early.
+   * `PanelExtensionContext.unstable_subscribeMessageRange`, with options only built-in panels use
+   * (see BuiltinRangeOptions).
    */
   unstable_subscribeMessageRange: (
-    args: SubscribeMessageRangeArgs & { rethrowErrors?: boolean },
+    args: SubscribeMessageRangeArgs & BuiltinRangeOptions,
   ) => () => void;
 } & Omit<PanelExtensionContext, "updatePanelSettingsEditor" | "unstable_subscribeMessageRange">;
 
@@ -137,6 +137,19 @@ export type MessageConverterAlertHandler = (
   alertId?: string,
 ) => void;
 
+/** Range read options only built-in panels use; extensions get the defaults */
+export type BuiltinRangeOptions = {
+  /** Let read errors reach the iterator; by default the range just ends early */
+  rethrowErrors?: boolean;
+  /**
+   * Read the history around the playhead first, then earlier and later history window by window
+   * (see BatchIteratorOptions.playheadFirst). Each batch is in receive-time order and lies
+   * entirely before or entirely after every message of earlier batches, so a consumer that keeps
+   * messages sorted puts each batch in at its time. Without it, batches come in receive-time order.
+   */
+  playheadFirst?: boolean;
+};
+
 export type CreateMessageRangeIteratorParams = {
   topic: string;
   convertTo?: string;
@@ -146,4 +159,6 @@ export type CreateMessageRangeIteratorParams = {
   emitAlert?: MessageConverterAlertHandler;
   /** Rethrow read errors to the consumer instead of only logging them and ending the range */
   rethrowErrors?: boolean;
+  /** Split batches so each lies entirely before or after the messages of earlier batches */
+  playheadFirst?: boolean;
 };

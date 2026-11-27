@@ -42,6 +42,7 @@ import {
 import { hasTransformerErrors } from "@lichtblick/suite-base/players/UserScriptPlayer/utils";
 import { isRecordingSource } from "@lichtblick/suite-base/players/constants";
 import {
+  BatchIteratorOptions,
   AdvertiseOptions,
   BlockCache,
   MessageBlock,
@@ -1419,14 +1420,17 @@ export default class UserScriptPlayer implements Player {
 
   public getBatchIterator(
     topic: string,
-    options?: { start?: Time; end?: Time },
+    options?: BatchIteratorOptions,
   ): AsyncIterableIterator<Readonly<IIterableSourceIteratorResult>> | undefined {
     const registration = this.#outputTopicRegistrations.get(topic);
     if (!registration) {
       return this.#player.getBatchIterator(topic, options);
     }
 
-    return this.#getVirtualBatchIterator(registration, options);
+    // Scripts and converters run in receive-time order: their outputs are read that way
+    const range =
+      options?.start || options?.end ? { start: options.start, end: options.end } : undefined;
+    return this.#getVirtualBatchIterator(registration, range);
   }
 
   // Topic converter outputs are backfilled by backfilling their inputs and running them through

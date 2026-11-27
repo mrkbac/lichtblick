@@ -20,6 +20,7 @@ import {
 import { isRecordingSource, PLAYER_CAPABILITIES } from "@lichtblick/suite-base/players/constants";
 import { subscriptionCovers } from "@lichtblick/suite-base/players/subscriptionEquality";
 import {
+  BatchIteratorOptions,
   AdvertiseOptions,
   Player,
   PlayerPresence,
@@ -254,7 +255,7 @@ export function createMessagePipelineStore({
         const player = get().player;
         return player?.getMetadata?.() ?? Object.freeze([]);
       },
-      getBatchIterator(topic: string, options?: { start?: Time; end?: Time }) {
+      getBatchIterator(topic: string, options?: BatchIteratorOptions) {
         const player = get().player;
         return player?.getBatchIterator(topic, options);
       },

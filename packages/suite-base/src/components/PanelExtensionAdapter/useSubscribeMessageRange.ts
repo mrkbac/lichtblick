@@ -12,7 +12,7 @@ import {
 } from "@lichtblick/suite-base/context/ExtensionCatalogContext";
 
 import { createMessageRangeIterator } from "./messageRangeIterator";
-import { MessageConverterAlertHandler } from "./types";
+import { BuiltinRangeOptions, MessageConverterAlertHandler } from "./types";
 
 const log = Logger.getLogger(__filename);
 
@@ -20,12 +20,11 @@ const selectInstalledMessageConverters = (state: ExtensionCatalog) =>
   state.installedMessageConverters;
 
 export type UseSubscribeMessageRange = (
-  args: SubscribeMessageRangeArgs & {
-    /** Let read errors reach `onNewRangeIterator`; by default the range just ends early */
-    rethrowErrors?: boolean;
-    /** Deprecated Foxglove name of `onNewRangeIterator`, still passed by older Foxglove extensions */
-    onReset?: SubscribeMessageRangeArgs["onNewRangeIterator"];
-  },
+  args: SubscribeMessageRangeArgs &
+    BuiltinRangeOptions & {
+      /** Deprecated Foxglove name of `onNewRangeIterator`, still passed by older Foxglove extensions */
+      onReset?: SubscribeMessageRangeArgs["onNewRangeIterator"];
+    },
 ) => () => void;
 
 /**
@@ -61,10 +60,19 @@ export function useSubscribeMessageRange(
   }, []);
 
   return useCallback(
-    ({ topic, convertTo, start, end, onNewRangeIterator, onReset, rethrowErrors }) => {
+    ({
+      topic,
+      convertTo,
+      start,
+      end,
+      onNewRangeIterator,
+      onReset,
+      rethrowErrors,
+      playheadFirst,
+    }) => {
       const { sortedTopics, getBatchIterator } = getMessagePipelineContext();
 
-      const rawBatchIterator = getBatchIterator(topic, { start, end });
+      const rawBatchIterator = getBatchIterator(topic, { start, end, playheadFirst });
       if (!rawBatchIterator) {
         return () => {};
       }
@@ -77,6 +85,7 @@ export function useSubscribeMessageRange(
         messageConverters: messageConvertersRef.current ?? [],
         emitAlert: emitAlertRef.current,
         rethrowErrors,
+        playheadFirst,
       });
 
       // oxlint-disable-next-line typescript/no-unnecessary-condition -- untyped extensions may omit it

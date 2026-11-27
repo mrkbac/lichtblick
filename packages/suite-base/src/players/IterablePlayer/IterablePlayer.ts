@@ -29,6 +29,7 @@ import { PLAYER_CAPABILITIES } from "@lichtblick/suite-base/players/constants";
 import { applySamplingGuardToSubscriptions } from "@lichtblick/suite-base/players/samplingGuard";
 import { sameTopicSelection } from "@lichtblick/suite-base/players/subscriptionEquality";
 import {
+  BatchIteratorOptions,
   Player,
   PlayerPresence,
   PlayerState,
@@ -258,14 +259,19 @@ export class IterablePlayer implements Player {
   // channels, which its initialize() and waitForUpdate() parse for all readers.
   readonly #unbufferedSource: IDeserializedIterableSource;
   /** Range reads (getBatchIterator) that start together share one pass over the recording */
-  readonly #rangeReads = new SharedRangeReads((topics, range, abort) =>
-    this.#unbufferedSource.messageIterator({
-      topics,
-      consumptionType: "full",
-      ...range,
-      // Closing the player (e.g. switching data sources) stops reads nobody cancelled
-      abort: AbortSignal.any([abort, this.#closeAbort.signal]),
-    }),
+  readonly #rangeReads = new SharedRangeReads(
+    (topics, range, abort) =>
+      this.#unbufferedSource.messageIterator({
+        topics,
+        consumptionType: "full",
+        ...range,
+        // Closing the player (e.g. switching data sources) stops reads nobody cancelled
+        abort: AbortSignal.any([abort, this.#closeAbort.signal]),
+      }),
+    () =>
+      this.#start && this.#end
+        ? { start: this.#start, end: this.#end, playhead: this.#currentTime ?? this.#start }
+        : undefined,
   );
   // #unbufferedSource once initialized
   #messageRangeSource?: IDeserializedIterableSource;
@@ -583,12 +589,16 @@ export class IterablePlayer implements Player {
 
   public getBatchIterator(
     topic: string,
-    options?: { start?: Time; end?: Time },
+    options?: BatchIteratorOptions,
   ): AsyncIterableIterator<Readonly<IteratorResult>> | undefined {
     if (!this.#messageRangeSource) {
       return undefined;
     }
-    return this.#rangeReads.read(topic, { start: options?.start, end: options?.end });
+    return this.#rangeReads.read(
+      topic,
+      { start: options?.start, end: options?.end },
+      { playheadFirst: options?.playheadFirst },
+    );
   }
 
   // Reuses #messageRangeSource (already independent of the live playback cursor/state machine,
