@@ -136,10 +136,13 @@ export default class RosbridgePlayer implements Player {
   #messageReadersByDatatype: {
     [datatype: string]: MessageDecoder;
   } = {};
+  // Definition text each reader was built from, so an unchanged type keeps its reader
+  #messageDefinitionsByDatatype = new Map<string, string>();
   #start?: Time; // The time at which we started playing.
   #clockTime?: Time; // The most recent published `/clock` time, if available
   // active subscriptions
-  #topicSubscriptions = new Map<string, roslib.Topic>();
+  // With the reader each was made with: a topic whose type or definition changes is resubscribed
+  #topicSubscriptions = new Map<string, { topic: roslib.Topic; reader: MessageDecoder }>();
   #requestedSubscriptions: SubscribePayload[] = []; // Requested subscriptions by setSubscriptions()
   // Subscriptions the player added for itself (#addInternalSubscriptions), not requested by a panel.
   readonly #internalSubscriptions = new WeakSet<SubscribePayload>();
@@ -224,7 +227,7 @@ export default class RosbridgePlayer implements Player {
       this.#presence = PlayerPresence.RECONNECTING;
 
       this.#cancelTopicsPoll();
-      for (const [topicName, topic] of this.#topicSubscriptions) {
+      for (const [topicName, { topic }] of this.#topicSubscriptions) {
         topic.unsubscribe();
         this.#topicSubscriptions.delete(topicName);
       }
@@ -329,21 +332,42 @@ export default class RosbridgePlayer implements Player {
       // we want to bail and avoid parsing definitions, updating readers, subscribers, etc.
       // However, during a re-connect, we _do_ want to refresh this list and re-subscribe
       const sortedTopics = _.sortBy(topics, "name");
-      if (!forceUpdate && _.isEqual(this.#providerTopics, sortedTopics)) {
+      const definitions = new Map<string, string>();
+      for (const { type, messageDefinition } of datatypeDescriptions) {
+        if (!definitions.has(type)) {
+          definitions.set(type, `${this.#rosVersion}\n${messageDefinition}`);
+        }
+      }
+      if (
+        !forceUpdate &&
+        _.isEqual(this.#providerTopics, sortedTopics) &&
+        _.isEqual(this.#messageDefinitionsByDatatype, definitions)
+      ) {
         return;
       }
 
       const messageReaders: Record<string, MessageDecoder> = {};
       for (const { type, messageDefinition } of datatypeDescriptions) {
+        if (messageReaders[type] != undefined) {
+          continue;
+        }
+        const previousReader = this.#messageReadersByDatatype[type];
+        if (
+          previousReader != undefined &&
+          this.#messageDefinitionsByDatatype.get(type) === definitions.get(type)
+        ) {
+          messageReaders[type] = previousReader;
+          continue;
+        }
         const parsedDefinition = parseMessageDefinition(messageDefinition, {
           ros2: this.#rosVersion === 2,
         });
-        // https://github.com/typescript-eslint/typescript-eslint/issues/6632
-        messageReaders[type] ??=
+        messageReaders[type] =
           this.#rosVersion !== 2
             ? new ROS1MessageReader(parsedDefinition)
             : { readMessage: createRos2CdrDeserializer(parsedDefinition) };
       }
+      this.#messageDefinitionsByDatatype = definitions;
 
       if (topicsMissingDatatypes.length > 0) {
         this.#alerts.addAlert("requestTopics:missing-types", {
@@ -556,14 +580,6 @@ export default class RosbridgePlayer implements Player {
 
     // Subscribe to all topics that we aren't subscribed to yet.
     for (const topicName of topicNames) {
-      if (this.#topicSubscriptions.has(topicName)) {
-        continue;
-      }
-      const topic = new roslib.Topic({
-        ros: this.#rosClient,
-        name: topicName,
-        compression: "cbor-raw",
-      });
       const availTopic = availableTopicsByTopicName[topicName];
       if (!availTopic) {
         continue;
@@ -574,6 +590,18 @@ export default class RosbridgePlayer implements Player {
       if (!messageReader) {
         continue;
       }
+      // Readers are rebuilt only when a type's definition changes, so the same reader means the
+      // topic's type and definition are unchanged
+      const existing = this.#topicSubscriptions.get(topicName);
+      if (existing?.reader === messageReader) {
+        continue;
+      }
+      existing?.topic.unsubscribe();
+      const topic = new roslib.Topic({
+        ros: this.#rosClient,
+        name: topicName,
+        compression: "cbor-raw",
+      });
 
       const alertId = `message:${topicName}`;
       topic.subscribe((message) => {
@@ -632,11 +660,11 @@ export default class RosbridgePlayer implements Player {
 
         this.#emitState();
       });
-      this.#topicSubscriptions.set(topicName, topic);
+      this.#topicSubscriptions.set(topicName, { topic, reader: messageReader });
     }
 
     // Unsubscribe from topics that we are subscribed to but shouldn't be.
-    for (const [topicName, topic] of this.#topicSubscriptions) {
+    for (const [topicName, { topic }] of this.#topicSubscriptions) {
       if (!topicNames.includes(topicName)) {
         topic.unsubscribe();
         this.#topicSubscriptions.delete(topicName);

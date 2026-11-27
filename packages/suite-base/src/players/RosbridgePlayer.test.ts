@@ -88,14 +88,17 @@ class MockRosClient {
     topics,
     types,
     typedefs,
+    messages,
   }: {
     topics: string[];
     types: string[];
     typedefs: string[];
+    messages?: any[];
   }) {
     this.#topics = topics;
     this.#types = types;
     this.#typedefs_full_text = typedefs;
+    this.#messages = messages ?? this.#messages;
   }
 
   public on(op: string, callback: () => void) {
@@ -355,6 +358,44 @@ describe("RosbridgePlayer", () => {
     });
     await vi.advanceTimersByTimeAsync(3_000);
     expect(subscribedTopics).toContain("/clock");
+  });
+
+  it("resubscribes a topic whose message definition changes", async () => {
+    vi.useFakeTimers();
+    onTestFinished(() => {
+      vi.useRealTimers();
+    });
+    workerInstance.setup({
+      topics: ["/t"],
+      types: ["pkg/Msg", "rosgraph_msgs/Log"],
+      typedefs: ["string text"],
+      messages: [{ topic: "/t", message: textMessage({ text: "hi" }) }],
+    });
+    const received: unknown[] = [];
+    player.setListener(async ({ activeData }) => {
+      received.push(...(activeData?.messages ?? []).map(({ message }) => message));
+    });
+    player.setSubscriptions([{ topic: "/t" }]);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(received).toContainEqual({ text: "hi" });
+
+    // An unchanged poll keeps the subscription
+    subscribedTopics.length = 0;
+    await vi.advanceTimersByTimeAsync(3_000);
+    expect(subscribedTopics).toEqual([]);
+
+    // Same type name, rebuilt definition
+    const bytes = Buffer.alloc(4);
+    bytes.writeUInt32LE(42, 0);
+    workerInstance.advertise({
+      topics: ["/t"],
+      types: ["pkg/Msg", "rosgraph_msgs/Log"],
+      typedefs: ["uint32 n"],
+      messages: [{ topic: "/t", message: { bytes } }],
+    });
+    await vi.advanceTimersByTimeAsync(3_000);
+    expect(subscribedTopics).toEqual(["/t"]);
+    expect(received).toContainEqual({ n: 42 });
   });
 
   it("subscribes to topics without errors", async () => {
