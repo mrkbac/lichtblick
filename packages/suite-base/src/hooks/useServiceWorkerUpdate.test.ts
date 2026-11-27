@@ -124,6 +124,16 @@ describe("reloadToLatestVersion", () => {
     expect(reload).toHaveBeenCalledTimes(1);
   });
 
+  it("doesn't reload where storage is blocked, since the cooldown couldn't survive it", async () => {
+    mockRegistration(undefined);
+    const getItem = vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
+      throw new DOMException("blocked", "SecurityError");
+    });
+    await expect(reloadToLatestVersion()).resolves.toBe(false);
+    expect(reload).not.toHaveBeenCalled();
+    getItem.mockRestore();
+  });
+
   it("tries only once per cooldown, so a persistent failure can't loop", async () => {
     mockRegistration(undefined);
     await reloadToLatestVersion();

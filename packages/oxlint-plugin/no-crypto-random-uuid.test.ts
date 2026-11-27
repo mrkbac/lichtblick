@@ -12,5 +12,9 @@ const ruleTester = new RuleTester({ languageOptions: { parserOptions: { lang: "t
 
 ruleTester.run("no-crypto-random-uuid", plugin.rules["no-crypto-random-uuid"], {
   valid: ["randomUUID();", "crypto.getRandomValues(bytes);"],
-  invalid: [{ code: "const id = crypto.randomUUID();", errors: [{ messageId: "randomUUID" }] }],
+  invalid: [
+    { code: "const id = crypto.randomUUID();", errors: [{ messageId: "randomUUID" }] },
+    { code: "const id = globalThis.crypto.randomUUID();", errors: [{ messageId: "randomUUID" }] },
+    { code: "const id = window.crypto.randomUUID();", errors: [{ messageId: "randomUUID" }] },
+  ],
 });

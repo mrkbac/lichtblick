@@ -17,11 +17,16 @@ module.exports = {
   },
 
   create(context) {
+    // crypto.randomUUID(), globalThis.crypto.randomUUID(), window.crypto.randomUUID(), …
+    const isCrypto = (object) =>
+      (object.type === "Identifier" && object.name === "crypto") ||
+      (object.type === "MemberExpression" && object.property.name === "crypto");
     return {
-      'CallExpression > MemberExpression.callee[property.name="randomUUID"][object.name="crypto"]':
-        (node) => {
+      'CallExpression > MemberExpression.callee[property.name="randomUUID"]': (node) => {
+        if (isCrypto(node.object)) {
           context.report({ node: node.parent, messageId: "randomUUID" });
-        },
+        }
+      },
     };
   },
 };

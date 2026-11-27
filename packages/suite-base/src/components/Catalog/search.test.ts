@@ -77,13 +77,33 @@ describe("filterRecordings", () => {
     expect(lateIds("since:2026", "America/Los_Angeles")).toEqual(["late"]);
     expect(lateIds("until:2026-11-27T23:00", "America/Los_Angeles")).toEqual([]);
     expect(lateIds("until:2026-11-28T07:30:00Z")).toEqual(["late"]);
+    // The last fraction of a day still belongs to it
+    const lastMoment = {
+      ...lateEvening,
+      id: "last",
+      start: { sec: Date.UTC(2026, 10, 27, 23, 59, 59) / 1000, nsec: 999_500_000 },
+    };
+    expect(filterRecordings([lastMoment], "until:2026-11-27", "UTC")).toEqual([lastMoment]);
   });
 
   it("finds the whole span a date names", () => {
     expect(parsePeriod("2026-12", "UTC")).toEqual({
       start: Date.UTC(2026, 11, 1),
-      end: Date.UTC(2027, 0, 1) - 1,
+      end: Date.UTC(2027, 0, 1),
     });
+    // Single-digit minutes and seconds keep their value
+    expect(parsePeriod("2026-11-27T08:05", "UTC")).toEqual({
+      start: Date.UTC(2026, 10, 27, 8, 5),
+      end: Date.UTC(2026, 10, 27, 8, 6),
+    });
+    // 02:00 doesn't exist on this day in Los Angeles: the minute ends where the clock resumes
+    expect(parsePeriod("2026-03-08T01:59", "America/Los_Angeles")?.end).toBe(
+      Date.parse("2026-03-08T10:00:00Z"),
+    );
+    // 01:30 happens twice: the first one
+    expect(parsePeriod("2026-11-01T01:30", "America/Los_Angeles")?.start).toBe(
+      Date.parse("2026-11-01T08:30:00Z"),
+    );
     expect(parsePeriod("2026-02-30", "UTC")).toBeUndefined();
     expect(parsePeriod("yesterday")).toBeUndefined();
   });

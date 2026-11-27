@@ -166,7 +166,8 @@ function useIndexedDbRecents(): IRecentsStore {
     }
     writingRef.current = writingRef.current
       .then(async () => {
-        const changes = unsavedRef.current.splice(0);
+        // Removed from the queue only once committed: a failed write is retried by the next save
+        const changes = unsavedRef.current.slice();
         if (changes.length === 0) {
           return;
         }
@@ -176,6 +177,8 @@ function useIndexedDbRecents(): IRecentsStore {
         );
         const saved = applyChanges(stored, changes);
         await store.put(saved, IDB_KEY);
+        await store.transaction.done;
+        unsavedRef.current.splice(0, changes.length);
         recentsRef.current = applyChanges(saved, unsavedRef.current);
         setRecents(recentsRef.current);
       })

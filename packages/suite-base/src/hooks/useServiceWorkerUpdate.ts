@@ -165,20 +165,16 @@ const STALE_RELOAD_COOLDOWN_MS = 30_000;
  * Returns whether it started a reload.
  */
 export async function reloadToLatestVersion(): Promise<boolean> {
-  // Storage can throw (blocked site data); then there is no cooldown across reloads
-  let lastAttempt = 0;
+  // The cooldown must survive the reload, or a chunk that fails on every boot reloads forever.
+  // Where storage is blocked (it throws), don't reload automatically at all.
   try {
-    lastAttempt = Number(sessionStorage.getItem(STALE_RELOAD_KEY) ?? 0);
-  } catch {
-    // no stored attempt
-  }
-  if (updateInFlight || Date.now() - lastAttempt < STALE_RELOAD_COOLDOWN_MS) {
-    return false;
-  }
-  try {
+    const lastAttempt = Number(sessionStorage.getItem(STALE_RELOAD_KEY) ?? 0);
+    if (updateInFlight || Date.now() - lastAttempt < STALE_RELOAD_COOLDOWN_MS) {
+      return false;
+    }
     sessionStorage.setItem(STALE_RELOAD_KEY, String(Date.now()));
   } catch {
-    // the cooldown then only holds until this window reloads
+    return false;
   }
   updateInFlight = true;
   await saveSessionBeforeReload();

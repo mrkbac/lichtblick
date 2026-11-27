@@ -878,7 +878,17 @@ export function useAppCommands(): {
           detail: `${formatOffset(offsetFromStart)} · ${formatTimeRaw(seekTime)}`,
           group: t("groupPlayback"),
           run: () => {
-            seek(seekTime);
+            // The palette keeps results while the query is unchanged: resolve the target
+            // against the range as it is now (a live end moves on)
+            const now = getPipeline().playerState.activeData;
+            const latest = now
+              ? parseSeekInput(query, {
+                  start: now.startTime,
+                  end: now.endTime,
+                  current: now.currentTime,
+                })
+              : undefined;
+            seek(latest?.time ?? seekTime);
           },
         },
       ];

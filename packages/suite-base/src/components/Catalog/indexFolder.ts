@@ -36,11 +36,14 @@ function isMcap(name: string): boolean {
 export async function listDirectory(
   dir: FileSystemDirectoryHandle,
   prefix = "",
+  /** Stops the walk between entries (an outstanding native read still finishes) */
+  signal?: AbortSignal,
 ): Promise<FolderFile[]> {
   const files: FolderFile[] = [];
   for await (const entry of dir.values()) {
+    signal?.throwIfAborted();
     if (entry.kind === "directory") {
-      pushAll(files, await listDirectory(entry, `${prefix}${entry.name}/`));
+      pushAll(files, await listDirectory(entry, `${prefix}${entry.name}/`, signal));
     } else if (isMcap(entry.name)) {
       files.push({
         path: `${prefix}${entry.name}`,
@@ -130,7 +133,14 @@ async function findInCatalogFolders(name: string): Promise<FileSystemFileHandle 
       ) {
         continue;
       }
-      const files = await promiseTimeout(listDirectory(dir), LIST_TIMEOUT_MS);
+      const walk = new AbortController();
+      const files = await promiseTimeout(
+        listDirectory(dir, "", walk.signal),
+        LIST_TIMEOUT_MS,
+      ).finally(() => {
+        // Stop a walk the timeout gave up on, so it doesn't run on beside the next folder's
+        walk.abort();
+      });
       const matches = files.filter((f) => f.path.split("/").at(-1) === name);
       if (matches.length === 1) {
         return matches[0]!.handle;
