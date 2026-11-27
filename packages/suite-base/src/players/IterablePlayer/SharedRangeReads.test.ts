@@ -380,7 +380,7 @@ describe("SharedRangeReads", () => {
               ) {
                 continue;
               }
-              if (gate && key === gate.topics && receiveTime.sec === gate.sec) {
+              if (gate?.topics === key && receiveTime.sec === gate.sec) {
                 await gate.open;
               }
             }

@@ -139,7 +139,7 @@ export class ColumnStore<K extends string> {
       for (let i = 1; i < kept; i++) {
         column[i] = column[2 * i]!;
       }
-      if (extra) {
+      if (this.#tailIsExtra) {
         column[kept] = column[rows]!;
       }
     }
