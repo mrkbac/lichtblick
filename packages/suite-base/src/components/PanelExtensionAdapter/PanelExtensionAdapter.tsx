@@ -25,6 +25,7 @@ import {
   AppSettingValue,
   ExtensionPanelRegistration,
   Immutable,
+  MessageEvent,
   PanelExtensionContext,
   ParameterValue,
   SettingsTreeAction,
@@ -37,6 +38,7 @@ import {
   MessagePipelineContext,
   useMessagePipeline,
   useMessagePipelineGetter,
+  useMessagePipelineSubscribe,
 } from "@lichtblick/suite-base/components/MessagePipeline";
 import { getTopicToSchemaNameMap } from "@lichtblick/suite-base/components/MessagePipeline/selectors";
 import { usePanelContext } from "@lichtblick/suite-base/components/PanelContext";
@@ -152,6 +154,10 @@ function selectContext(ctx: MessagePipelineContext) {
   return ctx;
 }
 
+function selectNothing() {
+  return undefined;
+}
+
 function selectInstalledMessageConverters(state: ExtensionCatalog) {
   return state.installedMessageConverters;
 }
@@ -174,7 +180,19 @@ function PanelExtensionAdapter(
   // changes.
   const initialState = useLatest(config as RenderStateConfig | undefined);
 
-  const messagePipelineContext = useMessagePipeline(selectContext);
+  // The panel extension context exposes methods on the message pipeline. We don't want
+  // the extension context to be re-created when the message pipeline changes since it only
+  // needs to act on the latest version of the message pipeline.
+  //
+  // This getter allows the extension context to remain stable through pipeline changes
+  const getMessagePipelineContext = useMessagePipelineGetter();
+
+  // A hidden panel (inactive tab, behind a maximized panel) doesn't re-render for every pipeline
+  // update: a pipeline subscription below batches its frames, and it reads the pipeline when it
+  // renders a batch.
+  const visible = useContext(PanelVisibleContext);
+  const messagePipelineContext =
+    useMessagePipeline(visible ? selectContext : selectNothing) ?? getMessagePipelineContext();
 
   const {
     playerState,
@@ -196,6 +214,7 @@ function PanelExtensionAdapter(
   const [forceConversion, setForceConversion] = useState(new Set<string>());
   const [watchedFields, setWatchedFields] = useState(new Set<keyof ExtensionRenderState>());
   const messageConverters = useExtensionCatalog(selectInstalledMessageConverters);
+  const messageConvertersRef = useLatest(messageConverters);
 
   const [localSubscriptions, setLocalSubscriptions] = useState<Subscription[]>([]);
 
@@ -235,13 +254,6 @@ function PanelExtensionAdapter(
   } = useTheme();
 
   const appConfiguration = useAppConfiguration();
-
-  // The panel extension context exposes methods on the message pipeline. We don't want
-  // the extension context to be re-created when the message pipeline changes since it only
-  // needs to act on the latest version of the message pipeline.
-  //
-  // This getter allows the extension context to remain stable through pipeline changes
-  const getMessagePipelineContext = useMessagePipelineGetter();
 
   // initRenderStateBuilder render produces a function which computes the latest render state from a set of inputs
   // Spiritually its like a reducer
@@ -295,19 +307,18 @@ function PanelExtensionAdapter(
     [messagePipelineContext.messageEventsBySubscriberId, panelId],
   );
 
-  // The rendering ref is set when we've begin rendering the frame (calling the panel's render
-  // function)
+  // The rendering ref holds the token of the render in progress (calling the panel's render
+  // function), so a late done() from an earlier render or panel instance can't end the current one.
   //
   // If another update arrives before the panel finishes rendering, we will update the
   // slowRenderState to indicate that the panel could not keep up with rendering relative to
   // updates.
-  const renderingRef = useRef<boolean>(false);
+  const renderingRef = useRef<object | undefined>(undefined);
 
   // Keep the last message of a newly subscribed topic until a rendered
   // frame has delivered it (see UndeliveredMessages).
   const [undelivered] = useState(() => new UndeliveredMessages());
   // A hidden panel keeps every message but renders them in batches (see HiddenFrames).
-  const visible = useContext(PanelVisibleContext);
   const [hiddenFrames] = useState(() => new HiddenFrames());
   // Pending frames belong to the seek that produced them.
   const lastSeekTimeRef = useRef(playerState.activeData?.lastSeekTime);
@@ -342,24 +353,53 @@ function PanelExtensionAdapter(
     [],
   );
 
-  useLayoutEffect(() => {
-    const lastSeekTime = playerState.activeData?.lastSeekTime;
-    const currentTime = playerState.activeData?.currentTime;
-    // Slow seeks acknowledge the target position before lastSeekTime changes.
-    const seekAcknowledged =
-      playerState.presence === PlayerPresence.BUFFERING &&
-      isRecordingSource(playerState.capabilities) &&
-      currentTime != undefined &&
-      lastCurrentTimeRef.current != undefined &&
-      compare(currentTime, lastCurrentTimeRef.current) !== 0;
-    if (lastSeekTime !== lastSeekTimeRef.current || seekAcknowledged) {
-      undelivered.clearPending();
-      hiddenFrames.clear();
+  // Records a pipeline frame for this panel; frames from before a seek are dropped
+  const notePipelineFrame = useCallback(
+    (
+      state: MessagePipelineContext["playerState"],
+      frame: Immutable<MessageEvent[]> | undefined,
+      { visible: isVisible }: { visible: boolean },
+    ) => {
+      const lastSeekTime = state.activeData?.lastSeekTime;
+      const currentTime = state.activeData?.currentTime;
+      // Slow seeks acknowledge the target position before lastSeekTime changes.
+      const seekAcknowledged =
+        state.presence === PlayerPresence.BUFFERING &&
+        isRecordingSource(state.capabilities) &&
+        currentTime != undefined &&
+        lastCurrentTimeRef.current != undefined &&
+        compare(currentTime, lastCurrentTimeRef.current) !== 0;
+      if (lastSeekTime !== lastSeekTimeRef.current || seekAcknowledged) {
+        undelivered.clearPending();
+        hiddenFrames.clear();
+      }
+      lastSeekTimeRef.current = lastSeekTime;
+      lastCurrentTimeRef.current = currentTime;
+      undelivered.hold(frame);
+      hiddenFrames.add(frame, { visible: isVisible });
+    },
+    [hiddenFrames, undelivered],
+  );
+
+  // While hidden, collect frames outside React and re-render at most once per batch interval
+  const subscribeMessagePipeline = useMessagePipelineSubscribe();
+  useEffect(() => {
+    if (visible) {
+      return;
     }
-    lastSeekTimeRef.current = lastSeekTime;
-    lastCurrentTimeRef.current = currentTime;
-    undelivered.hold(messageEvents);
-    hiddenFrames.add(messageEvents, { visible });
+    return subscribeMessagePipeline((ctx) => {
+      notePipelineFrame(ctx.playerState, ctx.messageEventsBySubscriberId.get(panelId), {
+        visible: false,
+      });
+      hiddenRetryTimerRef.current ??= setTimeout(() => {
+        hiddenRetryTimerRef.current = undefined;
+        setHeldRetry((n) => n + 1);
+      }, hiddenFrames.waitMs(performance.now()));
+    });
+  }, [hiddenFrames, notePipelineFrame, panelId, subscribeMessagePipeline, visible]);
+
+  useLayoutEffect(() => {
+    notePipelineFrame(playerState, messageEvents, { visible });
 
     /**
      * We need to check that the panel has been initialized because the renderFn function is being
@@ -383,7 +423,7 @@ function PanelExtensionAdapter(
       return;
     }
     // Still rendering: keep queued frames for when it is done (retryIfHeld) instead of dropping them.
-    if (renderingRef.current && hiddenFrames.hasPending()) {
+    if (renderingRef.current != undefined && hiddenFrames.hasPending()) {
       return;
     }
     clearTimeout(hiddenRetryTimerRef.current);
@@ -397,7 +437,7 @@ function PanelExtensionAdapter(
 
     // Before building the state: building commits what it hands out (variables, preview time,
     // seek), so a state built and then not rendered would be lost until something else changes
-    if (renderingRef.current) {
+    if (renderingRef.current != undefined) {
       setSlowRender(true);
       skippedRenderRef.current = true;
       return;
@@ -436,7 +476,8 @@ function PanelExtensionAdapter(
     }
 
     // tell the panel to render and lockout future renders until rendering is complete
-    renderingRef.current = true;
+    const renderToken = {};
+    renderingRef.current = renderToken;
     // An object: TypeScript doesn't see the done callback set it before the catch reads it
     const render = { done: false };
     try {
@@ -449,8 +490,10 @@ function PanelExtensionAdapter(
         }
         render.done = true;
         resumeFrame();
-        renderingRef.current = false;
-        retryIfHeld();
+        if (renderingRef.current === renderToken) {
+          renderingRef.current = undefined;
+          retryIfHeld();
+        }
       });
     } catch (e: unknown) {
       setError(toError(e));
@@ -459,7 +502,9 @@ function PanelExtensionAdapter(
       if (!render.done) {
         render.done = true;
         resumeFrame();
-        renderingRef.current = false;
+        if (renderingRef.current === renderToken) {
+          renderingRef.current = undefined;
+        }
       }
     }
   }, [
@@ -488,6 +533,7 @@ function PanelExtensionAdapter(
     watchedFields,
     initialState,
     forceConversion,
+    notePipelineFrame,
   ]);
 
   const updatePanelSettingsTree = useUncheckedPanelSettingsTreeUpdate();
@@ -654,16 +700,18 @@ function PanelExtensionAdapter(
         });
 
         // Resolve topic -> schemaName for converter lookup. If we don't know the schema yet,
-        // we default to no sampling (safe "needs all" behavior).
+        // we default to no sampling (safe "needs all" behavior). Read at call time: on a live
+        // source, topics and their schemas arrive after the panel first subscribes.
+        const currentTopics = getMessagePipelineContext().sortedTopics;
         const topicToSchemaNameMap = new Map(
-          sortedTopics.map((topic) => [topic.name, topic.schemaName]),
+          currentTopics.map((topic) => [topic.name, topic.schemaName]),
         );
 
         // Use the same conversion resolution as renderState to identify converters that apply.
         const { topicSchemaConverters } = collateTopicSchemaConversions(
           localSubs,
-          sortedTopics,
-          messageConverters,
+          currentTopics,
+          messageConvertersRef.current,
         );
 
         const subscribePayloads = localSubs.map((item): InternalSubscribePayload => {
@@ -699,6 +747,17 @@ function PanelExtensionAdapter(
         });
 
         undelivered.setRequestedTopics(new Set(localSubs.map((sub) => sub.topic)));
+        // A topic needs only its latest message per render if every subscription to it samples
+        const unsampledTopics = new Set(
+          localSubs
+            .filter(
+              (sub) => sub.preload === true || sub.sampling?.mode !== "latest-per-render-tick",
+            )
+            .map((sub) => sub.topic),
+        );
+        hiddenFrames.setSampledTopics(
+          new Set(localSubs.map((sub) => sub.topic).filter((topic) => !unsampledTopics.has(topic))),
+        );
         setLocalSubscriptions(localSubs);
         setSubscriptions(panelId, subscribePayloads);
       },
@@ -768,6 +827,7 @@ function PanelExtensionAdapter(
           return;
         }
         undelivered.setRequestedTopics(new Set());
+        hiddenFrames.setSampledTopics(new Set());
         setLocalSubscriptions([]);
         setSubscriptions(panelId, []);
       },
@@ -894,6 +954,8 @@ function PanelExtensionAdapter(
     setHoverValue,
     setSubscriptions,
     undelivered,
+    hiddenFrames,
+    messageConvertersRef,
     panelId,
     updatePanelSettingsTree,
     setDefaultPanelTitle,
@@ -936,7 +998,7 @@ function PanelExtensionAdapter(
 
     // Reset local state when the panel element is mounted or changes
     setRenderFn(undefined);
-    renderingRef.current = false;
+    renderingRef.current = undefined;
     undelivered.reset();
     setSlowRender(false);
 
@@ -949,8 +1011,9 @@ function PanelExtensionAdapter(
     panelContainerRef.current.appendChild(panelElement);
 
     // All instances share panelId, and a panel's own cleanup can run after the next instance has
-    // subscribed (createSyncRoot unmounts in a microtask). Ignore subscription calls from an
-    // instance that is no longer the current one, so they can't clear the new instance's.
+    // initialized (createSyncRoot unmounts in a microtask; extension settings can load after the
+    // layout). Ignore calls from an instance that is no longer the current one, so they can't
+    // clear the new instance's subscriptions or overwrite its settings tree or config.
     let isCurrentInstance = true;
     const ifCurrent = <F extends (...args: never[]) => void>(fn: F): F =>
       ((...args: Parameters<F>) => {
@@ -958,19 +1021,63 @@ function PanelExtensionAdapter(
           fn(...args);
         }
       }) as F;
-    const { advertise, unadvertise } = partialExtensionContext;
+    const ctx = partialExtensionContext;
     const advertisements = advertisementsRef.current;
+    // This instance's message ranges, cancelled when it is replaced, not only on unmount
+    const rangeCancels = new Set<() => void>();
+    const subscribeInstanceRange: PanelExtensionContext["unstable_subscribeMessageRange"] = (
+      args,
+    ) => {
+      if (!isCurrentInstance) {
+        return () => {};
+      }
+      const cancel = ctx.unstable_subscribeMessageRange(args);
+      const release = () => {
+        rangeCancels.delete(release);
+        cancel();
+      };
+      rangeCancels.add(release);
+      return release;
+    };
 
     log.info(`Init panel ${panelId}`);
     const context: ExtensionPanelContext = {
       panelElement,
-      ...partialExtensionContext,
+      ...ctx,
+      layout: { addPanel: ifCurrent(ctx.layout.addPanel) },
+      saveState: ifCurrent(ctx.saveState),
+      seekPlayback: ctx.seekPlayback && ifCurrent(ctx.seekPlayback),
+      setParameter: ifCurrent(ctx.setParameter),
+      setVariable: ifCurrent(ctx.setVariable),
+      setPreviewTime: ifCurrent(ctx.setPreviewTime),
+      setSharedPanelState: ifCurrent(ctx.setSharedPanelState),
+      // eslint-disable-next-line @typescript-eslint/no-deprecated -- wraps every overload
+      watch: ifCurrent(ctx.watch),
       // Wraps both overloads, not only the deprecated one.
       // eslint-disable-next-line @typescript-eslint/no-deprecated
-      subscribe: ifCurrent(partialExtensionContext.subscribe),
-      unsubscribeAll: ifCurrent(partialExtensionContext.unsubscribeAll),
-      advertise: advertise && ifCurrent(advertise),
-      unadvertise: unadvertise && ifCurrent(unadvertise),
+      subscribe: ifCurrent(ctx.subscribe),
+      unsubscribeAll: ifCurrent(ctx.unsubscribeAll),
+      advertise: ctx.advertise && ifCurrent(ctx.advertise),
+      unadvertise: ctx.unadvertise && ifCurrent(ctx.unadvertise),
+      publish: ctx.publish && ifCurrent(ctx.publish),
+      callService:
+        ctx.callService &&
+        (async (service, request) => {
+          if (!isCurrentInstance) {
+            throw new Error("Service call from a replaced panel instance");
+          }
+          return await ctx.callService!(service, request);
+        }),
+      subscribeAppSettings: ifCurrent(ctx.subscribeAppSettings),
+      updatePanelSettingsEditor: ifCurrent(ctx.updatePanelSettingsEditor),
+      setDefaultPanelTitle: ifCurrent(ctx.setDefaultPanelTitle),
+      unstable_setAlert: ctx.unstable_setAlert && ifCurrent(ctx.unstable_setAlert),
+      unstable_setMessagePathDropConfig: ifCurrent(ctx.unstable_setMessagePathDropConfig),
+      unstable_subscribeMessageRange: subscribeInstanceRange,
+      subscribeMessageRange: subscribeInstanceRange,
+      // Deprecated Foxglove name that older Foxglove extensions still call.
+      // eslint-disable-next-line @typescript-eslint/no-deprecated
+      UNSTABLE_subscribeMessageRange: subscribeInstanceRange,
 
       // eslint-disable-next-line @lichtblick/no-getters-setters
       set onRender(renderFunction: RenderFn | undefined) {
@@ -988,6 +1095,9 @@ function PanelExtensionAdapter(
         onUnmount();
       }
       isCurrentInstance = false;
+      for (const cancel of rangeCancels) {
+        cancel();
+      }
       isPanelInitializedRef.current = false;
       panelElement.remove();
       advertisements.clear();

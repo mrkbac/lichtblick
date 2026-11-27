@@ -1019,6 +1019,65 @@ describe("renderState", () => {
     expect(state?.currentFrame).toMatchObject([{ message: "forced" }]);
   });
 
+  it("adds a forced conversion to a new frame instead of replacing its messages", () => {
+    const buildRenderState = initRenderStateBuilder();
+    const converter = vi.fn((_msg, event) => event.topicConfig?.flag ?? "default");
+    const message = (topic: string, sec: number) => ({
+      topic,
+      schemaName: "schema",
+      receiveTime: { sec, nsec: 0 },
+      sizeInBytes: 1,
+      message: {},
+    });
+    const baseInput: BuilderRenderStateInput = {
+      watchedFields: new Set(["currentFrame"]),
+      playerState: PlayerBuilder.playerState({
+        activeData: PlayerBuilder.activeData({ lastSeekTime: 1 }),
+      }),
+      appSettings: undefined,
+      currentFrame: [message("a", 0), message("b", 0)],
+      colorScheme: undefined,
+      globalVariables: EMPTY_GLOBAL_VARIABLES,
+      hoverValue: undefined,
+      sharedPanelState: {},
+      sortedTopics: [
+        { name: "a", schemaName: "schema" },
+        { name: "b", schemaName: "schema" },
+      ],
+      subscriptions: [
+        { topic: "a", convertTo: "converted" },
+        { topic: "b", convertTo: "converted" },
+      ],
+      messageConverters: [{ fromSchemaName: "schema", toSchemaName: "converted", converter }],
+      forceConversion: new Set(),
+      config: { topics: {} },
+    };
+    buildRenderState(baseInput);
+
+    // Force "a" while a new frame with only "b" arrives
+    const state = buildRenderState({
+      ...baseInput,
+      currentFrame: [message("b", 1)],
+      forceConversion: new Set(["a"]),
+      config: { topics: { a: { flag: "forced" } } },
+    });
+    expect(state?.currentFrame).toMatchObject([
+      { topic: "b", receiveTime: { sec: 1 }, message: "default" },
+      { topic: "a", receiveTime: { sec: 0 }, message: "forced" },
+    ]);
+
+    // A forced topic that is in the new frame is converted once, with the new config
+    converter.mockClear();
+    const state2 = buildRenderState({
+      ...baseInput,
+      currentFrame: [message("a", 2)],
+      forceConversion: new Set(["a"]),
+      config: { topics: { a: { flag: "forced2" } } },
+    });
+    expect(converter).toHaveBeenCalledTimes(1);
+    expect(state2?.currentFrame).toMatchObject([{ topic: "a", message: "forced2" }]);
+  });
+
   it("should deliver new message when a second converter from the same topic is enabled", () => {
     const buildRenderState = initRenderStateBuilder();
     const initialState = makeInitialState();
