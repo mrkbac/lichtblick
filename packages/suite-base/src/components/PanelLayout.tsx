@@ -60,7 +60,11 @@ import {
   useCurrentLayoutSelector,
 } from "@lichtblick/suite-base/context/CurrentLayoutContext";
 import { useExtensionCatalog } from "@lichtblick/suite-base/context/ExtensionCatalogContext";
-import { PanelCatalog, usePanelCatalog } from "@lichtblick/suite-base/context/PanelCatalogContext";
+import {
+  PanelCatalog,
+  PanelInfo,
+  usePanelCatalog,
+} from "@lichtblick/suite-base/context/PanelCatalogContext";
 import { LayoutNode } from "@lichtblick/suite-base/types/layouts";
 import {
   PANEL_COMPONENT,
@@ -87,6 +91,21 @@ import "dockview-react/dist/styles/dockview.css";
 import { useInstallingExtensionsStore } from "../hooks/useInstallingExtensionsStore";
 
 type PanelComponents = ReadonlyMap<string, React.ComponentType<{ childId: string }>>;
+
+/**
+ * One lazy component per panel module, so a remounted panel tree (e.g. for a new player session)
+ * renders loaded panels right away. A new React.lazy suspends once even for a loaded module, and
+ * React retries a suspended tree at a priority that steady live updates can starve.
+ */
+const lazyPanels = new WeakMap<PanelInfo["module"], React.ComponentType<{ childId: string }>>();
+function lazyPanel(module: PanelInfo["module"]): React.ComponentType<{ childId: string }> {
+  let component = lazyPanels.get(module);
+  if (component == undefined) {
+    component = React.lazy(module);
+    lazyPanels.set(module, component);
+  }
+  return component;
+}
 
 const DOCKVIEW_THEME: DockviewTheme = {
   name: "lichtblick",
@@ -129,7 +148,7 @@ function PanelHostProvider({ children }: { children: React.ReactNode }): React.J
   const panelComponents = useMemo<PanelComponents>(
     () =>
       new Map(
-        panelCatalog.getPanels().map((panelInfo) => [panelInfo.type, React.lazy(panelInfo.module)]),
+        panelCatalog.getPanels().map((panelInfo) => [panelInfo.type, lazyPanel(panelInfo.module)]),
       ),
     [panelCatalog],
   );
