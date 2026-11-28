@@ -318,6 +318,7 @@ export class TransformHistory {
     // Runs of samples from one side at a time: usually all of `earlier`, then all of this
     let i = 0;
     let j = 0;
+    let headFromEarlier = false;
     while (i < added || j < size) {
       const next = timeB(j);
       if (timeA(i) < next) {
@@ -327,17 +328,29 @@ export class TransformHistory {
         }
         copy(earlier.#data, i, k, a);
         i = k;
+        headFromEarlier = true;
         continue;
       }
+      // The same time on both sides: this history's sample stays, and if it is the same transform,
+      // it was visible since the earlier receipt (as set() keeps it)
+      let receive: number | undefined;
       if (timeA(i) === next) {
+        if (this.#sameValuesAs(j, earlier, i)) {
+          receive = earlier.#data[i * STRIDE + RECEIVE]! + a.receive;
+        }
         i++;
       }
       let k = j + 1;
       while (k < size && timeB(k) < timeA(i)) {
         k++;
       }
+      const first = out;
       copy(this.#data, j, k, b);
+      if (receive != undefined && receive < data[first * STRIDE + RECEIVE]!) {
+        data[first * STRIDE + RECEIVE] = receive;
+      }
       j = k;
+      headFromEarlier = false;
     }
     // Receive times stay non-decreasing in stamp order (see #keepReceiveOrder)
     for (let o = STRIDE + RECEIVE; o < out * STRIDE; o += STRIDE) {
@@ -352,6 +365,20 @@ export class TransformHistory {
     this.#receiveBase = receiveBase;
     this.#pruneAt = -Infinity;
     this.#thinnedUntil = -Infinity;
+    if (headFromEarlier) {
+      // The newest sample is a new one, as after an insert in set()
+      this.#headInputs = 1;
+    }
+  }
+
+  /** Whether sample `index` has the same position and rotation as `other`'s sample `otherIndex` */
+  #sameValuesAs(index: number, other: TransformHistory, otherIndex: number): boolean {
+    for (let v = VALUES; v < STRIDE; v++) {
+      if (this.#data[index * STRIDE + v] !== other.#data[otherIndex * STRIDE + v]) {
+        return false;
+      }
+    }
+    return true;
   }
 
   /**

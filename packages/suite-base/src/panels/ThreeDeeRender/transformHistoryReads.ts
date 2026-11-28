@@ -30,9 +30,21 @@ export async function readTransformRange(args: {
   onBatch: (batch: readonly MessageEvent[], source: TransformTopic) => void | Promise<void>;
   /** Called when a topic is read to its end without errors */
   onTopicDone?: (source: TransformTopic) => void;
+  /** Called when a topic's read fails (not when it is cancelled) */
+  onTopicFailed?: (source: TransformTopic) => void;
   signal: AbortSignal;
 }): Promise<boolean> {
-  const { subscribeRange, topics, start, end, playheadFirst, onBatch, onTopicDone, signal } = args;
+  const {
+    subscribeRange,
+    topics,
+    start,
+    end,
+    playheadFirst,
+    onBatch,
+    onTopicDone,
+    onTopicFailed,
+    signal,
+  } = args;
   let failed = false;
   const cancels: (() => void)[] = [];
   const reads = topics.map(async (source) => {
@@ -65,6 +77,9 @@ export async function readTransformRange(args: {
               // Leave the unread part to the reads around seeks
               failed = true;
               log.error(`Reading ${source.topic} failed:`, err);
+              if (!signal.aborted) {
+                onTopicFailed?.(source);
+              }
             } finally {
               resolve();
             }

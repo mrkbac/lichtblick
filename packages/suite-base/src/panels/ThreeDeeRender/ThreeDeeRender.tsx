@@ -886,6 +886,11 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
           updateUi();
         }
       },
+      // A failed read keeps what it read: its earlier window goes in front too, but the history
+      // stays incomplete, so seeks read the transforms before them
+      onTopicFailed: (source) => {
+        earlierWindows.get(key(source))?.flush();
+      },
       onTopicDone: (source) => {
         earlierWindows.get(key(source))?.flush();
         earlierWindows.delete(key(source));

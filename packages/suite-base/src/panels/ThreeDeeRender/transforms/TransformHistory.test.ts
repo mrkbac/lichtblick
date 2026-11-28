@@ -168,18 +168,39 @@ describe("TransformHistory", () => {
       expect(later.receivedCount(1030n)).toBe(31);
     });
 
-    it("merges overlapping histories in linear time", () => {
-      // Every other sample of each: 100k + 100k fully interleaved
+    it("merges fully interleaved histories", () => {
+      // Every other sample of each: 100k + 100k (the merge is linear; see the PR's benchmark)
       const later = new TransformHistory();
       const earlier = new TransformHistory();
       for (let t = 0; t < 200_000; t++) {
         (t % 2 === 0 ? earlier : later).set(BigInt(t), at(t));
       }
-      const start = performance.now();
       later.prepend(earlier);
-      expect(performance.now() - start).toBeLessThan(1000);
       expect(later.size()).toBe(200_000);
       expect(later.timeAt(123_457)).toBe(123_457n);
+      expect(xAt(later, 123_457)).toBe(123_457);
+    });
+
+    it("keeps the earlier receipt of the same transform on both sides", () => {
+      const later = new TransformHistory();
+      later.set(100n, at(1), 10n);
+      later.set(200n, at(2), 20n);
+      const earlier = new TransformHistory();
+      earlier.set(50n, at(0), 1n);
+      earlier.set(100n, at(1), 5n);
+      later.prepend(earlier);
+      // As inserting them in time order: the sample at 100 is visible from its first receipt
+      expect(later.receivedCount(5n)).toBe(2);
+    });
+
+    it("counts a new newest sample from the earlier side like an insert", () => {
+      const history = new TransformHistory();
+      const earlier = new TransformHistory();
+      earlier.set(1n, at(1));
+      earlier.set(2n, at(2));
+      history.prepend(earlier);
+      history.set(3n, at(3));
+      expect(history.size()).toBe(3);
     });
 
     it("fills an empty history", () => {

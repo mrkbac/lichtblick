@@ -109,15 +109,19 @@ describe("readTransformRange failures", () => {
   it("does not report a topic that failed mid-read as done", async () => {
     const onBatch = vi.fn();
     const onTopicDone = vi.fn();
+    const onTopicFailed = vi.fn();
     await readTransformRange({
       subscribeRange: failingRange(),
       topics: [{ topic: "/tf" }],
       onBatch,
       onTopicDone,
+      onTopicFailed,
       signal: new AbortController().signal,
     });
     expect(onBatch).toHaveBeenCalledTimes(1);
     expect(onTopicDone).not.toHaveBeenCalled();
+    // Told apart from a cancelled read, so what it read can still be kept
+    expect(onTopicFailed).toHaveBeenCalledWith({ topic: "/tf" });
     expect(console.error).toHaveBeenCalled();
     (console.error as ReturnType<typeof vi.fn>).mockClear();
   });

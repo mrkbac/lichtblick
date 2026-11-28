@@ -29,6 +29,7 @@ import { TFMessage, TransformStamped } from "@lichtblick/suite-base/panels/Three
 import {
   AddTransformResult,
   makePose,
+  MAX_DURATION,
   Transform,
 } from "@lichtblick/suite-base/panels/ThreeDeeRender/transforms";
 import { BasicBuilder } from "@lichtblick/test-builders";
@@ -336,6 +337,46 @@ describe("3D Renderer", () => {
       renderer.dispose();
     },
   );
+
+  it("caches an earlier window's static transforms once merged, and never over a newer one", () => {
+    const renderer = new Renderer({ ...defaultRendererProps, canvas });
+    const tfStatic = (sec: number, x: number): MessageEvent<TFMessage> => ({
+      topic: "/tf_static",
+      schemaName: "tf2_msgs/TFMessage",
+      receiveTime: { sec, nsec: 0 },
+      sizeInBytes: 0,
+      message: {
+        transforms: [
+          {
+            header: { stamp: { sec, nsec: 0 }, frame_id: "a" },
+            child_frame_id: "b",
+            transform: { translation: { x, y: 0, z: 0 }, rotation: { x: 0, y: 0, z: 0, w: 1 } },
+          },
+        ],
+      },
+    });
+    /** The pose of "b" that a history reset restores from the static transform cache */
+    const restoredX = () => {
+      renderer.resetTransformHistory(new Set(["/tf_static"]));
+      const lower: [bigint, Transform] = [0n, Transform.Empty()];
+      const upper: [bigint, Transform] = [0n, Transform.Empty()];
+      renderer.transformTree
+        .frame("b")!
+        .findClosestTransforms(lower, upper, 100_000_000_000n, MAX_DURATION);
+      return lower[1].position()[0];
+    };
+    renderer.transformTree.setComplete(true);
+    renderer.addTransformMessages([tfStatic(10, 2)]);
+    const earlier = renderer.transformTree.createEarlier();
+    renderer.addTransformMessages([tfStatic(1, 1)], undefined, earlier);
+    // Not merged: the cache keeps the newer pose
+    expect(restoredX()).toBe(2);
+    renderer.transformTree.setComplete(true);
+    renderer.prependTransformHistory(earlier);
+    // Merged, but older: the cache still keeps the newer pose
+    expect(restoredX()).toBe(2);
+    renderer.dispose();
+  });
 
   it("constructs a renderer without error", () => {
     expect(() => new Renderer({ ...defaultRendererProps, canvas })).not.toThrow();

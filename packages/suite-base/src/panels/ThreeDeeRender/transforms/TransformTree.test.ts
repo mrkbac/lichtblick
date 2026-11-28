@@ -536,6 +536,12 @@ describe("TransformTree", () => {
       for (let t = 30; t < 80; t++) {
         tree.addTransform("b", "a", BigInt(t) * sec, at(t), BigInt(t) * sec);
       }
+      // The tree is full: the floor of 80 / 8 holds ten samples, and thins past them
+      const floor = tree.createEarlier();
+      for (let t = 0; t < 10; t++) {
+        floor.addTransform("c", "a", BigInt(t) * sec, at(t), BigInt(t) * sec);
+      }
+      expect(floor.frame("c")!.transformsSize()).toBe(10);
       expect(fill(tree.createEarlier())).toBeLessThanOrEqual(10);
     });
 
