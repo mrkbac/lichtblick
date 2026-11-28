@@ -105,6 +105,8 @@ function isClockMessage(topic: string, msg: unknown): msg is { clock: Time } {
  * alive, only rosapi (a separate node) is slow or hung. A dead mobile link can leave the socket open for minutes before the browser notices.
  */
 export const ROSBRIDGE_DEAD_LINK_MS = 30_000;
+/** A connection up this long counts as good: its drop starts the reconnect backoff over. */
+const STABLE_CONNECTION_MS = 30_000;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value != undefined;
@@ -224,11 +226,17 @@ export default class RosbridgePlayer implements Player {
 
     // Once per client: a dropped connection's socket may still report its close much later
     let handledClose = false;
+    let connectedAtMs: number | undefined;
     const onClose = () => {
       if (handledClose) {
         return;
       }
       handledClose = true;
+      if (connectedAtMs != undefined && Date.now() - connectedAtMs >= STABLE_CONNECTION_MS) {
+        // Only a connection that stayed up resets the backoff: a server that drops every client
+        // right after it connects is retried ever more slowly
+        this.#reconnectAttempts = 0;
+      }
       this.#presence = PlayerPresence.RECONNECTING;
 
       this.#cancelTopicsPoll();
@@ -277,7 +285,7 @@ export default class RosbridgePlayer implements Player {
       this.#alerts.removeAlert("rosbridge:error");
       this.#rosClient = rosClient;
       this.#dropConnection = onClose;
-      this.#reconnectAttempts = 0;
+      connectedAtMs = Date.now();
       this.#lastReceivedAtMs = Date.now();
 
       this.#setupPublishers();

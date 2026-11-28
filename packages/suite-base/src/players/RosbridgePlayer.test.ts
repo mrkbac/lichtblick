@@ -352,6 +352,25 @@ describe("RosbridgePlayer", () => {
     expect(workerInstance).toBe(second);
   });
 
+  it("backs off from a server that drops every connection right after it connects", async () => {
+    vi.useFakeTimers();
+    vi.spyOn(Math, "random").mockReturnValue(0);
+    onTestFinished(() => {
+      vi.useRealTimers();
+    });
+    workerInstance.setup({ types: ["rosgraph_msgs/Log"] });
+    for (const delay of [1_000, 2_000, 4_000]) {
+      const previous = workerInstance;
+      previous.emitClose?.();
+      (console.error as ReturnType<typeof vi.fn>).mockClear(); // the expected "Connection failed"
+      await vi.advanceTimersByTimeAsync(delay - 1);
+      expect(workerInstance).toBe(previous);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(workerInstance).not.toBe(previous);
+      workerInstance.setup({ types: ["rosgraph_msgs/Log"] });
+    }
+  });
+
   it("keeps a link that streams data while the topics poll goes unanswered", async () => {
     vi.useFakeTimers();
     onTestFinished(() => {
