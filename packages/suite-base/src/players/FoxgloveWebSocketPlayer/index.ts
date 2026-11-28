@@ -32,6 +32,7 @@ import type { IteratorResult } from "@lichtblick/suite-base/players/IterablePlay
 import {
   type LiveConnectionBackend,
   reconnectDelayMs,
+  STABLE_CONNECTION_MS,
 } from "@lichtblick/suite-base/players/LiveConnectionBackend";
 import {
   LIVE_QUEUE_MAX_BYTES,
@@ -140,8 +141,6 @@ const readHeapUsage = (): HeapUsage | undefined =>
 export const LINK_SILENCE_MS = 10_000;
 /** No answer this long after asking: the link is dead, reconnect. */
 export const LINK_PROBE_TIMEOUT_MS = 10_000;
-/** A connection up this long counts as good: its drop starts the reconnect backoff over. */
-export const STABLE_CONNECTION_MS = 30_000;
 /** Asset request id of the link probe; real requests count up from 1. */
 const LINK_PROBE_REQUEST_ID = 0;
 
@@ -714,8 +713,11 @@ export default class FoxgloveWebSocketPlayer implements Player {
         message: (subscriptionId, timestamp, data) => {
           const chanInfo = this.#resolvedSubscriptionsById.get(subscriptionId);
           if (!chanInfo) {
-            const wasRecentlyCanceled =
-              (this.#recentlyCanceledSubscriptions.get(subscriptionId) ?? 0) > Date.now();
+            const canceledUntil = this.#recentlyCanceledSubscriptions.get(subscriptionId);
+            const wasRecentlyCanceled = canceledUntil != undefined && canceledUntil > Date.now();
+            if (canceledUntil != undefined && !wasRecentlyCanceled) {
+              this.#recentlyCanceledSubscriptions.delete(subscriptionId);
+            }
             if (!wasRecentlyCanceled) {
               this.#alerts.addAlert(`message-missing-subscription:${subscriptionId}`, {
                 severity: "warn",
@@ -2046,9 +2048,7 @@ export default class FoxgloveWebSocketPlayer implements Player {
       }
     }
 
-    const clientChannel: ClientChannelWithoutId = schemaInfo
-      ? { topic, encoding, schemaName, ...schemaInfo }
-      : { topic, encoding, schemaName };
+    const clientChannel: ClientChannelWithoutId = { topic, encoding, schemaName, ...schemaInfo };
     const channelId = this.#client.advertise(clientChannel);
     this.#publicationsByTopic.set(topic, {
       id: channelId,

@@ -16,6 +16,7 @@ import {
   selectPlayerId,
 } from "@lichtblick/suite-base/components/MessagePipeline/selectors";
 import { useSubscribeMessageRange } from "@lichtblick/suite-base/components/PanelExtensionAdapter";
+import { LiveHistoryRead } from "@lichtblick/suite-base/components/PanelExtensionAdapter/LiveHistoryRead";
 import { PlayerPresence } from "@lichtblick/suite-base/players/types";
 
 import { clearLogStrings, normalizeLogEvent } from "./conversion";
@@ -24,8 +25,12 @@ import { NormalizedLogMessage } from "./types";
 
 /** Per-topic message limit for live sources, which can't be re-read. */
 export const LIVE_HISTORY_SIZE = 50_000;
+/**
+ * Lines kept per topic of a live session's history (and its live lines after it). A line of ~80
+ * characters holds ~515 bytes of heap (object, string, two times), so this is ~100 MB per topic.
+ */
+const LIVE_MAX_LINES = 200_000;
 const FLUSH_INTERVAL_MS = 250;
-const EMPTY: readonly string[] = [];
 
 const pickKeys = (record: Readonly<Record<string, string>>, keys: ReadonlySet<string>) =>
   Object.fromEntries(Object.entries(record).filter(([key]) => keys.has(key)));
@@ -34,7 +39,7 @@ type RangeState = {
   /** Topics read from the recorded range or the live session's history. */
   topics: ReadonlySet<string>;
   /**
-   * Topics read from the live session's history, with its newest message so far: their live
+   * Topics read from the live session's history, with their newest message so far: their live
    * messages after it go on from the rolling buffer.
    */
   liveHistoryNewest: ReadonlyMap<string, Time | undefined>;
@@ -48,16 +53,23 @@ const EMPTY_RANGE: RangeState = { topics: new Set(), liveHistoryNewest: new Map(
  * flush, which merges only them into the merged list instead of re-merging from the start; the
  * merged list is the only full copy kept.
  */
-class RangeAccumulator {
+export class RangeAccumulator {
+  readonly #maxLiveLines: number;
   /** Topics read from the range; their messages not yet merged. */
   #pending = new Map<string, NormalizedLogMessage[]>();
   #merged: readonly NormalizedLogMessage[] = [];
   /** Topics whose merged messages must go on the next flush. */
   #removed = new Set<string>();
-  #liveHistoryNewest = new Map<string, Time | undefined>();
+  #liveHistory = new Map<string, LiveHistoryRead<NormalizedLogMessage>>();
+  /** Lines of each live history topic, merged or not */
+  #liveCounts = new Map<string, number>();
   /** The last snapshot, handed out again while nothing changed */
   #last: RangeState = EMPTY_RANGE;
   #changed = false;
+
+  public constructor(maxLiveLines = LIVE_MAX_LINES) {
+    this.#maxLiveLines = maxLiveLines;
+  }
 
   public has(topic: string): boolean {
     return this.#pending.has(topic);
@@ -68,26 +80,49 @@ class RangeAccumulator {
     this.delete(topic);
     this.#pending.set(topic, []);
     if (liveHistory) {
-      this.#liveHistoryNewest.set(topic, undefined);
+      this.#liveHistory.set(topic, new LiveHistoryRead());
+      this.#liveCounts.set(topic, 0);
     }
     this.#changed = true;
   }
 
   public push(topic: string, message: NormalizedLogMessage): void {
     this.#pending.get(topic)?.push(message);
-    if (this.#liveHistoryNewest.has(topic)) {
-      const newest = this.#liveHistoryNewest.get(topic);
-      if (!newest || compare(message.receiveTime, newest) > 0) {
-        this.#liveHistoryNewest.set(topic, message.receiveTime);
-      }
+    const read = this.#liveHistory.get(topic);
+    if (read) {
+      read.read([message]);
+      this.#liveCounts.set(topic, (this.#liveCounts.get(topic) ?? 0) + 1);
     }
     this.#changed = true;
+  }
+
+  /** A topic's history read ended */
+  public end(topic: string): void {
+    this.#liveHistory.get(topic)?.end();
+  }
+
+  /**
+   * Keep a live history topic's live messages after what it has, once its read ended: the
+   * rolling live buffer drops its oldest, which would leave a gap after the history.
+   */
+  public appendLive(topic: string, live: readonly NormalizedLogMessage[]): boolean {
+    const read = this.#liveHistory.get(topic);
+    if (!read || read.reading()) {
+      return false;
+    }
+    const newest = read.newest();
+    const after = newest ? live.slice(searchByTime(live, newest)) : live;
+    for (const message of after) {
+      this.push(topic, message);
+    }
+    return after.length > 0;
   }
 
   public delete(topic: string): void {
     if (this.#pending.delete(topic)) {
       this.#removed.add(topic);
-      this.#liveHistoryNewest.delete(topic);
+      this.#liveHistory.delete(topic);
+      this.#liveCounts.delete(topic);
       this.#changed = true;
     }
   }
@@ -96,7 +131,8 @@ class RangeAccumulator {
     this.#pending.clear();
     this.#merged = [];
     this.#removed.clear();
-    this.#liveHistoryNewest.clear();
+    this.#liveHistory.clear();
+    this.#liveCounts.clear();
     this.#last = EMPTY_RANGE;
     this.#changed = false;
   }
@@ -133,10 +169,29 @@ class RangeAccumulator {
       next = merged.slice(0, start);
       pushAll(next, mergeTwo(merged.slice(start), added));
     }
+    // A live session runs for hours: past the cap, drop a topic's oldest lines (the first ones in
+    // the sorted list), with slack so this doesn't run on every flush
+    const drop = new Map<string, number>();
+    for (const [topic, count] of this.#liveCounts) {
+      if (count > this.#maxLiveLines) {
+        const keep = Math.floor(this.#maxLiveLines * 0.9);
+        drop.set(topic, count - keep);
+        this.#liveCounts.set(topic, keep);
+      }
+    }
+    if (drop.size > 0) {
+      next = next.filter((message) => {
+        const left = drop.get(message.topic) ?? 0;
+        drop.set(message.topic, left - 1);
+        return left <= 0;
+      });
+    }
     this.#merged = next;
     this.#last = {
       topics: new Set(this.#pending.keys()),
-      liveHistoryNewest: new Map(this.#liveHistoryNewest),
+      liveHistoryNewest: new Map(
+        Array.from(this.#liveHistory, ([topic, read]) => [topic, read.newest()]),
+      ),
       items: next,
     };
     return this.#last;
@@ -260,9 +315,8 @@ export function useLogMessages(topics: readonly string[]): {
             }
           } finally {
             if (!cancelled) {
-              // Also shows what was read before a failure; nothing is left for a pending flush
-              clearTimeout(flushTimerRef.current);
-              flushTimerRef.current = undefined;
+              acc.end(topic);
+              // Also shows what was read before a failure
               setRange(acc.snapshot());
               setLoadingTopics((prev) => {
                 const next = new Set(prev);
@@ -339,12 +393,7 @@ export function useLogMessages(topics: readonly string[]): {
 
   // Same content, same array: a new one would reset the live subscription's throttle
   const liveTopics = useShallowMemo(
-    useMemo(() => {
-      const live = topics.filter(
-        (topic) => !range.topics.has(topic) || range.liveHistoryNewest.has(topic),
-      );
-      return live.length > 0 ? live : EMPTY;
-    }, [topics, range.topics, range.liveHistoryNewest]),
+    topics.filter((topic) => !range.topics.has(topic) || range.liveHistoryNewest.has(topic)),
   );
 
   // Normalized once on arrival; the raw messages are not kept.
@@ -368,6 +417,17 @@ export function useLogMessages(topics: readonly string[]): {
     const timer = setTimeout(
       () => {
         lastLiveFlushRef.current = { at: Date.now(), liveTopics, lastSeekTime };
+        const acc = accumulatedRef.current;
+        let appended = false;
+        for (const topic of liveTopics) {
+          const live = latestLiveByTopic[topic];
+          if (live && acc.appendLive(topic, live.toArray())) {
+            appended = true;
+          }
+        }
+        if (appended) {
+          setRange(acc.snapshot());
+        }
         setLiveByTopic(latestLiveByTopic);
       },
       reset ? 0 : Math.max(0, last.at + FLUSH_INTERVAL_MS - Date.now()),

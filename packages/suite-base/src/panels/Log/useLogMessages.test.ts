@@ -14,7 +14,7 @@ import { PlayerPresence } from "@lichtblick/suite-base/players/types";
 
 import { normalizeLogEvent } from "./conversion";
 import { NormalizedLogMessage } from "./types";
-import { mergeByReceiveTime, useLogMessages } from "./useLogMessages";
+import { mergeByReceiveTime, RangeAccumulator, useLogMessages } from "./useLogMessages";
 
 vi.mock("@lichtblick/suite-base/components/MessagePipeline");
 vi.mock("@lichtblick/suite-base/components/PanelExtensionAdapter");
@@ -45,6 +45,30 @@ describe("mergeByReceiveTime", () => {
   it("returns a single array as-is", () => {
     const arr = [at(1)];
     expect(mergeByReceiveTime([[], arr])).toBe(arr);
+  });
+});
+
+describe("RangeAccumulator", () => {
+  it("keeps a live session's newest lines per topic, contiguous, within the cap", () => {
+    const acc = new RangeAccumulator(10);
+    acc.reset("/a", { liveHistory: true });
+    acc.reset("/rec", { liveHistory: false });
+    for (let sec = 1; sec <= 5; sec++) {
+      acc.push("/a", at(sec));
+      acc.push("/rec", at(sec, "/rec"));
+    }
+    acc.end("/a");
+    acc.snapshot();
+    acc.appendLive(
+      "/a",
+      [6, 7, 8, 9, 10, 11, 12].map((sec) => at(sec)),
+    );
+
+    const items = acc.snapshot().items;
+    const live = items.filter((m) => m.topic === "/a").map((m) => m.receiveTime.sec);
+    // Past 10 lines it keeps the newest 9, without a gap; a recorded topic keeps all
+    expect(live).toEqual([4, 5, 6, 7, 8, 9, 10, 11, 12]);
+    expect(items.filter((m) => m.topic === "/rec")).toHaveLength(5);
   });
 });
 
@@ -331,6 +355,40 @@ describe("useLogMessages", () => {
     expect(useMessageHistory).toHaveBeenLastCalledWith(
       expect.objectContaining({ topics: SINGLE_TOPIC }),
     );
+  });
+
+  it("keeps live lines the rolling buffer dropped after the session's history", async () => {
+    // Given a live source whose history ended at /a@1, with a rolling buffer of two messages
+    withRange({ liveHistory: true });
+    let live = { "/a": history([]) };
+    (useMessageHistory as Mock).mockImplementation(() => live);
+    const { result, rerender } = renderHook(() => useLogMessages(SINGLE_TOPIC));
+    await act(async () => {
+      rangeIterators.get("/a")!([event(1, "/a")]);
+      rangeIterators.get("/a")!("done");
+      await vi.runAllTimersAsync();
+    });
+
+    // When live messages arrive faster than the buffer holds them
+    for (const buffer of [
+      [2, 3],
+      [4, 5],
+    ]) {
+      live = { "/a": history(buffer.map((sec) => event(sec, "/a"))) };
+      rerender();
+      await act(async () => {
+        await vi.runAllTimersAsync();
+      });
+    }
+
+    // Then no line between the history and the live tail is lost
+    expect(result.current.items.map((m) => m.message)).toEqual([
+      "/a@1",
+      "/a@2",
+      "/a@3",
+      "/a@4",
+      "/a@5",
+    ]);
   });
 
   it("takes live updates at most every 250 ms, always ending on the latest", () => {

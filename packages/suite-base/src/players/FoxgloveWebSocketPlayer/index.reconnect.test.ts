@@ -1,13 +1,10 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
+import { STABLE_CONNECTION_MS } from "@lichtblick/suite-base/players/LiveConnectionBackend";
 import { PlayerState } from "@lichtblick/suite-base/players/types";
 
-import FoxgloveWebSocketPlayer, {
-  LINK_PROBE_TIMEOUT_MS,
-  LINK_SILENCE_MS,
-  STABLE_CONNECTION_MS,
-} from "./index";
+import FoxgloveWebSocketPlayer, { LINK_PROBE_TIMEOUT_MS, LINK_SILENCE_MS } from "./index";
 
 class MockWebSocket {
   public static lastInstance: MockWebSocket | undefined;
