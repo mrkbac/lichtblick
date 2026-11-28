@@ -103,17 +103,23 @@ export class TransformTree {
     const frame = existing ?? this.getOrCreateFrame(frameId);
     const sizeBefore = frame.transformsSize();
     const curParentFrame = frame.latestParent();
+    let added = false;
     if (curParentFrame?.id !== parentFrameId) {
       cycleDetected = this.#checkParentForCycle(frameId, parentFrameId);
-      // This frame was previously unparented but now we know its parent, or we
-      // are reparenting this frame
       if (!cycleDetected) {
-        frame.setParent(this.getOrCreateFrame(parentFrameId));
+        const parent = this.getOrCreateFrame(parentFrameId);
+        // A complete history's transform from before the current parent's (a seek's read during
+        // preloading) is placed under the parent of its time. Else this frame was unparented
+        // until now, or it is reparented.
+        added = frame.addEarlierTransform(parent, time, transform, receiveTime);
+        if (!added) {
+          frame.setParent(parent);
+        }
         updated = true;
       }
     }
 
-    if (!cycleDetected) {
+    if (!cycleDetected && !added) {
       frame.addTransform(time, transform, receiveTime);
     }
     this.#sampleCount += frame.transformsSize() - sizeBefore;

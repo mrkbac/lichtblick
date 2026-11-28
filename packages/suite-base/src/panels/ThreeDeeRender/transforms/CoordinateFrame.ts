@@ -28,6 +28,11 @@ const tempTransform = Transform.Identity();
 const tempMatrix = mat4Identity();
 
 const FALLBACK_FRAME_ID = Symbol("FALLBACK_FRAME_ID");
+
+/** When a history's first transform was received (its stamp for one always received) */
+function firstReceived(history: TransformHistory): Time {
+  return history.receiveTimeAt(0) ?? history.timeAt(0);
+}
 export type FallbackFrameId = typeof FALLBACK_FRAME_ID;
 
 /**
@@ -236,7 +241,42 @@ export class CoordinateFrame<ID extends AnyFrameId = UserFrameId> {
       transforms.setKeepEvery(this.#keepEvery);
     }
     this.#earlier = [...segments, ...this.#earlier];
+    // A seek's read may have put transforms in the earlier window's span
+    this.#orderSegments();
     return dropped;
+  }
+
+  /**
+   * Puts the parent segments of a complete history in receive order (by their first transform) and
+   * joins neighbours under one parent; the newest becomes the current one. Segments arrive out of
+   * order when a read writes before what was read so far (a seek's read during preloading).
+   */
+  #orderSegments(): void {
+    const segments = [...this.#earlier];
+    if (this.#parent) {
+      segments.push({ parent: this.#parent, transforms: this.#transforms });
+    }
+    const ordered = segments
+      .filter(({ transforms }) => transforms.size() > 0)
+      .sort((x, y) => Number(firstReceived(x.transforms) - firstReceived(y.transforms)));
+    const joined: typeof segments = [];
+    for (const segment of ordered) {
+      const previous = joined.at(-1);
+      if (previous?.parent === segment.parent) {
+        segment.transforms.prepend(previous.transforms);
+        joined[joined.length - 1] = segment;
+      } else {
+        joined.push(segment);
+      }
+    }
+    const newest = joined.pop();
+    if (!newest) {
+      return;
+    }
+    this.#earlier = joined;
+    this.#parent = newest.parent;
+    this.#transforms = newest.transforms;
+    this.#transforms.setKeepEvery(this.#keepEvery);
   }
 
   /**
@@ -272,6 +312,47 @@ export class CoordinateFrame<ID extends AnyFrameId = UserFrameId> {
     }
 
     history.removeOlderThan(Number(this.maxStorageTime));
+  }
+
+  /**
+   * For a complete history: adds a transform received before the current parent's first one (a
+   * seek's read during preloading) to the parent segment it was received in, or to a new one
+   * between, instead of making `parent` the newest parent as {@link setParent} would. Reparenting
+   * follows receive order (a stamp may be older). Returns false (adding nothing) for a transform
+   * that isn't received before the current parent's.
+   */
+  public addEarlierTransform(
+    parent: CoordinateFrame,
+    time: Time,
+    transform: Transform,
+    receiveTime?: Time,
+  ): boolean {
+    const key = receiveTime ?? time;
+    if (
+      !this.#visibility.complete ||
+      this.#transforms.size() === 0 ||
+      key >= firstReceived(this.#transforms)
+    ) {
+      return false;
+    }
+    // The newest segment received by then, if any, else the one after it
+    let i = this.#earlier.length - 1;
+    while (i >= 0 && firstReceived(this.#earlier[i]!.transforms) > key) {
+      i--;
+    }
+    const at = this.#earlier[i];
+    const after = this.#earlier[i + 1] ?? { parent: this.#parent, transforms: this.#transforms };
+    if (at?.parent === parent) {
+      at.transforms.set(time, transform, receiveTime);
+    } else if (after.parent === parent) {
+      after.transforms.set(time, transform, receiveTime);
+    } else {
+      const transforms = new TransformHistory();
+      transforms.setKeepEvery(this.#keepEvery);
+      transforms.set(time, transform, receiveTime);
+      this.#earlier.splice(i + 1, 0, { parent, transforms });
+    }
+    return true;
   }
 
   /**
