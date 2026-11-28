@@ -1077,25 +1077,23 @@ export class PlotCoordinator extends EventEmitter<PlotCoordinatorEventTypes> {
             this.queueDispatchDownsample();
           },
         );
-        for await (const batch of batchIterator) {
-          if (cancelled || this.isDestroyed()) {
-            return;
-          }
-          const startTime = this.startTime;
-          if (!startTime) {
-            continue;
-          }
-          this.datasetsBuilder.handleMessageRange?.(
-            batch,
-            { isReset, seriesKeys, readsXAxis, earlier: earlier.place(batch) },
-            startTime,
-          );
-          isReset = false;
-          this.queueDispatchDownsample();
-        }
-        if (!cancelled && !this.isDestroyed()) {
-          earlier.flush();
-        }
+        await earlier.read(
+          batchIterator,
+          () => cancelled || this.isDestroyed(),
+          (batch, into) => {
+            const startTime = this.startTime;
+            if (!startTime) {
+              return;
+            }
+            this.datasetsBuilder.handleMessageRange?.(
+              batch,
+              { isReset, seriesKeys, readsXAxis, earlier: into },
+              startTime,
+            );
+            isReset = false;
+            this.queueDispatchDownsample();
+          },
+        );
       },
     });
     entry.cancel = () => {

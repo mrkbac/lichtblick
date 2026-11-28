@@ -79,9 +79,9 @@ export class ColumnStore<K extends string> {
 
   /**
    * Put the rows of `earlier` (all before this store's first row) in front of this store's rows,
-   * for history read backwards from the playhead. They are thinned to at least this store's
-   * stride, and further to fit the limit: older history loses resolution first, and this store's
-   * rows (and its newest one) stay as they are.
+   * for history read backwards from the playhead. When both don't fit the limit, this store is
+   * halved first until the earlier rows fit at its stride, so both sides end up at one resolution;
+   * its newest row is kept.
    */
   public prepend(earlier: ColumnStore<K>): void {
     if (earlier.length === 0) {
