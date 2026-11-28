@@ -47,12 +47,15 @@ function toRanges(spans: [bigint, bigint][], first: bigint, last: bigint): Range
 function growSpans(
   first: bigint,
   last: bigint,
-  lo: bigint,
-  hi: bigint,
-  size: bigint,
+  readFrom: bigint,
+  readTo: bigint,
+  firstSize: bigint,
 ): [bigint, bigint][] {
   const clamp = (ns: bigint) => (ns < first ? first : ns > last ? last : ns);
   const spans: [bigint, bigint][] = [];
+  let lo = readFrom;
+  let hi = readTo;
+  let size = firstSize;
   while (lo > first || hi < last) {
     if (lo > first) {
       const to = lo - 1n;
@@ -464,7 +467,7 @@ class SharedRead {
   #position?: Time;
   readonly #atPosition = new Map<string, number>();
   /** The catch-up read gathering the readers that join at the next window */
-  #catchUp?: { window: number; read: SharedRead };
+  #catchUp?: { index: number; read: SharedRead };
 
   public constructor(
     readRange: ReadRange,
@@ -513,12 +516,12 @@ class SharedRead {
    */
   public joinLate(topic: string): Reader {
     const reader = this.join(topic);
-    const window = this.#windowIndex;
-    reader.fromWindow = window + 1;
-    if (this.#catchUp?.window !== window) {
-      const missed = this.#windows.slice(0, window + 1);
+    const index = this.#windowIndex;
+    reader.fromWindow = index + 1;
+    if (this.#catchUp?.index !== index) {
+      const missed = this.#windows.slice(0, index + 1);
       const read = new SharedRead(this.#readRange, () => missed);
-      const catchUp = { window, read };
+      const catchUp = { index, read };
       this.#catchUp = catchUp;
       setTimeout(() => {
         if (this.#catchUp === catchUp) {
@@ -585,7 +588,7 @@ class SharedRead {
   async #runWindow(span: Range): Promise<void> {
     this.#position = undefined;
     this.#atPosition.clear();
-    const window = this.#windowIndex;
+    const index = this.#windowIndex;
     const topics: TopicSelection = new Map(
       [...this.#readers].map((reader) => [reader.topic, { topic: reader.topic }]),
     );
@@ -606,7 +609,7 @@ class SharedRead {
         }
         for (const reader of this.#readers) {
           if (
-            reader.fromWindow <= window &&
+            reader.fromWindow <= index &&
             (result.type !== "message-event" || result.msgEvent.topic === reader.topic)
           ) {
             reader.push(result);
