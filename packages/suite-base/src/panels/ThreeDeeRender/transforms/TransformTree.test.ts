@@ -520,7 +520,7 @@ describe("TransformTree", () => {
       }
     });
 
-    it("gives an earlier window the room left in the budget, but at least an eighth", () => {
+    it("gives an earlier window the room left in the budget, but at least half", () => {
       const tree = new TransformTree(undefined, 80);
       tree.setComplete(true);
       for (let t = 0; t < 30; t++) {
@@ -533,16 +533,57 @@ describe("TransformTree", () => {
         return into.frame("c")!.transformsSize();
       };
       expect(fill(tree.createEarlier())).toBeLessThanOrEqual(50);
+      expect(fill(tree.createEarlier())).toBeGreaterThan(20);
       for (let t = 30; t < 80; t++) {
         tree.addTransform("b", "a", BigInt(t) * sec, at(t), BigInt(t) * sec);
       }
-      // The tree is full: the floor of 80 / 8 holds ten samples, and thins past them
+      // The tree is full: the floor of 80 / 2 holds 40 samples, and thins past them
       const floor = tree.createEarlier();
-      for (let t = 0; t < 10; t++) {
+      for (let t = 0; t < 40; t++) {
         floor.addTransform("c", "a", BigInt(t) * sec, at(t), BigInt(t) * sec);
       }
-      expect(floor.frame("c")!.transformsSize()).toBe(10);
-      expect(fill(tree.createEarlier())).toBeLessThanOrEqual(10);
+      expect(floor.frame("c")!.transformsSize()).toBe(40);
+      expect(fill(tree.createEarlier())).toBeLessThanOrEqual(40);
+    });
+
+    it("keeps about as many samples merging a full tree's earlier window as reading in time order", () => {
+      const add = (into: TransformTree, t: number) =>
+        into.addTransform("b", "a", BigInt(t) * sec, at(t), BigInt(t) * sec);
+      const ordered = new TransformTree(undefined, 1000);
+      ordered.setComplete(true);
+      for (let t = 0; t < 4000; t++) {
+        add(ordered, t);
+      }
+      const tree = new TransformTree(undefined, 1000);
+      tree.setComplete(true);
+      for (let t = 2000; t < 4000; t++) {
+        add(tree, t);
+      }
+      const earlier = tree.createEarlier();
+      for (let t = 0; t < 2000; t++) {
+        add(earlier, t);
+      }
+      tree.prepend(earlier);
+      // A sample over the budget at a window's edge can cost one extra halving, not more
+      expect(tree.frame("b")!.keepEvery()).toBeLessThanOrEqual(2 * ordered.frame("b")!.keepEvery());
+      expect(tree.frame("b")!.transformsSize()).toBeGreaterThanOrEqual(
+        ordered.frame("b")!.transformsSize() / 2,
+      );
+    });
+
+    it("counts thinning done by an earlier window's own budget", () => {
+      const tree = new TransformTree(undefined, 100);
+      tree.setComplete(true);
+      for (let t = 200; t < 210; t++) {
+        tree.addTransform("b", "a", BigInt(t) * sec, at(t), BigInt(t) * sec);
+      }
+      const earlier = tree.createEarlier();
+      for (let t = 0; t < 150; t++) {
+        earlier.addTransform("b", "a", BigInt(t) * sec, at(t), BigInt(t) * sec);
+      }
+      tree.prepend(earlier);
+      expect(tree.decimations).toBe(Math.log2(tree.frame("b")!.keepEvery()));
+      expect(tree.decimations).toBeGreaterThan(0);
     });
 
     it("merges an earlier window thinned further by its own budget at one rate", () => {

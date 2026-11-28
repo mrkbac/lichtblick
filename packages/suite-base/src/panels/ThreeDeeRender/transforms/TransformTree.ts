@@ -312,6 +312,8 @@ export class TransformTree {
       while (target.keepEvery() < frame.keepEvery()) {
         this.#sampleCount -= target.decimate();
       }
+      // Count thinning done by the earlier window's own budget too, so the alert shows it
+      this.decimations = Math.max(this.decimations, Math.log2(target.keepEvery()));
       const sizeBefore = target.transformsSize();
       const cyclic = target.prepend(
         frame,
@@ -339,8 +341,11 @@ export class TransformTree {
   /**
    * An empty tree for an earlier window of this tree's history (see prepend). Its frames keep
    * transforms at this tree's rate for them, and it has the room left in this tree's budget, so
-   * both together stay near the budget: at least an eighth of it, so a full tree doesn't thin the
-   * earlier window to nothing (the merge then halves both evenly).
+   * both together stay near the budget: at least half of it, so a full tree doesn't thin the
+   * earlier window far below its own rate (the merge brings both to one rate, so an earlier window
+   * thinned 32x would thin the whole history 32x). Half fits an earlier window as long as what
+   * was read before it, which the doubling windows keep to, at the rate both need together; the
+   * cost is a peak of 1.5x the budget while a window is open.
    * ponytail: each topic's read has its own earlier window, and each gets this room, so several
    * transform topics can together exceed the budget until their merges; split the room across open
    * windows if many topics carry dense transforms.
@@ -349,7 +354,7 @@ export class TransformTree {
     const room = this.#sampleBudget - this.#sampleCount;
     const tree = new TransformTree(
       this.#maxStorageTime,
-      Math.max(room, Math.ceil(this.#sampleBudget / 8)),
+      Math.max(room, Math.ceil(this.#sampleBudget / 2)),
     );
     tree.setComplete(this.#complete);
     tree.#keepEveryOf = (id) => this.#frames.get(id)?.keepEvery();
