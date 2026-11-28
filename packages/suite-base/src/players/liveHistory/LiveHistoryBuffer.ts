@@ -537,7 +537,9 @@ export class LiveHistoryBuffer {
  * rarely on a shared transform topic survives a seek.
  */
 export function seedKeys(msg: MessageEvent): readonly string[] {
-  return transformEntries(msg.message)?.map((tf) => tf.child_frame_id) ?? WHOLE_MESSAGE_KEYS;
+  const entries = transformEntries(msg.message);
+  // A frame named twice in one message is one seed: counted twice, it would release itself
+  return entries ? [...new Set(entries.map((tf) => tf.child_frame_id))] : WHOLE_MESSAGE_KEYS;
 }
 
 /** Per topic, the sequence number of the latest whole message and of the latest message per frame. */

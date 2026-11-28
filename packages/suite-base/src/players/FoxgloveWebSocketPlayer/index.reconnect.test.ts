@@ -3,7 +3,11 @@
 
 import { PlayerState } from "@lichtblick/suite-base/players/types";
 
-import FoxgloveWebSocketPlayer, { LINK_PROBE_TIMEOUT_MS, LINK_SILENCE_MS } from "./index";
+import FoxgloveWebSocketPlayer, {
+  LINK_PROBE_TIMEOUT_MS,
+  LINK_SILENCE_MS,
+  STABLE_CONNECTION_MS,
+} from "./index";
 
 class MockWebSocket {
   public static lastInstance: MockWebSocket | undefined;
@@ -114,7 +118,10 @@ describe("FoxgloveWebSocketPlayer reconnect", () => {
 
   async function drop() {
     close();
-    await vi.advanceTimersByTimeAsync(1_000); // first reconnect delay
+    // The reconnect delay grows with each drop of a connection that didn't stay up
+    for (let i = 0; i < 60 && MockWebSocket.lastInstance === ws; i++) {
+      await vi.advanceTimersByTimeAsync(1_000);
+    }
     expect(MockWebSocket.lastInstance).not.toBe(ws);
   }
 
@@ -415,6 +422,94 @@ describe("FoxgloveWebSocketPlayer reconnect", () => {
     expect(lastState?.alerts?.map(({ message }) => message)).toContain(
       "Failed to parse channel schema on /foo",
     );
+  });
+
+  it("clears the schema alert of a broken channel once the server unadvertises it", async () => {
+    ws.receive(
+      JSON.stringify({ op: "advertise", channels: [{ ...CHANNEL, id: 5, encoding: "unknown" }] }),
+    );
+    await vi.advanceTimersByTimeAsync(100);
+    (console.error as ReturnType<typeof vi.fn>).mockClear();
+    expect(lastState?.alerts?.map(({ message }) => message)).toContain(
+      "Failed to parse channel schema on /foo",
+    );
+    ws.receive(JSON.stringify({ op: "unadvertise", channelIds: [5] }));
+    await vi.advanceTimersByTimeAsync(100);
+    expect(lastState?.alerts?.map(({ message }) => message) ?? []).not.toContain(
+      "Failed to parse channel schema on /foo",
+    );
+  });
+
+  it("doesn't keep a ghost topic when a channel id is advertised again on another topic", async () => {
+    ws.receive(JSON.stringify({ op: "advertise", channels: [{ ...CHANNEL, topic: "/bar" }] }));
+    await vi.advanceTimersByTimeAsync(100);
+    expect(lastState?.activeData?.topics.map(({ name }) => name)).toEqual(["/bar"]);
+    ws.receive(JSON.stringify({ op: "unadvertise", channelIds: [CHANNEL.id] }));
+    await vi.advanceTimersByTimeAsync(100);
+    expect(lastState?.activeData?.topics ?? []).toEqual([]);
+  });
+
+  it("keeps a subscription when its channel is advertised again unchanged", async () => {
+    player.setSubscriptions([{ topic: "/foo" }]);
+    await Promise.resolve();
+    ws.send.mockClear();
+    ws.receive(JSON.stringify({ op: "advertise", channels: [CHANNEL] }));
+    await vi.advanceTimersByTimeAsync(100);
+    expect(ws.sentOps().map(({ op }) => op)).not.toContain("subscribe");
+  });
+
+  it("keeps ignoring late data of a canceled subscription across a reconnect", async () => {
+    player.setSubscriptions([{ topic: "/foo" }]);
+    await Promise.resolve();
+    player.setSubscriptions([]); // subscription 0 canceled: late data ignored for 2 s
+    await drop(); // t = 1 s
+    connect();
+    player.setSubscriptions([{ topic: "/foo" }]); // the new client's subscription 0
+    await vi.advanceTimersByTimeAsync(500); // t = 1.5 s
+    player.setSubscriptions([]); // canceled: ignored until t = 3.5 s
+    await vi.advanceTimersByTimeAsync(600); // t = 2.1 s: past the first cancel's 2 s
+    ws.receive(messageData(0, 1n));
+    await vi.advanceTimersByTimeAsync(100);
+    expect(lastState?.alerts?.map(({ message }) => message) ?? []).not.toContainEqual(
+      expect.stringContaining("unknown subscription"),
+    );
+  });
+
+  it("doesn't send a parameter while the next connection is opening", async () => {
+    await drop();
+    connect("session", ["parameters"]);
+    close(); // the next socket is still connecting
+    for (let i = 0; i < 60 && MockWebSocket.lastInstance === ws; i++) {
+      await vi.advanceTimersByTimeAsync(1_000);
+    }
+    const next = MockWebSocket.lastInstance!;
+    expect(() => {
+      player.setParameter("/p", 1);
+    }).toThrow();
+    expect(next.send).not.toHaveBeenCalled();
+  });
+
+  it("backs off from a server that drops every connection right after serverInfo", async () => {
+    vi.spyOn(Math, "random").mockReturnValue(0);
+    for (const delay of [1_000, 2_000, 4_000]) {
+      const previous = MockWebSocket.lastInstance;
+      close(); // dropped right after introducing itself
+      await vi.advanceTimersByTimeAsync(delay - 1);
+      expect(MockWebSocket.lastInstance).toBe(previous);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(MockWebSocket.lastInstance).not.toBe(previous);
+      connect();
+    }
+    // A connection that stays up (and keeps talking, so the link check is happy) starts the
+    // backoff over
+    for (let t = 0; t < STABLE_CONNECTION_MS; t += 5_000) {
+      ws.receive(JSON.stringify({ op: "advertise", channels: [CHANNEL] }));
+      await vi.advanceTimersByTimeAsync(5_000);
+    }
+    const stable = MockWebSocket.lastInstance;
+    close();
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(MockWebSocket.lastInstance).not.toBe(stable);
   });
 
   it("calls services that name their own encoding when the server lists none", async () => {

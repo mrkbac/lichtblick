@@ -41,6 +41,16 @@ function tf(sec: number, ...children: string[]): MessageEvent {
 const times = (events: MessageEvent[]) => events.map((e) => e.receiveTime.sec);
 
 describe("LiveHistoryBuffer", () => {
+  it("counts a transform message that names a frame twice once while it seeds", () => {
+    const buffer = new LiveHistoryBuffer({ windowNs: 5n * SEC, maxBytes: 1e9 });
+    for (let t = 1; t <= 100; t++) {
+      buffer.add(tf(t, "a", "a"));
+    }
+    buffer.add(tf(200, "b")); // evicts every earlier one: the newest seeds frame a
+    const one = tf(0, "b").sizeInBytes;
+    expect(buffer.sizeBytes()).toBe(2 * one);
+  });
+
   it("expires messages older than the window as time moves forward", () => {
     const buffer = new LiveHistoryBuffer({
       windowNs: 10n * SEC,
