@@ -672,43 +672,44 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
       if (reads.has(key)) {
         continue;
       }
-      reads.set(
-        key,
-        context.unstable_subscribeMessageRange({
-          topic: topic.name,
-          convertTo: topic.schemaName,
-          // Around the playhead first, so the track where the user looks shows at once
-          playheadFirst: true,
-          // A live source's trail starts with what the session kept, not when the panel opened
-          liveHistory: true,
-          onNewRangeIterator: async (iterator, info) => {
-            // A new iterator replaces the topic's data (e.g. an edited user script); drop the old.
-            tracksRef.current.get(topic.name)?.clear();
-            scheduleTrackFlush("recorded");
-            const live = info?.liveHistory === true ? new LiveHistoryRead<NavMessage>() : undefined;
-            if (live) {
-              liveTrackReadsRef.current.set(topic.name, live);
-            } else {
-              rangeTopicsRef.current.add(topic.name);
-            }
-            const earlier = new EarlierWindows<Map<string, TrackStore>>(
-              () => new Map(),
-              (stores) => {
-                for (const [name, before] of stores) {
-                  let store = tracksRef.current.get(name);
-                  if (!store) {
-                    store = new TrackStore(name);
-                    tracksRef.current.set(name, store);
-                  }
-                  store.prepend(before);
-                  store.schemaName ||= before.schemaName;
+      let cancelled = false;
+      const unsubscribe = context.unstable_subscribeMessageRange({
+        topic: topic.name,
+        convertTo: topic.schemaName,
+        // Around the playhead first, so the track where the user looks shows at once
+        playheadFirst: true,
+        // A live source's trail starts with what the session kept, not when the panel opened
+        liveHistory: true,
+        onNewRangeIterator: async (iterator, info) => {
+          // A new iterator replaces the topic's data (e.g. an edited user script); drop the old.
+          tracksRef.current.get(topic.name)?.clear();
+          scheduleTrackFlush("recorded");
+          const live = info?.liveHistory === true ? new LiveHistoryRead<NavMessage>() : undefined;
+          if (live) {
+            liveTrackReadsRef.current.set(topic.name, live);
+          } else {
+            rangeTopicsRef.current.add(topic.name);
+          }
+          const earlier = new EarlierWindows<Map<string, TrackStore>>(
+            () => new Map(),
+            (stores) => {
+              for (const [name, before] of stores) {
+                let store = tracksRef.current.get(name);
+                if (!store) {
+                  store = new TrackStore(name);
+                  tracksRef.current.set(name, store);
                 }
-                scheduleTrackFlush("recorded");
-              },
-            );
-            for await (const batch of iterator) {
+                store.prepend(before);
+                store.schemaName ||= before.schemaName;
+              }
+              scheduleTrackFlush("recorded");
+            },
+          );
+          const done = await earlier.read(
+            iterator,
+            () => cancelled,
+            (batch, into) => {
               live?.read(batch);
-              const into = earlier.place(batch);
               const valid = expandLocationFixes(batch).filter(
                 (event): event is NavMessage =>
                   isValidMapMessage(event) && !isGeoJSONMessage(event),
@@ -716,18 +717,21 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
               if (valid.length > 0) {
                 appendTrack(valid, "recorded", into);
               }
+            },
+          );
+          if (done && live && liveTrackReadsRef.current.get(topic.name) === live) {
+            liveTrackReadsRef.current.delete(topic.name);
+            const after = live.end();
+            if (after.length > 0) {
+              appendTrack(after, "live");
             }
-            earlier.flush();
-            if (live && liveTrackReadsRef.current.get(topic.name) === live) {
-              liveTrackReadsRef.current.delete(topic.name);
-              const after = live.end();
-              if (after.length > 0) {
-                appendTrack(after, "live");
-              }
-            }
-          },
-        }),
-      );
+          }
+        },
+      });
+      reads.set(key, () => {
+        cancelled = true;
+        unsubscribe();
+      });
     }
   }, [appendTrack, context, navTopics, scheduleTrackFlush]);
   useLayoutEffect(
@@ -824,49 +828,54 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
       if (reads.has(key)) {
         continue;
       }
-      reads.set(
-        key,
-        context.unstable_subscribeMessageRange({
-          topic,
-          playheadFirst: true,
-          liveHistory: true,
-          onNewRangeIterator: async (iterator, info) => {
-            for (const { path } of paths) {
-              samplesRef.current.get(path)?.clear();
-            }
-            setPathSamples({ stores: samplesRef.current });
-            const live = info?.liveHistory === true ? new LiveHistoryRead() : undefined;
-            if (live) {
-              liveSampleReadsRef.current.set(topic, live);
-            } else {
-              pathRangeTopicsRef.current.add(topic);
-            }
-            const earlier = new EarlierWindows<Map<string, SampleStore>>(
-              () => new Map(),
-              (stores) => {
-                for (const [path, before] of stores) {
-                  let store = samplesRef.current.get(path);
-                  if (!store) {
-                    store = new SampleStore();
-                    samplesRef.current.set(path, store);
-                  }
-                  store.prepend(before);
+      let cancelled = false;
+      const unsubscribe = context.unstable_subscribeMessageRange({
+        topic,
+        playheadFirst: true,
+        liveHistory: true,
+        onNewRangeIterator: async (iterator, info) => {
+          for (const { path } of paths) {
+            samplesRef.current.get(path)?.clear();
+          }
+          setPathSamples({ stores: samplesRef.current });
+          const live = info?.liveHistory === true ? new LiveHistoryRead() : undefined;
+          if (live) {
+            liveSampleReadsRef.current.set(topic, live);
+          } else {
+            pathRangeTopicsRef.current.add(topic);
+          }
+          const earlier = new EarlierWindows<Map<string, SampleStore>>(
+            () => new Map(),
+            (stores) => {
+              for (const [path, before] of stores) {
+                let store = samplesRef.current.get(path);
+                if (!store) {
+                  store = new SampleStore();
+                  samplesRef.current.set(path, store);
                 }
-                setPathSamples({ stores: samplesRef.current });
-              },
-            );
-            for await (const batch of iterator) {
+                store.prepend(before);
+              }
+              setPathSamples({ stores: samplesRef.current });
+            },
+          );
+          const done = await earlier.read(
+            iterator,
+            () => cancelled,
+            (batch, into) => {
               live?.read(batch);
-              appendPathSamples(batch, paths, "recorded", earlier.place(batch));
-            }
-            earlier.flush();
-            if (live && liveSampleReadsRef.current.get(topic) === live) {
-              liveSampleReadsRef.current.delete(topic);
-              appendPathSamples(live.end(), paths, "live");
-            }
-          },
-        }),
-      );
+              appendPathSamples(batch, paths, "recorded", into);
+            },
+          );
+          if (done && live && liveSampleReadsRef.current.get(topic) === live) {
+            liveSampleReadsRef.current.delete(topic);
+            appendPathSamples(live.end(), paths, "live");
+          }
+        },
+      });
+      reads.set(key, () => {
+        cancelled = true;
+        unsubscribe();
+      });
     }
   }, [appendPathSamples, colorPaths, context]);
   useLayoutEffect(
