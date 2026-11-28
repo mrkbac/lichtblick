@@ -332,6 +332,8 @@ describe("SharedRangeReads", () => {
       gates?: Record<string, PromiseWithResolvers<void>>;
     } = {}) {
       const reads: Read[] = [];
+      /** "topics@sec" of every message read, in order */
+      const log: string[] = [];
       const gate = Promise.withResolvers<void>();
       gates[`a@${gateAt}`] ??= gate;
       const bounds = { start: { sec: 0, nsec: 0 }, end: { sec: 99, nsec: 0 } };
@@ -352,6 +354,7 @@ describe("SharedRangeReads", () => {
               continue;
             }
             await gates[`${[...selection.keys()].join()}@${t}`]?.promise;
+            log.push(`${[...selection.keys()].join()}@${t}`);
             for (const topic of topics) {
               if (selection.has(topic)) {
                 yield { type: "message-event", msgEvent: message(topic, t) };
@@ -371,7 +374,7 @@ describe("SharedRangeReads", () => {
       const seek = (sec: number) => {
         playhead = { sec, nsec: 0 };
       };
-      return { shared, reads, gate, seek };
+      return { shared, reads, log, gate, seek };
     }
     const all = (topic: string) => Array.from({ length: 100 }, (_, t) => `${topic}${t}`);
     const sorted = (seen: string[], topic: string) =>
@@ -417,6 +420,28 @@ describe("SharedRangeReads", () => {
         { topics: "a,b", start: 60, end: 79 },
         { topics: "a,b", start: 80, end: undefined },
       ]);
+    });
+
+    it("pauses while a joiner's catch-up reads the window at the cursor", async () => {
+      // Playhead-first windows: [40 s, 60 s], [20 s, 39 s], [61 s, 80 s], …; the pass waits at 70 s,
+      // the catch-up in the middle of the cursor window
+      const gates = {
+        "a@70": Promise.withResolvers<void>(),
+        "b@50": Promise.withResolvers<void>(),
+      };
+      const { shared, log } = windowed({ gates });
+      const a = shared.read("a", {}, { playheadFirst: true });
+      const aSeen = await take(a, 50);
+      const b = collect(shared.read("b", {}, { playheadFirst: true }));
+      await tick();
+      gates["a@70"].resolve();
+      await tick();
+
+      // The pass took the message it waited on, then paused for the catch-up
+      expect(log.filter((entry) => entry.startsWith("a@7"))).toEqual(["a@70"]);
+      gates["b@50"].resolve();
+      expect(sorted([...aSeen, ...(await collect(a))], "a")).toEqual(all("a"));
+      expect(sorted(await b, "b")).toEqual(all("b"));
     });
 
     it("reads the windows missed by readers joining together in one catch-up", async () => {
@@ -596,6 +621,40 @@ describe("SharedRangeReads", () => {
       const rest = await collect(b);
       expect(first.value).toMatchObject({ msgEvent: { topic: "b" } });
       expect(rest).toEqual(["b1"]);
+    });
+
+    it("doesn't deadlock a consumer that alternates between the pass and a joiner's catch-up", async () => {
+      // The catch-up holds more than a reader queues; the consumer takes one of each in turn, so it
+      // waits on "a" while the pass pauses for the catch-up, until the catch-up runs out of room
+      const recording = range(5000).flatMap((sec) => [
+        ...events("a", [sec]),
+        ...events("b", [sec]),
+      ]);
+      const shared = recordingSource(recording);
+      const a = shared.read("a", {});
+      const seen = { a: [] as string[], b: [] as string[] };
+      while (seen.a.length < 10) {
+        const next = await a.next();
+        if (next.done !== true && next.value.type === "message-event") {
+          seen.a.push(`a${next.value.msgEvent.receiveTime.sec}`);
+        }
+      }
+      const b = shared.read("b", {});
+      for (let done = { a: false, b: false }; !done.a || !done.b; ) {
+        for (const [topic, iterator] of [
+          ["a", a],
+          ["b", b],
+        ] as const) {
+          const next = await iterator.next();
+          if (next.done === true) {
+            done[topic] = true;
+          } else if (next.value.type === "message-event") {
+            seen[topic].push(`${topic}${next.value.msgEvent.receiveTime.sec}`);
+          }
+        }
+      }
+      expect(seen.a).toEqual(range(5000).map((sec) => `a${sec}`));
+      expect(seen.b).toEqual(range(5000).map((sec) => `b${sec}`));
     });
 
     it.each(range(8))(

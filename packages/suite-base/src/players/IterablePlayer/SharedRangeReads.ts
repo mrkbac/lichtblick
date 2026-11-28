@@ -460,6 +460,13 @@ class SharedRead {
   readonly #atPosition = new Map<string, number>();
   /** The catch-up read gathering the readers that join at the next window */
   #catchUp?: { index: number; read: SharedRead };
+  /** Resolves once its first window is read (or it stops): a catch-up's window at the cursor */
+  readonly #firstWindow = Promise.withResolvers<void>();
+  /** A late joiner's catch-up reading the cursor window: this read pauses for it meanwhile */
+  #yieldTo?: { done: Promise<void>; read: SharedRead };
+  /** Whether it waits for a reader to make room; and who to tell when it starts waiting */
+  #waitingForRoom = false;
+  #onStall?: () => void;
 
   public constructor(
     readRange: ReadRange,
@@ -521,12 +528,29 @@ class SharedRead {
         }
         void read.run();
       }, GATHER_MS);
+      // The joiners see the window at the cursor sooner when the catch-up has the CPU for it
+      const yieldTo = { done: read.#firstWindow.promise, read };
+      this.#yieldTo = yieldTo;
+      read.#onStall = () => this.#pulled?.();
+      void yieldTo.done.then(() => {
+        if (this.#yieldTo === yieldTo) {
+          this.#yieldTo = undefined;
+        }
+      });
     }
     reader.catchUp(this.#catchUp.read.join(topic));
     return reader;
   }
 
   public async run(): Promise<void> {
+    try {
+      await this.#run();
+    } finally {
+      this.#firstWindow.resolve();
+    }
+  }
+
+  async #run(): Promise<void> {
     if (this.#readers.size === 0) {
       return;
     }
@@ -538,6 +562,7 @@ class SharedRead {
           this.#followSeek();
         }
         await this.#runWindow(this.#windows[this.#windowIndex]!);
+        this.#firstWindow.resolve();
         if (this.#readers.size === 0 || this.#abort.signal.aborted) {
           break;
         }
@@ -620,9 +645,28 @@ class SharedRead {
           if (!this.#readers.values().some((reader) => reader.isFull())) {
             break;
           }
+          this.#waitingForRoom = true;
+          this.#onStall?.();
           await new Promise<void>((resolve) => {
             this.#pulled = resolve;
           });
+          this.#pulled = undefined;
+          this.#waitingForRoom = false;
+        }
+        // Pause while a joiner's catch-up reads the cursor window, unless that catch-up waits for
+        // room: its consumer may wait on one of this read's readers (e.g. merging them by time)
+        while (
+          this.#yieldTo &&
+          !this.#yieldTo.read.#waitingForRoom &&
+          this.#readers.size > 0 &&
+          !this.#abort.signal.aborted
+        ) {
+          await Promise.race([
+            this.#yieldTo.done,
+            new Promise<void>((resolve) => {
+              this.#pulled = resolve;
+            }),
+          ]);
           this.#pulled = undefined;
         }
         if (this.#readers.size === 0) {
@@ -636,8 +680,8 @@ class SharedRead {
 
   /** Continues `reader` with its own read from where the shared read is for it */
   #detach(reader: Reader): void {
-    // A reader that joined in the current window reads from its first window; else it goes on where
-    // the read is
+    // A reader that joined during the current window got nothing of it: its own read starts at its
+    // first window. Else it goes on from where this read is, skipping what it got at that time.
     const fresh = reader.fromWindow > this.#windowIndex;
     const windows = fresh
       ? this.#windows.slice(reader.fromWindow)
