@@ -140,6 +140,8 @@ const readHeapUsage = (): HeapUsage | undefined =>
 export const LINK_SILENCE_MS = 10_000;
 /** No answer this long after asking: the link is dead, reconnect. */
 export const LINK_PROBE_TIMEOUT_MS = 10_000;
+/** A connection up this long counts as good: its drop starts the reconnect backoff over. */
+export const STABLE_CONNECTION_MS = 30_000;
 /** Asset request id of the link probe; real requests count up from 1. */
 const LINK_PROBE_REQUEST_ID = 0;
 
@@ -231,8 +233,10 @@ export default class FoxgloveWebSocketPlayer implements Player {
   #resolvedSubscriptionsById = new Map<SubscriptionId, ResolvedChannel>();
   #channelsByTopic = new Map<string, ResolvedChannel>();
   #channelsById = new Map<ChannelId, ResolvedChannel>();
-  #unsupportedChannelIds = new Set<ChannelId>();
-  #recentlyCanceledSubscriptions = new Set<SubscriptionId>();
+  /** Topic of each advertised channel that couldn't be parsed */
+  #unsupportedChannels = new Map<ChannelId, string>();
+  /** Until when (Date.now() ms) late data of each ended subscription is expected, not a bug */
+  #recentlyCanceledSubscriptions = new Map<SubscriptionId, number>();
   #parameters = new Map<string, ParameterValue>();
   #getParameterInterval?: ReturnType<typeof setInterval>;
   #openTimeout?: ReturnType<typeof setInterval>;
@@ -371,6 +375,14 @@ export default class FoxgloveWebSocketPlayer implements Player {
           const terminal = close?.retryable === false;
           this.#presence = terminal ? PlayerPresence.ERROR : PlayerPresence.RECONNECTING;
           this.#stopRecording();
+          if (
+            this.#connectedAtMs != undefined &&
+            Date.now() - this.#connectedAtMs >= STABLE_CONNECTION_MS
+          ) {
+            // Only a connection that stayed up resets the backoff: a server that drops every client
+            // right after serverInfo is retried ever more slowly
+            this.#reconnectAttempts = 0;
+          }
           this.#connectedAtMs = undefined;
           clearInterval(this.#linkCheckInterval);
           this.#linkCheckInterval = undefined;
@@ -433,7 +445,6 @@ export default class FoxgloveWebSocketPlayer implements Player {
           if (this.#id !== newSessionId) {
             this.#resetSessionState();
           }
-          this.#reconnectAttempts = 0;
 
           if (!Array.isArray(event.capabilities)) {
             this.#alerts.addAlert("ws:invalid-capabilities", {
@@ -582,6 +593,11 @@ export default class FoxgloveWebSocketPlayer implements Player {
         advertise: (newChannels) => {
           const newDatatypes: MessageDefinitionMap[] = [];
           for (const channel of newChannels) {
+            if (_.isEqual(this.#channelsById.get(channel.id)?.channel, channel)) {
+              continue; // advertised again unchanged: keep its subscription
+            }
+            // An id advertised again with another topic or schema replaces its channel
+            this.#removeChannel(channel.id);
             let parsedChannel;
             let schema;
             try {
@@ -639,7 +655,7 @@ export default class FoxgloveWebSocketPlayer implements Player {
               schema = { name: channel.schemaName, encoding: schemaEncoding, data: schemaData };
               parsedChannel = parseChannel({ messageEncoding: channel.encoding, schema });
             } catch (error) {
-              this.#unsupportedChannelIds.add(channel.id);
+              this.#unsupportedChannels.set(channel.id, channel.topic);
               this.#alerts.addAlert(`schema:${channel.topic}`, {
                 severity: "error",
                 message: `Failed to parse channel schema on ${channel.topic}`,
@@ -676,43 +692,11 @@ export default class FoxgloveWebSocketPlayer implements Player {
 
         unadvertise: (removedChannels) => {
           for (const id of removedChannels) {
-            const chanInfo = this.#channelsById.get(id);
-            if (!chanInfo) {
-              if (!this.#unsupportedChannelIds.delete(id)) {
-                this.#alerts.addAlert(`unadvertise:${id}`, {
-                  severity: "error",
-                  message: `Server unadvertised channel ${id} that was not advertised`,
-                });
-                this.#emitState();
-              }
-              continue;
-            }
-            for (const [subId, { channel }] of this.#resolvedSubscriptionsById) {
-              if (channel.id === id) {
-                this.#resolvedSubscriptionsById.delete(subId);
-                this.#resolvedSubscriptionsByTopic.delete(channel.topic);
-                // No unsubscribe: unadvertising a channel ends its subscriptions on the server, which
-                // answers an unsubscribe for one with a "did not exist" warning. Data already on its
-                // way may still arrive.
-                this.#ignoreLateMessages(subId);
-                this.#unresolvedSubscriptions.add(channel.topic);
-              }
-            }
-            this.#channelsById.delete(id);
-            const { topic } = chanInfo.channel;
-            const others = [...this.#channelsById.values()].filter(
-              ({ channel }) => channel.topic === topic,
-            );
-            if (this.#channelsByTopic.get(topic) === chanInfo) {
-              if (others[0]) {
-                this.#channelsByTopic.set(topic, others[0]);
-                this.#updateDataTypes([others[0].parsedChannel.datatypes]);
-              } else {
-                this.#channelsByTopic.delete(topic);
-              }
-            }
-            if (others.length < 2) {
-              this.#alerts.removeAlert(`duplicate-topic:${topic}`);
+            if (!this.#removeChannel(id)) {
+              this.#alerts.addAlert(`unadvertise:${id}`, {
+                severity: "error",
+                message: `Server unadvertised channel ${id} that was not advertised`,
+              });
             }
           }
           this.#updateTopics();
@@ -723,7 +707,8 @@ export default class FoxgloveWebSocketPlayer implements Player {
         message: (subscriptionId, timestamp, data) => {
           const chanInfo = this.#resolvedSubscriptionsById.get(subscriptionId);
           if (!chanInfo) {
-            const wasRecentlyCanceled = this.#recentlyCanceledSubscriptions.has(subscriptionId);
+            const wasRecentlyCanceled =
+              (this.#recentlyCanceledSubscriptions.get(subscriptionId) ?? 0) > Date.now();
             if (!wasRecentlyCanceled) {
               this.#alerts.addAlert(`message-missing-subscription:${subscriptionId}`, {
                 severity: "warn",
@@ -1145,11 +1130,59 @@ export default class FoxgloveWebSocketPlayer implements Player {
 
   /** Data for a subscription that just ended may still be on its way: don't warn about it. */
   #ignoreLateMessages(subId: SubscriptionId): void {
-    this.#recentlyCanceledSubscriptions.add(subId);
-    setTimeout(
-      () => this.#recentlyCanceledSubscriptions.delete(subId),
-      SUBSCRIPTION_WARNING_SUPPRESSION_MS,
+    // An expiry, not a timer: a timer of a previous connection would end the suppression of the
+    // same id, reused by the next connection's client
+    this.#recentlyCanceledSubscriptions.set(
+      subId,
+      Date.now() + SUBSCRIPTION_WARNING_SUPPRESSION_MS,
     );
+  }
+
+  /**
+   * Forgets an advertised channel: its subscription waits for another channel on the topic, which
+   * takes over. Returns false for an id that isn't advertised.
+   */
+  #removeChannel(id: ChannelId): boolean {
+    const unsupportedTopic = this.#unsupportedChannels.get(id);
+    if (unsupportedTopic != undefined) {
+      this.#unsupportedChannels.delete(id);
+      if (![...this.#unsupportedChannels.values()].includes(unsupportedTopic)) {
+        this.#alerts.removeAlert(`schema:${unsupportedTopic}`);
+      }
+      return true;
+    }
+    const chanInfo = this.#channelsById.get(id);
+    if (!chanInfo) {
+      return false;
+    }
+    for (const [subId, { channel }] of this.#resolvedSubscriptionsById) {
+      if (channel.id === id) {
+        this.#resolvedSubscriptionsById.delete(subId);
+        this.#resolvedSubscriptionsByTopic.delete(channel.topic);
+        // No unsubscribe: unadvertising a channel ends its subscriptions on the server, which
+        // answers an unsubscribe for one with a "did not exist" warning. Data already on its
+        // way may still arrive.
+        this.#ignoreLateMessages(subId);
+        this.#unresolvedSubscriptions.add(channel.topic);
+      }
+    }
+    this.#channelsById.delete(id);
+    const { topic } = chanInfo.channel;
+    const others = [...this.#channelsById.values()].filter(
+      ({ channel }) => channel.topic === topic,
+    );
+    if (this.#channelsByTopic.get(topic) === chanInfo) {
+      if (others[0]) {
+        this.#channelsByTopic.set(topic, others[0]);
+        this.#updateDataTypes([others[0].parsedChannel.datatypes]);
+      } else {
+        this.#channelsByTopic.delete(topic);
+      }
+    }
+    if (others.length < 2) {
+      this.#alerts.removeAlert(`duplicate-topic:${topic}`);
+    }
+    return true;
   }
 
   #updateTopics() {
@@ -1393,7 +1426,8 @@ export default class FoxgloveWebSocketPlayer implements Player {
   }
 
   public setParameter(key: string, value: ParameterValue): void {
-    if (!this.#client) {
+    if (!this.#client || this.#serverCapabilities == undefined) {
+      // Also while the next connection is still opening: nothing may be sent before serverInfo
       throw new Error(`Attempted to set parameters without a valid Foxglove WebSocket connection`);
     }
 
@@ -2092,7 +2126,7 @@ export default class FoxgloveWebSocketPlayer implements Player {
     this.#servicesByName.clear();
     this.#channelsById.clear();
     this.#channelsByTopic.clear();
-    this.#unsupportedChannelIds.clear();
+    this.#unsupportedChannels.clear();
     // Subscription ids start over with the next connection's client
     this.#recentlyCanceledSubscriptions.clear();
     for (const topic of this.#resolvedSubscriptionsByTopic.keys()) {
