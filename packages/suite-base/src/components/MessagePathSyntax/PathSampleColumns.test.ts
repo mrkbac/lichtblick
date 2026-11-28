@@ -45,6 +45,25 @@ describe("PathSampleColumns", () => {
     expect(columns.changes()).toBe(columns);
   });
 
+  it("keeps the newest sample when putting earlier samples in front thins the history", () => {
+    const at = (sec: number): PathSample => ({
+      receiveTime: { sec, nsec: 0 },
+      headerStamp: undefined,
+      count: 1,
+      value: sec,
+      constantName: undefined,
+    });
+    const later = PathSampleColumns.from([at(10), at(11)], 4);
+    const earlier = PathSampleColumns.from([at(0), at(1), at(2), at(3)], 4);
+    const merged = PathSampleColumns.concat(earlier, later);
+    expect(merged.size()).toBeLessThanOrEqual(4);
+    expect(merged.at(merged.size() - 1)?.receiveTime).toEqual({ sec: 11, nsec: 0 });
+    // A sample after it replaces it as the newest
+    merged.push(at(12));
+    expect(merged.at(merged.size() - 1)?.receiveTime).toEqual({ sec: 12, nsec: 0 });
+    expect(merged.at(merged.size() - 2)?.receiveTime).not.toEqual({ sec: 11, nsec: 0 });
+  });
+
   it("concatenates earlier samples in front, thinned to the later one's budget", () => {
     const earlier = PathSampleColumns.from([0, 1, 2].map((sec) => sample(sec, sec)));
     const later = new PathSampleColumns(8);
