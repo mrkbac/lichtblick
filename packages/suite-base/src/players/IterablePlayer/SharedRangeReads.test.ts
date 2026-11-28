@@ -636,6 +636,32 @@ describe("SharedRangeReads", () => {
         range(perSecond).map((i) => `${sec}.${Math.floor((i * 1e9) / perSecond)}`),
       );
 
+    it("keeps readers that keep up on the shared read while a late joiner catches up", async () => {
+      // "c" joins in the first window and takes its long catch-up first, so its queue in the
+      // pass fills: the pass waits for it, while "a" and "b" keep up and wait for the pass
+      const { shared, reads } = dense({ perSecond: 200, topics: ["a", "b", "c"] });
+      const a = shared.read("a", {});
+      const b = shared.read("b", {});
+      const take = async (iterator: AsyncIterableIterator<Readonly<IteratorResult>>, n: number) => {
+        for (let i = 0; i < n; ) {
+          const next = await iterator.next();
+          if (next.done !== true && next.value.type === "message-event") {
+            i++;
+          }
+        }
+      };
+      await Promise.all([take(a, 1000), take(b, 1000)]);
+      const [restA, restB, c] = await Promise.all([
+        times(a),
+        times(b),
+        times(shared.read("c", {})),
+      ]);
+      expect([restA.length + 1000, restB.length + 1000]).toEqual([20000, 20000]);
+      expect(c).toEqual(allTimes(200));
+      // Only the joiner reads on its own; "a" and "b" stay on the shared read
+      expect(reads.filter(({ topics }) => topics === "a" || topics === "b")).toEqual([]);
+    });
+
     it("doesn't deliver its catch-up twice when it falls behind and reads on its own", async () => {
       // "a" stops pulling, so the pass waits for room in its fourth window (past the 4096th
       // message); "b" joins there, catches up the first four windows, then waits and reads the

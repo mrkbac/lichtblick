@@ -301,6 +301,11 @@ class Reader implements AsyncIterableIterator<Readonly<ReadResult>> {
     this.#onLeave = onLeave;
   }
 
+  /** Whether its consumer still takes its catch-up: nothing of its queue was delivered yet */
+  public catchingUp(): boolean {
+    return this.#catchUp != undefined;
+  }
+
   public isFull(): boolean {
     // Progress and zero-byte messages also occupy queue entries.
     return this.#queuedBytes > MAX_QUEUED_BYTES || this.#queue.size() >= 4096;
@@ -643,10 +648,16 @@ class SharedRead {
         // The slowest reader sets the pace, so what waits for it stays bounded. A consumer may
         // wait on one reader before it empties another (e.g. merging inputs by time): readers
         // waiting while the read waits for room go on with their own read instead of blocking
-        // each other. A late joiner still catching up isn't waiting: the read waits for it.
+        // each other. A late joiner still catching up isn't waiting: the read waits for it, until
+        // other readers wait. Then the joiners that hold it up go on with their own read instead,
+        // one read rather than one per reader that keeps up.
         while (this.#readers.values().some((reader) => reader.isFull())) {
-          for (const reader of this.#readers) {
-            if (reader.waiting) {
+          const full = [...this.#readers].filter((reader) => reader.isFull());
+          const joinersHoldUp =
+            full.every((reader) => reader.catchingUp()) &&
+            this.#readers.values().some((reader) => reader.waiting);
+          for (const reader of joinersHoldUp ? full : this.#readers) {
+            if (joinersHoldUp || reader.waiting) {
               this.#detach(reader);
             }
           }
@@ -688,9 +699,10 @@ class SharedRead {
 
   /** Continues `reader` with its own read from where the shared read is for it */
   #detach(reader: Reader): void {
-    // A reader that joined during the current window got nothing of it: its own read starts at its
-    // first window. Else it goes on from where this read is, skipping what it got at that time.
-    const fresh = reader.fromWindow > this.#windowIndex;
+    // A reader that joined during the current window got nothing of it, and a joiner still taking
+    // its catch-up got nothing of its queue: its own read starts at its first window (the queue is
+    // dropped). Else it goes on from where this read is, skipping what it got at that time.
+    const fresh = reader.fromWindow > this.#windowIndex || reader.catchingUp();
     const windows = fresh
       ? this.#windows.slice(reader.fromWindow)
       : this.#windowsFrom(this.#position);
