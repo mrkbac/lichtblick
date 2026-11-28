@@ -381,7 +381,15 @@ class Reader implements AsyncIterableIterator<Readonly<ReadResult>> {
   async #pull(): Promise<IteratorResult<Readonly<ReadResult>>> {
     // The shared read may end first: the catch-up still delivers what it missed (return() drops it)
     while (this.#catchUp) {
-      const result = await this.#pullFrom(this.#catchUp);
+      let result: IteratorResult<Readonly<ReadResult>>;
+      try {
+        result = await this.#pullFrom(this.#catchUp);
+      } catch (error: unknown) {
+        // A consumer's for-await doesn't call return() on a failed next(): leave the shared read
+        // here, or it would wait for this reader's queue forever
+        await this.return();
+        throw error;
+      }
       if (result.done !== true) {
         return result;
       }

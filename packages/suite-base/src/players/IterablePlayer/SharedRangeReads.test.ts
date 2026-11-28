@@ -513,19 +513,6 @@ describe("SharedRangeReads", () => {
       ]);
     });
 
-    it("doesn't let alerts of one failing topic fill another reader's queue", async () => {
-      // 100 messages each followed by an alert: "good" is read only after "bad", so without a
-      // bound its queue would fill with alerts and stall "bad" too
-      const { shared } = windowed({ topics: ["bad", "good"], alerting: "bad" });
-      const bad = shared.read("bad", {});
-      const good = shared.read("good", {});
-      const firstGood = await good.next();
-      expect(await collect(bad)).toEqual(all("bad"));
-      const rest = await collect(good);
-      expect(firstGood.value).toMatchObject({ msgEvent: { topic: "good" } });
-      expect(rest).toHaveLength(99);
-    });
-
     it("still delivers a later alert once the earlier one was taken", async () => {
       // The pass waits at 50 s until the first alert was taken
       const gates = { "bad@50": Promise.withResolvers<void>() };
@@ -578,21 +565,154 @@ describe("SharedRangeReads", () => {
       secs.map((sec) => ({ type: "message-event", msgEvent: message(topic, sec) }));
     const range = (n: number) => Array.from({ length: n }, (_, i) => i);
 
+    /**
+     * `perSecond` messages a second of each of `topics` over [0 s, 99 s] (`sparse` only once, at
+     * the start; `alerting` each followed by an alert), read in ascending windows of 20 s
+     */
+    function dense({
+      perSecond,
+      topics,
+      sparse,
+      alerting,
+    }: {
+      perSecond: number;
+      topics: string[];
+      sparse?: string;
+      alerting?: string;
+    }) {
+      const reads: { topics: string; start?: number; end?: number }[] = [];
+      const shared = new SharedRangeReads(
+        async function* (selection, span) {
+          reads.push({
+            topics: [...selection.keys()].join(),
+            start: span.start?.sec,
+            end: span.end?.sec,
+          });
+          for (let sec = 0; sec < 100; sec++) {
+            for (let i = 0; i < perSecond; i++) {
+              const receiveTime = { sec, nsec: Math.floor((i * 1e9) / perSecond) };
+              if (
+                (span.start && compare(receiveTime, span.start) < 0) ||
+                (span.end && compare(receiveTime, span.end) > 0)
+              ) {
+                continue;
+              }
+              for (const topic of topics) {
+                if (!selection.has(topic) || (topic === sparse && (sec > 0 || i > 0))) {
+                  continue;
+                }
+                yield { type: "message-event", msgEvent: { ...message(topic, sec), receiveTime } };
+                if (topic === alerting) {
+                  yield {
+                    type: "alert",
+                    connectionId: 7,
+                    alert: { severity: "error", message: "can't decode" },
+                  };
+                }
+              }
+            }
+          }
+        },
+        () => ({
+          start: { sec: 0, nsec: 0 },
+          end: { sec: 99, nsec: 0 },
+          playhead: { sec: 50, nsec: 0 },
+        }),
+      );
+      return { shared, reads };
+    }
+    async function times(iterator: AsyncIterableIterator<Readonly<IteratorResult>>) {
+      const seen: string[] = [];
+      for await (const result of iterator) {
+        if (result.type === "message-event") {
+          const { sec, nsec } = result.msgEvent.receiveTime;
+          seen.push(`${sec}.${nsec}`);
+        }
+      }
+      return seen;
+    }
+    const allTimes = (perSecond: number) =>
+      range(100).flatMap((sec) =>
+        range(perSecond).map((i) => `${sec}.${Math.floor((i * 1e9) / perSecond)}`),
+      );
+
     it("doesn't deliver its catch-up twice when it falls behind and reads on its own", async () => {
-      // "a" stops pulling, so the pass waits for room with its queue full, past the 4096th message
-      const recording = range(5000).flatMap((sec) => [
-        ...events("a", [sec]),
-        ...events("b", [sec]),
-      ]);
-      const shared = recordingSource(recording);
+      // "a" stops pulling, so the pass waits for room in its fourth window (past the 4096th
+      // message); "b" joins there, catches up the first four windows, then waits and reads the
+      // fifth on its own
+      const { shared, reads } = dense({ perSecond: 60, topics: ["a", "b"] });
       const a = shared.read("a", {});
       expect((await a.next()).done).toBe(false);
-      await new Promise((resolve) => setTimeout(resolve, 0));
+      await new Promise((resolve) => setTimeout(resolve, 20));
 
-      // Joins late, catches up to where the pass waits, then waits itself and reads on its own
-      const b = await collect(shared.read("b", {}));
-      expect(b).toEqual(range(5000).map((sec) => `b${sec}`));
-      expect(await collect(a)).toHaveLength(4999);
+      expect(await times(shared.read("b", {}))).toEqual(allTimes(60));
+      expect(reads).toContainEqual({ topics: "b", start: 80, end: undefined });
+      expect(await times(a)).toHaveLength(5999);
+    });
+
+    it("keeps a reader on the shared read when another topic floods it with alerts", async () => {
+      // 6000 alerts of one connection while "good" (one message) isn't pulled: queued as they
+      // come, they would fill its queue and stall the pass, so "bad" would read on its own
+      const { shared, reads } = dense({
+        perSecond: 60,
+        topics: ["bad", "good"],
+        sparse: "good",
+        alerting: "bad",
+      });
+      const good = shared.read("good", {});
+      const bad = times(shared.read("bad", {}));
+      expect((await good.next()).done).toBe(false);
+      expect(await bad).toEqual(allTimes(60));
+      // Its first result was the first alert; its one message comes next
+      expect(await times(good)).toEqual(["0.0"]);
+      // One pass of both topics in ascending windows of 20 s, no read of "bad" on its own
+      expect(reads.map(({ topics, start }) => [topics, start])).toEqual(
+        [undefined, 20, 40, 60, 80].map((start) => ["bad,good", start]),
+      );
+    });
+
+    it("leaves the shared read when its catch-up fails", async () => {
+      const opened: string[] = [];
+      // The pass waits at 50 s until the joiner's catch-up failed
+      const hold = Promise.withResolvers<void>();
+      const shared = new SharedRangeReads(
+        async function* (selection, span) {
+          const topics = [...selection.keys()].join();
+          opened.push(topics);
+          for (let sec = 0; sec < 100; sec++) {
+            const receiveTime = { sec, nsec: 0 };
+            if (
+              (span.start && compare(receiveTime, span.start) < 0) ||
+              (span.end && compare(receiveTime, span.end) > 0)
+            ) {
+              continue;
+            }
+            if (topics === "b") {
+              throw new Error("broken chunk");
+            }
+            if (topics === "a" && sec === 50) {
+              await hold.promise;
+            }
+            for (const topic of selection.keys()) {
+              yield { type: "message-event", msgEvent: message(topic, sec) };
+            }
+          }
+        },
+        () => ({
+          start: { sec: 0, nsec: 0 },
+          end: { sec: 99, nsec: 0 },
+          playhead: { sec: 50, nsec: 0 },
+        }),
+      );
+      const a = shared.read("a", {});
+      expect((await a.next()).done).toBe(false);
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      const b = shared.read("b", {});
+      await expect(collect(b)).rejects.toThrow("broken chunk");
+      hold.resolve();
+      // "a" reads on alone: the pass reads "b" no more
+      expect(await collect(a)).toHaveLength(99);
+      expect(opened.at(-1)).toBe("a");
     });
 
     it("ends after its catch-up when the pass fills it with alerts only", async () => {
@@ -640,7 +760,8 @@ describe("SharedRangeReads", () => {
         }
       }
       const b = shared.read("b", {});
-      for (let done = { a: false, b: false }; !done.a || !done.b; ) {
+      const done = { a: false, b: false };
+      while (!done.a || !done.b) {
         for (const [topic, iterator] of [
           ["a", a],
           ["b", b],
