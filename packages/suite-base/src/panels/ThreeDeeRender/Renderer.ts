@@ -334,6 +334,12 @@ export class Renderer extends EventEmitter<RendererEvents> {
 
   public transformTree = new TransformTree();
   readonly #staticTransformCache = new Map<string, StaticTransform>();
+  /**
+   * Static transforms read into an earlier window's tree (see addTransformMessages), cached once
+   * that window is merged, and only over older ones
+   */
+  readonly #earlierStatics = new WeakMap<TransformTree, StaticTransform[]>();
+  #ingestingInto?: TransformTree;
   #touchedFrameIds: Set<string> | undefined;
 
   public coordinateFrameList: SelectEntry[] = [];
@@ -794,23 +800,68 @@ export class Renderer extends EventEmitter<RendererEvents> {
     messageEvents: readonly MessageEvent[],
     /** Collects the child frames these messages gave a transform */
     touchedFrameIds?: Set<string>,
+    /**
+     * The tree to add them to instead of the renderer's: an earlier window of a playhead-first
+     * read, put in front with prependTransformHistory once complete
+     */
+    into?: TransformTree,
   ): void {
     this.#touchedFrameIds = touchedFrameIds;
     this.#batchTransformTreeUpdates(() => {
-      for (const messageEvent of messageEvents) {
-        for (const subscription of this.schemaSubscriptions.get(messageEvent.schemaName) ?? []) {
-          if (subscription.preload === true) {
-            subscription.handler(messageEvent);
+      const tree = this.transformTree;
+      // Changes to an earlier window's tree don't change the frames shown yet
+      const dirty = this.#transformTreeDirty;
+      this.transformTree = into ?? tree;
+      this.#ingestingInto = into;
+      try {
+        for (const messageEvent of messageEvents) {
+          for (const subscription of this.schemaSubscriptions.get(messageEvent.schemaName) ?? []) {
+            if (subscription.preload === true) {
+              subscription.handler(messageEvent);
+            }
           }
+        }
+      } finally {
+        this.transformTree = tree;
+        this.#ingestingInto = undefined;
+        if (into) {
+          this.#transformTreeDirty = dirty;
         }
       }
     });
     this.#touchedFrameIds = undefined;
+    if (into) {
+      return;
+    }
     // A batch can replace or thin samples that are on screen, even one received after the current
     // time, so every non-empty batch repaints, throttled
     if (messageEvents.length > 0) {
       this.#queueHistoryRepaint();
     }
+  }
+
+  #reportCycle(parentFrameId: string, childFrameId: string): void {
+    this.settings.errors.add(
+      ["transforms", `frame:${childFrameId}`],
+      CYCLE_DETECTED,
+      `Transform tree cycle detected: Received transform with parent "${parentFrameId}" and child "${childFrameId}", but "${childFrameId}" is already an ancestor of "${parentFrameId}". Transform message dropped.`,
+    );
+  }
+
+  /** Puts `earlier` (see addTransformMessages) in front of the transform tree's history */
+  public prependTransformHistory(earlier: TransformTree): void {
+    for (const { frameId, parentFrameId } of this.transformTree.prepend(earlier)) {
+      this.#reportCycle(parentFrameId, frameId);
+    }
+    for (const pending of this.#earlierStatics.get(earlier) ?? []) {
+      const cached = this.#staticTransformCache.get(pending.childFrameId);
+      if (!cached || cached.stamp < pending.stamp) {
+        this.#staticTransformCache.set(pending.childFrameId, pending);
+      }
+    }
+    this.#earlierStatics.delete(earlier);
+    this.#transformTreeUpdated();
+    this.#queueHistoryRepaint();
   }
 
   /**
@@ -1698,14 +1749,22 @@ export class Renderer extends EventEmitter<RendererEvents> {
       }
 
       if (options.isStatic && isAddedTransform(result)) {
-        this.#staticTransformCache.set(childId, {
+        const cached: StaticTransform = {
           topic: options.topic,
           parentFrameId: parentId,
           childFrameId: childId,
           stamp,
           translation: t,
           rotation: q,
-        });
+        };
+        const into = this.#ingestingInto;
+        if (into) {
+          const pending = this.#earlierStatics.get(into) ?? [];
+          pending.push(cached);
+          this.#earlierStatics.set(into, pending);
+        } else {
+          this.#staticTransformCache.set(childId, cached);
+        }
       }
     } catch (e: unknown) {
       const err = toError(e);
@@ -1772,11 +1831,7 @@ export class Renderer extends EventEmitter<RendererEvents> {
     }
 
     if (status === AddTransformResult.CYCLE_DETECTED) {
-      this.settings.errors.add(
-        ["transforms", `frame:${childFrameId}`],
-        CYCLE_DETECTED,
-        `Transform tree cycle detected: Received transform with parent "${parentFrameId}" and child "${childFrameId}", but "${childFrameId}" is already an ancestor of "${parentFrameId}". Transform message dropped.`,
-      );
+      this.#reportCycle(parentFrameId, childFrameId);
       if (errorSettingsPath) {
         this.settings.errors.add(
           errorSettingsPath,

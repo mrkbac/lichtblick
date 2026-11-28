@@ -277,6 +277,111 @@ export class TransformHistory {
   }
 
   /**
+   * Merges in the samples of `earlier`, for history read backwards (see TransformTree.prepend):
+   * usually all before this history's first sample, but a seek's read can have put samples in their
+   * span. One linear merge by time; on equal times this history's sample stays.
+   */
+  public prepend(earlier: TransformHistory): void {
+    const added = earlier.#size;
+    if (added === 0) {
+      return;
+    }
+    const size = this.#size;
+    const base = size > 0 && this.#base < earlier.#base ? this.#base : earlier.#base;
+    const receiveBase = earlier.#receiveBase ?? this.#receiveBase;
+    const shift = (history: TransformHistory) => ({
+      time: Number(history.#base - base),
+      receive: history.#receiveBase == undefined ? 0 : Number(history.#receiveBase - receiveBase!),
+    });
+    const [a, b] = [shift(earlier), shift(this)];
+    const data = new Float64Array(Math.ceil((added + size) * GROWTH) * STRIDE);
+    let out = 0;
+    /** Copies samples [from, to) of `src` in one go and rebases them */
+    const copy = (
+      src: Float64Array,
+      from: number,
+      to: number,
+      by: { time: number; receive: number },
+    ) => {
+      data.set(src.subarray(from * STRIDE, to * STRIDE), out * STRIDE);
+      if (by.time !== 0 || by.receive !== 0) {
+        for (let o = out * STRIDE; o < (out + to - from) * STRIDE; o += STRIDE) {
+          data[o + TIME] = data[o + TIME]! + by.time;
+          data[o + RECEIVE] = data[o + RECEIVE]! + by.receive;
+        }
+      }
+      out += to - from;
+    };
+    const timeA = (k: number) =>
+      k < added ? earlier.#data[k * STRIDE + TIME]! + a.time : Infinity;
+    const timeB = (k: number) => (k < size ? this.#data[k * STRIDE + TIME]! + b.time : Infinity);
+    // Runs of samples from one side at a time: usually all of `earlier`, then all of this
+    let i = 0;
+    let j = 0;
+    let headFromEarlier = false;
+    while (i < added || j < size) {
+      const next = timeB(j);
+      if (timeA(i) < next) {
+        let k = i + 1;
+        while (timeA(k) < next) {
+          k++;
+        }
+        copy(earlier.#data, i, k, a);
+        i = k;
+        headFromEarlier = true;
+        continue;
+      }
+      // The same time on both sides: this history's sample stays, and if it is the same transform,
+      // it was visible since the earlier receipt (as set() keeps it)
+      let receive: number | undefined;
+      if (timeA(i) === next) {
+        if (this.#sameValuesAs(j, earlier, i)) {
+          receive = earlier.#data[i * STRIDE + RECEIVE]! + a.receive;
+        }
+        i++;
+      }
+      let k = j + 1;
+      while (k < size && timeB(k) < timeA(i)) {
+        k++;
+      }
+      const first = out;
+      copy(this.#data, j, k, b);
+      if (receive != undefined && receive < data[first * STRIDE + RECEIVE]!) {
+        data[first * STRIDE + RECEIVE] = receive;
+      }
+      j = k;
+      headFromEarlier = false;
+    }
+    // Receive times stay non-decreasing in stamp order (see #keepReceiveOrder)
+    for (let o = STRIDE + RECEIVE; o < out * STRIDE; o += STRIDE) {
+      if (data[o]! < data[o - STRIDE]!) {
+        data[o] = data[o - STRIDE]!;
+      }
+    }
+    this.#buffer = data;
+    this.#data = data;
+    this.#size = out;
+    this.#base = base;
+    this.#receiveBase = receiveBase;
+    this.#pruneAt = -Infinity;
+    this.#thinnedUntil = -Infinity;
+    if (headFromEarlier) {
+      // The newest sample is a new one, as after an insert in set()
+      this.#headInputs = 1;
+    }
+  }
+
+  /** Whether sample `index` has the same position and rotation as `other`'s sample `otherIndex` */
+  #sameValuesAs(index: number, other: TransformHistory, otherIndex: number): boolean {
+    for (let v = VALUES; v < STRIDE; v++) {
+      if (this.#data[index * STRIDE + v] !== other.#data[otherIndex * STRIDE + v]) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  /**
    * Halves the sample count by dropping every other sample, always keeping the first and last.
    * Returns the number of samples removed.
    */

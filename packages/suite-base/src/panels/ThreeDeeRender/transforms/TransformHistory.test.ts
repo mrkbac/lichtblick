@@ -120,4 +120,94 @@ describe("TransformHistory", () => {
     expect(history.timeAt(history.size() - 1)).toBe(4999n);
     expect(history.timeAt(0)).toBeLessThanOrEqual(4899n);
   });
+
+  describe("prepend", () => {
+    const filled = (from: number, to: number, receiveBase?: bigint) => {
+      const history = new TransformHistory();
+      for (let t = from; t < to; t++) {
+        // Distinct values, so runs of equal samples don't merge
+        history.set(
+          BigInt(t),
+          at(t),
+          receiveBase == undefined ? undefined : receiveBase + BigInt(t),
+        );
+      }
+      return history;
+    };
+
+    it("puts earlier samples in front in one copy, keeping times and receive times", () => {
+      const later = filled(100, 110, 1000n);
+      later.prepend(filled(0, 10, 1000n));
+      expect(later.size()).toBe(20);
+      expect(Array.from({ length: 20 }, (_, i) => later.timeAt(i))).toEqual([
+        ...Array.from({ length: 10 }, (_, i) => BigInt(i)),
+        ...Array.from({ length: 10 }, (_, i) => BigInt(100 + i)),
+      ]);
+      expect(xAt(later, 9)).toBe(9);
+      expect(xAt(later, 10)).toBe(100);
+      // Received at 1000 + time: by 1005, the samples up to 5 are visible
+      expect(later.receivedCount(1005n)).toBe(6);
+      expect(later.receivedCount(1105n)).toBe(16);
+      // Still sorted for inserts after it
+      later.set(50n, at(50));
+      expect(later.binarySearch(50n)).toBe(10);
+    });
+
+    it("merges samples a seek's read put inside the earlier span, keeping its own on equal times", () => {
+      // The read around the playhead (100 s on) plus a seek's read at 20 s to 21 s
+      const later = filled(100, 110, 1000n);
+      later.set(20n, at(-20), 1020n);
+      later.set(21n, at(-21), 1021n);
+      later.prepend(filled(0, 50, 1000n));
+      expect(Array.from({ length: later.size() }, (_, i) => later.timeAt(i))).toEqual([
+        ...Array.from({ length: 50 }, (_, i) => BigInt(i)),
+        ...Array.from({ length: 10 }, (_, i) => BigInt(100 + i)),
+      ]);
+      expect(xAt(later, 20)).toBe(-20);
+      expect(xAt(later, 22)).toBe(22);
+      expect(later.receivedCount(1030n)).toBe(31);
+    });
+
+    it("merges fully interleaved histories", () => {
+      // Every other sample of each: 100k + 100k (the merge is linear; see the PR's benchmark)
+      const later = new TransformHistory();
+      const earlier = new TransformHistory();
+      for (let t = 0; t < 200_000; t++) {
+        (t % 2 === 0 ? earlier : later).set(BigInt(t), at(t));
+      }
+      later.prepend(earlier);
+      expect(later.size()).toBe(200_000);
+      expect(later.timeAt(123_457)).toBe(123_457n);
+      expect(xAt(later, 123_457)).toBe(123_457);
+    });
+
+    it("keeps the earlier receipt of the same transform on both sides", () => {
+      const later = new TransformHistory();
+      later.set(100n, at(1), 10n);
+      later.set(200n, at(2), 20n);
+      const earlier = new TransformHistory();
+      earlier.set(50n, at(0), 1n);
+      earlier.set(100n, at(1), 5n);
+      later.prepend(earlier);
+      // As inserting them in time order: the sample at 100 is visible from its first receipt
+      expect(later.receivedCount(5n)).toBe(2);
+    });
+
+    it("counts a new newest sample from the earlier side like an insert", () => {
+      const history = new TransformHistory();
+      const earlier = new TransformHistory();
+      earlier.set(1n, at(1));
+      earlier.set(2n, at(2));
+      history.prepend(earlier);
+      history.set(3n, at(3));
+      expect(history.size()).toBe(3);
+    });
+
+    it("fills an empty history", () => {
+      const empty = new TransformHistory();
+      empty.prepend(filled(0, 3, 0n));
+      expect(empty.size()).toBe(3);
+      expect(empty.receivedCount(1n)).toBe(2);
+    });
+  });
 });

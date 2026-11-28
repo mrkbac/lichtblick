@@ -446,4 +446,143 @@ describe("TransformTree", () => {
       expect(tfTree.frame("b")).toBeUndefined();
     });
   });
+
+  describe("prepend", () => {
+    const sec = 1_000_000_000n;
+    const at = (x: number) => new Transform([x, 0, 0], [0, 0, 0, 1]);
+    const complete = () => {
+      const tree = new TransformTree();
+      tree.setComplete(true);
+      return tree;
+    };
+    const xAt = (tree: TransformTree, frameId: string, time: bigint) => {
+      const lower: [bigint, Transform] = [0n, Transform.Empty()];
+      const upper: [bigint, Transform] = [0n, Transform.Empty()];
+      tree.setReceivedUntil(time);
+      return tree.frame(frameId)!.findClosestTransforms(lower, upper, time, MAX_DURATION)
+        ? lower[1].position()[0]
+        : undefined;
+    };
+
+    it("gives the same lookups as reading the windows in time order", () => {
+      // Around the playhead first (20 s to 29 s), then the earlier window (0 s to 19 s)
+      const tree = complete();
+      for (let t = 20; t < 30; t++) {
+        tree.addTransform("b", "a", BigInt(t) * sec, at(t), BigInt(t) * sec);
+      }
+      const earlier = complete();
+      for (let t = 0; t < 20; t++) {
+        earlier.addTransform("b", "a", BigInt(t) * sec, at(t), BigInt(t) * sec);
+        earlier.addTransform("c", "a", BigInt(t) * sec, at(-t), BigInt(t) * sec);
+      }
+      tree.prepend(earlier);
+
+      const ordered = complete();
+      for (let t = 0; t < 30; t++) {
+        ordered.addTransform("b", "a", BigInt(t) * sec, at(t), BigInt(t) * sec);
+        if (t < 20) {
+          ordered.addTransform("c", "a", BigInt(t) * sec, at(-t), BigInt(t) * sec);
+        }
+      }
+      for (const t of [0n, 5n, 19n, 20n, 25n, 29n]) {
+        expect(xAt(tree, "b", t * sec)).toBe(xAt(ordered, "b", t * sec));
+        expect(xAt(tree, "c", t * sec)).toBe(xAt(ordered, "c", t * sec));
+      }
+      // A frame only the earlier window had is in the tree, under this tree's parent frame
+      expect(tree.frame("c")!.parent()).toBe(tree.frame("a"));
+    });
+
+    it("keeps an earlier parent from the earlier window until playback reaches the reparenting", () => {
+      const tree = complete();
+      tree.addTransform("b", "c", 10n * sec, at(2), 10n * sec);
+      const earlier = complete();
+      earlier.addTransform("b", "a", 0n, at(1), 0n);
+      tree.prepend(earlier);
+
+      tree.setReceivedUntil(5n * sec);
+      expect(tree.frame("b")!.parent()).toBe(tree.frame("a"));
+      expect(xAt(tree, "b", 5n * sec)).toBe(1);
+      tree.setReceivedUntil(20n * sec);
+      expect(tree.frame("b")!.parent()).toBe(tree.frame("c"));
+      expect(xAt(tree, "b", 20n * sec)).toBe(2);
+    });
+
+    it("drops an earlier parent that would form a cycle with this tree's parents", () => {
+      const tree = complete();
+      tree.addTransform("b", "a", 10n * sec, at(1), 10n * sec);
+      const earlier = complete();
+      earlier.addTransform("a", "b", 1n * sec, at(2), 1n * sec);
+      expect(tree.prepend(earlier)).toEqual([{ frameId: "a", parentFrameId: "b" }]);
+      for (const time of [1n, 10n]) {
+        tree.setReceivedUntil(time * sec);
+        expect(tree.frame("b")!.root()).toBe(tree.frame("a"));
+        expect(tree.frame("a")!.root()).toBe(tree.frame("a"));
+      }
+    });
+
+    it("gives an earlier window the room left in the budget, but at least an eighth", () => {
+      const tree = new TransformTree(undefined, 80);
+      tree.setComplete(true);
+      for (let t = 0; t < 30; t++) {
+        tree.addTransform("b", "a", BigInt(t) * sec, at(t), BigInt(t) * sec);
+      }
+      const fill = (into: TransformTree) => {
+        for (let t = 0; t < 200; t++) {
+          into.addTransform("c", "a", BigInt(t) * sec, at(t), BigInt(t) * sec);
+        }
+        return into.frame("c")!.transformsSize();
+      };
+      expect(fill(tree.createEarlier())).toBeLessThanOrEqual(50);
+      for (let t = 30; t < 80; t++) {
+        tree.addTransform("b", "a", BigInt(t) * sec, at(t), BigInt(t) * sec);
+      }
+      // The tree is full: the floor of 80 / 8 holds ten samples, and thins past them
+      const floor = tree.createEarlier();
+      for (let t = 0; t < 10; t++) {
+        floor.addTransform("c", "a", BigInt(t) * sec, at(t), BigInt(t) * sec);
+      }
+      expect(floor.frame("c")!.transformsSize()).toBe(10);
+      expect(fill(tree.createEarlier())).toBeLessThanOrEqual(10);
+    });
+
+    it("merges an earlier window thinned further by its own budget at one rate", () => {
+      // The read around the playhead plus a seek's read fill most of the budget, so the earlier
+      // window's tree halves its frame more often than the main tree did
+      const tree = new TransformTree(undefined, 100);
+      tree.setComplete(true);
+      for (let t = 300; t < 360; t++) {
+        tree.addTransform("b", "a", BigInt(t) * sec, at(t), BigInt(t) * sec);
+      }
+      for (let t = 100; t < 120; t++) {
+        tree.addTransform("b", "a", BigInt(t) * sec, at(t), BigInt(t) * sec);
+      }
+      const earlier = tree.createEarlier();
+      for (let t = 0; t < 300; t++) {
+        earlier.addTransform("b", "a", BigInt(t) * sec, at(t), BigInt(t) * sec);
+      }
+      const earlierRate = earlier.frame("b")!.keepEvery();
+      expect(earlierRate).toBeGreaterThan(tree.frame("b")!.keepEvery());
+
+      tree.prepend(earlier);
+      expect(tree.frame("b")!.keepEvery()).toBeGreaterThanOrEqual(earlierRate);
+      expect(tree.frame("b")!.transformsSize()).toBeLessThanOrEqual(100);
+    });
+
+    it("stays within the sample budget", () => {
+      const tree = new TransformTree(undefined, 100);
+      tree.setComplete(true);
+      for (let t = 50; t < 100; t++) {
+        tree.addTransform("b", "a", BigInt(t) * sec, at(t), BigInt(t) * sec);
+      }
+      const earlier = complete();
+      for (let t = 0; t < 50; t++) {
+        earlier.addTransform("b", "a", BigInt(t) * sec, at(t), BigInt(t) * sec);
+        earlier.addTransform("c", "a", BigInt(t) * sec, at(t), BigInt(t) * sec);
+      }
+      tree.prepend(earlier);
+      const total = tree.frame("b")!.transformsSize() + tree.frame("c")!.transformsSize();
+      expect(total).toBeLessThanOrEqual(100);
+      expect(tree.decimations).toBeGreaterThan(0);
+    });
+  });
 });
