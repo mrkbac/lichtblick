@@ -25,8 +25,11 @@ import { NormalizedLogMessage } from "./types";
 
 /** Per-topic message limit for live sources, which can't be re-read. */
 export const LIVE_HISTORY_SIZE = 50_000;
-/** Lines kept per topic of a live session's history (and its live lines after it), as Map does */
-const LIVE_MAX_LINES = 1_000_000;
+/**
+ * Lines kept per topic of a live session's history (and its live lines after it). A line of ~80
+ * characters holds ~515 bytes of heap (object, string, two times), so this is ~100 MB per topic.
+ */
+const LIVE_MAX_LINES = 200_000;
 const FLUSH_INTERVAL_MS = 250;
 
 const pickKeys = (record: Readonly<Record<string, string>>, keys: ReadonlySet<string>) =>
