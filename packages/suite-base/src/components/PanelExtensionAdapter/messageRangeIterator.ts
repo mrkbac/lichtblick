@@ -39,6 +39,7 @@ export function createMessageRangeIterator(params: CreateMessageRangeIteratorPar
     emitAlert,
     rethrowErrors = false,
     playheadFirst = false,
+    onEnd,
   } = params;
 
   // Create a cancellation token
@@ -143,6 +144,8 @@ export function createMessageRangeIterator(params: CreateMessageRangeIteratorPar
             throw err;
           }
         }
+      } finally {
+        onEnd?.();
       }
     },
   };

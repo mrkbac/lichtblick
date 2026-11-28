@@ -32,6 +32,7 @@ function createTool() {
     setSelectedRenderable: vi.fn(),
     currentTime: 0n,
     gl: { domElement: canvas },
+    ownerWindow: window,
     cameraHandler: { getActiveCamera: () => new THREE.PerspectiveCamera() },
     input: {
       canvasSize: new THREE.Vector2(100, 100),

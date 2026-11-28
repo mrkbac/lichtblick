@@ -82,6 +82,10 @@ export function useSubscribeMessageRange(
         return () => {};
       }
 
+      const cancelOnce = () => {
+        openCancels.current.delete(cancelOnce);
+        cancel();
+      };
       const { iterable: messageEventIterable, cancel } = createMessageRangeIterator({
         topic,
         convertTo,
@@ -91,7 +95,10 @@ export function useSubscribeMessageRange(
         emitAlert: emitAlertRef.current,
         rethrowErrors,
         playheadFirst,
+        // A read that ended has nothing left to cancel
+        onEnd: () => openCancels.current.delete(cancelOnce),
       });
+      openCancels.current.add(cancelOnce);
 
       // Only panels that asked for the live history are told where the iterator reads from
       const info = liveHistory ? ([{ liveHistory: fromLiveHistory }] as const) : ([] as const);
@@ -100,11 +107,6 @@ export function useSubscribeMessageRange(
         log.error("Error in useSubscribeMessageRange onNewRangeIterator:", err);
       });
 
-      const cancelOnce = () => {
-        openCancels.current.delete(cancelOnce);
-        cancel();
-      };
-      openCancels.current.add(cancelOnce);
       return cancelOnce;
     },
     [getMessagePipelineContext], // getMessagePipelineContext is already stable, but listed for clarity

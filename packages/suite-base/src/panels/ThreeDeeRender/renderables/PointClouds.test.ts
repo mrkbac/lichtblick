@@ -287,6 +287,24 @@ describe("PointCloudHistoryRenderable decay", () => {
     expect(latest.instanceDetails(0)).toMatchObject({ x: POSITIONS[0]![0] });
   });
 
+  it("decodes a read-back scan once, also with stixels", () => {
+    const reads = ({ stixelsEnabled }: { stixelsEnabled: boolean }) => {
+      const { renderable, settings } = decode(makeIntensityCloud(), {
+        colorMode: "gradient",
+        colorField: "intensity",
+        decayTime: 10,
+        stixelsEnabled,
+      });
+      renderable.updatePointCloud(makeIntensityCloud(), undefined, settings, 10n);
+      const getFloat32 = vi.spyOn(DataView.prototype, "getFloat32");
+      renderable.addOlderScan(makeIntensityCloud(), settings, 5n);
+      const count = getFloat32.mock.calls.length;
+      getFloat32.mockRestore();
+      return count;
+    };
+    expect(reads({ stixelsEnabled: true })).toBe(reads({ stixelsEnabled: false }));
+  });
+
   it("paints a backfilled scan using a matching camera frame and deduplicates its fallback version", () => {
     let hasTransform = true;
     const transformTree = {

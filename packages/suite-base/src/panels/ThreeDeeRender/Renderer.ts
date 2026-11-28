@@ -250,7 +250,8 @@ const drawFrame = { time: -1, spentMs: 0 };
 export class Renderer extends EventEmitter<RendererEvents> {
   public readonly interfaceMode: InterfaceMode;
   #canvas: HTMLCanvasElement;
-  readonly #ownerWindow: Window & typeof globalThis;
+  /** The window the canvas is in: a popped-out panel has its own */
+  public readonly ownerWindow: Window & typeof globalThis;
   // The label atlas never shrinks, so an overflow stays true across clear()
   #labelAtlasError: string | undefined;
   public readonly gl: THREE.WebGPURenderer;
@@ -394,7 +395,7 @@ export class Renderer extends EventEmitter<RendererEvents> {
     const interfaceMode = (this.interfaceMode = args.interfaceMode);
     const canvas = (this.#canvas = args.canvas);
     this.sharedMap = args.sharedMap;
-    this.#ownerWindow = canvas.ownerDocument.defaultView ?? window;
+    this.ownerWindow = canvas.ownerDocument.defaultView ?? window;
     const config = (this.config = args.config);
     this.#fetchAsset = args.fetchAsset;
     this.testOptions = args.testOptions;
@@ -426,7 +427,7 @@ export class Renderer extends EventEmitter<RendererEvents> {
     this.gl.autoClear = false;
     this.gl.info.autoReset = false;
     this.gl.sortObjects = true;
-    this.gl.setPixelRatio(this.#ownerWindow.devicePixelRatio);
+    this.gl.setPixelRatio(this.ownerWindow.devicePixelRatio);
 
     let width = canvas.width;
     let height = canvas.height;
@@ -688,14 +689,14 @@ export class Renderer extends EventEmitter<RendererEvents> {
   };
 
   #onDevicePixelRatioChange = () => {
-    log.debug(`devicePixelRatio changed to ${this.#ownerWindow.devicePixelRatio}`);
+    log.debug(`devicePixelRatio changed to ${this.ownerWindow.devicePixelRatio}`);
     this.#resizeHandler(this.input.canvasSize);
     this.#watchDevicePixelRatio();
   };
 
   #watchDevicePixelRatio() {
-    this.#devicePixelRatioMediaQuery = this.#ownerWindow.matchMedia(
-      `(resolution: ${this.#ownerWindow.devicePixelRatio}dppx)`,
+    this.#devicePixelRatioMediaQuery = this.ownerWindow.matchMedia(
+      `(resolution: ${this.ownerWindow.devicePixelRatio}dppx)`,
     );
     this.#devicePixelRatioMediaQuery.addEventListener("change", this.#onDevicePixelRatioChange, {
       once: true,
@@ -712,7 +713,7 @@ export class Renderer extends EventEmitter<RendererEvents> {
     this.#disposed = true;
     this.sharedMap?.detach(this);
     if (this.#animationFrame != undefined) {
-      this.#ownerWindow.cancelAnimationFrame(this.#animationFrame);
+      this.ownerWindow.cancelAnimationFrame(this.#animationFrame);
       this.#animationFrame = undefined;
     }
     clearTimeout(this.#historyRepaintTimer);
@@ -1877,7 +1878,7 @@ export class Renderer extends EventEmitter<RendererEvents> {
     // directly in the same tick) the queued rAF would otherwise fire on the next tick and paint a
     // redundant second frame.
     if (this.#animationFrame != undefined) {
-      this.#ownerWindow.cancelAnimationFrame(this.#animationFrame);
+      this.ownerWindow.cancelAnimationFrame(this.#animationFrame);
       this.#animationFrame = undefined;
     }
     if (!this.#rendering) {
@@ -1897,7 +1898,7 @@ export class Renderer extends EventEmitter<RendererEvents> {
     if (this.#disposed) {
       return;
     }
-    this.#animationFrame ??= this.#ownerWindow.requestAnimationFrame(this.animationFrame);
+    this.#animationFrame ??= this.ownerWindow.requestAnimationFrame(this.animationFrame);
   }
 
   public async settleVideoDecodes(): Promise<void> {
@@ -2084,11 +2085,11 @@ export class Renderer extends EventEmitter<RendererEvents> {
     if (size.width === 0 || size.height === 0) {
       return;
     }
-    this.gl.setPixelRatio(this.#ownerWindow.devicePixelRatio);
+    this.gl.setPixelRatio(this.ownerWindow.devicePixelRatio);
     this.gl.setSize(size.width, size.height);
-    this.sharedMap?.map.setPixelRatio(this.#ownerWindow.devicePixelRatio);
+    this.sharedMap?.map.setPixelRatio(this.ownerWindow.devicePixelRatio);
     this.sharedMap?.map.resize();
-    this.cameraHandler.handleResize(size.width, size.height, this.#ownerWindow.devicePixelRatio);
+    this.cameraHandler.handleResize(size.width, size.height, this.ownerWindow.devicePixelRatio);
 
     const renderSize = this.gl.getDrawingBufferSize(tempVec2);
     log.debug(`Resized renderer to ${renderSize.width}x${renderSize.height}`);

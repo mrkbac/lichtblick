@@ -62,6 +62,21 @@ describe("createMessageRangeIterator", () => {
     expect(typeof result.cancel).toBe("function");
   });
 
+  it("tells when the iterable stops", async () => {
+    const onEnd = vi.fn();
+    const { iterable } = createMessageRangeIterator({
+      topic: mockTopic,
+      rawBatchIterator: createMockRawBatchIterator([]),
+      sortedTopics: mockSortedTopics,
+      messageConverters: mockMessageConverters,
+      onEnd,
+    });
+    for await (const batch of iterable) {
+      expect(batch).toEqual([]);
+    }
+    expect(onEnd).toHaveBeenCalledTimes(1);
+  });
+
   it("closes the read when cancelled while it waits for a message", async () => {
     // A read that never delivers: only closing it ends the iteration
     let closed = false;

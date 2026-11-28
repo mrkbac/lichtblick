@@ -184,7 +184,7 @@ export class FrameAxes extends SceneExtension<FrameAxisRenderable> {
     renderer.on("transformTreeUpdated", this.#handleTransformTreeUpdated);
     renderer.on("variablesChange", this.#handleVariablesChange);
     // Capture phase: while adjusting, arrows must not also seek playback (global arrow keys)
-    this.#ownerWindow().addEventListener("keydown", this.#handleKeyDown, { capture: true });
+    this.renderer.ownerWindow.addEventListener("keydown", this.#handleKeyDown, { capture: true });
 
     this.#defaultRenderableSettings = { ...DEFAULT_SETTINGS, ...defaultRenderableSettings };
     this.#offsets = parseTransformOffsets(renderer.variables.get(TRANSFORM_OFFSETS_VARIABLE));
@@ -194,7 +194,9 @@ export class FrameAxes extends SceneExtension<FrameAxisRenderable> {
   public override dispose(): void {
     this.renderer.off("transformTreeUpdated", this.#handleTransformTreeUpdated);
     this.renderer.off("variablesChange", this.#handleVariablesChange);
-    this.#ownerWindow().removeEventListener("keydown", this.#handleKeyDown, { capture: true });
+    this.renderer.ownerWindow.removeEventListener("keydown", this.#handleKeyDown, {
+      capture: true,
+    });
     // Its trailing call would update the settings of a disposed renderer (and keep it alive)
     this.#throttledUpdateSettingsTree.cancel();
     this.#lineMaterial.dispose();
@@ -909,11 +911,6 @@ export class FrameAxes extends SceneExtension<FrameAxisRenderable> {
       this.#applyOffsets(next);
     }
   };
-
-  // A popped-out panel lives in its own window; its keys never reach the main one
-  #ownerWindow(): Window {
-    return this.renderer.gl.domElement.ownerDocument.defaultView ?? window;
-  }
 
   #handleKeyDown = (event: KeyboardEvent): void => {
     const target = event.target as HTMLElement | null;

@@ -588,6 +588,20 @@ describe("TransformTree", () => {
       expect(fill(tree.createEarlier())).toBeLessThanOrEqual(40);
     });
 
+    it("splits the room between the earlier windows of several transform topics", () => {
+      const tree = new TransformTree(undefined, 80);
+      tree.setComplete(true);
+      const fill = (into: TransformTree, frame: string) => {
+        for (let t = 0; t < 200; t++) {
+          into.addTransform(frame, "a", BigInt(t) * sec, at(t), BigInt(t) * sec);
+        }
+        return into.frame(frame)!.transformsSize();
+      };
+      // Two topics' reads have an earlier window open at the same time
+      const total = fill(tree.createEarlier(2), "b") + fill(tree.createEarlier(2), "c");
+      expect(total).toBeLessThanOrEqual(80);
+    });
+
     it("keeps about as many samples merging a full tree's earlier window as reading in time order", () => {
       const add = (into: TransformTree, t: number) =>
         into.addTransform("b", "a", BigInt(t) * sec, at(t), BigInt(t) * sec);
