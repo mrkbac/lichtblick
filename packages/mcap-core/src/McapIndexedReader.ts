@@ -175,11 +175,8 @@ export class McapIndexedReader<TReadOptions = unknown> {
   public appendIndex(added: McapIndexAppend): void {
     // Loops, not push(...): a spread of a long list overflows the call stack. Each input is
     // copied first, so passing this reader's own arrays doesn't loop forever.
-    const chunks = Array.from(added.chunkIndexes ?? []);
-    if (chunks.length > 0) {
+    for (const chunk of Array.from(added.chunkIndexes ?? [])) {
       this.#chunksByTime = undefined;
-    }
-    for (const chunk of chunks) {
       this.#chunkIndexes.push(chunk);
       this.#addChunkTimes(chunk);
     }

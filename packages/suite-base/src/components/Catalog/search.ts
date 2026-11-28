@@ -172,15 +172,12 @@ function filterPredicate(
       if (!period) {
         return undefined;
       }
-      if (key === "since") {
-        return (r) => r.end != undefined && toSec(r.end) * 1000 >= period.start;
-      }
       // `until:2026-11-27` keeps recordings from any instant of that day
-      const { end, endInclusive } = period;
-      return (r) => {
-        const ms = r.start != undefined ? toSec(r.start) * 1000 : Infinity;
-        return ms < end || (endInclusive && ms === end);
-      };
+      return key === "since"
+        ? (r) => r.end != undefined && toSec(r.end) * 1000 >= period.start
+        : period.endInclusive
+          ? (r) => r.start != undefined && toSec(r.start) * 1000 <= period.end
+          : (r) => r.start != undefined && toSec(r.start) * 1000 < period.end;
     }
     case "duration": {
       const sec = parseAmount(value, DURATION_UNITS);
