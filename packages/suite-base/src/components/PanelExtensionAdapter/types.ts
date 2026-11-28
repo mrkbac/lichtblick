@@ -180,4 +180,6 @@ export type CreateMessageRangeIteratorParams = {
   rethrowErrors?: boolean;
   /** Split batches so each lies entirely before or after the messages of earlier batches */
   playheadFirst?: boolean;
+  /** Called once the iterable stops: read to its end, failed, or the consumer stopped */
+  onEnd?: () => void;
 };

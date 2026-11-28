@@ -191,4 +191,28 @@ describe("useSubscribeMessageRange", () => {
 
     expect(cancel).toHaveBeenCalledTimes(2);
   });
+
+  it("forgets a read once it ended", () => {
+    const cancel = vi.fn();
+    mockCreateMessageRangeIterator.mockReturnValue({
+      iterable: { [Symbol.asyncIterator]: vi.fn() },
+      cancel,
+    });
+    mockUseMessagePipelineGetter.mockReturnValue(
+      vi.fn().mockReturnValue({
+        sortedTopics: [],
+        getBatchIterator: vi.fn().mockReturnValue({ [Symbol.asyncIterator]: vi.fn() }),
+      }),
+    );
+    const { result, unmount } = renderHook(() => useSubscribeMessageRange());
+    act(() => {
+      result.current({ topic: "/a", onNewRangeIterator: vi.fn().mockResolvedValue(undefined) });
+    });
+
+    // The iterable read to its end
+    (mockCreateMessageRangeIterator.mock.calls[0]![0] as { onEnd: () => void }).onEnd();
+    unmount();
+
+    expect(cancel).not.toHaveBeenCalled();
+  });
 });
