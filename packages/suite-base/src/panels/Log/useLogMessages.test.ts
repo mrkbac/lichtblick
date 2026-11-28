@@ -14,7 +14,7 @@ import { PlayerPresence } from "@lichtblick/suite-base/players/types";
 
 import { normalizeLogEvent } from "./conversion";
 import { NormalizedLogMessage } from "./types";
-import { mergeByReceiveTime, useLogMessages } from "./useLogMessages";
+import { mergeByReceiveTime, RangeAccumulator, useLogMessages } from "./useLogMessages";
 
 vi.mock("@lichtblick/suite-base/components/MessagePipeline");
 vi.mock("@lichtblick/suite-base/components/PanelExtensionAdapter");
@@ -45,6 +45,30 @@ describe("mergeByReceiveTime", () => {
   it("returns a single array as-is", () => {
     const arr = [at(1)];
     expect(mergeByReceiveTime([[], arr])).toBe(arr);
+  });
+});
+
+describe("RangeAccumulator", () => {
+  it("keeps a live session's newest lines per topic, contiguous, within the cap", () => {
+    const acc = new RangeAccumulator(10);
+    acc.reset("/a", { liveHistory: true });
+    acc.reset("/rec", { liveHistory: false });
+    for (let sec = 1; sec <= 5; sec++) {
+      acc.push("/a", at(sec));
+      acc.push("/rec", at(sec, "/rec"));
+    }
+    acc.end("/a");
+    acc.snapshot();
+    acc.appendLive(
+      "/a",
+      [6, 7, 8, 9, 10, 11, 12].map((sec) => at(sec)),
+    );
+
+    const items = acc.snapshot().items;
+    const live = items.filter((m) => m.topic === "/a").map((m) => m.receiveTime.sec);
+    // Past 10 lines it keeps the newest 9, without a gap; a recorded topic keeps all
+    expect(live).toEqual([4, 5, 6, 7, 8, 9, 10, 11, 12]);
+    expect(items.filter((m) => m.topic === "/rec")).toHaveLength(5);
   });
 });
 

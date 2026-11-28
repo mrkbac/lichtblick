@@ -350,6 +350,7 @@ export default class RosbridgePlayer implements Player {
 
       // Automatically detect the ROS version based on the datatypes.
       // The rosbridge server itself publishes /rosout so the topic should be reliably present.
+      const previousRosVersion = this.#rosVersion;
       if (result.types.includes("rcl_interfaces/msg/Log")) {
         this.#rosVersion = 2;
         this.#alerts.removeAlert("unknownRosVersion");
@@ -381,14 +382,14 @@ export default class RosbridgePlayer implements Player {
       // we want to bail and avoid parsing definitions, updating readers, subscribers, etc.
       // However, during a re-connect, we _do_ want to refresh this list and re-subscribe
       const sortedTopics = _.sortBy(topics, "name");
-      // The ROS version is part of a definition: the same text reads differently in ROS 1 and 2
-      const definitions = new Map<string, { definition: string; text: string }>();
+      // The same definition text reads differently in ROS 1 and 2
+      if (this.#rosVersion !== previousRosVersion) {
+        this.#messageReadersByDatatype.clear();
+      }
+      const definitions = new Map<string, string>();
       for (const { type, messageDefinition } of datatypeDescriptions) {
         if (!definitions.has(type)) {
-          definitions.set(type, {
-            definition: `${this.#rosVersion}\n${messageDefinition}`,
-            text: messageDefinition,
-          });
+          definitions.set(type, messageDefinition);
         }
       }
       const previousReaders = this.#messageReadersByDatatype;
@@ -397,20 +398,20 @@ export default class RosbridgePlayer implements Player {
         _.isEqual(this.#providerTopics, sortedTopics) &&
         definitions.size === previousReaders.size &&
         [...definitions].every(
-          ([type, { definition }]) => previousReaders.get(type)?.definition === definition,
+          ([type, definition]) => previousReaders.get(type)?.definition === definition,
         )
       ) {
         return;
       }
 
       const messageReaders = new Map<string, { definition: string; reader: MessageDecoder }>();
-      for (const [type, { definition, text }] of definitions) {
+      for (const [type, definition] of definitions) {
         const previous = previousReaders.get(type);
         if (previous?.definition === definition) {
           messageReaders.set(type, previous);
           continue;
         }
-        const parsedDefinition = parseMessageDefinition(text, {
+        const parsedDefinition = parseMessageDefinition(definition, {
           ros2: this.#rosVersion === 2,
         });
         messageReaders.set(type, {

@@ -25,6 +25,8 @@ import { NormalizedLogMessage } from "./types";
 
 /** Per-topic message limit for live sources, which can't be re-read. */
 export const LIVE_HISTORY_SIZE = 50_000;
+/** Lines kept per topic of a live session's history (and its live lines after it), as Map does */
+const LIVE_MAX_LINES = 1_000_000;
 const FLUSH_INTERVAL_MS = 250;
 
 const pickKeys = (record: Readonly<Record<string, string>>, keys: ReadonlySet<string>) =>
@@ -48,16 +50,23 @@ const EMPTY_RANGE: RangeState = { topics: new Set(), liveHistoryNewest: new Map(
  * flush, which merges only them into the merged list instead of re-merging from the start; the
  * merged list is the only full copy kept.
  */
-class RangeAccumulator {
+export class RangeAccumulator {
+  readonly #maxLiveLines: number;
   /** Topics read from the range; their messages not yet merged. */
   #pending = new Map<string, NormalizedLogMessage[]>();
   #merged: readonly NormalizedLogMessage[] = [];
   /** Topics whose merged messages must go on the next flush. */
   #removed = new Set<string>();
   #liveHistory = new Map<string, LiveHistoryRead<NormalizedLogMessage>>();
+  /** Lines of each live history topic, merged or not */
+  #liveCounts = new Map<string, number>();
   /** The last snapshot, handed out again while nothing changed */
   #last: RangeState = EMPTY_RANGE;
   #changed = false;
+
+  public constructor(maxLiveLines = LIVE_MAX_LINES) {
+    this.#maxLiveLines = maxLiveLines;
+  }
 
   public has(topic: string): boolean {
     return this.#pending.has(topic);
@@ -69,13 +78,18 @@ class RangeAccumulator {
     this.#pending.set(topic, []);
     if (liveHistory) {
       this.#liveHistory.set(topic, new LiveHistoryRead());
+      this.#liveCounts.set(topic, 0);
     }
     this.#changed = true;
   }
 
   public push(topic: string, message: NormalizedLogMessage): void {
     this.#pending.get(topic)?.push(message);
-    this.#liveHistory.get(topic)?.read([message]);
+    const read = this.#liveHistory.get(topic);
+    if (read) {
+      read.read([message]);
+      this.#liveCounts.set(topic, (this.#liveCounts.get(topic) ?? 0) + 1);
+    }
     this.#changed = true;
   }
 
@@ -105,6 +119,7 @@ class RangeAccumulator {
     if (this.#pending.delete(topic)) {
       this.#removed.add(topic);
       this.#liveHistory.delete(topic);
+      this.#liveCounts.delete(topic);
       this.#changed = true;
     }
   }
@@ -114,6 +129,7 @@ class RangeAccumulator {
     this.#merged = [];
     this.#removed.clear();
     this.#liveHistory.clear();
+    this.#liveCounts.clear();
     this.#last = EMPTY_RANGE;
     this.#changed = false;
   }
@@ -149,6 +165,23 @@ class RangeAccumulator {
       const start = searchByTime(merged, added[0]!.receiveTime);
       next = merged.slice(0, start);
       pushAll(next, mergeTwo(merged.slice(start), added));
+    }
+    // A live session runs for hours: past the cap, drop a topic's oldest lines (the first ones in
+    // the sorted list), with slack so this doesn't run on every flush
+    const drop = new Map<string, number>();
+    for (const [topic, count] of this.#liveCounts) {
+      if (count > this.#maxLiveLines) {
+        const keep = Math.floor(this.#maxLiveLines * 0.9);
+        drop.set(topic, count - keep);
+        this.#liveCounts.set(topic, keep);
+      }
+    }
+    if (drop.size > 0) {
+      next = next.filter((message) => {
+        const left = drop.get(message.topic) ?? 0;
+        drop.set(message.topic, left - 1);
+        return left <= 0;
+      });
     }
     this.#merged = next;
     this.#last = {
