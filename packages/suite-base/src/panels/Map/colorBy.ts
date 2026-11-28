@@ -158,16 +158,17 @@ export function valueRange(
   // Two selections instead of a sort: this runs on every live flush.
   const loK = Math.min(n - 1, Math.floor(0.02 * n));
   const hiK = Math.min(n - 1, Math.floor(0.98 * n));
-  const lo = min ?? select(sample, loK, 0, n - 1);
+  const finite = sample.subarray(0, n);
+  const lo = min ?? select(finite, loK, 0);
   // After selecting loK, everything from loK on is >= it: the 98th percentile is in there.
-  const hi = max ?? select(sample, hiK, min == undefined ? loK : 0, n - 1);
+  const hi = max ?? select(finite, hiK, min == undefined ? loK : 0);
   return hi > lo ? [lo, hi] : [lo, lo + 1];
 }
 
-/** The k-th smallest of a[left..right] (quickselect), partially reordering that span. */
-function select(a: Float64Array, k: number, from: number, to: number): number {
+/** The k-th smallest of a[from..] (quickselect), partially reordering that span. */
+function select(a: Float64Array, k: number, from: number): number {
   let left = from;
-  let right = to;
+  let right = a.length - 1;
   while (left < right) {
     // A random pivot keeps sorted or periodic signals from hitting the quadratic case.
     const pivot = a[left + Math.floor(Math.random() * (right - left + 1))]!;

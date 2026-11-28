@@ -54,7 +54,7 @@ export type RateSample = {
   timeMs: number;
   /** Rate over the recent window, as Data Source Info shows it; 0 once the topic is stale. */
   hz?: number;
-  /** Highest smoothed rate seen, used as the automatic expectation. */
+  /** Highest rolling-median rate seen, used as the automatic expectation. */
   peakHz?: number;
   /** Wall time when the count last changed. */
   lastMessageMs?: number;
@@ -85,8 +85,7 @@ export function sampleLiveRates(
       });
       continue;
     }
-    const seconds = (nowMs - last.timeMs) / 1000;
-    if (seconds <= 0) {
+    if (nowMs <= last.timeMs) {
       next.set(topic, last);
       continue;
     }
