@@ -86,6 +86,34 @@ describe("colorBy", () => {
   });
 });
 
+describe("valueRange", () => {
+  it("matches the sorted 2nd and 98th percentiles", () => {
+    const sorted = (xs: number[]) => {
+      const s = xs.filter((x) => isFinite(x)).sort((a, b) => a - b);
+      const at = (q: number) => s[Math.min(s.length - 1, Math.floor(q * s.length))]!;
+      return [at(0.02), at(0.98)];
+    };
+    let seed = 7;
+    const rnd = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648;
+    const cases = [
+      Array.from({ length: 5000 }, () => rnd() * 100 - 50),
+      Array.from({ length: 5000 }, () => Math.floor(rnd() * 3)),
+      Array.from({ length: 5000 }, (_, i) => i),
+      Array.from({ length: 5000 }, (_, i) => -i),
+      Array.from({ length: 5000 }, (_, i) => (i % 2 === 0 ? NaN : i % 37)),
+      Array.from({ length: 7 }, () => rnd()),
+    ];
+    for (const values of cases) {
+      const [lo, hi] = sorted(values);
+      expect(valueRange(values, undefined, undefined)).toEqual(
+        hi! > lo! ? [lo, hi] : [lo, lo! + 1],
+      );
+      expect(valueRange(values, -1000, undefined)).toEqual([-1000, hi]);
+      expect(valueRange(values, undefined, 1000)).toEqual([lo, 1000]);
+    }
+  });
+});
+
 describe("speedValues while a track grows", () => {
   it("matches a full computation", () => {
     const fixes = Array.from({ length: 50 }, (_, i) => ({
