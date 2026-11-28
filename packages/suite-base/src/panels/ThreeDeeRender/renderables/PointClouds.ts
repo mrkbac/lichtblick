@@ -718,7 +718,6 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
     const { position, color } = this.#scratch.attributes;
     const positions = (position!.array as Float32Array).subarray(0, count * 3);
     const colors = (color!.array as Uint8Array).subarray(0, count * 4);
-    const points = { ...settings, stixelsEnabled: false };
     const frameId = this.renderer.normalizeFrameId(getFrameId(pointCloud));
     const pose = getPose(pointCloud);
     const pointToCamera =
@@ -733,15 +732,25 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
             camera.time,
             messageTime,
           );
+    // Stixels keep one renderable per scan; one decode fills the points and the stixels
+    const stixels = settings.stixelsEnabled
+      ? new StixelsRenderable(
+          this.userData.topic,
+          { pose, topic: this.userData.topic },
+          createStixelGeometry(this.userData.topic, THREE.StaticDrawUsage),
+          this.userData.stixelMaterial,
+        )
+      : undefined;
+    stixels?.geometry.resize(count * 2);
     const { unpaintedColors, paintedPoints } = this.#updatePointCloudBuffers(
       pointCloud,
       tempFieldReaders,
       count,
-      points,
+      settings,
       position!,
       color!,
-      position!,
-      color!,
+      stixels?.geometry.attributes.position ?? position!,
+      stixels?.geometry.attributes.color ?? color!,
       camera,
       pointToCamera,
     );
@@ -759,7 +768,10 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
       paintedPoints,
     );
 
-    // Stixels keep one renderable per scan, inserted into their history in time order
+    if (!stixels) {
+      return;
+    }
+    // Inserted into the stixel history in time order, unless it holds this scan already
     const sameStixels = (renderable: StixelsRenderable) => {
       const tops = renderable.geometry.attributes.position!.array as Float32Array;
       if (renderable.geometry.drawRange.count !== count * 2) {
@@ -772,34 +784,10 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
       }
       return true;
     };
-    if (
-      !settings.stixelsEnabled ||
-      this.#stixelsHistory.has(receiveTime, messageTime, sameStixels, recordId)
-    ) {
+    if (this.#stixelsHistory.has(receiveTime, messageTime, sameStixels, recordId)) {
+      stixels.dispose();
       return;
     }
-    const stixels = new StixelsRenderable(
-      this.userData.topic,
-      {
-        pose: getPose(pointCloud),
-        topic: this.userData.topic,
-      },
-      createStixelGeometry(this.userData.topic, THREE.StaticDrawUsage),
-      this.userData.stixelMaterial,
-    );
-    stixels.geometry.resize(count * 2);
-    this.#updatePointCloudBuffers(
-      pointCloud,
-      tempFieldReaders,
-      count,
-      settings,
-      position!,
-      color!,
-      stixels.geometry.attributes.position!,
-      stixels.geometry.attributes.color!,
-      camera,
-      pointToCamera,
-    );
     stixels.setCameraCoverage(unpaintedColors, paintedPoints);
     this.add(stixels);
     this.#stixelsHistory.setMaxPoints(stixelMaxVertices(settings));
