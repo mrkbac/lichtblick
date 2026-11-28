@@ -2,7 +2,10 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import { LayoutID } from "@lichtblick/suite-base/context/CurrentLayoutContext";
-import { findFavoriteLayout } from "@lichtblick/suite-base/providers/CurrentLayoutProvider/utils";
+import {
+  findFavoriteLayout,
+  pruneSharedPanelState,
+} from "@lichtblick/suite-base/providers/CurrentLayoutProvider/utils";
 import { Layout, LayoutPermission } from "@lichtblick/suite-base/services/ILayoutStorage";
 import LayoutBuilder from "@lichtblick/suite-base/testing/builders/LayoutBuilder";
 
@@ -118,5 +121,18 @@ describe("findFavoriteLayout", () => {
 
     // Then
     expect(result).toBeUndefined();
+  });
+});
+
+describe("pruneSharedPanelState", () => {
+  it("keeps the same object when no panel type was removed", () => {
+    const state = { "3D": { a: 1 } };
+    expect(pruneSharedPanelState(state, { "3D!a": {}, "Plot!b": {} })).toBe(state);
+    expect(pruneSharedPanelState(undefined, { "3D!a": {} })).toBeUndefined();
+  });
+
+  it("drops the state of panel types no longer in the layout", () => {
+    const state = { "3D": { a: 1 }, Plot: { b: 2 } };
+    expect(pruneSharedPanelState(state, { "Plot!b": {} })).toEqual({ Plot: { b: 2 } });
   });
 });

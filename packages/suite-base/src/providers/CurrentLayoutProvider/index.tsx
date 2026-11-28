@@ -44,7 +44,10 @@ import {
 import useUpdateSharedPanelState from "@lichtblick/suite-base/providers/CurrentLayoutProvider/hooks/useUpdateSharedPanelState";
 import { LayoutHistory } from "@lichtblick/suite-base/providers/CurrentLayoutProvider/layoutHistory";
 import { loadDefaultLayouts } from "@lichtblick/suite-base/providers/CurrentLayoutProvider/loadDefaultLayouts";
-import { findFavoriteLayout } from "@lichtblick/suite-base/providers/CurrentLayoutProvider/utils";
+import {
+  findFavoriteLayout,
+  pruneSharedPanelState,
+} from "@lichtblick/suite-base/providers/CurrentLayoutProvider/utils";
 import { LayoutLoader } from "@lichtblick/suite-base/services/ILayoutLoader";
 import { LayoutManagerEventTypes } from "@lichtblick/suite-base/services/ILayoutManager";
 import {
@@ -55,7 +58,6 @@ import {
 import { migratePanelsState } from "@lichtblick/suite-base/services/migrateLayout";
 import { PanelConfig, PlaybackConfig, UserScripts } from "@lichtblick/suite-base/types/panels";
 import { windowAppURLState } from "@lichtblick/suite-base/util/appURLState";
-import { getPanelTypeFromId } from "@lichtblick/suite-base/util/layout";
 import { toError } from "@lichtblick/suite-base/util/toError";
 
 import { IncompatibleLayoutVersionAlert } from "./IncompatibleLayoutVersionAlert";
@@ -261,12 +263,11 @@ export default function CurrentLayoutProvider({
         return;
       }
 
-      // Get all the panel types that exist in the new config
-      const panelTypesInUse = [...new Set(Object.keys(newData.configById).map(getPanelTypeFromId))];
-
       setLayoutState({
-        // discared shared panel state for panel types that are no longer in the layout
-        sharedPanelState: _.pick(layoutStateRef.current.sharedPanelState, panelTypesInUse),
+        sharedPanelState: pruneSharedPanelState(
+          layoutStateRef.current.sharedPanelState,
+          newData.configById,
+        ),
         selectedLayout: {
           id: selected.id,
           data: newData,

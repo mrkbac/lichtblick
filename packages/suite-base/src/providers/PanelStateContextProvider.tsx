@@ -94,6 +94,18 @@ export function useUncheckedPanelSettingsTreeUpdate(): (newTree: ImmutableSettin
 
 const updateDefaultTitleSelector = (store: PanelStateStore) => store.updateDefaultTitle;
 
+/** Sets the panel's default title, without re-rendering when the title changes. */
+export function useSetDefaultPanelTitle(): (defaultTitle: string | undefined) => void {
+  const panelId = usePanelContext().id;
+  const updateDefaultTitle = usePanelStateStore(updateDefaultTitleSelector);
+  return useCallback(
+    (newValue: string | undefined) => {
+      updateDefaultTitle(panelId, newValue);
+    },
+    [panelId, updateDefaultTitle],
+  );
+}
+
 /**
  * Returns a [state, setState] pair that can be used to read and update a panel's default title.
  */
@@ -102,19 +114,8 @@ export function useDefaultPanelTitle(): [
   (defaultTitle: string | undefined) => void,
 ] {
   const panelId = usePanelContext().id;
-
   const selector = useCallback((store: PanelStateStore) => store.defaultTitles[panelId], [panelId]);
-
-  const updateDefaultTitle = usePanelStateStore(updateDefaultTitleSelector);
-  const defaultTitle = usePanelStateStore(selector);
-  const update = useCallback(
-    (newValue: string | undefined) => {
-      updateDefaultTitle(panelId, newValue);
-    },
-    [panelId, updateDefaultTitle],
-  );
-
-  return [defaultTitle, update];
+  return [usePanelStateStore(selector), useSetDefaultPanelTitle()];
 }
 
 type Props = PropsWithChildren<{

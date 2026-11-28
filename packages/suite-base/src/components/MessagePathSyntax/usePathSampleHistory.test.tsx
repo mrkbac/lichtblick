@@ -111,16 +111,16 @@ describe("usePathSampleHistory", () => {
     ]);
   });
 
-  it("starts paths using variables over when the variables change", () => {
-    const { send, values, hook } = setup(10, "/state{mode>$min}.mode");
+  it.each(["min", "min-mode"])("starts paths using variables over when $%s changes", (name) => {
+    const { send, values, hook } = setup(10, "/state{mode>$" + name + "}.mode");
     act(() => {
-      hook.result.current.setGlobalVariables({ min: 0 });
+      hook.result.current.setGlobalVariables({ [name]: 0 });
     });
     send(message(1, 1), message(2, 2));
     expect(values()).toEqual([1, 2]);
 
     act(() => {
-      hook.result.current.setGlobalVariables({ min: 1 });
+      hook.result.current.setGlobalVariables({ [name]: 1 });
     });
     send(message(3, 3));
     expect(values()).toEqual([3]);
@@ -135,6 +135,17 @@ describe("usePathSampleHistory", () => {
 
     act(() => {
       hook.result.current.setGlobalVariables({ selected: "other" });
+    });
+    send(message(3, 3));
+    expect(values()).toEqual([1, 2, 3]);
+  });
+
+  it("keeps the history when a variable named only inside a quoted literal changes", () => {
+    const { send, values, hook } = setup(10, "/state{mode!='$min'}.mode");
+    send(message(1, 1), message(2, 2));
+
+    act(() => {
+      hook.result.current.setGlobalVariables({ min: 5 });
     });
     send(message(3, 3));
     expect(values()).toEqual([1, 2, 3]);

@@ -73,7 +73,7 @@ import {
   PlayerPresence,
 } from "@lichtblick/suite-base/players/types";
 import {
-  useDefaultPanelTitle,
+  useSetDefaultPanelTitle,
   useUncheckedPanelSettingsTreeUpdate,
 } from "@lichtblick/suite-base/providers/PanelStateContextProvider";
 import { PanelConfig, SaveConfig } from "@lichtblick/suite-base/types/panels";
@@ -225,7 +225,7 @@ function PanelExtensionAdapter(
   const isPanelInitializedRef = useRef(false);
 
   const [slowRender, setSlowRender] = useState(false);
-  const [, setDefaultPanelTitle] = useDefaultPanelTitle();
+  const setDefaultPanelTitle = useSetDefaultPanelTitle();
   const { setAlert, clearSessionAlert: clearAlert } = useAlertsActions();
 
   // Tracks the ids of alerts this panel has set (via unstable_setAlert) so they can be cleared
@@ -376,14 +376,19 @@ function PanelExtensionAdapter(
       lastSeekTimeRef.current = lastSeekTime;
       lastCurrentTimeRef.current = currentTime;
       undelivered.hold(frame);
-      hiddenFrames.add(frame, { visible: isVisible });
+      // Only a panel that reads currentFrame needs the frames it hasn't rendered yet
+      if (deliverHeldRef.current) {
+        hiddenFrames.add(frame, { visible: isVisible });
+      }
     },
-    [hiddenFrames, undelivered],
+    [deliverHeldRef, hiddenFrames, undelivered],
   );
 
   // While hidden, collect frames outside React and re-render at most once per batch interval
   const subscribeMessagePipeline = useMessagePipelineSubscribe();
-  useEffect(() => {
+  // A layout effect: the hidden selector stops re-renders at this commit, so a frame emitted
+  // before a passive effect ran would be missed.
+  useLayoutEffect(() => {
     if (visible) {
       return;
     }
@@ -422,8 +427,12 @@ function PanelExtensionAdapter(
       }
       return;
     }
-    // Still rendering: keep queued frames for when it is done (retryIfHeld) instead of dropping them.
-    if (renderingRef.current != undefined && hiddenFrames.hasPending()) {
+    // Still rendering: retry once it is done (retryIfHeld). Before taking queued frames or held
+    // messages, which count as handed out, and before building the state, which commits what it
+    // hands out (variables, preview time, seek).
+    if (renderingRef.current != undefined) {
+      setSlowRender(true);
+      skippedRenderRef.current = true;
       return;
     }
     clearTimeout(hiddenRetryTimerRef.current);
@@ -434,14 +443,6 @@ function PanelExtensionAdapter(
     const currentFrame = deliverHeld
       ? undelivered.frameFor(pipelineFrame, subscribedTopics)
       : pipelineFrame;
-
-    // Before building the state: building commits what it hands out (variables, preview time,
-    // seek), so a state built and then not rendered would be lost until something else changes
-    if (renderingRef.current != undefined) {
-      setSlowRender(true);
-      skippedRenderRef.current = true;
-      return;
-    }
 
     const renderState = buildRenderState({
       appSettings,
@@ -469,7 +470,8 @@ function PanelExtensionAdapter(
     forceConversion.clear();
 
     setSlowRender(false);
-    const resumeFrame = pauseFrame(panelId);
+    // Only visible panels hold the next frame: a hidden panel's batch render must not stall playback.
+    const resumeFrame = visible ? pauseFrame(panelId) : () => {};
 
     if (deliverHeld) {
       undelivered.markDelivered(currentFrame, subscribedTopics);

@@ -133,6 +133,8 @@ const CompareDialog = lazy(async () => ({
 const selectPlayerIsPresent = ({ playerState }: MessagePipelineContext) =>
   playerState.presence !== PlayerPresence.NOT_PRESENT;
 const selectPlayUntil = (ctx: MessagePipelineContext) => ctx.playUntil;
+const selectHasAttachments = (ctx: MessagePipelineContext) =>
+  selectRecordingFiles(ctx)?.some((file) => file.attachments.length > 0) ?? false;
 const selectEventsSupported = (store: EventsStore) => store.eventsSupported;
 const selectSelectEvent = (store: EventsStore) => store.selectEvent;
 
@@ -318,9 +320,7 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
   // Events come from the recording's foxglove.Event topics, no account needed
   const showEventsTab = eventsSupported;
 
-  const hasAttachments = useMessagePipeline(
-    (ctx) => selectRecordingFiles(ctx)?.some((file) => file.attachments.length > 0) ?? false,
-  );
+  const hasAttachments = useMessagePipeline(selectHasAttachments);
 
   const leftSidebarItems = useMemo(() => {
     const items = new Map<LeftSidebarItemKey, SidebarItem>([

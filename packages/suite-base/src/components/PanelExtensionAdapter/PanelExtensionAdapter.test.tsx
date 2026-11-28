@@ -1191,6 +1191,35 @@ describe("PanelExtensionAdapter", () => {
       },
     );
 
+    it("delivers a frame that arrived while a panel with a held message was busy", async () => {
+      // Given a busy panel with a held latched message
+      const { Wrapper, panel, held, delivered, subscribe } = setup();
+      const handle = render(
+        <Wrapper frame={{ fast: [msg("fast", 1)], latched: [msg("latched", 2)] }} />,
+      );
+      await settle();
+      panel.hold = true;
+      subscribe(["fast"]);
+      await settle();
+      subscribe(["fast", "latched"]);
+      await settle();
+
+      // When a new frame arrives while it is still rendering, then it finishes
+      handle.rerender(<Wrapper frame={{ fast: [msg("fast", 3)] }} />);
+      await settle();
+      panel.hold = false;
+      act(() => {
+        held.splice(0).forEach((done) => {
+          done();
+        });
+      });
+      await settle();
+
+      // Then that frame's messages are delivered with the held message
+      expect(delivered()).toContain("fast@3");
+      expect(delivered().filter((d) => d === "latched@2")).toHaveLength(2);
+    });
+
     // The injected message used to arrive before the adapter's local subscriptions included the
     // topic, so the render state builder filtered it out and never saw that frame again.
     it.each([false, true])(
@@ -1296,11 +1325,12 @@ describe("PanelExtensionAdapter", () => {
     // Stable props: new ones would re-initialize the panel on every render.
     const config = {};
     const saveConfig = () => {};
+    const pauseFrame = vi.fn(() => () => {});
     const Wrapper = ({ visible, value }: { visible: boolean; value: number }) => (
       <ThemeProvider isDark>
         <MockPanelContextProvider>
           {/* Frames keep coming while a render is in progress, as after the pipeline's pause timeout. */}
-          <PanelSetup fixture={fixtureFor(value)} pauseFrame={() => () => {}}>
+          <PanelSetup fixture={fixtureFor(value)} pauseFrame={pauseFrame}>
             <PanelVisibleContext.Provider value={visible}>
               <PanelExtensionAdapter
                 config={config}
@@ -1321,6 +1351,9 @@ describe("PanelExtensionAdapter", () => {
     const handle = render(<Wrapper visible={false} value={1} />);
     await flush();
     const rendersBefore = frames.length;
+    // A hidden panel's render doesn't hold up playback for the visible ones.
+    expect(rendersBefore).toBeGreaterThan(0);
+    expect(pauseFrame).not.toHaveBeenCalled();
     handle.rerender(<Wrapper visible={false} value={2} />);
     await flush();
     handle.rerender(<Wrapper visible={false} value={3} />);
@@ -1333,6 +1366,7 @@ describe("PanelExtensionAdapter", () => {
     // Shown: the first render has everything that arrived while hidden. (The mock pipeline re-emits
     // the current message on every React render, so more renders with repeated values can follow.)
     expect(new Set(frames[rendersBefore])).toEqual(new Set([1, 2, 3]));
+    expect(pauseFrame).toHaveBeenCalled();
 
     // Hidden again with a frame queued and no frame after it: delivered when the interval ends.
     handle.rerender(<Wrapper visible={false} value={4} />);
