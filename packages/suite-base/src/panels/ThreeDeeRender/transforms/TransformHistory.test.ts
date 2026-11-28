@@ -120,4 +120,52 @@ describe("TransformHistory", () => {
     expect(history.timeAt(history.size() - 1)).toBe(4999n);
     expect(history.timeAt(0)).toBeLessThanOrEqual(4899n);
   });
+
+  describe("prepend", () => {
+    const filled = (from: number, to: number, receiveBase?: bigint) => {
+      const history = new TransformHistory();
+      for (let t = from; t < to; t++) {
+        // Distinct values, so runs of equal samples don't merge
+        history.set(
+          BigInt(t),
+          at(t),
+          receiveBase == undefined ? undefined : receiveBase + BigInt(t),
+        );
+      }
+      return history;
+    };
+
+    it("puts earlier samples in front in one copy, keeping times and receive times", () => {
+      const later = filled(100, 110, 1000n);
+      later.prepend(filled(0, 10, 1000n));
+      expect(later.size()).toBe(20);
+      expect(Array.from({ length: 20 }, (_, i) => later.timeAt(i))).toEqual([
+        ...Array.from({ length: 10 }, (_, i) => BigInt(i)),
+        ...Array.from({ length: 10 }, (_, i) => BigInt(100 + i)),
+      ]);
+      expect(xAt(later, 9)).toBe(9);
+      expect(xAt(later, 10)).toBe(100);
+      // Received at 1000 + time: by 1005, the samples up to 5 are visible
+      expect(later.receivedCount(1005n)).toBe(6);
+      expect(later.receivedCount(1105n)).toBe(16);
+      // Still sorted for inserts after it
+      later.set(50n, at(50));
+      expect(later.binarySearch(50n)).toBe(10);
+    });
+
+    it("inserts samples one by one when their stamps overlap this history's", () => {
+      const later = filled(5, 10);
+      later.prepend(filled(0, 8));
+      expect(Array.from({ length: later.size() }, (_, i) => later.timeAt(i))).toEqual(
+        Array.from({ length: 10 }, (_, i) => BigInt(i)),
+      );
+    });
+
+    it("fills an empty history", () => {
+      const empty = new TransformHistory();
+      empty.prepend(filled(0, 3, 0n));
+      expect(empty.size()).toBe(3);
+      expect(empty.receivedCount(1n)).toBe(2);
+    });
+  });
 });

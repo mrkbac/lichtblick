@@ -1133,12 +1133,20 @@ describe("ThreeDeeRender", () => {
       const messages = buildTfMessages({ topic: "/tf", count: 20_000 });
 
       // When
-      const { customRendererInstance, subscribe } = await renderPreloading(messages);
+      const { customRendererInstance, mockContext, subscribe } = await renderPreloading(messages);
 
-      // Then: nothing is dropped and the player does not preload the topic as well
+      // Then: nothing is dropped, the history is read around the playhead first, and the player
+      // does not preload the topic as well
       await waitFor(() => {
-        expect(customRendererInstance.addTransformMessages).toHaveBeenCalledWith(messages);
+        expect(customRendererInstance.addTransformMessages).toHaveBeenCalledWith(
+          messages,
+          undefined,
+          undefined,
+        );
       });
+      expect(mockContext.unstable_subscribeMessageRange).toHaveBeenCalledWith(
+        expect.objectContaining({ topic: "/tf", playheadFirst: true }),
+      );
       expect(customRendererInstance.transformTree.setComplete).toHaveBeenCalledWith(true);
       const subscriptions = subscribe.mock.calls.at(-1)?.[0];
       expect(subscriptions).toEqual([expect.objectContaining({ topic: "/tf" })]);

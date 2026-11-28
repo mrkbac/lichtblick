@@ -42,6 +42,7 @@ import {
   PANEL_STYLE,
   isTransformPreloadEnabled,
 } from "@lichtblick/suite-base/panels/ThreeDeeRender/constants";
+import { EarlierWindows } from "@lichtblick/suite-base/components/PanelExtensionAdapter/EarlierWindows";
 import { SELECTED_ID_VARIABLE } from "@lichtblick/suite-base/panels/ThreeDeeRender/settings";
 import ThemeProvider from "@lichtblick/suite-base/theme/ThemeProvider";
 import { findShortcut } from "@lichtblick/suite-base/util/keyboardShortcuts";
@@ -74,6 +75,7 @@ import {
 } from "./renderables/pointExtensionUtils";
 import { THREE_DEE_SHORTCUTS } from "./shortcuts";
 import { readTransformRange, readTransformsBefore, TransformTopic } from "./transformHistoryReads";
+import { TransformTree } from "./transforms";
 import { Shared3DPanelState, ThreeDeeRenderProps } from "./types";
 import { useGpuRecovery } from "./useGpuRecovery";
 
@@ -838,17 +840,27 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
     }
 
     const abort = new AbortController();
-    // Newest time read per range read (a topic can be read natively and converted); the tree is
-    // complete up to the oldest of them
+    // Each range read (a topic can be read natively and converted) reads around the playhead
+    // first: the transforms where the user looks come first, and the read joins the panels' shared
+    // pass instead of a second one in time order. Each earlier window is collected in a tree of
+    // its own and put in front once complete; the tree is complete once every read is done.
     const key = ({ topic, convertTo }: TransformTopic) => `${topic}\n${convertTo ?? ""}`;
-    const readUntil = new Map(transformTopics.map((source) => [key(source), -1n]));
-    const updateCompleteUntil = () => {
-      let until: bigint | undefined;
-      for (const time of readUntil.values()) {
-        until = until == undefined || time < until ? time : until;
-      }
-      transformsCompleteUntilRef.current = until ?? -1n;
-    };
+    const pending = new Set(transformTopics.map(key));
+    const earlierWindows = new Map(
+      transformTopics.map((source) => [
+        key(source),
+        new EarlierWindows<TransformTree>(
+          () => {
+            const tree = new TransformTree();
+            tree.setComplete(true);
+            return tree;
+          },
+          (earlier) => {
+            renderer.prependTransformHistory(earlier);
+          },
+        ),
+      ]),
+    );
     let count = 0;
     let lastUiUpdate = 0;
     const updateUi = () => {
@@ -859,6 +871,7 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
     void readTransformRange({
       subscribeRange: context.unstable_subscribeMessageRange,
       topics: transformTopics,
+      playheadFirst: true,
       signal: abort.signal,
       onBatch: (batch, source) => {
         // Only a source with ranges (a recording) has a complete history; live sources never get here
@@ -866,9 +879,11 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
           renderer.transformTree.setComplete(true);
           setIsLoadingTransforms(true);
         }
-        renderer.addTransformMessages(batch);
-        readUntil.set(key(source), toNanoSec(batch[batch.length - 1]!.receiveTime));
-        updateCompleteUntil();
+        renderer.addTransformMessages(
+          batch,
+          undefined,
+          earlierWindows.get(key(source))?.place(batch),
+        );
         count += batch.length;
         const now = Date.now();
         if (now - lastUiUpdate > 100) {
@@ -877,8 +892,11 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
         }
       },
       onTopicDone: (source) => {
-        readUntil.set(key(source), BigInt(Number.MAX_SAFE_INTEGER) * 1_000_000_000n);
-        updateCompleteUntil();
+        earlierWindows.get(key(source))?.flush();
+        pending.delete(key(source));
+        if (pending.size === 0) {
+          transformsCompleteUntilRef.current = BigInt(Number.MAX_SAFE_INTEGER) * 1_000_000_000n;
+        }
       },
     }).then(() => {
       if (!abort.signal.aborted && count > 0) {

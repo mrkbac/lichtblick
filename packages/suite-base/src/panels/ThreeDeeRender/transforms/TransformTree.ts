@@ -295,6 +295,28 @@ export class TransformTree {
     return this.#frames.get(id) as CoordinateFrame<ID>;
   }
 
+  /**
+   * Puts the history of `earlier`, a tree of transforms all received before this tree's (a
+   * playhead-first read's earlier window, see Renderer.addTransformMessages), in front of each
+   * frame's history: one copy per frame instead of an insert per transform.
+   */
+  public prepend(earlier: TransformTree): void {
+    this.version++;
+    for (const [id, frame] of earlier.#frames) {
+      const target = this.getOrCreateFrame(id);
+      const sizeBefore = target.transformsSize();
+      target.prepend(frame, (parentId) => this.getOrCreateFrame(parentId));
+      this.#sampleCount += target.transformsSize() - sizeBefore;
+    }
+    while (this.#sampleCount > this.#sampleBudget) {
+      const count = this.#sampleCount;
+      this.#decimate();
+      if (this.#sampleCount >= count) {
+        break;
+      }
+    }
+  }
+
   public getOrCreateFrame(id: string): CoordinateFrame {
     let frame = this.#frames.get(id);
     if (!frame) {

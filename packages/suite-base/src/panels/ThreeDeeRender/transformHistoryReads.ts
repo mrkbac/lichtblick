@@ -24,13 +24,15 @@ export async function readTransformRange(args: {
   topics: readonly TransformTopic[];
   start?: bigint;
   end?: bigint;
+  /** Read around the playhead first (see BuiltinRangeOptions.playheadFirst) */
+  playheadFirst?: boolean;
   /** The next batch is read once a returned promise settles */
   onBatch: (batch: readonly MessageEvent[], source: TransformTopic) => void | Promise<void>;
   /** Called when a topic is read to its end without errors */
   onTopicDone?: (source: TransformTopic) => void;
   signal: AbortSignal;
 }): Promise<boolean> {
-  const { subscribeRange, topics, start, end, onBatch, onTopicDone, signal } = args;
+  const { subscribeRange, topics, start, end, playheadFirst, onBatch, onTopicDone, signal } = args;
   let failed = false;
   const cancels: (() => void)[] = [];
   const reads = topics.map(async (source) => {
@@ -42,6 +44,7 @@ export async function readTransformRange(args: {
           convertTo: source.convertTo,
           start: start != undefined ? fromNanoSec(start < 0n ? 0n : start) : undefined,
           end: end != undefined ? fromNanoSec(end) : undefined,
+          playheadFirst,
           // A failed read must not count as read to the end
           rethrowErrors: true,
           onNewRangeIterator: async (batches) => {

@@ -794,23 +794,44 @@ export class Renderer extends EventEmitter<RendererEvents> {
     messageEvents: readonly MessageEvent[],
     /** Collects the child frames these messages gave a transform */
     touchedFrameIds?: Set<string>,
+    /**
+     * The tree to add them to instead of the renderer's: an earlier window of a playhead-first
+     * read, put in front with prependTransformHistory once complete
+     */
+    into?: TransformTree,
   ): void {
     this.#touchedFrameIds = touchedFrameIds;
     this.#batchTransformTreeUpdates(() => {
-      for (const messageEvent of messageEvents) {
-        for (const subscription of this.schemaSubscriptions.get(messageEvent.schemaName) ?? []) {
-          if (subscription.preload === true) {
-            subscription.handler(messageEvent);
+      const tree = this.transformTree;
+      this.transformTree = into ?? tree;
+      try {
+        for (const messageEvent of messageEvents) {
+          for (const subscription of this.schemaSubscriptions.get(messageEvent.schemaName) ?? []) {
+            if (subscription.preload === true) {
+              subscription.handler(messageEvent);
+            }
           }
         }
+      } finally {
+        this.transformTree = tree;
       }
     });
     this.#touchedFrameIds = undefined;
+    if (into) {
+      return;
+    }
     // A batch can replace or thin samples that are on screen, even one received after the current
     // time, so every non-empty batch repaints, throttled
     if (messageEvents.length > 0) {
       this.#queueHistoryRepaint();
     }
+  }
+
+  /** Puts `earlier` (see addTransformMessages) in front of the transform tree's history */
+  public prependTransformHistory(earlier: TransformTree): void {
+    this.transformTree.prepend(earlier);
+    this.#transformTreeUpdated();
+    this.#queueHistoryRepaint();
   }
 
   /**

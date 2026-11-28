@@ -189,6 +189,46 @@ export class CoordinateFrame<ID extends AnyFrameId = UserFrameId> {
   }
 
   /**
+   * Puts the history of `earlier` (the same frame in a tree of transforms received before this
+   * one's, see TransformTree.prepend) in front of this frame's. `frameOf` gives this tree's frame
+   * for an id of the earlier tree. A parent that changed between the two starts a new history, as
+   * a reparenting does in setParent.
+   */
+  public prepend(earlier: CoordinateFrame, frameOf: (id: string) => CoordinateFrame): void {
+    const before = [...earlier.#earlier];
+    if (earlier.#parent) {
+      before.push({ parent: earlier.#parent, transforms: earlier.#transforms });
+    }
+    const segments = before.map(({ parent, transforms }) => ({
+      parent: frameOf(parent.id),
+      transforms,
+    }));
+    const last = segments.pop();
+    if (!last) {
+      return;
+    }
+    if (!this.#parent) {
+      this.#parent = last.parent;
+      this.#transforms.prepend(last.transforms);
+    } else {
+      const first = this.#earlier[0] ?? { parent: this.#parent, transforms: this.#transforms };
+      if (first.parent === last.parent) {
+        first.transforms.prepend(last.transforms);
+      } else {
+        segments.push(last);
+      }
+    }
+    if (!this.#visibility.complete) {
+      // Earlier parents are only kept for a preloaded history
+      return;
+    }
+    for (const { transforms } of segments) {
+      transforms.setKeepEvery(this.#keepEvery);
+    }
+    this.#earlier = [...segments, ...this.#earlier];
+  }
+
+  /**
    * Search for an ancestor frame with the given ID by walking up the chain of
    * parent frames, starting at the current frame.
    * @param id Frame ID to search for

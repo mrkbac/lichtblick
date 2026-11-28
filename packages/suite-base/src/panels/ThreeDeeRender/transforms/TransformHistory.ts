@@ -277,6 +277,50 @@ export class TransformHistory {
   }
 
   /**
+   * Puts the samples of `earlier` in front, for history read backwards (see TransformTree.prepend):
+   * one copy when they are all stamped before this history's first sample, else one by one.
+   */
+  public prepend(earlier: TransformHistory): void {
+    const added = earlier.#size;
+    if (added === 0) {
+      return;
+    }
+    if (this.#size > 0 && earlier.timeAt(added - 1) >= this.timeAt(0)) {
+      // Stamps overlap (a publisher's clock behind its receive times): insert them one by one
+      const transform = Transform.Identity();
+      for (let i = 0; i < added; i++) {
+        const receive = earlier.#data[i * STRIDE + RECEIVE]!;
+        const receiveTime =
+          receive === -Infinity ? undefined : earlier.#receiveBase! + BigInt(receive);
+        this.set(earlier.timeAt(i), earlier.transformAt(i, transform), receiveTime);
+      }
+      return;
+    }
+    const size = this.#size;
+    const receiveBase = earlier.#receiveBase ?? this.#receiveBase;
+    const timeShift = Number(this.#base - earlier.#base);
+    const receiveShift =
+      this.#receiveBase == undefined ? 0 : Number(this.#receiveBase - receiveBase!);
+    const data = new Float64Array(Math.ceil((added + size) * GROWTH) * STRIDE);
+    data.set(earlier.#data.subarray(0, added * STRIDE));
+    data.set(this.#data.subarray(0, size * STRIDE), added * STRIDE);
+    for (let o = added * STRIDE; o < (added + size) * STRIDE; o += STRIDE) {
+      data[o + TIME] += timeShift;
+      data[o + RECEIVE] += receiveShift;
+    }
+    this.#buffer = data;
+    this.#data = data;
+    this.#size = added + size;
+    this.#base = earlier.#base;
+    this.#receiveBase = receiveBase;
+    this.#pruneAt = -Infinity;
+    this.#thinnedUntil = -Infinity;
+    if (size > 0) {
+      this.#keepReceiveOrder(added);
+    }
+  }
+
+  /**
    * Halves the sample count by dropping every other sample, always keeping the first and last.
    * Returns the number of samples removed.
    */
