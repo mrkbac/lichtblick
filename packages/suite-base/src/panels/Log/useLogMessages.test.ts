@@ -333,6 +333,40 @@ describe("useLogMessages", () => {
     );
   });
 
+  it("keeps live lines the rolling buffer dropped after the session's history", async () => {
+    // Given a live source whose history ended at /a@1, with a rolling buffer of two messages
+    withRange({ liveHistory: true });
+    let live = { "/a": history([]) };
+    (useMessageHistory as Mock).mockImplementation(() => live);
+    const { result, rerender } = renderHook(() => useLogMessages(SINGLE_TOPIC));
+    await act(async () => {
+      rangeIterators.get("/a")!([event(1, "/a")]);
+      rangeIterators.get("/a")!("done");
+      await vi.runAllTimersAsync();
+    });
+
+    // When live messages arrive faster than the buffer holds them
+    for (const buffer of [
+      [2, 3],
+      [4, 5],
+    ]) {
+      live = { "/a": history(buffer.map((sec) => event(sec, "/a"))) };
+      rerender();
+      await act(async () => {
+        await vi.runAllTimersAsync();
+      });
+    }
+
+    // Then no line between the history and the live tail is lost
+    expect(result.current.items.map((m) => m.message)).toEqual([
+      "/a@1",
+      "/a@2",
+      "/a@3",
+      "/a@4",
+      "/a@5",
+    ]);
+  });
+
   it("takes live updates at most every 250 ms, always ending on the latest", () => {
     (useSubscribeMessageRange as Mock).mockReturnValue(vi.fn(() => () => {}));
     let live = { "/a": history([event(1, "/a")]) };

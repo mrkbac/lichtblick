@@ -32,6 +32,16 @@ export class LiveHistoryRead<T extends Pick<MessageEvent, "receiveTime"> = Messa
   /** The newest message of the history read */
   #newest?: Time;
 
+  /** The newest message of the history read so far */
+  public newest(): Time | undefined {
+    return this.#newest;
+  }
+
+  /** Whether the history is still read */
+  public reading(): boolean {
+    return this.#waiting != undefined;
+  }
+
   /** Note a batch of the history read */
   public read(batch: readonly Pick<MessageEvent, "receiveTime">[]): void {
     for (const { receiveTime } of batch) {
