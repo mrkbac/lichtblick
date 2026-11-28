@@ -29,15 +29,16 @@ const GATHER_MS = 10;
 /** Smallest window a pass reads */
 const MIN_WINDOW_NS = 20_000_000_000n;
 
-/** Windows of an ascending pass: the boundaries where a reader that starts later joins it */
-const ASCENDING_WINDOWS = 32n;
-
 /** Inclusive spans in nanoseconds as ranges; spans reaching `first` or `last` are open there */
 function toRanges(spans: [bigint, bigint][], first: bigint, last: bigint): Range[] {
   return spans.map(([from, to]) => ({
     start: from <= first ? undefined : fromNanoSec(from),
     end: to >= last ? undefined : fromNanoSec(to),
   }));
+}
+
+function clamp(ns: bigint, first: bigint, last: bigint): bigint {
+  return ns < first ? first : ns > last ? last : ns;
 }
 
 /**
@@ -51,7 +52,6 @@ function growSpans(
   readTo: bigint,
   firstSize: bigint,
 ): [bigint, bigint][] {
-  const clamp = (ns: bigint) => (ns < first ? first : ns > last ? last : ns);
   const spans: [bigint, bigint][] = [];
   let lo = readFrom;
   let hi = readTo;
@@ -59,12 +59,12 @@ function growSpans(
   while (lo > first || hi < last) {
     if (lo > first) {
       const to = lo - 1n;
-      lo = clamp(to - size + 1n);
+      lo = clamp(to - size + 1n, first, last);
       spans.push([lo, to]);
     }
     if (hi < last) {
       const from = hi + 1n;
-      hi = clamp(from + size - 1n);
+      hi = clamp(from + size - 1n, first, last);
       spans.push([from, hi]);
     }
     size *= 2n;
@@ -72,7 +72,7 @@ function growSpans(
   return spans;
 }
 
-/** Size of a pass's first window: max(20 s, 1/32 of the recording) */
+/** Size of a pass's first window (and of an ascending pass's windows): max(20 s, 1/32 of the recording) */
 function windowSize(first: bigint, last: bigint): bigint {
   const size = (last - first) / 32n;
   return size < MIN_WINDOW_NS ? MIN_WINDOW_NS : size;
@@ -93,9 +93,8 @@ export function playheadWindows({ start, end, playhead }: Playhead): Range[] {
   }
   const size = windowSize(first, last);
   const at = toNanoSec(playhead);
-  const clamp = (ns: bigint) => (ns < first ? first : ns > last ? last : ns);
-  const lo = clamp(at - size / 2n);
-  const hi = clamp(at + size / 2n);
+  const lo = clamp(at - size / 2n, first, last);
+  const hi = clamp(at + size / 2n, first, last);
   return toRanges([[lo, hi], ...growSpans(first, last, lo, hi, size)], first, last);
 }
 
@@ -113,13 +112,14 @@ export function windowsAfterSeek(
 ): Range[] | undefined {
   const first = toNanoSec(start);
   const last = toNanoSec(end);
-  const clamp = (ns: bigint) => (ns < first ? first : ns > last ? last : ns);
-  const at = clamp(toNanoSec(playhead));
+  const at = clamp(toNanoSec(playhead), first, last);
   if (at >= lo && at <= hi) {
     return undefined;
   }
   const next: [bigint, bigint] =
-    at > hi ? [hi + 1n, clamp(at + size / 2n)] : [clamp(at - size / 2n), lo - 1n];
+    at > hi
+      ? [hi + 1n, clamp(at + size / 2n, first, last)]
+      : [clamp(at - size / 2n, first, last), lo - 1n];
   const spans = growSpans(
     first,
     last,
@@ -137,10 +137,7 @@ function ascendingWindows({ start, end }: Playhead): Range[] {
   if (last <= first) {
     return [{}];
   }
-  let size = (last - first + 1n) / ASCENDING_WINDOWS;
-  if (size < MIN_WINDOW_NS) {
-    size = MIN_WINDOW_NS;
-  }
+  const size = windowSize(first, last);
   const spans: [bigint, bigint][] = [];
   for (let from = first; from <= last; from += size) {
     const to = from + size - 1n;
@@ -339,11 +336,6 @@ class Reader implements AsyncIterableIterator<Readonly<ReadResult>> {
   /** Delivers `iterator` (the windows before `fromWindow`) before what the shared read pushes */
   public catchUp(iterator: AsyncIterator<Readonly<ReadResult>>): void {
     this.#catchUp = iterator;
-  }
-
-  /** Whether it took nothing from the shared read yet: its queue holds all it pushed */
-  public tookNothing(): boolean {
-    return this.#catchUp != undefined;
   }
 
   /** Goes on with `own`, skipping its first `skip` messages and dropping what is queued */
@@ -618,10 +610,10 @@ class SharedRead {
         // The slowest reader sets the pace, so what waits for it stays bounded. A consumer may
         // wait on one reader before it empties another (e.g. merging inputs by time): readers
         // waiting while the read waits for room go on with their own read instead of blocking
-        // each other. So does a late joiner still catching up.
+        // each other. A late joiner still catching up isn't waiting: the read waits for it.
         while (this.#readers.values().some((reader) => reader.isFull())) {
           for (const reader of this.#readers) {
-            if (reader.waiting || (reader.tookNothing() && reader.isFull())) {
+            if (reader.waiting) {
               this.#detach(reader);
             }
           }
@@ -644,8 +636,9 @@ class SharedRead {
 
   /** Continues `reader` with its own read from where the shared read is for it */
   #detach(reader: Reader): void {
-    const fresh = reader.fromWindow > this.#windowIndex || reader.tookNothing();
-    // A reader that took nothing yet reads all its windows; else it goes on where the read is
+    // A reader that joined in the current window reads from its first window; else it goes on where
+    // the read is
+    const fresh = reader.fromWindow > this.#windowIndex;
     const windows = fresh
       ? this.#windows.slice(reader.fromWindow)
       : this.#windowsFrom(this.#position);
