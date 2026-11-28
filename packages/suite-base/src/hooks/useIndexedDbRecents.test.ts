@@ -267,6 +267,44 @@ describe("useIndexedDbRecents", () => {
     reloaded.unmount();
   });
 
+  it("pins and removes a recent that another tab stored again under its own id", async () => {
+    const tabA = renderHook(() => useIndexedDbRecents());
+    const tabB = renderHook(() => useIndexedDbRecents());
+    await waitFor(() => {
+      expect(tabA.result.current.recentsLoaded).toBe(true);
+      expect(tabB.result.current.recentsLoaded).toBe(true);
+    });
+    let idB = "";
+    await act(async () => {
+      idB = tabB.result.current.addRecent(connection("ws://pin-me"));
+      tabB.result.current.addRecent(connection("ws://remove-me"));
+      await tabB.result.current.save();
+    });
+    // Tab A stores both under its own ids; tab B still shows its ids
+    await act(async () => {
+      tabA.result.current.addRecent(connection("ws://pin-me"));
+      tabA.result.current.addRecent(connection("ws://remove-me"));
+      await tabA.result.current.save();
+    });
+    await act(async () => {
+      tabB.result.current.togglePinRecent(idB);
+      const removeId = tabB.result.current.recents.find((r) => r.title === "ws://remove-me")!.id;
+      tabB.result.current.removeRecent(removeId);
+      await tabB.result.current.save();
+    });
+    tabA.unmount();
+    tabB.unmount();
+
+    const reloaded = renderHook(() => useIndexedDbRecents());
+    await waitFor(() => {
+      expect(reloaded.result.current.recentsLoaded).toBe(true);
+    });
+    const titles = reloaded.result.current.recents.map((r) => [r.title, r.pinned === true]);
+    expect(titles).toContainEqual(["ws://pin-me", true]);
+    expect(titles.map(([title]) => title)).not.toContain("ws://remove-me");
+    reloaded.unmount();
+  });
+
   it("identifies a connection by its arguments, not its display name", () => {
     const recent = (extra: Record<string, string>) => ({
       type: "connection" as const,

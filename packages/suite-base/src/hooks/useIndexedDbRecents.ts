@@ -227,20 +227,27 @@ function useIndexedDbRecents(): IRecentsStore {
     [change],
   );
 
+  // Another tab's addRecent may have stored the record under its own id since this tab loaded
+  // it, so a change by id matches the stored records by what they are.
   const removeRecent = useCallback(
     (id: string) => {
-      change((list) => list.filter((recent) => recent.id !== id));
+      const shown = recentsRef.current.find((recent) => recent.id === id);
+      if (shown) {
+        change((list) => list.filter((recent) => !isSameRecent(recent, shown)));
+      }
     },
     [change],
   );
 
   const togglePinRecent = useCallback(
     (id: string) => {
-      change((list) =>
-        list.map((recent) =>
-          recent.id === id ? { ...recent, pinned: recent.pinned !== true } : recent,
-        ),
-      );
+      const shown = recentsRef.current.find((recent) => recent.id === id);
+      if (shown) {
+        const pinned = shown.pinned !== true;
+        change((list) =>
+          list.map((recent) => (isSameRecent(recent, shown) ? { ...recent, pinned } : recent)),
+        );
+      }
     },
     [change],
   );
