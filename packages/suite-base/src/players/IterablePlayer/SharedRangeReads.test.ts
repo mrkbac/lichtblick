@@ -715,6 +715,37 @@ describe("SharedRangeReads", () => {
       expect(opened.at(-1)).toBe("a");
     });
 
+    it("skips what it got at the shared read's time when it reads on its own mid-window", async () => {
+      // "a" fills its queue with its 4096th entry, at 5000 s, right after the first of three "b"
+      // messages at that time: "b" got one of them when it goes on with its own read from 5000 s
+      const at = (topic: string, sec: number, id: string): IteratorResult => ({
+        type: "message-event",
+        msgEvent: { ...message(topic, sec), message: id },
+      });
+      const recording = [
+        ...range(4096).map((sec) => at("a", sec, `a${sec}`)),
+        at("b", 5000, "b1"),
+        at("a", 5000, "a5000"),
+        at("b", 5000, "b2"),
+        at("b", 5000, "b3"),
+      ];
+      const shared = recordingSource(recording);
+      const a = shared.read("a", {});
+      const b = shared.read("b", {});
+      const bSeen: unknown[] = [];
+      const bDone = (async () => {
+        for await (const result of b) {
+          if (result.type === "message-event") {
+            bSeen.push(result.msgEvent.message);
+          }
+        }
+      })();
+      expect((await a.next()).done).toBe(false);
+      await bDone;
+      expect(bSeen).toEqual(["b1", "b2", "b3"]);
+      expect(await collect(a)).toHaveLength(4096);
+    });
+
     it("ends after its catch-up when the pass fills it with alerts only", async () => {
       // An undecodable topic: an alert for each of its messages, after "b" has no more messages
       const recording = [
