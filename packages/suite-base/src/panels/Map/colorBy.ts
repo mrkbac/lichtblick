@@ -143,22 +143,60 @@ export function valueRange(
   min: number | undefined,
   max: number | undefined,
 ): [number, number] | undefined {
-  // A percentile of an even sample is as good for a color scale, and sorting stays cheap.
+  // A percentile of an even sample is as good for a color scale, and selecting stays cheap.
   const stride = Math.max(1, Math.ceil(values.length / 100_000));
-  const sample: number[] = [];
+  const sample = new Float64Array(Math.ceil(values.length / stride));
+  let n = 0;
   for (let i = 0; i < values.length; i += stride) {
     if (isFinite(values[i]!)) {
-      sample.push(values[i]!);
+      sample[n++] = values[i]!;
     }
   }
-  const sorted = Float64Array.from(sample).sort();
-  if (sorted.length === 0) {
+  if (n === 0) {
     return undefined;
   }
-  const at = (q: number) => sorted[Math.min(sorted.length - 1, Math.floor(q * sorted.length))]!;
-  const lo = min ?? at(0.02);
-  const hi = max ?? at(0.98);
+  // Two selections instead of a sort: this runs on every live flush.
+  const loK = Math.min(n - 1, Math.floor(0.02 * n));
+  const hiK = Math.min(n - 1, Math.floor(0.98 * n));
+  const lo = min ?? select(sample, loK, 0, n - 1);
+  // After selecting loK, everything from loK on is >= it: the 98th percentile is in there.
+  const hi = max ?? select(sample, hiK, min == undefined ? loK : 0, n - 1);
   return hi > lo ? [lo, hi] : [lo, lo + 1];
+}
+
+/** The k-th smallest of a[left..right] (quickselect), partially reordering that span. */
+function select(a: Float64Array, k: number, from: number, to: number): number {
+  let left = from;
+  let right = to;
+  while (left < right) {
+    // A random pivot keeps sorted or periodic signals from hitting the quadratic case.
+    const pivot = a[left + Math.floor(Math.random() * (right - left + 1))]!;
+    let i = left;
+    let j = right;
+    while (i <= j) {
+      while (a[i]! < pivot) {
+        i++;
+      }
+      while (a[j]! > pivot) {
+        j--;
+      }
+      if (i <= j) {
+        const t = a[i]!;
+        a[i] = a[j]!;
+        a[j] = t;
+        i++;
+        j--;
+      }
+    }
+    if (k <= j) {
+      right = j;
+    } else if (k >= i) {
+      left = i;
+    } else {
+      break;
+    }
+  }
+  return a[k]!;
 }
 
 /** Position of a value within the range, 0..1 (clamped). */
