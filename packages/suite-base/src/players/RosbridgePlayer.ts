@@ -100,8 +100,9 @@ function isClockMessage(topic: string, msg: unknown): msg is { clock: Time } {
 }
 
 /**
- * The topics poll (every 3 s while the window is shown) unanswered this long: the link is dead,
- * reconnect. A dead mobile link can leave the socket open for minutes before the browser notices.
+ * The topics poll (every 3 s while the window is shown) unanswered this long, with no message
+ * received in that time either: the link is dead, reconnect. A link that still streams data is
+ * alive, only rosapi (a separate node) is slow or hung. A dead mobile link can leave the socket open for minutes before the browser notices.
  */
 export const ROSBRIDGE_DEAD_LINK_MS = 30_000;
 
@@ -129,6 +130,8 @@ export default class RosbridgePlayer implements Player {
   #dropConnection?: () => void;
   /** Reconnects since the last successful connection, for the backoff. */
   #reconnectAttempts = 0;
+  /** When the current connection last received anything, for the dead-link check */
+  #lastReceivedAtMs = 0;
   #id: string = randomUUID(); // Unique ID for this player.
   #isRefreshing = false; // True if currently refreshing the node graph.
   /** Rejecters of requests in flight on the current connection, failed when it closes. */
@@ -275,6 +278,7 @@ export default class RosbridgePlayer implements Player {
       this.#rosClient = rosClient;
       this.#dropConnection = onClose;
       this.#reconnectAttempts = 0;
+      this.#lastReceivedAtMs = Date.now();
 
       this.#setupPublishers();
       void this.#requestTopics({ forceUpdate: true });
@@ -303,14 +307,20 @@ export default class RosbridgePlayer implements Player {
 
       this.#emitState();
     }, 5000);
-    const deadLinkTimeout = setTimeout(() => {
-      if (this.#isCurrentClient(rosClient)) {
-        log.warn(
-          `No answer from ${this.#url} for ${ROSBRIDGE_DEAD_LINK_MS / 1000} s, reconnecting`,
-        );
-        this.#dropConnection?.();
+    let deadLinkTimeout: ReturnType<typeof setTimeout>;
+    const checkDeadLink = () => {
+      if (!this.#isCurrentClient(rosClient)) {
+        return;
       }
-    }, ROSBRIDGE_DEAD_LINK_MS);
+      const silentMs = Date.now() - this.#lastReceivedAtMs;
+      if (silentMs < ROSBRIDGE_DEAD_LINK_MS) {
+        deadLinkTimeout = setTimeout(checkDeadLink, ROSBRIDGE_DEAD_LINK_MS - silentMs);
+        return;
+      }
+      log.warn(`No answer from ${this.#url} for ${ROSBRIDGE_DEAD_LINK_MS / 1000} s, reconnecting`);
+      this.#dropConnection?.();
+    };
+    deadLinkTimeout = setTimeout(checkDeadLink, ROSBRIDGE_DEAD_LINK_MS);
 
     try {
       const result = await new Promise<{
@@ -646,6 +656,7 @@ export default class RosbridgePlayer implements Player {
 
       const alertId = `message:${topicName}`;
       topic.subscribe((message) => {
+        this.#lastReceivedAtMs = Date.now();
         if (!this.#providerTopics) {
           return;
         }

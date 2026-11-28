@@ -186,6 +186,8 @@ class MockRosClient {
 }
 
 const subscribedTopics: string[] = [];
+/** The latest subscriber of each topic, to deliver messages to */
+const topicCallbacks = new Map<string, (arg: unknown) => void>();
 
 class MockRosTopic {
   #name: string = "";
@@ -196,6 +198,7 @@ class MockRosTopic {
 
   public subscribe(callback: (arg: unknown) => void) {
     subscribedTopics.push(this.#name);
+    topicCallbacks.set(this.#name, callback);
     workerInstance.getMessagesByTopicName(this.#name).forEach(({ message }) => {
       callback(message);
     });
@@ -347,6 +350,34 @@ describe("RosbridgePlayer", () => {
     first.emitClose?.();
     await vi.advanceTimersByTimeAsync(20_000);
     expect(workerInstance).toBe(second);
+  });
+
+  it("keeps a link that streams data while the topics poll goes unanswered", async () => {
+    vi.useFakeTimers();
+    onTestFinished(() => {
+      vi.useRealTimers();
+    });
+    const first = workerInstance;
+    first.setup({ topics: ["/a"], types: ["std_msgs/Header"], typedefs: [HEADER_TYPEDEF] });
+    await vi.advanceTimersByTimeAsync(0);
+    player.setSubscriptions([{ topic: "/a" }]);
+    // rosapi stops answering, but data keeps arriving
+    first.holdTopics = true;
+    for (let i = 0; i < (2 * ROSBRIDGE_DEAD_LINK_MS) / 100; i++) {
+      topicCallbacks.get("/a")?.(
+        headerMessage({ seq: i, stamp: { sec: i, nsec: 0 }, frame_id: "f" }),
+      );
+      await vi.advanceTimersByTimeAsync(100);
+    }
+    (console.warn as ReturnType<typeof vi.fn>).mockClear(); // "taking too long" stall warning
+    expect(first.closed).toBe(false);
+    expect(workerInstance).toBe(first);
+
+    // Once nothing arrives at all, the link is dead
+    await vi.advanceTimersByTimeAsync(ROSBRIDGE_DEAD_LINK_MS);
+    (console.warn as ReturnType<typeof vi.fn>).mockClear(); // "no answer, reconnecting"
+    (console.error as ReturnType<typeof vi.fn>).mockClear(); // the expected "Connection failed" alert
+    expect(first.closed).toBe(true);
   });
 
   it("looks up a large graph's services a few at a time", async () => {
