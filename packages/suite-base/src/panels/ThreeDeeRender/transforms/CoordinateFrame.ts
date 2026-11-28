@@ -236,7 +236,45 @@ export class CoordinateFrame<ID extends AnyFrameId = UserFrameId> {
       transforms.setKeepEvery(this.#keepEvery);
     }
     this.#earlier = [...segments, ...this.#earlier];
+    // A seek's read may have put transforms in the earlier window's span
+    this.#orderSegments();
     return dropped;
+  }
+
+  /**
+   * Puts the parent segments of a complete history in time order (by their first transform) and
+   * joins neighbours under one parent; the newest becomes the current one. Segments arrive out of
+   * order when a read writes before what was read so far (a seek's read during preloading).
+   */
+  #orderSegments(): void {
+    const segments = [...this.#earlier];
+    if (this.#parent) {
+      segments.push({ parent: this.#parent, transforms: this.#transforms });
+    }
+    const ordered = segments
+      .filter(({ transforms }) => transforms.size() > 0)
+      .sort((x, y) => {
+        const [a, b] = [x.transforms.timeAt(0), y.transforms.timeAt(0)];
+        return a < b ? -1 : a > b ? 1 : 0;
+      });
+    const joined: typeof segments = [];
+    for (const segment of ordered) {
+      const previous = joined.at(-1);
+      if (previous?.parent === segment.parent) {
+        segment.transforms.prepend(previous.transforms);
+        joined[joined.length - 1] = segment;
+      } else {
+        joined.push(segment);
+      }
+    }
+    const newest = joined.pop();
+    if (!newest) {
+      return;
+    }
+    this.#earlier = joined;
+    this.#parent = newest.parent;
+    this.#transforms = newest.transforms;
+    this.#transforms.setKeepEvery(this.#keepEvery);
   }
 
   /**
@@ -272,6 +310,45 @@ export class CoordinateFrame<ID extends AnyFrameId = UserFrameId> {
     }
 
     history.removeOlderThan(Number(this.maxStorageTime));
+  }
+
+  /**
+   * For a complete history: adds a transform from before the current parent's first one (a seek's
+   * read during preloading) to the parent segment of its time, or to a new one between, instead of
+   * making `parent` the newest parent as {@link setParent} would. Returns false (adding nothing)
+   * for a transform that isn't before the current parent's.
+   */
+  public addEarlierTransform(
+    parent: CoordinateFrame,
+    time: Time,
+    transform: Transform,
+    receiveTime?: Time,
+  ): boolean {
+    if (
+      !this.#visibility.complete ||
+      this.#transforms.size() === 0 ||
+      time >= this.#transforms.timeAt(0)
+    ) {
+      return false;
+    }
+    // The newest segment that starts by `time`, if any, else the one after it
+    let i = this.#earlier.length - 1;
+    while (i >= 0 && this.#earlier[i]!.transforms.timeAt(0) > time) {
+      i--;
+    }
+    const at = this.#earlier[i];
+    const after = this.#earlier[i + 1] ?? { parent: this.#parent, transforms: this.#transforms };
+    if (at?.parent === parent) {
+      at.transforms.set(time, transform, receiveTime);
+    } else if (after.parent === parent) {
+      after.transforms.set(time, transform, receiveTime);
+    } else {
+      const transforms = new TransformHistory();
+      transforms.setKeepEvery(this.#keepEvery);
+      transforms.set(time, transform, receiveTime);
+      this.#earlier.splice(i + 1, 0, { parent, transforms });
+    }
+    return true;
   }
 
   /**

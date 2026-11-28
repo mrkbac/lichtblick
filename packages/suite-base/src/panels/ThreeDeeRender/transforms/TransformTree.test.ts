@@ -507,6 +507,38 @@ describe("TransformTree", () => {
       expect(xAt(tree, "b", 20n * sec)).toBe(2);
     });
 
+    it("places a seek's transform before the loaded window under the parent it had then", () => {
+      // Read around the playhead (b moved from a to c at 50 s), then a seek to 10 s reads b -> a
+      const tree = complete();
+      tree.addTransform("b", "c", 100n * sec, at(100), 100n * sec);
+      tree.addTransform("b", "c", 110n * sec, at(110), 110n * sec);
+      tree.addTransform("b", "a", 9n * sec, at(9), 9n * sec);
+      tree.addTransform("b", "a", 10n * sec, at(10), 10n * sec);
+      expect(tree.frame("b")!.latestParent()).toBe(tree.frame("c"));
+      tree.setReceivedUntil(10n * sec);
+      expect(tree.frame("b")!.parent()).toBe(tree.frame("a"));
+      tree.setReceivedUntil(105n * sec);
+      expect(tree.frame("b")!.parent()).toBe(tree.frame("c"));
+
+      // Then the earlier window, which has the seek's transforms and the reparenting
+      const earlier = complete();
+      for (const t of [0, 9, 10, 20]) {
+        earlier.addTransform("b", "a", BigInt(t) * sec, at(t), BigInt(t) * sec);
+      }
+      earlier.addTransform("b", "c", 60n * sec, at(60), 60n * sec);
+      tree.prepend(earlier);
+      tree.setReceivedUntil(15n * sec);
+      expect(tree.frame("b")!.parent()).toBe(tree.frame("a"));
+      expect(xAt(tree, "b", 10n * sec)).toBe(10);
+      for (const t of [70n, 105n]) {
+        tree.setReceivedUntil(t * sec);
+        expect(tree.frame("b")!.parent()).toBe(tree.frame("c"));
+      }
+      expect(xAt(tree, "b", 110n * sec)).toBe(110);
+      expect(tree.frame("b")!.allParents()).toEqual([tree.frame("c"), tree.frame("a")]);
+      expect(tree.frame("b")!.transformsSize()).toBe(7);
+    });
+
     it("drops an earlier parent that would form a cycle with this tree's parents", () => {
       const tree = complete();
       tree.addTransform("b", "a", 10n * sec, at(1), 10n * sec);
