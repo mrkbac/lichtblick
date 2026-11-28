@@ -119,18 +119,35 @@ export function downsampleTimeseriesColumns(
     if (firstY !== lastY) {
       indices.push(lastI);
     }
+    if (trailingGapI >= 0) {
+      indices.push(trailingGapI);
+      trailingGapI = -1;
+    }
   };
 
+  // One gap per pixel column is drawn; later ones in that column fold into the interval, except
+  // one ending it, so the line still breaks after the column. Without this, data alternating with
+  // gaps kept every row.
+  let lastGapPixel = Number.NaN;
+  let trailingGapI = -1;
+
   for (let i = start; i < end; i++) {
+    const x = Math.trunc(xs[i]! * pixelPerXValue);
     if (Number.isNaN(ys[i])) {
+      if (x === lastGapPixel) {
+        if (lastI >= 0) {
+          trailingGapI = i;
+        }
+        continue;
+      }
       // A gap is a point of its own: comparisons with NaN would keep an interval from tracking
       // its min and max. The next value starts a new interval.
       finishInterval();
       indices.push(i);
       lastI = -1;
+      lastGapPixel = x;
       continue;
     }
-    const x = Math.trunc(xs[i]! * pixelPerXValue);
     const y = Math.trunc(ys[i]! * pixelPerYValue);
     if (lastI < 0 || x !== intX) {
       finishInterval();
@@ -141,6 +158,7 @@ export function downsampleTimeseriesColumns(
       lastI = minI = maxI = i;
       continue;
     }
+    trailingGapI = -1;
     lastY = y;
     lastI = i;
     if (y < minY) {

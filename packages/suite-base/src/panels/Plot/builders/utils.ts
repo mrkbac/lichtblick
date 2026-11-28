@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
+import { pushAll } from "@lichtblick/den/collection";
 import { STREAM_MODIFIERS } from "@lichtblick/message-path";
 import { Immutable, MessageEvent } from "@lichtblick/suite";
 
@@ -135,6 +136,32 @@ export function buildCurrentSeriesActions<TItem>(
     actions.push({ type: "append-current", series: s.config.key, items });
   }
   return { actions, datasetsChanged };
+}
+
+/**
+ * The batches of an earlier window as one append per series (and x-axis), items in order, so the
+ * worker inserts the window into place once.
+ */
+export function mergeAppends<
+  A extends { readonly type: string; readonly series?: SeriesConfigKey; readonly items?: unknown },
+>(actions: readonly A[]): A[] {
+  const out: A[] = [];
+  const itemsByKey = new Map<string, unknown[]>();
+  for (const action of actions) {
+    if (!Array.isArray(action.items)) {
+      out.push(action);
+      continue;
+    }
+    const key = `${action.type}\0${action.series ?? ""}`;
+    let items = itemsByKey.get(key);
+    if (!items) {
+      items = [];
+      itemsByKey.set(key, items);
+      out.push({ ...action, items });
+    }
+    pushAll(items, action.items);
+  }
+  return out;
 }
 
 type SeriesFullAction<T> =

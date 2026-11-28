@@ -20,7 +20,7 @@ import {
 
 import { CustomDatasetsBuilder, readXYItems } from "./CustomDatasetsBuilder";
 import { CustomDatasetsBuilderImpl } from "./CustomDatasetsBuilderImpl";
-import { SeriesConfigKey, SeriesItem } from "./IDatasetsBuilder";
+import { EarlierRange, SeriesConfigKey, SeriesItem } from "./IDatasetsBuilder";
 import { PlotPath } from "../utils/config";
 
 Object.defineProperty(global, "Worker", {
@@ -114,6 +114,36 @@ describe("CustomDatasetsBuilder", () => {
       [2, 20],
       [3, 30],
     ]);
+  });
+
+  it("puts an earlier window in front with one append per stream", async () => {
+    // GIVEN a read that loaded the later history first
+    const updateData = vi.spyOn(CustomDatasetsBuilderImpl.prototype, "updateData");
+    const builder = new CustomDatasetsBuilder();
+    builder.setXPath(unwrap(parseMessagePath("/pose.x")));
+    builder.setSeries(buildSeriesItems([{ value: "/pose.y" }]));
+    builder.handleMessageRange(poseMessages(4, 6), { isReset: true });
+
+    // WHEN an earlier window arrives in two batches and ends
+    const earlier: EarlierRange = { actions: [] };
+    builder.handleMessageRange(poseMessages(0, 2), { isReset: false, earlier });
+    builder.handleMessageRange(poseMessages(2, 4), { isReset: false, earlier });
+    builder.prependMessageRange(earlier);
+    const result = await builder.getViewportDatasets({
+      size: { width: 1_000, height: 1_000 },
+      bounds: {},
+    });
+
+    // THEN the worker gets the window as one append per stream, and the rows are in order
+    const windowActions = updateData.mock.calls[0]![0].slice(-2);
+    expect(
+      windowActions.map((action) => [action.type, "items" in action && action.items.length]),
+    ).toEqual([
+      ["append-full-x", 4],
+      ["append-full", 4],
+    ]);
+    expect(result.datasetsByConfigIndex[0]?.data.map(({ x }) => x)).toEqual([0, 1, 2, 3, 4, 5]);
+    updateData.mockRestore();
   });
 
   it("fits the x range to all-negative x values", () => {

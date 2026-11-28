@@ -256,12 +256,9 @@ function downsampleInto(
   let xMax = -Number.MAX_VALUE;
   let yMin = Number.MAX_VALUE;
   let yMax = -Number.MAX_VALUE;
-  let hasNaN = false;
   for (let i = startIdx; i < endIdx; i++) {
     const y = ys[i]!;
-    if (Number.isNaN(y)) {
-      hasNaN = true;
-    } else if (needBounds && i >= firstInView && Number.isFinite(y)) {
+    if (needBounds && i >= firstInView && Number.isFinite(y)) {
       yMin = y < yMin ? y : yMin;
       yMax = y > yMax ? y : yMax;
     }
@@ -313,17 +310,6 @@ function downsampleInto(
       dataset.showLine === true
         ? downsampleTimeseriesColumns(xs, ys, startIdx, endIdx, downsampleViewport, maxPoints)
         : downsampleScatter(xs, ys, startIdx, endIdx, downsampleViewport);
-  }
-
-  if (dataset.showLine === true && hasNaN && downsampledIndices.length < numItems) {
-    // Keep every gap so lines break where the data does
-    const downsampledIndexSet = new Set(downsampledIndices);
-    for (let i = startIdx; i < endIdx; i++) {
-      if (Number.isNaN(ys[i]!) && !downsampledIndexSet.has(i)) {
-        downsampledIndices.push(i);
-      }
-    }
-    downsampledIndices.sort((a, b) => a - b);
   }
 
   // When a series is downsampled the points are disabled as a visual indicator that

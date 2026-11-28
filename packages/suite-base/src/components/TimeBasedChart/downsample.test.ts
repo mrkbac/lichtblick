@@ -119,6 +119,31 @@ describe("downsampleTimeseriesColumns", () => {
     expect(result).toEqual([...result].sort((a, b) => a - b));
     expect(result).toEqual([0, 1, 2]);
   });
+
+  it("folds gaps per pixel column, so data alternating with gaps stays bounded", () => {
+    const n = 200_000;
+    const xs = new Float64Array(n);
+    const ys = new Float64Array(n);
+    for (let i = 0; i < n; i++) {
+      xs[i] = (i / n) * 100;
+      ys[i] = i % 2 === 0 ? i % 7 : Number.NaN;
+    }
+    const result = downsampleTimeseriesColumns(xs, ys, 0, n, bounds);
+    // 33 pixel columns, a handful of points each (was one per gap: 100k)
+    expect(result.length).toBeLessThan(400);
+    expect(result).toEqual([...result].sort((a, b) => a - b));
+    // the line never joins samples of different columns, as the data has a gap between them
+    const pixelPerX = Math.trunc(bounds.width / MINIMUM_PIXEL_DISTANCE) / 100;
+    const column = (row: number) => Math.trunc(xs[row]! * pixelPerX);
+    const joinedAcrossColumns = result.filter(
+      (row, i) =>
+        i > 0 &&
+        column(result[i - 1]!) !== column(row) &&
+        !Number.isNaN(ys[result[i - 1]!]!) &&
+        !Number.isNaN(ys[row]!),
+    );
+    expect(joinedAcrossColumns).toEqual([]);
+  });
 });
 
 describe("downsampleScatter", () => {
