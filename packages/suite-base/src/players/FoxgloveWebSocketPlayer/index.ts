@@ -159,6 +159,8 @@ export default class FoxgloveWebSocketPlayer implements Player {
   #name: string;
   #client?: FoxgloveClient; // The client when we're connected.
   #id: string = randomUUID(); // Unique ID for this player session.
+  /** The id in the last state the app got; the app starts over when it changes. */
+  #emittedId?: string;
   /** Capabilities of the current connection; undefined until its serverInfo. */
   #serverCapabilities?: string[];
   #playerCapabilities: (typeof PLAYER_CAPABILITIES)[keyof typeof PLAYER_CAPABILITIES][] = [];
@@ -444,6 +446,11 @@ export default class FoxgloveWebSocketPlayer implements Player {
           const newSessionId = event.sessionId ?? randomUUID();
           if (this.#id !== newSessionId) {
             this.#resetSessionState();
+            // The app drops its subscriptions with an id it has seen and sends them again: subscribing
+            // to the old ones now would be undone right away (latched topics sent twice)
+            if (this.#emittedId != undefined && this.#emittedId !== newSessionId) {
+              this.#unresolvedSubscriptions.clear();
+            }
           }
 
           if (!Array.isArray(event.capabilities)) {
@@ -1213,6 +1220,7 @@ export default class FoxgloveWebSocketPlayer implements Player {
     }
 
     if (!this.#topics) {
+      this.#emittedId = this.#id;
       return this.#listener({
         name: this.#name,
         presence: this.#presence,
@@ -1253,6 +1261,7 @@ export default class FoxgloveWebSocketPlayer implements Player {
       this.#topicsStatsChanged = false;
       this.#emittedTopicsStats = new Map(this.#topicsStats);
     }
+    this.#emittedId = this.#id;
     return this.#listener({
       name: this.#name,
       presence: this.#presence,

@@ -428,6 +428,7 @@ describe("FoxgloveWebSocketPlayer live history", () => {
       (console.warn as Mock).mockClear();
 
       connect();
+      player.setSubscriptions([{ topic: "/a" }]); // a new session: the app subscribes again
       await tick(50, 50, 1);
       expect(recorder.record).toHaveBeenCalledTimes(1);
     } finally {
@@ -439,6 +440,7 @@ describe("FoxgloveWebSocketPlayer live history", () => {
 
   it("clears the history on reconnect", async () => {
     connect();
+    player.setSubscriptions([{ topic: "/a" }]); // a new session: the app subscribes again
     await tick(50, 50, 1);
     expect(last().startTime).toEqual({ sec: 50, nsec: 0 });
   });

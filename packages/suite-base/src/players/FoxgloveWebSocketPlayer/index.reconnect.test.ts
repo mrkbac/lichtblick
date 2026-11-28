@@ -294,6 +294,20 @@ describe("FoxgloveWebSocketPlayer reconnect", () => {
     (console.warn as ReturnType<typeof vi.fn>).mockClear(); // "no server clock" while paused
   });
 
+  it("leaves subscribing to the app after a new session, which subscribes again anyway", async () => {
+    await receiveFoo(3);
+    await drop();
+    connect("restarted");
+    await Promise.resolve();
+    expect(ws.sentOps().filter(({ op }) => op === "subscribe")).toHaveLength(0);
+    // The app drops the old session's subscriptions, then its panels subscribe again
+    player.setSubscriptions([]);
+    player.setSubscriptions([{ topic: "/foo" }]);
+    await Promise.resolve();
+    expect(ws.sentOps().map(({ op }) => op)).toEqual(["subscribe"]);
+    (console.warn as ReturnType<typeof vi.fn>).mockClear(); // "no server clock"
+  });
+
   it("resubscribes once after a reconnect and takes a burst of data", async () => {
     await receiveFoo(3);
     await drop();
