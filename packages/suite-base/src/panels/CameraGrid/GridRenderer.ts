@@ -70,7 +70,7 @@ type VideoState = {
   /** `performance.now()` of the last paint, to keep painting while decoding lags behind. */
   lastPaint: number;
   /** The newest frame decoded while the tile was hidden, painted once it is shown. */
-  unpainted?: { frame: VideoFrame; event: Immutable<MessageEvent>; stamp: Time; epoch: number };
+  unpainted?: { frame: VideoFrame; event: Immutable<MessageEvent>; stamp: Time };
 };
 
 /** Longest a tile goes without a paint while its decoder works through a backlog. */
@@ -513,16 +513,17 @@ export class GridRenderer {
         Number((time - firstTime) / 1000n),
         prepared.type,
       );
-      // Older frames only keep the decoder's reference chain intact, unless decoding lags so far
-      // behind that the queue never empties; then paint periodically instead of freezing.
+      // A hidden tile keeps only its newest frame, painted once it is shown
       if (frame && !elements) {
         if (video.epoch === epoch) {
           video.unpainted?.frame.close();
-          video.unpainted = { frame, event, stamp: message.timestamp, epoch };
+          video.unpainted = { frame, event, stamp: message.timestamp };
           frame = undefined;
         }
         return;
       }
+      // Older frames only keep the decoder's reference chain intact, unless decoding lags so far
+      // behind that the queue never empties; then paint periodically instead of freezing.
       const now = performance.now();
       if (
         frame &&
@@ -552,9 +553,10 @@ export class GridRenderer {
       return;
     }
     video.unpainted = undefined;
+    const epoch = video.epoch;
     try {
       const bitmap = await createImageBitmap(unpainted.frame);
-      if (video.epoch !== unpainted.epoch) {
+      if (video.epoch !== epoch) {
         bitmap.close();
         return;
       }

@@ -651,8 +651,11 @@ class SharedRead {
         // each other. A late joiner still catching up isn't waiting: the read waits for it, until
         // other readers wait. Then the joiners that hold it up go on with their own read instead,
         // one read rather than one per reader that keeps up.
-        while (this.#readers.values().some((reader) => reader.isFull())) {
+        for (;;) {
           const full = [...this.#readers].filter((reader) => reader.isFull());
+          if (full.length === 0) {
+            break;
+          }
           const joinersHoldUp =
             full.every((reader) => reader.catchingUp()) &&
             this.#readers.values().some((reader) => reader.waiting);
@@ -661,7 +664,8 @@ class SharedRead {
               this.#detach(reader);
             }
           }
-          if (!this.#readers.values().some((reader) => reader.isFull())) {
+          // Detaching empties no reader, so only the full ones still attached can hold the read
+          if (!full.some((reader) => this.#readers.has(reader))) {
             break;
           }
           this.#waitingForRoom = true;
