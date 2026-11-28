@@ -527,16 +527,53 @@ describe("SharedRangeReads", () => {
       },
     );
 
-    it("reads ascending readers in their own pass, in time order", async () => {
-      const { shared, reads, expectPlayheadOrder } = setupPlayhead();
+    it("reads ascending and playhead-first readers that start together in one ascending pass", async () => {
+      const { shared, reads } = setupPlayhead();
       const [ascending, playhead] = await Promise.all([
         collect(shared.read("a", {})),
         collect(shared.read("b", {}, { playheadFirst: true })),
       ]);
       expect(ascending).toEqual(Array.from({ length: 100 }, (_, i) => `a${i}`));
-      expectPlayheadOrder(playhead, "b");
-      expect(reads.filter(({ topics }) => topics.includes("a"))).toEqual([
-        { topics: ["a"], start: undefined, end: undefined },
+      expect(playhead).toEqual(Array.from({ length: 100 }, (_, i) => `b${i}`));
+      expect(reads).toEqual([{ topics: ["a", "b"], start: undefined, end: undefined }]);
+    });
+
+    it("lets a playhead-first read join a running ascending pass", async () => {
+      const { shared, gate, reads } = setupPlayhead({ gateAt: 30 });
+      const a = shared.read("a", {});
+      const aSeen: string[] = [];
+      while (aSeen.length < 30) {
+        const next = await a.next();
+        if (next.done !== true && next.value.type === "message-event") {
+          aSeen.push(`a${next.value.msgEvent.receiveTime.sec}`);
+        }
+      }
+      const b = collect(shared.read("b", {}, { playheadFirst: true }));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      gate.resolve();
+      expect([...aSeen, ...(await collect(a))]).toEqual(
+        Array.from({ length: 100 }, (_, i) => `a${i}`),
+      );
+      expect(await b).toEqual(Array.from({ length: 100 }, (_, i) => `b${i}`));
+      // No whole pass for b: only its catch-up up to where the pass was, then the pass with both
+      expect(reads.filter(({ topics }) => topics.join() === "b")).toEqual([
+        { topics: ["b"], start: undefined, end: 29 },
+      ]);
+    });
+
+    it("gives an ascending read that starts during a playhead-first pass its own pass", async () => {
+      const { shared, gate, reads, expectPlayheadOrder } = setupPlayhead({ gateAt: 45 });
+      const a = shared.read("a", {}, { playheadFirst: true });
+      const first = await a.next();
+      expect(first.done !== true && first.value.type === "message-event").toBe(true);
+      const b = collect(shared.read("b", {}));
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      gate.resolve();
+      const aRest = await collect(a);
+      expect(await b).toEqual(Array.from({ length: 100 }, (_, i) => `b${i}`));
+      expectPlayheadOrder(["a40", ...aRest], "a");
+      expect(reads.filter(({ topics }) => topics.includes("b"))).toEqual([
+        { topics: ["b"], start: undefined, end: undefined },
       ]);
     });
 

@@ -102,16 +102,19 @@ function readWindows(
  *
  * A playhead-first read gets the history around the playhead first, then window by window earlier
  * and later history (see playheadWindows): each window in time order, and each window entirely
- * before or entirely after everything delivered before it. Playhead-first and ascending reads
- * gather in separate passes: an ascending reader in a playhead-first pass would have to hold
- * everything read before the recording's start comes, about the whole topic.
+ * before or entirely after everything delivered before it. A pass is playhead-first only while
+ * all its readers are: an ascending reader in a playhead-first pass would have to hold everything
+ * read before the recording's start comes, about the whole topic. A playhead-first reader takes an
+ * ascending pass instead (one window in time order keeps its contract), so a layout with an
+ * ascending reader (e.g. 3D transform preloading) still reads the recording once. Only an
+ * ascending read that starts while a playhead-first pass runs gets a pass of its own.
  */
 export class SharedRangeReads {
   readonly #readRange: ReadRange;
   readonly #playhead: () => Playhead | undefined;
-  /** Per order, the shared read still gathering readers */
-  readonly #gathering = new Map<boolean, SharedRead>();
-  /** Per order, the shared read running now, which a new whole-history read joins */
+  /** The shared read still gathering readers; ascending once any of them is */
+  #gathering?: { shared: SharedRead; ascending: boolean };
+  /** Per order (playhead-first or not), the shared read running now, which a new read joins */
   readonly #running = new Map<boolean, SharedRead>();
 
   public constructor(readRange: ReadRange, playhead: () => Playhead | undefined = () => undefined) {
@@ -137,33 +140,39 @@ export class SharedRangeReads {
     // Joins a shared read on its first pull: an iterator that is never read can't hold up others
     let reader: Reader | undefined;
     let closed = false;
-    const order = playheadFirst;
     const join = () => {
-      const gathering = this.#gathering.get(order);
+      const gathering = this.#gathering;
       if (gathering) {
-        return gathering.join(topic);
+        gathering.ascending ||= !playheadFirst;
+        return gathering.shared.join(topic);
       }
-      const running = this.#running.get(order);
-      if (running?.isJoinable() === true) {
-        return running.joinLate(topic);
+      // Any reader can join a running ascending pass; only a playhead-first one a playhead-first pass
+      for (const order of playheadFirst ? [false, true] : [false]) {
+        const running = this.#running.get(order);
+        if (running?.isJoinable() === true) {
+          return running.joinLate(topic);
+        }
       }
-      // The playhead as it is when the pass starts
-      const plan = () => {
-        const playhead = playheadFirst ? this.#playhead() : undefined;
-        return playhead ? playheadWindows(playhead) : [range];
+      const pending: { shared: SharedRead; ascending: boolean } = {
+        // The playhead as it is when the pass starts
+        shared: new SharedRead(this.#readRange, () => {
+          const playhead = pending.ascending ? undefined : this.#playhead();
+          return playhead ? playheadWindows(playhead) : [range];
+        }),
+        ascending: !playheadFirst,
       };
-      const newShared = new SharedRead(this.#readRange, plan);
-      this.#gathering.set(order, newShared);
+      this.#gathering = pending;
       setTimeout(() => {
-        this.#gathering.delete(order);
-        this.#running.set(order, newShared);
-        void newShared.run().finally(() => {
-          if (this.#running.get(order) === newShared) {
+        this.#gathering = undefined;
+        const order = !pending.ascending;
+        this.#running.set(order, pending.shared);
+        void pending.shared.run().finally(() => {
+          if (this.#running.get(order) === pending.shared) {
             this.#running.delete(order);
           }
         });
       }, GATHER_MS);
-      return newShared.join(topic);
+      return pending.shared.join(topic);
     };
     return {
       next: async () => {
