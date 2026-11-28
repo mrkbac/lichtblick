@@ -539,6 +539,16 @@ describe("TransformTree", () => {
       expect(tree.frame("b")!.transformsSize()).toBe(7);
     });
 
+    it("reparents in receive order, also to a transform with an older stamp", () => {
+      const tree = complete();
+      tree.addTransform("b", "c", 10n * sec, at(10), 10n * sec);
+      tree.addTransform("b", "a", 0n, at(0), 50n * sec);
+      tree.setReceivedUntil(60n * sec);
+      expect(tree.frame("b")!.parent()).toBe(tree.frame("a"));
+      tree.setReceivedUntil(20n * sec);
+      expect(tree.frame("b")!.parent()).toBe(tree.frame("c"));
+    });
+
     it("drops an earlier parent that would form a cycle with this tree's parents", () => {
       const tree = complete();
       tree.addTransform("b", "a", 10n * sec, at(1), 10n * sec);

@@ -72,6 +72,14 @@ export class TransformHistory {
     return this.#base + BigInt(this.#data[index * STRIDE]!);
   }
 
+  /** When the sample at `index` was received, or undefined for one that is always received */
+  public receiveTimeAt(index: number): Time | undefined {
+    const receive = this.#data[index * STRIDE + 1]!;
+    return this.#receiveBase == undefined || receive === -Infinity
+      ? undefined
+      : this.#receiveBase + BigInt(receive);
+  }
+
   /** Writes the sample at `index` into `out` */
   public transformAt(index: number, out: Transform): Transform {
     const d = this.#data;
