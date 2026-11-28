@@ -845,17 +845,19 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
     // pass instead of a second one in time order. Each earlier window is collected in a tree of
     // its own and put in front once complete; the tree is complete once every read is done.
     const key = ({ topic, convertTo }: TransformTopic) => `${topic}\n${convertTo ?? ""}`;
-    const earlierWindows = new Map(
-      transformTopics.map((source) => [
+    // The reads still running share the budget's room (see createEarlier)
+    const earlierWindows = new Map<string, EarlierWindows<TransformTree>>();
+    for (const source of transformTopics) {
+      earlierWindows.set(
         key(source),
-        new EarlierWindows<TransformTree>(
-          () => renderer.transformTree.createEarlier(),
+        new EarlierWindows(
+          () => renderer.transformTree.createEarlier(earlierWindows.size),
           (earlier) => {
             renderer.prependTransformHistory(earlier);
           },
         ),
-      ]),
-    );
+      );
+    }
     let count = 0;
     let lastUiUpdate = 0;
     const updateUi = () => {

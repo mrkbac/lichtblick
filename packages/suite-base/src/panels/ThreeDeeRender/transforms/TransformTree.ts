@@ -351,17 +351,13 @@ export class TransformTree {
    * earlier window far below its own rate (the merge brings both to one rate, so an earlier window
    * thinned 32x would thin the whole history 32x). Half fits an earlier window as long as what
    * was read before it, which the doubling windows keep to, at the rate both need together; the
-   * cost is a peak of 1.5x the budget while a window is open.
-   * ponytail: each topic's read has its own earlier window, and each gets this room, so several
-   * transform topics can together exceed the budget until their merges; split the room across open
-   * windows if many topics carry dense transforms.
+   * cost is a peak of 1.5x the budget while windows are open.
+   * Each transform topic's read has its own earlier window: `windows` of them (the reads still
+   * running) share the room, so together they stay within it too.
    */
-  public createEarlier(): TransformTree {
-    const room = this.#sampleBudget - this.#sampleCount;
-    const tree = new TransformTree(
-      this.#maxStorageTime,
-      Math.max(room, Math.ceil(this.#sampleBudget / 2)),
-    );
+  public createEarlier(windows = 1): TransformTree {
+    const room = Math.max(this.#sampleBudget - this.#sampleCount, this.#sampleBudget / 2);
+    const tree = new TransformTree(this.#maxStorageTime, Math.ceil(room / Math.max(1, windows)));
     tree.setComplete(this.#complete);
     tree.#keepEveryOf = (id) => this.#frames.get(id)?.keepEvery();
     return tree;
