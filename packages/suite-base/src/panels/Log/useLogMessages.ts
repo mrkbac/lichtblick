@@ -1,10 +1,11 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import { compare } from "@foxglove/rostime";
+import { compare, Time } from "@foxglove/rostime";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { pushAll } from "@lichtblick/den/collection";
+import { useShallowMemo } from "@lichtblick/hooks";
 import { useMessageHistory } from "@lichtblick/suite-base/PanelAPI";
 import {
   MessagePipelineContext,
@@ -30,12 +31,17 @@ const pickKeys = (record: Readonly<Record<string, string>>, keys: ReadonlySet<st
   Object.fromEntries(Object.entries(record).filter(([key]) => keys.has(key)));
 
 type RangeState = {
-  /** Topics read from the recorded range (the rest use the live history). */
+  /** Topics read from the recorded range or the live session's history. */
   topics: ReadonlySet<string>;
+  /**
+   * Topics read from the live session's history, with its newest message so far: their live
+   * messages after it go on from the rolling buffer.
+   */
+  liveHistoryNewest: ReadonlyMap<string, Time | undefined>;
   /** Their messages, merged by receive time. */
   items: readonly NormalizedLogMessage[];
 };
-const EMPTY_RANGE: RangeState = { topics: new Set(), items: [] };
+const EMPTY_RANGE: RangeState = { topics: new Set(), liveHistoryNewest: new Map(), items: [] };
 
 /**
  * Range messages of all topics, merged by receive time. Batches wait per topic until the next
@@ -48,24 +54,41 @@ class RangeAccumulator {
   #merged: readonly NormalizedLogMessage[] = [];
   /** Topics whose merged messages must go on the next flush. */
   #removed = new Set<string>();
+  #liveHistoryNewest = new Map<string, Time | undefined>();
+  /** The last snapshot, handed out again while nothing changed */
+  #last: RangeState = EMPTY_RANGE;
+  #changed = false;
 
   public has(topic: string): boolean {
     return this.#pending.has(topic);
   }
 
   /** Start (or restart, replacing what was loaded) reading a topic. */
-  public reset(topic: string): void {
+  public reset(topic: string, { liveHistory }: { liveHistory: boolean }): void {
     this.delete(topic);
     this.#pending.set(topic, []);
+    if (liveHistory) {
+      this.#liveHistoryNewest.set(topic, undefined);
+    }
+    this.#changed = true;
   }
 
   public push(topic: string, message: NormalizedLogMessage): void {
     this.#pending.get(topic)?.push(message);
+    if (this.#liveHistoryNewest.has(topic)) {
+      const newest = this.#liveHistoryNewest.get(topic);
+      if (!newest || compare(message.receiveTime, newest) > 0) {
+        this.#liveHistoryNewest.set(topic, message.receiveTime);
+      }
+    }
+    this.#changed = true;
   }
 
   public delete(topic: string): void {
     if (this.#pending.delete(topic)) {
       this.#removed.add(topic);
+      this.#liveHistoryNewest.delete(topic);
+      this.#changed = true;
     }
   }
 
@@ -73,10 +96,17 @@ class RangeAccumulator {
     this.#pending.clear();
     this.#merged = [];
     this.#removed.clear();
+    this.#liveHistoryNewest.clear();
+    this.#last = EMPTY_RANGE;
+    this.#changed = false;
   }
 
-  /** A new array, so consumers see a new reference on every flush. */
+  /** A new items array whenever something changed, else the previous state. */
   public snapshot(): RangeState {
+    if (!this.#changed) {
+      return this.#last;
+    }
+    this.#changed = false;
     let merged = this.#merged;
     if (this.#removed.size > 0) {
       const removed = this.#removed;
@@ -104,7 +134,12 @@ class RangeAccumulator {
       pushAll(next, mergeTwo(merged.slice(start), added));
     }
     this.#merged = next;
-    return { topics: new Set(this.#pending.keys()), items: next };
+    this.#last = {
+      topics: new Set(this.#pending.keys()),
+      liveHistoryNewest: new Map(this.#liveHistoryNewest),
+      items: next,
+    };
+    return this.#last;
   }
 }
 
@@ -158,7 +193,8 @@ const selectReady = (ctx: MessagePipelineContext) =>
  * All log messages of the given topics, sorted by receive time.
  *
  * Recorded sources: the whole recording is loaded via range iterators, independent of the
- * playhead. Live sources (no range support): a rolling buffer of the most recent messages.
+ * playhead. Live sources: what the session kept so far, then a rolling buffer of the most recent
+ * messages.
  */
 export function useLogMessages(topics: readonly string[]): {
   items: readonly NormalizedLogMessage[];
@@ -202,8 +238,10 @@ export function useLogMessages(topics: readonly string[]): {
         rethrowErrors: true,
         // The lines around the playhead, where the list scrolls to, show first
         playheadFirst: true,
-        onNewRangeIterator: async (iterator) => {
-          acc.reset(topic);
+        // A live source's log starts with what the session kept, not when the panel opened
+        liveHistory: true,
+        onNewRangeIterator: async (iterator, info) => {
+          acc.reset(topic, { liveHistory: info?.liveHistory === true });
           setLoadingTopics((prev) => new Set(prev).add(topic));
           try {
             for await (const batch of iterator) {
@@ -222,7 +260,9 @@ export function useLogMessages(topics: readonly string[]): {
             }
           } finally {
             if (!cancelled) {
-              // Also shows what was read before a failure
+              // Also shows what was read before a failure; nothing is left for a pending flush
+              clearTimeout(flushTimerRef.current);
+              flushTimerRef.current = undefined;
               setRange(acc.snapshot());
               setLoadingTopics((prev) => {
                 const next = new Set(prev);
@@ -233,8 +273,8 @@ export function useLogMessages(topics: readonly string[]): {
           }
         },
       });
-      // onNewRangeIterator runs synchronously when the source supports ranges. Topics without
-      // range support (live sources) are not tracked here so they use the live subscription.
+      // onNewRangeIterator runs synchronously when the source supports ranges or keeps a live
+      // history. Topics without either are not tracked here and use the live subscription only.
       if (acc.has(topic)) {
         added = true;
         subs.set(topic, () => {
@@ -297,10 +337,15 @@ export function useLogMessages(topics: readonly string[]): {
     setRetryCount((count) => count + 1);
   }, [errorByTopic]);
 
-  const liveTopics = useMemo(() => {
-    const live = topics.filter((topic) => !range.topics.has(topic));
-    return live.length > 0 ? live : EMPTY;
-  }, [topics, range.topics]);
+  // Same content, same array: a new one would reset the live subscription's throttle
+  const liveTopics = useShallowMemo(
+    useMemo(() => {
+      const live = topics.filter(
+        (topic) => !range.topics.has(topic) || range.liveHistoryNewest.has(topic),
+      );
+      return live.length > 0 ? live : EMPTY;
+    }, [topics, range.topics, range.liveHistoryNewest]),
+  );
 
   // Normalized once on arrival; the raw messages are not kept.
   const latestLiveByTopic = useMessageHistory({
@@ -336,13 +381,15 @@ export function useLogMessages(topics: readonly string[]): {
   const items = useMemo(() => {
     const arrays: (readonly NormalizedLogMessage[])[] = [range.items];
     for (const topic of liveTopics) {
-      const live = liveByTopic[topic];
+      const live = liveByTopic[topic]?.toArray();
       if (live) {
-        arrays.push(live.toArray());
+        // The history read has the messages up to its newest
+        const newest = range.liveHistoryNewest.get(topic);
+        arrays.push(newest ? live.slice(searchByTime(live, newest)) : live);
       }
     }
     return mergeByReceiveTime(arrays);
-  }, [liveTopics, range.items, liveByTopic]);
+  }, [liveTopics, range.items, range.liveHistoryNewest, liveByTopic]);
 
   const error = Object.entries(errorByTopic)
     .map(([topic, message]) => `${topic}: ${message}`)

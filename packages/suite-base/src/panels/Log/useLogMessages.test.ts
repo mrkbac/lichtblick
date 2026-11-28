@@ -71,7 +71,7 @@ describe("useLogMessages", () => {
     vi.useRealTimers();
   });
 
-  function withRange() {
+  function withRange({ liveHistory = false }: { liveHistory?: boolean } = {}) {
     const subscribe = vi.fn(({ topic, onNewRangeIterator }: SubscribeMessageRangeArgs) => {
       // Async iterator fed by the test
       const queue: (MessageEvent[] | "done" | Error)[] = [];
@@ -101,6 +101,8 @@ describe("useLogMessages", () => {
             yield next;
           }
         })(),
+        // @ts-expect-error built-in panels are told what the iterator reads
+        { liveHistory },
       );
       const cancel = vi.fn();
       cancelByTopic.set(topic, cancel);
@@ -238,6 +240,25 @@ describe("useLogMessages", () => {
     expect(first).toHaveLength(1);
   });
 
+  it("doesn't copy the list again when nothing changed since the last flush", async () => {
+    withRange();
+    const { result } = renderHook(() => useLogMessages(SINGLE_TOPIC));
+    await act(async () => {
+      rangeIterators.get("/a")!([event(1, "/a")]);
+      rangeIterators.get("/a")!("done");
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    const loaded = result.current.items;
+    expect(loaded).toHaveLength(1);
+
+    await act(async () => {
+      await vi.runAllTimersAsync();
+    });
+    expect(result.current.items).toBe(loaded);
+  });
+
   it("cancels topics that are no longer requested", async () => {
     withRange();
     const { rerender, result } = renderHook(({ topics }) => useLogMessages(topics), {
@@ -287,6 +308,29 @@ describe("useLogMessages", () => {
       map: normalizeLogEvent,
     });
     expect(result.current.items.map((m) => m.message)).toEqual(["/a@1", "/b@2", "/a@3"]);
+  });
+
+  it("starts a live source's log with the session's history, then goes on live", async () => {
+    // Given a live source that kept /a@1../a@3, and a rolling buffer from when the panel opened
+    const subscribe = withRange({ liveHistory: true });
+    (useMessageHistory as Mock).mockReturnValue({
+      "/a": history([event(3, "/a"), event(4, "/a")]),
+    });
+    const { result } = renderHook(() => useLogMessages(SINGLE_TOPIC));
+    expect(subscribe).toHaveBeenCalledWith(expect.objectContaining({ liveHistory: true }));
+
+    // When the history read ends
+    await act(async () => {
+      rangeIterators.get("/a")!([event(1, "/a"), event(2, "/a"), event(3, "/a")]);
+      rangeIterators.get("/a")!("done");
+      await vi.runAllTimersAsync();
+    });
+
+    // Then the log has each message once: the history, then the live messages after it
+    expect(result.current.items.map((m) => m.message)).toEqual(["/a@1", "/a@2", "/a@3", "/a@4"]);
+    expect(useMessageHistory).toHaveBeenLastCalledWith(
+      expect.objectContaining({ topics: SINGLE_TOPIC }),
+    );
   });
 
   it("takes live updates at most every 250 ms, always ending on the latest", () => {
