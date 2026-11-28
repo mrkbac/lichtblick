@@ -241,6 +241,28 @@ describe("UnconnectedPanelLayout", () => {
     expect(unmountA).toHaveBeenCalledTimes(1);
   });
 
+  it("shows loaded panels without suspending when the layout remounts", async () => {
+    // The workspace remounts its panels for a new player session. A new lazy component would load
+    // the module again and suspend, and steady live updates can keep that fallback up indefinitely.
+    const render1 = vi.fn().mockReturnValue(<>panel one</>);
+    const module1 = vi.fn().mockResolvedValue({
+      default: Panel(Object.assign(render1, { panelType: "one", defaultConfig: {} })),
+    });
+    const catalog = new MockPanelCatalog([{ title: "One", type: "one", module: module1 }]);
+    const { rerender } = render(
+      <UnconnectedPanelLayout key="session 1" layout={{ panels: ["one"] }} onChange={vi.fn()} />,
+      { wrapper: wrapperFor(catalog) },
+    );
+    await screen.findByText("panel one");
+
+    rerender(
+      <UnconnectedPanelLayout key="session 2" layout={{ panels: ["one"] }} onChange={vi.fn()} />,
+    );
+
+    await screen.findByText("panel one");
+    expect(module1).toHaveBeenCalledTimes(1);
+  });
+
   it("keeps a panel mounted when it moves into a nested layout", async () => {
     // Given a panel beside a panel that holds a layout of its own (like a Tab panel)
     const NestedLayoutContext = createContext<LayoutNode | undefined>(undefined);

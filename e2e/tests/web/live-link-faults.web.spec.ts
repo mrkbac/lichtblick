@@ -52,6 +52,35 @@ async function connect(page: Page): Promise<void> {
   await expect(page.getByText(/^test\.Counter @/)).toBeVisible();
 }
 
+/** Responding to a click slower than this feels broken, on a fast or a slow link. */
+const TOGGLE_BUDGET_MS = 500;
+
+/**
+ * Clicks play/pause and returns the ms until the button shows the new state, timed in the page so
+ * the test runner's own round trips and actionability checks don't count.
+ */
+async function togglePlaybackMs(page: Page): Promise<number> {
+  return await page.getByTestId("play-button").evaluate(
+    async (button) =>
+      await new Promise<number>((resolve) => {
+        const before = button.title;
+        const start = performance.now();
+        const observer = new MutationObserver(() => {
+          if (button.title !== before) {
+            observer.disconnect();
+            resolve(performance.now() - start);
+          }
+        });
+        observer.observe(button, { attributeFilter: ["title"] });
+        setTimeout(() => {
+          observer.disconnect();
+          resolve(Infinity);
+        }, 10_000);
+        button.click();
+      }),
+  );
+}
+
 async function expectNoAlerts(page: Page): Promise<void> {
   await page.getByRole("tab", { name: "Alerts" }).click();
   await expect(page.getByText("No alerts found")).toBeVisible();
@@ -165,10 +194,10 @@ test("stays responsive on a slow link without growing memory or alerts", {
   while (Date.now() < end) {
     // A slow link is not a dead one
     await expect(statusPill(page)).toHaveAttribute("aria-label", "Live");
-    const clickedAt = Date.now();
-    await page.getByRole("button", { name: "Pause" }).click();
-    await page.getByRole("button", { name: "Play", exact: true }).click();
-    expect(Date.now() - clickedAt).toBeLessThan(1500);
+    await expect(page.getByRole("button", { name: "Pause" })).toBeVisible();
+    const pauseMs = await togglePlaybackMs(page);
+    const playMs = await togglePlaybackMs(page);
+    expect(Math.max(pauseMs, playMs)).toBeLessThan(TOGGLE_BUDGET_MS);
     await page.waitForTimeout(2000);
   }
 
