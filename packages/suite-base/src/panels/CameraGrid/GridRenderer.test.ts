@@ -35,7 +35,7 @@ describe("enqueueVideoFrame", () => {
   });
 
   it("drops a full queue instead of growing without bound", () => {
-    // Given a tile that isn't decoding (hidden) and a stream without new keyframes
+    // Given a decoder that fell far behind on a stream without new keyframes
     const queue: Immutable<MessageEvent>[] = [frame(KEY)];
     for (let i = 1; i < MAX_QUEUED_VIDEO_FRAMES; i++) {
       expect(enqueueVideoFrame(queue, frame(DELTA))).toBe(true);

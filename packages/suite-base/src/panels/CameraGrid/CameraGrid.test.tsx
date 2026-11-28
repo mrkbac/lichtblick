@@ -40,12 +40,22 @@ describe("CameraGrid tile", () => {
     fireEvent.keyDown(tile, { key: "Enter" });
     expect(onToggleMaximize).toHaveBeenCalledWith("/camera");
 
+    // Not zoomed: arrows and minus are playback shortcuts, so they bubble on
+    expect(fireEvent.keyDown(tile, { key: "ArrowRight" })).toBe(true);
+    expect(fireEvent.keyDown(tile, { key: "-" })).toBe(true);
+    expect(renderer.panBy).not.toHaveBeenCalled();
+
     fireEvent.keyDown(tile, { key: "+" });
+    renderer.isZoomed.mockReturnValue(true);
     fireEvent.keyDown(tile, { key: "-" });
     expect(renderer.zoomAt.mock.calls.map(([, factor]) => factor)).toEqual([1.25, 0.8]);
 
-    fireEvent.keyDown(tile, { key: "ArrowRight" });
+    expect(fireEvent.keyDown(tile, { key: "ArrowRight" })).toBe(false);
     expect(renderer.panBy).toHaveBeenCalledWith("/camera", -40, -0);
+    // Shift/Alt+arrows step playback even while zoomed
+    expect(fireEvent.keyDown(tile, { key: "ArrowRight", shiftKey: true })).toBe(true);
+    expect(fireEvent.keyDown(tile, { key: "ArrowLeft", altKey: true })).toBe(true);
+    expect(renderer.panBy).toHaveBeenCalledTimes(1);
 
     // Unbound keys (e.g. Escape for the panel) bubble on
     const escape = fireEvent.keyDown(tile, { key: "Escape" });

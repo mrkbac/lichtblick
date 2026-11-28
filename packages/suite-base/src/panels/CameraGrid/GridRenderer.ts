@@ -69,14 +69,16 @@ type VideoState = {
   epoch: number;
   /** `performance.now()` of the last paint, to keep painting while decoding lags behind. */
   lastPaint: number;
+  /** The newest frame decoded while the tile was hidden, painted once it is shown. */
+  unpainted?: { frame: VideoFrame; event: Immutable<MessageEvent>; stamp: Time; epoch: number };
 };
 
 /** Longest a tile goes without a paint while its decoder works through a backlog. */
 const MAX_PAINT_INTERVAL_MS = 100;
 
 /**
- * Frames a tile queues at most. A hidden tile (another one maximized, an inactive tab) doesn't
- * decode, and a stream with keyframes only at its start would otherwise queue without bound.
+ * Frames a tile queues at most, should its decoder fall that far behind. Hidden tiles keep
+ * decoding, so a stream with keyframes only at its start doesn't freeze once this is reached.
  */
 export const MAX_QUEUED_VIDEO_FRAMES = 600;
 
@@ -223,7 +225,7 @@ export class GridRenderer {
     for (const [topic, tile] of this.#tiles) {
       if (!keep.has(topic)) {
         tile.bitmap?.close();
-        tile.video?.player?.close();
+        closeVideo(tile.video);
         this.#tiles.delete(topic);
       }
     }
@@ -379,7 +381,7 @@ export class GridRenderer {
       tile.bitmap?.close();
       tile.bitmap = undefined;
       tile.stampText = undefined;
-      tile.video?.player?.close();
+      closeVideo(tile.video);
       tile.video = undefined;
     }
   }
@@ -409,12 +411,17 @@ export class GridRenderer {
     try {
       // A loop rather than recursion, so continuous playback doesn't build an ever-growing promise chain.
       for (;;) {
-        const { latest: event, elements, video } = tile;
-        // Stop when unmounted or hidden (zero size, e.g. inactive tab).
-        if (!elements || elements.canvas.width === 0 || elements.canvas.height === 0) {
-          return;
-        }
+        const { latest: event, video } = tile;
+        // Unmounted (another tile maximized) or zero size (inactive tab)
+        const elements =
+          tile.elements && tile.elements.canvas.width > 0 && tile.elements.canvas.height > 0
+            ? tile.elements
+            : undefined;
         if (video) {
+          // Hidden tiles keep decoding: a stream may never send another keyframe to restart at.
+          if (elements && video.unpainted) {
+            await this.#paintUnpainted(tile, video, elements);
+          }
           const frame = video.queue.shift();
           if (!frame) {
             return;
@@ -422,7 +429,7 @@ export class GridRenderer {
           await this.#decodeVideoAndDraw(tile, video, frame, elements);
           continue;
         }
-        if (!event || event === tile.drawn) {
+        if (!elements || !event || event === tile.drawn) {
           return;
         }
         await this.#decodeAndDraw(tile, event, elements);
@@ -448,12 +455,15 @@ export class GridRenderer {
     }
   }
 
-  /** Feeds one frame to the tile's decoder; only the newest queued frame is drawn. */
+  /**
+   * Feeds one frame to the tile's decoder; only the newest queued frame is drawn. Without
+   * `elements` (hidden tile) the newest decoded frame is kept for when the tile is shown.
+   */
   async #decodeVideoAndDraw(
     tile: TileState,
     video: VideoState,
     event: Immutable<MessageEvent>,
-    elements: TileElements,
+    elements: TileElements | undefined,
   ): Promise<void> {
     let frame: VideoFrame | undefined;
     try {
@@ -505,8 +515,20 @@ export class GridRenderer {
       );
       // Older frames only keep the decoder's reference chain intact, unless decoding lags so far
       // behind that the queue never empties; then paint periodically instead of freezing.
+      if (frame && !elements) {
+        if (video.epoch === epoch) {
+          video.unpainted?.frame.close();
+          video.unpainted = { frame, event, stamp: message.timestamp, epoch };
+          frame = undefined;
+        }
+        return;
+      }
       const now = performance.now();
-      if (frame && (video.queue.length === 0 || now - video.lastPaint >= MAX_PAINT_INTERVAL_MS)) {
+      if (
+        frame &&
+        elements &&
+        (video.queue.length === 0 || now - video.lastPaint >= MAX_PAINT_INTERVAL_MS)
+      ) {
         video.lastPaint = now;
         const bitmap = await createImageBitmap(frame);
         if (video.epoch !== epoch) {
@@ -516,11 +538,32 @@ export class GridRenderer {
         this.#show(tile, event, elements, bitmap, message.timestamp);
       }
     } catch (error) {
-      if (tile.elements === elements) {
+      if (elements == undefined || tile.elements === elements) {
         this.#showStatus(tile, error instanceof Error ? error.message : String(error));
       }
     } finally {
       frame?.close();
+    }
+  }
+
+  async #paintUnpainted(tile: TileState, video: VideoState, elements: TileElements): Promise<void> {
+    const unpainted = video.unpainted;
+    if (!unpainted) {
+      return;
+    }
+    video.unpainted = undefined;
+    try {
+      const bitmap = await createImageBitmap(unpainted.frame);
+      if (video.epoch !== unpainted.epoch) {
+        bitmap.close();
+        return;
+      }
+      video.lastPaint = performance.now();
+      this.#show(tile, unpainted.event, elements, bitmap, unpainted.stamp);
+    } catch (error) {
+      this.#showStatus(tile, toError(error).message);
+    } finally {
+      unpainted.frame.close();
     }
   }
 
@@ -643,8 +686,15 @@ export class GridRenderer {
 /** Restarts decoding at the next keyframe and invalidates frames still being decoded. */
 function resetVideo(video: VideoState): void {
   video.epoch++;
+  video.unpainted?.frame.close();
+  video.unpainted = undefined;
   video.player?.resetForSeek();
   video.waitingForKeyframe = true;
   video.firstTime = undefined;
   video.lastTime = undefined;
+}
+
+function closeVideo(video: VideoState | undefined): void {
+  video?.player?.close();
+  video?.unpainted?.frame.close();
 }

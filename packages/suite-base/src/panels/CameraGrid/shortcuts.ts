@@ -11,7 +11,12 @@ export const CAMERA_GRID_SHORTCUTS = [
   {
     id: "cameraGrid.pan",
     titleKey: "cameraGridPan",
-    keys: [{ key: "ArrowLeft" }, { key: "ArrowRight" }, { key: "ArrowUp" }, { key: "ArrowDown" }],
+    // Shift/Alt+arrows stay playback shortcuts
+    keys: (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"] as const).map((key) => ({
+      key,
+      shift: false,
+      alt: false,
+    })),
     mouse: [{ action: "drag" }],
   },
   {
