@@ -73,6 +73,19 @@ describe("computeSpectrum", () => {
     expect(Math.max(...spectrum.y)).toBeLessThan(1.2);
   });
 
+  it("averages instead of aliasing when there are more samples than fit the transform", () => {
+    // 10 s at 1 kHz: a 3 Hz sine and a 450 Hz one, resampled to about 100 Hz (Nyquist 50 Hz)
+    const xs = Array.from({ length: 10_000 }, (_, i) => i / 1000);
+    const ys = sine(xs, 3, 1).map((y, i) => y + Math.sin(2 * Math.PI * 450 * xs[i]!));
+
+    const spectrum = computeSpectrum(Float64Array.from(xs), ys, 0, xs.length, 1000)!;
+
+    // the 450 Hz sine doesn't fold back into the band as a peak as tall as the real one
+    expect(spectrum.x[argMax(spectrum.y)]).toBeCloseTo(3, 0);
+    const aliased = spectrum.y.filter((_, k) => spectrum.x[k]! > 10);
+    expect(Math.max(...aliased)).toBeLessThan(0.2);
+  });
+
   it("needs a few samples", () => {
     expect(computeSpectrum(Float64Array.of(0, 1, 2), Float64Array.of(1, 2, 3), 0, 3)).toBe(
       undefined,

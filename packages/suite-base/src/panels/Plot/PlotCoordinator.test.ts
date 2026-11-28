@@ -1027,6 +1027,27 @@ describe("PlotCoordinator", () => {
       expect(plotCoordinator["viewport"].bounds.y).toEqual({});
     });
 
+    it("keeps the y range of a wheel zoom over the y axis in x zoom mode", async () => {
+      // GIVEN a chart area starting 50 px from the left, and the renderer's zoomed y
+      const bounds: Bounds = { x: { min: 2, max: 3 }, y: { min: -10, max: 10 } };
+      (renderer.update as Mock).mockResolvedValue(bounds);
+      plotCoordinator["latestXScale"] = { left: 50, right: 500 } as Scale;
+
+      // WHEN the wheel zooms over the y axis, left of the chart area
+      plotCoordinator.addInteractionEvent({
+        type: "wheel",
+        deltaY: -100,
+        clientX: 20,
+        clientY: 100,
+        boundingClientRect: { top: 0, left: 0 },
+        zoomMode: "x",
+      });
+      await plotCoordinator["dispatchRender"]();
+
+      // THEN downsampling uses the zoomed y range, not a fit to the data
+      expect(plotCoordinator["viewport"].bounds.y).toEqual(bounds.y);
+    });
+
     it("should not emit 'timeseriesBounds' if shouldSync is false", async () => {
       const listener = vi.fn();
 

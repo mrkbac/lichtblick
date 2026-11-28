@@ -52,7 +52,8 @@ export function fft(re: Float64Array, im: Float64Array): void {
  * Single-sided amplitude spectrum of the samples in rows [start, end) of time-sorted columns.
  *
  * Sampling is rarely even (message jitter, dropped messages), so the samples are linearly
- * resampled onto a grid at the median sample interval. Then the mean is removed, a Hann window is
+ * resampled onto a grid at the median sample interval (or, past `maxSamples`, averaged over a
+ * coarser grid's cells, so faster content doesn't alias). Then the mean is removed, a Hann window is
  * applied and the signal is zero-padded to a power of two. A sine of amplitude A peaks at about A.
  * Rows with a NaN x or y are skipped. Undefined when there are too few samples.
  */
@@ -61,6 +62,7 @@ export function computeSpectrum(
   ys: Float64Array,
   start: number,
   end: number,
+  maxSamples = MAX_FFT_SAMPLES,
 ): AnalysisColumns | undefined {
   const tx: number[] = [];
   const ty: number[] = [];
@@ -85,7 +87,7 @@ export function computeSpectrum(
   const span = tx[tx.length - 1]! - tx[0]!;
   // Gaps are interpolated over, so a long gap smears low frequencies; zoom the plot to a
   // gap-free range for a clean spectrum.
-  const count = Math.min(Math.floor(span / diffs[diffs.length >> 1]!) + 1, MAX_FFT_SAMPLES);
+  const count = Math.min(Math.floor(span / diffs[diffs.length >> 1]!) + 1, maxSamples);
   const dt = span / (count - 1);
 
   let size = 1;
@@ -94,14 +96,32 @@ export function computeSpectrum(
   }
   const re = new Float64Array(size);
   const im = new Float64Array(size);
+  // Capped to fewer grid points than samples: average the samples around each grid point (a box
+  // low-pass), so frequencies above the grid's Nyquist limit don't alias into the spectrum
+  const decimate = count === maxSamples && dt > diffs[diffs.length >> 1]!;
   let mean = 0;
-  for (let i = 0, j = 0; i < count; i++) {
+  for (let i = 0, j = 0, k = 0; i < count; i++) {
     const t = tx[0]! + i * dt;
     while (j < tx.length - 2 && tx[j + 1]! < t) {
       j++;
     }
-    const frac = Math.min(Math.max((t - tx[j]!) / (tx[j + 1]! - tx[j]!), 0), 1);
-    const value = ty[j]! + frac * (ty[j + 1]! - ty[j]!);
+    let value = Number.NaN;
+    if (decimate) {
+      let sum = 0;
+      let n = 0;
+      while (k < tx.length && tx[k]! < t - dt / 2) {
+        k++;
+      }
+      for (let m = k; m < tx.length && tx[m]! < t + dt / 2; m++) {
+        sum += ty[m]!;
+        n++;
+      }
+      value = n > 0 ? sum / n : Number.NaN;
+    }
+    if (Number.isNaN(value)) {
+      const frac = Math.min(Math.max((t - tx[j]!) / (tx[j + 1]! - tx[j]!), 0), 1);
+      value = ty[j]! + frac * (ty[j + 1]! - ty[j]!);
+    }
     re[i] = value;
     mean += value;
   }

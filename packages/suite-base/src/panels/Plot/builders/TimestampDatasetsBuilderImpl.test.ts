@@ -159,6 +159,33 @@ describe("TimestampDatasetsBuilderImpl", () => {
       expect(ys.some(Number.isNaN)).toBe(true);
     });
 
+    it("keeps the newest sample of a thinned group when a gap ends it", () => {
+      // GIVEN thinning folds flat live samples into groups
+      const builder = new TimestampDatasetsBuilderImpl(100);
+      builder.applyAction({ type: "update-series-config", seriesItems: [seriesItem("0")] });
+      builder.applyAction({
+        type: "append-current",
+        series: key,
+        items: items(range(0, 1000), () => 0),
+      });
+
+      // WHEN a spike and a few flat samples arrive, then a gap
+      builder.applyAction({
+        type: "append-current",
+        series: key,
+        items: [
+          ...items(range(1000, 1003), (x) => (x === 1000 ? 100 : 0)),
+          { ...items([1003])[0]!, y: NaN, value: null },
+        ],
+      });
+
+      // THEN the spike stays, and the line still reaches the newest sample before it breaks
+      const data = builder.getCsvData()[0]!.data;
+      expect(data.some((item) => item.y === 100)).toBe(true);
+      expect(data.slice(-2).map((item) => item.x)).toEqual([1002, 1003]);
+      expect(data.at(-1)!.y).toBeNaN();
+    });
+
     it("keeps line breaks when halving", () => {
       const builder = new TimestampDatasetsBuilderImpl(3);
       builder.applyAction({ type: "update-series-config", seriesItems: [seriesItem("0")] });

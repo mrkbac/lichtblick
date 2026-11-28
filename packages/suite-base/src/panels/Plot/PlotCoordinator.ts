@@ -706,9 +706,18 @@ export class PlotCoordinator extends EventEmitter<PlotCoordinatorEventTypes> {
   public addInteractionEvent(ev: InteractionEvent): void {
     this.updateAction.interactionEvents ??= [];
     this.updateAction.interactionEvents.push(ev);
-    // panning moves both axes; a wheel zoom only the axes of its mode
-    this.yInteracted ||= ev.type !== "wheel" || (ev.zoomMode ?? this.zoomMode) !== "x";
+    // panning moves both axes; a wheel zoom the axes of its mode, or the y axis under the cursor
+    this.yInteracted ||=
+      ev.type !== "wheel" || (ev.zoomMode ?? this.zoomMode) !== "x" || this.isOverYAxis(ev);
     this.queueDispatchRender();
+  }
+
+  /** Whether a wheel event is beside the chart area, over a y axis (which it zooms in any mode) */
+  private isOverYAxis(ev: Extract<InteractionEvent, { type: "wheel" }>): boolean {
+    const x = ev.clientX - ev.boundingClientRect.left;
+    return (
+      this.latestXScale != undefined && (x < this.latestXScale.left || x > this.latestXScale.right)
+    );
   }
 
   /** Get the plot x value at the canvas pixel x location */
