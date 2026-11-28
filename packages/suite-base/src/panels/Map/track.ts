@@ -87,13 +87,32 @@ export class ColumnStore<K extends string> {
     if (earlier.length === 0) {
       return;
     }
+    if (this.length === 0) {
+      // Nothing around the playhead: this store continues where the earlier rows end, at their
+      // stride, as if it had read them itself
+      const next = this.#allocate(earlier.columns[this.#keys[0]!].length);
+      for (const key of this.#keys) {
+        next[key].set(earlier.columns[key]);
+      }
+      Object.assign(this.columns, next);
+      this.length = earlier.length;
+      this.#stride = earlier.#stride;
+      this.#sinceKept = earlier.#sinceKept;
+      this.#tailIsExtra = earlier.#tailIsExtra;
+      this.version++;
+      return;
+    }
+    // The earlier rows' extra newest row is no longer the newest: only their rows at the stride
+    const earlierRows = earlier.length - (earlier.#tailIsExtra ? 1 : 0);
     // Halve this store until the earlier rows fit next to it at its stride, so both sides share
     // one resolution instead of the earlier rows being squeezed into what room is left
     const rowsAt = (stride: number) =>
-      Math.ceil(earlier.length / Math.max(1, stride / earlier.#stride));
+      Math.ceil(earlierRows / Math.max(1, stride / earlier.#stride));
+    // Also halve to the earlier rows' stride when it is coarser (an earlier window thinned past the
+    // limit): rows appended later come at this store's stride
     while (
       this.length - (this.#tailIsExtra ? 1 : 0) > 1 &&
-      rowsAt(this.#stride) > this.limit - this.length
+      (rowsAt(this.#stride) > this.limit - this.length || this.#stride < earlier.#stride)
     ) {
       if (!this.#tailIsExtra && this.length % 2 === 0) {
         // The newest row falls off the new stride: keep it as the extra newest row
@@ -102,12 +121,16 @@ export class ColumnStore<K extends string> {
       }
       this.#halve();
     }
+    if (this.#stride < earlier.#stride) {
+      // A single row: nothing to thin
+      this.#stride = earlier.#stride;
+    }
     const room = Math.max(1, this.limit - this.length);
     const step = Math.max(
       Math.max(1, this.#stride / earlier.#stride),
-      Math.ceil(earlier.length / room),
+      Math.ceil(earlierRows / room),
     );
-    const added = Math.ceil(earlier.length / step);
+    const added = Math.ceil(earlierRows / step);
     const total = added + this.length;
     let capacity = this.columns[this.#keys[0]!].length;
     while (capacity < total) {

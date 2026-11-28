@@ -306,6 +306,27 @@ describe("nearestFix", () => {
 });
 
 describe("ColumnStore.prepend", () => {
+  it("keeps one resolution when an earlier window thinned past the limit is put in front", () => {
+    for (const playheadRows of [0, 1, 3]) {
+      const store = new SampleStore(8);
+      for (let t = 0; t < playheadRows; t++) {
+        store.push(32 + t, 0);
+      }
+      const earlier = new SampleStore(8);
+      for (let t = 0; t < 32; t++) {
+        earlier.push(t, t);
+      }
+      store.prepend(earlier);
+      for (let t = 32 + playheadRows; t < 64; t++) {
+        store.push(t, t);
+      }
+      const times = [...store.columns.time.subarray(0, store.length)];
+      // Every gap but the one to the newest row is the same, as when read in time order
+      const gaps = new Set(times.slice(1, -1).map((time, i) => time - times[i]!));
+      expect(gaps.size).toBeLessThanOrEqual(1);
+    }
+  });
+
   it("puts earlier rows in front, thinned to the store's stride", () => {
     const later = new SampleStore(4);
     for (let t = 10; t < 16; t++) {

@@ -547,6 +547,10 @@ export class PathSampleColumns {
 
     // Still too dense: merge neighbours in pairs until there is room.
     let kept = this.#length;
+    // The newest sample, in case a pair merge drops it: the chart still reaches the latest time
+    const newest = kept > target ? this.#data.slice((kept - 1) * STRIDE, kept * STRIDE) : undefined;
+    const newestNumber = this.#numbers?.[kept - 1];
+    let newestDropped = false;
     while (kept > target) {
       this.#level = 3;
       let half = 0;
@@ -559,12 +563,25 @@ export class PathSampleColumns {
         if (mixed) {
           this.#setMixed(half);
         }
+        if (i + 1 === kept - 1 && keep === i) {
+          newestDropped = true;
+        }
         half++;
       }
       kept = half;
       this.#stride *= 2;
       this.#sinceKept = 0;
       this.#provisional = false;
+    }
+    if (newest && newestDropped) {
+      // Held as the newest sample until the next one, which merges it into the kept one before
+      this.#data.set(newest, kept * STRIDE);
+      if (this.#numbers && newestNumber != undefined) {
+        this.#numbers[kept] = newestNumber;
+      }
+      kept++;
+      this.#provisional = true;
+      this.#sinceKept = 1 % this.#stride;
     }
     this.#length = kept;
     this.#compactValues();
