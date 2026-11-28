@@ -2027,10 +2027,8 @@ describe("IterablePlayer", () => {
         results.push(result);
       }
 
-      expect(results).toHaveLength(3);
-      expect(results[0]?.type).toBe("message-event");
-      expect(results[1]?.type).toBe("alert");
-      expect(results[2]?.type).toBe("stamp");
+      // A whole-history read shares a pass over all readers' topics: the pass's stamps are left out
+      expect(results.map((result) => result.type)).toEqual(["message-event", "alert"]);
     });
 
     it("should handle empty iterator", async () => {

@@ -313,51 +313,492 @@ describe("SharedRangeReads", () => {
     await dense.return?.();
   });
 
-  it("lets a read that starts during a pass join it, reading only what it missed on its own", async () => {
-    const reads: { topics: string[]; start?: number; end?: number }[] = [];
-    let release!: () => void;
-    let gate = new Promise<void>((resolve) => (release = resolve));
-    const shared = new SharedRangeReads(async function* (topics, range) {
-      reads.push({ topics: [...topics.keys()], start: range.start?.sec, end: range.end?.sec });
-      for (const msgEvent of messages) {
-        if (
-          !topics.has(msgEvent.topic) ||
-          (range.start && msgEvent.receiveTime.sec < range.start.sec) ||
-          (range.end && msgEvent.receiveTime.sec > range.end.sec)
-        ) {
-          continue;
+  describe("window by window", () => {
+    type Read = { topics: string; start?: number; end?: number };
+    /**
+     * Messages of `topics` every second over [0 s, 99 s], an alert after each message of `alerting`.
+     * A read of only "a" waits at `gateAt` until `gate` opens; a read of `topics` at `sec` waits
+     * until `gates["topics@sec"]` opens.
+     */
+    function windowed({
+      topics = ["a", "b", "c"],
+      gateAt,
+      alerting,
+      gates = {},
+    }: {
+      topics?: string[];
+      gateAt?: number;
+      alerting?: string;
+      gates?: Record<string, PromiseWithResolvers<void>>;
+    } = {}) {
+      const reads: Read[] = [];
+      /** "topics@sec" of every message read, in order */
+      const log: string[] = [];
+      const gate = Promise.withResolvers<void>();
+      gates[`a@${gateAt}`] ??= gate;
+      const bounds = { start: { sec: 0, nsec: 0 }, end: { sec: 99, nsec: 0 } };
+      let playhead = { sec: 50, nsec: 0 };
+      const shared = new SharedRangeReads(
+        async function* (selection, range) {
+          reads.push({
+            topics: [...selection.keys()].join(),
+            start: range.start?.sec,
+            end: range.end?.sec,
+          });
+          for (let t = 0; t < 100; t++) {
+            const time = { sec: t, nsec: 0 };
+            if (
+              (range.start && compare(time, range.start) < 0) ||
+              (range.end && compare(time, range.end) > 0)
+            ) {
+              continue;
+            }
+            await gates[`${[...selection.keys()].join()}@${t}`]?.promise;
+            log.push(`${[...selection.keys()].join()}@${t}`);
+            for (const topic of topics) {
+              if (selection.has(topic)) {
+                yield { type: "message-event", msgEvent: message(topic, t) };
+                if (topic === alerting) {
+                  yield {
+                    type: "alert",
+                    connectionId: 7,
+                    alert: { severity: "error", message: "can't decode" },
+                  };
+                }
+              }
+            }
+          }
+        },
+        () => ({ ...bounds, playhead }),
+      );
+      const seek = (sec: number) => {
+        playhead = { sec, nsec: 0 };
+      };
+      return { shared, reads, log, gate, seek };
+    }
+    const all = (topic: string) => Array.from({ length: 100 }, (_, t) => `${topic}${t}`);
+    const sorted = (seen: string[], topic: string) =>
+      seen.toSorted((x, y) => Number(x.slice(topic.length)) - Number(y.slice(topic.length)));
+    /** Pulls `count` messages of `iterator` */
+    async function take(iterator: AsyncIterableIterator<Readonly<IteratorResult>>, count: number) {
+      const seen: string[] = [];
+      while (seen.length < count) {
+        const next = await iterator.next();
+        if (next.done === true) {
+          break;
         }
-        // The first pass stops after its second second until released
-        if (topics.size === 1 && topics.has("a") && !range.end && msgEvent.receiveTime.sec === 2) {
-          await gate;
+        if (next.value.type === "message-event") {
+          seen.push(`${next.value.msgEvent.topic}${next.value.msgEvent.receiveTime.sec}`);
         }
-        yield { type: "message-event", msgEvent };
       }
+      return seen;
+    }
+    const tick = async () => {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    };
+
+    it("adds a reader that joins mid-pass at the next window, after the windows it missed", async () => {
+      // Ascending windows of 20 s: the pass waits in its third window
+      const { shared, reads, gate } = windowed({ gateAt: 50 });
+      const a = shared.read("a", {});
+      const aSeen = await take(a, 50);
+      const b = collect(shared.read("b", {}));
+      await tick();
+      gate.resolve();
+
+      expect([...aSeen, ...(await collect(a))]).toEqual(all("a"));
+      expect(await b).toEqual(all("b"));
+      // No read restarts mid-window: the catch-up reads the windows up to the current one, and the
+      // pass reads "b" from the next window on
+      expect(reads).toEqual([
+        { topics: "a", start: undefined, end: 19 },
+        { topics: "a", start: 20, end: 39 },
+        { topics: "a", start: 40, end: 59 },
+        { topics: "b", start: undefined, end: 19 },
+        { topics: "b", start: 20, end: 39 },
+        { topics: "b", start: 40, end: 59 },
+        { topics: "a,b", start: 60, end: 79 },
+        { topics: "a,b", start: 80, end: undefined },
+      ]);
     });
 
-    const a = shared.read("a", {});
-    const aSeen: string[] = [];
-    for (let i = 0; i < 2; i++) {
-      const next = await a.next();
-      if (next.done !== true && next.value.type === "message-event") {
-        aSeen.push(`a${next.value.msgEvent.receiveTime.sec}`);
-      }
-    }
-    // The pass is at second 1 and waits: a second read starts now
-    const b = collect(shared.read("b", {}));
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    release();
-    gate = Promise.resolve();
-    const aRest = await collect(a);
+    it("pauses while a joiner's catch-up reads the window at the cursor", async () => {
+      // Playhead-first windows: [40 s, 60 s], [20 s, 39 s], [61 s, 80 s], …; the pass waits at 70 s,
+      // the catch-up in the middle of the cursor window
+      const gates = {
+        "a@70": Promise.withResolvers<void>(),
+        "b@50": Promise.withResolvers<void>(),
+      };
+      const { shared, log } = windowed({ gates });
+      const a = shared.read("a", {}, { playheadFirst: true });
+      const aSeen = await take(a, 50);
+      const b = collect(shared.read("b", {}, { playheadFirst: true }));
+      await tick();
+      gates["a@70"].resolve();
+      await tick();
 
-    expect([...aSeen, ...aRest]).toEqual(["a0", "a1", "a2", "a3"]);
-    expect(await b).toEqual(["b0", "b1", "b2", "b3"]);
-    // One pass for "a", a catch-up of "b" up to where the pass was, and the pass going on with both
-    expect(reads).toEqual([
-      { topics: ["a"], start: undefined, end: undefined },
-      { topics: ["b"], start: undefined, end: 1 },
-      { topics: ["a", "b"], start: 1, end: undefined },
-    ]);
+      // The pass took the message it waited on, then paused for the catch-up
+      expect(log.filter((entry) => entry.startsWith("a@7"))).toEqual(["a@70"]);
+      gates["b@50"].resolve();
+      expect(sorted([...aSeen, ...(await collect(a))], "a")).toEqual(all("a"));
+      expect(sorted(await b, "b")).toEqual(all("b"));
+    });
+
+    it("reads the windows missed by readers joining together in one catch-up", async () => {
+      const { shared, reads, gate } = windowed({ gateAt: 50 });
+      const a = shared.read("a", {});
+      const aSeen = await take(a, 50);
+      const b = collect(shared.read("b", {}));
+      const c = collect(shared.read("c", {}));
+      await tick();
+      gate.resolve();
+
+      expect([...aSeen, ...(await collect(a))]).toEqual(all("a"));
+      expect(await b).toEqual(all("b"));
+      expect(await c).toEqual(all("c"));
+      expect(reads.filter(({ topics }) => topics !== "a")).toEqual([
+        { topics: "b,c", start: undefined, end: 19 },
+        { topics: "b,c", start: 20, end: 39 },
+        { topics: "b,c", start: 40, end: 59 },
+        { topics: "a,b,c", start: 60, end: 79 },
+        { topics: "a,b,c", start: 80, end: undefined },
+      ]);
+    });
+
+    it("drops a leaving reader's topic at the next window and stops with no reader left", async () => {
+      const gates = {
+        "a,b@30": Promise.withResolvers<void>(),
+        "a@50": Promise.withResolvers<void>(),
+      };
+      const { shared, reads } = windowed({ gates });
+      const a = shared.read("a", {});
+      const b = shared.read("b", {});
+      // The pass waits in the second window
+      await Promise.all([take(a, 30), take(b, 30)]);
+      await b.return?.();
+      gates["a,b@30"].resolve();
+      // It waits in the third window, then the last reader leaves
+      await take(a, 20);
+      await a.return?.();
+      gates["a@50"].resolve();
+      await tick();
+
+      // Both in the first two windows, "a" alone in the third, then nothing
+      expect(reads).toEqual([
+        { topics: "a,b", start: undefined, end: 19 },
+        { topics: "a,b", start: 20, end: 39 },
+        { topics: "a", start: 40, end: 59 },
+      ]);
+    });
+
+    it("reaches a new playhead in the window after a seek, reading nothing twice", async () => {
+      const gates = { "a@60": Promise.withResolvers<void>() };
+      const { shared, reads, seek } = windowed({ gates });
+      const a = shared.read("a", {}, { playheadFirst: true });
+      // The window around 50 s, which waits before its last second
+      const around = await take(a, 20);
+      seek(95);
+      gates["a@60"].resolve();
+      const rest = await collect(a);
+
+      expect(around).toEqual(Array.from({ length: 20 }, (_, i) => `a${40 + i}`));
+      expect(sorted([...around, ...rest], "a")).toEqual(all("a"));
+      // The next window runs from the read span to past the playhead, then earlier history follows
+      expect(reads).toEqual([
+        { topics: "a", start: 40, end: 60 },
+        // Right after 60 s
+        { topics: "a", start: 60, end: undefined },
+        { topics: "a", start: 20, end: 39 },
+        { topics: "a", start: undefined, end: 19 },
+      ]);
+    });
+
+    it("still delivers a later alert once the earlier one was taken", async () => {
+      // The pass waits at 50 s until the first alert was taken
+      const gates = { "bad@50": Promise.withResolvers<void>() };
+      const { shared } = windowed({ topics: ["bad"], alerting: "bad", gates });
+      let alerts = 0;
+      for await (const result of shared.read("bad", {})) {
+        if (result.type === "alert") {
+          alerts++;
+          gates["bad@50"].resolve();
+        }
+      }
+      // More than the first, but not one per message: never more than one waits in the queue
+      expect(alerts).toBeGreaterThan(1);
+      expect(alerts).toBeLessThan(100);
+    });
+  });
+
+  describe("late joiners", () => {
+    /** A source over `recording` (inclusive ranges); `onEnd` runs when a read of `topics` ends */
+    function recordingSource(
+      recording: readonly Readonly<IteratorResult>[],
+      gate?: { topics: string; sec: number; open: Promise<void> },
+      onEnd?: (topics: string) => void,
+    ) {
+      return new SharedRangeReads(async function* (topics, range) {
+        const key = [...topics.keys()].join();
+        try {
+          for (const result of recording) {
+            if (result.type === "message-event") {
+              const { topic, receiveTime } = result.msgEvent;
+              if (
+                !topics.has(topic) ||
+                (range.start && compare(receiveTime, range.start) < 0) ||
+                (range.end && compare(receiveTime, range.end) > 0)
+              ) {
+                continue;
+              }
+              if (gate?.topics === key && receiveTime.sec === gate.sec) {
+                await gate.open;
+              }
+            }
+            yield result;
+          }
+        } finally {
+          onEnd?.(key);
+        }
+      });
+    }
+    const events = (topic: string, secs: number[]): IteratorResult[] =>
+      secs.map((sec) => ({ type: "message-event", msgEvent: message(topic, sec) }));
+    const range = (n: number) => Array.from({ length: n }, (_, i) => i);
+
+    /**
+     * `perSecond` messages a second of each of `topics` over [0 s, 99 s] (`sparse` only once, at
+     * the start; `alerting` each followed by an alert), read in ascending windows of 20 s
+     */
+    function dense({
+      perSecond,
+      topics,
+      sparse,
+      alerting,
+    }: {
+      perSecond: number;
+      topics: string[];
+      sparse?: string;
+      alerting?: string;
+    }) {
+      const reads: { topics: string; start?: number; end?: number }[] = [];
+      const shared = new SharedRangeReads(
+        async function* (selection, span) {
+          reads.push({
+            topics: [...selection.keys()].join(),
+            start: span.start?.sec,
+            end: span.end?.sec,
+          });
+          for (let sec = 0; sec < 100; sec++) {
+            for (let i = 0; i < perSecond; i++) {
+              const receiveTime = { sec, nsec: Math.floor((i * 1e9) / perSecond) };
+              if (
+                (span.start && compare(receiveTime, span.start) < 0) ||
+                (span.end && compare(receiveTime, span.end) > 0)
+              ) {
+                continue;
+              }
+              for (const topic of topics) {
+                if (!selection.has(topic) || (topic === sparse && (sec > 0 || i > 0))) {
+                  continue;
+                }
+                yield { type: "message-event", msgEvent: { ...message(topic, sec), receiveTime } };
+                if (topic === alerting) {
+                  yield {
+                    type: "alert",
+                    connectionId: 7,
+                    alert: { severity: "error", message: "can't decode" },
+                  };
+                }
+              }
+            }
+          }
+        },
+        () => ({
+          start: { sec: 0, nsec: 0 },
+          end: { sec: 99, nsec: 0 },
+          playhead: { sec: 50, nsec: 0 },
+        }),
+      );
+      return { shared, reads };
+    }
+    async function times(iterator: AsyncIterableIterator<Readonly<IteratorResult>>) {
+      const seen: string[] = [];
+      for await (const result of iterator) {
+        if (result.type === "message-event") {
+          const { sec, nsec } = result.msgEvent.receiveTime;
+          seen.push(`${sec}.${nsec}`);
+        }
+      }
+      return seen;
+    }
+    const allTimes = (perSecond: number) =>
+      range(100).flatMap((sec) =>
+        range(perSecond).map((i) => `${sec}.${Math.floor((i * 1e9) / perSecond)}`),
+      );
+
+    it("doesn't deliver its catch-up twice when it falls behind and reads on its own", async () => {
+      // "a" stops pulling, so the pass waits for room in its fourth window (past the 4096th
+      // message); "b" joins there, catches up the first four windows, then waits and reads the
+      // fifth on its own
+      const { shared, reads } = dense({ perSecond: 60, topics: ["a", "b"] });
+      const a = shared.read("a", {});
+      expect((await a.next()).done).toBe(false);
+      await new Promise((resolve) => setTimeout(resolve, 20));
+
+      expect(await times(shared.read("b", {}))).toEqual(allTimes(60));
+      expect(reads).toContainEqual({ topics: "b", start: 80, end: undefined });
+      expect(await times(a)).toHaveLength(5999);
+    });
+
+    it("keeps a reader on the shared read when another topic floods it with alerts", async () => {
+      // 6000 alerts of one connection while "good" (one message) isn't pulled: queued as they
+      // come, they would fill its queue and stall the pass, so "bad" would read on its own
+      const { shared, reads } = dense({
+        perSecond: 60,
+        topics: ["bad", "good"],
+        sparse: "good",
+        alerting: "bad",
+      });
+      const good = shared.read("good", {});
+      const bad = times(shared.read("bad", {}));
+      expect((await good.next()).done).toBe(false);
+      expect(await bad).toEqual(allTimes(60));
+      // Its first result was the first alert; its one message comes next
+      expect(await times(good)).toEqual(["0.0"]);
+      // One pass of both topics in ascending windows of 20 s, no read of "bad" on its own
+      expect(reads.map(({ topics, start }) => [topics, start])).toEqual(
+        [undefined, 20, 40, 60, 80].map((start) => ["bad,good", start]),
+      );
+    });
+
+    it("leaves the shared read when its catch-up fails", async () => {
+      const opened: string[] = [];
+      // The pass waits at 50 s until the joiner's catch-up failed
+      const hold = Promise.withResolvers<void>();
+      const shared = new SharedRangeReads(
+        async function* (selection, span) {
+          const topics = [...selection.keys()].join();
+          opened.push(topics);
+          for (let sec = 0; sec < 100; sec++) {
+            const receiveTime = { sec, nsec: 0 };
+            if (
+              (span.start && compare(receiveTime, span.start) < 0) ||
+              (span.end && compare(receiveTime, span.end) > 0)
+            ) {
+              continue;
+            }
+            if (topics === "b") {
+              throw new Error("broken chunk");
+            }
+            if (topics === "a" && sec === 50) {
+              await hold.promise;
+            }
+            for (const topic of selection.keys()) {
+              yield { type: "message-event", msgEvent: message(topic, sec) };
+            }
+          }
+        },
+        () => ({
+          start: { sec: 0, nsec: 0 },
+          end: { sec: 99, nsec: 0 },
+          playhead: { sec: 50, nsec: 0 },
+        }),
+      );
+      const a = shared.read("a", {});
+      expect((await a.next()).done).toBe(false);
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      const b = shared.read("b", {});
+      await expect(collect(b)).rejects.toThrow("broken chunk");
+      hold.resolve();
+      // "a" reads on alone: the pass reads "b" no more
+      expect(await collect(a)).toHaveLength(99);
+      expect(opened.at(-1)).toBe("a");
+    });
+
+    it("ends after its catch-up when the pass fills it with alerts only", async () => {
+      // An undecodable topic: an alert for each of its messages, after "b" has no more messages
+      const recording = [
+        ...events("b", [0, 1]),
+        ...range(5000).flatMap((sec): IteratorResult[] => [
+          ...events("a", [sec]),
+          {
+            type: "alert",
+            connectionId: 1,
+            alert: { severity: "error", message: "can't decode" },
+          },
+        ]),
+      ];
+      const open = Promise.withResolvers<void>();
+      const shared = recordingSource(recording, { topics: "a", sec: 2, open: open.promise });
+      const a = collect(shared.read("a", {}));
+      await new Promise((resolve) => setTimeout(resolve, 20));
+
+      // Joins while the pass waits at 2 s and reads its catch-up only once the pass is done
+      const b = shared.read("b", {});
+      const first = await b.next();
+      open.resolve();
+      expect(await a).toHaveLength(5000);
+      const rest = await collect(b);
+      expect(first.value).toMatchObject({ msgEvent: { topic: "b" } });
+      expect(rest).toEqual(["b1"]);
+    });
+
+    it("doesn't deadlock a consumer that alternates between the pass and a joiner's catch-up", async () => {
+      // The catch-up holds more than a reader queues; the consumer takes one of each in turn, so it
+      // waits on "a" while the pass pauses for the catch-up, until the catch-up runs out of room
+      const recording = range(5000).flatMap((sec) => [
+        ...events("a", [sec]),
+        ...events("b", [sec]),
+      ]);
+      const shared = recordingSource(recording);
+      const a = shared.read("a", {});
+      const seen = { a: [] as string[], b: [] as string[] };
+      while (seen.a.length < 10) {
+        const next = await a.next();
+        if (next.done !== true && next.value.type === "message-event") {
+          seen.a.push(`a${next.value.msgEvent.receiveTime.sec}`);
+        }
+      }
+      const b = shared.read("b", {});
+      const done = { a: false, b: false };
+      while (!done.a || !done.b) {
+        for (const [topic, iterator] of [
+          ["a", a],
+          ["b", b],
+        ] as const) {
+          const next = await iterator.next();
+          if (next.done === true) {
+            done[topic] = true;
+          } else if (next.value.type === "message-event") {
+            seen[topic].push(`${topic}${next.value.msgEvent.receiveTime.sec}`);
+          }
+        }
+      }
+      expect(seen.a).toEqual(range(5000).map((sec) => `a${sec}`));
+      expect(seen.b).toEqual(range(5000).map((sec) => `b${sec}`));
+    });
+
+    it.each(range(8))(
+      "gets a window's tail when it joins %i microtasks after the window's source read ended",
+      async (ticks) => {
+        const recording = [...events("a", [0, 1, 2]), ...events("b", [0, 1, 2, 3])];
+        let b: Promise<string[]> | undefined;
+        const shared = recordingSource(recording, undefined, (topics) => {
+          if (topics !== "a" || b) {
+            return;
+          }
+          b = (async () => {
+            for (let i = 0; i < ticks; i++) {
+              await Promise.resolve();
+            }
+            return await collect(shared.read("b", {}));
+          })();
+        });
+
+        expect(await collect(shared.read("a", {}))).toEqual(["a0", "a1", "a2"]);
+        expect(await b).toEqual(["b0", "b1", "b2", "b3"]);
+      },
+    );
   });
 
   describe("playhead first", () => {
@@ -527,15 +968,25 @@ describe("SharedRangeReads", () => {
       },
     );
 
+    const ascendingWindowsOf = (topics: string[]) =>
+      [
+        [undefined, 19],
+        [20, 39],
+        [40, 59],
+        [60, 79],
+        [80, undefined],
+      ].map(([start, end]) => ({ topics, start, end }));
+    const all = (topic: string) => Array.from({ length: 100 }, (_, i) => `${topic}${i}`);
+
     it("reads ascending and playhead-first readers that start together in one ascending pass", async () => {
       const { shared, reads } = setupPlayhead();
       const [ascending, playhead] = await Promise.all([
         collect(shared.read("a", {})),
         collect(shared.read("b", {}, { playheadFirst: true })),
       ]);
-      expect(ascending).toEqual(Array.from({ length: 100 }, (_, i) => `a${i}`));
-      expect(playhead).toEqual(Array.from({ length: 100 }, (_, i) => `b${i}`));
-      expect(reads).toEqual([{ topics: ["a", "b"], start: undefined, end: undefined }]);
+      expect(ascending).toEqual(all("a"));
+      expect(playhead).toEqual(all("b"));
+      expect(reads).toEqual(ascendingWindowsOf(["a", "b"]));
     });
 
     it("lets a playhead-first read join a running ascending pass", async () => {
@@ -549,16 +1000,14 @@ describe("SharedRangeReads", () => {
         }
       }
       const b = collect(shared.read("b", {}, { playheadFirst: true }));
-      await new Promise((resolve) => setTimeout(resolve, 0));
+      await new Promise((resolve) => setTimeout(resolve, 20));
       gate.resolve();
-      expect([...aSeen, ...(await collect(a))]).toEqual(
-        Array.from({ length: 100 }, (_, i) => `a${i}`),
+      expect([...aSeen, ...(await collect(a))]).toEqual(all("a"));
+      expect(await b).toEqual(all("b"));
+      // No pass of its own: b's catch-up of the windows the pass read, then the pass with both
+      expect(reads.filter(({ topics }) => topics.join() === "b")).toEqual(
+        ascendingWindowsOf(["b"]).slice(0, 2),
       );
-      expect(await b).toEqual(Array.from({ length: 100 }, (_, i) => `b${i}`));
-      // No whole pass for b: only its catch-up up to where the pass was, then the pass with both
-      expect(reads.filter(({ topics }) => topics.join() === "b")).toEqual([
-        { topics: ["b"], start: undefined, end: 29 },
-      ]);
     });
 
     it("gives an ascending read that starts during a playhead-first pass its own pass", async () => {
@@ -570,11 +1019,9 @@ describe("SharedRangeReads", () => {
       await new Promise((resolve) => setTimeout(resolve, 20));
       gate.resolve();
       const aRest = await collect(a);
-      expect(await b).toEqual(Array.from({ length: 100 }, (_, i) => `b${i}`));
+      expect(await b).toEqual(all("b"));
       expectPlayheadOrder(["a40", ...aRest], "a");
-      expect(reads.filter(({ topics }) => topics.includes("b"))).toEqual([
-        { topics: ["b"], start: undefined, end: undefined },
-      ]);
+      expect(reads.filter(({ topics }) => topics.includes("b"))).toEqual(ascendingWindowsOf(["b"]));
     });
 
     it("reads in time order when the player has no playhead", async () => {

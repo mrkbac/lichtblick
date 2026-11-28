@@ -117,32 +117,32 @@ export function useDecodedMessageRange(
               }
             },
           );
-          for await (const batch of batchIterator) {
+          const done = await earlier.read(
+            batchIterator,
             // The resolver can already be the next render's, before this effect cancels us.
-            if (cancelled || request.paths.some((path) => !pathsRef.current.includes(path))) {
-              return;
-            }
-            const into = earlier.place(batch) ?? acc;
-            for (const path of request.paths) {
-              const out = (into[path] ??= new PathSampleColumns(MAX_SAMPLES_PER_PATH));
-              if (changesPathsRef.current.includes(path)) {
-                out.trackChanges();
-              }
-              for (const message of batch) {
-                const queriedData = decodeRef.current(path, message);
-                if (queriedData) {
-                  out.pushMessage(message, queriedData);
+            () => cancelled || request.paths.some((path) => !pathsRef.current.includes(path)),
+            (batch, earlierInto) => {
+              const into = earlierInto ?? acc;
+              for (const path of request.paths) {
+                const out = (into[path] ??= new PathSampleColumns(MAX_SAMPLES_PER_PATH));
+                if (changesPathsRef.current.includes(path)) {
+                  out.trackChanges();
+                }
+                for (const message of batch) {
+                  const queriedData = decodeRef.current(path, message);
+                  if (queriedData) {
+                    out.pushMessage(message, queriedData);
+                  }
                 }
               }
-            }
-            // Group batches arriving in quick succession into one update.
-            flushRef.current ??= setTimeout(() => {
-              flushRef.current = undefined;
-              publish();
-            }, FLUSH_INTERVAL_MS);
-          }
-          if (!cancelled) {
-            earlier.flush();
+              // Group batches arriving in quick succession into one update.
+              flushRef.current ??= setTimeout(() => {
+                flushRef.current = undefined;
+                publish();
+              }, FLUSH_INTERVAL_MS);
+            },
+          );
+          if (done) {
             publish();
           }
         },
