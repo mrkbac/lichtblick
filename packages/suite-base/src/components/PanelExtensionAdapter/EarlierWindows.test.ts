@@ -54,4 +54,60 @@ describe("EarlierWindows", () => {
     windows.flush();
     expect(loaded).toEqual([1, 2, 3, 4, 5]);
   });
+
+  it("leaves the earlier window out when the read is cancelled", async () => {
+    let loaded: number[] = [];
+    const windows = new EarlierWindows<number[]>(
+      () => [],
+      (earlier) => {
+        loaded = [...earlier, ...loaded];
+      },
+    );
+    let cancelled = false;
+    async function* batches() {
+      yield at(5, 6);
+      yield at(3);
+      // Cancelled mid-window: a newer read may own `loaded` now
+      cancelled = true;
+      loaded = [];
+      yield at(4);
+    }
+    const done = await windows.read(
+      batches(),
+      () => cancelled,
+      (batch, into) => {
+        pushAll(
+          into ?? loaded,
+          batch.map((event) => event.message as number),
+        );
+      },
+    );
+    expect(done).toBe(false);
+    expect(loaded).toEqual([]);
+  });
+
+  it("puts the last earlier window in front when the read ends", async () => {
+    let loaded: number[] = [];
+    const windows = new EarlierWindows<number[]>(
+      () => [],
+      (earlier) => {
+        loaded = [...earlier, ...loaded];
+      },
+    );
+    async function* batches() {
+      yield* [at(5, 6), at(3), at(4)];
+    }
+    const done = await windows.read(
+      batches(),
+      () => false,
+      (batch, into) => {
+        pushAll(
+          into ?? loaded,
+          batch.map((event) => event.message as number),
+        );
+      },
+    );
+    expect(done).toBe(true);
+    expect(loaded).toEqual([3, 4, 5, 6]);
+  });
 });

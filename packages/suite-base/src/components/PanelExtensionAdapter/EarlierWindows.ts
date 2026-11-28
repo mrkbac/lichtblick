@@ -52,6 +52,29 @@ export class EarlierWindows<T> {
     return this.#earlier.store;
   }
 
+  /**
+   * Reads `iterator`, handing each batch to `onBatch` with where it goes (see place), and puts the
+   * last earlier window in front at the end. Once `cancelled()` it stops and leaves that window out:
+   * the stores may belong to a newer read by then. Returns whether it read to the end.
+   */
+  public async read(
+    iterator: AsyncIterable<readonly MessageEvent[]>,
+    cancelled: () => boolean,
+    onBatch: (batch: readonly MessageEvent[], into: T | undefined) => void,
+  ): Promise<boolean> {
+    for await (const batch of iterator) {
+      if (cancelled()) {
+        return false;
+      }
+      onBatch(batch, this.place(batch));
+    }
+    if (cancelled()) {
+      return false;
+    }
+    this.flush();
+    return true;
+  }
+
   /** Puts the earlier window collected so far in front; call it when the read ends */
   public flush(): void {
     if (this.#earlier && this.#loaded) {

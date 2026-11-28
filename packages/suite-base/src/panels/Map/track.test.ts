@@ -323,4 +323,24 @@ describe("ColumnStore.prepend", () => {
     expect(times[0]).toBe(0);
     expect(times.at(-1)).toBe(15);
   });
+  it.each([100, 151])(
+    "keeps earlier history at the store's resolution when %i rows already fill it",
+    (pushed) => {
+      const later = new SampleStore(100);
+      for (let t = 1000; t < 1000 + pushed; t++) {
+        later.push(t, t);
+      }
+      const earlier = new SampleStore(100);
+      for (let t = 0; t < 50; t++) {
+        earlier.push(t, t);
+      }
+      later.prepend(earlier);
+      const times = Array.from(later.columns.time.subarray(0, later.length));
+      expect(times).toEqual([...times].sort((a, b) => a - b));
+      expect(times.length).toBeLessThanOrEqual(101);
+      // Both sides lose resolution evenly: not one row for the whole earlier window
+      expect(times.filter((t) => t < 1000).length).toBeGreaterThanOrEqual(12);
+      expect(times.at(-1)).toBe(999 + pushed);
+    },
+  );
 });
