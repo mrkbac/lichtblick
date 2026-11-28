@@ -409,14 +409,12 @@ export function placeScans(
   return false;
 }
 
-type HistoryEntry<TRenderable extends HistoryRenderable> = ScanEntry<TRenderable>;
-
 /**
  * One renderable per scan over the decay time, for stixels (points keep only the latest scan as a
  * renderable and copy older ones into a {@link DecayPointRing}).
  */
 export class RenderObjectHistory<TRenderable extends HistoryRenderable> {
-  #history: HistoryEntry<TRenderable>[];
+  #history: ScanEntry<TRenderable>[];
   #parentRenderable: Renderable<RenderObjectHistoryUserData>;
   #renderer: Renderer;
   readonly #limits: HistoryLimits;
@@ -427,7 +425,7 @@ export class RenderObjectHistory<TRenderable extends HistoryRenderable> {
     parentRenderable,
     limits,
   }: {
-    initial: HistoryEntry<TRenderable>;
+    initial: ScanEntry<TRenderable>;
     renderer: Renderer;
     parentRenderable: Renderable<RenderObjectHistoryUserData>;
     limits: HistoryLimits;
@@ -443,7 +441,7 @@ export class RenderObjectHistory<TRenderable extends HistoryRenderable> {
     this.#limits.maxPoints = maxPoints;
   }
 
-  public addHistoryEntry(entry: HistoryEntry<TRenderable>): void {
+  public addHistoryEntry(entry: ScanEntry<TRenderable>): void {
     this.#history.push(entry);
     this.#evictOldest(this.#history.length - this.#limits.maxEntries);
   }
@@ -476,7 +474,7 @@ export class RenderObjectHistory<TRenderable extends HistoryRenderable> {
   }
 
   /** Adds an entry older than the latest one (read back after a seek), in time order */
-  public insertOlderEntry(entry: HistoryEntry<TRenderable>): void {
+  public insertOlderEntry(entry: ScanEntry<TRenderable>): void {
     let at = this.#history.length - 1; // the latest stays last
     while (at > 0 && this.#history[at - 1]!.receiveTime > entry.receiveTime) {
       at--;
@@ -512,7 +510,7 @@ export class RenderObjectHistory<TRenderable extends HistoryRenderable> {
     }
   }
 
-  public forEach(callback: (entry: HistoryEntry<TRenderable>) => void): void {
+  public forEach(callback: (entry: ScanEntry<TRenderable>) => void): void {
     this.#history.forEach(callback);
   }
 
@@ -550,7 +548,7 @@ export class RenderObjectHistory<TRenderable extends HistoryRenderable> {
     );
   }
 
-  public latest(): HistoryEntry<TRenderable> {
+  public latest(): ScanEntry<TRenderable> {
     if (this.#history.length === 0) {
       throw new Error("RenderObjectHistory is empty");
     }

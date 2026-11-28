@@ -262,7 +262,7 @@ export class MeasurementTool extends SceneExtension<Renderable, MeasurementToolE
       this.#handlePointerDown,
       { capture: true },
     );
-    this.#ownerWindow().addEventListener("keydown", this.#handleKeyDown);
+    this.renderer.ownerWindow.addEventListener("keydown", this.#handleKeyDown);
     this.dispatchEvent({ type: "foxglove.measure-start" });
     this.#emitChange();
   }
@@ -955,7 +955,7 @@ export class MeasurementTool extends SceneExtension<Renderable, MeasurementToolE
       this.#handlePointerDown,
       { capture: true },
     );
-    this.#ownerWindow().removeEventListener("keydown", this.#handleKeyDown);
+    this.renderer.ownerWindow.removeEventListener("keydown", this.#handleKeyDown);
     this.#dragListeners?.abort();
     this.#drag = undefined;
     this.renderer.gl.domElement.style.cursor = "";
@@ -1082,11 +1082,6 @@ export class MeasurementTool extends SceneExtension<Renderable, MeasurementToolE
     if (drag) {
       this.#dragSnap = this.#snapLatest(this.#dragCursor, drag.item, drag.item.points[drag.index]!);
     }
-  }
-
-  // A popped-out panel lives in its own window; its keys never reach the main one
-  #ownerWindow(): Window {
-    return this.renderer.gl.domElement.ownerDocument.defaultView ?? window;
   }
 
   #handleKeyDown = (event: KeyboardEvent): void => {
