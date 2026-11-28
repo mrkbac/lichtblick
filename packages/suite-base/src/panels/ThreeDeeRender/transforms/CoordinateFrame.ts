@@ -192,20 +192,30 @@ export class CoordinateFrame<ID extends AnyFrameId = UserFrameId> {
    * Puts the history of `earlier` (the same frame in a tree of transforms received before this
    * one's, see TransformTree.prepend) in front of this frame's. `frameOf` gives this tree's frame
    * for an id of the earlier tree. A parent that changed between the two starts a new history, as
-   * a reparenting does in setParent.
+   * a reparenting does in setParent. Histories under a parent for which `isCycle` is true are
+   * dropped; returns those parents' ids.
    */
-  public prepend(earlier: CoordinateFrame, frameOf: (id: string) => CoordinateFrame): void {
+  public prepend(
+    earlier: CoordinateFrame,
+    frameOf: (id: string) => CoordinateFrame,
+    isCycle: (parentId: string) => boolean,
+  ): string[] {
     const before = [...earlier.#earlier];
     if (earlier.#parent) {
       before.push({ parent: earlier.#parent, transforms: earlier.#transforms });
     }
-    const segments = before.map(({ parent, transforms }) => ({
-      parent: frameOf(parent.id),
-      transforms,
-    }));
+    const dropped: string[] = [];
+    const segments: { parent: CoordinateFrame; transforms: TransformHistory }[] = [];
+    for (const { parent, transforms } of before) {
+      if (isCycle(parent.id)) {
+        dropped.push(parent.id);
+      } else {
+        segments.push({ parent: frameOf(parent.id), transforms });
+      }
+    }
     const last = segments.pop();
     if (!last) {
-      return;
+      return dropped;
     }
     if (!this.#parent) {
       this.#parent = last.parent;
@@ -220,12 +230,13 @@ export class CoordinateFrame<ID extends AnyFrameId = UserFrameId> {
     }
     if (!this.#visibility.complete) {
       // Earlier parents are only kept for a preloaded history
-      return;
+      return dropped;
     }
     for (const { transforms } of segments) {
       transforms.setKeepEvery(this.#keepEvery);
     }
     this.#earlier = [...segments, ...this.#earlier];
+    return dropped;
   }
 
   /**

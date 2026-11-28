@@ -507,6 +507,38 @@ describe("TransformTree", () => {
       expect(xAt(tree, "b", 20n * sec)).toBe(2);
     });
 
+    it("drops an earlier parent that would form a cycle with this tree's parents", () => {
+      const tree = complete();
+      tree.addTransform("b", "a", 10n * sec, at(1), 10n * sec);
+      const earlier = complete();
+      earlier.addTransform("a", "b", 1n * sec, at(2), 1n * sec);
+      expect(tree.prepend(earlier)).toEqual([{ frameId: "a", parentFrameId: "b" }]);
+      for (const time of [1n, 10n]) {
+        tree.setReceivedUntil(time * sec);
+        expect(tree.frame("b")!.root()).toBe(tree.frame("a"));
+        expect(tree.frame("a")!.root()).toBe(tree.frame("a"));
+      }
+    });
+
+    it("gives an earlier window the room left in the budget, but at least an eighth", () => {
+      const tree = new TransformTree(undefined, 80);
+      tree.setComplete(true);
+      for (let t = 0; t < 30; t++) {
+        tree.addTransform("b", "a", BigInt(t) * sec, at(t), BigInt(t) * sec);
+      }
+      const fill = (into: TransformTree) => {
+        for (let t = 0; t < 200; t++) {
+          into.addTransform("c", "a", BigInt(t) * sec, at(t), BigInt(t) * sec);
+        }
+        return into.frame("c")!.transformsSize();
+      };
+      expect(fill(tree.createEarlier())).toBeLessThanOrEqual(50);
+      for (let t = 30; t < 80; t++) {
+        tree.addTransform("b", "a", BigInt(t) * sec, at(t), BigInt(t) * sec);
+      }
+      expect(fill(tree.createEarlier())).toBeLessThanOrEqual(10);
+    });
+
     it("stays within the sample budget", () => {
       const tree = new TransformTree(undefined, 100);
       tree.setComplete(true);

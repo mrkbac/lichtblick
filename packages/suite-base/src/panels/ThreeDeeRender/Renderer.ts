@@ -829,7 +829,13 @@ export class Renderer extends EventEmitter<RendererEvents> {
 
   /** Puts `earlier` (see addTransformMessages) in front of the transform tree's history */
   public prependTransformHistory(earlier: TransformTree): void {
-    this.transformTree.prepend(earlier);
+    for (const { frameId, parentFrameId } of this.transformTree.prepend(earlier)) {
+      this.settings.errors.add(
+        ["transforms", `frame:${frameId}`],
+        CYCLE_DETECTED,
+        `Transform tree cycle detected: Received transform with parent "${parentFrameId}" and child "${frameId}", but "${frameId}" is already an ancestor of "${parentFrameId}". Transform message dropped.`,
+      );
+    }
     this.#transformTreeUpdated();
     this.#queueHistoryRepaint();
   }

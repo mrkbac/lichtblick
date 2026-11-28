@@ -277,47 +277,81 @@ export class TransformHistory {
   }
 
   /**
-   * Puts the samples of `earlier` in front, for history read backwards (see TransformTree.prepend):
-   * one copy when they are all stamped before this history's first sample, else one by one.
+   * Merges in the samples of `earlier`, for history read backwards (see TransformTree.prepend):
+   * usually all before this history's first sample, but a seek's read can have put samples in their
+   * span. One linear merge by time; on equal times this history's sample stays.
    */
   public prepend(earlier: TransformHistory): void {
     const added = earlier.#size;
     if (added === 0) {
       return;
     }
-    if (this.#size > 0 && earlier.timeAt(added - 1) >= this.timeAt(0)) {
-      // Stamps overlap (a publisher's clock behind its receive times): insert them one by one
-      const transform = Transform.Identity();
-      for (let i = 0; i < added; i++) {
-        const receive = earlier.#data[i * STRIDE + RECEIVE]!;
-        const receiveTime =
-          receive === -Infinity ? undefined : earlier.#receiveBase! + BigInt(receive);
-        this.set(earlier.timeAt(i), earlier.transformAt(i, transform), receiveTime);
-      }
-      return;
-    }
     const size = this.#size;
+    const base = size > 0 && this.#base < earlier.#base ? this.#base : earlier.#base;
     const receiveBase = earlier.#receiveBase ?? this.#receiveBase;
-    const timeShift = Number(this.#base - earlier.#base);
-    const receiveShift =
-      this.#receiveBase == undefined ? 0 : Number(this.#receiveBase - receiveBase!);
+    const shift = (history: TransformHistory) => ({
+      time: Number(history.#base - base),
+      receive: history.#receiveBase == undefined ? 0 : Number(history.#receiveBase - receiveBase!),
+    });
+    const [a, b] = [shift(earlier), shift(this)];
     const data = new Float64Array(Math.ceil((added + size) * GROWTH) * STRIDE);
-    data.set(earlier.#data.subarray(0, added * STRIDE));
-    data.set(this.#data.subarray(0, size * STRIDE), added * STRIDE);
-    for (let o = added * STRIDE; o < (added + size) * STRIDE; o += STRIDE) {
-      data[o + TIME] = data[o + TIME]! + timeShift;
-      data[o + RECEIVE] = data[o + RECEIVE]! + receiveShift;
+    let out = 0;
+    /** Copies samples [from, to) of `src` in one go and rebases them */
+    const copy = (
+      src: Float64Array,
+      from: number,
+      to: number,
+      by: { time: number; receive: number },
+    ) => {
+      data.set(src.subarray(from * STRIDE, to * STRIDE), out * STRIDE);
+      if (by.time !== 0 || by.receive !== 0) {
+        for (let o = out * STRIDE; o < (out + to - from) * STRIDE; o += STRIDE) {
+          data[o + TIME] = data[o + TIME]! + by.time;
+          data[o + RECEIVE] = data[o + RECEIVE]! + by.receive;
+        }
+      }
+      out += to - from;
+    };
+    const timeA = (k: number) =>
+      k < added ? earlier.#data[k * STRIDE + TIME]! + a.time : Infinity;
+    const timeB = (k: number) => (k < size ? this.#data[k * STRIDE + TIME]! + b.time : Infinity);
+    // Runs of samples from one side at a time: usually all of `earlier`, then all of this
+    let i = 0;
+    let j = 0;
+    while (i < added || j < size) {
+      const next = timeB(j);
+      if (timeA(i) < next) {
+        let k = i + 1;
+        while (timeA(k) < next) {
+          k++;
+        }
+        copy(earlier.#data, i, k, a);
+        i = k;
+        continue;
+      }
+      if (timeA(i) === next) {
+        i++;
+      }
+      let k = j + 1;
+      while (k < size && timeB(k) < timeA(i)) {
+        k++;
+      }
+      copy(this.#data, j, k, b);
+      j = k;
+    }
+    // Receive times stay non-decreasing in stamp order (see #keepReceiveOrder)
+    for (let o = STRIDE + RECEIVE; o < out * STRIDE; o += STRIDE) {
+      if (data[o]! < data[o - STRIDE]!) {
+        data[o] = data[o - STRIDE]!;
+      }
     }
     this.#buffer = data;
     this.#data = data;
-    this.#size = added + size;
-    this.#base = earlier.#base;
+    this.#size = out;
+    this.#base = base;
     this.#receiveBase = receiveBase;
     this.#pruneAt = -Infinity;
     this.#thinnedUntil = -Infinity;
-    if (size > 0) {
-      this.#keepReceiveOrder(added);
-    }
   }
 
   /**

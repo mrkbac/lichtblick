@@ -153,12 +153,33 @@ describe("TransformHistory", () => {
       expect(later.binarySearch(50n)).toBe(10);
     });
 
-    it("inserts samples one by one when their stamps overlap this history's", () => {
-      const later = filled(5, 10);
-      later.prepend(filled(0, 8));
-      expect(Array.from({ length: later.size() }, (_, i) => later.timeAt(i))).toEqual(
-        Array.from({ length: 10 }, (_, i) => BigInt(i)),
-      );
+    it("merges samples a seek's read put inside the earlier span, keeping its own on equal times", () => {
+      // The read around the playhead (100 s on) plus a seek's read at 20 s to 21 s
+      const later = filled(100, 110, 1000n);
+      later.set(20n, at(-20), 1020n);
+      later.set(21n, at(-21), 1021n);
+      later.prepend(filled(0, 50, 1000n));
+      expect(Array.from({ length: later.size() }, (_, i) => later.timeAt(i))).toEqual([
+        ...Array.from({ length: 50 }, (_, i) => BigInt(i)),
+        ...Array.from({ length: 10 }, (_, i) => BigInt(100 + i)),
+      ]);
+      expect(xAt(later, 20)).toBe(-20);
+      expect(xAt(later, 22)).toBe(22);
+      expect(later.receivedCount(1030n)).toBe(31);
+    });
+
+    it("merges overlapping histories in linear time", () => {
+      // Every other sample of each: 100k + 100k fully interleaved
+      const later = new TransformHistory();
+      const earlier = new TransformHistory();
+      for (let t = 0; t < 200_000; t++) {
+        (t % 2 === 0 ? earlier : later).set(BigInt(t), at(t));
+      }
+      const start = performance.now();
+      later.prepend(earlier);
+      expect(performance.now() - start).toBeLessThan(1000);
+      expect(later.size()).toBe(200_000);
+      expect(later.timeAt(123_457)).toBe(123_457n);
     });
 
     it("fills an empty history", () => {

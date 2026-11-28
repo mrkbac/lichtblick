@@ -298,14 +298,24 @@ export class TransformTree {
   /**
    * Puts the history of `earlier`, a tree of transforms all received before this tree's (a
    * playhead-first read's earlier window, see Renderer.addTransformMessages), in front of each
-   * frame's history: one copy per frame instead of an insert per transform.
+   * frame's history: one merge per frame instead of an insert per transform. A parent that would
+   * form a cycle with this tree's parents is dropped with its transforms, as addTransform does;
+   * returns those.
    */
-  public prepend(earlier: TransformTree): void {
+  public prepend(earlier: TransformTree): { frameId: string; parentFrameId: string }[] {
     this.version++;
+    const dropped: { frameId: string; parentFrameId: string }[] = [];
     for (const [id, frame] of earlier.#frames) {
       const target = this.getOrCreateFrame(id);
       const sizeBefore = target.transformsSize();
-      target.prepend(frame, (parentId) => this.getOrCreateFrame(parentId));
+      const cyclic = target.prepend(
+        frame,
+        (parentId) => this.getOrCreateFrame(parentId),
+        (parentId) => this.#checkParentForCycle(id, parentId),
+      );
+      for (const parentFrameId of cyclic) {
+        dropped.push({ frameId: id, parentFrameId });
+      }
       this.#sampleCount += target.transformsSize() - sizeBefore;
     }
     while (this.#sampleCount > this.#sampleBudget) {
@@ -315,6 +325,27 @@ export class TransformTree {
         break;
       }
     }
+    return dropped;
+  }
+
+  /** For an earlier window's tree: how thinned its frames start, by frame id (see createEarlier) */
+  #keepEveryOf?: (id: string) => number | undefined;
+
+  /**
+   * An empty tree for an earlier window of this tree's history (see prepend). Its frames keep
+   * transforms at this tree's rate for them, and it has the room left in this tree's budget, so
+   * both together stay near the budget: at least an eighth of it, so a full tree doesn't thin the
+   * earlier window to nothing (the merge then halves both evenly).
+   */
+  public createEarlier(): TransformTree {
+    const room = this.#sampleBudget - this.#sampleCount;
+    const tree = new TransformTree(
+      this.#maxStorageTime,
+      Math.max(room, Math.ceil(this.#sampleBudget / 8)),
+    );
+    tree.setComplete(this.#complete);
+    tree.#keepEveryOf = (id) => this.#frames.get(id)?.keepEvery();
+    return tree;
   }
 
   public getOrCreateFrame(id: string): CoordinateFrame {
@@ -322,6 +353,10 @@ export class TransformTree {
     if (!frame) {
       frame = new CoordinateFrame(id, undefined, this.#maxStorageTime, this.#visibility);
       this.#applyLimits(frame);
+      const keepEvery = this.#keepEveryOf?.(id);
+      if (keepEvery != undefined) {
+        frame.setKeepEvery(keepEvery);
+      }
       this.#frames.set(id, frame);
     }
     return frame;
