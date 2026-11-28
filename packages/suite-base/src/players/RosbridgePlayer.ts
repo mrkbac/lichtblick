@@ -30,7 +30,10 @@ import { ParameterValue } from "@lichtblick/suite";
 import ExtensionProxySocket, {
   needsExtensionProxy,
 } from "@lichtblick/suite-base/players/FoxgloveWebSocketPlayer/ExtensionProxySocket";
-import { reconnectDelayMs } from "@lichtblick/suite-base/players/LiveConnectionBackend";
+import {
+  reconnectDelayMs,
+  STABLE_CONNECTION_MS,
+} from "@lichtblick/suite-base/players/LiveConnectionBackend";
 import {
   LIVE_QUEUE_MAX_BYTES,
   LiveMessageQueue,
@@ -105,8 +108,6 @@ function isClockMessage(topic: string, msg: unknown): msg is { clock: Time } {
  * alive, only rosapi (a separate node) is slow or hung. A dead mobile link can leave the socket open for minutes before the browser notices.
  */
 export const ROSBRIDGE_DEAD_LINK_MS = 30_000;
-/** A connection up this long counts as good: its drop starts the reconnect backoff over. */
-const STABLE_CONNECTION_MS = 30_000;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value != undefined;
@@ -149,11 +150,8 @@ export default class RosbridgePlayer implements Player {
   #publishedTopics = new Map<string, Set<string>>(); // A map of topic names to the set of publisher IDs publishing each topic.
   #subscribedTopics = new Map<string, Set<string>>(); // A map of topic names to the set of subscriber IDs subscribed to each topic.
   #services = new Map<string, Set<string>>(); // A map of service names to service provider IDs that provide each service.
-  #messageReadersByDatatype: {
-    [datatype: string]: MessageDecoder;
-  } = {};
-  // Definition text each reader was built from, so an unchanged type keeps its reader
-  #messageDefinitionsByDatatype = new Map<string, string>();
+  // With the definition text each reader was built from, so an unchanged type keeps its reader
+  #messageReadersByDatatype = new Map<string, { definition: string; reader: MessageDecoder }>();
   #start?: Time; // The time at which we started playing.
   #clockTime?: Time; // The most recent published `/clock` time, if available
   // active subscriptions
@@ -383,42 +381,46 @@ export default class RosbridgePlayer implements Player {
       // we want to bail and avoid parsing definitions, updating readers, subscribers, etc.
       // However, during a re-connect, we _do_ want to refresh this list and re-subscribe
       const sortedTopics = _.sortBy(topics, "name");
-      const definitions = new Map<string, string>();
+      // The ROS version is part of a definition: the same text reads differently in ROS 1 and 2
+      const definitions = new Map<string, { definition: string; text: string }>();
       for (const { type, messageDefinition } of datatypeDescriptions) {
         if (!definitions.has(type)) {
-          definitions.set(type, `${this.#rosVersion}\n${messageDefinition}`);
+          definitions.set(type, {
+            definition: `${this.#rosVersion}\n${messageDefinition}`,
+            text: messageDefinition,
+          });
         }
       }
+      const previousReaders = this.#messageReadersByDatatype;
       if (
         !forceUpdate &&
         _.isEqual(this.#providerTopics, sortedTopics) &&
-        _.isEqual(this.#messageDefinitionsByDatatype, definitions)
+        definitions.size === previousReaders.size &&
+        [...definitions].every(
+          ([type, { definition }]) => previousReaders.get(type)?.definition === definition,
+        )
       ) {
         return;
       }
 
-      const messageReaders: Record<string, MessageDecoder> = {};
-      for (const { type, messageDefinition } of datatypeDescriptions) {
-        if (messageReaders[type] != undefined) {
+      const messageReaders = new Map<string, { definition: string; reader: MessageDecoder }>();
+      for (const [type, { definition, text }] of definitions) {
+        const previous = previousReaders.get(type);
+        if (previous?.definition === definition) {
+          messageReaders.set(type, previous);
           continue;
         }
-        const previousReader = this.#messageReadersByDatatype[type];
-        if (
-          previousReader != undefined &&
-          this.#messageDefinitionsByDatatype.get(type) === definitions.get(type)
-        ) {
-          messageReaders[type] = previousReader;
-          continue;
-        }
-        const parsedDefinition = parseMessageDefinition(messageDefinition, {
+        const parsedDefinition = parseMessageDefinition(text, {
           ros2: this.#rosVersion === 2,
         });
-        messageReaders[type] =
-          this.#rosVersion !== 2
-            ? new ROS1MessageReader(parsedDefinition)
-            : { readMessage: createRos2CdrDeserializer(parsedDefinition) };
+        messageReaders.set(type, {
+          definition,
+          reader:
+            this.#rosVersion !== 2
+              ? new ROS1MessageReader(parsedDefinition)
+              : { readMessage: createRos2CdrDeserializer(parsedDefinition) },
+        });
       }
-      this.#messageDefinitionsByDatatype = definitions;
 
       if (topicsMissingDatatypes.length > 0) {
         this.#alerts.addAlert("requestTopics:missing-types", {
@@ -645,7 +647,7 @@ export default class RosbridgePlayer implements Player {
       }
 
       const { schemaName } = availTopic;
-      const messageReader = this.#messageReadersByDatatype[schemaName];
+      const messageReader = this.#messageReadersByDatatype.get(schemaName)?.reader;
       if (!messageReader) {
         continue;
       }

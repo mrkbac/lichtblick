@@ -9,7 +9,6 @@ import type { WebSocket } from "ws";
 /** A Foxglove WebSocket server with one synthetic JSON topic, for live-connection tests. */
 export type TestServer = {
   port: number;
-  sessionId: string;
   /** Subscribe requests per connection, in connection order. */
   subscribesPerConnection: number[];
   close: () => Promise<void>;
@@ -17,17 +16,22 @@ export type TestServer = {
 
 export const TEST_TOPIC = "/test/counter";
 
+const HZ = 20;
+
 /**
- * Publishes {@link TEST_TOPIC} at `hz` with `payloadBytes` of padding, stamped with wall time.
+ * Publishes {@link TEST_TOPIC} at {@link HZ} with `payloadBytes` of padding, stamped with wall time.
  * Publishes its clock, and advertises `assets` so the player can probe a silent link.
  */
-export async function startTestServer(
-  opts: { port?: number; sessionId?: string; hz?: number; payloadBytes?: number } = {},
-): Promise<TestServer> {
-  const { hz = 20, payloadBytes = 0 } = opts;
-  const sessionId = opts.sessionId ?? randomUUID();
+export async function startTestServer({
+  port = 0,
+  payloadBytes = 0,
+}: {
+  port?: number;
+  payloadBytes?: number;
+} = {}): Promise<TestServer> {
+  const sessionId = randomUUID();
   const wss = new WebSocketServer({
-    port: opts.port ?? 0,
+    port,
     host: "127.0.0.1",
     handleProtocols: (protocols) => (protocols.has("foxglove.sdk.v1") ? "foxglove.sdk.v1" : false),
   });
@@ -117,11 +121,10 @@ export async function startTestServer(
         client.send(frame);
       }
     }
-  }, 1000 / hz);
+  }, 1000 / HZ);
 
   return {
     port: (wss.address() as AddressInfo).port,
-    sessionId,
     subscribesPerConnection,
     close: async () => {
       clearInterval(timer);
@@ -137,7 +140,6 @@ export async function startTestServer(
 
 /** A TCP proxy in front of the server that misbehaves like a bad mobile link. */
 export type FaultProxy = {
-  port: number;
   url: string;
   /** Delay each chunk by latency + random jitter, and cap throughput (0 = unlimited). */
   shape: (link: { latencyMs?: number; jitterMs?: number; kbps?: number }) => void;
@@ -223,19 +225,21 @@ export async function startFaultProxy(targetPort: number): Promise<FaultProxy> {
   });
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const port = (server.address() as AddressInfo).port;
+  const destroyAll = () => {
+    for (const { client, upstream } of connections) {
+      client.destroy();
+      upstream.destroy();
+    }
+    connections.clear();
+  };
 
   return {
-    port,
     url: `ws://localhost:${port}`,
     shape: ({ latencyMs = 0, jitterMs = 0, kbps = 0 }) =>
       Object.assign(link, { latencyMs, jitterMs, kbps }),
     drop: (ms) => {
       refuseUntil = Date.now() + ms;
-      for (const { client, upstream } of connections) {
-        client.destroy();
-        upstream.destroy();
-      }
-      connections.clear();
+      destroyAll();
     },
     blackhole: () => {
       blackholed = true;
@@ -245,10 +249,7 @@ export async function startFaultProxy(targetPort: number): Promise<FaultProxy> {
       blackholed = false;
     },
     close: async () => {
-      for (const { client, upstream } of connections) {
-        client.destroy();
-        upstream.destroy();
-      }
+      destroyAll();
       await new Promise((resolve) => server.close(resolve));
     },
   };

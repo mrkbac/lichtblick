@@ -14,6 +14,8 @@ export interface LiveConnectionBackend {
 
 const RECONNECT_MIN_MS = 1000;
 const RECONNECT_MAX_MS = 15_000;
+/** A connection up this long counts as good: its drop starts the reconnect backoff over. */
+export const STABLE_CONNECTION_MS = 30_000;
 
 /**
  * Wait before reconnect attempt `attempt` (0 for the first after a drop): 1 s, doubling up to 15 s,
