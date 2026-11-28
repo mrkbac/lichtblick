@@ -36,13 +36,13 @@ import {
   VariableValue,
 } from "@lichtblick/suite";
 import { AppSetting } from "@lichtblick/suite-base/AppSetting";
+import { EarlierWindows } from "@lichtblick/suite-base/components/PanelExtensionAdapter/EarlierWindows";
 import { TopicSettingsUpdater } from "@lichtblick/suite-base/components/PanelExtensionAdapter/types";
 import {
   DEFAULT_FOLLOW_MODE,
   PANEL_STYLE,
   isTransformPreloadEnabled,
 } from "@lichtblick/suite-base/panels/ThreeDeeRender/constants";
-import { EarlierWindows } from "@lichtblick/suite-base/components/PanelExtensionAdapter/EarlierWindows";
 import { SELECTED_ID_VARIABLE } from "@lichtblick/suite-base/panels/ThreeDeeRender/settings";
 import ThemeProvider from "@lichtblick/suite-base/theme/ThemeProvider";
 import { findShortcut } from "@lichtblick/suite-base/util/keyboardShortcuts";

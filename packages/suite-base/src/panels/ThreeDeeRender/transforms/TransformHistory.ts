@@ -305,8 +305,8 @@ export class TransformHistory {
     data.set(earlier.#data.subarray(0, added * STRIDE));
     data.set(this.#data.subarray(0, size * STRIDE), added * STRIDE);
     for (let o = added * STRIDE; o < (added + size) * STRIDE; o += STRIDE) {
-      data[o + TIME] += timeShift;
-      data[o + RECEIVE] += receiveShift;
+      data[o + TIME] = data[o + TIME]! + timeShift;
+      data[o + RECEIVE] = data[o + RECEIVE]! + receiveShift;
     }
     this.#buffer = data;
     this.#data = data;
