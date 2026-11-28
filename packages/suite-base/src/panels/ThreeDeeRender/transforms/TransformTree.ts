@@ -307,6 +307,11 @@ export class TransformTree {
     const dropped: { frameId: string; parentFrameId: string }[] = [];
     for (const [id, frame] of earlier.#frames) {
       const target = this.getOrCreateFrame(id);
+      // One rate for the whole history: thin this frame to the earlier window's rate, which its
+      // tree's own budget may have halved further
+      while (target.keepEvery() < frame.keepEvery()) {
+        this.#sampleCount -= target.decimate();
+      }
       const sizeBefore = target.transformsSize();
       const cyclic = target.prepend(
         frame,
@@ -336,6 +341,9 @@ export class TransformTree {
    * transforms at this tree's rate for them, and it has the room left in this tree's budget, so
    * both together stay near the budget: at least an eighth of it, so a full tree doesn't thin the
    * earlier window to nothing (the merge then halves both evenly).
+   * ponytail: each topic's read has its own earlier window, and each gets this room, so several
+   * transform topics can together exceed the budget until their merges; split the room across open
+   * windows if many topics carry dense transforms.
    */
   public createEarlier(): TransformTree {
     const room = this.#sampleBudget - this.#sampleCount;

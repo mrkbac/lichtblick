@@ -827,14 +827,18 @@ export class Renderer extends EventEmitter<RendererEvents> {
     }
   }
 
+  #reportCycle(parentFrameId: string, childFrameId: string): void {
+    this.settings.errors.add(
+      ["transforms", `frame:${childFrameId}`],
+      CYCLE_DETECTED,
+      `Transform tree cycle detected: Received transform with parent "${parentFrameId}" and child "${childFrameId}", but "${childFrameId}" is already an ancestor of "${parentFrameId}". Transform message dropped.`,
+    );
+  }
+
   /** Puts `earlier` (see addTransformMessages) in front of the transform tree's history */
   public prependTransformHistory(earlier: TransformTree): void {
     for (const { frameId, parentFrameId } of this.transformTree.prepend(earlier)) {
-      this.settings.errors.add(
-        ["transforms", `frame:${frameId}`],
-        CYCLE_DETECTED,
-        `Transform tree cycle detected: Received transform with parent "${parentFrameId}" and child "${frameId}", but "${frameId}" is already an ancestor of "${parentFrameId}". Transform message dropped.`,
-      );
+      this.#reportCycle(parentFrameId, frameId);
     }
     this.#transformTreeUpdated();
     this.#queueHistoryRepaint();
@@ -1799,11 +1803,7 @@ export class Renderer extends EventEmitter<RendererEvents> {
     }
 
     if (status === AddTransformResult.CYCLE_DETECTED) {
-      this.settings.errors.add(
-        ["transforms", `frame:${childFrameId}`],
-        CYCLE_DETECTED,
-        `Transform tree cycle detected: Received transform with parent "${parentFrameId}" and child "${childFrameId}", but "${childFrameId}" is already an ancestor of "${parentFrameId}". Transform message dropped.`,
-      );
+      this.#reportCycle(parentFrameId, childFrameId);
       if (errorSettingsPath) {
         this.settings.errors.add(
           errorSettingsPath,

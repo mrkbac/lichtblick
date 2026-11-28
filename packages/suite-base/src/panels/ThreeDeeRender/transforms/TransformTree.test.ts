@@ -539,6 +539,29 @@ describe("TransformTree", () => {
       expect(fill(tree.createEarlier())).toBeLessThanOrEqual(10);
     });
 
+    it("merges an earlier window thinned further by its own budget at one rate", () => {
+      // The read around the playhead plus a seek's read fill most of the budget, so the earlier
+      // window's tree halves its frame more often than the main tree did
+      const tree = new TransformTree(undefined, 100);
+      tree.setComplete(true);
+      for (let t = 300; t < 360; t++) {
+        tree.addTransform("b", "a", BigInt(t) * sec, at(t), BigInt(t) * sec);
+      }
+      for (let t = 100; t < 120; t++) {
+        tree.addTransform("b", "a", BigInt(t) * sec, at(t), BigInt(t) * sec);
+      }
+      const earlier = tree.createEarlier();
+      for (let t = 0; t < 300; t++) {
+        earlier.addTransform("b", "a", BigInt(t) * sec, at(t), BigInt(t) * sec);
+      }
+      const earlierRate = earlier.frame("b")!.keepEvery();
+      expect(earlierRate).toBeGreaterThan(tree.frame("b")!.keepEvery());
+
+      tree.prepend(earlier);
+      expect(tree.frame("b")!.keepEvery()).toBeGreaterThanOrEqual(earlierRate);
+      expect(tree.frame("b")!.transformsSize()).toBeLessThanOrEqual(100);
+    });
+
     it("stays within the sample budget", () => {
       const tree = new TransformTree(undefined, 100);
       tree.setComplete(true);
