@@ -7,7 +7,9 @@ import { ToWorkerMessage } from "@lichtblick/suite-base/players/FoxgloveWebSocke
 import { BasicBuilder } from "@lichtblick/test-builders";
 
 class MockWebSocket {
+  public static readonly OPEN = 1;
   public static lastInstance: MockWebSocket | undefined;
+  public readyState = 0;
   public binaryType = "";
   public protocol = "test-protocol";
   public onerror?: (event: unknown) => void;
@@ -32,6 +34,7 @@ let constructorShouldThrow = false;
 let constructorError: unknown;
 let postMessageMock: Mock;
 let onmessage: (event: MessageEvent<ToWorkerMessage>) => void;
+let workerModule: typeof import("./worker");
 
 function dispatch(data: ToWorkerMessage): void {
   onmessage({ data } as MessageEvent<ToWorkerMessage>);
@@ -51,7 +54,7 @@ describe("FoxgloveWebSocketPlayer worker", () => {
     self.postMessage = postMessageMock;
     (global as unknown as { WebSocket: typeof MockWebSocket }).WebSocket = MockWebSocket;
 
-    await import("./worker");
+    workerModule = await import("./worker");
     onmessage = self.onmessage as unknown as (event: MessageEvent<ToWorkerMessage>) => void;
   });
 
@@ -129,6 +132,27 @@ describe("FoxgloveWebSocketPlayer worker", () => {
       vi.useRealTimers();
     });
 
+    it("should split a burst into several batches", () => {
+      vi.useFakeTimers();
+      dispatch({ type: "open", data: { wsUrl } });
+      const count = workerModule.MAX_BATCH_MESSAGES * 2 + 1;
+      for (let i = 0; i < count; i++) {
+        MockWebSocket.lastInstance?.onmessage?.({ data: new ArrayBuffer(1) } as MessageEvent);
+      }
+      // Two full batches went out right away; the rest waits for the timer
+      expect(postMessageMock).toHaveBeenCalledTimes(2);
+      vi.runAllTimers();
+      const sizes = postMessageMock.mock.calls.map(
+        ([message]) => (message as { data: unknown[] }).data.length,
+      );
+      expect(sizes).toEqual([workerModule.MAX_BATCH_MESSAGES, workerModule.MAX_BATCH_MESSAGES, 1]);
+
+      const big = new ArrayBuffer(workerModule.MAX_BATCH_BYTES);
+      MockWebSocket.lastInstance?.onmessage?.({ data: big } as MessageEvent);
+      expect(postMessageMock).toHaveBeenCalledTimes(4);
+      vi.useRealTimers();
+    });
+
     it("should post pending messages before a close, keeping their order", () => {
       // Given
       vi.useFakeTimers();
@@ -178,12 +202,19 @@ describe("FoxgloveWebSocketPlayer worker", () => {
     it("should send data through the active WebSocket", () => {
       // Given
       dispatch({ type: "open", data: { wsUrl } });
-      const instance = MockWebSocket.lastInstance;
+      const instance = MockWebSocket.lastInstance!;
+      instance.readyState = MockWebSocket.OPEN;
       const data = BasicBuilder.string();
       // When
       dispatch({ type: "data", data });
       // Then
-      expect(instance?.send).toHaveBeenCalledWith(data);
+      expect(instance.send).toHaveBeenCalledWith(data);
+    });
+
+    it("should drop data for a socket that isn't open", () => {
+      dispatch({ type: "open", data: { wsUrl } });
+      dispatch({ type: "data", data: BasicBuilder.string() });
+      expect(MockWebSocket.lastInstance?.send).not.toHaveBeenCalled();
     });
   });
 });

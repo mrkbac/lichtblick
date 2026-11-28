@@ -75,6 +75,8 @@ export class FoxgloveClient {
   #pendingSubscribe: { id: SubscriptionId; channelId: ChannelId }[] = [];
   #pendingUnsubscribe: SubscriptionId[] = [];
   #flushQueued = false;
+  /** Wall time (Date.now()) of the last frame received, or of creating the client */
+  public receivedAtMs = Date.now();
 
   public constructor({ ws, handlers }: { ws: IWebSocket; handlers: FoxgloveClientHandlers }) {
     this.#ws = ws;
@@ -85,12 +87,14 @@ export class FoxgloveClient {
       handlers.error(error instanceof Error ? error : new Error("WebSocket error"));
     };
     ws.onopen = () => {
+      this.receivedAtMs = Date.now();
       handlers.open();
     };
     ws.onclose = (event: unknown) => {
       handlers.close(event);
     };
     ws.onmessage = ({ data }) => {
+      this.receivedAtMs = Date.now();
       if (typeof data === "string") {
         let message;
         try {
@@ -111,6 +115,10 @@ export class FoxgloveClient {
   #handleBinary(bytes: Uint8Array): void {
     // Message data is nearly all traffic: read it without building a message object
     if (bytes[0] === BinaryOpcode.MESSAGE_DATA) {
+      if (bytes.length < 13) {
+        this.#handlers.error(new Error(`Truncated message data frame (${bytes.length} bytes)`));
+        return;
+      }
       const view = new DataView(bytes.buffer, bytes.byteOffset, 13);
       this.#handlers.message(
         view.getUint32(1, true),
@@ -201,6 +209,19 @@ export class FoxgloveClient {
 
   public close(): void {
     this.#ws.close();
+  }
+
+  /**
+   * Close without waiting for the socket: no handler is called for it anymore, except `close`
+   * with `event` right away when given. A half-open socket can take a minute to report its close.
+   */
+  public dispose(event?: unknown): void {
+    const ws = this.#ws;
+    ws.onopen = ws.onerror = ws.onmessage = ws.onclose = undefined;
+    ws.close();
+    if (event != undefined) {
+      this.#handlers.close(event);
+    }
   }
 
   /** Subscriptions made in one task go out as one message */

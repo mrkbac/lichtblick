@@ -29,7 +29,10 @@ import { ParameterValue } from "@lichtblick/suite";
 import { Asset } from "@lichtblick/suite-base/components/PanelExtensionAdapter";
 import { APP_CONFIG } from "@lichtblick/suite-base/constants/config";
 import type { IteratorResult } from "@lichtblick/suite-base/players/IterablePlayer/IIterableSource";
-import type { LiveConnectionBackend } from "@lichtblick/suite-base/players/LiveConnectionBackend";
+import {
+  type LiveConnectionBackend,
+  reconnectDelayMs,
+} from "@lichtblick/suite-base/players/LiveConnectionBackend";
 import {
   LIVE_QUEUE_MAX_BYTES,
   LiveMessageQueue,
@@ -80,13 +83,12 @@ import {
   ZERO_TIME,
 } from "./constants";
 import { dataTypeToFullName, statusLevelToAlertSeverity } from "./helpers";
-import { FoxgloveClient, FoxgloveClientHandlers } from "./protocol/client";
+import { FoxgloveClient } from "./protocol/client";
 import {
   ChannelId,
   ClientChannelWithoutId,
   FetchAssetResponse,
   FetchAssetStatus,
-  IWebSocket,
   Parameter,
   PlaybackState,
   PlaybackStatus,
@@ -131,24 +133,19 @@ const secToNs = (sec: number) => BigInt(Math.round(sec * 1e9));
 const readHeapUsage = (): HeapUsage | undefined =>
   (performance as { memory?: HeapUsage } | undefined)?.memory;
 
-/** `handlers`, each doing nothing once `isCurrent()` is false (a replaced or closed socket) */
-function whileCurrent(
-  isCurrent: () => boolean,
-  handlers: FoxgloveClientHandlers,
-): FoxgloveClientHandlers {
-  const guarded = {} as Record<string, (...args: unknown[]) => void>;
-  for (const [name, handler] of Object.entries(handlers) as [
-    string,
-    (...args: unknown[]) => void,
-  ][]) {
-    guarded[name] = (...args) => {
-      if (isCurrent()) {
-        handler(...args);
-      }
-    };
-  }
-  return guarded as FoxgloveClientHandlers;
-}
+/**
+ * Nothing received for this long: ask the server for an answer. A dead mobile link can leave the
+ * socket open (half-open) for minutes before the browser notices.
+ */
+export const LINK_SILENCE_MS = 10_000;
+/** No answer this long after asking: the link is dead, reconnect. */
+export const LINK_PROBE_TIMEOUT_MS = 10_000;
+/** Asset request id of the link probe; real requests count up from 1. */
+const LINK_PROBE_REQUEST_ID = 0;
+
+/** Alerts about advertised channels: they stay while the channel does, across a session reset. */
+const isChannelAlert = (id: string) =>
+  id.startsWith("schema:") || id.startsWith("duplicate-topic:");
 
 export default class FoxgloveWebSocketPlayer implements Player {
   readonly #sourceId: string;
@@ -160,7 +157,8 @@ export default class FoxgloveWebSocketPlayer implements Player {
   #name: string;
   #client?: FoxgloveClient; // The client when we're connected.
   #id: string = randomUUID(); // Unique ID for this player session.
-  #serverCapabilities: string[] = [];
+  /** Capabilities of the current connection; undefined until its serverInfo. */
+  #serverCapabilities?: string[];
   #playerCapabilities: (typeof PLAYER_CAPABILITIES)[keyof typeof PLAYER_CAPABILITIES][] = [];
   #supportedEncodings?: string[];
   #listener?: (arg0: PlayerState) => Promise<void>; // Listener for _emitState().
@@ -187,8 +185,11 @@ export default class FoxgloveWebSocketPlayer implements Player {
   #clockTime?: Time;
   /* Flag indicating if the server publishes time messages */
   #serverPublishesTime = false;
-  /* The raw socket, kept to send playback control requests the client library doesn't know about */
-  #ws?: IWebSocket;
+  /** Reconnects since the last connection that got as far as serverInfo, for the backoff. */
+  #reconnectAttempts = 0;
+  #linkCheckInterval?: ReturnType<typeof setInterval>;
+  /** When the current silence was answered with a probe. */
+  #linkProbedAtMs?: number;
   /** Topics panels subscribed to, connected or not */
   #requestedTopics = new Set<string>();
   /** Id of the newest playback control request; replies to older ones are ignored */
@@ -297,7 +298,6 @@ export default class FoxgloveWebSocketPlayer implements Player {
     const subprotocols = SUBPROTOCOLS;
 
     const ws = this.#transport.open(this.#url, subprotocols);
-    this.#ws = ws;
 
     // Set a timeout to abort the connection if we are still not connected by then.
     // This will abort hanging connection attempts that can for whatever reason not
@@ -313,25 +313,28 @@ export default class FoxgloveWebSocketPlayer implements Player {
     let opened = false;
     let blockedAsMixedContent = false;
 
-    // A late event from a replaced socket must not touch this connection's state
-    const current = () => !this.#closed && this.#ws === ws;
-
+    // Each socket gets its own client; close() disposes it, so no handler runs after that.
     this.#client = new FoxgloveClient({
       ws,
-      handlers: whileCurrent(current, {
+      handlers: {
         open: () => {
           opened = true;
           if (this.#connectionAttemptTimeout != undefined) {
             clearTimeout(this.#connectionAttemptTimeout);
           }
           this.#presence = PlayerPresence.PRESENT;
-          this.#resetSessionState();
+          // The session (history, paused position, stats) stays until serverInfo names a new one
           this.#playerCapabilities = []; // serverInfo re-adds what this connection supports
           this.#connectedAtMs = Date.now();
+          this.#lastClockWallMs = Date.now(); // the clock wasn't stale while disconnected
           this.#stopRecording();
           this.#recorderUnavailable = false; // a new connection tries recording again
+          // Alerts about the last connection; the new one reports its channels and status again
           this.#alerts.clear();
           this.#dropConnectionState();
+          this.#linkProbedAtMs = undefined;
+          clearInterval(this.#linkCheckInterval);
+          this.#linkCheckInterval = setInterval(this.#checkLink, 1000);
 
           // Re-assign members that are emitted as player state
           this.#profile = undefined;
@@ -369,6 +372,8 @@ export default class FoxgloveWebSocketPlayer implements Player {
           this.#presence = terminal ? PlayerPresence.ERROR : PlayerPresence.RECONNECTING;
           this.#stopRecording();
           this.#connectedAtMs = undefined;
+          clearInterval(this.#linkCheckInterval);
+          this.#linkCheckInterval = undefined;
 
           if (this.#getParameterInterval != undefined) {
             clearInterval(this.#getParameterInterval);
@@ -378,7 +383,6 @@ export default class FoxgloveWebSocketPlayer implements Player {
             clearTimeout(this.#connectionAttemptTimeout);
           }
 
-          this.#ws = undefined;
           this.#client = undefined;
           this.#serverControlsPlayback = false;
           this.#dropConnectionState();
@@ -419,11 +423,18 @@ export default class FoxgloveWebSocketPlayer implements Player {
 
           this.#emitState();
           if (!terminal) {
-            this.#openTimeout = setTimeout(this.#open, 3000);
+            this.#openTimeout = setTimeout(this.#open, reconnectDelayMs(this.#reconnectAttempts++));
           }
         },
 
         serverInfo: (event) => {
+          // A server without a session id may have restarted: start over, as for a new session
+          const newSessionId = event.sessionId ?? randomUUID();
+          if (this.#id !== newSessionId) {
+            this.#resetSessionState();
+          }
+          this.#reconnectAttempts = 0;
+
           if (!Array.isArray(event.capabilities)) {
             this.#alerts.addAlert("ws:invalid-capabilities", {
               severity: "warn",
@@ -431,14 +442,10 @@ export default class FoxgloveWebSocketPlayer implements Player {
             });
           }
 
-          const newSessionId = event.sessionId ?? randomUUID();
-          if (this.#id !== newSessionId) {
-            this.#resetSessionState();
-          }
-
           this.#id = newSessionId;
           this.#name = `${this.#url}\n${event.name}`;
           this.#serverName = event.name;
+          const publishedTime = this.#serverPublishesTime;
           this.#serverCapabilities = Array.isArray(event.capabilities) ? event.capabilities : [];
           this.#serverPublishesTime = this.#serverCapabilities.includes(ServerCapability.time);
           this.#supportedEncodings = event.supportedEncodings;
@@ -451,12 +458,15 @@ export default class FoxgloveWebSocketPlayer implements Player {
           this.#datatypes = new Map();
           // Channels advertised before it keep their types
           this.#updateDataTypes(
-            Array.from(this.#channelsById.values(), ({ parsedChannel }) => parsedChannel.datatypes),
+            Array.from(
+              this.#channelsByTopic.values(),
+              ({ parsedChannel }) => parsedChannel.datatypes,
+            ),
           );
 
-          // If the server publishes the time we clear any existing clockTime we might have and let the
-          // server override
-          if (this.#serverPublishesTime) {
+          // A clock taken from wall time gives way to the server's. The server's own clock of this
+          // session stays, so a reconnect doesn't move the timeline until its next time message.
+          if (this.#serverPublishesTime && !publishedTime) {
             this.#clockTime = undefined;
           }
 
@@ -479,24 +489,14 @@ export default class FoxgloveWebSocketPlayer implements Player {
             this.#setupPublishers();
           }
           if (event.capabilities.includes(ServerCapability.services)) {
+            // Only the fallback for services that don't name their encodings; a service that can't
+            // be called gets its own alert when advertised
             this.#serviceCallEncoding = event.supportedEncodings?.find((e) =>
               SUPPORTED_SERVICE_ENCODINGS.includes(e),
             );
-
-            const alertId = "callService:unsupportedEncoding";
-            if (this.#serviceCallEncoding) {
-              this.#playerCapabilities = this.#playerCapabilities.concat(
-                PLAYER_CAPABILITIES.callServices,
-              );
-              this.#alerts.removeAlert(alertId);
-            } else {
-              this.#alerts.addAlert(alertId, {
-                severity: "warn",
-                message: `Calling services is disabled as no compatible encoding could be found. \
-                The server supports [${event.supportedEncodings?.join(", ")}], \
-                but Studio only supports [${SUPPORTED_SERVICE_ENCODINGS.join(", ")}]`,
-              });
-            }
+            this.#playerCapabilities = this.#playerCapabilities.concat(
+              PLAYER_CAPABILITIES.callServices,
+            );
           }
 
           if (event.capabilities.includes(ServerCapability.parameters)) {
@@ -648,8 +648,16 @@ export default class FoxgloveWebSocketPlayer implements Player {
               this.#emitState();
               continue;
             }
+            const resolvedChannel = {
+              channel,
+              parsedChannel,
+              record: { topic: channel.topic, messageEncoding: channel.encoding, schema },
+            };
+            // Every channel is kept by id; the first on a topic is the one panels get, and another
+            // takes over once it goes
+            this.#channelsById.set(channel.id, resolvedChannel);
             const existingChannel = this.#channelsByTopic.get(channel.topic);
-            if (existingChannel && !_.isEqual(channel, existingChannel.channel)) {
+            if (existingChannel && existingChannel.channel.id !== channel.id) {
               this.#alerts.addAlert(`duplicate-topic:${channel.topic}`, {
                 severity: "error",
                 message: `Multiple channels advertise the same topic: ${channel.topic} (${existingChannel.channel.id} and ${channel.id})`,
@@ -657,12 +665,6 @@ export default class FoxgloveWebSocketPlayer implements Player {
               this.#emitState();
               continue;
             }
-            const resolvedChannel = {
-              channel,
-              parsedChannel,
-              record: { topic: channel.topic, messageEncoding: channel.encoding, schema },
-            };
-            this.#channelsById.set(channel.id, resolvedChannel);
             this.#channelsByTopic.set(channel.topic, resolvedChannel);
             newDatatypes.push(parsedChannel.datatypes);
           }
@@ -690,15 +692,32 @@ export default class FoxgloveWebSocketPlayer implements Player {
                 this.#resolvedSubscriptionsById.delete(subId);
                 this.#resolvedSubscriptionsByTopic.delete(channel.topic);
                 // No unsubscribe: unadvertising a channel ends its subscriptions on the server, which
-                // answers an unsubscribe for one with a "did not exist" warning.
+                // answers an unsubscribe for one with a "did not exist" warning. Data already on its
+                // way may still arrive.
+                this.#ignoreLateMessages(subId);
                 this.#unresolvedSubscriptions.add(channel.topic);
               }
             }
             this.#channelsById.delete(id);
-            this.#channelsByTopic.delete(chanInfo.channel.topic);
+            const { topic } = chanInfo.channel;
+            const others = [...this.#channelsById.values()].filter(
+              ({ channel }) => channel.topic === topic,
+            );
+            if (this.#channelsByTopic.get(topic) === chanInfo) {
+              if (others[0]) {
+                this.#channelsByTopic.set(topic, others[0]);
+                this.#updateDataTypes([others[0].parsedChannel.datatypes]);
+              } else {
+                this.#channelsByTopic.delete(topic);
+              }
+            }
+            if (others.length < 2) {
+              this.#alerts.removeAlert(`duplicate-topic:${topic}`);
+            }
           }
           this.#updateTopics();
           this.#emitState();
+          this.#processUnresolvedSubscriptions();
         },
 
         message: (subscriptionId, timestamp, data) => {
@@ -816,9 +835,8 @@ export default class FoxgloveWebSocketPlayer implements Player {
           // A parameter without a value has been unset
           const setParameters = mappedParameters.filter((param) => param.value != undefined);
           const newParameters = setParameters.filter((param) => !this.#parameters.has(param.name));
-          const canSubscribe = this.#serverCapabilities.includes(
-            ServerCapability.parametersSubscribe,
-          );
+          const canSubscribe =
+            this.#serverCapabilities?.includes(ServerCapability.parametersSubscribe) === true;
 
           if (id === GET_ALL_PARAMS_REQUEST_ID) {
             // Reset params
@@ -857,10 +875,6 @@ export default class FoxgloveWebSocketPlayer implements Player {
         },
 
         advertiseServices: (services) => {
-          if (!this.#serviceCallEncoding) {
-            return;
-          }
-
           let defaultSchemaEncoding = "";
           if (this.#serviceCallEncoding === "json") {
             defaultSchemaEncoding = "jsonschema";
@@ -877,8 +891,9 @@ export default class FoxgloveWebSocketPlayer implements Player {
             // (according to ROS convention).
             const requestType = service.request?.schemaName ?? `${service.type}_Request`;
             const responseType = service.response?.schemaName ?? `${service.type}_Response`;
-            const requestMsgEncoding = service.request?.encoding ?? this.#serviceCallEncoding;
-            const responseMsgEncoding = service.response?.encoding ?? this.#serviceCallEncoding;
+            const requestMsgEncoding = service.request?.encoding ?? this.#serviceCallEncoding ?? "";
+            const responseMsgEncoding =
+              service.response?.encoding ?? this.#serviceCallEncoding ?? "";
 
             // Note: The `requestSchema` and `responseSchema` fields are deprecated in the protocol.
             // However, they are still required for compatibility with Foxglove Bridge.
@@ -1056,6 +1071,9 @@ export default class FoxgloveWebSocketPlayer implements Player {
         },
 
         fetchAssetResponse: (response) => {
+          if (response.requestId === LINK_PROBE_REQUEST_ID) {
+            return; // its arrival was all the link check needed
+          }
           const responseCallback = this.#fetchAssetRequests.get(response.requestId);
           if (!responseCallback) {
             // e.g. a late answer to a request the last disconnect already failed
@@ -1086,13 +1104,57 @@ export default class FoxgloveWebSocketPlayer implements Player {
             this.#handlePlaybackState(state);
           }
         },
-      }),
+      },
     });
   };
 
+  /**
+   * Once a second while connected: after a silence, ask the server for an answer, and if none
+   * comes, drop the connection and reconnect. Servers that can't be asked (no parameters or assets)
+   * may legitimately stay silent, so their silence isn't judged.
+   */
+  #checkLink = (): void => {
+    const client = this.#client;
+    if (!client) {
+      return;
+    }
+    const nowMs = Date.now();
+    if (nowMs - client.receivedAtMs < LINK_SILENCE_MS) {
+      this.#linkProbedAtMs = undefined;
+      return;
+    }
+    const capabilities = this.#serverCapabilities;
+    if (this.#linkProbedAtMs == undefined) {
+      this.#linkProbedAtMs = nowMs;
+      if (capabilities?.includes(ServerCapability.parameters) === true) {
+        client.getParameters([], GET_ALL_PARAMS_REQUEST_ID);
+      } else if (capabilities?.includes(ServerCapability.assets) === true) {
+        client.fetchAsset("", LINK_PROBE_REQUEST_ID);
+      } else if (capabilities != undefined) {
+        this.#linkProbedAtMs = undefined; // nothing to ask
+      }
+      // Without serverInfo yet, nothing to ask either, but a server that stays silent is dead
+      return;
+    }
+    if (nowMs - this.#linkProbedAtMs >= LINK_PROBE_TIMEOUT_MS) {
+      const silentSec = Math.round((nowMs - client.receivedAtMs) / 1000);
+      log.warn(`No data from ${this.#url} for ${silentSec} s, reconnecting`);
+      client.dispose({ code: 1006, reason: `No data for ${silentSec} s`, wasClean: false });
+    }
+  };
+
+  /** Data for a subscription that just ended may still be on its way: don't warn about it. */
+  #ignoreLateMessages(subId: SubscriptionId): void {
+    this.#recentlyCanceledSubscriptions.add(subId);
+    setTimeout(
+      () => this.#recentlyCanceledSubscriptions.delete(subId),
+      SUBSCRIPTION_WARNING_SUPPRESSION_MS,
+    );
+  }
+
   #updateTopics() {
-    // Build a new topics array from this._channelsById
-    const topics: Topic[] = Array.from(this.#channelsById.values(), (chanInfo) => ({
+    // One topic per active channel
+    const topics: Topic[] = Array.from(this.#channelsByTopic.values(), (chanInfo) => ({
       name: chanInfo.channel.topic,
       schemaName: chanInfo.channel.schemaName,
     }));
@@ -1209,10 +1271,11 @@ export default class FoxgloveWebSocketPlayer implements Player {
     this.#closed = true;
     clearTimeout(this.#connectionAttemptTimeout);
     clearTimeout(this.#reviewEmitTimer);
+    clearInterval(this.#linkCheckInterval);
     this.#stopRecording();
     this.#unsubscribeHistorySettings();
     this.#clearHistory();
-    this.#client?.close();
+    this.#client?.dispose();
     this.#dropConnectionState();
     this.#transport.dispose?.();
     if (this.#openTimeout != undefined) {
@@ -1228,6 +1291,7 @@ export default class FoxgloveWebSocketPlayer implements Player {
   public setSubscriptions(subscriptions: SubscribePayload[]): void {
     const newTopics = new Set(subscriptions.map(({ topic }) => topic));
     this.#requestedTopics = newTopics;
+    this.#history.setRequestedTopics(newTopics);
 
     if (!this.#client || this.#closed) {
       // Remember requested subscriptions so we can retry subscribing when
@@ -1247,17 +1311,12 @@ export default class FoxgloveWebSocketPlayer implements Player {
         this.#client.unsubscribe(subId);
         this.#resolvedSubscriptionsByTopic.delete(topic);
         this.#resolvedSubscriptionsById.delete(subId);
-        this.#recentlyCanceledSubscriptions.add(subId);
+        this.#ignoreLateMessages(subId);
 
         // Reset the message count for this topic
         if (this.#topicsStats.delete(topic)) {
           this.#topicsStatsChanged = true;
         }
-
-        setTimeout(
-          () => this.#recentlyCanceledSubscriptions.delete(subId),
-          SUBSCRIPTION_WARNING_SUPPRESSION_MS,
-        );
       }
     }
 
@@ -1449,7 +1508,8 @@ export default class FoxgloveWebSocketPlayer implements Player {
       throw new Error(
         `Attempted to fetch assset ${uri} without a valid Foxglove WebSocket connection.`,
       );
-    } else if (!this.#serverCapabilities.includes(ServerCapability.assets)) {
+    } else if (this.#serverCapabilities?.includes(ServerCapability.assets) !== true) {
+      // Also while the next connection is still opening: nothing may be sent before serverInfo
       throw new Error(`Fetching assets (${uri}) is not supported for FoxgloveWebSocketPlayer`);
     }
 
@@ -2020,13 +2080,21 @@ export default class FoxgloveWebSocketPlayer implements Player {
    * are restored once the next connection advertises its channels.
    */
   #dropConnectionState(): void {
-    // Until the next serverInfo, nothing may be sent: the next socket may still be connecting
+    // Until the next serverInfo, nothing may be sent: the next socket may still be connecting.
+    // Playback of the session's history keeps working while disconnected.
+    this.#serverCapabilities = undefined;
     this.#playerCapabilities = this.#playerCapabilities.filter(
-      (cap) => cap !== PLAYER_CAPABILITIES.advertise && cap !== PLAYER_CAPABILITIES.callServices,
+      (cap) =>
+        cap === PLAYER_CAPABILITIES.playbackControl ||
+        cap === PLAYER_CAPABILITIES.setSpeed ||
+        cap === PLAYER_CAPABILITIES.liveHistory,
     );
     this.#servicesByName.clear();
     this.#channelsById.clear();
     this.#channelsByTopic.clear();
+    this.#unsupportedChannelIds.clear();
+    // Subscription ids start over with the next connection's client
+    this.#recentlyCanceledSubscriptions.clear();
     for (const topic of this.#resolvedSubscriptionsByTopic.keys()) {
       this.#unresolvedSubscriptions.add(topic);
     }
@@ -2067,7 +2135,7 @@ export default class FoxgloveWebSocketPlayer implements Player {
     this.#receivedBytes = 0;
     this.#clearHistory();
     this.#lastClockWallMs = Date.now();
-    this.#alerts.clear();
+    this.#alerts.removeAlerts((id) => !isChannelAlert(id));
     this.#parameters = new Map();
     this.#fetchedAssets.clear();
     this.#failPendingAssetRequests("WebSocket connection reset");

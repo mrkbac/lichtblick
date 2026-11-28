@@ -3,7 +3,7 @@
 
 import { PlayerState } from "@lichtblick/suite-base/players/types";
 
-import FoxgloveWebSocketPlayer from "./index";
+import FoxgloveWebSocketPlayer, { LINK_PROBE_TIMEOUT_MS, LINK_SILENCE_MS } from "./index";
 
 class MockWebSocket {
   public static lastInstance: MockWebSocket | undefined;
@@ -57,6 +57,18 @@ const SERVICE = {
   },
 };
 
+/** MessageData (op 1) carrying a JSON payload */
+function messageData(subscriptionId: number, timeNs: bigint, payload = "{}") {
+  const text = new TextEncoder().encode(payload);
+  const buffer = new ArrayBuffer(13 + text.length);
+  const view = new DataView(buffer);
+  view.setUint8(0, 1);
+  view.setUint32(1, subscriptionId, true);
+  view.setBigUint64(5, timeNs, true);
+  new Uint8Array(buffer).set(text, 13);
+  return buffer;
+}
+
 /** FetchAssetResponse (op 4) with status 1 (error) */
 function fetchAssetError(requestId: number, error: string) {
   const text = new TextEncoder().encode(error);
@@ -75,16 +87,20 @@ describe("FoxgloveWebSocketPlayer reconnect", () => {
   let ws: MockWebSocket;
   let lastState: PlayerState | undefined;
 
-  function connect() {
+  function connect(
+    sessionId = "session",
+    capabilities = ["clientPublish", "services", "assets"],
+    supportedEncodings = ["json"],
+  ) {
     ws = MockWebSocket.lastInstance!;
     ws.onopen?.({});
     ws.receive(
       JSON.stringify({
         op: "serverInfo",
         name: "test",
-        sessionId: "session",
-        capabilities: ["clientPublish", "services", "assets"],
-        supportedEncodings: ["json"],
+        sessionId,
+        capabilities,
+        supportedEncodings,
       }),
     );
     ws.receive(JSON.stringify({ op: "advertise", channels: [CHANNEL] }));
@@ -98,8 +114,26 @@ describe("FoxgloveWebSocketPlayer reconnect", () => {
 
   async function drop() {
     close();
-    await vi.advanceTimersByTimeAsync(3_000); // reconnect delay
+    await vi.advanceTimersByTimeAsync(1_000); // first reconnect delay
+    expect(MockWebSocket.lastInstance).not.toBe(ws);
   }
+
+  /** Subscribes to /foo and receives `count` messages on it */
+  async function receiveFoo(count: number) {
+    player.setSubscriptions([{ topic: "/foo" }]);
+    await Promise.resolve(); // subscriptions go out once per task
+    const subscribe = ws.sentOps().findLast(({ op }) => op === "subscribe") as
+      | { subscriptions: { id: number }[] }
+      | undefined;
+    const subId = subscribe?.subscriptions[0]?.id ?? 0;
+    for (let i = 0; i < count; i++) {
+      ws.receive(messageData(subId, BigInt(i)));
+    }
+    await vi.advanceTimersByTimeAsync(100);
+  }
+
+  const stats = () => lastState?.activeData?.topicStats.get("/foo")?.numMessages;
+  const historyMessages = () => lastState?.activeData?.liveStats?.historyMessages;
 
   beforeEach(() => {
     vi.useFakeTimers();
@@ -223,5 +257,174 @@ describe("FoxgloveWebSocketPlayer reconnect", () => {
     ws.send.mockClear();
     void player.fetchAsset("package://foo/mesh.stl").catch(() => {});
     expect(ws.send).toHaveBeenCalled();
+  });
+
+  it("keeps the history, paused position and stats across a reconnect to the same session", async () => {
+    await receiveFoo(3);
+    player.pausePlayback();
+    await vi.advanceTimersByTimeAsync(100);
+    const paused = lastState?.activeData?.currentTime;
+
+    await drop();
+    connect();
+    await vi.advanceTimersByTimeAsync(2_000);
+    expect(lastState?.activeData?.isPlaying).toBe(false);
+    expect(lastState?.activeData?.currentTime).toEqual(paused);
+    expect(stats()).toBe(3);
+    expect(historyMessages()).toBe(3);
+    (console.warn as ReturnType<typeof vi.fn>).mockClear(); // "no server clock" while paused
+  });
+
+  it("starts over when the server comes back with a new session", async () => {
+    await receiveFoo(3);
+    player.pausePlayback();
+    await drop();
+    connect("restarted");
+    await vi.advanceTimersByTimeAsync(100);
+    expect(lastState?.activeData?.isPlaying).toBe(true);
+    expect(stats()).toBeUndefined();
+    expect(historyMessages()).toBe(0);
+    (console.warn as ReturnType<typeof vi.fn>).mockClear(); // "no server clock" while paused
+  });
+
+  it("resubscribes once after a reconnect and takes a burst of data", async () => {
+    await receiveFoo(3);
+    await drop();
+    connect();
+    await Promise.resolve();
+    const subscribes = ws.sentOps().filter(({ op }) => op === "subscribe");
+    expect(subscribes).toHaveLength(1);
+    await receiveFoo(5_000); // the same subscriptions: nothing new is sent
+    expect(ws.sentOps().filter(({ op }) => op === "subscribe")).toHaveLength(1);
+    expect(stats()).toBe(5_003);
+    expect(historyMessages()).toBe(5_003);
+    expect(lastState?.alerts).toEqual([
+      expect.objectContaining({ message: "No server clock: history uses local receive time" }),
+    ]);
+  });
+
+  it("reconnects when a silent link doesn't answer a probe", async () => {
+    await vi.advanceTimersByTimeAsync(LINK_SILENCE_MS);
+    // The server can't be asked about parameters, but about an asset
+    expect(ws.sentOps().at(-1)).toEqual({ op: "fetchAsset", uri: "", requestId: 0 });
+    const dead = ws;
+    await vi.advanceTimersByTimeAsync(LINK_PROBE_TIMEOUT_MS);
+    (console.warn as ReturnType<typeof vi.fn>).mockClear(); // "no data, reconnecting"
+    (console.error as ReturnType<typeof vi.fn>).mockClear(); // the expected "Connection failed" alert
+    expect(dead.close).toHaveBeenCalled();
+    expect(lastState?.presence).toBe("RECONNECTING");
+
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(MockWebSocket.lastInstance).not.toBe(dead);
+    connect();
+    // The dead socket reporting its close at last changes nothing
+    dead.onclose?.({ code: 1006 });
+    await vi.advanceTimersByTimeAsync(100);
+    expect(lastState?.presence).toBe("PRESENT");
+  });
+
+  it("keeps a silent link whose server answers the probe", async () => {
+    await vi.advanceTimersByTimeAsync(LINK_SILENCE_MS);
+    ws.receive(fetchAssetError(0, "not found"));
+    await vi.advanceTimersByTimeAsync(LINK_PROBE_TIMEOUT_MS);
+    expect(ws.close).not.toHaveBeenCalled();
+  });
+
+  it("doesn't judge the silence of a server it can't ask", async () => {
+    await drop();
+    connect("session", []);
+    await vi.advanceTimersByTimeAsync(LINK_SILENCE_MS + LINK_PROBE_TIMEOUT_MS * 3);
+    expect(ws.close).not.toHaveBeenCalled();
+    expect(ws.sentOps()).toEqual([]);
+  });
+
+  it("backs off between failed attempts, with jitter", async () => {
+    vi.spyOn(Math, "random").mockReturnValue(0);
+    close();
+    const opened = () => MockWebSocket.lastInstance;
+    let previous = opened();
+    for (const delay of [1_000, 2_000, 4_000, 8_000, 15_000, 15_000]) {
+      await vi.advanceTimersByTimeAsync(delay - 1);
+      expect(opened()).toBe(previous);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(opened()).not.toBe(previous);
+      previous = opened();
+      previous!.onclose?.({ code: 1006 }); // the server is still unreachable
+      (console.error as ReturnType<typeof vi.fn>).mockClear();
+    }
+  });
+
+  it("fails an asset fetch while the next connection is still opening, sending nothing", async () => {
+    await drop();
+    const next = MockWebSocket.lastInstance!;
+    await expect(player.fetchAsset("package://foo/mesh.stl")).rejects.toThrow("not supported");
+    expect(next.send).not.toHaveBeenCalled();
+  });
+
+  it("lets a second channel on a topic take over when the first goes", async () => {
+    ws.receive(JSON.stringify({ op: "advertise", channels: [{ ...CHANNEL, id: 2 }] }));
+    player.setSubscriptions([{ topic: "/foo" }]);
+    await vi.advanceTimersByTimeAsync(100);
+    expect(lastState?.alerts?.map(({ message }) => message)).toContainEqual(
+      expect.stringContaining("Multiple channels"),
+    );
+    (console.error as ReturnType<typeof vi.fn>).mockClear();
+    expect(lastState?.activeData?.topics).toHaveLength(1);
+
+    ws.receive(JSON.stringify({ op: "unadvertise", channelIds: [1] }));
+    await vi.advanceTimersByTimeAsync(100);
+    expect(ws.sentOps().at(-1)).toEqual({
+      op: "subscribe",
+      subscriptions: [{ id: 1, channelId: 2 }],
+    });
+    expect(lastState?.activeData?.topics).toEqual([{ name: "/foo", schemaName: "S" }]);
+    expect(lastState?.alerts ?? []).not.toContainEqual(
+      expect.objectContaining({ message: expect.stringContaining("Multiple channels") }),
+    );
+    // Data the first channel's subscription had on its way doesn't warn
+    ws.receive(messageData(0, 1n));
+    await vi.advanceTimersByTimeAsync(100);
+    expect(lastState?.alerts?.map(({ message }) => message) ?? []).not.toContainEqual(
+      expect.stringContaining("unknown subscription"),
+    );
+  });
+
+  it("forgets unsupported channels on reconnect", async () => {
+    ws.receive(
+      JSON.stringify({ op: "advertise", channels: [{ ...CHANNEL, id: 5, encoding: "unknown" }] }),
+    );
+    await drop();
+    connect();
+    ws.receive(JSON.stringify({ op: "unadvertise", channelIds: [5] }));
+    await vi.advanceTimersByTimeAsync(100);
+    (console.error as ReturnType<typeof vi.fn>).mockClear();
+    expect(lastState?.alerts?.map(({ message }) => message)).toContain(
+      "Server unadvertised channel 5 that was not advertised",
+    );
+  });
+
+  it("keeps alerts of broken channels when the session changes on an open connection", async () => {
+    ws.receive(
+      JSON.stringify({ op: "advertise", channels: [{ ...CHANNEL, id: 5, encoding: "unknown" }] }),
+    );
+    ws.receive(
+      JSON.stringify({ op: "serverInfo", name: "test", sessionId: "other", capabilities: [] }),
+    );
+    await vi.advanceTimersByTimeAsync(100);
+    (console.error as ReturnType<typeof vi.fn>).mockClear();
+    expect(lastState?.alerts?.map(({ message }) => message)).toContain(
+      "Failed to parse channel schema on /foo",
+    );
+  });
+
+  it("calls services that name their own encoding when the server lists none", async () => {
+    await drop();
+    connect("session", ["services"], []);
+    await vi.advanceTimersByTimeAsync(100);
+    expect(lastState?.capabilities).toContain("callServices");
+    ws.send.mockClear();
+    const call = player.callService("/svc", {});
+    expect(ws.send).toHaveBeenCalledTimes(1);
+    await Promise.all([expect(call).rejects.toThrow("Connection closed"), drop()]);
   });
 });
